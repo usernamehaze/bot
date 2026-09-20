@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Clicky</title>
-<meta name="description" content="Clicky: an animated AI cursor that tutors you through any subject.">
+<title>Cassie</title>
+<meta name="description" content="Cassie: an animated AI cursor that tutors you through any subject.">
 <meta name="theme-color" content="#6d28d9">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Clicky">
+<meta name="apple-mobile-web-app-title" content="Cassie">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,7 +20,7 @@
   <header class="topbar">
     <div class="brand">
       <span class="brand-dot"></span>
-      <span>Clicky</span>
+      <span>Cassie</span>
     </div>
     <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.6 7.6 0 0 0-1.7-1L14.4 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5L9 5.1a7.6 7.6 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.8 1.7 1l.4 2.6c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
@@ -34,14 +34,14 @@
     </button>
     <div class="study-text-body">
       <div id="study-text" contenteditable="true"
-           data-placeholder="Paste a question, paragraph, or problem here — then highlight any part of it to ask Clicky about just that bit."></div>
+           data-placeholder="Paste a question, paragraph, or problem here — then highlight any part of it to ask Cassie about just that bit."></div>
       <button type="button" id="study-text-clear" class="text-btn">Clear</button>
     </div>
   </section>
 
   <main id="chat-log" aria-live="polite">
     <div class="bubble bubble-assistant intro">
-      <p>Hi, I'm Clicky. Ask me anything you're studying — I'll walk you through it step by step.</p>
+      <p>Hi, I'm Cassie. Ask me anything you're studying — I'll walk you through it step by step.</p>
     </div>
   </main>
 
@@ -60,7 +60,7 @@
     <button type="button" id="mic-btn" class="icon-btn" title="Ask by voice" aria-label="Ask by voice" hidden>
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg>
     </button>
-    <textarea id="prompt-input" rows="1" placeholder="Ask Clicky a question…" autocomplete="off"></textarea>
+    <textarea id="prompt-input" rows="1" placeholder="Ask Cassie a question…" autocomplete="off"></textarea>
     <button type="submit" id="send-btn" class="icon-btn primary" title="Send" aria-label="Send">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
@@ -96,7 +96,7 @@
     </div>
   </div>
 
-  <div id="clicky-cursor" aria-hidden="true">
+  <div id="cassie-cursor" aria-hidden="true">
     <svg viewBox="0 0 32 32">
       <path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z" />
     </svg>

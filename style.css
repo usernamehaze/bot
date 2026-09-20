@@ -348,7 +348,7 @@ html, body {
 .btn.secondary { background: var(--border); color: var(--text); }
 
 /* animated cursor character */
-#clicky-cursor {
+#cassie-cursor {
   position: fixed;
   top: 0;
   left: 0;
@@ -360,16 +360,16 @@ html, body {
   transition: transform .09s linear;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45));
 }
-#clicky-cursor.detour { transition: transform .4s cubic-bezier(.34, 1.3, .4, 1); }
-#clicky-cursor svg { width: 18px; height: 18px; }
-#clicky-cursor svg path {
+#cassie-cursor.detour { transition: transform .4s cubic-bezier(.34, 1.3, .4, 1); }
+#cassie-cursor svg { width: 18px; height: 18px; }
+#cassie-cursor svg path {
   fill: #ffffff;
   stroke: rgba(0, 0, 0, .55);
   stroke-width: 1.2;
   stroke-linejoin: round;
 }
-#clicky-cursor.thinking svg { animation: spin-tilt 1s ease-in-out infinite; }
-#clicky-cursor .ring {
+#cassie-cursor.thinking svg { animation: spin-tilt 1s ease-in-out infinite; }
+#cassie-cursor .ring {
   position: absolute;
   top: 3px;
   left: 3px;
@@ -380,7 +380,7 @@ html, body {
   opacity: 0;
   transform: scale(0.4);
 }
-#clicky-cursor.clicking .ring {
+#cassie-cursor.clicking .ring {
   animation: click-ring .5s ease-out;
 }
 
