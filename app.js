@@ -59,7 +59,15 @@ const highlightToolbar = document.getElementById('highlight-toolbar');
 const contextMenu = document.getElementById('context-menu');
 
 /* ---------- animated cursor ---------- */
+/* Clicky trails just below-right of the real mouse/touch pointer. It only
+   ever breaks away briefly ("detour") to point at something in Clicky's
+   own UI (Settings, its latest reply), then snaps back to following you. */
 let cursorState = 'idle';
+let following = true;
+let lastPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+let detourTimer = null;
+const CURSOR_OFFSET_X = 12;
+const CURSOR_OFFSET_Y = 18;
 
 function moveCursorTo(x, y, { click = false } = {}) {
   cursorEl.style.transform = `translate(${x}px, ${y}px)`;
@@ -70,26 +78,41 @@ function moveCursorTo(x, y, { click = false } = {}) {
   }
 }
 
-function moveCursorToElement(el, opts) {
-  if (!el) return;
-  const r = el.getBoundingClientRect();
-  moveCursorTo(r.left + Math.min(28, r.width * 0.5), r.top + Math.min(14, r.height * 0.4), opts);
+function followMouseNow() {
+  moveCursorTo(lastPointer.x + CURSOR_OFFSET_X, lastPointer.y + CURSOR_OFFSET_Y);
 }
+
+function updatePointer(x, y) {
+  lastPointer = { x, y };
+  if (following) followMouseNow();
+}
+
+window.addEventListener('mousemove', (e) => updatePointer(e.clientX, e.clientY));
+window.addEventListener('touchmove', (e) => {
+  if (e.touches && e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: true });
 
 function setCursorMode(mode) {
   cursorState = mode;
-  cursorEl.classList.toggle('idle', mode === 'idle');
   cursorEl.classList.toggle('thinking', mode === 'thinking');
 }
 
-function idleFloatToInput() {
-  setCursorMode('idle');
-  moveCursorToElement(promptInput);
+function resumeFollowing() {
+  clearTimeout(detourTimer);
+  cursorEl.classList.remove('detour');
+  following = true;
+  followMouseNow();
 }
 
-window.addEventListener('resize', () => {
-  if (cursorState === 'idle') idleFloatToInput();
-});
+function detourToElement(el, { click = false, resumeAfter = 800 } = {}) {
+  if (!el) return;
+  following = false;
+  cursorEl.classList.add('detour');
+  const r = el.getBoundingClientRect();
+  moveCursorTo(r.left + Math.min(20, r.width * 0.5), r.top + Math.min(12, r.height * 0.4), { click });
+  clearTimeout(detourTimer);
+  detourTimer = setTimeout(resumeFollowing, resumeAfter);
+}
 
 /* ---------- chat rendering ---------- */
 function scrollToBottom() {
@@ -167,7 +190,7 @@ async function handleSend(text) {
 
   if (!state.apiKey) {
     openSettings();
-    moveCursorToElement(apiKeyInput, { click: true });
+    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
     renderMessage('assistant', "I need an Anthropic API key before I can answer — pop it into Settings (top right) and I'll be ready.");
     return;
   }
@@ -179,7 +202,6 @@ async function handleSend(text) {
   autoGrow();
 
   setCursorMode('thinking');
-  moveCursorToElement(chatLog.lastElementChild, { click: false });
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
 
@@ -189,14 +211,15 @@ async function handleSend(text) {
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
-    moveCursorToElement(bubble, { click: true });
+    setCursorMode('idle');
+    detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
   } catch (err) {
     typingBubble.remove();
     renderMessage('assistant', `Something went wrong: ${err.message}`).classList.add('error');
+    setCursorMode('idle');
   } finally {
     sendBtn.disabled = false;
-    setTimeout(idleFloatToInput, 500);
   }
 }
 
@@ -231,11 +254,11 @@ function closeSettings() {
   state.voiceOut = voiceOutToggle.checked;
   save();
   settingsPanel.hidden = true;
-  idleFloatToInput();
+  resumeFollowing();
 }
 settingsBtn.addEventListener('click', () => {
   openSettings();
-  moveCursorToElement(settingsBtn, { click: true });
+  detourToElement(settingsBtn, { click: true, resumeAfter: 900 });
 });
 settingsCloseBtn.addEventListener('click', closeSettings);
 
@@ -261,7 +284,7 @@ if (SpeechRecognitionCtor) {
       recognizer.start();
       listening = true;
       micBtn.classList.add('primary');
-      moveCursorToElement(micBtn, { click: true });
+      detourToElement(micBtn, { click: true, resumeAfter: 700 });
     } catch (e) { /* already started */ }
   });
   recognizer.addEventListener('result', (e) => {
@@ -426,7 +449,7 @@ if (state.studyText) studyText.innerText = state.studyText;
 renderHistory();
 requestAnimationFrame(() => {
   setCursorMode('idle');
-  idleFloatToInput();
+  followMouseNow();
 });
 
 if ('serviceWorker' in navigator) {
