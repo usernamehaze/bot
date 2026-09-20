@@ -58,6 +58,20 @@
     .body p { margin: 0 0 8px; }
     .body p:last-child { margin-bottom: 0; }
     .body.muted { color: #6b6f8a; font-style: italic; }
+    .question { font-weight: 600; margin-bottom: 10px; }
+    .choice-row { display: flex; gap: 8px; }
+    .choice-btn {
+      flex: 1;
+      background: #6d28d9;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .choice-btn:hover { background: #5b21b6; }
   `;
   shadow.appendChild(style);
 
@@ -112,35 +126,58 @@
     popover.style.top = `${Math.max(8, top)}px`;
   }
 
-  function runAutoExplain(text, rect) {
+  let pendingText = '';
+  let pendingRect = null;
+
+  function showChoice(text, rect) {
+    pendingText = text;
+    pendingRect = rect;
+    body.classList.remove('muted');
+    body.innerHTML = `
+      <div class="question">Explain this, or answer it?</div>
+      <div class="choice-row">
+        <button type="button" class="choice-btn" data-mode="explain">Explain</button>
+        <button type="button" class="choice-btn" data-mode="answer">Answer</button>
+      </div>
+    `;
+    positionPopover(rect);
+  }
+
+  body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.choice-btn');
+    if (!btn) return;
+    runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
+  });
+
+  function runExplainOrAnswer(text, rect, mode) {
     const myGen = ++gen;
-    popover.hidden = false;
     setContent('Thinking…', { muted: true });
     positionPopover(rect);
 
-    chrome.runtime.sendMessage(
-      { type: 'CASSIE_ASK', text: `Explain this, then give the answer:\n\n"${text}"` },
-      (res) => {
-        if (myGen !== gen) return; // superseded by a newer selection
-        if (chrome.runtime.lastError) {
-          setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
-          positionPopover(rect);
-          return;
-        }
-        if (res?.error === 'no-key') {
-          setContent('Click the Cassie icon in your browser toolbar to add your Anthropic API key first.', { muted: true });
-          positionPopover(rect);
-          return;
-        }
-        if (res?.error) {
-          setContent(`Something went wrong: ${res.error}`, { muted: true });
-          positionPopover(rect);
-          return;
-        }
-        setContent(res.reply || '(no response)');
+    const prompt = mode === 'answer'
+      ? `Explain this, then give the answer:\n\n"${text}"`
+      : `Explain this:\n\n"${text}"`;
+
+    chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
+      if (myGen !== gen) return; // superseded by a newer selection
+      if (chrome.runtime.lastError) {
+        setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
         positionPopover(rect);
+        return;
       }
-    );
+      if (res?.error === 'no-key') {
+        setContent('Click the Cassie icon in your browser toolbar to add your Anthropic API key first.', { muted: true });
+        positionPopover(rect);
+        return;
+      }
+      if (res?.error) {
+        setContent(`Something went wrong: ${res.error}`, { muted: true });
+        positionPopover(rect);
+        return;
+      }
+      setContent(res.reply || '(no response)');
+      positionPopover(rect);
+    });
   }
 
   function checkSelection() {
@@ -151,7 +188,8 @@
     const text = sel.toString().trim();
     if (!text || text.length < 2 || text === lastAutoText) return;
     lastAutoText = text;
-    runAutoExplain(text, range.getBoundingClientRect());
+    popover.hidden = false;
+    showChoice(text, range.getBoundingClientRect());
   }
 
   document.addEventListener('selectionchange', () => {
