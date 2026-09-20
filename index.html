@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StudyBuddy</title>
+<meta name="description" content="A simple offline study companion: flashcards, tasks, and a focus timer.">
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StudyBuddy">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab active" data-view="dashboard" title="Dashboard">
+      <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="tab" data-view="cards" title="Flashcards">
+      <svg viewBox="0 0 24 24"><path d="M22 10V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4h20zM2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6H2z"/></svg>
+      <span>Cards</span>
+    </button>
+    <button class="tab" data-view="tasks" title="Tasks">
+      <svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+      <span>Tasks</span>
+    </button>
+    <button class="tab" data-view="timer" title="Focus Timer">
+      <svg viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm0-18c-.4 0-.7.1-1 .2V1h2v1.2c-.3-.1-.6-.2-1-.2zm5.7 2.7L16.3 6.1l1.4 1.4 1.4-1.4-1.4-1.4zM13 11h-2v6h6v-2h-4z"/></svg>
+      <span>Timer</span>
+    </button>
+    <button class="tab" data-view="notes" title="Notes">
+      <svg viewBox="0 0 24 24"><path d="M4 4h16v2H4zM4 11h16v2H4zM4 18h10v2H4z"/></svg>
+      <span>Notes</span>
+    </button>
+  </nav>
+
+  <main id="views">
+
+    <section id="view-dashboard" class="view active">
+      <header class="view-header">
+        <h1>StudyBuddy</h1>
+        <p class="subtitle" id="today-label"></p>
+      </header>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-streak">0</div>
+          <div class="stat-label">Day streak</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-due">0</div>
+          <div class="stat-label">Cards due</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-tasks">0</div>
+          <div class="stat-label">Tasks open</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-minutes">0</div>
+          <div class="stat-label">Focus min today</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Due soon</h2>
+        <ul class="mini-list" id="dashboard-tasks">
+          <li class="empty">No upcoming tasks. Add one in the Tasks tab.</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Quick actions</h2>
+        <div class="quick-actions">
+          <button class="btn" data-goto="cards">Review flashcards</button>
+          <button class="btn" data-goto="timer">Start focus session</button>
+          <button class="btn" data-goto="tasks">Add a task</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-cards" class="view">
+      <header class="view-header">
+        <h1>Flashcards</h1>
+        <p class="subtitle">Spaced repetition keeps due cards coming back at the right time.</p>
+      </header>
+
+      <div class="deck-controls">
+        <select id="deck-select"></select>
+        <button class="btn small" id="deck-new">New deck</button>
+        <button class="btn small" id="card-new">New card</button>
+      </div>
+
+      <div id="review-area">
+        <div class="flashcard" id="flashcard">
+          <div class="flashcard-inner" id="flashcard-inner">
+            <div class="flashcard-face flashcard-front" id="card-front">Add a card to get started</div>
+            <div class="flashcard-face flashcard-back" id="card-back"></div>
+          </div>
+        </div>
+        <p class="hint" id="card-progress"></p>
+        <div class="grade-row" id="grade-row" hidden>
+          <button class="grade" data-grade="0">Again</button>
+          <button class="grade" data-grade="1">Hard</button>
+          <button class="grade" data-grade="2">Good</button>
+          <button class="grade" data-grade="3">Easy</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>All cards in this deck</h2>
+        <ul class="mini-list" id="card-list"></ul>
+      </div>
+    </section>
+
+    <section id="view-tasks" class="view">
+      <header class="view-header">
+        <h1>Tasks & Assignments</h1>
+        <p class="subtitle">Track what's due and check it off.</p>
+      </header>
+
+      <form id="task-form" class="inline-form">
+        <input type="text" id="task-title" placeholder="Assignment or task" required>
+        <input type="date" id="task-due">
+        <button class="btn" type="submit">Add</button>
+      </form>
+
+      <ul class="task-list" id="task-list"></ul>
+    </section>
+
+    <section id="view-timer" class="view">
+      <header class="view-header">
+        <h1>Focus Timer</h1>
+        <p class="subtitle">Pomodoro-style study sessions with short breaks.</p>
+      </header>
+
+      <div class="timer-wrap">
+        <div class="timer-ring" id="timer-ring">
+          <span id="timer-display">25:00</span>
+          <span id="timer-mode">Focus</span>
+        </div>
+        <div class="timer-controls">
+          <button class="btn" id="timer-start">Start</button>
+          <button class="btn secondary" id="timer-reset">Reset</button>
+        </div>
+        <div class="timer-lengths">
+          <label>Focus <input type="number" id="len-focus" min="1" max="120" value="25"> min</label>
+          <label>Break <input type="number" id="len-break" min="1" max="60" value="5"> min</label>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-notes" class="view">
+      <header class="view-header">
+        <h1>Notes</h1>
+        <p class="subtitle">Quick notes per subject, saved automatically.</p>
+      </header>
+
+      <div class="deck-controls">
+        <select id="note-select"></select>
+        <button class="btn small" id="note-new">New note</button>
+        <button class="btn small danger" id="note-delete">Delete</button>
+      </div>
+
+      <input type="text" id="note-title" placeholder="Note title" class="note-title-input">
+      <textarea id="note-body" placeholder="Start typing..."></textarea>
+    </section>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
