@@ -84,10 +84,21 @@ The simplest option is **GitHub Pages**:
 Any static host (Netlify, Vercel, Cloudflare Pages) works the same way —
 just point it at this folder.
 
+## Browser extension (desktop only)
+
+There's also a [browser extension](extension/README.md) that brings the
+same highlight-to-explain behavior to any webpage, not just Cassie's own
+paste box — highlight text on an article, a PDF, a Google Doc, and a
+small "Cassie" popup explains it right there. It only works on desktop
+Chrome/Edge (browser extensions don't run on phones), and it's meant for
+reading and homework help, not for use during a test.
+
 ## What Cassie is and isn't
 
 Cassie is inspired by desktop assistants like HeyClicky that place an AI
 next to your cursor — but it only "sees" and points within its own chat
-window. It doesn't capture your screen, read other apps, or require any
-OS-level permissions, which is what makes it installable on phone and
-desktop alike from one codebase.
+window (or, for the browser extension, the page you deliberately
+highlighted text on). It doesn't capture your screen, doesn't run
+silently in the background, and doesn't require any special OS-level
+permissions — everything it does is a direct, visible reaction to text
+you selected.
