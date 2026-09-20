@@ -56,6 +56,7 @@ const studyTextToggle = document.getElementById('study-text-toggle');
 const studyText = document.getElementById('study-text');
 const studyTextClear = document.getElementById('study-text-clear');
 const highlightToolbar = document.getElementById('highlight-toolbar');
+const contextMenu = document.getElementById('context-menu');
 
 /* ---------- animated cursor ---------- */
 let cursorState = 'idle';
@@ -356,16 +357,69 @@ chatLog.addEventListener('scroll', hideHighlightToolbar);
 studyText.addEventListener('scroll', hideHighlightToolbar);
 window.addEventListener('resize', hideHighlightToolbar);
 
+function sendExplainAction(text, action) {
+  const label = action === 'answer' ? 'Explain and answer' : 'Explain';
+  window.getSelection().removeAllRanges();
+  handleSend(`${label}: "${text}"`);
+}
+
 highlightToolbar.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
   const text = highlightToolbar.dataset.text;
   if (!text) return;
-  const label = btn.dataset.action === 'answer' ? 'Explain and answer' : 'Explain';
   hideHighlightToolbar();
-  window.getSelection().removeAllRanges();
-  handleSend(`${label}: "${text}"`);
+  sendExplainAction(text, btn.dataset.action);
 });
+
+/* ---------- custom right-click menu on the study-text box ---------- */
+/* Same scope as the toolbar above: only fires for a selection inside
+   #study-text, and adds "Explain" / "Explain & answer" next to a normal
+   Copy — it never touches the browser's native menu anywhere else. */
+function hideContextMenu() {
+  contextMenu.hidden = true;
+}
+
+studyText.addEventListener('contextmenu', (e) => {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!studyText.contains(range.commonAncestorContainer)) return;
+  const text = sel.toString().trim();
+  if (!text) return;
+
+  e.preventDefault();
+  hideHighlightToolbar();
+  contextMenu.dataset.text = text;
+  const left = Math.min(e.clientX, window.innerWidth - 170);
+  const top = Math.min(e.clientY, window.innerHeight - 150);
+  contextMenu.style.left = `${left}px`;
+  contextMenu.style.top = `${top}px`;
+  contextMenu.hidden = false;
+});
+
+contextMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const text = contextMenu.dataset.text;
+  hideContextMenu();
+  if (!text) return;
+  if (btn.dataset.action === 'copy') {
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
+    window.getSelection().removeAllRanges();
+    return;
+  }
+  sendExplainAction(text, btn.dataset.action);
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (!contextMenu.contains(e.target)) hideContextMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideContextMenu();
+});
+document.addEventListener('scroll', hideContextMenu, true);
+window.addEventListener('resize', hideContextMenu);
 
 /* ---------- init ---------- */
 if (state.studyText) studyText.innerText = state.studyText;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clicky-v2';
+const CACHE_NAME = 'clicky-v3';
 const ASSETS = [
   './',
   'index.html',
