@@ -55,8 +55,9 @@ const studyTextWrap = document.getElementById('study-text-wrap');
 const studyTextToggle = document.getElementById('study-text-toggle');
 const studyText = document.getElementById('study-text');
 const studyTextClear = document.getElementById('study-text-clear');
-const highlightToolbar = document.getElementById('highlight-toolbar');
-const contextMenu = document.getElementById('context-menu');
+const highlightPopover = document.getElementById('highlight-popover');
+const highlightPopoverBody = document.getElementById('highlight-popover-body');
+const highlightPopoverClose = document.getElementById('highlight-popover-close');
 
 /* ---------- animated cursor ---------- */
 /* Cassie trails just below-right of the real mouse/touch pointer. It only
@@ -336,113 +337,120 @@ studyTextClear.addEventListener('click', () => {
   studyText.innerText = '';
   state.studyText = '';
   save();
-  hideHighlightToolbar();
+  hideHighlightPopover();
 });
 
-/* ---------- highlight-to-ask ---------- */
+/* ---------- highlight-to-ask (automatic) ---------- */
 /* Only ever looks at text inside #study-text (what the user pasted into
-   Cassie), never at the rest of the page or anything outside the app. */
+   Cassie), never at the rest of the page or anything outside the app.
+   Highlighting a bit of that text — no button, no menu — shows the
+   explanation/answer in a small popover right there. Nothing here is
+   added to the main chat; it's a separate, throwaway lookup. */
 let selTimer = null;
+let lastAutoText = '';
+let highlightGen = 0;
 
-function hideHighlightToolbar() {
-  highlightToolbar.hidden = true;
+function hideHighlightPopover() {
+  highlightPopover.hidden = true;
+  lastAutoText = '';
+  highlightGen++; // invalidate any in-flight request
 }
 
-function updateHighlightToolbar() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideHighlightToolbar(); return; }
-  const range = sel.getRangeAt(0);
-  if (!studyText.contains(range.commonAncestorContainer)) { hideHighlightToolbar(); return; }
-  const text = sel.toString().trim();
-  if (!text) { hideHighlightToolbar(); return; }
+function positionPopover(rect) {
+  const width = highlightPopover.offsetWidth || 280;
+  let left = rect.left + rect.width / 2 - width / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
+  highlightPopover.style.left = `${left}px`;
 
-  const rect = range.getBoundingClientRect();
-  const left = Math.min(Math.max(rect.left + rect.width / 2, 60), window.innerWidth - 60);
-  const top = Math.max(rect.top, 50);
-  highlightToolbar.style.left = `${left}px`;
-  highlightToolbar.style.top = `${top}px`;
-  highlightToolbar.dataset.text = text;
-  highlightToolbar.hidden = false;
+  const estHeight = highlightPopover.offsetHeight || 90;
+  const spaceAbove = rect.top;
+  const top = spaceAbove > estHeight + 16
+    ? rect.top - estHeight - 8
+    : Math.min(rect.bottom + 8, window.innerHeight - estHeight - 12);
+  highlightPopover.style.top = `${Math.max(8, top)}px`;
+}
+
+function setPopoverContent(text, { muted = false } = {}) {
+  highlightPopoverBody.classList.toggle('muted', muted);
+  highlightPopoverBody.innerHTML = '';
+  text.split(/\n{2,}/).forEach((para) => {
+    const p = document.createElement('p');
+    p.textContent = para;
+    highlightPopoverBody.appendChild(p);
+  });
+}
+
+async function runAutoExplain(text, rect) {
+  const myGen = ++highlightGen;
+  highlightPopover.hidden = false;
+  setPopoverContent('Thinking…', { muted: true });
+  positionPopover(rect);
+
+  if (!state.apiKey) {
+    setPopoverContent('Add your Anthropic API key in Settings first.', { muted: true });
+    positionPopover(rect);
+    openSettings();
+    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
+    return;
+  }
+
+  setCursorMode('thinking');
+  try {
+    const reply = await askCassie(`Explain this, then give the answer:\n\n"${text}"`);
+    if (myGen !== highlightGen) return; // a newer selection superseded this one
+    setPopoverContent(reply);
+    positionPopover(rect);
+    detourToElement(highlightPopover, { click: true, resumeAfter: 900 });
+  } catch (err) {
+    if (myGen !== highlightGen) return;
+    setPopoverContent(`Something went wrong: ${err.message}`, { muted: true });
+    positionPopover(rect);
+  } finally {
+    if (myGen === highlightGen) setCursorMode('idle');
+  }
+}
+
+function checkSelectionForAutoExplain() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideHighlightPopover(); return; }
+  const range = sel.getRangeAt(0);
+  if (!studyText.contains(range.commonAncestorContainer)) { hideHighlightPopover(); return; }
+  const text = sel.toString().trim();
+  if (!text || text.length < 2 || text === lastAutoText) return;
+  lastAutoText = text;
+  runAutoExplain(text, range.getBoundingClientRect());
 }
 
 document.addEventListener('selectionchange', () => {
   clearTimeout(selTimer);
-  selTimer = setTimeout(updateHighlightToolbar, 120);
+  selTimer = setTimeout(checkSelectionForAutoExplain, 450);
 });
 
-document.addEventListener('mousedown', (e) => {
-  if (!highlightToolbar.contains(e.target) && !studyText.contains(e.target)) {
-    hideHighlightToolbar();
-  }
-});
-
-chatLog.addEventListener('scroll', hideHighlightToolbar);
-studyText.addEventListener('scroll', hideHighlightToolbar);
-window.addEventListener('resize', hideHighlightToolbar);
-
-function sendExplainAction(text, action) {
-  const label = action === 'answer' ? 'Explain and answer' : 'Explain';
-  window.getSelection().removeAllRanges();
-  handleSend(`${label}: "${text}"`);
+/* Explicit "I'm done" actions also clear the actual text selection, not
+   just our UI state — otherwise re-highlighting the exact same range
+   afterward fires no selectionchange event at all (browsers only fire it
+   on a real change) and the popover would never come back. Passive hides
+   (scroll, clicking elsewhere) leave the selection alone, since the user
+   might be in the middle of selecting something else entirely. */
+function dismissHighlightPopover() {
+  window.getSelection()?.removeAllRanges();
+  hideHighlightPopover();
 }
 
-highlightToolbar.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
-  const text = highlightToolbar.dataset.text;
-  if (!text) return;
-  hideHighlightToolbar();
-  sendExplainAction(text, btn.dataset.action);
-});
-
-/* ---------- custom right-click menu on the study-text box ---------- */
-/* Same scope as the toolbar above: only fires for a selection inside
-   #study-text, and adds "Explain" / "Explain & answer" next to a normal
-   Copy — it never touches the browser's native menu anywhere else. */
-function hideContextMenu() {
-  contextMenu.hidden = true;
-}
-
-studyText.addEventListener('contextmenu', (e) => {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  if (!studyText.contains(range.commonAncestorContainer)) return;
-  const text = sel.toString().trim();
-  if (!text) return;
-
-  e.preventDefault();
-  hideHighlightToolbar();
-  contextMenu.dataset.text = text;
-  const left = Math.min(e.clientX, window.innerWidth - 170);
-  const top = Math.min(e.clientY, window.innerHeight - 150);
-  contextMenu.style.left = `${left}px`;
-  contextMenu.style.top = `${top}px`;
-  contextMenu.hidden = false;
-});
-
-contextMenu.addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
-  const text = contextMenu.dataset.text;
-  hideContextMenu();
-  if (!text) return;
-  if (btn.dataset.action === 'copy') {
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
-    window.getSelection().removeAllRanges();
-    return;
-  }
-  sendExplainAction(text, btn.dataset.action);
-});
+highlightPopoverClose.addEventListener('click', dismissHighlightPopover);
 
 document.addEventListener('mousedown', (e) => {
-  if (!contextMenu.contains(e.target)) hideContextMenu();
+  if (!highlightPopover.contains(e.target) && !studyText.contains(e.target)) {
+    hideHighlightPopover();
+  }
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') hideContextMenu();
+  if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
-document.addEventListener('scroll', hideContextMenu, true);
-window.addEventListener('resize', hideContextMenu);
+
+chatLog.addEventListener('scroll', hideHighlightPopover);
+studyText.addEventListener('scroll', hideHighlightPopover);
+window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
 if (state.studyText) studyText.innerText = state.studyText;
