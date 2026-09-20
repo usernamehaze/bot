@@ -1,7 +1,7 @@
 'use strict';
 
 /* ---------- storage ---------- */
-const STORE_KEY = 'clicky.v1';
+const STORE_KEY = 'cassie.v1';
 
 function loadState() {
   try {
@@ -23,7 +23,7 @@ function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
-const SYSTEM_PROMPT = `You are Clicky, a brilliant, patient, encouraging AI tutor that lives inside a
+const SYSTEM_PROMPT = `You are Cassie, a brilliant, patient, encouraging AI tutor that lives inside a
 study app as an animated cursor character. You can help with any subject a
 student is studying: math, science, history, languages, coding, essay
 writing, test prep, and more.
@@ -50,7 +50,7 @@ const apiKeyInput = document.getElementById('api-key-input');
 const modelSelect = document.getElementById('model-select');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const clearChatBtn = document.getElementById('clear-chat-btn');
-const cursorEl = document.getElementById('clicky-cursor');
+const cursorEl = document.getElementById('cassie-cursor');
 const studyTextWrap = document.getElementById('study-text-wrap');
 const studyTextToggle = document.getElementById('study-text-toggle');
 const studyText = document.getElementById('study-text');
@@ -59,8 +59,8 @@ const highlightToolbar = document.getElementById('highlight-toolbar');
 const contextMenu = document.getElementById('context-menu');
 
 /* ---------- animated cursor ---------- */
-/* Clicky trails just below-right of the real mouse/touch pointer. It only
-   ever breaks away briefly ("detour") to point at something in Clicky's
+/* Cassie trails just below-right of the real mouse/touch pointer. It only
+   ever breaks away briefly ("detour") to point at something in Cassie's
    own UI (Settings, its latest reply), then snaps back to following you. */
 let cursorState = 'idle';
 let following = true;
@@ -146,7 +146,7 @@ function renderHistory() {
   if (state.messages.length === 0) {
     const bubble = document.createElement('div');
     bubble.className = 'bubble bubble-assistant intro';
-    bubble.innerHTML = "<p>Hi, I'm Clicky. Ask me anything you're studying — I'll walk you through it step by step.</p>";
+    bubble.innerHTML = "<p>Hi, I'm Cassie. Ask me anything you're studying — I'll walk you through it step by step.</p>";
     chatLog.appendChild(bubble);
     return;
   }
@@ -154,7 +154,7 @@ function renderHistory() {
 }
 
 /* ---------- Anthropic API ---------- */
-async function askClicky(userText) {
+async function askCassie(userText) {
   const body = {
     model: state.model,
     max_tokens: 1024,
@@ -206,7 +206,7 @@ async function handleSend(text) {
   sendBtn.disabled = true;
 
   try {
-    const reply = await askClicky(text);
+    const reply = await askCassie(text);
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
@@ -341,7 +341,7 @@ studyTextClear.addEventListener('click', () => {
 
 /* ---------- highlight-to-ask ---------- */
 /* Only ever looks at text inside #study-text (what the user pasted into
-   Clicky), never at the rest of the page or anything outside the app. */
+   Cassie), never at the rest of the page or anything outside the app. */
 let selTimer = null;
 
 function hideHighlightToolbar() {
