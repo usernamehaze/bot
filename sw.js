@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studybuddy-v1';
+const CACHE_NAME = 'clicky-v1';
 const ASSETS = [
   './',
   'index.html',

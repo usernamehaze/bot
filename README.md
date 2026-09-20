@@ -1,19 +1,41 @@
-# StudyBuddy
+# Clicky
 
-A small, offline-first study companion you can install on your phone and your
-computer straight from the browser — no app store, no account, no backend.
-All your data (flashcards, tasks, notes, focus history) stays on your device
-in local storage.
+An animated AI cursor that tutors you through whatever you're studying — by
+text or voice. Installable on your phone and your computer straight from
+the browser (a Progressive Web App), no app store, no account, no backend
+server to run.
 
-## Features
+## How it works
 
-- **Flashcards** with lightweight spaced repetition (cards you find hard come
-  back sooner; cards you know well come back later).
-- **Tasks & assignments** with due dates, sorted by what's coming up.
-- **Focus timer** (Pomodoro-style: focus sessions + short breaks), with a
-  daily focus-minutes counter and a day streak.
-- **Notes** per subject, saved automatically as you type.
-- Works fully **offline** after the first load, thanks to a service worker.
+- Clicky is a little animated cursor character that lives on screen, idles
+  near the input box, and "clicks" toward its own answers and toward
+  Settings when it needs your attention (e.g. to ask for an API key).
+- Ask it anything — any subject, any level — by typing or (on supported
+  browsers) tapping the mic button and talking.
+- It answers using Anthropic's Claude models, teaching step by step rather
+  than just handing over answers.
+- Optionally, it can read its answers aloud.
+
+## Bring your own API key
+
+This app is 100% client-side: there's no server, so it calls the Anthropic
+API directly from your browser using an API key you provide.
+
+1. Get a key at [console.anthropic.com](https://console.anthropic.com).
+2. Open Clicky, tap the gear icon (top right) → Settings.
+3. Paste your key in and pick a model (Sonnet 5 for the smartest answers,
+   Haiku 4.5 for speed).
+
+Your key is stored only in your browser's `localStorage` on your device. It
+is never sent anywhere except directly to Anthropic's API when you ask a
+question. If you host this app somewhere public, don't share a URL that has
+your key typed into it into anyone else's browser — each browser keeps its
+own separate copy, so this is safe by default, but treat the key like a
+password.
+
+**Cost note:** Anthropic API usage is billed per token on your own account
+(it isn't included with a claude.ai subscription). Check current pricing
+before heavy use.
 
 ## Running it locally
 
@@ -26,35 +48,34 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000` in your browser.
 
-(Opening `index.html` directly via `file://` also mostly works, but the
-service worker — and therefore full offline support and "Add to Home
-Screen" — requires a real `http://` or `https://` origin.)
+(Opening `index.html` directly via `file://` mostly works too, but the
+service worker — and therefore full offline caching of the app shell, and
+"Add to Home Screen" — requires a real `http://` or `https://` origin.
+Talking to the Anthropic API always requires an internet connection.)
 
 ## Installing on your phone
 
 1. Host the folder somewhere reachable over HTTPS (GitHub Pages, Netlify,
-   Vercel, or any static host all work — see below), or serve it on your
-   home network and open that URL on your phone.
+   Vercel, or any static host all work — see below).
 2. **Android (Chrome):** open the site, tap the menu (⋮), then **"Add to
    Home screen" / "Install app"**.
 3. **iPhone/iPad (Safari):** open the site, tap the **Share** icon, then
    **"Add to Home Screen"**.
-
-It then behaves like a normal app icon and opens full-screen, offline.
+   (Voice input via the mic button isn't supported in Safari; typing
+   always works. Voice *output* — read-aloud — works everywhere.)
 
 ## Installing on your computer
 
 1. Open the site in Chrome, Edge, or another Chromium-based browser.
 2. Click the **install icon** in the address bar (or the browser menu →
-   "Install StudyBuddy…").
+   "Install Clicky…").
 3. It opens in its own window from then on, like a native app.
 
-## Deploying for free (so you can install it anywhere)
+## Deploying for free
 
 The simplest option is **GitHub Pages**:
 
-1. Push this repo to GitHub (already done if you're reading this from the
-   repo).
+1. Push this repo to GitHub.
 2. In the repo settings, enable **Pages**, serving from the branch/folder
    containing these files.
 3. Open the published URL on your phone and computer and install it as
@@ -62,3 +83,11 @@ The simplest option is **GitHub Pages**:
 
 Any static host (Netlify, Vercel, Cloudflare Pages) works the same way —
 just point it at this folder.
+
+## What Clicky is and isn't
+
+Clicky is inspired by desktop assistants like HeyClicky that place an AI
+next to your cursor — but it only "sees" and points within its own chat
+window. It doesn't capture your screen, read other apps, or require any
+OS-level permissions, which is what makes it installable on phone and
+desktop alike from one codebase.
