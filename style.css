@@ -209,6 +209,20 @@ html, body {
 .highlight-popover-body p { margin: 0 0 8px; }
 .highlight-popover-body p:last-child { margin-bottom: 0; }
 .highlight-popover-body.muted { color: var(--muted); font-style: italic; }
+.popover-question { font-weight: 600; margin-bottom: 10px; }
+.popover-choice-row { display: flex; gap: 8px; }
+.popover-choice-btn {
+  flex: 1;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 0;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.popover-choice-btn:active { background: var(--primary-dark); }
 
 .bubble {
   max-width: 82%;

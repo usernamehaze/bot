@@ -380,9 +380,31 @@ function setPopoverContent(text, { muted = false } = {}) {
   });
 }
 
-async function runAutoExplain(text, rect) {
+let pendingText = '';
+let pendingRect = null;
+
+function setPopoverChoice(text, rect) {
+  pendingText = text;
+  pendingRect = rect;
+  highlightPopoverBody.classList.remove('muted');
+  highlightPopoverBody.innerHTML = `
+    <div class="popover-question">Explain this, or answer it?</div>
+    <div class="popover-choice-row">
+      <button type="button" class="popover-choice-btn" data-mode="explain">Explain</button>
+      <button type="button" class="popover-choice-btn" data-mode="answer">Answer</button>
+    </div>
+  `;
+  positionPopover(rect);
+}
+
+highlightPopoverBody.addEventListener('click', (e) => {
+  const btn = e.target.closest('.popover-choice-btn');
+  if (!btn) return;
+  runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
+});
+
+async function runExplainOrAnswer(text, rect, mode) {
   const myGen = ++highlightGen;
-  highlightPopover.hidden = false;
   setPopoverContent('Thinking…', { muted: true });
   positionPopover(rect);
 
@@ -395,8 +417,11 @@ async function runAutoExplain(text, rect) {
   }
 
   setCursorMode('thinking');
+  const prompt = mode === 'answer'
+    ? `Explain this, then give the answer:\n\n"${text}"`
+    : `Explain this:\n\n"${text}"`;
   try {
-    const reply = await askCassie(`Explain this, then give the answer:\n\n"${text}"`);
+    const reply = await askCassie(prompt);
     if (myGen !== highlightGen) return; // a newer selection superseded this one
     setPopoverContent(reply);
     positionPopover(rect);
@@ -418,7 +443,8 @@ function checkSelectionForAutoExplain() {
   const text = sel.toString().trim();
   if (!text || text.length < 2 || text === lastAutoText) return;
   lastAutoText = text;
-  runAutoExplain(text, range.getBoundingClientRect());
+  highlightPopover.hidden = false;
+  setPopoverChoice(text, range.getBoundingClientRect());
 }
 
 document.addEventListener('selectionchange', () => {

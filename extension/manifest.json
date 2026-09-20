@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie — AI Study Tutor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Highlight text on any page to get Cassie's explanation or answer in a small, clearly-labeled popup.",
   "icons": {
     "16": "icons/icon-16.png",
