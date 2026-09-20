@@ -45,15 +45,12 @@
     </div>
   </main>
 
-  <div id="highlight-toolbar" class="highlight-toolbar" hidden>
-    <button type="button" data-action="explain">Explain</button>
-    <button type="button" data-action="answer">Explain &amp; answer</button>
-  </div>
-
-  <div id="context-menu" class="context-menu" hidden>
-    <button type="button" data-action="copy">Copy</button>
-    <button type="button" data-action="explain">Explain</button>
-    <button type="button" data-action="answer">Explain &amp; answer</button>
+  <div id="highlight-popover" class="highlight-popover" hidden>
+    <div class="highlight-popover-header">
+      <span>Cassie</span>
+      <button type="button" id="highlight-popover-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="highlight-popover-body" class="highlight-popover-body"></div>
   </div>
 
   <form id="composer" class="composer">
