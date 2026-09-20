@@ -13,6 +13,7 @@ function loadState() {
     model: 'claude-sonnet-5',
     voiceOut: false,
     messages: [], // { role: 'user' | 'assistant', content: '...' }
+    studyText: '',
   };
 }
 
@@ -50,6 +51,11 @@ const modelSelect = document.getElementById('model-select');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const cursorEl = document.getElementById('clicky-cursor');
+const studyTextWrap = document.getElementById('study-text-wrap');
+const studyTextToggle = document.getElementById('study-text-toggle');
+const studyText = document.getElementById('study-text');
+const studyTextClear = document.getElementById('study-text-clear');
+const highlightToolbar = document.getElementById('highlight-toolbar');
 
 /* ---------- animated cursor ---------- */
 let cursorState = 'idle';
@@ -282,7 +288,87 @@ function speak(text) {
   window.speechSynthesis.speak(utter);
 }
 
+/* ---------- study text panel ---------- */
+studyTextToggle.addEventListener('click', () => {
+  studyTextWrap.classList.toggle('expanded');
+});
+
+studyText.addEventListener('paste', (e) => {
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+  document.execCommand('insertText', false, text);
+});
+
+let studyTextSaveTimer = null;
+studyText.addEventListener('input', () => {
+  clearTimeout(studyTextSaveTimer);
+  studyTextSaveTimer = setTimeout(() => {
+    state.studyText = studyText.innerText;
+    save();
+  }, 300);
+});
+
+studyTextClear.addEventListener('click', () => {
+  studyText.innerText = '';
+  state.studyText = '';
+  save();
+  hideHighlightToolbar();
+});
+
+/* ---------- highlight-to-ask ---------- */
+/* Only ever looks at text inside #study-text (what the user pasted into
+   Clicky), never at the rest of the page or anything outside the app. */
+let selTimer = null;
+
+function hideHighlightToolbar() {
+  highlightToolbar.hidden = true;
+}
+
+function updateHighlightToolbar() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideHighlightToolbar(); return; }
+  const range = sel.getRangeAt(0);
+  if (!studyText.contains(range.commonAncestorContainer)) { hideHighlightToolbar(); return; }
+  const text = sel.toString().trim();
+  if (!text) { hideHighlightToolbar(); return; }
+
+  const rect = range.getBoundingClientRect();
+  const left = Math.min(Math.max(rect.left + rect.width / 2, 60), window.innerWidth - 60);
+  const top = Math.max(rect.top, 50);
+  highlightToolbar.style.left = `${left}px`;
+  highlightToolbar.style.top = `${top}px`;
+  highlightToolbar.dataset.text = text;
+  highlightToolbar.hidden = false;
+}
+
+document.addEventListener('selectionchange', () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(updateHighlightToolbar, 120);
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (!highlightToolbar.contains(e.target) && !studyText.contains(e.target)) {
+    hideHighlightToolbar();
+  }
+});
+
+chatLog.addEventListener('scroll', hideHighlightToolbar);
+studyText.addEventListener('scroll', hideHighlightToolbar);
+window.addEventListener('resize', hideHighlightToolbar);
+
+highlightToolbar.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const text = highlightToolbar.dataset.text;
+  if (!text) return;
+  const label = btn.dataset.action === 'answer' ? 'Explain and answer' : 'Explain';
+  hideHighlightToolbar();
+  window.getSelection().removeAllRanges();
+  handleSend(`${label}: "${text}"`);
+});
+
 /* ---------- init ---------- */
+if (state.studyText) studyText.innerText = state.studyText;
 renderHistory();
 requestAnimationFrame(() => {
   setCursorMode('idle');

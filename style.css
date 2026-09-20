@@ -95,6 +95,97 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ---------- study text / highlight-to-ask ---------- */
+#study-text-wrap {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.study-text-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.study-text-header .chevron {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  transition: transform .2s;
+}
+#study-text-wrap.expanded .study-text-header .chevron { transform: rotate(180deg); }
+
+.study-text-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .25s ease;
+}
+#study-text-wrap.expanded .study-text-body { grid-template-rows: 1fr; }
+.study-text-body > * { overflow: hidden; }
+
+#study-text {
+  min-height: 90px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: .9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+#study-text:empty:before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+#study-text:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+.text-btn {
+  display: block;
+  margin: 0 16px 10px auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.highlight-toolbar {
+  position: fixed;
+  display: flex;
+  gap: 4px;
+  background: #1c1a26;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  z-index: 25;
+  transform: translate(-50%, -100%);
+}
+.highlight-toolbar button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: 7px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.highlight-toolbar button:active { background: rgba(255, 255, 255, .15); }
+
 .bubble {
   max-width: 82%;
   padding: 11px 14px;
