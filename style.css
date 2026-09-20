@@ -186,6 +186,36 @@ html, body {
 }
 .highlight-toolbar button:active { background: rgba(255, 255, 255, .15); }
 
+.context-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  z-index: 26;
+}
+.context-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: .88rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.context-menu button:active { background: var(--border); }
+.context-menu button[data-action="copy"] {
+  border-bottom: 1px solid var(--border);
+  border-radius: 7px 7px 0 0;
+  margin-bottom: 4px;
+  padding-bottom: 10px;
+}
+
 .bubble {
   max-width: 82%;
   padding: 11px 14px;
