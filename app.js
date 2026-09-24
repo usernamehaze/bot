@@ -527,6 +527,21 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
 
+/* Right-click (or two-finger tap on a trackpad) on selected text shows the
+   Explain / Answer buttons at the pointer, instead of the browser menu.
+   Only hijacks when there IS a selection; plain inputs keep their native menu. */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('input, textarea')) return; // keep native menu in edit fields
+  const sel = window.getSelection();
+  const text = sel ? sel.toString().trim() : '';
+  if (!text || text.length < 2) return; // nothing selected -> normal menu
+  e.preventDefault();
+  lastAutoText = text;
+  const rect = { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY, width: 0, height: 0 };
+  highlightPopover.hidden = false;
+  setPopoverChoice(text, rect);
+});
+
 chatLog.addEventListener('scroll', hideHighlightPopover);
 studyText.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);

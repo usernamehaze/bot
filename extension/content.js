@@ -220,6 +220,23 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popover.hidden) dismissPopover();
   });
+
+  // Right-click (or two-finger tap) on selected text shows the Explain / Answer
+  // buttons at the pointer instead of the browser's menu. Only when there's a
+  // selection; edit fields keep their native menu.
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target === host) return;
+    if (e.target.closest && e.target.closest('input, textarea')) return;
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if (!text || text.length < 2) return;
+    e.preventDefault();
+    lastAutoText = text;
+    const rect = { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY, width: 0, height: 0 };
+    popover.hidden = false;
+    showChoice(text, rect);
+  });
+
   window.addEventListener('scroll', hidePopover, true);
   window.addEventListener('resize', hidePopover);
 })();
