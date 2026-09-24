@@ -20,9 +20,17 @@ function modelRetired(status, msg) {
   return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
 }
 
+function isOverloaded(status, msg) {
+  return status === 429 || status === 503 ||
+    /high demand|overloaded|try again later|temporarily|unavailable|resource exhausted|quota/i.test(msg || '');
+}
+const MAX_OVERLOAD_RETRIES = 4;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function askCassie(text, apiKey, model) {
   let modelId = model || FALLBACK_MODEL;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let overloadTries = 0;
+  while (true) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
     const res = await fetch(url, {
       method: 'POST',
@@ -44,6 +52,14 @@ async function askCassie(text, apiKey, model) {
         modelId = FALLBACK_MODEL;
         chrome.storage.local.set({ model: FALLBACK_MODEL }); // remember for next time
         continue;
+      }
+      if (isOverloaded(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
+        overloadTries += 1;
+        await sleep(1200 * Math.pow(2, overloadTries - 1)); // ~1.2s, 2.4s, 4.8s, 9.6s
+        continue;
+      }
+      if (isOverloaded(res.status, detail)) {
+        throw new Error("Google's free tier is really busy right now — give it a minute and try again.");
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
