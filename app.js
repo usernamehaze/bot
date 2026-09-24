@@ -1,7 +1,7 @@
 'use strict';
 
 /* ---------- storage ---------- */
-const STORE_KEY = 'cassie.v1';
+const STORE_KEY = 'cassie.v2'; // v2: switched from Anthropic to Google Gemini
 
 function loadState() {
   try {
@@ -10,7 +10,7 @@ function loadState() {
   } catch (e) { /* ignore corrupt state */ }
   return {
     apiKey: '',
-    model: 'claude-sonnet-5',
+    model: 'gemini-2.0-flash',
     voiceOut: false,
     messages: [], // { role: 'user' | 'assistant', content: '...' }
     studyText: '',
@@ -154,25 +154,28 @@ function renderHistory() {
   state.messages.forEach((m) => renderMessage(m.role, m.content));
 }
 
-/* ---------- Anthropic API ---------- */
-async function askCassie(userText) {
-  const body = {
-    model: state.model,
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [...state.messages, { role: 'user', content: userText }]
-      .map((m) => ({ role: m.role, content: m.content })),
-  };
+/* ---------- Google Gemini API (free tier) ---------- */
+/* `msgs` is an array of { role: 'user' | 'assistant', content } — the caller
+   owns the history (handleSend passes state.messages; the highlight popover
+   passes a one-off), so nothing is appended or duplicated here. */
+async function askCassie(msgs) {
+  const contents = msgs.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': state.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      'x-goog-api-key': state.apiKey,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+    }),
   });
 
   if (!res.ok) {
@@ -182,7 +185,13 @@ async function askCassie(userText) {
   }
 
   const data = await res.json();
-  return (data.content || []).map((block) => block.text || '').join('').trim() || '(no response)';
+  const cand = data.candidates?.[0];
+  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  if (!text) {
+    if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
+    return '(no response)';
+  }
+  return text;
 }
 
 /* ---------- send flow ---------- */
@@ -192,7 +201,7 @@ async function handleSend(text) {
   if (!state.apiKey) {
     openSettings();
     detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', "I need an Anthropic API key before I can answer — pop it into Settings (top right) and I'll be ready.");
+    renderMessage('assistant', "I need a free Google (Gemini) API key before I can answer — pop it into Settings (top right) and I'll be ready.");
     return;
   }
 
@@ -207,7 +216,7 @@ async function handleSend(text) {
   sendBtn.disabled = true;
 
   try {
-    const reply = await askCassie(text);
+    const reply = await askCassie(state.messages);
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
@@ -409,7 +418,7 @@ async function runExplainOrAnswer(text, rect, mode) {
   positionPopover(rect);
 
   if (!state.apiKey) {
-    setPopoverContent('Add your Anthropic API key in Settings first.', { muted: true });
+    setPopoverContent('Add your free Google (Gemini) API key in Settings first.', { muted: true });
     positionPopover(rect);
     openSettings();
     detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
@@ -421,7 +430,7 @@ async function runExplainOrAnswer(text, rect, mode) {
     ? `Explain this, then give the answer:\n\n"${text}"`
     : `Explain this:\n\n"${text}"`;
   try {
-    const reply = await askCassie(prompt);
+    const reply = await askCassie([{ role: 'user', content: prompt }]);
     if (myGen !== highlightGen) return; // a newer selection superseded this one
     setPopoverContent(reply);
     positionPopover(rect);

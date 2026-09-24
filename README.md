@@ -12,30 +12,32 @@ server to run.
   Settings when it needs your attention (e.g. to ask for an API key).
 - Ask it anything — any subject, any level — by typing or (on supported
   browsers) tapping the mic button and talking.
-- It answers using Anthropic's Claude models, teaching step by step rather
-  than just handing over answers.
+- It answers using Google's Gemini models (free tier), teaching step by
+  step rather than just handing over answers.
 - Optionally, it can read its answers aloud.
 
-## Bring your own API key
+## Bring your own (free) API key
 
-This app is 100% client-side: there's no server, so it calls the Anthropic
-API directly from your browser using an API key you provide.
+This app is 100% client-side: there's no server, so it calls Google's
+Gemini API directly from your browser using an API key you provide.
 
-1. Get a key at [console.anthropic.com](https://console.anthropic.com).
+1. Get a **free** key (no credit card required) at
+   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
 2. Open Cassie, tap the gear icon (top right) → Settings.
-3. Paste your key in and pick a model (Sonnet 5 for the smartest answers,
-   Haiku 4.5 for speed).
+3. Paste your key in and pick a model (Gemini 2.0 Flash for speed, or
+   Gemini 2.5 Flash for smarter answers).
 
 Your key is stored only in your browser's `localStorage` on your device. It
-is never sent anywhere except directly to Anthropic's API when you ask a
+is never sent anywhere except directly to Google's Gemini API when you ask a
 question. If you host this app somewhere public, don't share a URL that has
 your key typed into it into anyone else's browser — each browser keeps its
 own separate copy, so this is safe by default, but treat the key like a
 password.
 
-**Cost note:** Anthropic API usage is billed per token on your own account
-(it isn't included with a claude.ai subscription). Check current pricing
-before heavy use.
+**Cost note:** Gemini's free tier is genuinely free but rate-limited (only
+so many requests per minute/day). That's plenty for one student's studying;
+it would slow down under heavy shared use. No credit card and no billing
+are required for the free tier.
 
 ## Running it locally
 
@@ -51,7 +53,7 @@ Then open `http://localhost:8000` in your browser.
 (Opening `index.html` directly via `file://` mostly works too, but the
 service worker — and therefore full offline caching of the app shell, and
 "Add to Home Screen" — requires a real `http://` or `https://` origin.
-Talking to the Anthropic API always requires an internet connection.)
+Talking to the Gemini API always requires an internet connection.)
 
 ## Installing on your phone
 

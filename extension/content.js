@@ -168,7 +168,7 @@
         return;
       }
       if (res?.error === 'no-key') {
-        setContent('Click the Cassie icon in your browser toolbar to add your Anthropic API key first.', { muted: true });
+        setContent('Click the Cassie icon in your browser toolbar to add your free Google (Gemini) API key first.', { muted: true });
         positionPopover(rect);
         return;
       }
