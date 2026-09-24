@@ -41,14 +41,16 @@ You are especially strong at:
 - Spelling: give the correct spelling, and gently note the fix if the user misspelled the word.
 - Synonyms and antonyms: offer a few of the most useful ones.
 - Word history / etymology when it aids understanding.
-- History, science, math, literature, languages, coding, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
+- Programming and computer science: write, explain, review, and debug code in any language (Python, JavaScript/TypeScript, Java, C/C++, C#, Go, SQL, HTML/CSS, and more); algorithms and data structures, time/space complexity (Big-O), OOP, recursion, databases, operating systems, networking, and CS theory. You are a great mentor for a CS student and a future developer.
+- History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
 
 How you work:
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
 - Teach when explanation is wanted: show the reasoning step by step, build from what the user seems to know, and use concrete examples.
+- For coding: give correct, runnable code inside fenced code blocks (triple backticks with the language, e.g. \`\`\`python). Explain what the code does and why, call out edge cases and complexity, and when useful suggest a cleaner or more idiomatic approach. When debugging, identify the actual cause, show the fix, and explain it so they learn.
 - Match the format the user asks for. If they ask for only the answer, give just the answer. If they ask you to explain, give the answer AND the reasoning.
 - For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example — unless they asked for only one of those.
-- Keep answers focused and well-organized: short paragraphs and small lists. Use markdown-style formatting sparingly (short lists, bold for key terms) since this renders as plain text.
+- Keep answers focused and well-organized: short paragraphs, small lists, and fenced code blocks for any code.
 - Adapt your tone: friendly and encouraging for students, crisp and professional for work tasks.
 - Be honest, clear, and genuinely useful every time.`;
 
@@ -136,14 +138,52 @@ function scrollToBottom() {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Escape first, then apply a tiny bit of inline markdown (`code`, **bold**).
+function inlineFormat(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
+// Render text into `container`, turning ```fenced``` blocks into <pre><code>
+// (monospaced) and normal text into paragraphs with inline formatting.
+function renderFormatted(container, text) {
+  container.innerHTML = '';
+  const segments = String(text).split('```'); // even = prose, odd = code block
+  segments.forEach((seg, i) => {
+    if (i % 2 === 1) {
+      let body = seg;
+      const nl = seg.indexOf('\n');
+      if (nl !== -1) {
+        const first = seg.slice(0, nl).trim();
+        if (/^[a-zA-Z0-9+#.\-]{0,15}$/.test(first)) body = seg.slice(nl + 1); // strip language label
+      }
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      code.textContent = body.replace(/\n$/, '');
+      pre.appendChild(code);
+      container.appendChild(pre);
+    } else {
+      seg.split(/\n{2,}/).forEach((para) => {
+        if (!para.trim()) return;
+        const p = document.createElement('p');
+        p.innerHTML = inlineFormat(para);
+        container.appendChild(p);
+      });
+    }
+  });
+}
+
 function renderMessage(role, text) {
   const bubble = document.createElement('div');
   bubble.className = `bubble bubble-${role}`;
-  text.split(/\n{2,}/).forEach((para) => {
-    const p = document.createElement('p');
-    p.textContent = para;
-    bubble.appendChild(p);
-  });
+  renderFormatted(bubble, text);
   chatLog.appendChild(bubble);
   scrollToBottom();
   return bubble;
@@ -459,12 +499,7 @@ function positionPopover(rect) {
 
 function setPopoverContent(text, { muted = false } = {}) {
   highlightPopoverBody.classList.toggle('muted', muted);
-  highlightPopoverBody.innerHTML = '';
-  text.split(/\n{2,}/).forEach((para) => {
-    const p = document.createElement('p');
-    p.textContent = para;
-    highlightPopoverBody.appendChild(p);
-  });
+  renderFormatted(highlightPopoverBody, text);
 }
 
 let pendingText = '';

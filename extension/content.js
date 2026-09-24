@@ -57,9 +57,15 @@
       max-height: 260px;
       overflow-y: auto;
     }
-    .body p { margin: 0 0 8px; }
+    .body p { margin: 0 0 8px; white-space: pre-wrap; }
     .body p:last-child { margin-bottom: 0; }
     .body.muted { color: #6b6f8a; font-style: italic; }
+    .body pre {
+      background: #0d0d12; color: #f2f2f5; padding: 10px 12px;
+      border-radius: 8px; overflow-x: auto; margin: 8px 0; white-space: pre;
+    }
+    .body pre code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; background: none; padding: 0; }
+    .body code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; background: rgba(127,127,127,.18); padding: 1px 4px; border-radius: 4px; }
     .question { font-weight: 600; margin-bottom: 10px; }
     .choice-row { display: flex; gap: 8px; }
     .choice-btn {
@@ -104,13 +110,41 @@
     hidePopover();
   }
 
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+  function inlineFormat(text) {
+    return escapeHtml(text)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  }
+
   function setContent(text, { muted = false } = {}) {
     body.classList.toggle('muted', muted);
     body.innerHTML = '';
-    text.split(/\n{2,}/).forEach((para) => {
-      const p = document.createElement('p');
-      p.textContent = para;
-      body.appendChild(p);
+    String(text).split('```').forEach((seg, i) => {
+      if (i % 2 === 1) {
+        let code = seg;
+        const nl = seg.indexOf('\n');
+        if (nl !== -1) {
+          const first = seg.slice(0, nl).trim();
+          if (/^[a-zA-Z0-9+#.\-]{0,15}$/.test(first)) code = seg.slice(nl + 1);
+        }
+        const pre = document.createElement('pre');
+        const c = document.createElement('code');
+        c.textContent = code.replace(/\n$/, '');
+        pre.appendChild(c);
+        body.appendChild(pre);
+      } else {
+        seg.split(/\n{2,}/).forEach((para) => {
+          if (!para.trim()) return;
+          const p = document.createElement('p');
+          p.innerHTML = inlineFormat(para);
+          body.appendChild(p);
+        });
+      }
     });
   }
 
