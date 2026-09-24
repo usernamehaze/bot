@@ -7,7 +7,11 @@ const status = document.getElementById('status');
 
 chrome.storage.local.get(['apiKey', 'model'], ({ apiKey, model }) => {
   if (apiKey) apiKeyInput.value = apiKey;
-  if (model) modelSelect.value = model;
+  // Only restore the saved model if it's still one of the current options;
+  // otherwise leave the dropdown on its default (a retired ID was stored).
+  if (model && [...modelSelect.options].some((o) => o.value === model)) {
+    modelSelect.value = model;
+  }
 });
 
 saveBtn.addEventListener('click', () => {
