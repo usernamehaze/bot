@@ -4,6 +4,8 @@
   const HOST_ID = 'cassie-ext-host-92f1';
   if (document.getElementById(HOST_ID)) return; // avoid double injection
 
+  console.log('[Cassie] extension loaded on this page — highlight text to use it.');
+
   const host = document.createElement('div');
   host.id = HOST_ID;
   document.documentElement.appendChild(host);
@@ -192,15 +194,27 @@
     showChoice(text, range.getBoundingClientRect());
   }
 
+  // Primary trigger: mouseup is the reliable "user finished selecting with the
+  // mouse" signal across sites. A tiny delay lets the browser finalize the
+  // selection before we read it.
+  document.addEventListener('mouseup', (e) => {
+    if (e.target === host) return; // clicks inside our own popover
+    setTimeout(checkSelection, 10);
+  });
+
+  // Backup trigger: keyboard selection (shift+arrows) fires no mouseup, so
+  // still watch selectionchange, debounced.
   document.addEventListener('selectionchange', () => {
     clearTimeout(selTimer);
-    selTimer = setTimeout(checkSelection, 450);
+    selTimer = setTimeout(checkSelection, 500);
   });
 
   closeBtn.addEventListener('click', dismissPopover);
 
+  // Hide when the user starts a fresh interaction elsewhere (but not the
+  // mousedown that begins a new selection inside a page — checkSelection on
+  // the following mouseup will re-show it).
   document.addEventListener('mousedown', (e) => {
-    // events from inside our shadow root are retargeted to `host` here
     if (e.target !== host) hidePopover();
   });
   document.addEventListener('keydown', (e) => {
