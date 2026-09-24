@@ -12,6 +12,7 @@ function loadState() {
     apiKey: '',
     model: 'gemini-3.6-flash',
     voiceOut: false,
+    webSearch: true, // fact-check via Google Search grounding when available
     messages: [], // { role: 'user' | 'assistant', content: '...' }
     studyText: '',
   };
@@ -63,6 +64,7 @@ const settingsCloseBtn = document.getElementById('settings-close-btn');
 const apiKeyInput = document.getElementById('api-key-input');
 const modelSelect = document.getElementById('model-select');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
+const webSearchToggle = document.getElementById('web-search-toggle');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const cursorEl = document.getElementById('cassie-cursor');
 const studyTextWrap = document.getElementById('study-text-wrap');
@@ -187,6 +189,18 @@ function isOverloaded(status, msg) {
 const MAX_OVERLOAD_RETRIES = 4;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* Pull the web sources Gemini used to ground its answer, so we can show them. */
+function extractSources(cand) {
+  const chunks = cand?.groundingMetadata?.groundingChunks || [];
+  const seen = new Set();
+  const out = [];
+  for (const c of chunks) {
+    const uri = c.web && c.web.uri;
+    if (uri && !seen.has(uri)) { seen.add(uri); out.push(c.web.title || uri); }
+  }
+  return out.slice(0, 5);
+}
+
 /* `msgs` is an array of { role: 'user' | 'assistant', content } — the caller
    owns the history (handleSend passes state.messages; the highlight popover
    passes a one-off), so nothing is appended or duplicated here. */
@@ -197,8 +211,16 @@ async function askCassie(msgs) {
   }));
 
   let model = state.model;
+  let useSearch = state.webSearch !== false; // fact-check with Google Search
   let overloadTries = 0;
   while (true) {
+    const body = {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+    };
+    if (useSearch) body.tools = [{ google_search: {} }];
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const res = await fetch(url, {
       method: 'POST',
@@ -206,11 +228,7 @@ async function askCassie(msgs) {
         'content-type': 'application/json',
         'x-goog-api-key': state.apiKey,
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -220,6 +238,12 @@ async function askCassie(msgs) {
         model = FALLBACK_MODEL;
         state.model = FALLBACK_MODEL; // remember, so we skip the retry next time
         save();
+        continue;
+      }
+      // If the search tool isn't allowed (e.g. free-tier/model limit), drop it
+      // and answer normally rather than failing.
+      if (useSearch && res.status === 400) {
+        useSearch = false;
         continue;
       }
       if (isOverloaded(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
@@ -235,11 +259,13 @@ async function askCassie(msgs) {
 
     const data = await res.json();
     const cand = data.candidates?.[0];
-    const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+    let text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
     if (!text) {
       if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
       return '(no response)';
     }
+    const sources = extractSources(cand);
+    if (sources.length) text += `\n\nSources: ${sources.join(' · ')}`;
     return text;
   }
 }
@@ -306,12 +332,14 @@ function openSettings() {
   apiKeyInput.value = state.apiKey;
   modelSelect.value = state.model;
   voiceOutToggle.checked = state.voiceOut;
+  webSearchToggle.checked = state.webSearch !== false;
   settingsPanel.hidden = false;
 }
 function closeSettings() {
   state.apiKey = apiKeyInput.value.trim();
   state.model = modelSelect.value;
   state.voiceOut = voiceOutToggle.checked;
+  state.webSearch = webSearchToggle.checked;
   save();
   settingsPanel.hidden = true;
   resumeFollowing();
