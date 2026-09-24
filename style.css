@@ -238,6 +238,35 @@ html, body {
 }
 .bubble p { margin: 0 0 8px; }
 .bubble p:last-child { margin-bottom: 0; }
+
+/* code rendering (chat bubbles + highlight popover) */
+.bubble pre,
+.highlight-popover-body pre {
+  background: #0d0d12;
+  color: #f2f2f5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  white-space: pre;
+}
+.bubble pre code,
+.highlight-popover-body pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .82rem;
+  line-height: 1.5;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.bubble code,
+.highlight-popover-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .88em;
+  background: rgba(127, 127, 127, .18);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .bubble-user {
   align-self: flex-end;
   background: var(--bubble-user);
