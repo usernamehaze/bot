@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Cassie — AI Study Tutor",
-  "version": "1.2.0",
-  "description": "Highlight text on any page to get Cassie's explanation or answer in a small, clearly-labeled popup.",
+  "version": "2.0.0",
+  "description": "Highlight text on any page to get Cassie's explanation or answer in a small, clearly-labeled popup. Runs on Google Gemini's free tier.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -30,5 +30,5 @@
     }
   ],
   "permissions": ["storage"],
-  "host_permissions": ["https://api.anthropic.com/*"]
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"]
 }

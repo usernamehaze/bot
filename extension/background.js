@@ -15,19 +15,18 @@ Teach, don't just answer:
 - Be warm and encouraging, especially when the student is stuck.`;
 
 async function askCassie(text, apiKey, model) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const modelId = model || 'gemini-2.0-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      'x-goog-api-key': apiKey,
     },
     body: JSON.stringify({
-      model: model || 'claude-sonnet-5',
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: text }],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text }] }],
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
     }),
   });
 
@@ -38,7 +37,13 @@ async function askCassie(text, apiKey, model) {
   }
 
   const data = await res.json();
-  return (data.content || []).map((block) => block.text || '').join('').trim() || '(no response)';
+  const cand = data.candidates?.[0];
+  const reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  if (!reply) {
+    if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
+    return '(no response)';
+  }
+  return reply;
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

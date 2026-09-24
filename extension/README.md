@@ -6,11 +6,11 @@ small, clearly-labeled popup shows Cassie's explanation or answer, right
 where you selected it.
 
 It's built the same way as the main [Cassie app](../README.md): no backend,
-no account, calling the Anthropic API directly using an API key you
-provide. It doesn't hide anything, doesn't disguise itself, and doesn't
-watch your screen — it only reacts when you deliberately highlight text,
-and it always shows up as an obvious "Cassie" popup with a close button and
-your browser's normal extension icon in the toolbar.
+no account, calling Google's Gemini API (free tier) directly using an API
+key you provide. It doesn't hide anything, doesn't disguise itself, and
+doesn't watch your screen — it only reacts when you deliberately highlight
+text, and it always shows up as an obvious "Cassie" popup with a close
+button and your browser's normal extension icon in the toolbar.
 
 **This is meant for reading and homework help, not for use during a test or
 quiz** — using it to get instant answers during graded work is exactly the
@@ -36,13 +36,13 @@ directly from these files:
 ## Setting your API key
 
 1. Click the Cassie icon in your toolbar.
-2. Paste in your Anthropic API key (get one at console.anthropic.com) and
-   pick a model.
+2. Paste in your **free** Google (Gemini) API key — get one with no credit
+   card at aistudio.google.com/app/apikey — and pick a model.
 3. Click **Save**.
 
 Your key is stored in the extension's own local storage on your device —
-never synced anywhere, never sent anywhere except directly to Anthropic's
-API when you highlight something.
+never synced anywhere, never sent anywhere except directly to Google's
+Gemini API when you highlight something.
 
 ## Using it
 
@@ -54,7 +54,7 @@ something new replaces it.
 ## Files
 
 - `manifest.json` — extension configuration (Manifest V3).
-- `background.js` — service worker that calls the Anthropic API (keeps the
+- `background.js` — service worker that calls the Gemini API (keeps the
   network request out of the page's own context).
 - `content.js` — injected into every page; watches for text selection and
   renders the popup in an isolated Shadow DOM so it can't be styled or
