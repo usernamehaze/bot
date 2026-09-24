@@ -32,7 +32,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 7px 6px 7px 12px;
-      background: #6d28d9;
+      background: #db2777;
       color: #fff;
       font-size: 12px;
       font-weight: 700;
@@ -64,7 +64,7 @@
     .choice-row { display: flex; gap: 8px; }
     .choice-btn {
       flex: 1;
-      background: #6d28d9;
+      background: #db2777;
       color: #fff;
       border: none;
       border-radius: 8px;
@@ -73,7 +73,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .choice-btn:hover { background: #5b21b6; }
+    .choice-btn:hover { background: #be185d; }
   `;
   shadow.appendChild(style);
 

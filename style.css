@@ -3,10 +3,10 @@
   --surface: #ffffff;
   --text: #1c1d2b;
   --muted: #6b6f8a;
-  --primary: #6d28d9;
-  --primary-dark: #5b21b6;
+  --primary: #db2777;
+  --primary-dark: #be185d;
   --border: #e6e2f5;
-  --bubble-user: #6d28d9;
+  --bubble-user: #db2777;
   --bubble-user-text: #ffffff;
   --bubble-assistant: #ffffff;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -65,7 +65,7 @@ html, body {
   height: 12px;
   border-radius: 50%;
   background: var(--primary);
-  box-shadow: 0 0 0 4px rgba(109, 40, 217, 0.15);
+  box-shadow: 0 0 0 4px rgba(219, 39, 119, 0.18);
 }
 
 .icon-btn {
