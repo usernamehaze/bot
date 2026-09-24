@@ -10,17 +10,25 @@ function loadState() {
   } catch (e) { /* ignore corrupt state */ }
   return {
     apiKey: '',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
     voiceOut: false,
     messages: [], // { role: 'user' | 'assistant', content: '...' }
     studyText: '',
   };
 }
 
+const CURRENT_MODELS = ['gemini-3.6-flash', 'gemini-3.6-pro'];
+
 let state = loadState();
 
 function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+// If a previously stored model has since been retired, snap to the current default.
+if (!CURRENT_MODELS.includes(state.model)) {
+  state.model = 'gemini-3.6-flash';
+  save();
 }
 
 const SYSTEM_PROMPT = `You are Cassie, a brilliant, patient, encouraging AI tutor that lives inside a
@@ -155,6 +163,15 @@ function renderHistory() {
 }
 
 /* ---------- Google Gemini API (free tier) ---------- */
+/* Google retires model IDs over time. FALLBACK_MODEL is the current known-good
+   one; if a request fails because the selected model is gone, we retry once on
+   the fallback and remember it, so a retired ID never permanently breaks the app. */
+const FALLBACK_MODEL = 'gemini-3.6-flash';
+
+function modelRetired(status, msg) {
+  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
+}
+
 /* `msgs` is an array of { role: 'user' | 'assistant', content } — the caller
    owns the history (handleSend passes state.messages; the highlight popover
    passes a one-off), so nothing is appended or duplicated here. */
@@ -164,34 +181,43 @@ async function askCassie(msgs) {
     parts: [{ text: m.content }],
   }));
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-goog-api-key': state.apiKey,
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents,
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    }),
-  });
+  let model = state.model;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': state.apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+      }),
+    });
 
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    throw new Error(detail || `Request failed (${res.status})`);
-  }
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+      if (modelRetired(res.status, detail) && model !== FALLBACK_MODEL) {
+        model = FALLBACK_MODEL;
+        state.model = FALLBACK_MODEL; // remember, so we skip the retry next time
+        save();
+        continue;
+      }
+      throw new Error(detail || `Request failed (${res.status})`);
+    }
 
-  const data = await res.json();
-  const cand = data.candidates?.[0];
-  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-  if (!text) {
-    if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
-    return '(no response)';
+    const data = await res.json();
+    const cand = data.candidates?.[0];
+    const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+    if (!text) {
+      if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
+      return '(no response)';
+    }
+    return text;
   }
-  return text;
 }
 
 /* ---------- send flow ---------- */

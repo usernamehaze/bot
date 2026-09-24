@@ -14,36 +14,49 @@ Teach, don't just answer:
 - Keep answers focused and not overly long unless the student asks for depth.
 - Be warm and encouraging, especially when the student is stuck.`;
 
+const FALLBACK_MODEL = 'gemini-3.6-flash';
+
+function modelRetired(status, msg) {
+  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
+}
+
 async function askCassie(text, apiKey, model) {
-  const modelId = model || 'gemini-2.0-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text }] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    }),
-  });
+  let modelId = model || FALLBACK_MODEL;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text }] }],
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+      }),
+    });
 
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    throw new Error(detail || `Request failed (${res.status})`);
-  }
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+      if (modelRetired(res.status, detail) && modelId !== FALLBACK_MODEL) {
+        modelId = FALLBACK_MODEL;
+        chrome.storage.local.set({ model: FALLBACK_MODEL }); // remember for next time
+        continue;
+      }
+      throw new Error(detail || `Request failed (${res.status})`);
+    }
 
-  const data = await res.json();
-  const cand = data.candidates?.[0];
-  const reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-  if (!reply) {
-    if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
-    return '(no response)';
+    const data = await res.json();
+    const cand = data.candidates?.[0];
+    const reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+    if (!reply) {
+      if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
+      return '(no response)';
+    }
+    return reply;
   }
-  return reply;
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
