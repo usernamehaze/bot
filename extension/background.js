@@ -33,10 +33,29 @@ function isOverloaded(status, msg) {
 const MAX_OVERLOAD_RETRIES = 4;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function askCassie(text, apiKey, model) {
+function extractSources(cand) {
+  const chunks = (cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+  const seen = new Set();
+  const out = [];
+  for (const c of chunks) {
+    const uri = c.web && c.web.uri;
+    if (uri && !seen.has(uri)) { seen.add(uri); out.push(c.web.title || uri); }
+  }
+  return out.slice(0, 5);
+}
+
+async function askCassie(text, apiKey, model, webSearch) {
   let modelId = model || FALLBACK_MODEL;
+  let useSearch = webSearch !== false;
   let overloadTries = 0;
   while (true) {
+    const body = {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text }] }],
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+    };
+    if (useSearch) body.tools = [{ google_search: {} }];
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
     const res = await fetch(url, {
       method: 'POST',
@@ -44,11 +63,7 @@ async function askCassie(text, apiKey, model) {
         'content-type': 'application/json',
         'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts: [{ text }] }],
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -57,6 +72,10 @@ async function askCassie(text, apiKey, model) {
       if (modelRetired(res.status, detail) && modelId !== FALLBACK_MODEL) {
         modelId = FALLBACK_MODEL;
         chrome.storage.local.set({ model: FALLBACK_MODEL }); // remember for next time
+        continue;
+      }
+      if (useSearch && res.status === 400) { // search tool not allowed -> answer without it
+        useSearch = false;
         continue;
       }
       if (isOverloaded(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
@@ -72,11 +91,13 @@ async function askCassie(text, apiKey, model) {
 
     const data = await res.json();
     const cand = data.candidates?.[0];
-    const reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+    let reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
     if (!reply) {
       if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
       return '(no response)';
     }
+    const sources = extractSources(cand);
+    if (sources.length) reply += `\n\nSources: ${sources.join(' · ')}`;
     return reply;
   }
 }
@@ -85,13 +106,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
   (async () => {
-    const { apiKey, model } = await chrome.storage.local.get(['apiKey', 'model']);
+    const { apiKey, model, webSearch } = await chrome.storage.local.get(['apiKey', 'model', 'webSearch']);
     if (!apiKey) {
       sendResponse({ error: 'no-key' });
       return;
     }
     try {
-      const reply = await askCassie(msg.text, apiKey, model);
+      const reply = await askCassie(msg.text, apiKey, model, webSearch);
       sendResponse({ reply });
     } catch (err) {
       sendResponse({ error: err.message });
