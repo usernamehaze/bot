@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v12';
+const CACHE_NAME = 'cassie-v13';
 const ASSETS = [
   './',
   'index.html',
@@ -32,8 +32,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  // Revalidate with the server (cache: 'no-cache') so a changed file is fetched
+  // fresh instead of served stale from the browser's HTTP cache.
+  const fresh = new Request(event.request.url, { cache: 'no-cache' });
   event.respondWith(
-    fetch(event.request)
+    fetch(fresh)
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
