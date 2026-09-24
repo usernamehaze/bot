@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie — AI Study Tutor",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Highlight text on any page to get Cassie's explanation or answer in a small, clearly-labeled popup. Runs on Google Gemini's free tier.",
   "icons": {
     "16": "icons/icon-16.png",

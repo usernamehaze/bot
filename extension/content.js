@@ -157,8 +157,8 @@
     positionPopover(rect);
 
     const prompt = mode === 'answer'
-      ? `Explain this, then give the answer:\n\n"${text}"`
-      : `Explain this:\n\n"${text}"`;
+      ? `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`
+      : `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
 
     chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
       if (myGen !== gen) return; // superseded by a newer selection

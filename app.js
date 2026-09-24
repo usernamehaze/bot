@@ -471,8 +471,8 @@ async function runExplainOrAnswer(text, rect, mode) {
 
   setCursorMode('thinking');
   const prompt = mode === 'answer'
-    ? `Explain this, then give the answer:\n\n"${text}"`
-    : `Explain this:\n\n"${text}"`;
+    ? `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`
+    : `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
   try {
     const reply = await askCassie([{ role: 'user', content: prompt }]);
     if (myGen !== highlightGen) return; // a newer selection superseded this one
