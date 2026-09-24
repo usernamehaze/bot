@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v8';
+const CACHE_NAME = 'cassie-v9';
 const ASSETS = [
   './',
   'index.html',
@@ -25,18 +25,20 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Network-first for our own files: always fetch the latest when online (so
+// code updates land immediately), falling back to cache only when offline.
+// Cross-origin requests (e.g. the Gemini API) are left untouched.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
