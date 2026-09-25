@@ -266,7 +266,7 @@
     chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
       if (myGen !== gen) return;
       if (chrome.runtime.lastError) { setContent('Something went wrong. Reload the page and try again.', { muted: true }); positionPopover(rect); return; }
-      if (res?.error === 'no-key') { setContent('Click the Cassie toolbar icon to add your free Google (Gemini) API key first.', { muted: true }); positionPopover(rect); return; }
+      if (res?.error === 'no-key') { setContent('Click the Cassie toolbar icon to add your free Groq API key first.', { muted: true }); positionPopover(rect); return; }
       if (res?.error) { setContent(res.error, { muted: true }); positionPopover(rect); return; }
       setContent(res.reply || '(no response)');
       positionPopover(rect);
@@ -319,7 +319,7 @@
         return;
       }
       if (res?.error === 'no-key') {
-        setContent('Click the Cassie icon in your browser toolbar to add your free Google (Gemini) API key first.', { muted: true });
+        setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
         positionPopover(rect);
         return;
       }

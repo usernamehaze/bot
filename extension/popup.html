@@ -85,24 +85,21 @@
   <h1>Cassie</h1>
   <p class="subtitle">Highlight text on any page to get an explanation or answer.</p>
 
-  <label for="api-key">Google (Gemini) API key — free</label>
-  <input type="password" id="api-key" placeholder="AIza...">
+  <label for="groq-key">Groq API key — free</label>
+  <input type="password" id="groq-key" placeholder="gsk_...">
   <p class="hint">
-    Stored only in this browser (extension storage) — never sent anywhere
-    except directly to Google's Gemini API. Get a <strong>free</strong> key
-    (no credit card) at aistudio.google.com/app/apikey.
+    Powers all answers, with higher free limits (~30/min). Stored only in this
+    browser. Get a <strong>free</strong> key (no credit card) at
+    console.groq.com/keys.
   </p>
 
   <label for="model">Model</label>
   <select id="model">
-    <option value="gemini-3.6-flash">Gemini 3.6 Flash — recommended, fast &amp; free</option>
-    <option value="gemini-3.6-pro">Gemini 3.6 Pro — smarter, free</option>
+    <option value="llama-3.3-70b-versatile">Llama 3.3 70B — recommended</option>
+    <option value="llama-3.1-8b-instant">Llama 3.1 8B — fastest</option>
+    <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+    <option value="openai/gpt-oss-20b">GPT-OSS 20B</option>
   </select>
-
-  <label style="display:flex;align-items:center;gap:8px;margin:2px 0 12px;font-size:13px;color:#1c1d2b;">
-    <input type="checkbox" id="web-search" style="width:auto;margin:0;">
-    Fact-check with Google Search
-  </label>
 
   <button type="button" id="save">Save</button>
   <div id="status"></div>

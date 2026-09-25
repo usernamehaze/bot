@@ -16,28 +16,30 @@ server to run.
   step rather than just handing over answers.
 - Optionally, it can read its answers aloud.
 
-## Bring your own (free) API key
+## Bring your own (free) API keys
 
-This app is 100% client-side: there's no server, so it calls Google's
-Gemini API directly from your browser using an API key you provide.
+This app is 100% client-side (no server) and uses two free providers:
 
-1. Get a **free** key (no credit card required) at
+- **Groq** powers all text — chat, highlight → Explain/Answer/Code it, and
+  "ask about this page". Groq's free tier is more generous (~30 requests per
+  minute), which keeps everyday studying from hitting limits.
+- **Google Gemini** is used only for **images** — generating pictures and
+  reading photos you attach. You can leave it blank if you don't need images.
+
+Setup:
+
+1. Get a **free** Groq key (no credit card) at
+   [console.groq.com/keys](https://console.groq.com/keys).
+2. (Optional, for images) get a **free** Gemini key at
    [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
-2. Open Cassie, tap the gear icon (top right) → Settings.
-3. Paste your key in and pick a model (Gemini 2.0 Flash for speed, or
-   Gemini 2.5 Flash for smarter answers).
+3. Open Cassie → gear icon (top right) → paste the key(s) in → Done.
 
-Your key is stored only in your browser's `localStorage` on your device. It
-is never sent anywhere except directly to Google's Gemini API when you ask a
-question. If you host this app somewhere public, don't share a URL that has
-your key typed into it into anyone else's browser — each browser keeps its
-own separate copy, so this is safe by default, but treat the key like a
-password.
+Keys are stored only in your browser's `localStorage` on your device and are
+sent only to the provider they belong to when you ask something. Treat them
+like passwords.
 
-**Cost note:** Gemini's free tier is genuinely free but rate-limited (only
-so many requests per minute/day). That's plenty for one student's studying;
-it would slow down under heavy shared use. No credit card and no billing
-are required for the free tier.
+**Cost note:** both free tiers are genuinely free (no billing), but
+rate-limited per minute/day. Groq's higher limit is why text runs on it.
 
 ## Running it locally
 

@@ -1,11 +1,5 @@
 'use strict';
 
-// One-time reset: an earlier build defaulted web search ON, which the free tier
-// can't sustain. Turn it off once; the user can re-enable it in the popup.
-chrome.storage.local.get(['webSearchReset'], (r) => {
-  if (!r.webSearchReset) chrome.storage.local.set({ webSearch: false, webSearchReset: true });
-});
-
 const SYSTEM_PROMPT = `You are Cassie, a warm, sharp, and reliable study buddy and professional buddy,
 available as a browser extension. The user has highlighted a piece of text on a
 webpage they're reading or working through and wants help with it. You are the
@@ -17,7 +11,7 @@ You are especially strong at:
 - Synonyms and antonyms: offer a few of the most useful ones.
 - Word history / etymology when it aids understanding.
 - Programming and computer science: write, explain, review, and debug code in any language; algorithms, data structures, Big-O complexity, OOP, databases, and CS theory — a great mentor for a CS student and future developer.
-- Trivia and hard or obscure facts: answer precisely when you know it; for time-sensitive or very obscure facts, lean on reliable sources and flag real uncertainty instead of bluffing.
+- Trivia and hard or obscure facts: answer precisely when you know it; flag real uncertainty instead of bluffing.
 - Riddles, brain teasers, and lateral-thinking puzzles: work out the intended answer, then explain the wordplay/trick behind it (don't take a riddle literally).
 - History, science, math, literature, languages, writing, exam prep, general knowledge, and professional tasks.
 
@@ -30,92 +24,55 @@ How you work:
 - Keep answers focused and well-organized: short paragraphs and small lists. Use markdown-style formatting sparingly since this renders as plain text.
 - Adapt your tone: friendly and encouraging for students, crisp and professional for work tasks.`;
 
-const FALLBACK_MODEL = 'gemini-3.6-flash';
+// Text runs on Groq (OpenAI-compatible, higher free limits than Gemini).
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
 
 function modelRetired(status, msg) {
-  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
+  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist|does not exist|decommission/i.test(msg || '');
 }
-
 function isTransientOverload(status, msg) {
-  return status === 503 || /high demand|overloaded|temporarily|unavailable|try again later/i.test(msg || '');
+  return status === 503 || /overloaded|temporarily|unavailable|try again later/i.test(msg || '');
 }
 function isRateLimited(status, msg) {
-  return status === 429 || /resource exhausted|quota|rate limit/i.test(msg || '');
+  return status === 429 || /resource exhausted|quota|rate limit|too many requests/i.test(msg || '');
 }
-const MAX_OVERLOAD_RETRIES = 4;
+const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function extractSources(cand) {
-  const chunks = (cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
-  const seen = new Set();
-  const out = [];
-  for (const c of chunks) {
-    const uri = c.web && c.web.uri;
-    if (uri && !seen.has(uri)) { seen.add(uri); out.push(c.web.title || uri); }
-  }
-  return out.slice(0, 5);
-}
-
-async function askCassie(text, apiKey, model, webSearch) {
-  let modelId = model || FALLBACK_MODEL;
-  let useSearch = webSearch === true;
+async function askCassie(text, groqKey, model) {
+  let modelId = model || GROQ_MODELS[0];
+  const tried = new Set();
   let overloadTries = 0;
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: text },
+  ];
   while (true) {
-    const body = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text }] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    };
-    if (useSearch) body.tools = [{ google_search: {} }];
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`;
-    const res = await fetch(url, {
+    tried.add(modelId);
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
+      body: JSON.stringify({ model: modelId, messages, max_tokens: 2048, temperature: 0.7 }),
     });
-
     if (!res.ok) {
       let detail = '';
       try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-      if (modelRetired(res.status, detail) && modelId !== FALLBACK_MODEL) {
-        modelId = FALLBACK_MODEL;
-        chrome.storage.local.set({ model: FALLBACK_MODEL }); // remember for next time
-        continue;
-      }
-      // Grounded requests hit tighter free-tier limits; on rejection (400) or a
-      // limit, drop search and retry without it.
-      if (useSearch && (res.status === 400 || isRateLimited(res.status, detail) || isTransientOverload(res.status, detail))) {
-        useSearch = false;
-        continue;
+      if (modelRetired(res.status, detail)) {
+        const next = GROQ_MODELS.find((m) => !tried.has(m));
+        if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); continue; }
       }
       if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
         overloadTries += 1;
-        await sleep(1200 * Math.pow(2, overloadTries - 1)); // ~1.2s, 2.4s, 4.8s, 9.6s
+        await sleep(1000 * Math.pow(2, overloadTries - 1));
         continue;
       }
       if (isRateLimited(res.status, detail)) {
-        throw new Error("You've hit Google's free-tier limit for now. Wait a minute and try again — the free tier allows only so many questions per minute/day. (Tip: keep 'Fact-check with Google Search' off in the popup — it uses far fewer requests.)");
-      }
-      if (isTransientOverload(res.status, detail)) {
-        throw new Error("Google's servers are briefly overloaded — try again in a moment.");
+        throw new Error("Groq's free tier is rate-limiting for a moment — wait a few seconds and try again. (Free tier allows ~30 questions/minute.)");
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
-
     const data = await res.json();
-    const cand = data.candidates?.[0];
-    let reply = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-    if (!reply) {
-      if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
-      return '(no response)';
-    }
-    const sources = extractSources(cand);
-    if (sources.length) reply += `\n\nSources: ${sources.join(' · ')}`;
-    return reply;
+    return (data.choices?.[0]?.message?.content || '').trim() || '(no response)';
   }
 }
 
@@ -123,13 +80,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
   (async () => {
-    const { apiKey, model, webSearch } = await chrome.storage.local.get(['apiKey', 'model', 'webSearch']);
-    if (!apiKey) {
+    const { groqKey, groqModel } = await chrome.storage.local.get(['groqKey', 'groqModel']);
+    if (!groqKey) {
       sendResponse({ error: 'no-key' });
       return;
     }
     try {
-      const reply = await askCassie(msg.text, apiKey, model, webSearch);
+      const reply = await askCassie(msg.text, groqKey, groqModel);
       sendResponse({ reply });
     } catch (err) {
       sendResponse({ error: err.message });
