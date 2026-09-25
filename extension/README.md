@@ -6,11 +6,13 @@ small, clearly-labeled popup shows Cassie's explanation or answer, right
 where you selected it.
 
 It's built the same way as the main [Cassie app](../README.md): no backend,
-no account, calling Google's Gemini API (free tier) directly using an API
-key you provide. It doesn't hide anything, doesn't disguise itself, and
+no account, calling Groq's free API directly using a key you provide (Groq's
+free tier allows ~30 requests/minute, which comfortably handles highlighting
+across your tabs). It doesn't hide anything, doesn't disguise itself, and
 doesn't watch your screen — it only reacts when you deliberately highlight
-text, and it always shows up as an obvious "Cassie" popup with a close
-button and your browser's normal extension icon in the toolbar.
+text (or click the floating button), and it always shows up as an obvious
+"Cassie" popup with a close button and your browser's normal extension icon
+in the toolbar.
 
 **This is meant for reading and homework help, not for use during a test or
 quiz** — using it to get instant answers during graded work is exactly the
@@ -36,13 +38,13 @@ directly from these files:
 ## Setting your API key
 
 1. Click the Cassie icon in your toolbar.
-2. Paste in your **free** Google (Gemini) API key — get one with no credit
-   card at aistudio.google.com/app/apikey — and pick a model.
+2. Paste in your **free** Groq API key — get one with no credit card at
+   console.groq.com/keys — and pick a model.
 3. Click **Save**.
 
 Your key is stored in the extension's own local storage on your device —
-never synced anywhere, never sent anywhere except directly to Google's
-Gemini API when you highlight something.
+never synced anywhere, never sent anywhere except directly to Groq's API
+when you ask something.
 
 ## Using it
 

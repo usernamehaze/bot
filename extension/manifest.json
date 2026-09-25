@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Cassie — AI Study Tutor",
-  "version": "2.18.0",
-  "description": "Highlight text on any page to get Cassie's explanation or answer in a small, clearly-labeled popup. Runs on Google Gemini's free tier.",
+  "version": "3.0.0",
+  "description": "Highlight text on any page for an explanation, answer, or code. Runs on Groq's free tier.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -32,5 +32,5 @@
     }
   ],
   "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://generativelanguage.googleapis.com/*"]
+  "host_permissions": ["https://api.groq.com/*"]
 }

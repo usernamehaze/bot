@@ -9,35 +9,33 @@ function loadState() {
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore corrupt state */ }
   return {
-    apiKey: '',
-    model: 'gemini-3.6-flash',
+    groqKey: '',            // Groq — used for all text (chat, highlight, page-ask)
+    groqModel: 'llama-3.3-70b-versatile',
+    geminiKey: '',          // Gemini — used only for images (generation + reading photos)
     voiceOut: false,
-    webSearch: false, // off by default: the free tier heavily rate-limits grounding
     messages: [], // { role: 'user' | 'assistant', content: '...' }
     studyText: '',
   };
 }
 
-const CURRENT_MODELS = ['gemini-3.6-flash', 'gemini-3.6-pro'];
+// Text runs on Groq (higher free limits); images run on Gemini.
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
+const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
 let state = loadState();
+
+// Migrate old single-key state (apiKey was the Gemini key) to the new fields.
+if (state.apiKey && !state.geminiKey) { state.geminiKey = state.apiKey; }
+if (state.groqKey === undefined) state.groqKey = '';
+if (!state.groqModel) state.groqModel = 'llama-3.3-70b-versatile';
 
 function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
-// If a previously stored model has since been retired, snap to the current default.
-if (!CURRENT_MODELS.includes(state.model)) {
-  state.model = 'gemini-3.6-flash';
-  save();
-}
-
-// One-time reset: an earlier build defaulted web search ON, which the free tier
-// can't sustain (difficult questions got rate-limited). Turn it off once; the
-// user can still switch it back on in Settings.
-if (!state.webSearchReset) {
-  state.webSearch = false;
-  state.webSearchReset = true;
+if (!GROQ_MODELS.includes(state.groqModel)) {
+  state.groqModel = 'llama-3.3-70b-versatile';
   save();
 }
 
@@ -75,10 +73,10 @@ const micBtn = document.getElementById('mic-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const settingsPanel = document.getElementById('settings-panel');
 const settingsCloseBtn = document.getElementById('settings-close-btn');
-const apiKeyInput = document.getElementById('api-key-input');
-const modelSelect = document.getElementById('model-select');
+const groqKeyInput = document.getElementById('groq-key-input');
+const groqModelSelect = document.getElementById('groq-model-select');
+const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
-const webSearchToggle = document.getElementById('web-search-toggle');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const cursorEl = document.getElementById('cassie-cursor');
 const attachBtn = document.getElementById('attach-btn');
@@ -228,116 +226,98 @@ function renderHistory() {
   state.messages.forEach((m) => renderMessage(m.role, m.content));
 }
 
-/* ---------- Google Gemini API (free tier) ---------- */
-/* Google retires model IDs over time. FALLBACK_MODEL is the current known-good
-   one; if a request fails because the selected model is gone, we retry once on
-   the fallback and remember it, so a retired ID never permanently breaks the app. */
-const FALLBACK_MODEL = 'gemini-3.6-flash';
-
+/* ---------- providers: Groq for text, Gemini for images ---------- */
 function modelRetired(status, msg) {
-  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
+  return status === 404 || /no longer available|not found|is not supported|unsupported|not exist|does not exist|decommission/i.test(msg || '');
 }
-
-/* Transient server load (503 / "overloaded") — worth waiting out and retrying. */
 function isTransientOverload(status, msg) {
-  return status === 503 || /high demand|overloaded|temporarily|unavailable|try again later/i.test(msg || '');
+  return status === 503 || /overloaded|temporarily|unavailable|try again later/i.test(msg || '');
 }
-/* Hard rate/quota limit (429 / "resource exhausted") — retrying soon just burns
-   more of the free quota, so we surface a clear message instead. */
 function isRateLimited(status, msg) {
-  return status === 429 || /resource exhausted|quota|rate limit/i.test(msg || '');
+  return status === 429 || /resource exhausted|quota|rate limit|too many requests/i.test(msg || '');
 }
-const MAX_OVERLOAD_RETRIES = 4;
+const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* Pull the web sources Gemini used to ground its answer, so we can show them. */
-function extractSources(cand) {
-  const chunks = cand?.groundingMetadata?.groundingChunks || [];
-  const seen = new Set();
-  const out = [];
-  for (const c of chunks) {
-    const uri = c.web && c.web.uri;
-    if (uri && !seen.has(uri)) { seen.add(uri); out.push(c.web.title || uri); }
+/* Text → Groq (OpenAI-compatible chat completions). Falls back through a list of
+   models if the chosen one has been retired. `msgs` = [{role, content}]. */
+async function askGroq(msgs) {
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...msgs.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+  ];
+  let model = state.groqModel;
+  const tried = new Set();
+  let overloadTries = 0;
+  while (true) {
+    tried.add(model);
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
+      body: JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.7 }),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+      if (modelRetired(res.status, detail)) {
+        const next = GROQ_MODELS.find((m) => !tried.has(m));
+        if (next) { model = next; state.groqModel = next; save(); continue; }
+      }
+      if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
+        overloadTries += 1;
+        await sleep(1000 * Math.pow(2, overloadTries - 1));
+        continue;
+      }
+      if (isRateLimited(res.status, detail)) {
+        throw new Error("Groq's free tier is rate-limiting for a moment — wait a few seconds and try again. (Groq allows ~30 questions/minute free.)");
+      }
+      throw new Error(detail || `Request failed (${res.status})`);
+    }
+    const data = await res.json();
+    const text = (data.choices?.[0]?.message?.content || '').trim();
+    return text || '(no response)';
   }
-  return out.slice(0, 5);
 }
 
-/* `msgs` is an array of { role: 'user' | 'assistant', content } — the caller
-   owns the history (handleSend passes state.messages; the highlight popover
-   passes a one-off), so nothing is appended or duplicated here. `image`
-   (optional { mimeType, base64 }) is attached to the latest user turn. */
-async function askCassie(msgs, image) {
+/* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
+async function askGeminiVision(msgs, image) {
   const contents = msgs.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
-  if (image && contents.length) {
-    contents[contents.length - 1].parts.unshift({
-      inlineData: { mimeType: image.mimeType, data: image.base64 },
-    });
+  if (contents.length) {
+    contents[contents.length - 1].parts.unshift({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
   }
-
-  let model = state.model;
-  let useSearch = state.webSearch === true; // off unless explicitly enabled
-  let overloadTries = 0;
-  while (true) {
-    const body = {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VISION_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
+    body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents,
       generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    };
-    if (useSearch) body.tools = [{ google_search: {} }];
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': state.apiKey,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-      if (modelRetired(res.status, detail) && model !== FALLBACK_MODEL) {
-        model = FALLBACK_MODEL;
-        state.model = FALLBACK_MODEL; // remember, so we skip the retry next time
-        save();
-        continue;
-      }
-      // Google Search grounding has much tighter free-tier limits. If the search
-      // tool is rejected (400) or hitting a limit, drop it and retry without it.
-      if (useSearch && (res.status === 400 || isRateLimited(res.status, detail) || isTransientOverload(res.status, detail))) {
-        useSearch = false;
-        continue;
-      }
-      if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
-        overloadTries += 1;
-        await sleep(1200 * Math.pow(2, overloadTries - 1)); // ~1.2s, 2.4s, 4.8s, 9.6s
-        continue;
-      }
-      if (isRateLimited(res.status, detail)) {
-        throw new Error("You've hit Google's free-tier limit for now. Wait a minute and try again — the free tier only allows a certain number of questions per minute/day. (Tip: leave 'Fact-check with Google Search' off in Settings — it uses far fewer requests.)");
-      }
-      if (isTransientOverload(res.status, detail)) {
-        throw new Error("Google's servers are briefly overloaded — try again in a moment.");
-      }
-      throw new Error(detail || `Request failed (${res.status})`);
-    }
-
-    const data = await res.json();
-    const cand = data.candidates?.[0];
-    let text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-    if (!text) {
-      if (cand?.finishReason === 'SAFETY') return "I can't help with that one — try rephrasing it.";
-      return '(no response)';
-    }
-    const sources = extractSources(cand);
-    if (sources.length) text += `\n\nSources: ${sources.join(' · ')}`;
-    return text;
+    }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (isRateLimited(res.status, detail)) throw new Error("Gemini's free tier is rate-limiting right now — wait a minute and try again.");
+    throw new Error(detail || `Request failed (${res.status})`);
   }
+  const cand = (await res.json()).candidates?.[0];
+  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one — try rephrasing it." : '(no response)';
+  return text;
+}
+
+/* Router: text goes to Groq; anything with an attached image goes to Gemini. */
+async function askCassie(msgs, image) {
+  if (image) {
+    if (!state.geminiKey) throw new Error('Add your Google (Gemini) API key in Settings to use images.');
+    return askGeminiVision(msgs, image);
+  }
+  if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
+  return askGroq(msgs);
 }
 
 /* ---------- upload / download / image helpers ---------- */
@@ -420,10 +400,13 @@ async function handleSend(text) {
   const image = pendingImage;
   if (!text.trim() && !image) return;
 
-  if (!state.apiKey) {
+  const needKey = image ? !state.geminiKey : !state.groqKey;
+  if (needKey) {
     openSettings();
-    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', "I need a free Google (Gemini) API key before I can answer — pop it into Settings (top right) and I'll be ready.");
+    detourToElement(image ? geminiKeyInput : groqKeyInput, { click: true, resumeAfter: 1200 });
+    renderMessage('assistant', image
+      ? "To read an image I need your free Google (Gemini) API key — add it in Settings (top right)."
+      : "I need your free Groq API key before I can answer — add it in Settings (top right).");
     return;
   }
 
@@ -461,14 +444,12 @@ async function handleSend(text) {
   }
 }
 
-/* ---------- image generation ---------- */
-const IMAGE_MODEL = 'gemini-2.5-flash-image';
-
+/* ---------- image generation (Gemini) ---------- */
 async function generateImage(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.apiKey },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
@@ -491,10 +472,10 @@ async function generateImage(prompt) {
 async function handleGenerateImage() {
   const text = promptInput.value.trim();
   if (!text) return;
-  if (!state.apiKey) {
+  if (!state.geminiKey) {
     openSettings();
-    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', "I need a free Google (Gemini) API key first — add it in Settings (top right).");
+    detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
+    renderMessage('assistant', "Image generation uses Google Gemini — add your free Gemini API key in Settings (top right).");
     return;
   }
   state.messages.push({ role: 'user', content: `Generate an image: ${text}` });
@@ -560,17 +541,17 @@ promptInput.addEventListener('input', autoGrow);
 
 /* ---------- settings ---------- */
 function openSettings() {
-  apiKeyInput.value = state.apiKey;
-  modelSelect.value = state.model;
+  groqKeyInput.value = state.groqKey;
+  groqModelSelect.value = state.groqModel;
+  geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
-  webSearchToggle.checked = state.webSearch === true;
   settingsPanel.hidden = false;
 }
 function closeSettings() {
-  state.apiKey = apiKeyInput.value.trim();
-  state.model = modelSelect.value;
+  state.groqKey = groqKeyInput.value.trim();
+  state.groqModel = groqModelSelect.value;
+  state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
-  state.webSearch = webSearchToggle.checked;
   save();
   settingsPanel.hidden = true;
   resumeFollowing();
@@ -722,11 +703,11 @@ async function runExplainOrAnswer(text, rect, mode) {
   setPopoverContent('Thinking…', { muted: true });
   positionPopover(rect);
 
-  if (!state.apiKey) {
-    setPopoverContent('Add your free Google (Gemini) API key in Settings first.', { muted: true });
+  if (!state.groqKey) {
+    setPopoverContent('Add your free Groq API key in Settings first.', { muted: true });
     positionPopover(rect);
     openSettings();
-    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
+    detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
     return;
   }
 
