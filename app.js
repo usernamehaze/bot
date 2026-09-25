@@ -686,10 +686,11 @@ function setPopoverChoice(text, rect) {
   pendingRect = rect;
   highlightPopoverBody.classList.remove('muted');
   highlightPopoverBody.innerHTML = `
-    <div class="popover-question">Explain this, or answer it?</div>
+    <div class="popover-question">What should I do with this?</div>
     <div class="popover-choice-row">
       <button type="button" class="popover-choice-btn" data-mode="explain">Explain</button>
       <button type="button" class="popover-choice-btn" data-mode="answer">Answer</button>
+      <button type="button" class="popover-choice-btn" data-mode="code">Code it</button>
     </div>
   `;
   positionPopover(rect);
@@ -715,9 +716,14 @@ async function runExplainOrAnswer(text, rect, mode) {
   }
 
   setCursorMode('thinking');
-  const prompt = mode === 'answer'
-    ? `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`
-    : `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+  let prompt;
+  if (mode === 'answer') {
+    prompt = `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`;
+  } else if (mode === 'code') {
+    prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works:\n\n"${text}"`;
+  } else {
+    prompt = `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+  }
   try {
     const reply = await askCassie([{ role: 'user', content: prompt }]);
     if (myGen !== highlightGen) return; // a newer selection superseded this one

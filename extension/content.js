@@ -170,10 +170,11 @@
     pendingRect = rect;
     body.classList.remove('muted');
     body.innerHTML = `
-      <div class="question">Explain this, or answer it?</div>
+      <div class="question">What should I do with this?</div>
       <div class="choice-row">
         <button type="button" class="choice-btn" data-mode="explain">Explain</button>
         <button type="button" class="choice-btn" data-mode="answer">Answer</button>
+        <button type="button" class="choice-btn" data-mode="code">Code it</button>
       </div>
     `;
     positionPopover(rect);
@@ -190,9 +191,14 @@
     setContent('Thinking…', { muted: true });
     positionPopover(rect);
 
-    const prompt = mode === 'answer'
-      ? `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`
-      : `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+    let prompt;
+    if (mode === 'answer') {
+      prompt = `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`;
+    } else if (mode === 'code') {
+      prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works:\n\n"${text}"`;
+    } else {
+      prompt = `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+    }
 
     chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
       if (myGen !== gen) return; // superseded by a newer selection
