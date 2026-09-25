@@ -42,6 +42,7 @@ You are especially strong at:
 - Synonyms and antonyms: offer a few of the most useful ones.
 - Word history / etymology when it aids understanding.
 - Programming and computer science: write, explain, review, and debug code in any language (Python, JavaScript/TypeScript, Java, C/C++, C#, Go, SQL, HTML/CSS, and more); algorithms and data structures, time/space complexity (Big-O), OOP, recursion, databases, operating systems, networking, and CS theory. You are a great mentor for a CS student and a future developer.
+- Reading images the user attaches — photos of problems, diagrams, screenshots, handwriting — and helping with whatever they show.
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
 
 How you work:
@@ -69,6 +70,12 @@ const voiceOutToggle = document.getElementById('voice-out-toggle');
 const webSearchToggle = document.getElementById('web-search-toggle');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const cursorEl = document.getElementById('cassie-cursor');
+const attachBtn = document.getElementById('attach-btn');
+const fileInput = document.getElementById('file-input');
+const attachPreview = document.getElementById('attach-preview');
+const attachThumb = document.getElementById('attach-thumb');
+const attachRemove = document.getElementById('attach-remove');
+const imageBtn = document.getElementById('image-btn');
 const studyTextWrap = document.getElementById('study-text-wrap');
 const studyTextToggle = document.getElementById('study-text-toggle');
 const studyText = document.getElementById('study-text');
@@ -243,12 +250,18 @@ function extractSources(cand) {
 
 /* `msgs` is an array of { role: 'user' | 'assistant', content } — the caller
    owns the history (handleSend passes state.messages; the highlight popover
-   passes a one-off), so nothing is appended or duplicated here. */
-async function askCassie(msgs) {
+   passes a one-off), so nothing is appended or duplicated here. `image`
+   (optional { mimeType, base64 }) is attached to the latest user turn. */
+async function askCassie(msgs, image) {
   const contents = msgs.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
+  if (image && contents.length) {
+    contents[contents.length - 1].parts.unshift({
+      inlineData: { mimeType: image.mimeType, data: image.base64 },
+    });
+  }
 
   let model = state.model;
   let useSearch = state.webSearch !== false; // fact-check with Google Search
@@ -310,9 +323,85 @@ async function askCassie(msgs) {
   }
 }
 
+/* ---------- upload / download / image helpers ---------- */
+let pendingImage = null; // { mimeType, base64, dataUrl }
+
+function clearAttach() {
+  pendingImage = null;
+  attachPreview.hidden = true;
+  attachThumb.removeAttribute('src');
+  fileInput.value = '';
+}
+
+// Load an image file, downscale to <=1024px, return base64 JPEG (keeps requests small).
+function processImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const maxDim = 1024;
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve({ mimeType: 'image/jpeg', base64: dataUrl.split(',')[1], dataUrl });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const DL_ICON = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5z"/></svg>';
+
+function addTextDownload(bubble, text) {
+  const tools = document.createElement('div');
+  tools.className = 'bubble-tools';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.innerHTML = `${DL_ICON} Download`;
+  btn.addEventListener('click', () => downloadBlob('cassie-answer.txt', new Blob([text], { type: 'text/plain' })));
+  tools.appendChild(btn);
+  bubble.appendChild(tools);
+}
+
+function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
+  const img = document.createElement('img');
+  img.className = 'chat-img';
+  img.src = dataUrl;
+  img.alt = 'image';
+  bubble.appendChild(img);
+  if (download) {
+    const tools = document.createElement('div');
+    tools.className = 'bubble-tools';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerHTML = `${DL_ICON} Download image`;
+    btn.addEventListener('click', () => fetch(dataUrl).then((r) => r.blob()).then((b) => downloadBlob('cassie-image.png', b)));
+    tools.appendChild(btn);
+    bubble.appendChild(tools);
+  }
+  scrollToBottom();
+}
+
 /* ---------- send flow ---------- */
 async function handleSend(text) {
-  if (!text.trim()) return;
+  const image = pendingImage;
+  if (!text.trim() && !image) return;
 
   if (!state.apiKey) {
     openSettings();
@@ -321,9 +410,14 @@ async function handleSend(text) {
     return;
   }
 
-  state.messages.push({ role: 'user', content: text });
+  let sendText = text.trim();
+  if (!sendText && image) sendText = 'Please look at this image and help me with it.';
+
+  state.messages.push({ role: 'user', content: sendText });
   save();
-  renderMessage('user', text);
+  const userBubble = renderMessage('user', sendText);
+  if (image) addImageToBubble(userBubble, image.dataUrl);
+  clearAttach();
   promptInput.value = '';
   autoGrow();
 
@@ -332,11 +426,12 @@ async function handleSend(text) {
   sendBtn.disabled = true;
 
   try {
-    const reply = await askCassie(state.messages);
+    const reply = await askCassie(state.messages, image);
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
+    addTextDownload(bubble, reply);
     setCursorMode('idle');
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
@@ -348,6 +443,85 @@ async function handleSend(text) {
     sendBtn.disabled = false;
   }
 }
+
+/* ---------- image generation ---------- */
+const IMAGE_MODEL = 'gemini-2.5-flash-image';
+
+async function generateImage(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.apiKey },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+    }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 404 || res.status === 400) {
+      throw new Error("image generation isn't available on the free tier for this key right now");
+    }
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+  const parts = (await res.json()).candidates?.[0]?.content?.parts || [];
+  const imgPart = parts.find((p) => p.inlineData && p.inlineData.data);
+  if (!imgPart) throw new Error('no image came back — try describing it differently');
+  return `data:${imgPart.inlineData.mimeType || 'image/png'};base64,${imgPart.inlineData.data}`;
+}
+
+async function handleGenerateImage() {
+  const text = promptInput.value.trim();
+  if (!text) return;
+  if (!state.apiKey) {
+    openSettings();
+    detourToElement(apiKeyInput, { click: true, resumeAfter: 1200 });
+    renderMessage('assistant', "I need a free Google (Gemini) API key first — add it in Settings (top right).");
+    return;
+  }
+  state.messages.push({ role: 'user', content: `Generate an image: ${text}` });
+  save();
+  renderMessage('user', `Generate an image: ${text}`);
+  promptInput.value = '';
+  autoGrow();
+
+  setCursorMode('thinking');
+  const typingBubble = renderTyping();
+  sendBtn.disabled = imageBtn.disabled = true;
+
+  try {
+    const dataUrl = await generateImage(text);
+    typingBubble.remove();
+    const bubble = renderMessage('assistant', '');
+    addImageToBubble(bubble, dataUrl, { download: true });
+    state.messages.push({ role: 'assistant', content: '[generated an image]' });
+    save();
+    setCursorMode('idle');
+  } catch (err) {
+    typingBubble.remove();
+    renderMessage('assistant', `Couldn't generate that image: ${err.message}`).classList.add('error');
+    setCursorMode('idle');
+  } finally {
+    sendBtn.disabled = imageBtn.disabled = false;
+  }
+}
+
+/* ---------- attach / generate wiring ---------- */
+attachBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  try {
+    pendingImage = await processImageFile(file);
+    attachThumb.src = pendingImage.dataUrl;
+    attachPreview.hidden = false;
+  } catch (e) {
+    clearAttach();
+  }
+});
+attachRemove.addEventListener('click', clearAttach);
+imageBtn.addEventListener('click', handleGenerateImage);
 
 composer.addEventListener('submit', (e) => {
   e.preventDefault();
