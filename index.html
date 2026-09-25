@@ -53,11 +53,23 @@
     <div id="highlight-popover-body" class="highlight-popover-body"></div>
   </div>
 
+  <div id="attach-preview" class="attach-preview" hidden>
+    <img id="attach-thumb" alt="attached image">
+    <button type="button" id="attach-remove" title="Remove image" aria-label="Remove image">&times;</button>
+  </div>
+
   <form id="composer" class="composer">
+    <button type="button" id="attach-btn" class="icon-btn" title="Attach an image" aria-label="Attach an image">
+      <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6h-1.5z"/></svg>
+    </button>
+    <input type="file" id="file-input" accept="image/*" hidden>
     <button type="button" id="mic-btn" class="icon-btn" title="Ask by voice" aria-label="Ask by voice" hidden>
       <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg>
     </button>
     <textarea id="prompt-input" rows="1" placeholder="Ask Cassie a question…" autocomplete="off"></textarea>
+    <button type="button" id="image-btn" class="icon-btn" title="Generate an image" aria-label="Generate an image">
+      <svg viewBox="0 0 24 24"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5zM8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>
+    </button>
     <button type="submit" id="send-btn" class="icon-btn primary" title="Send" aria-label="Send">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
