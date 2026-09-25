@@ -293,9 +293,11 @@ async function askCassie(msgs, image) {
         save();
         continue;
       }
-      // If the search tool isn't allowed (e.g. free-tier/model limit), drop it
-      // and answer normally rather than failing.
-      if (useSearch && res.status === 400) {
+      // Google Search grounding has much tighter free-tier limits than a plain
+      // request. If the search tool is rejected (400) OR rate-limited/overloaded,
+      // drop it and retry immediately without search so the user still gets an
+      // answer instead of a "busy" error.
+      if (useSearch && (res.status === 400 || isOverloaded(res.status, detail))) {
         useSearch = false;
         continue;
       }
@@ -305,7 +307,7 @@ async function askCassie(msgs, image) {
         continue;
       }
       if (isOverloaded(res.status, detail)) {
-        throw new Error("Google's free tier is really busy right now — give it a minute and try again.");
+        throw new Error("Google's free tier is rate-limiting right now — wait a minute and try again.");
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }

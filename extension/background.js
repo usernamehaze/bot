@@ -76,7 +76,10 @@ async function askCassie(text, apiKey, model, webSearch) {
         chrome.storage.local.set({ model: FALLBACK_MODEL }); // remember for next time
         continue;
       }
-      if (useSearch && res.status === 400) { // search tool not allowed -> answer without it
+      // Grounded requests hit tighter free-tier limits; on rejection (400) or
+      // rate-limit/overload, drop search and retry without it so the user still
+      // gets an answer instead of a "busy" error.
+      if (useSearch && (res.status === 400 || isOverloaded(res.status, detail))) {
         useSearch = false;
         continue;
       }
@@ -86,7 +89,7 @@ async function askCassie(text, apiKey, model, webSearch) {
         continue;
       }
       if (isOverloaded(res.status, detail)) {
-        throw new Error("Google's free tier is really busy right now — give it a minute and try again.");
+        throw new Error("Google's free tier is rate-limiting right now — wait a minute and try again.");
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
