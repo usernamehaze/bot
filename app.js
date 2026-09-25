@@ -12,7 +12,7 @@ function loadState() {
     apiKey: '',
     model: 'gemini-3.6-flash',
     voiceOut: false,
-    webSearch: true, // fact-check via Google Search grounding when available
+    webSearch: false, // off by default: the free tier heavily rate-limits grounding
     messages: [], // { role: 'user' | 'assistant', content: '...' }
     studyText: '',
   };
@@ -29,6 +29,15 @@ function save() {
 // If a previously stored model has since been retired, snap to the current default.
 if (!CURRENT_MODELS.includes(state.model)) {
   state.model = 'gemini-3.6-flash';
+  save();
+}
+
+// One-time reset: an earlier build defaulted web search ON, which the free tier
+// can't sustain (difficult questions got rate-limited). Turn it off once; the
+// user can still switch it back on in Settings.
+if (!state.webSearchReset) {
+  state.webSearch = false;
+  state.webSearchReset = true;
   save();
 }
 
@@ -266,7 +275,7 @@ async function askCassie(msgs, image) {
   }
 
   let model = state.model;
-  let useSearch = state.webSearch !== false; // fact-check with Google Search
+  let useSearch = state.webSearch === true; // off unless explicitly enabled
   let overloadTries = 0;
   while (true) {
     const body = {
@@ -550,7 +559,7 @@ function openSettings() {
   apiKeyInput.value = state.apiKey;
   modelSelect.value = state.model;
   voiceOutToggle.checked = state.voiceOut;
-  webSearchToggle.checked = state.webSearch !== false;
+  webSearchToggle.checked = state.webSearch === true;
   settingsPanel.hidden = false;
 }
 function closeSettings() {
