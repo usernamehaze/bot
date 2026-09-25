@@ -13,7 +13,7 @@ chrome.storage.local.get(['apiKey', 'model', 'webSearch'], ({ apiKey, model, web
   if (model && [...modelSelect.options].some((o) => o.value === model)) {
     modelSelect.value = model;
   }
-  webSearchToggle.checked = webSearch !== false; // default on
+  webSearchToggle.checked = webSearch === true; // off unless explicitly enabled
 });
 
 saveBtn.addEventListener('click', () => {

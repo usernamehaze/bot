@@ -1,5 +1,11 @@
 'use strict';
 
+// One-time reset: an earlier build defaulted web search ON, which the free tier
+// can't sustain. Turn it off once; the user can re-enable it in the popup.
+chrome.storage.local.get(['webSearchReset'], (r) => {
+  if (!r.webSearchReset) chrome.storage.local.set({ webSearch: false, webSearchReset: true });
+});
+
 const SYSTEM_PROMPT = `You are Cassie, a warm, sharp, and reliable study buddy and professional buddy,
 available as a browser extension. The user has highlighted a piece of text on a
 webpage they're reading or working through and wants help with it. You are the
@@ -50,7 +56,7 @@ function extractSources(cand) {
 
 async function askCassie(text, apiKey, model, webSearch) {
   let modelId = model || FALLBACK_MODEL;
-  let useSearch = webSearch !== false;
+  let useSearch = webSearch === true;
   let overloadTries = 0;
   while (true) {
     const body = {
