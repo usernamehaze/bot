@@ -90,6 +90,50 @@
       cursor: pointer;
     }
     .choice-btn:hover { background: #000000; }
+    .fab {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #1c1c24;
+      border: none;
+      cursor: pointer;
+      z-index: 2147483646;
+      opacity: .55;
+      transition: opacity .15s;
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .fab:hover { opacity: 1; }
+    .fab[hidden] { display: none; }
+    .fab svg { width: 22px; height: 22px; fill: #fff; }
+    .page-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid #e6e2f5;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 8px;
+      font-family: inherit;
+    }
+    .page-ask-btn {
+      width: 100%;
+      background: #1c1c24;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .page-ask-btn:hover { background: #000; }
   `;
   shadow.appendChild(style);
 
@@ -104,6 +148,18 @@
 
   const closeBtn = popover.querySelector('.header button');
   const body = popover.querySelector('.body');
+
+  // Floating "ask about this page" button — top frame only, so there's just one.
+  let fab = null;
+  if (window.top === window) {
+    fab = document.createElement('button');
+    fab.className = 'fab';
+    fab.type = 'button';
+    fab.title = 'Ask Cassie about this page';
+    fab.innerHTML = '<svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg>';
+    shadow.appendChild(fab);
+    fab.addEventListener('click', showPageAsk);
+  }
 
   let lastAutoText = '';
   let gen = 0;
@@ -170,6 +226,51 @@
       ? rect.top - estHeight - 8
       : Math.min(rect.bottom + 8, window.innerHeight - estHeight - 12);
     popover.style.top = `${Math.max(8, top)}px`;
+  }
+
+  // A rect near the bottom-right (just above the FAB) to anchor the page popover.
+  function bottomRightRect() {
+    const x = window.innerWidth - 30;
+    const y = window.innerHeight - 70;
+    return { left: x, top: y, right: x, bottom: y, width: 0, height: 0 };
+  }
+
+  function showPageAsk() {
+    const rect = bottomRightRect();
+    body.classList.remove('muted');
+    body.innerHTML = `
+      <div class="question">Ask about this page</div>
+      <input type="text" class="page-input" placeholder="e.g. Summarize this page">
+      <button type="button" class="page-ask-btn">Ask</button>
+    `;
+    popover.hidden = false;
+    positionPopover(rect);
+    const input = body.querySelector('.page-input');
+    const askBtn = body.querySelector('.page-ask-btn');
+    input.focus();
+    const run = () => runPageAsk(input.value.trim());
+    askBtn.addEventListener('click', run);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+  }
+
+  function runPageAsk(question) {
+    const rect = bottomRightRect();
+    const q = question || 'Summarize this page and list the key points.';
+    const myGen = ++gen;
+    setContent('Reading the page…', { muted: true });
+    positionPopover(rect);
+    const pageText = ((document.body && document.body.innerText) || '')
+      .replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+    if (!pageText) { setContent('This page has no readable text.', { muted: true }); positionPopover(rect); return; }
+    const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}`;
+    chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
+      if (myGen !== gen) return;
+      if (chrome.runtime.lastError) { setContent('Something went wrong. Reload the page and try again.', { muted: true }); positionPopover(rect); return; }
+      if (res?.error === 'no-key') { setContent('Click the Cassie toolbar icon to add your free Google (Gemini) API key first.', { muted: true }); positionPopover(rect); return; }
+      if (res?.error) { setContent(res.error, { muted: true }); positionPopover(rect); return; }
+      setContent(res.reply || '(no response)');
+      positionPopover(rect);
+    });
   }
 
   let pendingText = '';
