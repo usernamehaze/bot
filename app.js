@@ -238,11 +238,14 @@ function modelRetired(status, msg) {
   return status === 404 || /no longer available|not found|is not supported|unsupported|not exist/i.test(msg || '');
 }
 
-/* Transient "the model is busy" conditions — worth waiting out and retrying the
-   same model, rather than surfacing an error or asking the user to switch. */
-function isOverloaded(status, msg) {
-  return status === 429 || status === 503 ||
-    /high demand|overloaded|try again later|temporarily|unavailable|resource exhausted|quota/i.test(msg || '');
+/* Transient server load (503 / "overloaded") — worth waiting out and retrying. */
+function isTransientOverload(status, msg) {
+  return status === 503 || /high demand|overloaded|temporarily|unavailable|try again later/i.test(msg || '');
+}
+/* Hard rate/quota limit (429 / "resource exhausted") — retrying soon just burns
+   more of the free quota, so we surface a clear message instead. */
+function isRateLimited(status, msg) {
+  return status === 429 || /resource exhausted|quota|rate limit/i.test(msg || '');
 }
 const MAX_OVERLOAD_RETRIES = 4;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -304,21 +307,22 @@ async function askCassie(msgs, image) {
         save();
         continue;
       }
-      // Google Search grounding has much tighter free-tier limits than a plain
-      // request. If the search tool is rejected (400) OR rate-limited/overloaded,
-      // drop it and retry immediately without search so the user still gets an
-      // answer instead of a "busy" error.
-      if (useSearch && (res.status === 400 || isOverloaded(res.status, detail))) {
+      // Google Search grounding has much tighter free-tier limits. If the search
+      // tool is rejected (400) or hitting a limit, drop it and retry without it.
+      if (useSearch && (res.status === 400 || isRateLimited(res.status, detail) || isTransientOverload(res.status, detail))) {
         useSearch = false;
         continue;
       }
-      if (isOverloaded(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
+      if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
         overloadTries += 1;
         await sleep(1200 * Math.pow(2, overloadTries - 1)); // ~1.2s, 2.4s, 4.8s, 9.6s
         continue;
       }
-      if (isOverloaded(res.status, detail)) {
-        throw new Error("Google's free tier is rate-limiting right now — wait a minute and try again.");
+      if (isRateLimited(res.status, detail)) {
+        throw new Error("You've hit Google's free-tier limit for now. Wait a minute and try again — the free tier only allows a certain number of questions per minute/day. (Tip: leave 'Fact-check with Google Search' off in Settings — it uses far fewer requests.)");
+      }
+      if (isTransientOverload(res.status, detail)) {
+        throw new Error("Google's servers are briefly overloaded — try again in a moment.");
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
