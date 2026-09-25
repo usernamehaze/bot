@@ -61,6 +61,24 @@
     min-height: 14px;
     text-align: center;
   }
+  hr { border: none; border-top: 1px solid #e6e2f5; margin: 16px 0 14px; }
+  .section-title { font-size: 13px; font-weight: 700; color: #1c1d2b; margin: 0 0 8px; }
+  #page-answer {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #1c1d2b;
+    max-height: 240px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    background: #f6f5fb;
+    border: 1px solid #e6e2f5;
+    border-radius: 8px;
+    padding: 10px;
+  }
+  #page-answer[hidden] { display: none; }
+  #page-answer pre { background:#0d0d12; color:#f2f2f5; padding:8px 10px; border-radius:6px; overflow-x:auto; white-space:pre; }
+  #page-answer code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; }
 </style>
 </head>
 <body>
@@ -88,6 +106,13 @@
 
   <button type="button" id="save">Save</button>
   <div id="status"></div>
+
+  <hr>
+  <p class="section-title">Ask about this page</p>
+  <p class="hint" style="margin-top:0;">Cassie reads the page you're viewing in this tab — no need to highlight.</p>
+  <input type="text" id="page-q" placeholder="e.g. Summarize this page">
+  <button type="button" id="page-ask">Ask about this page</button>
+  <div id="page-answer" hidden></div>
 
   <script src="popup.js"></script>
 </body>

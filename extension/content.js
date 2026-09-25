@@ -6,6 +6,16 @@
 
   console.log('[Cassie] extension loaded on this page — highlight text to use it.');
 
+  // Let the popup ask for the text of the page the user is viewing (top frame only).
+  if (window.top === window) {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg && msg.type === 'CASSIE_GET_PAGE') {
+        const raw = (document.body && document.body.innerText) || '';
+        sendResponse({ text: raw.replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000) });
+      }
+    });
+  }
+
   const host = document.createElement('div');
   host.id = HOST_ID;
   document.documentElement.appendChild(host);
