@@ -193,11 +193,13 @@
   }
   function inlineFormat(text) {
     let html = escapeHtml(text);
-    const codes = [];
+    const codes = [], escaped = [];
     html = html.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`);
+    html = html.replace(/\\([\\*_`#|~[\]()>.\-])/g, (m, ch) => `\u0001${escaped.push(ch) - 1}\u0001`);
     html = html
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
     return html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   }
 

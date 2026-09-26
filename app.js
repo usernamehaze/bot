@@ -14,7 +14,6 @@ function loadState() {
     geminiKey: '',          // Gemini — used only for images (generation + reading photos)
     voiceOut: false,
     messages: [], // { role: 'user' | 'assistant', content: '...' }
-    studyText: '',
   };
 }
 
@@ -95,10 +94,6 @@ const attachPreview = document.getElementById('attach-preview');
 const attachThumb = document.getElementById('attach-thumb');
 const attachRemove = document.getElementById('attach-remove');
 const imageBtn = document.getElementById('image-btn');
-const studyTextWrap = document.getElementById('study-text-wrap');
-const studyTextToggle = document.getElementById('study-text-toggle');
-const studyText = document.getElementById('study-text');
-const studyTextClear = document.getElementById('study-text-clear');
 const highlightPopover = document.getElementById('highlight-popover');
 const highlightPopoverBody = document.getElementById('highlight-popover-body');
 const highlightPopoverClose = document.getElementById('highlight-popover-close');
@@ -174,11 +169,15 @@ function escapeHtml(str) {
 // Inline code is protected so its contents aren't re-formatted.
 function inlineFormat(text) {
   let html = escapeHtml(text);
-  const codes = [];
+  const codes = [], escaped = [];
   html = html.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  // Honor backslash-escaped markdown punctuation (\*, \_, \#, …): keep the
+  // literal char and hide it from the formatters below.
+  html = html.replace(/\\([\\*_`#|~[\]()>.\-])/g, (m, ch) => `\u0001${escaped.push(ch) - 1}\u0001`);
   html = html
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
   html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   return html;
 }
@@ -739,46 +738,14 @@ function speak(text) {
   window.speechSynthesis.speak(utter);
 }
 
-/* ---------- study text panel ---------- */
-studyTextToggle.addEventListener('click', () => {
-  studyTextWrap.classList.toggle('expanded');
-});
-
-studyText.addEventListener('paste', (e) => {
-  e.preventDefault();
-  const text = (e.clipboardData || window.clipboardData).getData('text/plain');
-  document.execCommand('insertText', false, text);
-});
-
-let studyTextSaveTimer = null;
-studyText.addEventListener('input', () => {
-  clearTimeout(studyTextSaveTimer);
-  studyTextSaveTimer = setTimeout(() => {
-    state.studyText = studyText.innerText;
-    save();
-  }, 300);
-});
-
-studyTextClear.addEventListener('click', () => {
-  studyText.innerText = '';
-  state.studyText = '';
-  save();
-  hideHighlightPopover();
-});
-
-/* ---------- highlight-to-ask (automatic) ---------- */
-/* Only ever looks at text inside #study-text (what the user pasted into
-   Cassie), never at the rest of the page or anything outside the app.
-   Highlighting a bit of that text — no button, no menu — shows the
-   explanation/answer in a small popover right there. Nothing here is
-   added to the main chat; it's a separate, throwaway lookup. */
-let selTimer = null;
-let lastAutoText = '';
+/* ---------- highlight-to-ask (right-click a selection) ---------- */
+/* Select any text in the app, right-click, and pick Explain / Answer /
+   Code it — the result shows in a small popover right there, without
+   touching the main chat. It's a separate, throwaway lookup. */
 let highlightGen = 0;
 
 function hideHighlightPopover() {
   highlightPopover.hidden = true;
-  lastAutoText = '';
   highlightGen++; // invalidate any in-flight request
 }
 
@@ -862,23 +829,6 @@ async function runExplainOrAnswer(text, rect, mode) {
   }
 }
 
-function checkSelectionForAutoExplain() {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideHighlightPopover(); return; }
-  const range = sel.getRangeAt(0);
-  if (!studyText.contains(range.commonAncestorContainer)) { hideHighlightPopover(); return; }
-  const text = sel.toString().trim();
-  if (!text || text.length < 2 || text === lastAutoText) return;
-  lastAutoText = text;
-  highlightPopover.hidden = false;
-  setPopoverChoice(text, range.getBoundingClientRect());
-}
-
-document.addEventListener('selectionchange', () => {
-  clearTimeout(selTimer);
-  selTimer = setTimeout(checkSelectionForAutoExplain, 450);
-});
-
 /* Explicit "I'm done" actions also clear the actual text selection, not
    just our UI state — otherwise re-highlighting the exact same range
    afterward fires no selectionchange event at all (browsers only fire it
@@ -893,9 +843,7 @@ function dismissHighlightPopover() {
 highlightPopoverClose.addEventListener('click', dismissHighlightPopover);
 
 document.addEventListener('mousedown', (e) => {
-  if (!highlightPopover.contains(e.target) && !studyText.contains(e.target)) {
-    hideHighlightPopover();
-  }
+  if (!highlightPopover.contains(e.target)) hideHighlightPopover();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
@@ -910,18 +858,15 @@ document.addEventListener('contextmenu', (e) => {
   const text = sel ? sel.toString().trim() : '';
   if (!text || text.length < 2) return; // nothing selected -> normal menu
   e.preventDefault();
-  lastAutoText = text;
   const rect = { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY, width: 0, height: 0 };
   highlightPopover.hidden = false;
   setPopoverChoice(text, rect);
 });
 
 chatLog.addEventListener('scroll', hideHighlightPopover);
-studyText.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
-if (state.studyText) studyText.innerText = state.studyText;
 renderHistory();
 requestAnimationFrame(() => {
   setCursorMode('idle');
