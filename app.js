@@ -70,6 +70,7 @@ Formatting — keep every answer clean and scannable:
 - Use bullet points for lists of items and numbered steps for sequences. Keep each bullet to one line where you can.
 - Use a table ONLY to compare a few things across a few clear attributes, and keep it small (roughly 2–4 columns, a handful of rows). Write it as a normal markdown table (a header row, one |---| separator row, then the data) — it will render as a clean table, so don't hand-draw borders or add extra symbols. If a comparison would need a wide, dense grid, use short grouped sections or bullets instead — never dump a giant sprawling table.
 - Bold the key term or number in a line so the takeaway stands out; don't bold whole sentences.
+- Math: write it in plain, readable text — NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Instead use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and symbols like ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Lay out a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"). Keep equations on their own line so they're easy to read.
 - End with a one-line summary or recommendation only when it actually adds something.
 - Overall: aim for the answer a sharp tutor would write on a whiteboard — organized, uncluttered, and easy to skim — not a wall of text or an oversized spreadsheet.`;
 
@@ -180,6 +181,50 @@ function inlineFormat(text) {
   html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
   html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   return html;
+}
+
+// Turn LaTeX-style math that models sometimes emit (we don't render LaTeX)
+// into readable plain text. Only touches text that actually looks like
+// LaTeX, so ordinary prose (e.g. "R&D", "$3") is left untouched.
+const LATEX_SYMBOLS = {
+  times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', neq: '≠', ne: '≠',
+  leq: '≤', le: '≤', geq: '≥', ge: '≥', approx: '≈', equiv: '≡', propto: '∝', infty: '∞',
+  sum: 'Σ', prod: '∏', int: '∫', partial: '∂', nabla: '∇', cdots: '…', ldots: '…', dots: '…', vdots: '⋮',
+  Rightarrow: '⇒', Leftarrow: '⇐', Leftrightarrow: '⇔', rightarrow: '→', leftarrow: '←', to: '→', mapsto: '↦',
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
+  theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', rho: 'ρ', sigma: 'σ',
+  tau: 'τ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  in: '∈', notin: '∉', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇', cup: '∪', cap: '∩',
+  emptyset: '∅', forall: '∀', exists: '∃', land: '∧', lor: '∨', neg: '¬', angle: '∠', deg: '°',
+  prime: '′', bullet: '•', circ: '∘', ast: '*', star: '*',
+};
+function deLatex(text) {
+  if (!/\\(frac|dfrac|tfrac|sqrt|begin|end|left|right|displaystyle|text|mathrm|mathbf|operatorname|[a-zA-Z]+)|\\\[|\\\]|\\\(|\\\)|\^\{|_\{/.test(text)) {
+    return text;
+  }
+  let t = text;
+  t = t.replace(/\\\\?\s*\[\s*[0-9]+\s*(pt|ex|em|mu)\s*\]/g, '\n'); // row spacing like \\[8pt]
+  t = t.replace(/\\\[|\\\]|\\\(|\\\)|\$\$/g, ' ');                 // math delimiters
+  t = t.replace(/\\\\\s*/g, '\n');                                // \\ row breaks
+  t = t.replace(/\\(begin|end)\{[^}]*\}/g, '');                   // environments
+  t = t.replace(/\\left|\\right/g, '');
+  t = t.replace(/\\(displaystyle|textstyle|scriptstyle|limits|nonumber|quad|qquad|,|;|:|!)/g, ' ');
+  t = t.replace(/\\(text|mathrm|mathbf|mathit|mathsf|mathcal|mathbb|operatorname)\s*\{([^{}]*)\}/g, '$2');
+  for (let i = 0; i < 5; i++) {
+    t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)');
+    t = t.replace(/\\[dt]?frac\s*([0-9A-Za-z])\s*([0-9A-Za-z])/g, '($1)/($2)');
+    t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)');
+    t = t.replace(/\^\{([^{}]*)\}/g, '^($1)');
+    t = t.replace(/_\{([^{}]*)\}/g, '_($1)');
+  }
+  t = t.replace(/\\([a-zA-Z]+)/g, (m, w) => (Object.prototype.hasOwnProperty.call(LATEX_SYMBOLS, w) ? LATEX_SYMBOLS[w] : w));
+  t = t.replace(/\\([%&#_${}])/g, '$1'); // escaped specials
+  t = t.replace(/&/g, ' ');              // alignment tabs
+  t = t.replace(/[{}]/g, '');            // leftover grouping braces
+  t = t.replace(/^[ \t]*\[[ \t]+/gm, '').replace(/[ \t]+\][ \t]*$/gm, ''); // strip [ … ] display wrap
+  t = t.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+  return t;
 }
 
 // --- markdown block helpers ---
@@ -317,7 +362,7 @@ function renderFormatted(container, text) {
       pre.appendChild(code);
       container.appendChild(pre);
     } else if (seg.trim()) {
-      renderProse(container, seg);
+      renderProse(container, deLatex(seg));
     }
   });
 }

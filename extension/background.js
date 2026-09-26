@@ -29,6 +29,7 @@ Formatting — this shows in a small popup beside the user's selection, so keep 
 - Use short bullet points or a couple of short paragraphs. Only add a heading when the answer truly has multiple distinct parts.
 - Don't use tables — they render badly in this narrow popup. For a comparison, use short grouped bullets instead.
 - Fenced code blocks are fine for code; bold the single key term or number so the takeaway stands out.
+- Math: write it in plain, readable text — NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Put a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"), and keep each equation on its own line.
 - Aim for a clean, uncluttered note a sharp tutor would jot down — never a wall of text.`;
 
 // Text runs on Groq (OpenAI-compatible, higher free limits than Gemini).
