@@ -235,6 +235,41 @@
     return t;
   }
 
+  // Read the current selection as text, preserving math a plain toString()
+  // would flatten (x² -> "x2", stacked fractions -> "13"). Reconstructs
+  // <sup>/<sub>, KaTeX, and MathML into readable ^/_ and fraction notation
+  // so the model receives real exponents instead of a broken problem.
+  function selectionText(sel) {
+    if (!sel || sel.rangeCount === 0) return '';
+    let box;
+    try {
+      box = document.createElement('div');
+      for (let i = 0; i < sel.rangeCount; i++) box.appendChild(sel.getRangeAt(i).cloneContents());
+      // KaTeX: use the original TeX annotation, dropping the duplicated render.
+      box.querySelectorAll('.katex').forEach((k) => {
+        const tex = k.querySelector('annotation[encoding="application/x-tex"]');
+        k.replaceWith(document.createTextNode(tex ? ' ' + tex.textContent + ' ' : k.textContent));
+      });
+      // MathML: convert structure innermost-first into ^ / _ / fractions.
+      const mnodes = Array.prototype.slice.call(box.querySelectorAll('msup, msub, msubsup, mfrac, msqrt, mroot'));
+      for (let i = mnodes.length - 1; i >= 0; i--) {
+        const el = mnodes[i], k = el.children, tag = el.tagName.toLowerCase();
+        let r = el.textContent;
+        if (tag === 'msup' && k.length >= 2) r = k[0].textContent + '^(' + k[1].textContent + ')';
+        else if (tag === 'msub' && k.length >= 2) r = k[0].textContent + '_(' + k[1].textContent + ')';
+        else if (tag === 'msubsup' && k.length >= 3) r = k[0].textContent + '_(' + k[1].textContent + ')^(' + k[2].textContent + ')';
+        else if (tag === 'mfrac' && k.length >= 2) r = '(' + k[0].textContent + ')/(' + k[1].textContent + ')';
+        else if (tag === 'msqrt') r = '√(' + el.textContent + ')';
+        else if (tag === 'mroot' && k.length >= 2) r = '(' + k[1].textContent + ')√(' + k[0].textContent + ')';
+        el.replaceWith(document.createTextNode(r));
+      }
+      box.querySelectorAll('sup').forEach((s) => s.replaceWith(document.createTextNode('^(' + s.textContent + ')')));
+      box.querySelectorAll('sub').forEach((s) => s.replaceWith(document.createTextNode('_(' + s.textContent + ')')));
+    } catch (e) { return sel.toString().trim(); }
+    const text = (box.textContent || '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, ' ').trim();
+    return text || sel.toString().trim();
+  }
+
   function inlineFormat(text) {
     let html = escapeHtml(text);
     const codes = [], escaped = [];
@@ -455,7 +490,7 @@
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePopover(); return; }
     const range = sel.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return; // ignore selecting our own popover text
-    const text = sel.toString().trim();
+    const text = selectionText(sel);
     if (!text || text.length < 2 || text === lastAutoText) return;
     lastAutoText = text;
     popover.hidden = false;
@@ -496,7 +531,7 @@
     if (e.target === host) return;
     if (e.target.closest && e.target.closest('input, textarea')) return;
     const sel = window.getSelection();
-    const text = sel ? sel.toString().trim() : '';
+    const text = selectionText(sel);
     if (!text || text.length < 2) return;
     e.preventDefault();
     lastAutoText = text;
