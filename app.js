@@ -66,9 +66,10 @@ How you work:
 Formatting — keep every answer clean and scannable:
 - Lead with the answer. Put the single most important point in the first line or two, before any detail or background.
 - Be concise. Prefer the shortest answer that fully answers the question. Cut filler, throat-clearing, and repetition. Don't pad a simple question into an essay.
-- Use short sections with bold headings ONLY when the answer genuinely has multiple parts. A one- or two-idea answer needs no headings at all — just a tight paragraph or a short list.
+- Do NOT use markdown headings (#, ##, ###) — they look cluttered here. To label a section, put a short phrase in **bold** on its own line instead. Use *italics* for light emphasis.
+- Break a multi-part answer into short labelled sections ONLY when it genuinely has multiple parts. A one- or two-idea answer needs no labels at all — just a tight paragraph or a short list.
 - Use bullet points for lists of items and numbered steps for sequences. Keep each bullet to one line where you can.
-- Use a table ONLY to compare a few things across a few clear attributes, and keep it small (roughly 2–4 columns, a handful of rows). If a comparison would need a wide, dense grid, use short grouped sections or bullets instead — never dump a giant sprawling table.
+- Use a table ONLY to compare a few things across a few clear attributes, and keep it small (roughly 2–4 columns, a handful of rows). Write it as a normal markdown table (a header row, one |---| separator row, then the data) — it will render as a clean table, so don't hand-draw borders or add extra symbols. If a comparison would need a wide, dense grid, use short grouped sections or bullets instead — never dump a giant sprawling table.
 - Bold the key term or number in a line so the takeaway stands out; don't bold whole sentences.
 - End with a one-line summary or recommendation only when it actually adds something.
 - Overall: aim for the answer a sharp tutor would write on a whiteboard — organized, uncluttered, and easy to skim — not a wall of text or an oversized spreadsheet.`;
@@ -169,15 +170,137 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
-// Escape first, then apply a tiny bit of inline markdown (`code`, **bold**).
+// Escape first, then apply inline markdown (`code`, **bold**, *italic*).
+// Inline code is protected so its contents aren't re-formatted.
 function inlineFormat(text) {
-  return escapeHtml(text)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  let html = escapeHtml(text);
+  const codes = [];
+  html = html.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  html = html
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
+  return html;
+}
+
+// --- markdown block helpers ---
+function isTableSeparator(line) {
+  return line.includes('-') && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(line);
+}
+function splitTableRow(line) {
+  let s = line.trim();
+  if (s.startsWith('|')) s = s.slice(1);
+  if (s.endsWith('|')) s = s.slice(0, -1);
+  return s.split('|').map((c) => c.trim());
+}
+
+// Turn a block of prose (no ```fences```) into clean HTML: real tables,
+// bold "headings" (we deliberately don't render big #/##/### headings —
+// they become bold labels), italics, bullet/numbered lists, and rules.
+function renderProse(container, text) {
+  const lines = String(text).replace(/\r/g, '').split('\n');
+  let i = 0;
+  let listEl = null, listType = null;
+  const flushList = () => { if (listEl) container.appendChild(listEl); listEl = null; listType = null; };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) { flushList(); i++; continue; }
+
+    // Table: a row of cells followed by a |---|---| separator line.
+    if (line.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      flushList();
+      const header = splitTableRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+        rows.push(splitTableRow(lines[i]));
+        i++;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      const table = document.createElement('table');
+      table.className = 'md-table';
+      const thead = document.createElement('thead');
+      const htr = document.createElement('tr');
+      header.forEach((h) => { const th = document.createElement('th'); th.innerHTML = inlineFormat(h); htr.appendChild(th); });
+      thead.appendChild(htr);
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      rows.forEach((r) => {
+        const tr = document.createElement('tr');
+        for (let c = 0; c < header.length; c++) {
+          const td = document.createElement('td');
+          td.innerHTML = inlineFormat(r[c] || '');
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      container.appendChild(wrap);
+      continue;
+    }
+
+    // Horizontal rule (---, ***, ___): render as a clean thin line.
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) { flushList(); container.appendChild(document.createElement('hr')); i++; continue; }
+
+    // Markdown heading -> bold label (no oversized headings).
+    const h = trimmed.match(/^#{1,6}\s+(.*)$/);
+    if (h) {
+      flushList();
+      const p = document.createElement('p');
+      p.className = 'md-label';
+      p.innerHTML = '<strong>' + inlineFormat(h[1].replace(/#+\s*$/, '').trim()) + '</strong>';
+      container.appendChild(p);
+      i++; continue;
+    }
+
+    // Bullet list.
+    const bullet = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (bullet) {
+      if (listType !== 'ul') { flushList(); listEl = document.createElement('ul'); listType = 'ul'; }
+      const li = document.createElement('li');
+      li.innerHTML = inlineFormat(bullet[1]);
+      listEl.appendChild(li);
+      i++; continue;
+    }
+
+    // Numbered list.
+    const num = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (num) {
+      if (listType !== 'ol') { flushList(); listEl = document.createElement('ol'); listType = 'ol'; }
+      const li = document.createElement('li');
+      li.innerHTML = inlineFormat(num[1]);
+      listEl.appendChild(li);
+      i++; continue;
+    }
+
+    // Paragraph: join wrapped lines until a blank line or a block start.
+    flushList();
+    const buf = [trimmed];
+    i++;
+    while (i < lines.length) {
+      const nl = lines[i], nt = nl.trim();
+      if (!nt) break;
+      if (/^#{1,6}\s+/.test(nt)) break;
+      if (/^\s*[-*+]\s+/.test(nl) || /^\s*\d+[.)]\s+/.test(nl)) break;
+      if (/^\s*([-*_])\1{2,}\s*$/.test(nl)) break;
+      if (nl.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) break;
+      buf.push(nt);
+      i++;
+    }
+    const p = document.createElement('p');
+    p.innerHTML = inlineFormat(buf.join(' '));
+    container.appendChild(p);
+  }
+  flushList();
 }
 
 // Render text into `container`, turning ```fenced``` blocks into <pre><code>
-// (monospaced) and normal text into paragraphs with inline formatting.
+// and everything else into clean formatted HTML.
 function renderFormatted(container, text) {
   container.innerHTML = '';
   const segments = String(text).split('```'); // even = prose, odd = code block
@@ -194,13 +317,8 @@ function renderFormatted(container, text) {
       code.textContent = body.replace(/\n$/, '');
       pre.appendChild(code);
       container.appendChild(pre);
-    } else {
-      seg.split(/\n{2,}/).forEach((para) => {
-        if (!para.trim()) return;
-        const p = document.createElement('p');
-        p.innerHTML = inlineFormat(para);
-        container.appendChild(p);
-      });
+    } else if (seg.trim()) {
+      renderProse(container, seg);
     }
   });
 }

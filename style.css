@@ -267,6 +267,49 @@ html, body {
   padding: 1px 4px;
   border-radius: 4px;
 }
+
+/* clean tables, lists, rules and bold section labels */
+.bubble .table-wrap,
+.highlight-popover-body .table-wrap { overflow-x: auto; margin: 8px 0; }
+.bubble table.md-table,
+.highlight-popover-body table.md-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .88rem;
+  white-space: normal;
+}
+.bubble table.md-table th,
+.bubble table.md-table td,
+.highlight-popover-body table.md-table th,
+.highlight-popover-body table.md-table td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bubble table.md-table thead th,
+.highlight-popover-body table.md-table thead th {
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+}
+.bubble table.md-table tbody tr:last-child td,
+.highlight-popover-body table.md-table tbody tr:last-child td { border-bottom: none; }
+.bubble table.md-table tbody tr:nth-child(even),
+.highlight-popover-body table.md-table tbody tr:nth-child(even) { background: rgba(127, 127, 127, .06); }
+.bubble ul, .bubble ol,
+.highlight-popover-body ul, .highlight-popover-body ol { margin: 6px 0 8px; padding-left: 20px; }
+.bubble li,
+.highlight-popover-body li { margin: 2px 0; }
+.bubble p.md-label,
+.highlight-popover-body p.md-label { margin: 10px 0 4px; }
+.bubble p.md-label:first-child,
+.highlight-popover-body p.md-label:first-child { margin-top: 0; }
+.bubble hr,
+.highlight-popover-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
 .bubble-user {
   align-self: flex-end;
   background: var(--bubble-user);
