@@ -47,10 +47,14 @@ function isRateLimited(status, msg) {
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function askCassie(text, groqKey, model) {
+// Ask Groq. If onDelta is given, stream the reply (calling onDelta with each
+// chunk of text as it arrives) so the answer appears while it's generated;
+// otherwise return the whole reply at once. Returns the full text either way.
+async function askCassie(text, groqKey, model, onDelta) {
   let modelId = model || GROQ_MODELS[0];
   const tried = new Set();
   let overloadTries = 0;
+  const stream = typeof onDelta === 'function';
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: text },
@@ -60,7 +64,7 @@ async function askCassie(text, groqKey, model) {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
-      body: JSON.stringify({ model: modelId, messages, max_tokens: 2048, temperature: 0.7 }),
+      body: JSON.stringify({ model: modelId, messages, max_tokens: 2048, temperature: 0.7, stream }),
     });
     if (!res.ok) {
       let detail = '';
@@ -79,8 +83,32 @@ async function askCassie(text, groqKey, model) {
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
-    const data = await res.json();
-    return (data.choices?.[0]?.message?.content || '').trim() || '(no response)';
+    if (!stream) {
+      const data = await res.json();
+      return (data.choices?.[0]?.message?.content || '').trim() || '(no response)';
+    }
+    // Streamed response (Server-Sent Events): parse `data:` lines as they arrive.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', full = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep the last, possibly-incomplete line
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const payload = t.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const delta = JSON.parse(payload).choices?.[0]?.delta?.content || '';
+          if (delta) { full += delta; onDelta(delta); }
+        } catch (e) { /* ignore keep-alives / partial JSON */ }
+      }
+    }
+    return full.trim() || '(no response)';
   }
 }
 
@@ -102,4 +130,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   })();
 
   return true; // keep the message channel open for the async sendResponse above
+});
+
+// Streaming path (used by the on-page popover): the content script opens a
+// long-lived port so we can push the reply chunk-by-chunk as it generates.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'cassie-stream') return;
+  const post = (m) => { try { port.postMessage(m); } catch (e) { /* port closed */ } };
+  port.onMessage.addListener((msg) => {
+    if (msg?.type !== 'CASSIE_ASK') return;
+    (async () => {
+      const { groqKey, groqModel } = await chrome.storage.local.get(['groqKey', 'groqModel']);
+      if (!groqKey) { post({ error: 'no-key' }); return; }
+      try {
+        const reply = await askCassie(msg.text, groqKey, groqModel, (delta) => post({ delta }));
+        post({ done: true, reply });
+      } catch (err) {
+        post({ error: err.message });
+      }
+    })();
+  });
 });

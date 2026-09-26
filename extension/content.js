@@ -366,6 +366,24 @@
     });
   }
 
+  // Ask Groq via a streaming port so the answer appears as it's written.
+  // handlers: onDelta(fullTextSoFar), onDone(fullText), onError(code|message).
+  function askStream(prompt, handlers) {
+    let port;
+    try { port = chrome.runtime.connect({ name: 'cassie-stream' }); }
+    catch (e) { handlers.onError('reload'); return; }
+    let acc = '';
+    let finished = false;
+    port.onMessage.addListener((m) => {
+      if (m.delta != null) { acc += m.delta; handlers.onDelta(acc); }
+      else if (m.done) { finished = true; handlers.onDone(m.reply != null ? m.reply : acc); try { port.disconnect(); } catch (e) {} }
+      else if (m.error) { finished = true; handlers.onError(m.error); try { port.disconnect(); } catch (e) {} }
+    });
+    port.onDisconnect.addListener(() => { if (!finished) handlers.onError('reload'); });
+    try { port.postMessage({ type: 'CASSIE_ASK', text: prompt }); }
+    catch (e) { handlers.onError('reload'); }
+  }
+
   function positionPopover(rect) {
     const width = popover.offsetWidth || 300;
     let left = rect.left + rect.width / 2 - width / 2;
@@ -415,13 +433,26 @@
       .replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
     if (!pageText) { setContent('This page has no readable text.', { muted: true }); positionPopover(rect); return; }
     const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}`;
-    chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
-      if (myGen !== gen) return;
-      if (chrome.runtime.lastError) { setContent('Something went wrong. Reload the page and try again.', { muted: true }); positionPopover(rect); return; }
-      if (res?.error === 'no-key') { setContent('Click the Cassie toolbar icon to add your free Groq API key first.', { muted: true }); positionPopover(rect); return; }
-      if (res?.error) { setContent(res.error, { muted: true }); positionPopover(rect); return; }
-      setContent(res.reply || '(no response)');
-      positionPopover(rect);
+    let positioned = false;
+    askStream(prompt, {
+      onDelta: (soFar) => {
+        if (myGen !== gen) return;
+        setContent(soFar);
+        if (!positioned) { positionPopover(rect); positioned = true; }
+        body.scrollTop = body.scrollHeight;
+      },
+      onDone: (full) => {
+        if (myGen !== gen) return;
+        setContent(full || '(no response)');
+        positionPopover(rect);
+      },
+      onError: (err) => {
+        if (myGen !== gen) return;
+        if (err === 'no-key') setContent('Click the Cassie toolbar icon to add your free Groq API key first.', { muted: true });
+        else if (err === 'reload') setContent('Something went wrong. Reload the page and try again.', { muted: true });
+        else setContent(err, { muted: true });
+        positionPopover(rect);
+      },
     });
   }
 
@@ -463,25 +494,26 @@
       prompt = `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
     }
 
-    chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
-      if (myGen !== gen) return; // superseded by a newer selection
-      if (chrome.runtime.lastError) {
-        setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
+    let positioned = false;
+    askStream(prompt, {
+      onDelta: (soFar) => {
+        if (myGen !== gen) return;
+        setContent(soFar);
+        if (!positioned) { positionPopover(rect); positioned = true; }
+        body.scrollTop = body.scrollHeight;
+      },
+      onDone: (full) => {
+        if (myGen !== gen) return;
+        setContent(full || '(no response)');
         positionPopover(rect);
-        return;
-      }
-      if (res?.error === 'no-key') {
-        setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
+      },
+      onError: (err) => {
+        if (myGen !== gen) return;
+        if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
+        else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
+        else setContent(`Something went wrong: ${err}`, { muted: true });
         positionPopover(rect);
-        return;
-      }
-      if (res?.error) {
-        setContent(`Something went wrong: ${res.error}`, { muted: true });
-        positionPopover(rect);
-        return;
-      }
-      setContent(res.reply || '(no response)');
-      positionPopover(rect);
+      },
     });
   }
 
