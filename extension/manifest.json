@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie — AI Study Tutor",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Highlight text on any page for an explanation, answer, or code. Runs on Groq's free tier.",
   "icons": {
     "16": "icons/icon-16.png",
