@@ -487,11 +487,11 @@
 
     let prompt;
     if (mode === 'answer') {
-      prompt = `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`;
+      prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer — no explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
     } else if (mode === 'code') {
-      prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works:\n\n"${text}"`;
+      prompt = `Write clean, well-commented code that correctly solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, make sure it actually works, and briefly explain how it works:\n\n"${text}"`;
     } else {
-      prompt = `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+      prompt = `Work through this carefully step by step and double-check your result, then give the answer followed by a clear explanation of why/how:\n\n"${text}"`;
     }
 
     let positioned = false;

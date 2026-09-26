@@ -10,7 +10,7 @@ function loadState() {
   } catch (e) { /* ignore corrupt state */ }
   return {
     groqKey: '',            // Groq — used for all text (chat, highlight, page-ask)
-    groqModel: 'llama-3.3-70b-versatile',
+    groqModel: 'openai/gpt-oss-120b',
     geminiKey: '',          // Gemini — used only for images (generation + reading photos)
     voiceOut: false,
     messages: [], // { role: 'user' | 'assistant', content: '...' }
@@ -18,7 +18,8 @@ function loadState() {
 }
 
 // Text runs on Groq (higher free limits); images run on Gemini.
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+// Smartest first — it's also the default and the head of the fallback chain.
+const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'];
 const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
 const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
@@ -27,14 +28,14 @@ let state = loadState();
 // Migrate old single-key state (apiKey was the Gemini key) to the new fields.
 if (state.apiKey && !state.geminiKey) { state.geminiKey = state.apiKey; }
 if (state.groqKey === undefined) state.groqKey = '';
-if (!state.groqModel) state.groqModel = 'llama-3.3-70b-versatile';
+if (!state.groqModel) state.groqModel = 'openai/gpt-oss-120b';
 
 function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
 if (!GROQ_MODELS.includes(state.groqModel)) {
-  state.groqModel = 'llama-3.3-70b-versatile';
+  state.groqModel = 'openai/gpt-oss-120b';
   save();
 }
 
@@ -55,6 +56,7 @@ You are especially strong at:
 
 How you work:
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
+- Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
 - Teach when explanation is wanted: show the reasoning step by step, build from what the user seems to know, and use concrete examples.
 - Text may be pasted from a webpage with math notation flattened: "x2" usually means x squared (x^2), "x3" means x^3, and one number over another means a fraction. Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and solve it; for multiple choice, pick the correct option and show the key steps.
 - For coding: give correct, runnable code inside fenced code blocks (triple backticks with the language, e.g. \`\`\`python). Explain what the code does and why, call out edge cases and complexity, and when useful suggest a cleaner or more idiomatic approach. When debugging, identify the actual cause, show the fix, and explain it so they learn.
