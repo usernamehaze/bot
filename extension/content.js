@@ -191,6 +191,50 @@
     d.textContent = str;
     return d.innerHTML;
   }
+
+  // Turn LaTeX-style math (which we don't render) into readable plain text.
+  // Only touches text that actually looks like LaTeX.
+  const LATEX_SYMBOLS = {
+    times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', neq: '≠', ne: '≠',
+    leq: '≤', le: '≤', geq: '≥', ge: '≥', approx: '≈', equiv: '≡', propto: '∝', infty: '∞',
+    sum: 'Σ', prod: '∏', int: '∫', partial: '∂', nabla: '∇', cdots: '…', ldots: '…', dots: '…', vdots: '⋮',
+    Rightarrow: '⇒', Leftarrow: '⇐', Leftrightarrow: '⇔', rightarrow: '→', leftarrow: '←', to: '→', mapsto: '↦',
+    alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
+    theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', rho: 'ρ', sigma: 'σ',
+    tau: 'τ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+    Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+    in: '∈', notin: '∉', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇', cup: '∪', cap: '∩',
+    emptyset: '∅', forall: '∀', exists: '∃', land: '∧', lor: '∨', neg: '¬', angle: '∠', deg: '°',
+    prime: '′', bullet: '•', circ: '∘', ast: '*', star: '*',
+  };
+  function deLatex(text) {
+    if (!/\\(frac|dfrac|tfrac|sqrt|begin|end|left|right|displaystyle|text|mathrm|mathbf|operatorname|[a-zA-Z]+)|\\\[|\\\]|\\\(|\\\)|\^\{|_\{/.test(text)) {
+      return text;
+    }
+    let t = text;
+    t = t.replace(/\\\\?\s*\[\s*[0-9]+\s*(pt|ex|em|mu)\s*\]/g, '\n');
+    t = t.replace(/\\\[|\\\]|\\\(|\\\)|\$\$/g, ' ');
+    t = t.replace(/\\\\\s*/g, '\n');
+    t = t.replace(/\\(begin|end)\{[^}]*\}/g, '');
+    t = t.replace(/\\left|\\right/g, '');
+    t = t.replace(/\\(displaystyle|textstyle|scriptstyle|limits|nonumber|quad|qquad|,|;|:|!)/g, ' ');
+    t = t.replace(/\\(text|mathrm|mathbf|mathit|mathsf|mathcal|mathbb|operatorname)\s*\{([^{}]*)\}/g, '$2');
+    for (let i = 0; i < 5; i++) {
+      t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)');
+      t = t.replace(/\\[dt]?frac\s*([0-9A-Za-z])\s*([0-9A-Za-z])/g, '($1)/($2)');
+      t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)');
+      t = t.replace(/\^\{([^{}]*)\}/g, '^($1)');
+      t = t.replace(/_\{([^{}]*)\}/g, '_($1)');
+    }
+    t = t.replace(/\\([a-zA-Z]+)/g, (m, w) => (Object.prototype.hasOwnProperty.call(LATEX_SYMBOLS, w) ? LATEX_SYMBOLS[w] : w));
+    t = t.replace(/\\([%&#_${}])/g, '$1');
+    t = t.replace(/&/g, ' ');
+    t = t.replace(/[{}]/g, '');
+    t = t.replace(/^[ \t]*\[[ \t]+/gm, '').replace(/[ \t]+\][ \t]*$/gm, '');
+    t = t.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+    return t;
+  }
+
   function inlineFormat(text) {
     let html = escapeHtml(text);
     const codes = [], escaped = [];
@@ -282,7 +326,7 @@
         pre.appendChild(c);
         body.appendChild(pre);
       } else if (seg.trim()) {
-        renderProse(body, seg);
+        renderProse(body, deLatex(seg));
       }
     });
   }
