@@ -76,6 +76,16 @@
     }
     .body pre code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; background: none; padding: 0; }
     .body code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; background: rgba(127,127,127,.18); padding: 1px 4px; border-radius: 4px; }
+    .body .table-wrap { overflow-x: auto; margin: 8px 0; }
+    .body table.md-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    .body table.md-table th, .body table.md-table td { text-align: left; padding: 6px 9px; border-bottom: 1px solid rgba(127,127,127,.35); vertical-align: top; }
+    .body table.md-table thead th { font-weight: 600; border-bottom: 2px solid rgba(127,127,127,.5); }
+    .body table.md-table tbody tr:last-child td { border-bottom: none; }
+    .body ul, .body ol { margin: 6px 0 8px; padding-left: 20px; }
+    .body li { margin: 2px 0; }
+    .body p.md-label { margin: 10px 0 4px; font-weight: 600; }
+    .body p.md-label:first-child { margin-top: 0; }
+    .body hr { border: none; border-top: 1px solid rgba(127,127,127,.35); margin: 10px 0; }
     .question { font-weight: 600; margin-bottom: 10px; }
     .choice-row { display: flex; gap: 8px; }
     .choice-btn {
@@ -182,9 +192,75 @@
     return d.innerHTML;
   }
   function inlineFormat(text) {
-    return escapeHtml(text)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    let html = escapeHtml(text);
+    const codes = [];
+    html = html.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`);
+    html = html
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    return html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
+  }
+
+  function isTableSeparator(line) {
+    return line.includes('-') && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(line);
+  }
+  function splitTableRow(line) {
+    let s = line.trim();
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|')) s = s.slice(0, -1);
+    return s.split('|').map((c) => c.trim());
+  }
+
+  // Render a prose block (no ```fences```) into clean HTML: real tables,
+  // bold labels instead of #/##/### headings, italics, lists, rules.
+  function renderProse(container, text) {
+    const lines = String(text).replace(/\r/g, '').split('\n');
+    let i = 0, listEl = null, listType = null;
+    const flushList = () => { if (listEl) container.appendChild(listEl); listEl = null; listType = null; };
+    while (i < lines.length) {
+      const line = lines[i], trimmed = line.trim();
+      if (!trimmed) { flushList(); i++; continue; }
+      if (line.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+        flushList();
+        const header = splitTableRow(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) { rows.push(splitTableRow(lines[i])); i++; }
+        const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+        const table = document.createElement('table'); table.className = 'md-table';
+        const thead = document.createElement('thead'), htr = document.createElement('tr');
+        header.forEach((h) => { const th = document.createElement('th'); th.innerHTML = inlineFormat(h); htr.appendChild(th); });
+        thead.appendChild(htr); table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.forEach((r) => {
+          const tr = document.createElement('tr');
+          for (let c = 0; c < header.length; c++) { const td = document.createElement('td'); td.innerHTML = inlineFormat(r[c] || ''); tr.appendChild(td); }
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody); wrap.appendChild(table); container.appendChild(wrap);
+        continue;
+      }
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) { flushList(); container.appendChild(document.createElement('hr')); i++; continue; }
+      const h = trimmed.match(/^#{1,6}\s+(.*)$/);
+      if (h) { flushList(); const p = document.createElement('p'); p.className = 'md-label'; p.innerHTML = '<strong>' + inlineFormat(h[1].replace(/#+\s*$/, '').trim()) + '</strong>'; container.appendChild(p); i++; continue; }
+      const bullet = line.match(/^\s*[-*+]\s+(.*)$/);
+      if (bullet) { if (listType !== 'ul') { flushList(); listEl = document.createElement('ul'); listType = 'ul'; } const li = document.createElement('li'); li.innerHTML = inlineFormat(bullet[1]); listEl.appendChild(li); i++; continue; }
+      const num = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (num) { if (listType !== 'ol') { flushList(); listEl = document.createElement('ol'); listType = 'ol'; } const li = document.createElement('li'); li.innerHTML = inlineFormat(num[1]); listEl.appendChild(li); i++; continue; }
+      flushList();
+      const buf = [trimmed]; i++;
+      while (i < lines.length) {
+        const nl = lines[i], nt = nl.trim();
+        if (!nt) break;
+        if (/^#{1,6}\s+/.test(nt)) break;
+        if (/^\s*[-*+]\s+/.test(nl) || /^\s*\d+[.)]\s+/.test(nl)) break;
+        if (/^\s*([-*_])\1{2,}\s*$/.test(nl)) break;
+        if (nl.includes('|') && i + 1 < lines.length && isTableSeparator(lines[i + 1])) break;
+        buf.push(nt); i++;
+      }
+      const p = document.createElement('p'); p.innerHTML = inlineFormat(buf.join(' ')); container.appendChild(p);
+    }
+    flushList();
   }
 
   function setContent(text, { muted = false } = {}) {
@@ -203,13 +279,8 @@
         c.textContent = code.replace(/\n$/, '');
         pre.appendChild(c);
         body.appendChild(pre);
-      } else {
-        seg.split(/\n{2,}/).forEach((para) => {
-          if (!para.trim()) return;
-          const p = document.createElement('p');
-          p.innerHTML = inlineFormat(para);
-          body.appendChild(p);
-        });
+      } else if (seg.trim()) {
+        renderProse(body, seg);
       }
     });
   }
