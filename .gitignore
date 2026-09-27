@@ -1,3 +1,4 @@
 # Build artifacts (generated for Chrome Web Store upload, not source)
 *.zip
 cassie-extension-*.zip
+cassie-screenshot-*.png
