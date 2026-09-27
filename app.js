@@ -452,8 +452,27 @@ function isTransientOverload(status, msg) {
 function isRateLimited(status, msg) {
   return status === 429 || /resource exhausted|quota|rate limit|too many requests/i.test(msg || '');
 }
+// Request exceeded the model's per-minute token budget (long conversation).
+function isTooLarge(status, msg) {
+  return status === 413 || /too large|reduce your (message|prompt)|tokens per minute|\bTPM\b|context length|maximum context/i.test(msg || '');
+}
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Rough token estimate (~4 chars/token) and history trimmer: keep the most
+// recent messages within a token budget so requests stay under free limits.
+function estimateTokens(str) { return Math.ceil((str || '').length / 4); }
+function trimHistory(msgs, budgetTokens) {
+  const out = [];
+  let used = 0;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const t = estimateTokens(msgs[i].content);
+    if (out.length && used + t > budgetTokens) break; // always keep the latest
+    out.unshift(msgs[i]);
+    used += t;
+  }
+  return out;
+}
 
 // Parse a duration like "2m30s", "1h", "45.6s", or a bare seconds number.
 function parseDuration(str) {
@@ -502,15 +521,16 @@ function rateLimitMessage(res, detail) {
 /* Text → Groq (OpenAI-compatible chat completions). Falls back through a list of
    models if the chosen one has been retired. `msgs` = [{role, content}]. */
 async function askGroq(msgs, opts = {}) {
-  const messages = [
-    { role: 'system', content: buildSystemPrompt(opts) },
-    ...msgs.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-  ];
   let model = state.groqModel;
   const tried = new Set();
   let overloadTries = 0;
+  let historyBudget = 4000; // tokens of chat history to include (trimmed on overflow)
   while (true) {
     tried.add(model);
+    const messages = [
+      { role: 'system', content: buildSystemPrompt(opts) },
+      ...trimHistory(msgs, historyBudget).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+    ];
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
@@ -522,6 +542,14 @@ async function askGroq(msgs, opts = {}) {
       if (modelRetired(res.status, detail)) {
         const next = GROQ_MODELS.find((m) => !tried.has(m));
         if (next) { model = next; state.groqModel = next; save(); continue; }
+      }
+      if (isTooLarge(res.status, detail)) {
+        if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
+        const next = GROQ_MODELS.find((m) => !tried.has(m));
+        if (next) { model = next; state.groqModel = next; save(); historyBudget = 4000; continue; }
+        const e = new Error("This conversation got too long for the free per-minute limit. Clear the chat (gear icon → Clear conversation) or ask a shorter question, and I'll be right back.");
+        e.friendly = true;
+        throw e;
       }
       if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
         overloadTries += 1;
