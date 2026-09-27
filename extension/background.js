@@ -97,15 +97,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Ask Groq. If onDelta is given, stream the reply (calling onDelta with each
 // chunk of text as it arrives) so the answer appears while it's generated;
 // otherwise return the whole reply at once. Returns the full text either way.
-async function askCassie(text, groqKey, model, onDelta) {
+async function askCassie(input, groqKey, model, onDelta) {
   let modelId = model || GROQ_MODELS[0];
   const tried = new Set();
   let overloadTries = 0;
   const stream = typeof onDelta === 'function';
-  const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: text },
-  ];
+  // `input` is either a single user string or a full [{role, content}] history
+  // (for multi-turn follow-ups). Keep only valid roles and cap the history.
+  const turns = Array.isArray(input)
+    ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-12)
+    : [{ role: 'user', content: String(input) }];
+  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...turns];
   while (true) {
     tried.add(modelId);
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -190,7 +192,8 @@ chrome.runtime.onConnect.addListener((port) => {
       const { groqKey, groqModel } = await chrome.storage.local.get(['groqKey', 'groqModel']);
       if (!groqKey) { post({ error: 'no-key' }); return; }
       try {
-        const reply = await askCassie(msg.text, groqKey, groqModel, (delta) => post({ delta }));
+        const input = Array.isArray(msg.messages) ? msg.messages : msg.text;
+        const reply = await askCassie(input, groqKey, groqModel, (delta) => post({ delta }));
         post({ done: true, reply });
       } catch (err) {
         post({ error: err.message });
