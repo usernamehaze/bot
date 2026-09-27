@@ -86,6 +86,10 @@
     .body p.md-label { margin: 10px 0 4px; font-weight: 600; }
     .body p.md-label:first-child { margin-top: 0; }
     .body hr { border: none; border-top: 1px solid rgba(127,127,127,.35); margin: 10px 0; }
+    .body sup, .body sub { line-height: 0; font-size: .75em; }
+    .body .frac { display: inline-flex; flex-direction: column; text-align: center; vertical-align: -0.55em; margin: 0 2px; font-size: .95em; }
+    .body .frac-n { border-bottom: 1px solid currentColor; padding: 0 4px; line-height: 1.25; }
+    .body .frac-d { padding: 0 4px; line-height: 1.25; }
     .question { font-weight: 600; font-size: 12px; margin-bottom: 7px; }
     .choice-row { display: flex; gap: 5px; }
     .choice-btn {
@@ -277,6 +281,16 @@
     return text || sel.toString().trim();
   }
 
+  function prettifyMath(html) {
+    html = html.replace(/\^\(([^()]{1,40})\)/g, '<sup>$1</sup>');
+    html = html.replace(/\^(-?\d+|[A-Za-z])/g, '<sup>$1</sup>');
+    html = html.replace(/_\(([^()]{1,40})\)/g, '<sub>$1</sub>');
+    html = html.replace(/_(\d+)/g, '<sub>$1</sub>');
+    html = html.replace(/\(([^()]{1,40})\)\s*\/\s*\(([^()]{1,40})\)/g,
+      '<span class="frac"><span class="frac-n">$1</span><span class="frac-d">$2</span></span>');
+    return html;
+  }
+
   function inlineFormat(text) {
     let html = escapeHtml(text);
     const codes = [], escaped = [];
@@ -285,6 +299,7 @@
     html = html
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    html = prettifyMath(html);
     html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
     return html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   }
