@@ -90,16 +90,24 @@
     .body .frac { display: inline-flex; flex-direction: column; text-align: center; vertical-align: -0.55em; margin: 0 2px; font-size: .95em; }
     .body .frac-n { border-bottom: 1px solid currentColor; padding: 0 4px; line-height: 1.25; }
     .body .frac-d { padding: 0 4px; line-height: 1.25; }
-    .question { font-weight: 600; font-size: 12px; margin-bottom: 7px; }
-    .choice-row { display: flex; gap: 5px; }
+    /* dark theme — applied when the page it sits on has a dark background */
+    .popover.dark { background: #1e1f26; color: #e9e9ef; border-color: #3a3b44; }
+    .popover.dark .header { background: #0f0f14; }
+    .popover.dark .body.muted { color: #a0a3b8; }
+    .popover.dark .page-input, .popover.dark .followup-input { border-color: #4a4b55; }
+    .popover.dark .copy-btn { border-color: #4a4b55; }
+    .popover.dark .choice-btn, .popover.dark .followup-send, .popover.dark .page-ask-btn { background: #3a3b44; }
+    .popover.dark .choice-btn:hover, .popover.dark .followup-send:hover, .popover.dark .page-ask-btn:hover { background: #565764; }
+    .question { font-weight: 600; font-size: 11px; margin-bottom: 6px; }
+    .choice-row { display: flex; gap: 4px; }
     .choice-btn {
       flex: 1;
       background: #1c1c24;
       color: #fff;
       border: none;
-      border-radius: 6px;
-      padding: 5px 0;
-      font-size: 11px;
+      border-radius: 5px;
+      padding: 4px 0;
+      font-size: 10px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -191,6 +199,26 @@
     lastAutoText = '';
     gen++;
   }
+
+  // Match the popover to the page it sits on: dark popover on dark pages,
+  // light on light. Reads the first opaque background from body/html, and
+  // falls back to the OS colour-scheme preference.
+  function isDarkBg() {
+    try {
+      for (const el of [document.body, document.documentElement]) {
+        if (!el) continue;
+        const bg = getComputedStyle(el).backgroundColor;
+        const m = bg && bg.match(/rgba?\(([^)]+)\)/);
+        if (!m) continue;
+        const p = m[1].split(',').map((s) => parseFloat(s));
+        if (p.length >= 4 && p[3] === 0) continue; // transparent — try next
+        const lum = 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
+        return lum < 128;
+      }
+    } catch (e) { /* ignore */ }
+    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+  }
+  function applyTheme() { popover.classList.toggle('dark', isDarkBg()); }
 
   function dismissPopover() {
     window.getSelection()?.removeAllRanges();
@@ -502,6 +530,7 @@
   }
 
   function positionPopover(rect) {
+    applyTheme();
     const width = popover.offsetWidth || 300;
     let left = rect.left + rect.width / 2 - width / 2;
     left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
@@ -566,7 +595,7 @@
       <div class="choice-row">
         <button type="button" class="choice-btn" data-mode="explain">Explain</button>
         <button type="button" class="choice-btn" data-mode="answer">Answer</button>
-        <button type="button" class="choice-btn" data-mode="code">Code it</button>
+        <button type="button" class="choice-btn" data-mode="code">Code</button>
       </div>
     `;
     positionPopover(rect);
