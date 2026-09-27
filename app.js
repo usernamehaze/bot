@@ -166,6 +166,9 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const sidebarClose = document.getElementById('sidebar-close');
 const newChatBtn = document.getElementById('new-chat-btn');
 const chatList = document.getElementById('chat-list');
+const modelPill = document.getElementById('model-pill');
+const modelPillModel = document.getElementById('model-pill-model');
+const modelPillLevel = document.getElementById('model-pill-level');
 const cursorEl = document.getElementById('cassie-cursor');
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
@@ -939,6 +942,18 @@ function openSettings() {
   if (levelSelect) levelSelect.value = state.level || 'auto';
   settingsPanel.hidden = false;
 }
+const MODEL_SHORT = {
+  'openai/gpt-oss-120b': 'GPT-OSS 120B',
+  'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+  'llama-3.1-8b-instant': 'Llama 3.1 8B',
+  'openai/gpt-oss-20b': 'GPT-OSS 20B',
+};
+function updateModelPill() {
+  if (!modelPill) return;
+  modelPillModel.textContent = MODEL_SHORT[state.groqModel] || 'Cassie';
+  const lvl = state.level && state.level !== 'auto' ? (LEVEL_LABELS[state.level] || 'Auto') : 'Auto';
+  modelPillLevel.textContent = lvl.charAt(0).toUpperCase() + lvl.slice(1);
+}
 function closeSettings() {
   state.groqKey = groqKeyInput.value.trim();
   state.groqModel = groqModelSelect.value;
@@ -946,6 +961,7 @@ function closeSettings() {
   state.voiceOut = voiceOutToggle.checked;
   if (levelSelect) state.level = levelSelect.value;
   save();
+  updateModelPill();
   settingsPanel.hidden = true;
   resumeFollowing();
 }
@@ -954,6 +970,12 @@ settingsBtn.addEventListener('click', () => {
   detourToElement(settingsBtn, { click: true, resumeAfter: 900 });
 });
 settingsCloseBtn.addEventListener('click', closeSettings);
+if (modelPill) {
+  modelPill.addEventListener('click', () => {
+    openSettings();
+    detourToElement(groqModelSelect, { click: true, resumeAfter: 900 });
+  });
+}
 
 clearChatBtn.addEventListener('click', () => {
   if (!confirm('Clear this conversation?')) return;
@@ -1236,6 +1258,7 @@ window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
 renderHistory();
+updateModelPill();
 requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();
