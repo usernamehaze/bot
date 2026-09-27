@@ -301,6 +301,26 @@ html, body {
 }
 .icon-btn { flex-shrink: 0; }
 
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.chip {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--primary); }
+.chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
 .attach-preview {
   display: flex;
   align-items: center;

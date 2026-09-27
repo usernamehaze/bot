@@ -13,6 +13,7 @@ function loadState() {
     groqModel: 'openai/gpt-oss-120b',
     geminiKey: '',          // Gemini — used only for images (generation + reading photos)
     voiceOut: false,
+    level: 'auto',          // explanation level: auto | elementary | middle | high | college
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -77,6 +78,30 @@ Formatting — keep every answer clean and scannable:
 - End with a one-line summary or recommendation only when it actually adds something.
 - Overall: aim for the answer a sharp tutor would write on a whiteboard — organized, uncluttered, and easy to skim — not a wall of text or an oversized spreadsheet.`;
 
+/* ---------- tutor helpers ---------- */
+const LEVEL_LABELS = {
+  elementary: 'elementary school',
+  middle: 'middle school',
+  high: 'high school',
+  college: 'college',
+};
+const HINT_INSTRUCTION = "For THIS reply, act as a tutor giving a HINT only: nudge the student toward the answer with a leading question or the first step. Do NOT reveal the final answer or full solution. Keep it short and encouraging. If they then ask for the full answer, give it.";
+const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer — do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.";
+
+let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
+
+// Build the system prompt with the chosen level and (for chat) any active
+// tutor mode. Highlight-popover calls pass tutor:false.
+function buildSystemPrompt({ tutor = false, mode = null } = {}) {
+  let sp = SYSTEM_PROMPT;
+  if (state.level && LEVEL_LABELS[state.level]) {
+    sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level — match your vocabulary, depth, and examples to that level.`;
+  }
+  if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
+  if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
+  return sp;
+}
+
 /* ---------- DOM refs ---------- */
 const chatLog = document.getElementById('chat-log');
 const composer = document.getElementById('composer');
@@ -90,6 +115,9 @@ const groqKeyInput = document.getElementById('groq-key-input');
 const groqModelSelect = document.getElementById('groq-model-select');
 const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
+const levelSelect = document.getElementById('level-select');
+const hintBtn = document.getElementById('hint-btn');
+const quizBtn = document.getElementById('quiz-btn');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const cursorEl = document.getElementById('cassie-cursor');
 const attachBtn = document.getElementById('attach-btn');
@@ -473,9 +501,9 @@ function rateLimitMessage(res, detail) {
 
 /* Text → Groq (OpenAI-compatible chat completions). Falls back through a list of
    models if the chosen one has been retired. `msgs` = [{role, content}]. */
-async function askGroq(msgs) {
+async function askGroq(msgs, opts = {}) {
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: buildSystemPrompt(opts) },
     ...msgs.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
   ];
   let model = state.groqModel;
@@ -527,7 +555,7 @@ async function askGeminiVision(msgs, image) {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
       contents,
       generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
     }),
@@ -545,13 +573,13 @@ async function askGeminiVision(msgs, image) {
 }
 
 /* Router: text goes to Groq; anything with an attached image goes to Gemini. */
-async function askCassie(msgs, image) {
+async function askCassie(msgs, image, opts = {}) {
   if (image) {
     if (!state.geminiKey) throw new Error('Add your Google (Gemini) API key in Settings to use images.');
     return askGeminiVision(msgs, image);
   }
   if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
-  return askGroq(msgs);
+  return askGroq(msgs, opts);
 }
 
 /* ---------- upload / download / image helpers ---------- */
@@ -643,7 +671,7 @@ function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
 }
 
 /* ---------- send flow ---------- */
-async function handleSend(text) {
+async function handleSend(text, opts = {}) {
   const image = pendingImage;
   if (!text.trim() && !image) return;
 
@@ -673,7 +701,7 @@ async function handleSend(text) {
   sendBtn.disabled = true;
 
   try {
-    const reply = await askCassie(state.messages, image);
+    const reply = await askCassie(state.messages, image, { tutor: true, mode: opts.mode });
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
@@ -786,12 +814,52 @@ function autoGrow() {
 }
 promptInput.addEventListener('input', autoGrow);
 
+/* ---------- tutor quick-actions: Hint & Quiz ---------- */
+if (hintBtn) {
+  hintBtn.addEventListener('click', () => {
+    const text = promptInput.value.trim();
+    if (!text) {
+      promptInput.placeholder = 'Type your question first, then tap Hint…';
+      promptInput.focus();
+      return;
+    }
+    handleSend(text, { mode: 'hint' });
+  });
+}
+if (quizBtn) {
+  quizBtn.addEventListener('click', () => {
+    if (!state.groqKey) {
+      openSettings();
+      detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
+      renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can start a quiz.');
+      return;
+    }
+    quizMode = !quizMode;
+    quizBtn.classList.toggle('active', quizMode);
+    quizBtn.textContent = quizMode ? '■ Stop quiz' : '📝 Quiz me';
+    if (quizMode) {
+      const topic = promptInput.value.trim();
+      promptInput.value = '';
+      autoGrow();
+      handleSend(
+        topic
+          ? `Quiz me on: ${topic}. Ask the first question.`
+          : "Quiz me on what we've been studying (or pick a useful general topic if we haven't). Ask the first question.",
+        {}
+      );
+    } else {
+      renderMessage('assistant', 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
+    }
+  });
+}
+
 /* ---------- settings ---------- */
 function openSettings() {
   groqKeyInput.value = state.groqKey;
   groqModelSelect.value = state.groqModel;
   geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
+  if (levelSelect) levelSelect.value = state.level || 'auto';
   settingsPanel.hidden = false;
 }
 function closeSettings() {
@@ -799,6 +867,7 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
+  if (levelSelect) state.level = levelSelect.value;
   save();
   settingsPanel.hidden = true;
   resumeFollowing();
