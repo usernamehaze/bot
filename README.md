@@ -20,7 +20,7 @@ server to run.
 
 This app is 100% client-side (no server) and uses two free providers:
 
-- **Groq** powers all text — chat, highlight → Explain/Answer/Code it, and
+- **Groq** powers all text — chat, highlight → Explain/Answer/Code, and
   "ask about this page". Groq's free tier is more generous (~30 requests per
   minute), which keeps everyday studying from hitting limits.
 - **Google Gemini** is used only for **images** — generating pictures and

@@ -901,7 +901,7 @@ function setPopoverChoice(text, rect) {
     <div class="popover-choice-row">
       <button type="button" class="popover-choice-btn" data-mode="explain">Explain</button>
       <button type="button" class="popover-choice-btn" data-mode="answer">Answer</button>
-      <button type="button" class="popover-choice-btn" data-mode="code">Code it</button>
+      <button type="button" class="popover-choice-btn" data-mode="code">Code</button>
     </div>
   `;
   positionPopover(rect);
