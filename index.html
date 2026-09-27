@@ -46,6 +46,11 @@
     <button type="button" id="attach-remove" title="Remove image" aria-label="Remove image">&times;</button>
   </div>
 
+  <div id="quick-actions" class="quick-actions">
+    <button type="button" id="hint-btn" class="chip" title="Get a hint instead of the full answer">💡 Hint</button>
+    <button type="button" id="quiz-btn" class="chip" title="Start a practice quiz">📝 Quiz me</button>
+  </div>
+
   <form id="composer" class="composer">
     <button type="button" id="attach-btn" class="icon-btn" title="Attach an image" aria-label="Attach an image">
       <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6h-1.5z"/></svg>
@@ -93,6 +98,16 @@
         <strong>free</strong> key at <span class="mono">aistudio.google.com/app/apikey</span>.
         Leave blank if you don't need images.
       </p>
+      <label class="field">
+        <span>Explanation level</span>
+        <select id="level-select">
+          <option value="auto">Auto (match my question)</option>
+          <option value="elementary">Elementary school</option>
+          <option value="middle">Middle school</option>
+          <option value="high">High school</option>
+          <option value="college">College</option>
+        </select>
+      </label>
       <label class="field row">
         <span>Read answers aloud</span>
         <input type="checkbox" id="voice-out-toggle">
