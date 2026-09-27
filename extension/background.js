@@ -46,6 +46,21 @@ function isTransientOverload(status, msg) {
 function isRateLimited(status, msg) {
   return status === 429 || /resource exhausted|quota|rate limit|too many requests/i.test(msg || '');
 }
+function isTooLarge(status, msg) {
+  return status === 413 || /too large|reduce your (message|prompt)|tokens per minute|\bTPM\b|context length|maximum context/i.test(msg || '');
+}
+function estimateTokens(str) { return Math.ceil((str || '').length / 4); }
+function trimHistory(msgs, budgetTokens) {
+  const out = [];
+  let used = 0;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const t = estimateTokens(msgs[i].content);
+    if (out.length && used + t > budgetTokens) break;
+    out.unshift(msgs[i]);
+    used += t;
+  }
+  return out;
+}
 
 // Parse a duration like "2m30s", "1h", "45.6s", or a bare seconds number.
 function parseDuration(str) {
@@ -104,12 +119,13 @@ async function askCassie(input, groqKey, model, onDelta) {
   const stream = typeof onDelta === 'function';
   // `input` is either a single user string or a full [{role, content}] history
   // (for multi-turn follow-ups). Keep only valid roles and cap the history.
-  const turns = Array.isArray(input)
-    ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-12)
+  const allTurns = Array.isArray(input)
+    ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     : [{ role: 'user', content: String(input) }];
-  const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...turns];
+  let historyBudget = 4000; // tokens of history to include (trimmed on overflow)
   while (true) {
     tried.add(modelId);
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...trimHistory(allTurns, historyBudget)];
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
@@ -121,6 +137,12 @@ async function askCassie(input, groqKey, model, onDelta) {
       if (modelRetired(res.status, detail)) {
         const next = GROQ_MODELS.find((m) => !tried.has(m));
         if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); continue; }
+      }
+      if (isTooLarge(res.status, detail)) {
+        if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; }
+        const next = GROQ_MODELS.find((m) => !tried.has(m));
+        if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); historyBudget = 4000; continue; }
+        throw new Error('That was a bit too long for the free per-minute limit — try a shorter selection or question.');
       }
       if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
         overloadTries += 1;
