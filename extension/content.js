@@ -144,6 +144,13 @@
       cursor: pointer;
     }
     .page-ask-btn:hover { background: #000; }
+    .answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.25); }
+    .copy-btn { background: none; border: 1px solid rgba(127,127,127,.4); color: inherit; border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .copy-btn:hover { background: rgba(127,127,127,.12); }
+    .followup-row { display: flex; gap: 6px; margin-top: 8px; }
+    .followup-input { flex: 1; box-sizing: border-box; padding: 6px 9px; border: 1px solid rgba(127,127,127,.4); border-radius: 6px; font-size: 12px; font-family: inherit; background: transparent; color: inherit; }
+    .followup-send { background: #1c1c24; color: #fff; border: none; border-radius: 6px; padding: 0 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .followup-send:hover { background: #000; }
   `;
   shadow.appendChild(style);
 
@@ -367,8 +374,9 @@
   }
 
   // Ask Groq via a streaming port so the answer appears as it's written.
+  // `payload` is a single prompt string or a [{role, content}] history.
   // handlers: onDelta(fullTextSoFar), onDone(fullText), onError(code|message).
-  function askStream(prompt, handlers) {
+  function askStream(payload, handlers) {
     let port;
     try { port = chrome.runtime.connect({ name: 'cassie-stream' }); }
     catch (e) { handlers.onError('reload'); return; }
@@ -380,8 +388,102 @@
       else if (m.error) { finished = true; handlers.onError(m.error); try { port.disconnect(); } catch (e) {} }
     });
     port.onDisconnect.addListener(() => { if (!finished) handlers.onError('reload'); });
-    try { port.postMessage({ type: 'CASSIE_ASK', text: prompt }); }
+    const msg = Array.isArray(payload) ? { type: 'CASSIE_ASK', messages: payload } : { type: 'CASSIE_ASK', text: payload };
+    try { port.postMessage(msg); }
     catch (e) { handlers.onError('reload'); }
+  }
+
+  // --- conversation state for follow-up questions in the popover ---
+  let convo = [];          // [{role, content}] sent to the model
+  let convoLabel = '';     // the human-readable question, for the history log
+  let convoRect = null;    // where to anchor the popover for this conversation
+
+  // Save each completed Q&A to local history (capped), for the popup to show.
+  function saveToHistory(question, answer) {
+    try {
+      chrome.storage.local.get(['cassieHistory'], ({ cassieHistory }) => {
+        const list = Array.isArray(cassieHistory) ? cassieHistory : [];
+        list.unshift({ q: (question || '').slice(0, 400), a: (answer || '').slice(0, 4000), url: location.href, ts: Date.now() });
+        chrome.storage.local.set({ cassieHistory: list.slice(0, 50) });
+      });
+    } catch (e) { /* storage unavailable */ }
+  }
+
+  // Render a finished answer plus a Copy button and a follow-up input.
+  function renderAnswerView(full, rect) {
+    setContent(full);
+    const actions = document.createElement('div');
+    actions.className = 'answer-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.addEventListener('click', () => {
+      const done = () => { copyBtn.textContent = 'Copied ✓'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500); };
+      try {
+        navigator.clipboard.writeText(full).then(done, () => {
+          const ta = document.createElement('textarea'); ta.value = full; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+        });
+      } catch (e) { /* clipboard blocked */ }
+    });
+    actions.appendChild(copyBtn);
+    body.appendChild(actions);
+
+    const row = document.createElement('div');
+    row.className = 'followup-row';
+    const input = document.createElement('input');
+    input.className = 'followup-input';
+    input.type = 'text';
+    input.placeholder = 'Ask a follow-up…';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'followup-send';
+    send.textContent = 'Ask';
+    const go = () => {
+      const q = input.value.trim();
+      if (!q) return;
+      convo.push({ role: 'user', content: q });
+      convoLabel = q;
+      runConversation(rect);
+    };
+    send.addEventListener('click', go);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    row.appendChild(input);
+    row.appendChild(send);
+    body.appendChild(row);
+    positionPopover(rect);
+    input.focus();
+  }
+
+  // Run (or continue) the current conversation, streaming the answer.
+  function runConversation(rect) {
+    convoRect = rect;
+    const myGen = ++gen;
+    setContent('Thinking…', { muted: true });
+    positionPopover(rect);
+    let positioned = false;
+    askStream(convo, {
+      onDelta: (soFar) => {
+        if (myGen !== gen) return;
+        setContent(soFar);
+        if (!positioned) { positionPopover(rect); positioned = true; }
+        body.scrollTop = body.scrollHeight;
+      },
+      onDone: (full) => {
+        if (myGen !== gen) return;
+        convo.push({ role: 'assistant', content: full });
+        saveToHistory(convoLabel, full);
+        renderAnswerView(full || '(no response)', rect);
+      },
+      onError: (err) => {
+        if (myGen !== gen) return;
+        if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
+        else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
+        else setContent(err, { muted: true });
+        positionPopover(rect);
+      },
+    });
   }
 
   function positionPopover(rect) {
@@ -426,34 +528,15 @@
   function runPageAsk(question) {
     const rect = bottomRightRect();
     const q = question || 'Summarize this page and list the key points.';
-    const myGen = ++gen;
     setContent('Reading the page…', { muted: true });
     positionPopover(rect);
     const pageText = ((document.body && document.body.innerText) || '')
       .replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
     if (!pageText) { setContent('This page has no readable text.', { muted: true }); positionPopover(rect); return; }
     const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}`;
-    let positioned = false;
-    askStream(prompt, {
-      onDelta: (soFar) => {
-        if (myGen !== gen) return;
-        setContent(soFar);
-        if (!positioned) { positionPopover(rect); positioned = true; }
-        body.scrollTop = body.scrollHeight;
-      },
-      onDone: (full) => {
-        if (myGen !== gen) return;
-        setContent(full || '(no response)');
-        positionPopover(rect);
-      },
-      onError: (err) => {
-        if (myGen !== gen) return;
-        if (err === 'no-key') setContent('Click the Cassie toolbar icon to add your free Groq API key first.', { muted: true });
-        else if (err === 'reload') setContent('Something went wrong. Reload the page and try again.', { muted: true });
-        else setContent(err, { muted: true });
-        positionPopover(rect);
-      },
-    });
+    convo = [{ role: 'user', content: prompt }];
+    convoLabel = q;
+    runConversation(rect);
   }
 
   let pendingText = '';
@@ -481,10 +564,6 @@
   });
 
   function runExplainOrAnswer(text, rect, mode) {
-    const myGen = ++gen;
-    setContent('Thinking…', { muted: true });
-    positionPopover(rect);
-
     let prompt;
     if (mode === 'answer') {
       prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer — no explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
@@ -493,28 +572,9 @@
     } else {
       prompt = `Work through this carefully step by step and double-check your result, then give the answer followed by a clear explanation of why/how:\n\n"${text}"`;
     }
-
-    let positioned = false;
-    askStream(prompt, {
-      onDelta: (soFar) => {
-        if (myGen !== gen) return;
-        setContent(soFar);
-        if (!positioned) { positionPopover(rect); positioned = true; }
-        body.scrollTop = body.scrollHeight;
-      },
-      onDone: (full) => {
-        if (myGen !== gen) return;
-        setContent(full || '(no response)');
-        positionPopover(rect);
-      },
-      onError: (err) => {
-        if (myGen !== gen) return;
-        if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
-        else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
-        else setContent(err, { muted: true });
-        positionPopover(rect);
-      },
-    });
+    convo = [{ role: 'user', content: prompt }];
+    convoLabel = text;
+    runConversation(rect);
   }
 
   function checkSelection() {
