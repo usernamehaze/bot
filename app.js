@@ -171,6 +171,19 @@ function escapeHtml(str) {
 
 // Escape first, then apply inline markdown (`code`, **bold**, *italic*).
 // Inline code is protected so its contents aren't re-formatted.
+// Render simple math nicely: real superscripts/subscripts and stacked
+// fractions. Runs on already-escaped HTML (code is protected separately).
+function prettifyMath(html) {
+  html = html.replace(/\^\(([^()]{1,40})\)/g, '<sup>$1</sup>');   // ^(a+b)
+  html = html.replace(/\^(-?\d+|[A-Za-z])/g, '<sup>$1</sup>');     // ^2, ^n
+  html = html.replace(/_\(([^()]{1,40})\)/g, '<sub>$1</sub>');    // _(i)
+  html = html.replace(/_(\d+)/g, '<sub>$1</sub>');                // _1  (CO_2)
+  // (A)/(B) with no nested parens -> a stacked fraction.
+  html = html.replace(/\(([^()]{1,40})\)\s*\/\s*\(([^()]{1,40})\)/g,
+    '<span class="frac"><span class="frac-n">$1</span><span class="frac-d">$2</span></span>');
+  return html;
+}
+
 function inlineFormat(text) {
   let html = escapeHtml(text);
   const codes = [], escaped = [];
@@ -181,6 +194,7 @@ function inlineFormat(text) {
   html = html
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  html = prettifyMath(html);
   html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
   html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   return html;
@@ -588,6 +602,19 @@ const DL_ICON = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-
 function addTextDownload(bubble, text) {
   const tools = document.createElement('div');
   tools.className = 'bubble-tools';
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.textContent = 'Copy';
+  copyBtn.addEventListener('click', () => {
+    const done = () => { copyBtn.textContent = 'Copied ✓'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500); };
+    try {
+      navigator.clipboard.writeText(text).then(done, () => {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ } document.body.removeChild(ta);
+      });
+    } catch (e) { /* clipboard blocked */ }
+  });
+  tools.appendChild(copyBtn);
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.innerHTML = `${DL_ICON} Download`;
