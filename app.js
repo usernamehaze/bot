@@ -413,6 +413,50 @@ function isRateLimited(status, msg) {
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Parse a duration like "2m30s", "1h", "45.6s", or a bare seconds number.
+function parseDuration(str) {
+  if (str == null) return 0;
+  const s = String(str);
+  let total = 0, found = false, m;
+  const re = /([0-9]*\.?[0-9]+)\s*(ms|h|m|s)/g;
+  while ((m = re.exec(s))) {
+    found = true;
+    const v = parseFloat(m[1]);
+    if (m[2] === 'h') total += v * 3600;
+    else if (m[2] === 'm') total += v * 60;
+    else if (m[2] === 's') total += v;
+    else if (m[2] === 'ms') total += v / 1000;
+  }
+  return found ? total : (parseFloat(s) || 0);
+}
+function humanWait(secs) {
+  if (!secs || secs <= 0) return '';
+  if (secs < 60) return `about ${Math.ceil(secs)} second${Math.ceil(secs) === 1 ? '' : 's'}`;
+  if (secs < 3600) { const m = Math.ceil(secs / 60); return `about ${m} minute${m === 1 ? '' : 's'}`; }
+  const h = Math.round(secs / 3600); return `about ${h} hour${h === 1 ? '' : 's'}`;
+}
+// Build a friendly rate-limit message including when the limit resets.
+function rateLimitMessage(res, detail) {
+  let secs = 0;
+  try {
+    secs = parseDuration(res.headers.get('retry-after'));
+    if (!secs) secs = parseDuration(res.headers.get('x-ratelimit-reset-requests'));
+    if (!secs) secs = parseDuration(res.headers.get('x-ratelimit-reset-tokens'));
+  } catch (e) { /* headers unavailable */ }
+  if (!secs && detail) { const mm = detail.match(/try again in ([0-9hms.\s]+)/i); if (mm) secs = parseDuration(mm[1]); }
+  const wait = humanWait(secs);
+  let clock = '';
+  if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
+  const daily = secs > 3600;
+  if (daily) {
+    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to a lighter model (Llama 3.1 8B) in Settings — it has a higher daily limit.`;
+  }
+  if (wait) {
+    return `Slow down a sec — that's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
+  }
+  return "Groq's free tier is busy for a moment — wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
+}
+
 /* Text → Groq (OpenAI-compatible chat completions). Falls back through a list of
    models if the chosen one has been retired. `msgs` = [{role, content}]. */
 async function askGroq(msgs) {
@@ -443,7 +487,9 @@ async function askGroq(msgs) {
         continue;
       }
       if (isRateLimited(res.status, detail)) {
-        throw new Error("Groq's free tier is rate-limiting for a moment — wait a few seconds and try again. (Groq allows ~30 questions/minute free.)");
+        const e = new Error(rateLimitMessage(res, detail));
+        e.friendly = true; // already a complete, user-facing message
+        throw e;
       }
       throw new Error(detail || `Request failed (${res.status})`);
     }
@@ -611,7 +657,7 @@ async function handleSend(text) {
     speak(reply);
   } catch (err) {
     typingBubble.remove();
-    renderMessage('assistant', `Something went wrong: ${err.message}`).classList.add('error');
+    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
     setCursorMode('idle');
   } finally {
     sendBtn.disabled = false;
@@ -870,7 +916,7 @@ async function runExplainOrAnswer(text, rect, mode) {
     detourToElement(highlightPopover, { click: true, resumeAfter: 900 });
   } catch (err) {
     if (myGen !== highlightGen) return;
-    setPopoverContent(`Something went wrong: ${err.message}`, { muted: true });
+    setPopoverContent(err.friendly ? err.message : `Something went wrong: ${err.message}`, { muted: true });
     positionPopover(rect);
   } finally {
     if (myGen === highlightGen) setCursorMode('idle');
