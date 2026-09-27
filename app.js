@@ -32,12 +32,53 @@ if (state.groqKey === undefined) state.groqKey = '';
 if (!state.groqModel) state.groqModel = 'openai/gpt-oss-120b';
 
 function save() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  const { messages, ...rest } = state; // `messages` is a runtime alias to the current chat
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(rest)); } catch (e) { /* quota */ }
 }
 
 if (!GROQ_MODELS.includes(state.groqModel)) {
   state.groqModel = 'openai/gpt-oss-120b';
   save();
+}
+
+/* ---------- conversations (multiple saved chats) ---------- */
+function makeChat() {
+  return {
+    id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    title: '',
+    messages: [],
+    updatedAt: Date.now(),
+  };
+}
+function deriveTitle(msgs) {
+  const u = (msgs || []).find((m) => m.role === 'user');
+  if (!u) return '';
+  const t = u.content.replace(/\s+/g, ' ').trim();
+  return t.length > 42 ? t.slice(0, 42) + '…' : t;
+}
+// Migrate the old single conversation into a chats list.
+if (!Array.isArray(state.chats)) {
+  const first = makeChat();
+  if (Array.isArray(state.messages) && state.messages.length) {
+    first.messages = state.messages;
+    first.title = deriveTitle(first.messages);
+  }
+  state.chats = [first];
+  state.currentId = first.id;
+}
+if (!state.chats.length) state.chats = [makeChat()];
+if (!state.currentId || !state.chats.some((c) => c.id === state.currentId)) {
+  state.currentId = state.chats[0].id;
+}
+function curChat() {
+  return state.chats.find((c) => c.id === state.currentId) || state.chats[0];
+}
+// `state.messages` is a live alias to the current chat's messages array.
+state.messages = curChat().messages;
+function touchChat() {
+  const c = curChat();
+  c.updatedAt = Date.now();
+  if (!c.title) c.title = deriveTitle(c.messages);
 }
 
 const SYSTEM_PROMPT = `You are Cassie, a warm, sharp, and reliable study buddy and professional buddy.
@@ -119,6 +160,12 @@ const levelSelect = document.getElementById('level-select');
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const clearChatBtn = document.getElementById('clear-chat-btn');
+const menuBtn = document.getElementById('menu-btn');
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const sidebarClose = document.getElementById('sidebar-close');
+const newChatBtn = document.getElementById('new-chat-btn');
+const chatList = document.getElementById('chat-list');
 const cursorEl = document.getElementById('cassie-cursor');
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
@@ -717,6 +764,7 @@ async function handleSend(text, opts = {}) {
   if (!sendText && image) sendText = 'Please look at this image and help me with it.';
 
   state.messages.push({ role: 'user', content: sendText });
+  touchChat();
   save();
   const userBubble = renderMessage('user', sendText);
   if (image) addImageToBubble(userBubble, image.dataUrl);
@@ -782,6 +830,7 @@ async function handleGenerateImage() {
     return;
   }
   state.messages.push({ role: 'user', content: `Generate an image: ${text}` });
+  touchChat();
   save();
   renderMessage('user', `Generate an image: ${text}`);
   promptInput.value = '';
@@ -907,10 +956,111 @@ settingsBtn.addEventListener('click', () => {
 settingsCloseBtn.addEventListener('click', closeSettings);
 
 clearChatBtn.addEventListener('click', () => {
-  if (!confirm('Clear the whole conversation?')) return;
-  state.messages = [];
+  if (!confirm('Clear this conversation?')) return;
+  const c = curChat();
+  c.messages.length = 0;
+  c.title = '';
+  state.messages = c.messages;
+  quizMode = false;
+  if (quizBtn) { quizBtn.classList.remove('active'); quizBtn.textContent = '📝 Quiz me'; }
   save();
   renderHistory();
+  renderChatList();
+});
+
+/* ---------- sidebar: multiple conversations ---------- */
+function resetQuizUi() {
+  quizMode = false;
+  if (quizBtn) { quizBtn.classList.remove('active'); quizBtn.textContent = '📝 Quiz me'; }
+}
+function openSidebar() {
+  renderChatList();
+  sidebar.classList.add('open');
+  sidebarOverlay.classList.add('open');
+}
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  sidebarOverlay.classList.remove('open');
+}
+function renderChatList() {
+  const chats = [...state.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  chatList.innerHTML = '';
+  if (!chats.length) {
+    const e = document.createElement('div');
+    e.className = 'chat-empty';
+    e.textContent = 'No conversations yet.';
+    chatList.appendChild(e);
+    return;
+  }
+  chats.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'chat-item' + (c.id === state.currentId ? ' active' : '');
+    item.innerHTML = '<svg class="ci-icon" viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>';
+    const title = document.createElement('span');
+    title.className = 'ci-title';
+    title.textContent = c.title || deriveTitle(c.messages) || 'New chat';
+    const del = document.createElement('button');
+    del.className = 'ci-del';
+    del.type = 'button';
+    del.title = 'Delete conversation';
+    del.setAttribute('aria-label', 'Delete conversation');
+    del.textContent = '×';
+    del.addEventListener('click', (e) => { e.stopPropagation(); deleteChat(c.id); });
+    item.appendChild(title);
+    item.appendChild(del);
+    item.addEventListener('click', () => selectChat(c.id));
+    chatList.appendChild(item);
+  });
+}
+function selectChat(id) {
+  if (id !== state.currentId) {
+    const c = state.chats.find((x) => x.id === id);
+    if (!c) return;
+    state.currentId = id;
+    state.messages = c.messages;
+    resetQuizUi();
+    save();
+    renderHistory();
+  }
+  closeSidebar();
+}
+function createNewChat() {
+  const cur = curChat();
+  if (cur && cur.messages.length === 0) {
+    state.messages = cur.messages; // reuse the current blank chat instead of stacking empties
+  } else {
+    const c = makeChat();
+    state.chats.push(c);
+    state.currentId = c.id;
+    state.messages = c.messages;
+  }
+  resetQuizUi();
+  save();
+  renderHistory();
+  renderChatList();
+  closeSidebar();
+  promptInput.focus();
+}
+function deleteChat(id) {
+  const idx = state.chats.findIndex((c) => c.id === id);
+  if (idx === -1) return;
+  state.chats.splice(idx, 1);
+  if (!state.chats.length) state.chats.push(makeChat());
+  if (state.currentId === id) {
+    state.currentId = state.chats[0].id;
+    state.messages = curChat().messages;
+    resetQuizUi();
+    renderHistory();
+  }
+  save();
+  renderChatList();
+}
+menuBtn.addEventListener('click', openSidebar);
+sidebarClose.addEventListener('click', closeSidebar);
+sidebarOverlay.addEventListener('click', closeSidebar);
+newChatBtn.addEventListener('click', createNewChat);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && sidebar.classList.contains('open')) closeSidebar();
 });
 
 /* ---------- voice input ---------- */
