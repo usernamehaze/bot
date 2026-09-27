@@ -86,16 +86,16 @@
     .body p.md-label { margin: 10px 0 4px; font-weight: 600; }
     .body p.md-label:first-child { margin-top: 0; }
     .body hr { border: none; border-top: 1px solid rgba(127,127,127,.35); margin: 10px 0; }
-    .question { font-weight: 600; margin-bottom: 10px; }
-    .choice-row { display: flex; gap: 8px; }
+    .question { font-weight: 600; font-size: 12px; margin-bottom: 7px; }
+    .choice-row { display: flex; gap: 5px; }
     .choice-btn {
       flex: 1;
       background: #1c1c24;
       color: #fff;
       border: none;
-      border-radius: 8px;
-      padding: 9px 0;
-      font-size: 13px;
+      border-radius: 6px;
+      padding: 5px 0;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -511,7 +511,7 @@
         if (myGen !== gen) return;
         if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
         else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
-        else setContent(`Something went wrong: ${err}`, { muted: true });
+        else setContent(err, { muted: true });
         positionPopover(rect);
       },
     });
