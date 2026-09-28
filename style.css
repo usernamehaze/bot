@@ -11,6 +11,7 @@
   --bubble-assistant: #ffffff;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  --cb-accent: #ff5ea8; /* Cassie's board — her signature pink */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -976,3 +977,54 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .popover-choice-btn:active { transform: scale(.94); }
 .chip, .home-example, .fu-chip { transition: transform .08s ease, border-color .12s ease, box-shadow .12s ease; }
 .chip:active, .fu-chip:active { transform: scale(.95); }
+
+/* ===== Cassie's board — she draws what she explains ===== */
+.cassie-board {
+  margin: 12px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.cb-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 14px; font-weight: 700; font-size: 13.5px;
+  border-bottom: 1px solid var(--border);
+}
+.cb-pin { color: var(--cb-accent); }
+.cb-body { padding: 14px; }
+.cb-title { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+.cb-note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* steps */
+.cb-steps { list-style: none; margin: 0; padding: 0; counter-reset: cb; }
+.cb-steps li {
+  position: relative; padding: 9px 12px 9px 40px; margin-bottom: 6px;
+  border-radius: 12px; font-size: 15px; border: 1px solid transparent;
+  opacity: 0; transform: translateY(4px); transition: opacity .35s ease, transform .35s ease;
+}
+.cb-steps li.show { opacity: 1; transform: none; }
+.cb-steps li::before {
+  counter-increment: cb; content: counter(cb);
+  position: absolute; left: 10px; top: 8px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.cb-steps li.done { opacity: .6; }
+.cb-steps li.active {
+  background: color-mix(in srgb, var(--cb-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--cb-accent) 45%, transparent);
+}
+.cb-steps li.active::before { background: var(--cb-accent); color: #fff; border-color: var(--cb-accent); }
+
+/* graph */
+.cb-canvas-wrap { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.cb-canvas-wrap canvas { width: 100%; height: auto; display: block; }
+
+/* geometry */
+.cb-geo { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.cb-geo-svg { width: 190px; max-width: 60%; height: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.cb-geo-out { font-size: 14px; line-height: 1.7; }
+.cb-geo-out .cb-geo-name { font-weight: 700; margin-bottom: 2px; }
+.cb-geo-out b { color: var(--cb-accent); }
