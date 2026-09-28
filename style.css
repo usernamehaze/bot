@@ -41,14 +41,17 @@ html, body {
 /* one font everywhere — inputs, textareas, selects and buttons all inherit */
 input, textarea, select, button { font-family: inherit; }
 
+html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #app {
   max-width: 100%;
   width: 100%;
   margin: 0;
-  height: 100vh;
+  height: 100vh;        /* fallback */
+  height: 100dvh;       /* dynamic viewport — accounts for the mobile address bar */
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow-x: hidden;
 }
 
 .topbar {
@@ -706,7 +709,7 @@ input, textarea, select, button { font-family: inherit; }
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: .95rem;
+  font-size: 16px; /* >=16px so iOS Safari doesn't auto-zoom on focus */
   font-family: inherit;
   line-height: 1.4;
 }
@@ -762,7 +765,7 @@ input, textarea, select, button { font-family: inherit; }
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: .95rem;
+  font-size: 16px; /* >=16px so iOS Safari doesn't auto-zoom on focus */
 }
 .field input[type="checkbox"] { width: 20px; height: 20px; }
 .field-hint { font-size: .78rem; color: var(--muted); margin: -6px 0 16px; line-height: 1.4; }

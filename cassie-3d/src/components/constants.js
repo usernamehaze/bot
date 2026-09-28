@@ -57,6 +57,22 @@ export const EMOTIONS = {
     blurb: 'Taking a little nap.',
     pose: { jump: 0, headX: 0.16, headZ: 0.12, armL: -0.2, armR: 0.2, rimColor: PINK_SOFT, eyes: 'closed', confetti: false, icon: 'zzz' },
   },
+  // Driven by the tutor when the bot is dragged too fast.
+  angry: {
+    key: 'angry',
+    label: 'Angry',
+    emoji: '😠',
+    blurb: 'Hey — quit shaking me!',
+    pose: { jump: 0, headX: 0.06, headZ: 0, armL: -0.55, armR: 0.55, rimColor: '#ff4d4d', eyes: 'angry', confetti: false, icon: 'none', shake: true },
+  },
+  // Driven by the tutor while the bot is being dragged around.
+  dizzy: {
+    key: 'dizzy',
+    label: 'Dizzy',
+    emoji: '😵',
+    blurb: 'Wheee… so dizzy!',
+    pose: { jump: 0, headX: 0, headZ: 0.2, armL: -0.4, armR: 0.4, rimColor: PINK_SOFT, eyes: 'dizzy', confetti: false, icon: 'none', wobble: true },
+  },
 };
 
 export const EMOTION_ORDER = ['neutral', 'thinking', 'encouraging', 'celebratory', 'curious'];

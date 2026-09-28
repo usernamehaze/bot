@@ -66,6 +66,24 @@ function Eye({ side, kind, starGeo }) {
       </mesh>
     );
   }
+  if (kind === 'angry') {
+    // slanted bars angled down toward the centre = angry brow
+    return (
+      <mesh position={[x, 0.05, 0.42]} rotation={[0, 0, side > 0 ? 0.55 : -0.55]} scale={[0.12, 0.035, 0.05]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <GlossyPink intensity={2.8} transmission={0.2} />
+      </mesh>
+    );
+  }
+  if (kind === 'dizzy') {
+    // little swirly rings
+    return (
+      <mesh position={[x, 0.05, 0.42]}>
+        <torusGeometry args={[0.07, 0.02, 8, 20]} />
+        <GlossyPink intensity={2.6} transmission={0.2} />
+      </mesh>
+    );
+  }
   return (
     <mesh position={[x, 0.04, 0.42]} scale={[0.06, 0.11, 0.05]}>
       <sphereGeometry args={[1, 24, 24]} />
@@ -174,6 +192,10 @@ export default function CassieBot({ emotion, hideIcons = false }) {
       const jumpY = pose.jump * (0.6 + 0.4 * Math.abs(Math.sin(time * 4)));
       rig.current.position.y = lerp(rig.current.position.y, floatY + jumpY, t);
       rig.current.rotation.y = Math.sin(time * 0.6) * 0.15;
+      // angry shakes fast, dizzy wobbles side to side
+      if (pose.shake) rig.current.position.x = Math.sin(time * 34) * 0.03;
+      else if (pose.wobble) rig.current.position.x = Math.sin(time * 7) * 0.05;
+      else rig.current.position.x = lerp(rig.current.position.x, 0, t);
     }
     if (head.current) {
       head.current.rotation.x = lerp(head.current.rotation.x, pose.headX, t);
