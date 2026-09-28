@@ -2,7 +2,7 @@
   "name": "Cassie — Study Tutor",
   "short_name": "Cassie",
   "description": "An animated AI cursor that tutors you through any subject, by voice or text.",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f2fb",
