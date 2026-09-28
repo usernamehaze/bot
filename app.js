@@ -522,7 +522,7 @@ function renderHome() {
   wrap.className = 'home';
   wrap.innerHTML = `
     <div class="home-badge"><span class="brand-dot"></span></div>
-    <h2 class="home-title">Hi, I'm Cassie 👋</h2>
+    <h2 class="home-title">Hi, I'm Cassie <svg class="home-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg></h2>
     <p class="home-sub">Your study buddy. Ask me anything, or start with one of these:</p>
   `;
   const grid = document.createElement('div');
