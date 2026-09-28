@@ -449,11 +449,20 @@ input, textarea, select, button { font-family: inherit; }
 .r-screen, .r-belly { fill: #0e1626; }
 .r-eye { fill: var(--bot-glow); transform-box: fill-box; transform-origin: center; animation: mascotBlink 5.5s infinite; }
 /* every non-default eye group is hidden until a state turns it on */
-.r-eyes-happy, .r-eyes-wink, .r-eyes-love, .r-eyes-surprised, .r-eyes-sleepy, .r-think { display: none; }
+.r-eyes-happy, .r-eyes-wink, .r-eyes-love, .r-eyes-surprised, .r-eyes-sleepy,
+.r-eyes-star, .r-eyes-cool, .r-eyes-sad, .r-eyes-focused, .r-eyes-dizzy, .r-think { display: none; }
 .r-eyes-happy path, .r-eyes-wink path, .r-eyes-sleepy path { fill: none; stroke: var(--bot-glow); stroke-width: 3.2; stroke-linecap: round; }
 .r-eyes-wink rect { fill: var(--bot-glow); }
 .r-eyes-love path { fill: var(--bot-glow); }
 .r-eyes-surprised circle { fill: var(--bot-glow); }
+.r-eyes-star path { fill: var(--bot-glow); }
+.r-eyes-cool path { fill: var(--bot-glow); }
+.r-eyes-cool .r-cool-glass { fill: #0e1626; }
+.r-eyes-cool .r-cool-bar { fill: none; stroke: var(--bot-glow); stroke-width: 2; }
+.r-eyes-sad rect { fill: var(--bot-glow); }
+.r-eyes-sad .r-brow { fill: none; stroke: var(--bot-glow); stroke-width: 2.6; stroke-linecap: round; }
+.r-eyes-focused rect { fill: var(--bot-glow); }
+.r-eyes-dizzy path { fill: none; stroke: var(--bot-glow); stroke-width: 2.4; stroke-linecap: round; }
 .r-think circle { fill: var(--bot-glow); }
 #mascot-btn:hover .mascot-face { transform: scale(1.06); }
 @keyframes mascotFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
@@ -471,19 +480,37 @@ input, textarea, select, button { font-family: inherit; }
 #mascot.emote-wink .r-eyes,
 #mascot.emote-love .r-eyes,
 #mascot.emote-surprised .r-eyes,
-#mascot.emote-sleepy .r-eyes { display: none; }
+#mascot.emote-sleepy .r-eyes,
+#mascot.emote-star .r-eyes,
+#mascot.emote-cool .r-eyes,
+#mascot.emote-sad .r-eyes,
+#mascot.emote-focused .r-eyes,
+#mascot.emote-dizzy .r-eyes { display: none; }
 #mascot.emote-happy .r-eyes-happy, #mascot.happy .r-eyes-happy { display: block; }
 #mascot.emote-wink .r-eyes-wink { display: block; }
 #mascot.emote-love .r-eyes-love { display: block; }
 #mascot.emote-surprised .r-eyes-surprised { display: block; }
 #mascot.emote-sleepy .r-eyes-sleepy { display: block; }
+#mascot.emote-star .r-eyes-star { display: block; }
+#mascot.emote-cool .r-eyes-cool { display: block; }
+#mascot.emote-sad .r-eyes-sad { display: block; }
+#mascot.emote-focused .r-eyes-focused { display: block; }
+#mascot.emote-dizzy .r-eyes-dizzy { display: block; }
 #mascot.emote-love .mascot-face { animation: mascotFloat 4.5s ease-in-out infinite, mascotLove 1.4s ease-in-out infinite; }
 #mascot.emote-surprised .mascot-face { animation: mascotSurprise .5s ease; }
+#mascot.emote-star .mascot-face { animation: mascotFloat 4.5s ease-in-out infinite, mascotLove 1s ease-in-out infinite; }
+#mascot.emote-dizzy .mascot-face { animation: mascotDizzy .8s ease; }
+#mascot.emote-sad .mascot-face { animation: mascotSad 1.2s ease; }
 @keyframes mascotLove { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
 @keyframes mascotSurprise { 0% { transform: translateY(0) scale(1); } 40% { transform: translateY(-6px) scale(1.1); } 100% { transform: translateY(0) scale(1); } }
+@keyframes mascotDizzy { 0% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } 100% { transform: rotate(0); } }
+@keyframes mascotSad { 0% { transform: translateY(0); } 50% { transform: translateY(4px); } 100% { transform: translateY(0); } }
 /* happy: smiley eyes + a celebratory bounce */
 #mascot.happy .mascot-face { animation: mascotHappy .7s ease; }
 @keyframes mascotHappy { 0% { transform: translateY(0) scale(1); } 30% { transform: translateY(-10px) scale(1.08); } 60% { transform: translateY(0) scale(1); } 80% { transform: translateY(-4px); } 100% { transform: translateY(0); } }
+#confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
+#prompt-input.nudge { animation: inputNudge .9s ease; }
+@keyframes inputNudge { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px var(--bot-glow); } 60% { box-shadow: 0 0 0 3px var(--bot-glow); } }
 .mascot-bubble {
   max-width: 220px;
   background: var(--surface);
