@@ -1843,6 +1843,11 @@ function openSettings() {
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
   if (easyreadToggle) easyreadToggle.checked = !!state.easyRead;
+  // A first-time user hasn't added a key yet, so open the "API keys" section
+  // for them (that's where they need to paste it). Once a key is saved, keep
+  // every section collapsed so the screen stays calm.
+  const keysGroup = document.getElementById('settings-keys');
+  if (keysGroup) keysGroup.open = !state.groqKey;
   settingsPanel.hidden = false;
 }
 const MODEL_SHORT = {
