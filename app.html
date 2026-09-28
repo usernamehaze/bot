@@ -136,70 +136,98 @@
   <div id="settings-panel" class="settings-panel" hidden>
     <div class="settings-card">
       <h2>Settings</h2>
-      <label class="field">
-        <span>Groq API key — free (chat, highlight &amp; code)</span>
-        <input type="password" id="groq-key-input" placeholder="gsk_...">
-      </label>
-      <p class="field-hint">
-        Powers all text answers — higher free limits (~30/min). Get a
-        <strong>free</strong> key (no credit card) at
-        <span class="mono">console.groq.com/keys</span>.
-      </p>
-      <label class="field">
-        <span>Groq model</span>
-        <select id="groq-model-select">
-          <option value="openai/gpt-oss-120b">GPT-OSS 120B — smartest (best for hard problems)</option>
-          <option value="llama-3.3-70b-versatile">Llama 3.3 70B — balanced</option>
-          <option value="llama-3.1-8b-instant">Llama 3.1 8B — fastest</option>
-          <option value="openai/gpt-oss-20b">GPT-OSS 20B — fast reasoning</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Google (Gemini) API key — free (reading photos &amp; web search)</span>
-        <input type="password" id="gemini-key-input" placeholder="AIza... / AQ...">
-      </label>
-      <p class="field-hint">
-        Used to read photos you attach and for Web source-checking. Get a
-        <strong>free</strong> key at <span class="mono">aistudio.google.com/app/apikey</span>.
-        Note: Google currently turns <em>image generation</em> off on the free
-        tier, so making pictures may need billing enabled on your Google account.
-        Leave blank if you don't need these.
-      </p>
-      <label class="field">
-        <span>Explanation level</span>
-        <select id="level-select">
-          <option value="auto">Auto (match my question)</option>
-          <option value="elementary">Elementary school</option>
-          <option value="middle">Middle school</option>
-          <option value="high">High school</option>
-          <option value="college">College</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Citation style (for Research)</span>
-        <select id="citation-select">
-          <option value="APA">APA</option>
-          <option value="MLA">MLA</option>
-          <option value="IEEE">IEEE</option>
-          <option value="Chicago">Chicago</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Text size</span>
-        <select id="textsize-select">
-          <option value="normal">Normal</option>
-          <option value="large">Large</option>
-          <option value="larger">Larger</option>
-        </select>
-      </label>
-      <label class="field row">
-        <span>Easy-read spacing</span>
-        <input type="checkbox" id="easyread-toggle">
-      </label>
-      <label class="field row">
-        <span>Read answers aloud</span>
-        <input type="checkbox" id="voice-out-toggle">
-      </label>
+
+      <details class="settings-group">
+        <summary>
+          <span class="sg-title">API keys</span>
+          <span class="sg-sub">Connect Cassie's free brains</span>
+        </summary>
+        <div class="sg-body">
+          <label class="field">
+            <span>Groq API key — free (chat, highlight &amp; code)</span>
+            <input type="password" id="groq-key-input" placeholder="gsk_...">
+          </label>
+          <p class="field-hint">
+            Powers all text answers — higher free limits (~30/min). Get a
+            <strong>free</strong> key (no credit card) at
+            <span class="mono">console.groq.com/keys</span>.
+          </p>
+          <label class="field">
+            <span>Groq model</span>
+            <select id="groq-model-select">
+              <option value="openai/gpt-oss-120b">GPT-OSS 120B — smartest (best for hard problems)</option>
+              <option value="llama-3.3-70b-versatile">Llama 3.3 70B — balanced</option>
+              <option value="llama-3.1-8b-instant">Llama 3.1 8B — fastest</option>
+              <option value="openai/gpt-oss-20b">GPT-OSS 20B — fast reasoning</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Google (Gemini) API key — free (reading photos &amp; web search)</span>
+            <input type="password" id="gemini-key-input" placeholder="AIza... / AQ...">
+          </label>
+          <p class="field-hint">
+            Used to read photos you attach and for Web source-checking. Get a
+            <strong>free</strong> key at <span class="mono">aistudio.google.com/app/apikey</span>.
+            Note: Google currently turns <em>image generation</em> off on the free
+            tier, so making pictures may need billing enabled on your Google account.
+            Leave blank if you don't need these.
+          </p>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <span class="sg-title">Answers</span>
+          <span class="sg-sub">How Cassie explains &amp; cites</span>
+        </summary>
+        <div class="sg-body">
+          <label class="field">
+            <span>Explanation level</span>
+            <select id="level-select">
+              <option value="auto">Auto (match my question)</option>
+              <option value="elementary">Elementary school</option>
+              <option value="middle">Middle school</option>
+              <option value="high">High school</option>
+              <option value="college">College</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Citation style (for Research)</span>
+            <select id="citation-select">
+              <option value="APA">APA</option>
+              <option value="MLA">MLA</option>
+              <option value="IEEE">IEEE</option>
+              <option value="Chicago">Chicago</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <details class="settings-group">
+        <summary>
+          <span class="sg-title">Reading &amp; accessibility</span>
+          <span class="sg-sub">Text size, spacing, read-aloud</span>
+        </summary>
+        <div class="sg-body">
+          <label class="field">
+            <span>Text size</span>
+            <select id="textsize-select">
+              <option value="normal">Normal</option>
+              <option value="large">Large</option>
+              <option value="larger">Larger</option>
+            </select>
+          </label>
+          <label class="field row">
+            <span>Easy-read spacing</span>
+            <input type="checkbox" id="easyread-toggle">
+          </label>
+          <label class="field row">
+            <span>Read answers aloud</span>
+            <input type="checkbox" id="voice-out-toggle">
+          </label>
+        </div>
+      </details>
+
       <div class="settings-actions">
         <button type="button" class="btn secondary" id="clear-chat-btn">Clear conversation</button>
         <button type="button" class="btn" id="settings-close-btn">Done</button>

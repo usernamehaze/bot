@@ -813,7 +813,47 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .field-hint { font-size: .78rem; color: var(--muted); margin: -6px 0 16px; line-height: 1.4; }
 .mono { font-family: ui-monospace, monospace; }
 
-.settings-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+/* Collapsible settings sections — closed by default, tap a header to open. */
+.settings-group {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.settings-group > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-group > summary::-webkit-details-marker { display: none; }
+.settings-group > summary::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: 20px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform .2s ease;
+}
+.settings-group[open] > summary::after { transform: rotate(-135deg); }
+.settings-group > summary:hover { background: color-mix(in srgb, var(--surface) 40%, transparent); }
+.sg-title { font-size: .95rem; font-weight: 600; color: var(--text); padding-right: 22px; }
+.sg-sub { font-size: .76rem; color: var(--muted); padding-right: 22px; }
+.sg-body { padding: 4px 16px 8px; border-top: 1px solid var(--border); }
+.sg-body .field:last-child { margin-bottom: 8px; }
+.sg-body .field-hint:last-child { margin-bottom: 8px; }
+
+.settings-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .btn {
   background: var(--primary);
   color: #fff;
