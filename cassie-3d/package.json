@@ -1,0 +1,28 @@
+{
+  "name": "cassie-3d",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cassie — glossy-pink 3D loading screen and multi-emotion bot (React Three Fiber).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.114.0",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/postprocessing": "^2.16.3",
+    "framer-motion": "^11.11.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.9"
+  }
+}
