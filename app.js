@@ -15,6 +15,8 @@ function loadState() {
     voiceOut: false,
     level: 'auto',          // explanation level: auto | elementary | middle | high | college
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
+    textSize: 'normal',     // normal | large | larger — reading accessibility
+    easyRead: false,        // extra line spacing for easier reading
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -164,6 +166,14 @@ const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
+const textsizeSelect = document.getElementById('textsize-select');
+const easyreadToggle = document.getElementById('easyread-toggle');
+const appEl = document.getElementById('app');
+function applyReading() {
+  if (!appEl) return;
+  appEl.setAttribute('data-textsize', state.textSize || 'normal');
+  appEl.setAttribute('data-easyread', state.easyRead ? 'on' : 'off');
+}
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
@@ -497,16 +507,87 @@ function renderTyping() {
   return bubble;
 }
 
+// Example prompts shown on the empty home screen. `send: true` asks it
+// straight away; otherwise it fills the box so the student can paste/edit.
+const HOME_EXAMPLES = [
+  { label: '💡 Explain a topic', text: 'Explain photosynthesis in simple terms.', send: true },
+  { label: '📝 Quiz me', text: 'Quiz me on the water cycle.', send: true },
+  { label: '🧮 Solve step by step', text: 'Solve step by step: 3x + 7 = 22', send: true },
+  { label: '🗒️ Make study notes', text: 'Summarize this into clean study notes:\n\n', send: false },
+  { label: '🎓 Research a topic', text: 'Research: effects of social media on students', send: true },
+];
+
+function renderHome() {
+  const wrap = document.createElement('div');
+  wrap.className = 'home';
+  wrap.innerHTML = `
+    <div class="home-badge"><span class="brand-dot"></span></div>
+    <h2 class="home-title">Hi, I'm Cassie 👋</h2>
+    <p class="home-sub">Your study buddy. Ask me anything, or start with one of these:</p>
+  `;
+  const grid = document.createElement('div');
+  grid.className = 'home-examples';
+  HOME_EXAMPLES.forEach((ex) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-example';
+    btn.textContent = ex.label;
+    btn.addEventListener('click', () => {
+      if (ex.send) {
+        handleSend(ex.text);
+      } else {
+        promptInput.value = ex.text;
+        autoGrow();
+        promptInput.focus();
+      }
+    });
+    grid.appendChild(btn);
+  });
+  wrap.appendChild(grid);
+  const tip = document.createElement('p');
+  tip.className = 'home-tip';
+  tip.textContent = 'Tip: highlight text anywhere in an answer, or use Hint, Research, and Web below.';
+  wrap.appendChild(tip);
+  chatLog.appendChild(wrap);
+}
+
 function renderHistory() {
   chatLog.innerHTML = '';
+  clearFollowups();
   if (state.messages.length === 0) {
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble bubble-assistant intro';
-    bubble.innerHTML = "<p>Hi, I'm Cassie. Ask me anything you're studying — I'll walk you through it step by step.</p>";
-    chatLog.appendChild(bubble);
+    renderHome();
     return;
   }
   state.messages.forEach((m) => renderMessage(m.role, m.content));
+}
+
+/* ---------- one-tap follow-ups + double-check (under the latest answer) ---------- */
+let followupRow = null;
+function clearFollowups() {
+  if (followupRow && followupRow.parentNode) followupRow.parentNode.removeChild(followupRow);
+  followupRow = null;
+}
+const FOLLOWUPS = [
+  { label: 'Explain simpler', text: 'Can you explain that more simply?' },
+  { label: 'Step-by-step', text: 'Show me the step-by-step.' },
+  { label: 'Give an example', text: 'Give me a concrete example.' },
+  { label: 'Double-check', text: 'Double-check your last answer carefully and fix it if there is any mistake.' },
+];
+function showFollowups() {
+  clearFollowups();
+  const row = document.createElement('div');
+  row.className = 'followups';
+  FOLLOWUPS.forEach((f) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fu-chip';
+    b.textContent = f.label;
+    b.addEventListener('click', () => { clearFollowups(); handleSend(f.text); });
+    row.appendChild(b);
+  });
+  chatLog.appendChild(row);
+  followupRow = row;
+  scrollToBottom();
 }
 
 /* ---------- providers: Groq for text, Gemini for images ---------- */
@@ -783,6 +864,9 @@ async function handleSend(text, opts = {}) {
   let sendText = text.trim();
   if (!sendText && image) sendText = 'Please look at this image and help me with it.';
 
+  clearFollowups();
+  // if the home screen is showing, clear it before the first message
+  if (!state.messages.length) chatLog.innerHTML = '';
   state.messages.push({ role: 'user', content: sendText });
   touchChat();
   save();
@@ -803,6 +887,7 @@ async function handleSend(text, opts = {}) {
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
     addTextDownload(bubble, reply);
+    showFollowups();
     setCursorMode('idle');
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
@@ -1154,6 +1239,8 @@ function openSettings() {
   voiceOutToggle.checked = state.voiceOut;
   if (levelSelect) levelSelect.value = state.level || 'auto';
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
+  if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
+  if (easyreadToggle) easyreadToggle.checked = !!state.easyRead;
   settingsPanel.hidden = false;
 }
 const MODEL_SHORT = {
@@ -1175,8 +1262,11 @@ function closeSettings() {
   state.voiceOut = voiceOutToggle.checked;
   if (levelSelect) state.level = levelSelect.value;
   if (citationSelect) state.citationStyle = citationSelect.value;
+  if (textsizeSelect) state.textSize = textsizeSelect.value;
+  if (easyreadToggle) state.easyRead = easyreadToggle.checked;
   save();
   updateModelPill();
+  applyReading();
   settingsPanel.hidden = true;
   resumeFollowing();
 }
@@ -1472,6 +1562,7 @@ chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
+applyReading();
 renderHistory();
 updateModelPill();
 requestAnimationFrame(() => {
