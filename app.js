@@ -255,6 +255,63 @@ function mascotCelebrate() {
   mascotHappyTimer = setTimeout(() => mascot.classList.remove('happy'), 800);
 }
 
+// ---- emotions: Cassie's eyes drift through little moods on their own ----
+const MASCOT_EMOTES = ['emote-wink', 'emote-love', 'emote-surprised', 'emote-sleepy', 'emote-happy'];
+let mascotEmoteTimer = null;
+let mascotEmoteClearTimer = null;
+let mascotDragging = false;
+function clearEmote() {
+  if (!mascot) return;
+  MASCOT_EMOTES.forEach((c) => mascot.classList.remove(c));
+}
+function mascotEmote(name) {
+  if (!mascot || mascotDragging || mascot.classList.contains('thinking')) return;
+  clearEmote();
+  mascot.classList.add(name);
+  clearTimeout(mascotEmoteClearTimer);
+  mascotEmoteClearTimer = setTimeout(clearEmote, name === 'emote-love' ? 2200 : 1500);
+}
+function scheduleEmote() {
+  clearTimeout(mascotEmoteTimer);
+  mascotEmoteTimer = setTimeout(() => {
+    if (mascot && !mascotDragging && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
+      mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
+    }
+    scheduleEmote();
+  }, 6000 + Math.random() * 6000);
+}
+
+// ---- roaming: Cassie wanders to a new spot now and then ----
+let mascotRoamTimer = null;
+function mascotBounds() {
+  const w = mascot ? mascot.offsetWidth || 58 : 58;
+  const h = mascot ? mascot.offsetHeight || 68 : 68;
+  // keep her clear of the top bar and the composer at the bottom
+  return {
+    maxX: Math.max(8, window.innerWidth - w - 8),
+    maxY: Math.max(70, window.innerHeight - h - 130),
+    minX: 8,
+    minY: 70,
+  };
+}
+function placeMascot(x, y) {
+  if (!mascot) return;
+  const b = mascotBounds();
+  const nx = Math.min(Math.max(x, b.minX), b.maxX);
+  const ny = Math.min(Math.max(y, b.minY), b.maxY);
+  mascot.style.left = nx + 'px';
+  mascot.style.top = ny + 'px';
+}
+function mascotRoam() {
+  if (mascot && !mascotDragging) {
+    const b = mascotBounds();
+    placeMascot(b.minX + Math.random() * (b.maxX - b.minX), b.minY + Math.random() * (b.maxY - b.minY));
+    mascotEmote('emote-happy');
+  }
+  clearTimeout(mascotRoamTimer);
+  mascotRoamTimer = setTimeout(mascotRoam, 6000 + Math.random() * 5000);
+}
+
 const MASCOT_TIPS = [
   "Tip: highlight any part of an answer to dig deeper.",
   "Stuck? Tap Hint for a nudge instead of the full answer.",
@@ -271,14 +328,63 @@ function mascotSay(text) {
   clearTimeout(mascotBubbleTimer);
   mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, 5000);
 }
-if (mascotBtn) {
+if (mascotBtn && mascot) {
   let tipIdx = Math.floor(Math.random() * MASCOT_TIPS.length);
+  let downX = 0, downY = 0, startLeft = 0, startTop = 0, moved = false, pointerId = null;
+
+  const onMove = (e) => {
+    if (pointerId === null) return;
+    const dx = e.clientX - downX;
+    const dy = e.clientY - downY;
+    if (!moved && Math.hypot(dx, dy) > 4) {
+      moved = true;
+      mascotDragging = true;
+      mascot.classList.add('dragging');
+      clearEmote();
+    }
+    if (moved) placeMascot(startLeft + dx, startTop + dy);
+  };
+  const onUp = () => {
+    if (pointerId === null) return;
+    try { mascot.releasePointerCapture(pointerId); } catch (_) {}
+    pointerId = null;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    if (moved) {
+      mascotDragging = false;
+      mascot.classList.remove('dragging');
+      mascotCelebrate();
+    }
+    // if it didn't move, the click handler below fires and shows a tip
+  };
+  mascot.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    pointerId = e.pointerId;
+    downX = e.clientX; downY = e.clientY; moved = false;
+    const r = mascot.getBoundingClientRect();
+    startLeft = r.left; startTop = r.top;
+    try { mascot.setPointerCapture(pointerId); } catch (_) {}
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+
   mascotBtn.addEventListener('click', () => {
+    if (moved) { moved = false; return; } // a drag, not a tap
     if (mascotBubble && !mascotBubble.hidden) { mascotBubble.hidden = true; return; }
     mascotSay(MASCOT_TIPS[tipIdx % MASCOT_TIPS.length]);
     tipIdx += 1;
+    mascotEmote('emote-happy');
     mascotCelebrate();
   });
+
+  // start Cassie off in the bottom-right (clear of the home options), then wander
+  placeMascot(mascotBounds().maxX, mascotBounds().maxY);
+  window.addEventListener('resize', () => {
+    const r = mascot.getBoundingClientRect();
+    placeMascot(r.left, r.top);
+  });
+  scheduleEmote();
+  mascotRoamTimer = setTimeout(mascotRoam, 5000 + Math.random() * 4000);
 }
 
 function resumeFollowing() {
