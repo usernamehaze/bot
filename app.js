@@ -159,6 +159,8 @@ const voiceOutToggle = document.getElementById('voice-out-toggle');
 const levelSelect = document.getElementById('level-select');
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
+const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
+function setQuizLabel(text) { if (quizLabel) quizLabel.textContent = text; }
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const menuBtn = document.getElementById('menu-btn');
 const sidebar = document.getElementById('sidebar');
@@ -916,7 +918,7 @@ if (quizBtn) {
     }
     quizMode = !quizMode;
     quizBtn.classList.toggle('active', quizMode);
-    quizBtn.textContent = quizMode ? '■ Stop quiz' : '📝 Quiz me';
+    setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
     if (quizMode) {
       const topic = promptInput.value.trim();
       promptInput.value = '';
@@ -984,7 +986,7 @@ clearChatBtn.addEventListener('click', () => {
   c.title = '';
   state.messages = c.messages;
   quizMode = false;
-  if (quizBtn) { quizBtn.classList.remove('active'); quizBtn.textContent = '📝 Quiz me'; }
+  if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
   save();
   renderHistory();
   renderChatList();
@@ -993,7 +995,7 @@ clearChatBtn.addEventListener('click', () => {
 /* ---------- sidebar: multiple conversations ---------- */
 function resetQuizUi() {
   quizMode = false;
-  if (quizBtn) { quizBtn.classList.remove('active'); quizBtn.textContent = '📝 Quiz me'; }
+  if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
 }
 function openSidebar() {
   renderChatList();

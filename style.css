@@ -398,6 +398,9 @@ input, textarea, select, button { font-family: inherit; }
   flex-shrink: 0;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -407,6 +410,7 @@ input, textarea, select, button { font-family: inherit; }
   font-weight: 600;
   cursor: pointer;
 }
+.chip .chip-ico { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
 .chip:hover { border-color: var(--primary); }
 .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
