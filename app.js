@@ -2223,6 +2223,7 @@ let highlightGen = 0;
 
 function hideHighlightPopover() {
   highlightPopover.hidden = true;
+  lastPopoverText = ''; // allow re-selecting the same text to reopen it
   highlightGen++; // invalidate any in-flight request
 }
 
@@ -2247,11 +2248,13 @@ function setPopoverContent(text, { muted = false } = {}) {
 
 let pendingText = '';
 let pendingRect = null;
+let lastPopoverText = ''; // the selection currently shown, so we don't overwrite an answer
 let popoverComplexity = 'normal'; // 'eli5' | 'normal' | 'advanced'
 
 function setPopoverChoice(text, rect) {
   pendingText = text;
   pendingRect = rect;
+  lastPopoverText = text;
   highlightPopoverBody.classList.remove('muted');
   highlightPopoverBody.innerHTML = `
     <div class="popover-question">What should I do with this?</div>
@@ -2381,6 +2384,8 @@ function trySelectionPopover() {
   if (!el) return;
   if (el.closest('input, textarea')) return;         // ignore typed text
   if (!el.closest('#chat-log')) return;              // only within answers/messages
+  // if this exact selection is already open (e.g. showing an answer), leave it
+  if (!highlightPopover.hidden && text === lastPopoverText) return;
   const rect = range.getBoundingClientRect();
   if (!rect || (rect.width === 0 && rect.height === 0)) return;
   highlightPopover.hidden = false;
@@ -2390,19 +2395,18 @@ function scheduleSelectionPopover(delay) {
   clearTimeout(selPopoverTimer);
   selPopoverTimer = setTimeout(trySelectionPopover, delay);
 }
-// Auto-popup is TOUCH-ONLY: phones have no right-click, so selecting text in an
-// answer should offer Explain/Answer/Code. On desktop this stays out of the way
-// (plain selection does nothing) — use right-click (below) to summon it there.
-let lastInputTouch = false;
-document.addEventListener('touchstart', () => { lastInputTouch = true; }, { passive: true, capture: true });
-document.addEventListener('mousedown', () => { lastInputTouch = false; }, true);
-document.addEventListener('touchend', () => {
+// Highlight-to-ask on every device: selecting text in an answer opens the
+// popover; picking a choice shows the answer; clicking away hides it; and
+// selecting new text opens it again. Clicks inside the popover never re-trigger.
+function fromPopover(e) { return e.target && e.target.closest && e.target.closest('.highlight-popover'); }
+document.addEventListener('mouseup', (e) => { if (!fromPopover(e)) scheduleSelectionPopover(10); });
+document.addEventListener('touchend', (e) => {
   lastTouchEndAt = Date.now();
   // wait past the browser's synthesized mouse events so the outside-tap
-  // handler below doesn't immediately hide the popover we're about to show
-  scheduleSelectionPopover(380);
+  // handler doesn't immediately hide the popover we're about to show
+  if (!fromPopover(e)) scheduleSelectionPopover(380);
 }, { passive: true });
-document.addEventListener('selectionchange', () => { if (lastInputTouch) scheduleSelectionPopover(450); });
+document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
 
 chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
