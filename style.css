@@ -427,15 +427,14 @@ input, textarea, select, button { font-family: inherit; }
 .chip .chip-ico { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
 .chip:hover { border-color: var(--primary); }
 
-/* interactive robot mascot — pink eyes, emotes, roams & is draggable */
+/* interactive robot mascot — pink eyes, emotes, draggable (no auto-roaming) */
 :root { --bot-glow: #ff5fa2; }
 #mascot {
   position: fixed;
   left: 14px; top: 60%;
   z-index: 26;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  touch-action: none; /* let us handle drag on touch screens */
-  transition: left 2.6s cubic-bezier(.45, .05, .35, 1), top 2.6s cubic-bezier(.45, .05, .35, 1);
+  /* she stays put; a brief transition only smooths a resize/rest snap */
+  transition: left .35s ease, top .35s ease;
   will-change: left, top;
 }
 #mascot.dragging { transition: none; cursor: grabbing; }
@@ -512,17 +511,48 @@ input, textarea, select, button { font-family: inherit; }
 #prompt-input.nudge { animation: inputNudge .9s ease; }
 @keyframes inputNudge { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px var(--bot-glow); } 60% { box-shadow: 0 0 0 3px var(--bot-glow); } }
 .mascot-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: max-content;
   max-width: 220px;
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 14px 14px 4px 14px;
   padding: 9px 12px;
   font-size: .82rem;
   line-height: 1.4;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
 }
 .mascot-bubble[hidden] { display: none; }
+
+/* sleeping: eyes shut, gentle breathing, dozing 'z's */
+#mascot.sleeping .r-eyes,
+#mascot.sleeping .r-think { display: none; }
+#mascot.sleeping .r-eyes-sleepy { display: block; }
+#mascot.sleeping .r-ant-tip { animation: none; opacity: .3; }
+#mascot.sleeping .mascot-face { animation: mascotBreathe 4.2s ease-in-out infinite; }
+#mascot.sleeping #mascot-btn { cursor: pointer; }
+@keyframes mascotBreathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(1px) scale(.985); } }
+.mascot-z {
+  position: absolute;
+  bottom: 78%;
+  right: -4px;
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--bot-glow);
+  pointer-events: none;
+  opacity: 0;
+}
+#mascot.sleeping .mascot-z { animation: mascotZ 2.6s ease-in-out infinite; }
+#mascot.sleeping .mascot-z:nth-of-type(2) { animation-delay: .8s; font-size: .95rem; right: 4px; }
+#mascot.sleeping .mascot-z:nth-of-type(3) { animation-delay: 1.6s; font-size: 1.1rem; right: 12px; }
+@keyframes mascotZ {
+  0% { opacity: 0; transform: translateY(6px) scale(.7); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-16px) scale(1.1); }
+}
 @media (max-width: 480px) { #mascot-btn, .mascot-face { width: 48px; height: 48px; } }
 
 /* home / empty state — intro on the left, a 3D options bar on the right */

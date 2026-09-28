@@ -263,12 +263,13 @@ const MASCOT_EMOTES = [
 let mascotEmoteTimer = null;
 let mascotEmoteClearTimer = null;
 let mascotDragging = false;
+let mascotAsleep = false;
 function clearEmote() {
   if (!mascot) return;
   MASCOT_EMOTES.forEach((c) => mascot.classList.remove(c));
 }
 function mascotEmote(name, hold) {
-  if (!mascot || mascotDragging || mascot.classList.contains('thinking')) return;
+  if (!mascot || mascotDragging || mascotAsleep || mascot.classList.contains('thinking')) return;
   clearEmote();
   mascot.classList.add(name);
   clearTimeout(mascotEmoteClearTimer);
@@ -278,19 +279,20 @@ function mascotEmote(name, hold) {
 function scheduleEmote() {
   clearTimeout(mascotEmoteTimer);
   mascotEmoteTimer = setTimeout(() => {
-    if (mascot && !mascotDragging && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
+    if (mascot && !mascotDragging && !mascotAsleep && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
       mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
     }
     scheduleEmote();
   }, 5000 + Math.random() * 5000);
 }
 
-// ---- speech bubble ----
+// ---- speech bubble ---- (ms === 0 keeps it up until something replaces it)
 function mascotSay(text, ms) {
   if (!mascotBubble) return;
   mascotBubble.textContent = text;
   mascotBubble.hidden = false;
   clearTimeout(mascotBubbleTimer);
+  if (ms === 0) return;
   mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, ms || 4200);
 }
 
@@ -363,6 +365,8 @@ function mascotReact(kind, hold) {
 
 // Pick an opinion based on what the student sent.
 function mascotOnSend(text) {
+  if (typeof wakeMascot === 'function' && mascotAsleep) wakeMascot();
+  if (typeof scheduleResleep === 'function') scheduleResleep();
   const t = (text || '').trim();
   if (!t) return;
   if (/^(hi|hey|hello|yo|sup|good (morning|afternoon|evening))\b/i.test(t)) return mascotReact('greet');
@@ -451,13 +455,23 @@ const MASCOT_NUGGETS = [
 ];
 let mascotTipTimer = null;
 let nuggetIdx = Math.floor(Math.random() * MASCOT_NUGGETS.length);
+// The bottom "floor" for the mascot is the top of the Hint/Quiz row (or the
+// composer if the chips are hidden) so she rests right above it.
+function mascotFloorTop() {
+  const qa = document.getElementById('quick-actions');
+  const comp = document.getElementById('composer');
+  const el = (qa && qa.offsetParent !== null) ? qa : comp;
+  if (el) return el.getBoundingClientRect().top;
+  return window.innerHeight - 70;
+}
+function mascotBtnSize() {
+  return { w: (mascotBtn && mascotBtn.offsetWidth) || 58, h: (mascotBtn && mascotBtn.offsetHeight) || 68 };
+}
 function mascotBounds() {
-  const w = mascot ? mascot.offsetWidth || 58 : 58;
-  const h = mascot ? mascot.offsetHeight || 68 : 68;
-  // keep her clear of the top bar and the composer at the bottom
+  const { w, h } = mascotBtnSize();
   return {
-    maxX: Math.max(8, window.innerWidth - w - 8),
-    maxY: Math.max(70, window.innerHeight - h - 130),
+    maxX: Math.max(8, window.innerWidth - w - 10),
+    maxY: Math.max(70, mascotFloorTop() - h - 8),
     minX: 8,
     minY: 70,
   };
@@ -470,11 +484,55 @@ function placeMascot(x, y) {
   mascot.style.left = nx + 'px';
   mascot.style.top = ny + 'px';
 }
-// She no longer roams; now and then she shares a quick study tip in place.
+// Her resting dock: just above the Hint/Quiz row, on the right by the answers.
+function restMascot() {
+  const b = mascotBounds();
+  placeMascot(b.maxX, b.maxY);
+}
+let mascotUserMoved = false; // once dragged, stop auto-docking her on resize
+
+// ---- sleep at night; a tap wakes her ----
+function isNight() {
+  const h = new Date().getHours();
+  return h >= 20 || h < 6; // 8pm–6am
+}
+let mascotResleepTimer = null;
+function sleepMascot() {
+  if (!mascot || mascotAsleep) return;
+  mascotAsleep = true;
+  clearTimeout(mascotResleepTimer);
+  clearEmote();
+  mascot.classList.remove('happy');
+  mascot.classList.add('sleeping');
+  mascotSay('Zzz… tap to wake me', 0);
+}
+function scheduleResleep() {
+  clearTimeout(mascotResleepTimer);
+  if (!isNight()) return;
+  mascotResleepTimer = setTimeout(() => { if (!mascotDragging) sleepMascot(); }, 45000);
+}
+function wakeMascot() {
+  if (!mascot || !mascotAsleep) return;
+  mascotAsleep = false;
+  mascot.classList.remove('sleeping');
+  if (mascotBubble) mascotBubble.hidden = true;
+  mascotEmote('emote-happy');
+  mascotSay('*yawn* Hi! 👋', 3000);
+  mascotCelebrate();
+  scheduleResleep(); // she'll doze off again if it's still night and idle
+}
+// any interaction resets the night-time doze timer
+function mascotPoke() {
+  if (mascotAsleep) { wakeMascot(); return true; }
+  scheduleResleep();
+  return false;
+}
+
+// She doesn't roam; now and then she shares a quick study tip in place.
 function mascotIdleTip() {
-  if (mascot && !mascotDragging && !mascot.classList.contains('thinking') && (!mascotBubble || mascotBubble.hidden)) {
+  if (mascot && !mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking') && (!mascotBubble || mascotBubble.hidden)) {
     mascotEmote(Math.random() < 0.5 ? 'emote-focused' : 'emote-star');
-    setTimeout(() => mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000), 400);
+    setTimeout(() => { if (!mascotAsleep) mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000); }, 400);
   }
   clearTimeout(mascotTipTimer);
   mascotTipTimer = setTimeout(mascotIdleTip, 18000 + Math.random() * 12000);
@@ -504,14 +562,15 @@ if (mascotBtn && mascot) {
     window.removeEventListener('pointerup', onUp);
     if (moved) {
       mascotDragging = false;
+      mascotUserMoved = true;
       mascot.classList.remove('dragging');
-      mascotEmote('emote-dizzy', 800);
-      mascotSay('Wheee!', 1600);
+      if (!mascotAsleep) { mascotEmote('emote-dizzy', 800); mascotSay('Wheee!', 1600); }
     }
     // if it didn't move, the click handler below fires
   };
   mascot.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return;
+    if (mascotAsleep) return; // don't drag a sleeping bot; a tap wakes her
     pointerId = e.pointerId;
     downX = e.clientX; downY = e.clientY; moved = false;
     const r = mascot.getBoundingClientRect();
@@ -521,9 +580,10 @@ if (mascotBtn && mascot) {
     window.addEventListener('pointerup', onUp);
   });
 
-  // tap Cassie → a short motivating word + a matching mood
+  // tap Cassie → wake her if asleep, else a short motivating word + mood
   mascotBtn.addEventListener('click', () => {
     if (moved) { moved = false; return; } // a drag, not a tap
+    if (mascotPoke()) return; // was asleep → just woke her
     const pick = MASCOT_REACTIONS.click[clickIdx++ % MASCOT_REACTIONS.click.length];
     mascotEmote(pick.e);
     mascotSay(pick.t, 3000);
@@ -534,6 +594,8 @@ if (mascotBtn && mascot) {
   let lastTypeReact = 0;
   if (promptInput) {
     promptInput.addEventListener('input', () => {
+      if (mascotAsleep) { wakeMascot(); return; }
+      scheduleResleep();
       const now = Date.now();
       if (promptInput.value.trim().length >= 6 && now - lastTypeReact > 9000 && (!mascotBubble || mascotBubble.hidden)) {
         lastTypeReact = now;
@@ -542,15 +604,21 @@ if (mascotBtn && mascot) {
     });
   }
 
-  // start Cassie in the bottom-right; she stays there until you drag her
-  placeMascot(mascotBounds().maxX, mascotBounds().maxY);
+  // dock Cassie at her resting spot (above Hint/Quiz, by the answers)
+  const dock = () => { if (!mascotDragging && !mascotUserMoved) restMascot(); };
+  requestAnimationFrame(dock);
+  setTimeout(dock, 300); // re-dock once layout/fonts settle
   window.addEventListener('resize', () => {
-    const r = mascot.getBoundingClientRect();
-    placeMascot(r.left, r.top);
+    if (mascotUserMoved) { const r = mascot.getBoundingClientRect(); placeMascot(r.left, r.top); }
+    else restMascot();
   });
   scheduleEmote();
   mascotTipTimer = setTimeout(mascotIdleTip, 20000 + Math.random() * 10000);
-  setTimeout(() => mascotReact('greet'), 1400);
+  if (isNight()) {
+    setTimeout(sleepMascot, 1600); // it's evening — she dozes off
+  } else {
+    setTimeout(() => mascotReact('greet'), 1400);
+  }
 }
 
 function resumeFollowing() {
