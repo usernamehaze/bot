@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v60';
+const CACHE_NAME = 'cassie-v61';
 const ASSETS = [
   './',
   'index.html',
@@ -33,14 +33,43 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  // Revalidate with the server (cache: 'no-cache') so a changed file is fetched
-  // fresh instead of served stale from the browser's HTTP cache.
+
+  // Page navigations need special care: Cloudflare Pages 308-redirects
+  // /app.html -> /app, and a browser REJECTS a redirected response returned
+  // from a service worker for a navigation (ERR_FAILED). So follow the
+  // redirect ourselves and hand back a fresh, non-redirected response.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.redirected) {
+            return response.clone().blob().then((body) =>
+              new Response(body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+              })
+            );
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then((c) => c || caches.match('index.html'))
+        )
+    );
+    return;
+  }
+
+  // Other same-origin GETs: network-first with a runtime cache. Never cache a
+  // redirected response (Cache.put rejects those).
   const fresh = new Request(event.request.url, { cache: 'no-cache' });
   event.respondWith(
     fetch(fresh)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (!response.redirected) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
       .catch(() => caches.match(event.request))
