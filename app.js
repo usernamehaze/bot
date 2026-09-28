@@ -267,7 +267,10 @@ function mascotCelebrate() {
   mascot.classList.add('happy');
   set3D('celebratory');
   clearTimeout(mascotHappyTimer);
-  mascotHappyTimer = setTimeout(() => mascot.classList.remove('happy'), 800);
+  mascotHappyTimer = setTimeout(() => {
+    mascot.classList.remove('happy');
+    if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral');
+  }, 2200);
 }
 
 // ---- emotions: Cassie has lots of moods and shows them in her eyes ----
@@ -297,12 +300,17 @@ function mascotEmote(name, hold) {
 function scheduleEmote() {
   clearTimeout(mascotEmoteTimer);
   mascotEmoteTimer = setTimeout(() => {
+    // before the 5-min idle sleep: mostly neutral, with an occasional happy blip
     if (mascot && !mascotDragging && !mascotAsleep && Date.now() >= emotionHoldUntil
         && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
-      mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
+      set3D('encouraging');
+      setTimeout(() => {
+        if (mascot && !mascotDragging && !mascotAsleep && Date.now() >= emotionHoldUntil
+            && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) set3D('neutral');
+      }, 1600);
     }
     scheduleEmote();
-  }, 5000 + Math.random() * 5000);
+  }, 22000 + Math.random() * 18000);
 }
 
 // ---- speech bubble ---- (ms === 0 keeps it up until something replaces it)
@@ -384,15 +392,10 @@ function mascotReact(kind, hold) {
 
 // Pick an opinion based on what the student sent.
 function mascotOnSend(text) {
-  if (typeof wakeMascot === 'function' && mascotAsleep) wakeMascot();
-  if (typeof scheduleResleep === 'function') scheduleResleep();
-  const t = (text || '').trim();
-  if (!t) return;
-  if (/^(hi|hey|hello|yo|sup|good (morning|afternoon|evening))\b/i.test(t)) return mascotReact('greet');
-  if (/[0-9].*[-+*/=^]|solve|equation|derivative|integral|calculate/i.test(t)) return mascotReact('math');
-  if (t.length > 220) return mascotReact('long');
-  if (t.includes('?')) return mascotReact('question');
-  return mascotReact('send');
+  // sending is activity; she'll show 'thinking' while the answer is generated
+  // (setCursorMode) and 'celebrate' once it arrives (mascotCelebrate).
+  if (typeof resetIdle === 'function') resetIdle();
+  if (mascotAsleep) wakeMascot();
 }
 
 // ---- confetti burst for celebrating a correct answer ----
@@ -488,10 +491,14 @@ function mascotBtnSize() {
 }
 function mascotBounds() {
   const { w, h } = mascotBtnSize();
+  // The 3D canvas is ~150px wide, centred on the button, so keep the button
+  // far enough from the edges that the canvas never overflows the viewport
+  // (which on mobile would let the page zoom out).
+  const pad = 78; // half the canvas (~75) + a little
   return {
-    maxX: Math.max(8, window.innerWidth - w - 10),
+    maxX: Math.max(8, window.innerWidth - w / 2 - pad),
     maxY: Math.max(70, mascotFloorTop() - h - 8),
-    minX: 8,
+    minX: Math.min(52, Math.max(8, window.innerWidth - w / 2 - pad)),
     minY: 70,
   };
 }
@@ -510,56 +517,44 @@ function restMascot() {
 }
 let mascotUserMoved = false; // once dragged, stop auto-docking her on resize
 
-// ---- sleep at night; a tap wakes her ----
-function isNight() {
-  const h = new Date().getHours();
-  return h >= 20 || h < 6; // 8pm–6am
-}
-let mascotResleepTimer = null;
+// ---- sleepy after 5 minutes idle; any activity wakes her ----
+const IDLE_SLEEP_MS = 5 * 60 * 1000;
+let idleTimer = null;
 function sleepMascot() {
   if (!mascot || mascotAsleep) return;
   mascotAsleep = true;
-  clearTimeout(mascotResleepTimer);
   clearEmote();
   mascot.classList.remove('happy');
   mascot.classList.add('sleeping');
   set3D('sleep');
   mascotSay('Zzz… tap to wake me', 0);
 }
-function scheduleResleep() {
-  clearTimeout(mascotResleepTimer);
-  if (!isNight()) return;
-  mascotResleepTimer = setTimeout(() => { if (!mascotDragging) sleepMascot(); }, 45000);
-}
 function wakeMascot() {
   if (!mascot || !mascotAsleep) return;
   mascotAsleep = false;
   mascot.classList.remove('sleeping');
   if (mascotBubble) mascotBubble.hidden = true;
-  mascotEmote('emote-happy');
-  mascotSay('*yawn* Hi! 👋', 3000);
-  mascotCelebrate();
-  scheduleResleep(); // she'll doze off again if it's still night and idle
+  set3D('encouraging');
+  mascotSay('*yawn* Hi! 👋', 2400);
+  setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2200);
 }
-// any interaction resets the night-time doze timer
+// Reset the 5-minute idle→sleep countdown on any real activity (also wakes her).
+function resetIdle() {
+  if (mascotAsleep) wakeMascot();
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(sleepMascot, IDLE_SLEEP_MS);
+}
+// tap while asleep wakes her
 function mascotPoke() {
   if (mascotAsleep) { wakeMascot(); return true; }
-  scheduleResleep();
+  resetIdle();
   return false;
-}
-
-// She doesn't roam; now and then she shares a quick study tip in place.
-function mascotIdleTip() {
-  if (mascot && !mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking') && (!mascotBubble || mascotBubble.hidden)) {
-    mascotEmote(Math.random() < 0.5 ? 'emote-focused' : 'emote-star');
-    setTimeout(() => { if (!mascotAsleep) mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000); }, 400);
-  }
-  clearTimeout(mascotTipTimer);
-  mascotTipTimer = setTimeout(mascotIdleTip, 18000 + Math.random() * 12000);
 }
 
 if (mascotBtn && mascot) {
   let downX = 0, downY = 0, startLeft = 0, startTop = 0, moved = false, pointerId = null;
+  let lastMoveT = 0, lastMoveX = 0, lastMoveY = 0, dragSpeed = 0, angryDrag = false;
+  const FAST_DRAG = 1.1; // px per ms → "angry" threshold
 
   const onMove = (e) => {
     if (pointerId === null) return;
@@ -570,8 +565,19 @@ if (mascotBtn && mascot) {
       mascotDragging = true;
       mascot.classList.add('dragging');
       clearEmote();
+      lastMoveT = performance.now(); lastMoveX = e.clientX; lastMoveY = e.clientY; dragSpeed = 0; angryDrag = false;
     }
-    if (moved) placeMascot(startLeft + dx, startTop + dy);
+    if (moved) {
+      placeMascot(startLeft + dx, startTop + dy);
+      const now = performance.now();
+      const dt = now - lastMoveT;
+      const jump = Math.hypot(e.clientX - lastMoveX, e.clientY - lastMoveY);
+      if (dt > 0) dragSpeed = dragSpeed * 0.6 + (jump / dt) * 0.4; // smoothed px/ms
+      lastMoveT = now; lastMoveX = e.clientX; lastMoveY = e.clientY;
+      // being dragged → dizzy; dragged fast (high speed OR a big single jump) → angry
+      if (dragSpeed > FAST_DRAG || jump > 55) angryDrag = true;
+      set3D(angryDrag ? 'angry' : 'dizzy');
+    }
   };
   const onUp = () => {
     if (pointerId === null) return;
@@ -583,9 +589,10 @@ if (mascotBtn && mascot) {
       mascotDragging = false;
       mascotUserMoved = true;
       mascot.classList.remove('dragging');
-      if (!mascotAsleep) { mascotEmote('emote-dizzy', 800); mascotSay('Wheee!', 1600); }
+      mascotSay(angryDrag ? 'Hey! Careful 😠' : 'Wheee… so dizzy 😵', 1800);
+      setTimeout(() => { if (!mascotDragging && !mascotAsleep) set3D('neutral'); }, 1400);
+      resetIdle();
     }
-    // if it didn't move, the click handler below fires
   };
   mascot.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return;
@@ -599,37 +606,33 @@ if (mascotBtn && mascot) {
     window.addEventListener('pointerup', onUp);
   });
 
-  // tap Cassie → wake her if asleep, else cycle through her 3D emotions so you
-  // can try them all (Encouraging → Curious → Celebrate → Thinking → Sleepy → Ready)
-  const EMOTE_CYCLE = [
-    { e: 'encouraging', t: 'Encouraging! 🙌' },
-    { e: 'curious', t: 'Curious 🤔' },
-    { e: 'celebratory', t: 'Yay! 🎉' },
-    { e: 'thinking', t: 'Thinking… 💭' },
-    { e: 'sleep', t: 'Sleepy… 😴' },
-    { e: 'neutral', t: 'Ready! 🤖' },
-  ];
-  let cycleIdx = 0;
+  // tap Cassie → wake if asleep, else a cheerful little hello (and reset idle)
   mascotBtn.addEventListener('click', () => {
     if (moved) { moved = false; return; } // a drag, not a tap
     if (mascotPoke()) return; // was asleep → just woke her
-    const pick = EMOTE_CYCLE[cycleIdx++ % EMOTE_CYCLE.length];
-    set3D(pick.e);
-    mascotSay(pick.t, 2600);
-    emotionHoldUntil = Date.now() + 3200; // let the tapped mood linger
+    set3D('encouraging');
+    mascotSay('Hi! Need help? 🙌', 2400);
+    emotionHoldUntil = Date.now() + 2600;
+    setTimeout(() => { if (!mascotDragging && !mascotAsleep && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2600);
   });
 
-  // react while the student types (throttled so it isn't spammy)
-  let lastTypeReact = 0;
+  // while the student types → thinking, with a friendly cloud bubble
+  const TYPING_MSGS = ['typing…', 'take your time', "I'm listening 👂", 'no rush!', 'go on…'];
+  let typingRevertTimer = null, lastTypeSay = 0;
   if (promptInput) {
     promptInput.addEventListener('input', () => {
-      if (mascotAsleep) { wakeMascot(); return; }
-      scheduleResleep();
+      resetIdle();                 // typing is activity (also wakes if asleep)
+      set3D('thinking');
       const now = Date.now();
-      if (promptInput.value.trim().length >= 6 && now - lastTypeReact > 9000 && (!mascotBubble || mascotBubble.hidden)) {
-        lastTypeReact = now;
-        mascotReact('type');
+      if (now - lastTypeSay > 3500 && promptInput.value.trim().length >= 1) {
+        lastTypeSay = now;
+        mascotSay(TYPING_MSGS[Math.floor(Math.random() * TYPING_MSGS.length)], 2400);
       }
+      clearTimeout(typingRevertTimer);
+      typingRevertTimer = setTimeout(() => {
+        // after they stop typing, settle back (unless a request is running)
+        if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral');
+      }, 2600);
     });
   }
 
@@ -641,13 +644,15 @@ if (mascotBtn && mascot) {
     if (mascotUserMoved) { const r = mascot.getBoundingClientRect(); placeMascot(r.left, r.top); }
     else restMascot();
   });
-  scheduleEmote();
-  mascotTipTimer = setTimeout(mascotIdleTip, 20000 + Math.random() * 10000);
-  if (isNight()) {
-    setTimeout(sleepMascot, 1600); // it's evening — she dozes off
-  } else {
-    setTimeout(() => mascotReact('greet'), 1400);
-  }
+  set3D('neutral');
+  scheduleEmote();  // occasional happy blip while idle
+  resetIdle();      // start the 5-minute idle → sleep countdown
+  setTimeout(() => {
+    if (mascotAsleep || mascotDragging) return;
+    set3D('encouraging');
+    mascotSay('Hi, I’m Cassie! 👋', 2600);
+    setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2400);
+  }, 1400);
 }
 
 function resumeFollowing() {
