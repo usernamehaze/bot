@@ -442,10 +442,18 @@ input, textarea, select, button { font-family: inherit; }
 #mascot-btn { border: none; background: none; padding: 0; cursor: grab; width: 58px; height: 68px; touch-action: none; }
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 .mascot-face { width: 58px; height: 68px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); animation: mascotFloat 4.5s ease-in-out infinite; }
-.r-head, .r-ear, .r-body { fill: var(--primary); }
-.r-ant { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
-.r-ant-tip { fill: var(--bot-glow); animation: antPulse 2s ease-in-out infinite; }
-.r-screen, .r-belly { fill: #0e1626; }
+/* cute glossy white robot */
+.r-head, .r-ear, .r-body, .r-arm { fill: #f4f5fb; stroke: rgba(28,30,46,.14); stroke-width: 1; }
+.r-ant { stroke: #b7bacb; stroke-width: 2.6; stroke-linecap: round; }
+.r-ant-tip { fill: #ffb24d; animation: antPulse 2s ease-in-out infinite; }
+.r-ear-dot { fill: #ffb24d; }
+.r-screen { fill: #10131f; }
+/* glowing amber chest core */
+.r-core { animation: corePulse 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.r-core-glow { fill: #ffb24d; opacity: .32; }
+.r-core-ring { fill: #e08a2a; }
+.r-core-dot { fill: #fff2d6; }
+@keyframes corePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 .r-eye { fill: var(--bot-glow); transform-box: fill-box; transform-origin: center; animation: mascotBlink 5.5s infinite; }
 /* every non-default eye group is hidden until a state turns it on */
 .r-eyes-happy, .r-eyes-wink, .r-eyes-love, .r-eyes-surprised, .r-eyes-sleepy,
