@@ -561,13 +561,16 @@ const HOME_EXAMPLES = [
 function renderHome() {
   const wrap = document.createElement('div');
   wrap.className = 'home';
-  wrap.innerHTML = `
+  const intro = document.createElement('div');
+  intro.className = 'home-intro';
+  intro.innerHTML = `
     <div class="home-badge"><span class="brand-dot"></span></div>
     <h2 class="home-title">Hi, I'm Cassie <svg class="home-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg></h2>
     <p class="home-sub">Your study buddy. Ask me anything, or start with one of these:</p>
+    <p class="home-tip">Tip: highlight text anywhere in an answer, or use Hint, Research, and Web below.</p>
   `;
-  const grid = document.createElement('div');
-  grid.className = 'home-examples';
+  const bar = document.createElement('div');
+  bar.className = 'home-bar';
   HOME_EXAMPLES.forEach((ex) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -585,13 +588,10 @@ function renderHome() {
         promptInput.focus();
       }
     });
-    grid.appendChild(btn);
+    bar.appendChild(btn);
   });
-  wrap.appendChild(grid);
-  const tip = document.createElement('p');
-  tip.className = 'home-tip';
-  tip.textContent = 'Tip: highlight text anywhere in an answer, or use Hint, Research, and Web below.';
-  wrap.appendChild(tip);
+  wrap.appendChild(intro);
+  wrap.appendChild(bar);
   chatLog.appendChild(wrap);
 }
 
