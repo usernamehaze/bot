@@ -67,7 +67,8 @@
 
   <div id="attach-preview" class="attach-preview" hidden>
     <img id="attach-thumb" alt="attached image">
-    <button type="button" id="attach-remove" title="Remove image" aria-label="Remove image">&times;</button>
+    <span id="attach-name" hidden></span>
+    <button type="button" id="attach-remove" title="Remove attachment" aria-label="Remove attachment">&times;</button>
   </div>
 
   <div id="quick-actions" class="quick-actions">
@@ -90,10 +91,10 @@
   </div>
 
   <form id="composer" class="composer">
-    <input type="file" id="file-input" accept="image/*" hidden>
+    <input type="file" id="file-input" accept="image/*,.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
     <textarea id="prompt-input" rows="1" placeholder="Ask Cassie a question…" autocomplete="off"></textarea>
     <div class="composer-row">
-      <button type="button" id="attach-btn" class="icon-btn round" title="Attach an image" aria-label="Attach an image">
+      <button type="button" id="attach-btn" class="icon-btn round" title="Attach a file (image, PDF, Word, PowerPoint)" aria-label="Attach a file">
         <svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
       </button>
       <button type="button" id="model-pill" class="model-pill" title="Change model & level in Settings">

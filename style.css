@@ -471,6 +471,27 @@ input, textarea, select, button { font-family: inherit; }
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+.attach-preview img[hidden] { display: none; }
+#attach-name {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .88rem;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#attach-name[hidden] { display: none; }
+#attach-name::before {
+  content: '';
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  background: currentColor;
+  -webkit-mask: center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5z'/%3E%3C/svg%3E");
+  mask: center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5z'/%3E%3C/svg%3E");
+}
 .attach-preview button {
   background: var(--border);
   color: var(--text);
@@ -544,6 +565,10 @@ input, textarea, select, button { font-family: inherit; }
   background: var(--surface);
   width: 100%;
   max-width: 440px;
+  max-height: 88vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border-radius: 20px 20px 0 0;
   padding: 22px 20px calc(22px + var(--safe-bottom));
 }
