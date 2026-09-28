@@ -166,6 +166,74 @@
     .followup-input { flex: 1; box-sizing: border-box; padding: 6px 9px; border: 1px solid rgba(127,127,127,.4); border-radius: 6px; font-size: 12px; font-family: inherit; background: transparent; color: inherit; }
     .followup-send { background: #1c1c24; color: #fff; border: none; border-radius: 6px; padding: 0 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .followup-send:hover { background: #000; }
+
+    /* --- "Explain a graphic" overlay: Cassie draws on top of the page --- */
+    .annotate-fab {
+      position: fixed; right: 16px; bottom: 68px; width: 44px; height: 44px;
+      border-radius: 50%; background: #ff2e93; border: none; cursor: pointer;
+      z-index: 2147483646; opacity: .62; transition: opacity .15s;
+      box-shadow: 0 4px 14px rgba(255,46,147,.4);
+      display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .annotate-fab:hover { opacity: 1; }
+    .annotate-fab[hidden] { display: none; }
+    .annotate-fab svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2.4; }
+    .pt-backdrop {
+      position: fixed; inset: 0; z-index: 2147483644; cursor: crosshair;
+      background: rgba(10,8,16,.28); backdrop-filter: blur(.5px);
+    }
+    .pt-backdrop[hidden] { display: none; }
+    .pt-hint {
+      position: fixed; left: 50%; top: 20px; transform: translateX(-50%);
+      background: #1c1a26; color: #fff; border: 1.5px solid #ff2e93; border-radius: 12px;
+      padding: 10px 16px; font-size: 14px; font-weight: 600; z-index: 2147483647;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); display: flex; align-items: center; gap: 8px;
+    }
+    .pt-hint[hidden] { display: none; }
+    .pt-hint .x { margin-left: 6px; cursor: pointer; opacity: .7; font-size: 17px; }
+    .pt-hint .x:hover { opacity: 1; }
+    .ann-svg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2147483645; }
+    .ann-svg path, .ann-svg line { stroke: #ff2e93; fill: none; stroke-width: 3; stroke-linecap: round; }
+    .ann-dot { fill: #ff2e93; }
+    .ann-dot-ring { fill: none; stroke: #ff2e93; stroke-width: 2; opacity: .6; }
+    .board-card {
+      position: fixed; z-index: 2147483646; width: 300px; max-width: calc(100vw - 24px);
+      background: #1c1a26; color: #ecebf5; border: 1.5px solid #ff2e93; border-radius: 16px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.4); overflow: hidden;
+    }
+    .board-card[hidden] { display: none; }
+    .board-card .bc-head {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,46,147,.3); font-weight: 700; font-size: 13.5px;
+    }
+    .board-card .bc-head .face {
+      width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(160deg,#fff,#ffd9ec);
+      border: 1.5px solid #ffb8dd; position: relative; flex-shrink: 0;
+    }
+    .board-card .bc-head .face::before, .board-card .bc-head .face::after {
+      content: ""; position: absolute; top: 7px; width: 3px; height: 5px; border-radius: 2px; background: #ff2e93;
+    }
+    .board-card .bc-head .face::before { left: 6px } .board-card .bc-head .face::after { right: 6px }
+    .board-card .bc-head .grow { flex: 1; }
+    .board-card .bc-head .x { cursor: pointer; opacity: .7; font-size: 18px; line-height: 1; }
+    .board-card .bc-head .x:hover { opacity: 1; }
+    .board-card .bc-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; font-size: 14px; line-height: 1.5; }
+    .board-card .bc-headline { font-weight: 700; margin: 0 0 10px; }
+    .board-steps { list-style: none; margin: 0; padding: 0; counter-reset: bs; }
+    .board-steps li {
+      position: relative; padding: 8px 10px 8px 34px; margin-bottom: 6px; border-radius: 10px;
+      border: 1px solid transparent; opacity: 0; transform: translateY(4px);
+      transition: opacity .35s ease, transform .35s ease;
+    }
+    .board-steps li.show { opacity: 1; transform: none; }
+    .board-steps li::before {
+      counter-increment: bs; content: counter(bs); position: absolute; left: 8px; top: 7px;
+      width: 19px; height: 19px; border-radius: 50%; background: #2a2836; border: 1px solid rgba(255,255,255,.15);
+      color: #b9b7c9; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .board-steps li.done { opacity: .62; }
+    .board-steps li.active { background: rgba(255,46,147,.15); border-color: rgba(255,46,147,.5); }
+    .board-steps li.active::before { background: #ff2e93; color: #fff; border-color: #ff2e93; }
   `;
   shadow.appendChild(style);
 
@@ -183,6 +251,7 @@
 
   // Floating "ask about this page" button — top frame only, so there's just one.
   let fab = null;
+  let annotateBtn = null;
   if (window.top === window) {
     fab = document.createElement('button');
     fab.className = 'fab';
@@ -191,6 +260,15 @@
     fab.innerHTML = '<svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg>';
     shadow.appendChild(fab);
     fab.addEventListener('click', showPageAsk);
+
+    // "Explain a graphic" — point at a graph/diagram and Cassie draws on it.
+    annotateBtn = document.createElement('button');
+    annotateBtn.className = 'annotate-fab';
+    annotateBtn.type = 'button';
+    annotateBtn.title = 'Explain a graph or diagram on this page';
+    annotateBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>';
+    shadow.appendChild(annotateBtn);
+    annotateBtn.addEventListener('click', enterPointMode);
   }
 
   let lastAutoText = '';
@@ -584,6 +662,176 @@
     convo = [{ role: 'user', content: prompt }];
     convoLabel = q;
     runConversation(rect);
+  }
+
+  // ===== "Explain a graphic": point at something, Cassie draws over it =====
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  let ptBackdrop = null, ptHint = null, annSvg = null, boardCard = null;
+
+  function ensureOverlayEls() {
+    if (ptBackdrop) return;
+    ptBackdrop = document.createElement('div'); ptBackdrop.className = 'pt-backdrop'; ptBackdrop.hidden = true;
+    ptHint = document.createElement('div'); ptHint.className = 'pt-hint'; ptHint.hidden = true;
+    ptHint.innerHTML = '<span>Tap the graph, diagram or equation you want explained</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
+    annSvg = document.createElementNS(SVGNS, 'svg'); annSvg.setAttribute('class', 'ann-svg'); annSvg.style.display = 'none';
+    boardCard = document.createElement('div'); boardCard.className = 'board-card'; boardCard.hidden = true;
+    shadow.appendChild(ptBackdrop); shadow.appendChild(annSvg); shadow.appendChild(boardCard); shadow.appendChild(ptHint);
+    ptBackdrop.addEventListener('click', onPointClick);
+    ptHint.querySelector('.x').addEventListener('click', (e) => { e.stopPropagation(); exitPointMode(); });
+  }
+
+  function enterPointMode() {
+    ensureOverlayEls();
+    hidePopover();
+    closeBoard();
+    if (fab) fab.hidden = true;
+    if (annotateBtn) annotateBtn.hidden = true;
+    ptBackdrop.hidden = false; ptHint.hidden = false;
+    document.addEventListener('keydown', escPoint, true);
+  }
+  function escPoint(e) { if (e.key === 'Escape') exitPointMode(); }
+  function exitPointMode() {
+    if (ptBackdrop) ptBackdrop.hidden = true;
+    if (ptHint) ptHint.hidden = true;
+    if (fab) fab.hidden = false;
+    if (annotateBtn) annotateBtn.hidden = false;
+    document.removeEventListener('keydown', escPoint, true);
+  }
+
+  function onPointClick(e) {
+    e.preventDefault(); e.stopPropagation();
+    const x = e.clientX, y = e.clientY;
+    ptBackdrop.style.pointerEvents = 'none';
+    let el = document.elementFromPoint(x, y);
+    ptBackdrop.style.pointerEvents = '';
+    exitPointMode();
+    if (!el || (host && host.contains(el)) || el === document.documentElement) return;
+    explainTarget(el, x, y);
+  }
+
+  // Read the text around the pointed-at element so Cassie knows what it is.
+  function gatherContext(el) {
+    const parts = [];
+    if (document.title) parts.push('Page: ' + document.title);
+    const fig = el.closest('figure, section, article, table, .figure, .graph, .chart') || el.parentElement;
+    const cap = fig && fig.querySelector && fig.querySelector('figcaption');
+    if (cap && cap.innerText) parts.push('Caption: ' + cap.innerText.trim().slice(0, 300));
+    const alt = el.getAttribute && (el.getAttribute('alt') || el.getAttribute('aria-label') || el.getAttribute('title'));
+    if (alt) parts.push('Label: ' + alt.trim().slice(0, 300));
+    let h = null, n = el;
+    for (let i = 0; i < 8 && n; i++) {
+      n = n.previousElementSibling || n.parentElement;
+      if (!n) break;
+      if (/^H[1-6]$/.test(n.tagName || '')) { h = n; break; }
+      if (n.querySelector) { const hh = n.querySelector('h1,h2,h3,h4'); if (hh) { h = hh; break; } }
+    }
+    if (h && h.innerText) parts.push('Section: ' + h.innerText.trim().slice(0, 160));
+    const own = ((el.innerText || '') || (fig && fig.innerText) || '').replace(/\s+/g, ' ').trim().slice(0, 900);
+    if (own) parts.push('What is shown: ' + own);
+    return parts.join('\n');
+  }
+
+  function explainTarget(el, x, y) {
+    const rect = el.getBoundingClientRect();
+    const ctx = gatherContext(el);
+    openBoardLoading(rect, x, y);
+    const prompt = `A student is viewing a webpage and pointed at one specific graphic on it (a graph, diagram, shape, equation, or illustration). Surrounding context:\n\n"""\n${ctx}\n"""\n\nExplain what this graphic shows and how to read it, like a friendly step-by-step tutor. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~14 words each. If context is thin, still give your best explanation of that kind of graphic.`;
+    askStream([{ role: 'user', content: prompt }], {
+      onDelta() {},
+      onDone(full) { renderBoard(rect, x, y, parseBoardJSON(full)); },
+      onError(err) {
+        renderBoard(rect, x, y, {
+          headline: err === 'no-key' ? 'Add your free Groq key first — click the Cassie toolbar icon.' : 'Couldn’t reach Cassie — please try again.',
+          steps: [],
+        });
+      },
+    });
+  }
+
+  function parseBoardJSON(text) {
+    try { const m = String(text).match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch (e) { /* fall through */ }
+    const lines = String(text).split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
+    return { headline: lines[0] || 'Here’s how to read this', steps: lines.slice(1, 6) };
+  }
+
+  function closeBoard() {
+    if (boardCard) boardCard.hidden = true;
+    if (annSvg) { annSvg.style.display = 'none'; while (annSvg.firstChild) annSvg.removeChild(annSvg.firstChild); }
+    document.removeEventListener('click', outsideBoard, true);
+    window.removeEventListener('scroll', closeBoard, true);
+  }
+  function outsideBoard(e) {
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.includes(boardCard)) return;
+    closeBoard();
+  }
+
+  function boardHead() {
+    return '<div class="bc-head"><span class="face"></span><span class="grow">Cassie</span><span class="x" role="button" aria-label="Close">&times;</span></div>';
+  }
+  function openBoardLoading(rect, x, y) {
+    ensureOverlayEls();
+    boardCard.hidden = false;
+    boardCard.innerHTML = boardHead() + '<div class="bc-body"><p style="opacity:.7;margin:0">Looking at this…</p></div>';
+    boardCard.querySelector('.x').addEventListener('click', closeBoard);
+    positionBoard(rect);
+    drawPointer(x, y);
+  }
+  function renderBoard(rect, x, y, data) {
+    ensureOverlayEls();
+    boardCard.hidden = false;
+    boardCard.innerHTML = boardHead();
+    const bodyEl = document.createElement('div'); bodyEl.className = 'bc-body';
+    if (data.headline) { const h = document.createElement('p'); h.className = 'bc-headline'; h.textContent = data.headline; bodyEl.appendChild(h); }
+    const ol = document.createElement('ol'); ol.className = 'board-steps';
+    const items = (data.steps || []).map((s) => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); return li; });
+    bodyEl.appendChild(ol);
+    boardCard.appendChild(bodyEl);
+    boardCard.querySelector('.x').addEventListener('click', closeBoard);
+    positionBoard(rect);
+    drawPointer(x, y);
+    let k = 0;
+    (function step() {
+      items.forEach((li, i) => { li.classList.toggle('show', i <= k); li.classList.toggle('active', i === k); li.classList.toggle('done', i < k); });
+      k++;
+      if (k < items.length) setTimeout(step, 750);
+      else setTimeout(() => items.forEach((li) => li.classList.remove('active')), 800);
+    })();
+    setTimeout(() => { document.addEventListener('click', outsideBoard, true); window.addEventListener('scroll', closeBoard, true); }, 60);
+  }
+
+  function positionBoard(rect) {
+    const w = 300, margin = 12;
+    let left = rect.left + rect.width / 2 - w / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - w - margin));
+    boardCard.style.left = left + 'px';
+    const h = boardCard.offsetHeight || 200;
+    let top = rect.top - h - 14;
+    if (top < margin) top = Math.min(rect.bottom + 14, window.innerHeight - h - margin);
+    boardCard.style.top = Math.max(margin, top) + 'px';
+  }
+
+  // A curved pink arrow from the board down to the exact spot the student tapped.
+  function drawPointer(x, y) {
+    while (annSvg.firstChild) annSvg.removeChild(annSvg.firstChild);
+    annSvg.style.display = 'block';
+    const b = boardCard.getBoundingClientRect();
+    const startX = Math.max(b.left + 22, Math.min(x, b.right - 22));
+    const below = b.top < y; // board is above the target → start from its bottom
+    const startY = below ? b.bottom : b.top;
+    const midY = (startY + y) / 2;
+    const path = document.createElementNS(SVGNS, 'path');
+    path.setAttribute('d', `M ${startX} ${startY} C ${startX} ${midY}, ${x} ${midY}, ${x} ${y - 10}`);
+    annSvg.appendChild(path);
+    const head = document.createElementNS(SVGNS, 'path');
+    head.setAttribute('d', `M ${x} ${y} l -6 -10 M ${x} ${y} l 6 -10`);
+    annSvg.appendChild(head);
+    const ring = document.createElementNS(SVGNS, 'circle');
+    ring.setAttribute('class', 'ann-dot-ring'); ring.setAttribute('cx', x); ring.setAttribute('cy', y); ring.setAttribute('r', 14);
+    annSvg.appendChild(ring);
+    const dot = document.createElementNS(SVGNS, 'circle');
+    dot.setAttribute('class', 'ann-dot'); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', 5);
+    annSvg.appendChild(dot);
   }
 
   let pendingText = '';
