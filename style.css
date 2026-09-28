@@ -752,10 +752,11 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .mem-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .mem-head h2 { margin: 0; }
 .mem-privacy { font-size: .78rem; color: var(--muted); margin: 0 0 14px; line-height: 1.4; }
-.mem-stats { display: flex; gap: 10px; margin-bottom: 16px; }
-.mem-stat { flex: 1; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px; }
-.mem-stat b { display: block; font-size: 1.05rem; }
-.mem-stat small { color: var(--muted); font-size: .72rem; }
+.mem-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.mem-stat { text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 4px; }
+.mem-stat b { display: block; font-size: 1rem; }
+.mem-stat small { color: var(--muted); font-size: .7rem; }
+.mem-note { font-size: .76rem; color: var(--muted); margin: 0 0 12px; text-align: center; }
 .mem-section { font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 16px 0 8px; }
 .mem-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .mem-review {
@@ -868,3 +869,65 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   0%, 100% { transform: rotate(0deg); }
   50% { transform: rotate(-18deg); }
 }
+
+/* ---------- Pomodoro focus timer (sidebar) ---------- */
+.pomo {
+  margin: 4px 0 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface), var(--bg));
+}
+.pomo.break { border-color: color-mix(in srgb, #57e39b 55%, var(--border)); }
+.pomo-head { display: flex; align-items: center; justify-content: space-between; font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+#pomo-cycles { display: inline-flex; gap: 4px; }
+#pomo-cycles span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+#pomo-cycles span.on { background: var(--bot-glow, #ff5fa2); box-shadow: 0 0 5px var(--bot-glow, #ff5fa2); }
+.pomo-time { font-size: 2rem; font-weight: 800; text-align: center; letter-spacing: .02em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+.pomo-ring { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 10px; }
+.pomo-ring i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff5fa2, #ff9db8); transition: width 1s linear; }
+.pomo.break .pomo-ring i { background: linear-gradient(90deg, #57e39b, #8ff0c0); }
+.pomo-btns { display: flex; gap: 6px; }
+.pomo-btn {
+  flex: 1; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 10px; padding: 8px 4px; font-size: .82rem; font-weight: 600; cursor: pointer;
+  transition: transform .08s ease, border-color .12s ease, background .12s ease;
+}
+.pomo-btn:hover { border-color: var(--primary); }
+.pomo-btn:active { transform: translateY(1px); }
+.pomo-btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ---------- ELI5 / complexity control in the highlight popover ---------- */
+.popover-complexity { display: flex; gap: 6px; margin: 8px 0; }
+.pc-lvl {
+  flex: 1; border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 5px 6px; font-size: .74rem; font-weight: 700; cursor: pointer;
+  transition: transform .08s ease, color .12s ease, border-color .12s ease, background .12s ease;
+}
+.pc-lvl:hover { color: var(--text); }
+.pc-lvl.active { background: var(--bot-glow, #ff5fa2); color: #fff; border-color: transparent; box-shadow: 0 3px 12px color-mix(in srgb, var(--bot-glow, #ff5fa2) 45%, transparent); }
+.pc-lvl:active { transform: scale(.95); }
+
+/* ---------- glassmorphism + ambient glow ---------- */
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  .highlight-popover, .settings-card, #sidebar {
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    backdrop-filter: blur(16px) saturate(1.3);
+  }
+  .highlight-popover { background: color-mix(in srgb, var(--surface) 78%, transparent); }
+  .settings-card { background: color-mix(in srgb, var(--surface) 86%, transparent); }
+  #sidebar { background: color-mix(in srgb, var(--surface) 88%, transparent); }
+}
+.highlight-popover {
+  border: 1px solid color-mix(in srgb, var(--bot-glow, #ff5fa2) 40%, var(--border));
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .3), 0 0 0 1px color-mix(in srgb, var(--bot-glow, #ff5fa2) 18%, transparent), 0 0 22px color-mix(in srgb, var(--bot-glow, #ff5fa2) 22%, transparent);
+  animation: popIn .16s cubic-bezier(.34, 1.4, .5, 1);
+}
+@keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* ---------- micro-interactions ---------- */
+.popover-choice-btn { transition: transform .08s ease, box-shadow .12s ease, background .12s ease; }
+.popover-choice-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px color-mix(in srgb, var(--bot-glow, #ff5fa2) 30%, transparent); }
+.popover-choice-btn:active { transform: scale(.94); }
+.chip, .home-example, .fu-chip { transition: transform .08s ease, border-color .12s ease, box-shadow .12s ease; }
+.chip:active, .fu-chip:active { transform: scale(.95); }
