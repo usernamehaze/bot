@@ -92,16 +92,16 @@ function Eye({ side, kind, starGeo }) {
   );
 }
 
-// Floating "z z z" above her head while sleeping.
+// Floating "z z z" beside her head while sleeping (kept inside the frame).
 function Zzz() {
   const ref = useRef();
   useFrame((state) => {
-    if (ref.current) ref.current.position.y = 1.1 + Math.sin(state.clock.elapsedTime * 1.5) * 0.05;
+    if (ref.current) ref.current.position.y = 0.72 + Math.sin(state.clock.elapsedTime * 1.5) * 0.04;
   });
   return (
-    <group ref={ref} position={[0.55, 1.1, 0]}>
-      <Html center distanceFactor={7} occlude={false}>
-        <div style={{ color: '#FF1493', fontWeight: 800, fontSize: 22, textShadow: '0 0 8px rgba(255,20,147,.6)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+    <group ref={ref} position={[0.42, 0.72, 0]}>
+      <Html center distanceFactor={9} occlude={false}>
+        <div style={{ color: '#FF1493', fontWeight: 800, fontSize: 18, textShadow: '0 0 8px rgba(255,20,147,.6)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
           z z z
         </div>
       </Html>
