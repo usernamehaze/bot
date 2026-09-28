@@ -21,7 +21,7 @@
   }
 
   function blank() {
-    return { v: 1, profile: { name: '', goal: '' }, topics: {}, facts: [], streak: { count: 0, lastDay: '' } };
+    return { v: 1, profile: { name: '', goal: '' }, topics: {}, facts: [], streak: { count: 0, lastDay: '' }, focusMinutes: 0 };
   }
 
   let data = blank();
@@ -37,6 +37,7 @@
         data.topics = parsed.topics || {};
         data.facts = parsed.facts || [];
         data.streak = Object.assign({ count: 0, lastDay: '' }, parsed.streak || {});
+        data.focusMinutes = parsed.focusMinutes || 0;
       }
     } catch (e) { data = blank(); }
   }
@@ -185,9 +186,25 @@
       );
     },
 
+    addFocusMinutes(n) {
+      bumpStreak(); // a completed focus block counts as studying today
+      data.focusMinutes = (data.focusMinutes || 0) + (Number(n) || 0);
+      save();
+    },
+    masteredCount() {
+      return Object.values(data.topics).filter((t) => t.correct > 0 && t.correct > t.wrong).length;
+    },
     stats() {
       const topics = Object.keys(data.topics).length;
-      return { topics, streak: data.streak.count, due: API.dueTopics().length, weak: API.weakTopics().length };
+      return {
+        topics,
+        streak: data.streak.count,
+        due: API.dueTopics().length,
+        weak: API.weakTopics().length,
+        mastered: API.masteredCount(),
+        focusHours: Math.round(((data.focusMinutes || 0) / 60) * 10) / 10,
+        focusMinutes: data.focusMinutes || 0,
+      };
     },
 
     clearAll() { data = blank(); save(); },

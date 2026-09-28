@@ -1923,9 +1923,12 @@ function renderMemory() {
       <p class="mem-privacy">🔒 Everything here stays on your device. No account, no server — only you can see it.</p>
       <div class="mem-stats">
         <div class="mem-stat"><b>🔥 ${s.streak}</b><small>day streak</small></div>
+        <div class="mem-stat"><b>✅ ${s.mastered}</b><small>mastered</small></div>
+        <div class="mem-stat"><b>⏱️ ${s.focusHours}h</b><small>focus</small></div>
         <div class="mem-stat"><b>📚 ${s.topics}</b><small>topics</small></div>
         <div class="mem-stat"><b>🔁 ${s.due}</b><small>to review</small></div>
       </div>
+      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here. 💛</p>
 
       <label class="field"><span>Your name (optional)</span><input id="mem-name" type="text" value="${memEsc(d.profile.name)}" placeholder="What should I call you?"></label>
       <label class="field"><span>Your goal (optional)</span><input id="mem-goal" type="text" value="${memEsc(d.profile.goal)}" placeholder="e.g. pass my chemistry finals"></label>
@@ -1995,6 +1998,71 @@ if (memoryPanel) {
     }
   });
 }
+
+/* ---------- Pomodoro focus timer ---------- */
+(function pomodoro() {
+  const FOCUS = 25 * 60, BREAK = 5 * 60, LONG = 15 * 60;
+  const wrap = document.getElementById('pomo');
+  const modeEl = document.getElementById('pomo-mode');
+  const timeEl = document.getElementById('pomo-time');
+  const cyclesEl = document.getElementById('pomo-cycles');
+  const ringFill = document.getElementById('pomo-ring-fill');
+  const toggleBtn = document.getElementById('pomo-toggle');
+  const resetBtn = document.getElementById('pomo-reset');
+  const skipBtn = document.getElementById('pomo-skip');
+  if (!wrap || !toggleBtn) return;
+
+  let mode = 'focus';       // 'focus' | 'break' | 'long'
+  let remaining = FOCUS;
+  let running = false;
+  let tick = null;
+  let cycles = 0;           // completed focus blocks
+
+  const total = () => (mode === 'focus' ? FOCUS : mode === 'long' ? LONG : BREAK);
+  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  function render() {
+    timeEl.textContent = fmt(remaining);
+    modeEl.textContent = mode === 'focus' ? 'Focus' : mode === 'long' ? 'Long break' : 'Break';
+    const dots = [0, 1, 2, 3].map((i) => `<span class="${i < (cycles % 4 || (cycles && mode !== 'focus' ? 4 : 0)) ? 'on' : ''}"></span>`).join('');
+    cyclesEl.innerHTML = dots;
+    ringFill.style.width = `${Math.max(0, Math.min(100, (1 - remaining / total()) * 100))}%`;
+    toggleBtn.textContent = running ? 'Pause' : 'Start';
+    wrap.classList.toggle('break', mode !== 'focus');
+  }
+  function switchMode(next) { mode = next; remaining = total(); render(); }
+  function nudge(msg, pose) {
+    try { if (typeof set3D === 'function') set3D(pose); } catch (e) { /* */ }
+    try { if (typeof mascotSay === 'function') mascotSay(msg, 5200); } catch (e) { /* */ }
+  }
+  function start() {
+    if (running) return;
+    running = true;
+    clearInterval(tick);
+    tick = setInterval(() => { remaining -= 1; if (remaining <= 0) return complete(); render(); }, 1000);
+    render();
+  }
+  function pause() { running = false; clearInterval(tick); render(); }
+  function complete() {
+    clearInterval(tick); running = false;
+    if (mode === 'focus') {
+      cycles += 1;
+      try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(FOCUS / 60); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
+      const long = cycles % 4 === 0;
+      switchMode(long ? 'long' : 'break');
+      nudge(long ? 'Awesome focus! 🎉 Take a longer break — stretch & breathe.' : 'Nice work! ☕ 5-min break — hydrate 💧 and rest your eyes.', 'encouraging');
+    } else {
+      switchMode('focus');
+      nudge('Break\'s over — ready to focus? Let\'s go! ✎', 'thinking');
+    }
+    start(); // auto-flow into the next block
+  }
+
+  toggleBtn.addEventListener('click', () => (running ? pause() : (nudge(mode === 'focus' ? 'Focus time! I\'ll keep you company 💪' : 'Rest up! 🌿', mode === 'focus' ? 'thinking' : 'encouraging'), start())));
+  resetBtn.addEventListener('click', () => { pause(); mode = 'focus'; cycles = 0; remaining = FOCUS; render(); });
+  skipBtn.addEventListener('click', () => { pause(); switchMode(mode === 'focus' ? 'break' : 'focus'); });
+  render();
+})();
 
 clearChatBtn.addEventListener('click', () => {
   if (!confirm('Clear this conversation?')) return;
@@ -2179,6 +2247,7 @@ function setPopoverContent(text, { muted = false } = {}) {
 
 let pendingText = '';
 let pendingRect = null;
+let popoverComplexity = 'normal'; // 'eli5' | 'normal' | 'advanced'
 
 function setPopoverChoice(text, rect) {
   pendingText = text;
@@ -2186,6 +2255,11 @@ function setPopoverChoice(text, rect) {
   highlightPopoverBody.classList.remove('muted');
   highlightPopoverBody.innerHTML = `
     <div class="popover-question">What should I do with this?</div>
+    <div class="popover-complexity" role="group" aria-label="Explanation depth">
+      <button type="button" class="pc-lvl${popoverComplexity === 'eli5' ? ' active' : ''}" data-lvl="eli5">ELI5</button>
+      <button type="button" class="pc-lvl${popoverComplexity === 'normal' ? ' active' : ''}" data-lvl="normal">Normal</button>
+      <button type="button" class="pc-lvl${popoverComplexity === 'advanced' ? ' active' : ''}" data-lvl="advanced">Advanced</button>
+    </div>
     <div class="popover-choice-row">
       <button type="button" class="popover-choice-btn" data-mode="explain">Explain</button>
       <button type="button" class="popover-choice-btn" data-mode="answer">Answer</button>
@@ -2196,6 +2270,13 @@ function setPopoverChoice(text, rect) {
 }
 
 highlightPopoverBody.addEventListener('click', (e) => {
+  const lvl = e.target.closest('.pc-lvl');
+  if (lvl) {
+    popoverComplexity = lvl.dataset.lvl;
+    highlightPopoverBody.querySelectorAll('.pc-lvl').forEach((b) => b.classList.toggle('active', b === lvl));
+    positionPopover(pendingRect);
+    return;
+  }
   const btn = e.target.closest('.popover-choice-btn');
   if (!btn) return;
   runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
@@ -2215,13 +2296,18 @@ async function runExplainOrAnswer(text, rect, mode) {
   }
 
   setCursorMode('thinking');
+  const depth = popoverComplexity === 'eli5'
+    ? ' Explain it like I\'m 5: super simple, everyday words, a short friendly analogy, and no jargon.'
+    : popoverComplexity === 'advanced'
+      ? ' Give an advanced, in-depth explanation: precise terminology, the underlying mechanisms, and any important nuances.'
+      : '';
   let prompt;
   if (mode === 'answer') {
     prompt = `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`;
   } else if (mode === 'code') {
-    prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works:\n\n"${text}"`;
+    prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works.${depth}\n\n"${text}"`;
   } else {
-    prompt = `Answer this and explain your reasoning — give the answer, then explain why/how:\n\n"${text}"`;
+    prompt = `Answer this and explain your reasoning — give the answer, then explain why/how.${depth}\n\n"${text}"`;
   }
   try {
     const reply = await askCassie([{ role: 'user', content: prompt }]);
@@ -2266,7 +2352,8 @@ document.addEventListener('keydown', (e) => {
    Explain / Answer buttons at the pointer, instead of the browser menu.
    Only hijacks when there IS a selection; plain inputs keep their native menu. */
 document.addEventListener('contextmenu', (e) => {
-  if (e.target.closest('input, textarea')) return; // keep native menu in edit fields
+  const el = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+  if (el && el.closest('input, textarea')) return; // keep native menu in edit fields
   const sel = window.getSelection();
   const text = sel ? sel.toString().trim() : '';
   if (!text || text.length < 2) return; // nothing selected -> normal menu

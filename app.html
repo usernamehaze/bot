@@ -31,6 +31,19 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
     New chat
   </button>
+
+  <!-- Pomodoro focus timer -->
+  <div class="pomo" id="pomo">
+    <div class="pomo-head"><span id="pomo-mode">Focus</span><span id="pomo-cycles"></span></div>
+    <div class="pomo-time" id="pomo-time">25:00</div>
+    <div class="pomo-ring"><i id="pomo-ring-fill"></i></div>
+    <div class="pomo-btns">
+      <button id="pomo-toggle" class="pomo-btn primary">Start</button>
+      <button id="pomo-reset" class="pomo-btn" title="Reset">Reset</button>
+      <button id="pomo-skip" class="pomo-btn" title="Skip to next">Skip</button>
+    </div>
+  </div>
+
   <div class="sidebar-section">Recents</div>
   <div id="chat-list" class="chat-list"></div>
   <div class="sidebar-foot">Your study buddy · Cassie</div>
