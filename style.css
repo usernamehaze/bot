@@ -426,6 +426,7 @@ input, textarea, select, button { font-family: inherit; }
 .home-badge { display: inline-flex; }
 .home-badge .brand-dot { width: 20px; height: 20px; }
 .home-title { font-size: 1.4rem; margin: 14px 0 4px; }
+.home-title .home-spark { width: 20px; height: 20px; fill: currentColor; vertical-align: -3px; }
 .home-sub { color: var(--muted); margin: 0 0 18px; font-size: .95rem; }
 .home-examples { display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .home-example {
