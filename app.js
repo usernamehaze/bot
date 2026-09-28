@@ -510,11 +510,11 @@ function renderTyping() {
 // Example prompts shown on the empty home screen. `send: true` asks it
 // straight away; otherwise it fills the box so the student can paste/edit.
 const HOME_EXAMPLES = [
-  { label: '💡 Explain a topic', text: 'Explain photosynthesis in simple terms.', send: true },
-  { label: '📝 Quiz me', text: 'Quiz me on the water cycle.', send: true },
-  { label: '🧮 Solve step by step', text: 'Solve step by step: 3x + 7 = 22', send: true },
-  { label: '🗒️ Make study notes', text: 'Summarize this into clean study notes:\n\n', send: false },
-  { label: '🎓 Research a topic', text: 'Research: effects of social media on students', send: true },
+  { label: 'Explain a topic', icon: 'M12 2a6 6 0 0 0-3.8 10.65c.52.42.8 1.03.8 1.68V15h6v-.67c0-.65.28-1.26.8-1.68A6 6 0 0 0 12 2zM9 16.5h6v.5a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-.5zm1 3h4v.25a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75V19.5z', text: 'Explain photosynthesis in simple terms.', send: true },
+  { label: 'Quiz me', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z', text: 'Quiz me on the water cycle.', send: true },
+  { label: 'Solve step by step', icon: 'M3 5h2v2H3zM7 5h14v2H7zM3 11h2v2H3zM7 11h14v2H7zM3 17h2v2H3zM7 17h14v2H7z', text: 'Solve step by step: 3x + 7 = 22', send: true },
+  { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
+  { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
 ];
 
 function renderHome() {
@@ -531,7 +531,10 @@ function renderHome() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'home-example';
-    btn.textContent = ex.label;
+    btn.innerHTML = `<svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg>`;
+    const lbl = document.createElement('span');
+    lbl.textContent = ex.label;
+    btn.appendChild(lbl);
     btn.addEventListener('click', () => {
       if (ex.send) {
         handleSend(ex.text);

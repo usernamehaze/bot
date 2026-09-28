@@ -429,10 +429,12 @@ input, textarea, select, button { font-family: inherit; }
 .home-sub { color: var(--muted); margin: 0 0 18px; font-size: .95rem; }
 .home-examples { display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .home-example {
+  display: flex; align-items: center; gap: 10px;
   background: var(--surface); color: var(--text);
   border: 1px solid var(--border); border-radius: 12px;
   padding: 12px 14px; font-size: .92rem; font-weight: 500; cursor: pointer;
 }
+.home-example .home-ico { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
 .home-example:hover { border-color: var(--primary); }
 .home-tip { color: var(--muted); font-size: .8rem; margin: 18px 0 0; line-height: 1.5; }
 
