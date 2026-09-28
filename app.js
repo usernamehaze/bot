@@ -195,6 +195,7 @@ const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 const attachPreview = document.getElementById('attach-preview');
 const attachThumb = document.getElementById('attach-thumb');
+const attachName = document.getElementById('attach-name');
 const attachRemove = document.getElementById('attach-remove');
 const imageBtn = document.getElementById('image-btn');
 const highlightPopover = document.getElementById('highlight-popover');
@@ -561,7 +562,7 @@ function renderHistory() {
     renderHome();
     return;
   }
-  state.messages.forEach((m) => renderMessage(m.role, m.content));
+  state.messages.forEach((m) => renderMessage(m.role, m.display || m.content));
 }
 
 /* ---------- one-tap follow-ups + double-check (under the latest answer) ---------- */
@@ -761,14 +762,91 @@ async function askCassie(msgs, image, opts = {}) {
   return askGroq(msgs, opts);
 }
 
-/* ---------- upload / download / image helpers ---------- */
+/* ---------- upload / download / image + document helpers ---------- */
 let pendingImage = null; // { mimeType, base64, dataUrl }
+let pendingDoc = null;   // { name, text } — extracted text from a PDF/DOCX/PPTX
 
 function clearAttach() {
   pendingImage = null;
+  pendingDoc = null;
   attachPreview.hidden = true;
   attachThumb.removeAttribute('src');
+  attachThumb.hidden = false;
+  if (attachName) { attachName.hidden = true; attachName.textContent = ''; }
   fileInput.value = '';
+}
+
+// Lazily load a third-party script once (used for document parsers, from CDN).
+const _scriptCache = {};
+function loadScript(src) {
+  if (_scriptCache[src]) return _scriptCache[src];
+  _scriptCache[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    s.onload = resolve;
+    s.onerror = () => { delete _scriptCache[src]; reject(new Error('Failed to load ' + src)); };
+    document.head.appendChild(s);
+  });
+  return _scriptCache[src];
+}
+
+const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+const DOC_TEXT_CAP = 16000; // characters of extracted text we keep
+
+async function extractPdfText(file) {
+  await loadScript(PDFJS_URL);
+  const pdfjs = window.pdfjsLib;
+  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  const data = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data }).promise;
+  const maxPages = Math.min(pdf.numPages, 50);
+  let text = '';
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map((it) => it.str).join(' ') + '\n\n';
+    if (text.length > DOC_TEXT_CAP + 4000) break;
+  }
+  return text;
+}
+
+async function extractDocxText(file) {
+  await loadScript(MAMMOTH_URL);
+  const arrayBuffer = await file.arrayBuffer();
+  const res = await window.mammoth.extractRawText({ arrayBuffer });
+  return (res && res.value) || '';
+}
+
+function decodeXml(s) {
+  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+}
+async function extractPptxText(file) {
+  await loadScript(JSZIP_URL);
+  const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+  const slides = Object.keys(zip.files)
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a, b) => (+a.match(/slide(\d+)/)[1]) - (+b.match(/slide(\d+)/)[1]));
+  let text = '';
+  for (const name of slides) {
+    const xml = await zip.files[name].async('string');
+    const runs = xml.match(/<a:t>[\s\S]*?<\/a:t>/g) || [];
+    const slideText = runs.map((r) => decodeXml(r.replace(/^<a:t>/, '').replace(/<\/a:t>$/, ''))).join(' ').trim();
+    if (slideText) text += slideText + '\n\n';
+    if (text.length > DOC_TEXT_CAP + 4000) break;
+  }
+  return text;
+}
+
+async function extractDocText(file) {
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.pdf') || file.type === 'application/pdf') return extractPdfText(file);
+  if (name.endsWith('.docx') || /wordprocessingml/.test(file.type)) return extractDocxText(file);
+  if (name.endsWith('.pptx') || /presentationml/.test(file.type)) return extractPptxText(file);
+  throw new Error('unsupported');
 }
 
 // Load an image file, downscale to <=1024px, return base64 JPEG (keeps requests small).
@@ -852,7 +930,8 @@ function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
 /* ---------- send flow ---------- */
 async function handleSend(text, opts = {}) {
   const image = pendingImage;
-  if (!text.trim() && !image) return;
+  const doc = pendingDoc;
+  if (!text.trim() && !image && !doc) return;
 
   const needKey = image ? !state.geminiKey : !state.groqKey;
   if (needKey) {
@@ -866,14 +945,24 @@ async function handleSend(text, opts = {}) {
 
   let sendText = text.trim();
   if (!sendText && image) sendText = 'Please look at this image and help me with it.';
+  if (!sendText && doc) sendText = 'Please read this document and help me with it.';
 
   clearFollowups();
   // if the home screen is showing, clear it before the first message
   if (!state.messages.length) chatLog.innerHTML = '';
-  state.messages.push({ role: 'user', content: sendText });
+  // A document is fed to the model as context, but the chat bubble stays clean.
+  let modelContent = sendText;
+  let displayContent = sendText;
+  if (doc) {
+    modelContent = `Here is the document "${doc.name}":\n"""\n${doc.text}\n"""\n\n${sendText}`;
+    displayContent = `${sendText}\n\n(attached: ${doc.name})`;
+  }
+  const userMsg = { role: 'user', content: modelContent };
+  if (doc) userMsg.display = displayContent;
+  state.messages.push(userMsg);
   touchChat();
   save();
-  const userBubble = renderMessage('user', sendText);
+  const userBubble = renderMessage('user', displayContent);
   if (image) addImageToBubble(userBubble, image.dataUrl);
   clearAttach();
   promptInput.value = '';
@@ -1165,13 +1254,53 @@ if (webBtn) {
 attachBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files && fileInput.files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  try {
-    pendingImage = await processImageFile(file);
-    attachThumb.src = pendingImage.dataUrl;
+  if (!file) return;
+  const lname = (file.name || '').toLowerCase();
+
+  // Image → existing vision flow.
+  if (file.type.startsWith('image/')) {
+    try {
+      pendingImage = await processImageFile(file);
+      pendingDoc = null;
+      attachThumb.src = pendingImage.dataUrl;
+      attachThumb.hidden = false;
+      attachName.hidden = true;
+      attachPreview.hidden = false;
+    } catch (e) { clearAttach(); }
+    return;
+  }
+
+  // Document → extract text in-browser.
+  if (/\.(pdf|docx|pptx)$/.test(lname)) {
+    pendingImage = null;
+    attachThumb.hidden = true;
+    attachName.hidden = false;
+    attachName.textContent = `Reading ${file.name}…`;
     attachPreview.hidden = false;
-  } catch (e) {
-    clearAttach();
+    try {
+      let text = await extractDocText(file);
+      text = (text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!text) {
+        pendingDoc = null;
+        attachName.textContent = `Couldn’t find text in ${file.name} (it may be scanned images).`;
+        return;
+      }
+      pendingDoc = { name: file.name, text: text.slice(0, DOC_TEXT_CAP) };
+      attachName.textContent = file.name;
+    } catch (e) {
+      pendingDoc = null;
+      attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, .docx, or .pptx.`;
+    }
+    return;
+  }
+
+  // Old binary Office formats aren't supported by the in-browser parsers.
+  if (/\.(doc|ppt)$/.test(lname)) {
+    pendingImage = null;
+    attachThumb.hidden = true;
+    attachName.hidden = false;
+    attachName.textContent = 'Please save it as .docx or .pptx and try again.';
+    attachPreview.hidden = false;
   }
 });
 attachRemove.addEventListener('click', clearAttach);
