@@ -23,6 +23,10 @@
 
   const style = document.createElement('style');
   style.textContent = `
+    /* one font across the whole popover, including buttons and inputs */
+    .popover, .popover *, .fab {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
     .popover {
       position: fixed;
       width: 300px;
@@ -34,7 +38,6 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
       z-index: 2147483647;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .popover[hidden] { display: none; }
     .header {
