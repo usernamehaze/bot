@@ -25,7 +25,7 @@ function Mascot() {
 
   return (
     <Canvas
-      camera={{ position: [0, 0.15, 3.5], fov: 38 }}
+      camera={{ position: [0, 0.1, 4.4], fov: 40 }}
       dpr={[1, 1.5]}
       gl={{ alpha: true, antialias: true, preserveDrawingBuffer: false }}
       style={{ background: 'transparent', pointerEvents: 'none' }}
@@ -33,7 +33,8 @@ function Mascot() {
       <ambientLight intensity={0.7} />
       <directionalLight position={[3, 4, 4]} intensity={2.2} color="#FF1493" />
       <directionalLight position={[-3, 2, 2]} intensity={0.7} color="#88aaff" />
-      <group scale={1.2} position={[0, -0.15, 0]}>
+      {/* scaled to leave head-room so raised / open arms stay inside the frame */}
+      <group scale={1.02} position={[0, -0.1, 0]}>
         <CassieBot emotion={emotion} hideIcons />
       </group>
       <Environment resolution={128}>

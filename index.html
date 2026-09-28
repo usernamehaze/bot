@@ -1,41 +1,95 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#121214" />
-    <title>Cassie</title>
-    <meta name="description" content="Cassie — your free AI study buddy." />
-    <link rel="manifest" href="manifest.json" />
-    <link rel="icon" href="icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Cassie" />
-    <link rel="prefetch" href="app.html" />
-    <style>
-      html, body, #root { height: 100%; margin: 0; background: #121214; }
-      #boot {
-        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        background: #121214; color: #fff; font-family: system-ui, -apple-system, sans-serif;
-        font-size: 2rem; font-weight: 700; letter-spacing: -0.01em;
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cassie</title>
+<meta name="description" content="Cassie — your free AI study buddy.">
+<meta name="theme-color" content="#100f16">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cassie">
+<link rel="prefetch" href="app.html">
+<link rel="prefetch" href="app.js">
+<link rel="prefetch" href="style.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    min-height: 100vh; min-height: 100dvh;
+    background: #100f16;
+    background-image: radial-gradient(60% 50% at 50% 44%, #1b1a24 0%, #100f16 60%, #0b0a0f 100%);
+    color: #f4efe4; overflow: hidden; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  /* compact orbit loader */
+  .loader { position: relative; width: 132px; height: 132px; }
+  .loader .core {
+    position: absolute; inset: 40%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #ffd0e6, #ff1493 55%, #b30f6b);
+    box-shadow: 0 0 18px 4px rgba(255,20,147,.55);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .loader .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid transparent;
+    border-top-color: #ff1493; border-bottom-color: rgba(255,105,180,.45);
+  }
+  .loader .ring.r1 { animation: spin 2.2s linear infinite; }
+  .loader .ring.r2 { inset: 12%; border-top-color: #ff69b4; border-bottom-color: transparent; animation: spin 3s linear infinite reverse; transform: rotate(30deg); }
+  .loader .ring.r3 { inset: 24%; border-left-color: rgba(255,20,147,.6); border-right-color: transparent; border-top-color: transparent; border-bottom-color: transparent; animation: spin 1.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+
+  .brand { text-align: center; }
+  .name { font-size: 1.9rem; font-weight: 700; letter-spacing: -.01em; }
+  .name .spk { color: #ff1493; font-size: .55em; vertical-align: super; margin-left: 2px; display: inline-block; animation: twinkle 2.2s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity: .5; transform: scale(.85) rotate(0); } 50% { opacity: 1; transform: scale(1.1) rotate(20deg); } }
+  .think { display: block; margin-top: 4px; color: #9a978c; font-size: .9rem; letter-spacing: .08em; }
+  .think .d { animation: dots 1.4s infinite; }
+  .think .d:nth-child(2) { animation-delay: .2s; }
+  .think .d:nth-child(3) { animation-delay: .4s; }
+  @keyframes dots { 0%,60%,100% { opacity: .25; } 30% { opacity: 1; } }
+
+  .hint { position: fixed; left: 0; right: 0; bottom: clamp(26px,7vh,60px); text-align: center; color: rgba(255,255,255,.4); font-size: .8rem; letter-spacing: .04em; opacity: 0; transition: opacity .6s ease; }
+  .hint.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .loader .ring, .loader .core, .name .spk, .think .d { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="loader" aria-label="Cassie loading" role="img">
+    <div class="ring r1"></div>
+    <div class="ring r2"></div>
+    <div class="ring r3"></div>
+    <div class="core"></div>
+  </div>
+  <div class="brand">
+    <span class="name">Cassie<span class="spk">✦</span></span>
+    <span class="think">thinking<span class="d">.</span><span class="d">.</span><span class="d">.</span></span>
+  </div>
+  <div class="hint" id="hint">tap anywhere to enter</div>
+
+  <script>
+    (function () {
+      // Cloudflare Pages serves HTML at its extensionless clean URL and
+      // 308-redirects /app.html -> /app; GitHub Pages needs the .html. Pick the
+      // right target per host so navigation never hits a redirect.
+      function target() {
+        var h = location.hostname;
+        if (h.indexOf('github.io') !== -1) return 'app.html';
+        if (h === 'localhost' || h === '127.0.0.1' || location.protocol === 'file:') return 'app.html';
+        return 'app';
       }
-    </style>
-    <script>
-      // If the device has no WebGL, skip the 3D loader and go straight to the app.
-      (function () {
-        try {
-          var c = document.createElement('canvas');
-          var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
-          if (!gl) window.location.replace('app.html');
-        } catch (e) {
-          window.location.replace('app.html');
-        }
-      })();
-    </script>
-    <script type="module" crossorigin src="./assets/index-X1nuoyV7.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DjKhCU-U.css">
-  </head>
-  <body>
-    <div id="root"><div id="boot">Cassie</div></div>
-  </body>
+      var done = false;
+      function go() { if (done) return; done = true; window.location.href = target(); }
+      setTimeout(function () { var h = document.getElementById('hint'); if (h) h.classList.add('show'); }, 1000);
+      document.body.addEventListener('click', go);
+      setTimeout(go, 3200); // short, snappy splash
+    })();
+  </script>
+</body>
 </html>

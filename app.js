@@ -279,6 +279,7 @@ let mascotEmoteTimer = null;
 let mascotEmoteClearTimer = null;
 let mascotDragging = false;
 let mascotAsleep = false;
+let emotionHoldUntil = 0; // pause idle emote-cycling briefly after a manual tap
 function clearEmote() {
   if (!mascot) return;
   MASCOT_EMOTES.forEach((c) => mascot.classList.remove(c));
@@ -296,7 +297,8 @@ function mascotEmote(name, hold) {
 function scheduleEmote() {
   clearTimeout(mascotEmoteTimer);
   mascotEmoteTimer = setTimeout(() => {
-    if (mascot && !mascotDragging && !mascotAsleep && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
+    if (mascot && !mascotDragging && !mascotAsleep && Date.now() >= emotionHoldUntil
+        && !mascot.classList.contains('thinking') && !mascot.classList.contains('happy')) {
       mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
     }
     scheduleEmote();
@@ -557,7 +559,6 @@ function mascotIdleTip() {
 }
 
 if (mascotBtn && mascot) {
-  let clickIdx = Math.floor(Math.random() * MASCOT_REACTIONS.click.length);
   let downX = 0, downY = 0, startLeft = 0, startTop = 0, moved = false, pointerId = null;
 
   const onMove = (e) => {
@@ -598,14 +599,24 @@ if (mascotBtn && mascot) {
     window.addEventListener('pointerup', onUp);
   });
 
-  // tap Cassie → wake her if asleep, else a short motivating word + mood
+  // tap Cassie → wake her if asleep, else cycle through her 3D emotions so you
+  // can try them all (Encouraging → Curious → Celebrate → Thinking → Sleepy → Ready)
+  const EMOTE_CYCLE = [
+    { e: 'encouraging', t: 'Encouraging! 🙌' },
+    { e: 'curious', t: 'Curious 🤔' },
+    { e: 'celebratory', t: 'Yay! 🎉' },
+    { e: 'thinking', t: 'Thinking… 💭' },
+    { e: 'sleep', t: 'Sleepy… 😴' },
+    { e: 'neutral', t: 'Ready! 🤖' },
+  ];
+  let cycleIdx = 0;
   mascotBtn.addEventListener('click', () => {
     if (moved) { moved = false; return; } // a drag, not a tap
     if (mascotPoke()) return; // was asleep → just woke her
-    const pick = MASCOT_REACTIONS.click[clickIdx++ % MASCOT_REACTIONS.click.length];
-    mascotEmote(pick.e);
-    mascotSay(pick.t, 3000);
-    mascotCelebrate();
+    const pick = EMOTE_CYCLE[cycleIdx++ % EMOTE_CYCLE.length];
+    set3D(pick.e);
+    mascotSay(pick.t, 2600);
+    emotionHoldUntil = Date.now() + 3200; // let the tapped mood linger
   });
 
   // react while the student types (throttled so it isn't spammy)
@@ -2165,14 +2176,19 @@ function scheduleSelectionPopover(delay) {
   clearTimeout(selPopoverTimer);
   selPopoverTimer = setTimeout(trySelectionPopover, delay);
 }
-document.addEventListener('mouseup', () => scheduleSelectionPopover(10));
+// Auto-popup is TOUCH-ONLY: phones have no right-click, so selecting text in an
+// answer should offer Explain/Answer/Code. On desktop this stays out of the way
+// (plain selection does nothing) — use right-click (below) to summon it there.
+let lastInputTouch = false;
+document.addEventListener('touchstart', () => { lastInputTouch = true; }, { passive: true, capture: true });
+document.addEventListener('mousedown', () => { lastInputTouch = false; }, true);
 document.addEventListener('touchend', () => {
   lastTouchEndAt = Date.now();
   // wait past the browser's synthesized mouse events so the outside-tap
   // handler below doesn't immediately hide the popover we're about to show
   scheduleSelectionPopover(380);
 }, { passive: true });
-document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
+document.addEventListener('selectionchange', () => { if (lastInputTouch) scheduleSelectionPopover(450); });
 
 chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);

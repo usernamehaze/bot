@@ -440,13 +440,15 @@ input, textarea, select, button { font-family: inherit; }
 #mascot.dragging { transition: none; cursor: grabbing; }
 #mascot.dragging .mascot-face { animation: none; }
 #mascot-btn { border: none; background: none; padding: 0; cursor: grab; width: 58px; height: 68px; touch-action: none; position: relative; }
-/* 3D Cassie canvas mount — hidden until the bundle signals ready */
-.mascot-3d { position: absolute; inset: -12px; width: 82px; height: 92px; display: none; pointer-events: none; }
+/* 3D Cassie canvas mount — larger than the button and centred on it so raised
+   arms are never clipped by the canvas edge. Transparent + pointer-events:none,
+   so the extra area doesn't block anything. */
+.mascot-3d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 150px; height: 150px; display: none; pointer-events: none; }
 #mascot.has3d .mascot-3d { display: block; }
 /* emoji shown only when WebGL / the 3D bundle isn't available */
 .mascot-fallback { display: flex; align-items: center; justify-content: center; width: 58px; height: 68px; font-size: 38px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.28)); }
 #mascot.has3d .mascot-fallback { display: none; }
-@media (max-width: 480px) { .mascot-3d { inset: -10px; width: 68px; height: 78px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
+@media (max-width: 480px) { .mascot-3d { width: 124px; height: 124px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 .mascot-face { width: 58px; height: 68px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); animation: mascotFloat 4.5s ease-in-out infinite; }
 /* cute glossy white robot */
