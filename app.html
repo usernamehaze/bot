@@ -198,6 +198,8 @@
   <div id="mascot">
     <div id="mascot-bubble" class="mascot-bubble" hidden></div>
     <button id="mascot-btn" type="button" aria-label="Cassie" title="Cassie">
+      <!-- real 3D Cassie mounts here; the SVG below stays as a fallback -->
+      <div id="cassie-3d-root" class="mascot-3d"></div>
       <svg class="mascot-face" viewBox="0 0 72 86" aria-hidden="true">
         <!-- little arms -->
         <rect class="r-arm" x="2" y="60" width="7" height="17" rx="3.5"/>
@@ -282,5 +284,31 @@
 </div>
 
 <script src="app.js"></script>
+<script>
+  // Lazy-load the 3D Cassie mascot after the tutor is interactive so it never
+  // blocks the app. If it fails or WebGL is unavailable, the SVG mascot stays.
+  (function () {
+    function hasWebGL() {
+      try {
+        var c = document.createElement('canvas');
+        return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
+      } catch (e) { return false; }
+    }
+    function load3D() {
+      if (!hasWebGL()) return;
+      var s = document.createElement('script');
+      s.src = 'mascot3d/cassie-mascot.js';
+      s.async = true;
+      document.body.appendChild(s);
+    }
+    // when the 3D bot signals ready, switch the mascot from SVG to 3D
+    window.addEventListener('cassie3d-ready', function () {
+      var m = document.getElementById('mascot');
+      if (m) m.classList.add('has3d');
+    });
+    if (document.readyState === 'complete') setTimeout(load3D, 400);
+    else window.addEventListener('load', function () { setTimeout(load3D, 400); });
+  })();
+</script>
 </body>
 </html>

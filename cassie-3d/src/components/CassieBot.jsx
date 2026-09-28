@@ -127,7 +127,7 @@ function StatusIcon({ icon }) {
   return null;
 }
 
-export default function CassieBot({ emotion }) {
+export default function CassieBot({ emotion, hideIcons = false }) {
   const rig = useRef();
   const head = useRef();
   const armL = useRef();
@@ -236,7 +236,7 @@ export default function CassieBot({ emotion }) {
       </group>
 
       <Confetti active={pose.confetti} />
-      <StatusIcon icon={pose.icon} />
+      {!hideIcons && <StatusIcon icon={pose.icon} />}
     </group>
   );
 }

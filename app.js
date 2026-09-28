@@ -242,15 +242,30 @@ const mascotBubble = document.getElementById('mascot-bubble');
 let mascotHappyTimer = null;
 let mascotBubbleTimer = null;
 
+// Bridge the mascot's moods to the optional 3D Cassie (window.CassieMascot).
+// Falls back silently (SVG mascot) when the 3D bundle isn't loaded.
+const EMOTE_TO_3D = {
+  'emote-happy': 'encouraging', 'emote-love': 'encouraging', 'emote-star': 'celebratory',
+  'emote-surprised': 'curious', 'emote-wink': 'neutral', 'emote-sleepy': 'neutral',
+  'emote-focused': 'thinking', 'emote-cool': 'neutral', 'emote-sad': 'neutral', 'emote-dizzy': 'curious',
+};
+function set3D(name) {
+  try {
+    if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
+  } catch (e) { /* ignore */ }
+}
+
 function setCursorMode(mode) {
   cursorState = mode;
   cursorEl.classList.toggle('thinking', mode === 'thinking');
   if (mascot) mascot.classList.toggle('thinking', mode === 'thinking');
+  set3D(mode === 'thinking' ? 'thinking' : 'neutral');
 }
 
 function mascotCelebrate() {
   if (!mascot) return;
   mascot.classList.add('happy');
+  set3D('celebratory');
   clearTimeout(mascotHappyTimer);
   mascotHappyTimer = setTimeout(() => mascot.classList.remove('happy'), 800);
 }
@@ -267,11 +282,13 @@ let mascotAsleep = false;
 function clearEmote() {
   if (!mascot) return;
   MASCOT_EMOTES.forEach((c) => mascot.classList.remove(c));
+  if (!mascotAsleep) set3D(mascot.classList.contains('thinking') ? 'thinking' : 'neutral');
 }
 function mascotEmote(name, hold) {
   if (!mascot || mascotDragging || mascotAsleep || mascot.classList.contains('thinking')) return;
   clearEmote();
   mascot.classList.add(name);
+  set3D(EMOTE_TO_3D[name] || 'neutral');
   clearTimeout(mascotEmoteClearTimer);
   const dur = hold || (name === 'emote-love' ? 2200 : 1600);
   mascotEmoteClearTimer = setTimeout(clearEmote, dur);
@@ -504,6 +521,7 @@ function sleepMascot() {
   clearEmote();
   mascot.classList.remove('happy');
   mascot.classList.add('sleeping');
+  set3D('neutral');
   mascotSay('Zzz… tap to wake me', 0);
 }
 function scheduleResleep() {

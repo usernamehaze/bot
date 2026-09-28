@@ -439,7 +439,12 @@ input, textarea, select, button { font-family: inherit; }
 }
 #mascot.dragging { transition: none; cursor: grabbing; }
 #mascot.dragging .mascot-face { animation: none; }
-#mascot-btn { border: none; background: none; padding: 0; cursor: grab; width: 58px; height: 68px; touch-action: none; }
+#mascot-btn { border: none; background: none; padding: 0; cursor: grab; width: 58px; height: 68px; touch-action: none; position: relative; }
+/* 3D Cassie canvas mount — hidden until the bundle signals ready */
+.mascot-3d { position: absolute; inset: -12px; width: 82px; height: 92px; display: none; pointer-events: none; }
+#mascot.has3d .mascot-3d { display: block; }
+#mascot.has3d .mascot-face { display: none; }
+@media (max-width: 480px) { .mascot-3d { inset: -10px; width: 68px; height: 78px; } }
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 .mascot-face { width: 58px; height: 68px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); animation: mascotFloat 4.5s ease-in-out infinite; }
 /* cute glossy white robot */
