@@ -148,6 +148,8 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   }
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
+  // personalize with what Cassie remembers about this student (on-device only)
+  try { if (window.CassieMemory) sp += window.CassieMemory.summaryForPrompt(); } catch (e) { /* ignore */ }
   return sp;
 }
 
@@ -1383,6 +1385,13 @@ async function handleSend(text, opts = {}) {
   promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
+  // remember what the student is studying + any explicit "remember ..." note
+  try {
+    if (window.CassieMemory) {
+      window.CassieMemory.maybeRememberFrom(sendText);
+      window.CassieMemory.recordQuestion(sendText);
+    }
+  } catch (e) { /* ignore */ }
 
   setCursorMode('thinking');
   const typingBubble = renderTyping();
@@ -1399,6 +1408,7 @@ async function handleSend(text, opts = {}) {
     setCursorMode('idle');
     mascotCelebrate();
     maybeCelebrate(reply); // confetti if she's praising a correct answer
+    try { if (window.CassieMemory) { window.CassieMemory.scanExchange(sendText, reply); updateMemoryDot(); } } catch (e) { /* ignore */ }
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
   } catch (err) {
@@ -1874,6 +1884,118 @@ if (modelPill) {
   });
 }
 
+/* ---------- Cassie's memory panel ---------- */
+const memoryBtn = document.getElementById('memory-btn');
+const memoryPanel = document.getElementById('memory-panel');
+const memoryDot = document.getElementById('memory-dot');
+const memEsc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function updateMemoryDot() {
+  if (!memoryDot || !window.CassieMemory) return;
+  const due = window.CassieMemory.stats().due;
+  memoryDot.hidden = due === 0;
+}
+
+function memTopicRow(t) {
+  const total = t.correct + t.wrong;
+  const pct = total ? Math.round((t.correct / total) * 100) : Math.min(100, (t.reps || 0) * 25);
+  return `<div class="mem-topic"><div class="mem-topic-top"><span class="mem-topic-name">${memEsc(t.name)}</span>` +
+    `<button class="mem-review" data-topic="${memEsc(t.name)}">Review</button></div>` +
+    `<div class="mem-bar"><i style="width:${pct}%"></i></div></div>`;
+}
+
+function renderMemory() {
+  if (!memoryPanel || !window.CassieMemory) return;
+  const M = window.CassieMemory;
+  const d = M.data;
+  const s = M.stats();
+  const due = M.dueTopics().slice(0, 12);
+  const weak = M.weakTopics().slice(0, 12);
+  const recent = M.recentTopics(8);
+  const facts = d.facts || [];
+
+  memoryPanel.innerHTML = `
+    <div class="settings-card memory-card">
+      <div class="mem-head">
+        <h2>What Cassie remembers</h2>
+        <button class="icon-btn" id="mem-close" aria-label="Close">&times;</button>
+      </div>
+      <p class="mem-privacy">🔒 Everything here stays on your device. No account, no server — only you can see it.</p>
+      <div class="mem-stats">
+        <div class="mem-stat"><b>🔥 ${s.streak}</b><small>day streak</small></div>
+        <div class="mem-stat"><b>📚 ${s.topics}</b><small>topics</small></div>
+        <div class="mem-stat"><b>🔁 ${s.due}</b><small>to review</small></div>
+      </div>
+
+      <label class="field"><span>Your name (optional)</span><input id="mem-name" type="text" value="${memEsc(d.profile.name)}" placeholder="What should I call you?"></label>
+      <label class="field"><span>Your goal (optional)</span><input id="mem-goal" type="text" value="${memEsc(d.profile.goal)}" placeholder="e.g. pass my chemistry finals"></label>
+
+      ${due.length ? `<div class="mem-section">🔁 Due for review</div><div class="mem-chips">${due.map((t) => `<button class="mem-review" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
+      ${weak.length ? `<div class="mem-section">Weak spots</div><div class="mem-chips">${weak.map((t) => `<button class="mem-review weak" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
+
+      <div class="mem-section">Recently studied</div>
+      ${recent.length ? `<div class="mem-topics">${recent.map(memTopicRow).join('')}</div>` : '<p class="mem-empty">Ask Cassie some questions and she’ll start remembering what you study.</p>'}
+
+      <div class="mem-section">Notes Cassie remembers</div>
+      <div class="mem-facts">${facts.length ? facts.map((f, i) => `<div class="mem-fact"><span>${memEsc(f.text)}</span><button class="mem-del" data-i="${i}" aria-label="Remove">&times;</button></div>`).join('') : '<p class="mem-empty">No notes yet. Try telling her: “Remember my exam is on Friday.”</p>'}</div>
+      <div class="mem-addrow"><input id="mem-fact" type="text" placeholder="Tell Cassie to remember something…"><button id="mem-add" class="btn">Add</button></div>
+
+      <div class="settings-actions">
+        <button class="btn secondary" id="mem-clear">Clear all memory</button>
+        <button class="btn" id="mem-done">Done</button>
+      </div>
+    </div>`;
+}
+
+function openMemory() {
+  if (!memoryPanel) return;
+  renderMemory();
+  memoryPanel.hidden = false;
+}
+function closeMemory() { if (memoryPanel) memoryPanel.hidden = true; updateMemoryDot(); }
+
+function startReview(topic) {
+  closeMemory();
+  if (!topic) return;
+  quizMode = true;
+  if (quizBtn) quizBtn.classList.add('active');
+  if (typeof setQuizLabel === 'function') setQuizLabel('Stop quiz');
+  handleSend(`Quiz me on ${topic}. Ask one question at a time and wait for my answer.`);
+}
+if (window.CassieMemory) window.CassieMemory.onReview = startReview;
+
+if (memoryBtn) memoryBtn.addEventListener('click', openMemory);
+if (memoryPanel) {
+  memoryPanel.addEventListener('click', (e) => {
+    if (e.target === memoryPanel) return closeMemory();
+    const rev = e.target.closest('.mem-review');
+    if (rev) return startReview(rev.dataset.topic);
+    if (e.target.closest('#mem-close') || e.target.closest('#mem-done')) return closeMemory();
+    const del = e.target.closest('.mem-del');
+    if (del) { window.CassieMemory.removeFact(+del.dataset.i); renderMemory(); return; }
+    if (e.target.closest('#mem-add')) {
+      const inp = document.getElementById('mem-fact');
+      if (inp && inp.value.trim()) { window.CassieMemory.addFact(inp.value); renderMemory(); }
+      return;
+    }
+    if (e.target.closest('#mem-clear')) {
+      if (confirm('Clear everything Cassie remembers about you? This cannot be undone.')) {
+        window.CassieMemory.clearAll(); renderMemory(); updateMemoryDot();
+      }
+    }
+  });
+  memoryPanel.addEventListener('change', (e) => {
+    if (e.target.id === 'mem-name') window.CassieMemory.setProfile('name', e.target.value);
+    if (e.target.id === 'mem-goal') window.CassieMemory.setProfile('goal', e.target.value);
+  });
+  memoryPanel.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'mem-fact') {
+      e.preventDefault();
+      if (e.target.value.trim()) { window.CassieMemory.addFact(e.target.value); renderMemory(); }
+    }
+  });
+}
+
 clearChatBtn.addEventListener('click', () => {
   if (!confirm('Clear this conversation?')) return;
   const c = curChat();
@@ -2202,6 +2324,7 @@ window.addEventListener('resize', hideHighlightPopover);
 applyReading();
 renderHistory();
 updateModelPill();
+updateMemoryDot();
 requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();
