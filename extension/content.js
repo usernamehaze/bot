@@ -44,7 +44,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 7px 6px 7px 12px;
+      padding: 9px 8px 9px 15px;
       background: #1c1c24;
       color: #fff;
       font-size: 12px;
@@ -64,7 +64,7 @@
     }
     .header button:hover { opacity: 1; }
     .body {
-      padding: 11px 13px;
+      padding: 14px 15px;
       font-size: 14px;
       line-height: 1.45;
       max-height: 260px;
