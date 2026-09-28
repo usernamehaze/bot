@@ -1377,8 +1377,11 @@ async function handleSend(text, opts = {}) {
 }
 
 /* ---------- image generation (Gemini) ---------- */
-async function generateImage(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+// Try these image models in order — if one is off on the free tier, fall back.
+const GEMINI_IMAGE_MODELS = [GEMINI_IMAGE_MODEL, 'gemini-2.0-flash-preview-image-generation'];
+
+async function tryGenerateImage(prompt, model) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
@@ -1390,15 +1393,40 @@ async function generateImage(prompt) {
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (res.status === 404 || res.status === 400) {
-      throw new Error("image generation isn't available on the free tier for this key right now");
-    }
-    throw new Error(detail || `Request failed (${res.status})`);
+    const err = new Error(detail || `Request failed (${res.status})`);
+    err.status = res.status;
+    // "limit: 0" / quota / billing → the free tier has image generation OFF
+    err.quota = res.status === 429 || /quota|limit:\s*0|billing|exceeded/i.test(detail);
+    err.notAvailable = res.status === 404 || res.status === 400;
+    throw err;
   }
   const parts = (await res.json()).candidates?.[0]?.content?.parts || [];
   const imgPart = parts.find((p) => p.inlineData && p.inlineData.data);
   if (!imgPart) throw new Error('no image came back — try describing it differently');
   return `data:${imgPart.inlineData.mimeType || 'image/png'};base64,${imgPart.inlineData.data}`;
+}
+
+async function generateImage(prompt) {
+  let lastErr;
+  for (const model of GEMINI_IMAGE_MODELS) {
+    try {
+      return await tryGenerateImage(prompt, model);
+    } catch (e) {
+      lastErr = e;
+      // only keep trying other models when this one is unavailable/quota-capped
+      if (e.quota || e.notAvailable) continue;
+      throw e;
+    }
+  }
+  // Every model was capped/unavailable — give an honest, friendly explanation.
+  if (lastErr && (lastErr.quota || lastErr.notAvailable)) {
+    const friendly = new Error(
+      "Google's free tier has image generation turned off for your key right now (they set the limit to 0), so I can't create pictures at the moment. Everything else still works — text answers, reading photos you upload, research, and web search are all free. To make images you'd need to enable billing on your Google AI Studio account."
+    );
+    friendly.friendly = true;
+    throw friendly;
+  }
+  throw lastErr || new Error('image generation failed');
 }
 
 async function handleGenerateImage() {
@@ -1418,10 +1446,13 @@ async function handleGenerateImage() {
     renderMessage('assistant', "Image generation uses Google Gemini — add your free Gemini API key in Settings (top right).");
     return;
   }
-  state.messages.push({ role: 'user', content: `Generate an image: ${text}` });
+  // don't double up the prefix if the box already starts with it
+  const clean = text.replace(/^\s*generate an image:\s*/i, '').trim() || text;
+  const label = `Generate an image: ${clean}`;
+  state.messages.push({ role: 'user', content: label });
   touchChat();
   save();
-  renderMessage('user', `Generate an image: ${text}`);
+  renderMessage('user', label);
   promptInput.value = '';
   autoGrow();
 
@@ -1430,16 +1461,19 @@ async function handleGenerateImage() {
   sendBtn.disabled = imageBtn.disabled = true;
 
   try {
-    const dataUrl = await generateImage(text);
+    const dataUrl = await generateImage(clean);
     typingBubble.remove();
     const bubble = renderMessage('assistant', '');
     addImageToBubble(bubble, dataUrl, { download: true });
     state.messages.push({ role: 'assistant', content: '[generated an image]' });
     save();
     setCursorMode('idle');
+    mascotCelebrate();
   } catch (err) {
     typingBubble.remove();
-    renderMessage('assistant', `Couldn't generate that image: ${err.message}`).classList.add('error');
+    // friendly (e.g. free-tier quota) messages show as-is; others get a prefix
+    const msg = err.friendly ? err.message : `Couldn't generate that image: ${err.message}`;
+    renderMessage('assistant', msg).classList.add('error');
     setCursorMode('idle');
   } finally {
     sendBtn.disabled = imageBtn.disabled = false;
