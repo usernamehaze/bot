@@ -57,11 +57,37 @@ function Eye({ side, kind, starGeo }) {
       </mesh>
     );
   }
+  if (kind === 'closed') {
+    // a calm, sleepy closed eye — a flat glossy-pink bar
+    return (
+      <mesh position={[x, 0.05, 0.42]} scale={[0.11, 0.02, 0.05]}>
+        <sphereGeometry args={[1, 20, 12]} />
+        <GlossyPink intensity={2.2} transmission={0.2} />
+      </mesh>
+    );
+  }
   return (
     <mesh position={[x, 0.04, 0.42]} scale={[0.06, 0.11, 0.05]}>
       <sphereGeometry args={[1, 24, 24]} />
       <GlossyPink intensity={2.8} transmission={0.3} />
     </mesh>
+  );
+}
+
+// Floating "z z z" above her head while sleeping.
+function Zzz() {
+  const ref = useRef();
+  useFrame((state) => {
+    if (ref.current) ref.current.position.y = 1.1 + Math.sin(state.clock.elapsedTime * 1.5) * 0.05;
+  });
+  return (
+    <group ref={ref} position={[0.55, 1.1, 0]}>
+      <Html center distanceFactor={7} occlude={false}>
+        <div style={{ color: '#FF1493', fontWeight: 800, fontSize: 22, textShadow: '0 0 8px rgba(255,20,147,.6)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+          z z z
+        </div>
+      </Html>
+    </group>
   );
 }
 
@@ -236,7 +262,8 @@ export default function CassieBot({ emotion, hideIcons = false }) {
       </group>
 
       <Confetti active={pose.confetti} />
-      {!hideIcons && <StatusIcon icon={pose.icon} />}
+      {pose.icon === 'zzz' && <Zzz />}
+      {!hideIcons && pose.icon !== 'zzz' && <StatusIcon icon={pose.icon} />}
     </group>
   );
 }

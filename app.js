@@ -521,7 +521,7 @@ function sleepMascot() {
   clearEmote();
   mascot.classList.remove('happy');
   mascot.classList.add('sleeping');
-  set3D('neutral');
+  set3D('sleep');
   mascotSay('Zzz… tap to wake me', 0);
 }
 function scheduleResleep() {
@@ -2113,7 +2113,11 @@ function dismissHighlightPopover() {
 
 highlightPopoverClose.addEventListener('click', dismissHighlightPopover);
 
+let lastTouchEndAt = 0;
 document.addEventListener('mousedown', (e) => {
+  // ignore the synthesized mousedown that follows a touch selection, or it
+  // would hide the popover on phones the instant it appears
+  if (Date.now() - lastTouchEndAt < 700) return;
   if (!highlightPopover.contains(e.target)) hideHighlightPopover();
 });
 document.addEventListener('keydown', (e) => {
@@ -2133,6 +2137,42 @@ document.addEventListener('contextmenu', (e) => {
   highlightPopover.hidden = false;
   setPopoverChoice(text, rect);
 });
+
+/* Highlight-to-ask on ANY device: when the user selects text inside an answer,
+   show the Explain / Answer / Code popover near the selection. This is what
+   makes it work on phones (which have no right-click). Debounced so it waits
+   for the selection to settle (mobile selection-handle dragging fires many
+   selectionchange events). */
+let selPopoverTimer = null;
+function trySelectionPopover() {
+  if (!highlightPopover) return;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  const text = sel.toString().trim();
+  if (text.length < 2) return;
+  const range = sel.getRangeAt(0);
+  const anchor = range.commonAncestorContainer;
+  const el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+  if (!el) return;
+  if (el.closest('input, textarea')) return;         // ignore typed text
+  if (!el.closest('#chat-log')) return;              // only within answers/messages
+  const rect = range.getBoundingClientRect();
+  if (!rect || (rect.width === 0 && rect.height === 0)) return;
+  highlightPopover.hidden = false;
+  setPopoverChoice(text, rect);
+}
+function scheduleSelectionPopover(delay) {
+  clearTimeout(selPopoverTimer);
+  selPopoverTimer = setTimeout(trySelectionPopover, delay);
+}
+document.addEventListener('mouseup', () => scheduleSelectionPopover(10));
+document.addEventListener('touchend', () => {
+  lastTouchEndAt = Date.now();
+  // wait past the browser's synthesized mouse events so the outside-tap
+  // handler below doesn't immediately hide the popover we're about to show
+  scheduleSelectionPopover(380);
+}, { passive: true });
+document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
 
 chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
