@@ -2250,6 +2250,7 @@ let pendingText = '';
 let pendingRect = null;
 let lastPopoverText = ''; // the selection currently shown, so we don't overwrite an answer
 let popoverComplexity = 'normal'; // 'eli5' | 'normal' | 'advanced'
+let lastMode = null; // 'explain' | 'answer' | 'code' — for re-running at a new depth
 
 function setPopoverChoice(text, rect) {
   pendingText = text;
@@ -2258,11 +2259,6 @@ function setPopoverChoice(text, rect) {
   highlightPopoverBody.classList.remove('muted');
   highlightPopoverBody.innerHTML = `
     <div class="popover-question">What should I do with this?</div>
-    <div class="popover-complexity" role="group" aria-label="Explanation depth">
-      <button type="button" class="pc-lvl${popoverComplexity === 'eli5' ? ' active' : ''}" data-lvl="eli5">ELI5</button>
-      <button type="button" class="pc-lvl${popoverComplexity === 'normal' ? ' active' : ''}" data-lvl="normal">Normal</button>
-      <button type="button" class="pc-lvl${popoverComplexity === 'advanced' ? ' active' : ''}" data-lvl="advanced">Advanced</button>
-    </div>
     <div class="popover-choice-row">
       <button type="button" class="popover-choice-btn" data-mode="explain">Explain</button>
       <button type="button" class="popover-choice-btn" data-mode="answer">Answer</button>
@@ -2272,12 +2268,29 @@ function setPopoverChoice(text, rect) {
   positionPopover(rect);
 }
 
+// After Explain/Code, show the answer with a depth control (ELI5 / Normal /
+// Advanced) on top so the student can re-explain simpler or deeper in place.
+function depthBarHTML() {
+  return `<div class="popover-complexity" role="group" aria-label="Explanation depth">
+      <button type="button" class="pc-lvl${popoverComplexity === 'eli5' ? ' active' : ''}" data-lvl="eli5">ELI5</button>
+      <button type="button" class="pc-lvl${popoverComplexity === 'normal' ? ' active' : ''}" data-lvl="normal">Normal</button>
+      <button type="button" class="pc-lvl${popoverComplexity === 'advanced' ? ' active' : ''}" data-lvl="advanced">Advanced</button>
+    </div>`;
+}
+function setPopoverResult(reply, mode) {
+  highlightPopoverBody.classList.remove('muted');
+  const withDepth = mode === 'explain' || mode === 'code';
+  highlightPopoverBody.innerHTML = (withDepth ? depthBarHTML() : '') + '<div class="popover-result"></div>';
+  renderFormatted(highlightPopoverBody.querySelector('.popover-result'), reply);
+}
+
 highlightPopoverBody.addEventListener('click', (e) => {
   const lvl = e.target.closest('.pc-lvl');
   if (lvl) {
+    // tapping a depth chip re-runs the last explanation at that complexity
     popoverComplexity = lvl.dataset.lvl;
     highlightPopoverBody.querySelectorAll('.pc-lvl').forEach((b) => b.classList.toggle('active', b === lvl));
-    positionPopover(pendingRect);
+    if (lastMode) runExplainOrAnswer(pendingText, pendingRect, lastMode);
     return;
   }
   const btn = e.target.closest('.popover-choice-btn');
@@ -2287,6 +2300,7 @@ highlightPopoverBody.addEventListener('click', (e) => {
 
 async function runExplainOrAnswer(text, rect, mode) {
   const myGen = ++highlightGen;
+  lastMode = mode;
   setPopoverContent('Thinking…', { muted: true });
   positionPopover(rect);
 
@@ -2315,7 +2329,7 @@ async function runExplainOrAnswer(text, rect, mode) {
   try {
     const reply = await askCassie([{ role: 'user', content: prompt }]);
     if (myGen !== highlightGen) return; // a newer selection superseded this one
-    setPopoverContent(reply);
+    setPopoverResult(reply, mode);
     positionPopover(rect);
     detourToElement(highlightPopover, { click: true, resumeAfter: 900 });
   } catch (err) {
