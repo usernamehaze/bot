@@ -904,8 +904,8 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   border-radius: 999px; padding: 5px 6px; font-size: .74rem; font-weight: 700; cursor: pointer;
   transition: transform .08s ease, color .12s ease, border-color .12s ease, background .12s ease;
 }
-.pc-lvl:hover { color: var(--text); }
-.pc-lvl.active { background: var(--bot-glow, #ff5fa2); color: #fff; border-color: transparent; box-shadow: 0 3px 12px color-mix(in srgb, var(--bot-glow, #ff5fa2) 45%, transparent); }
+.pc-lvl:hover { color: var(--text); border-color: var(--primary); }
+.pc-lvl.active { background: var(--primary); color: #fff; border-color: transparent; }
 .pc-lvl:active { transform: scale(.95); }
 
 /* ---------- glassmorphism + ambient glow ---------- */
@@ -919,15 +919,15 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   #sidebar { background: color-mix(in srgb, var(--surface) 88%, transparent); }
 }
 .highlight-popover {
-  border: 1px solid color-mix(in srgb, var(--bot-glow, #ff5fa2) 40%, var(--border));
-  box-shadow: 0 12px 34px rgba(0, 0, 0, .3), 0 0 0 1px color-mix(in srgb, var(--bot-glow, #ff5fa2) 18%, transparent), 0 0 22px color-mix(in srgb, var(--bot-glow, #ff5fa2) 22%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
   animation: popIn .16s cubic-bezier(.34, 1.4, .5, 1);
 }
 @keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
 
 /* ---------- micro-interactions ---------- */
 .popover-choice-btn { transition: transform .08s ease, box-shadow .12s ease, background .12s ease; }
-.popover-choice-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px color-mix(in srgb, var(--bot-glow, #ff5fa2) 30%, transparent); }
+.popover-choice-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
 .popover-choice-btn:active { transform: scale(.94); }
 .chip, .home-example, .fu-chip { transition: transform .08s ease, border-color .12s ease, box-shadow .12s ease; }
 .chip:active, .fu-chip:active { transform: scale(.95); }
