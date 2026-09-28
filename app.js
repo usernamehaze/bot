@@ -236,9 +236,49 @@ window.addEventListener('touchmove', (e) => {
   if (e.touches && e.touches[0]) updatePointer(e.touches[0].clientX, e.touches[0].clientY);
 }, { passive: true });
 
+const mascot = document.getElementById('mascot');
+const mascotBtn = document.getElementById('mascot-btn');
+const mascotBubble = document.getElementById('mascot-bubble');
+let mascotHappyTimer = null;
+let mascotBubbleTimer = null;
+
 function setCursorMode(mode) {
   cursorState = mode;
   cursorEl.classList.toggle('thinking', mode === 'thinking');
+  if (mascot) mascot.classList.toggle('thinking', mode === 'thinking');
+}
+
+function mascotCelebrate() {
+  if (!mascot) return;
+  mascot.classList.add('happy');
+  clearTimeout(mascotHappyTimer);
+  mascotHappyTimer = setTimeout(() => mascot.classList.remove('happy'), 800);
+}
+
+const MASCOT_TIPS = [
+  "Tip: highlight any part of an answer to dig deeper.",
+  "Stuck? Tap Hint for a nudge instead of the full answer.",
+  "Upload a PDF, Word, or PowerPoint and I'll summarize or quiz you on it.",
+  "Use Research for real papers and a ready-made RRL.",
+  "Tap Quiz me to test yourself on any topic.",
+  "You've got this — one step at a time! ✎",
+  "Ask me to 'explain it simpler' anytime.",
+];
+function mascotSay(text) {
+  if (!mascotBubble) return;
+  mascotBubble.textContent = text;
+  mascotBubble.hidden = false;
+  clearTimeout(mascotBubbleTimer);
+  mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, 5000);
+}
+if (mascotBtn) {
+  let tipIdx = Math.floor(Math.random() * MASCOT_TIPS.length);
+  mascotBtn.addEventListener('click', () => {
+    if (mascotBubble && !mascotBubble.hidden) { mascotBubble.hidden = true; return; }
+    mascotSay(MASCOT_TIPS[tipIdx % MASCOT_TIPS.length]);
+    tipIdx += 1;
+    mascotCelebrate();
+  });
 }
 
 function resumeFollowing() {
@@ -981,6 +1021,7 @@ async function handleSend(text, opts = {}) {
     addTextDownload(bubble, reply);
     showFollowups();
     setCursorMode('idle');
+    mascotCelebrate();
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
   } catch (err) {
