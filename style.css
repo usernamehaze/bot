@@ -300,6 +300,13 @@ input, textarea, select, button { font-family: inherit; }
   border-top: 1px solid var(--border);
   margin: 12px 0;
 }
+.bubble a,
+.highlight-popover-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
 
 /* nicer math: superscripts/subscripts + stacked fractions */
 .bubble sup, .bubble sub,
@@ -392,6 +399,7 @@ input, textarea, select, button { font-family: inherit; }
 
 .quick-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px 0;
   background: var(--surface);

@@ -95,8 +95,10 @@ You are especially strong at:
 - Trivia and hard or obscure facts: answer precisely and confidently when you know it; for time-sensitive or very obscure facts, lean on reliable sources and flag any real uncertainty instead of bluffing.
 - Riddles, brain teasers, and lateral-thinking puzzles: recognize them, work out the intended answer, then explain the wordplay, trick, or logic behind it (don't take a riddle literally).
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
+- Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis — the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
 
 How you work:
+- CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
 - Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
 - Teach when explanation is wanted: show the reasoning step by step, build from what the user seems to know, and use concrete examples.
@@ -161,6 +163,8 @@ const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
 function setQuizLabel(text) { if (quizLabel) quizLabel.textContent = text; }
+const researchBtn = document.getElementById('research-btn');
+const webBtn = document.getElementById('web-btn');
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const menuBtn = document.getElementById('menu-btn');
 const sidebar = document.getElementById('sidebar');
@@ -266,15 +270,21 @@ function prettifyMath(html) {
 
 function inlineFormat(text) {
   let html = escapeHtml(text);
-  const codes = [], escaped = [];
+  const codes = [], escaped = [], links = [];
   html = html.replace(/`([^`]+)`/g, (m, c) => `\u0000${codes.push(c) - 1}\u0000`);
   // Honor backslash-escaped markdown punctuation (\*, \_, \#, …): keep the
   // literal char and hide it from the formatters below.
   html = html.replace(/\\([\\*_`#|~[\]()>.\-])/g, (m, ch) => `\u0001${escaped.push(ch) - 1}\u0001`);
+  // Markdown links [label](https://…) — protected so math/bold don't touch them.
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, label, url) => `\u0002${links.push({ label, url }) - 1}\u0002`);
   html = html
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
   html = prettifyMath(html);
+  html = html.replace(/\u0002(\d+)\u0002/g, (m, i) => {
+    const { label, url } = links[+i];
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
   html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
   html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
   return html;
@@ -860,6 +870,201 @@ async function handleGenerateImage() {
   } finally {
     sendBtn.disabled = imageBtn.disabled = false;
   }
+}
+
+/* ---------- research (OpenAlex) + web source-checking (Gemini) ---------- */
+
+// Reconstruct an OpenAlex abstract from its inverted index.
+function reconstructAbstract(inv) {
+  if (!inv) return '';
+  const words = [];
+  for (const [w, positions] of Object.entries(inv)) {
+    for (const pos of positions) words[pos] = w;
+  }
+  return words.filter(Boolean).join(' ');
+}
+
+// Search real academic papers via OpenAlex (free, no key, CORS-enabled).
+async function searchOpenAlex(query, n = 8) {
+  const email = (state.email && state.email.includes('@')) ? state.email : 'cassie-study-app@example.com';
+  const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}`
+    + `&per-page=${n}&sort=relevance_score:desc&mailto=${encodeURIComponent(email)}`;
+  const res = await fetch(url, { headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error('Could not reach the research database (OpenAlex).');
+  const data = await res.json();
+  return (data.results || []).map((w) => ({
+    title: (w.title || 'Untitled').trim(),
+    year: w.publication_year || '',
+    authors: (w.authorships || []).map((a) => a.author && a.author.display_name).filter(Boolean),
+    venue: (w.primary_location && w.primary_location.source && w.primary_location.source.display_name) || '',
+    url: w.doi || (w.open_access && w.open_access.oa_url) || (w.primary_location && w.primary_location.landing_page_url) || w.id || '',
+    cited: w.cited_by_count || 0,
+    abstract: reconstructAbstract(w.abstract_inverted_index).slice(0, 700),
+  }));
+}
+
+function authorsShort(list) {
+  if (!list.length) return 'Unknown author';
+  if (list.length <= 3) return list.join(', ');
+  return list.slice(0, 3).join(', ') + ', et al.';
+}
+
+async function runResearch(topic) {
+  topic = (topic || '').trim();
+  if (!topic) { promptInput.placeholder = 'Type a topic first, then tap Research…'; promptInput.focus(); return; }
+  if (!state.groqKey) {
+    openSettings();
+    detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
+    renderMessage('assistant', 'Add your free Groq API key in Settings first, then I can research for you.');
+    return;
+  }
+  state.messages.push({ role: 'user', content: `Research: ${topic}` });
+  touchChat();
+  save();
+  renderMessage('user', `Research: ${topic}`);
+  promptInput.value = '';
+  autoGrow();
+
+  setCursorMode('thinking');
+  let typing = renderTyping();
+  let papers;
+  try {
+    papers = await searchOpenAlex(topic, 8);
+  } catch (e) {
+    typing.remove();
+    renderMessage('assistant', "I couldn't reach the research database. Check your internet connection and try again.").classList.add('error');
+    setCursorMode('idle');
+    return;
+  }
+  typing.remove();
+  if (!papers.length) {
+    const msg = `I couldn't find papers for "${topic}". Try broader or different keywords (e.g. the main concept plus the field).`;
+    state.messages.push({ role: 'assistant', content: msg });
+    save();
+    renderMessage('assistant', msg);
+    setCursorMode('idle');
+    return;
+  }
+
+  // List of real papers (with clickable links + a Google Scholar link).
+  const scholar = 'https://scholar.google.com/scholar?q=' + encodeURIComponent(topic);
+  let listMd = `**Found ${papers.length} real papers on "${topic}".** [Open this search in Google Scholar](${scholar})\n\n`;
+  papers.forEach((p, i) => {
+    listMd += `${i + 1}. **${p.title}** (${p.year || 'n.d.'}). ${authorsShort(p.authors)}.`;
+    if (p.venue) listMd += ` *${p.venue}*.`;
+    if (p.cited) listMd += ` Cited ${p.cited}×.`;
+    if (p.url) listMd += ` [link](${p.url})`;
+    listMd += '\n';
+  });
+  state.messages.push({ role: 'assistant', content: listMd });
+  save();
+  renderMessage('assistant', listMd);
+
+  // Grounded RRL synthesis — model may use ONLY these sources.
+  const sources = papers.map((p, i) =>
+    `[${i + 1}] ${p.authors.join(', ') || 'Unknown'} (${p.year || 'n.d.'}). ${p.title}. ${p.venue || 'n.p.'}.`
+    + (p.abstract ? `\nAbstract: ${p.abstract}` : '')).join('\n\n');
+  const prompt = `You are helping a student write the Review of Related Literature (RRL) for a thesis on "${topic}". `
+    + `Using ONLY the sources listed below, write a well-organized RRL:\n`
+    + `- Synthesize by theme (group related findings; do not just summarize each paper one by one).\n`
+    + `- Use in-text citations in APA style, e.g. (Surname, Year), referring ONLY to these sources.\n`
+    + `- Note common findings, disagreements, and any research gap relevant to the topic.\n`
+    + `- End with a "References" section in APA format, built from the details provided.\n`
+    + `Do NOT invent any source, author, year, or finding that is not in the list. If a detail is missing, leave it out rather than guessing.\n\n`
+    + `SOURCES:\n${sources}`;
+
+  setCursorMode('thinking');
+  typing = renderTyping();
+  try {
+    const reply = await askCassie([{ role: 'user', content: prompt }]);
+    typing.remove();
+    state.messages.push({ role: 'assistant', content: reply });
+    touchChat();
+    save();
+    const bubble = renderMessage('assistant', reply);
+    addTextDownload(bubble, reply);
+    setCursorMode('idle');
+  } catch (err) {
+    typing.remove();
+    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
+    setCursorMode('idle');
+  }
+}
+
+// Ask Gemini with Google Search grounding — returns { text, sources }.
+async function askGeminiGrounded(q) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VISION_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+      contents: [{ role: 'user', parts: [{ text: q }] }],
+      tools: [{ google_search: {} }],
+    }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (isRateLimited(res.status, detail)) throw new Error("Google's free search tier is busy right now — wait a minute and try again.");
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+  const cand = (await res.json()).candidates?.[0];
+  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  const chunks = cand?.groundingMetadata?.groundingChunks || [];
+  const seen = new Set();
+  const sources = [];
+  chunks.forEach((c) => {
+    const uri = c.web && c.web.uri;
+    if (uri && !seen.has(uri)) { seen.add(uri); sources.push({ title: (c.web.title || uri), uri }); }
+  });
+  return { text: text || '(no response)', sources };
+}
+
+async function runWebCheck(text) {
+  text = (text || '').trim();
+  if (!text) { promptInput.placeholder = 'Type a question first, then tap Web…'; promptInput.focus(); return; }
+  if (!state.geminiKey) {
+    openSettings();
+    detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
+    renderMessage('assistant', 'Web fact-checking uses Google Gemini’s search. Add your free Gemini key in Settings (the images key) to turn it on.');
+    return;
+  }
+  state.messages.push({ role: 'user', content: text });
+  touchChat();
+  save();
+  renderMessage('user', text);
+  promptInput.value = '';
+  autoGrow();
+
+  setCursorMode('thinking');
+  const typing = renderTyping();
+  try {
+    const { text: answer, sources } = await askGeminiGrounded(text);
+    typing.remove();
+    let out = answer;
+    if (sources.length) {
+      out += '\n\n**Sources**\n';
+      sources.slice(0, 6).forEach((s, i) => { out += `${i + 1}. [${s.title}](${s.uri})\n`; });
+    }
+    state.messages.push({ role: 'assistant', content: out });
+    touchChat();
+    save();
+    const bubble = renderMessage('assistant', out);
+    addTextDownload(bubble, out);
+    setCursorMode('idle');
+  } catch (err) {
+    typing.remove();
+    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
+    setCursorMode('idle');
+  }
+}
+
+if (researchBtn) {
+  researchBtn.addEventListener('click', () => runResearch(promptInput.value));
+}
+if (webBtn) {
+  webBtn.addEventListener('click', () => runWebCheck(promptInput.value));
 }
 
 /* ---------- attach / generate wiring ---------- */
