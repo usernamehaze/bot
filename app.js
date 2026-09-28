@@ -255,8 +255,11 @@ function mascotCelebrate() {
   mascotHappyTimer = setTimeout(() => mascot.classList.remove('happy'), 800);
 }
 
-// ---- emotions: Cassie's eyes drift through little moods on their own ----
-const MASCOT_EMOTES = ['emote-wink', 'emote-love', 'emote-surprised', 'emote-sleepy', 'emote-happy'];
+// ---- emotions: Cassie has lots of moods and shows them in her eyes ----
+const MASCOT_EMOTES = [
+  'emote-wink', 'emote-love', 'emote-surprised', 'emote-sleepy', 'emote-happy',
+  'emote-star', 'emote-cool', 'emote-sad', 'emote-focused', 'emote-dizzy',
+];
 let mascotEmoteTimer = null;
 let mascotEmoteClearTimer = null;
 let mascotDragging = false;
@@ -264,12 +267,13 @@ function clearEmote() {
   if (!mascot) return;
   MASCOT_EMOTES.forEach((c) => mascot.classList.remove(c));
 }
-function mascotEmote(name) {
+function mascotEmote(name, hold) {
   if (!mascot || mascotDragging || mascot.classList.contains('thinking')) return;
   clearEmote();
   mascot.classList.add(name);
   clearTimeout(mascotEmoteClearTimer);
-  mascotEmoteClearTimer = setTimeout(clearEmote, name === 'emote-love' ? 2200 : 1500);
+  const dur = hold || (name === 'emote-love' ? 2200 : 1600);
+  mascotEmoteClearTimer = setTimeout(clearEmote, dur);
 }
 function scheduleEmote() {
   clearTimeout(mascotEmoteTimer);
@@ -278,11 +282,175 @@ function scheduleEmote() {
       mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
     }
     scheduleEmote();
-  }, 6000 + Math.random() * 6000);
+  }, 5000 + Math.random() * 5000);
 }
 
-// ---- roaming: Cassie wanders to a new spot now and then ----
+// ---- speech bubble ----
+function mascotSay(text, ms) {
+  if (!mascotBubble) return;
+  mascotBubble.textContent = text;
+  mascotBubble.hidden = false;
+  clearTimeout(mascotBubbleTimer);
+  mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, ms || 4200);
+}
+
+// ---- reactions & opinions: short, encouraging, with a matching mood ----
+const MASCOT_REACTIONS = {
+  send: [
+    { t: 'Ooh, good one!', e: 'emote-star' },
+    { t: 'On it! ✎', e: 'emote-focused' },
+    { t: 'Love this question!', e: 'emote-love' },
+    { t: "Let's figure it out!", e: 'emote-happy' },
+    { t: 'Great thinking!', e: 'emote-star' },
+    { t: 'Nice, digging in…', e: 'emote-cool' },
+  ],
+  question: [
+    { t: 'Curious mind!', e: 'emote-surprised' },
+    { t: 'Good question!', e: 'emote-star' },
+    { t: "Let's explore!", e: 'emote-happy' },
+  ],
+  math: [
+    { t: 'Math time! 🧮', e: 'emote-focused' },
+    { t: 'Numbers, my fave!', e: 'emote-star' },
+    { t: 'Step by step…', e: 'emote-focused' },
+  ],
+  long: [
+    { t: "Whoa, lots to read!", e: 'emote-surprised' },
+    { t: 'Big one — I got it!', e: 'emote-cool' },
+  ],
+  greet: [
+    { t: 'Hi there! 👋', e: 'emote-happy' },
+    { t: 'Ready to learn?', e: 'emote-star' },
+  ],
+  type: [
+    { t: 'Keep typing…', e: 'emote-focused' },
+    { t: 'I’m listening!', e: 'emote-happy' },
+    { t: 'Ooh, what’s next?', e: 'emote-surprised' },
+    { t: 'Take your time.', e: 'emote-cool' },
+  ],
+  click: [
+    { t: "You've got this!", e: 'emote-happy' },
+    { t: 'Keep going!', e: 'emote-star' },
+    { t: 'Stay curious!', e: 'emote-surprised' },
+    { t: "You're doing great!", e: 'emote-love' },
+    { t: 'Believe in you!', e: 'emote-star' },
+    { t: 'One step at a time.', e: 'emote-focused' },
+    { t: 'Learning is cool 😎', e: 'emote-cool' },
+    { t: 'Never give up!', e: 'emote-happy' },
+  ],
+  image: [
+    { t: 'Tell me what to draw!', e: 'emote-surprised' },
+    { t: 'Describe it first 🎨', e: 'emote-star' },
+  ],
+  celebrate: [
+    { t: 'Correct! 🎉', e: 'emote-star' },
+    { t: 'Nailed it!', e: 'emote-love' },
+    { t: 'Yesss! 🎉', e: 'emote-happy' },
+    { t: 'Brilliant!', e: 'emote-star' },
+  ],
+  done: [
+    { t: 'There you go!', e: 'emote-happy' },
+    { t: 'Hope that helps!', e: 'emote-love' },
+    { t: 'Make sense?', e: 'emote-wink' },
+  ],
+};
+function mascotReact(kind, hold) {
+  const pool = MASCOT_REACTIONS[kind] || MASCOT_REACTIONS.click;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  mascotEmote(pick.e, hold);
+  mascotSay(pick.t, 3200);
+}
+
+// Pick an opinion based on what the student sent.
+function mascotOnSend(text) {
+  const t = (text || '').trim();
+  if (!t) return;
+  if (/^(hi|hey|hello|yo|sup|good (morning|afternoon|evening))\b/i.test(t)) return mascotReact('greet');
+  if (/[0-9].*[-+*/=^]|solve|equation|derivative|integral|calculate/i.test(t)) return mascotReact('math');
+  if (t.length > 220) return mascotReact('long');
+  if (t.includes('?')) return mascotReact('question');
+  return mascotReact('send');
+}
+
+// ---- confetti burst for celebrating a correct answer ----
+let confettiCanvas = null, confettiCtx = null, confettiParts = [], confettiRAF = null;
+function ensureConfetti() {
+  if (confettiCanvas) return;
+  confettiCanvas = document.createElement('canvas');
+  confettiCanvas.id = 'confetti-canvas';
+  document.body.appendChild(confettiCanvas);
+  confettiCtx = confettiCanvas.getContext('2d');
+  const resize = () => { confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; };
+  resize();
+  window.addEventListener('resize', resize);
+}
+function launchConfetti(x, y) {
+  ensureConfetti();
+  const cx = x != null ? x : window.innerWidth / 2;
+  const cy = y != null ? y : window.innerHeight / 3;
+  const colors = ['#ff5fa2', '#ffd166', '#06d6a0', '#4dabf7', '#b197fc', '#ff922b'];
+  for (let i = 0; i < 90; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 4 + Math.random() * 7;
+    confettiParts.push({
+      x: cx, y: cy,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 4,
+      g: 0.18 + Math.random() * 0.12,
+      size: 5 + Math.random() * 6,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      color: colors[i % colors.length],
+      life: 90 + Math.random() * 40,
+    });
+  }
+  if (!confettiRAF) confettiRAF = requestAnimationFrame(stepConfetti);
+}
+function stepConfetti() {
+  confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  confettiParts = confettiParts.filter((p) => p.life > 0 && p.y < confettiCanvas.height + 30);
+  for (const p of confettiParts) {
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life -= 1;
+    confettiCtx.save();
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot);
+    confettiCtx.globalAlpha = Math.max(0, Math.min(1, p.life / 40));
+    confettiCtx.fillStyle = p.color;
+    confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    confettiCtx.restore();
+  }
+  if (confettiParts.length) {
+    confettiRAF = requestAnimationFrame(stepConfetti);
+  } else {
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confettiRAF = null;
+  }
+}
+// If Cassie's reply is praising a correct answer, throw confetti.
+function maybeCelebrate(reply) {
+  if (!reply) return;
+  if (/\b(correct!|that'?s right|well done|great job|exactly right|nailed it|spot on|you got it|perfect!)\b|✅|🎉/i.test(reply)) {
+    let x, y;
+    if (mascot) { const r = mascot.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top; }
+    launchConfetti(x, y);
+    mascotReact('celebrate', 2400);
+    mascotCelebrate();
+  }
+}
+
+// ---- roaming: Cassie wanders around, as if showing the student things ----
+const MASCOT_NUGGETS = [
+  'Highlight any word to ask about it!',
+  'Tap Hint for a nudge, not the whole answer.',
+  'You can upload a PDF or slides 📄',
+  'Use Research for real papers + an RRL.',
+  'Break big problems into small steps.',
+  'Quiz yourself — it helps memory stick!',
+  'Ask me to explain it simpler anytime.',
+  'Mistakes are how we learn 💡',
+];
 let mascotRoamTimer = null;
+let nuggetIdx = Math.floor(Math.random() * MASCOT_NUGGETS.length);
 function mascotBounds() {
   const w = mascot ? mascot.offsetWidth || 58 : 58;
   const h = mascot ? mascot.offsetHeight || 68 : 68;
@@ -303,33 +471,23 @@ function placeMascot(x, y) {
   mascot.style.top = ny + 'px';
 }
 function mascotRoam() {
-  if (mascot && !mascotDragging) {
+  if (mascot && !mascotDragging && !mascot.classList.contains('thinking')) {
     const b = mascotBounds();
     placeMascot(b.minX + Math.random() * (b.maxX - b.minX), b.minY + Math.random() * (b.maxY - b.minY));
-    mascotEmote('emote-happy');
+    // every so often she pauses to "teach" a quick tip as she moves
+    if (Math.random() < 0.45 && (!mascotBubble || mascotBubble.hidden)) {
+      mascotEmote(Math.random() < 0.5 ? 'emote-focused' : 'emote-star');
+      setTimeout(() => mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000), 500);
+    } else {
+      mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
+    }
   }
   clearTimeout(mascotRoamTimer);
-  mascotRoamTimer = setTimeout(mascotRoam, 6000 + Math.random() * 5000);
+  mascotRoamTimer = setTimeout(mascotRoam, 6500 + Math.random() * 5000);
 }
 
-const MASCOT_TIPS = [
-  "Tip: highlight any part of an answer to dig deeper.",
-  "Stuck? Tap Hint for a nudge instead of the full answer.",
-  "Upload a PDF, Word, or PowerPoint and I'll summarize or quiz you on it.",
-  "Use Research for real papers and a ready-made RRL.",
-  "Tap Quiz me to test yourself on any topic.",
-  "You've got this — one step at a time! ✎",
-  "Ask me to 'explain it simpler' anytime.",
-];
-function mascotSay(text) {
-  if (!mascotBubble) return;
-  mascotBubble.textContent = text;
-  mascotBubble.hidden = false;
-  clearTimeout(mascotBubbleTimer);
-  mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, 5000);
-}
 if (mascotBtn && mascot) {
-  let tipIdx = Math.floor(Math.random() * MASCOT_TIPS.length);
+  let clickIdx = Math.floor(Math.random() * MASCOT_REACTIONS.click.length);
   let downX = 0, downY = 0, startLeft = 0, startTop = 0, moved = false, pointerId = null;
 
   const onMove = (e) => {
@@ -353,9 +511,10 @@ if (mascotBtn && mascot) {
     if (moved) {
       mascotDragging = false;
       mascot.classList.remove('dragging');
-      mascotCelebrate();
+      mascotEmote('emote-dizzy', 800);
+      mascotSay('Wheee!', 1600);
     }
-    // if it didn't move, the click handler below fires and shows a tip
+    // if it didn't move, the click handler below fires
   };
   mascot.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return;
@@ -368,14 +527,26 @@ if (mascotBtn && mascot) {
     window.addEventListener('pointerup', onUp);
   });
 
+  // tap Cassie → a short motivating word + a matching mood
   mascotBtn.addEventListener('click', () => {
     if (moved) { moved = false; return; } // a drag, not a tap
-    if (mascotBubble && !mascotBubble.hidden) { mascotBubble.hidden = true; return; }
-    mascotSay(MASCOT_TIPS[tipIdx % MASCOT_TIPS.length]);
-    tipIdx += 1;
-    mascotEmote('emote-happy');
+    const pick = MASCOT_REACTIONS.click[clickIdx++ % MASCOT_REACTIONS.click.length];
+    mascotEmote(pick.e);
+    mascotSay(pick.t, 3000);
     mascotCelebrate();
   });
+
+  // react while the student types (throttled so it isn't spammy)
+  let lastTypeReact = 0;
+  if (promptInput) {
+    promptInput.addEventListener('input', () => {
+      const now = Date.now();
+      if (promptInput.value.trim().length >= 6 && now - lastTypeReact > 9000 && (!mascotBubble || mascotBubble.hidden)) {
+        lastTypeReact = now;
+        mascotReact('type');
+      }
+    });
+  }
 
   // start Cassie off in the bottom-right (clear of the home options), then wander
   placeMascot(mascotBounds().maxX, mascotBounds().maxY);
@@ -385,6 +556,7 @@ if (mascotBtn && mascot) {
   });
   scheduleEmote();
   mascotRoamTimer = setTimeout(mascotRoam, 5000 + Math.random() * 4000);
+  setTimeout(() => mascotReact('greet'), 1400);
 }
 
 function resumeFollowing() {
@@ -1112,7 +1284,9 @@ async function handleSend(text, opts = {}) {
   if (image) addImageToBubble(userBubble, image.dataUrl);
   clearAttach();
   promptInput.value = '';
+  promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
+  mascotOnSend(sendText); // Cassie reacts/comments on what you sent
 
   setCursorMode('thinking');
   const typingBubble = renderTyping();
@@ -1128,6 +1302,7 @@ async function handleSend(text, opts = {}) {
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
+    maybeCelebrate(reply); // confetti if she's praising a correct answer
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
   } catch (err) {
@@ -1166,7 +1341,15 @@ async function generateImage(prompt) {
 
 async function handleGenerateImage() {
   const text = promptInput.value.trim();
-  if (!text) return;
+  if (!text) {
+    // Nothing typed yet — guide the student instead of silently doing nothing.
+    promptInput.placeholder = 'Describe the image you want, then tap the picture button…';
+    promptInput.focus();
+    promptInput.classList.add('nudge');
+    setTimeout(() => promptInput.classList.remove('nudge'), 900);
+    mascotReact('image');
+    return;
+  }
   if (!state.geminiKey) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
