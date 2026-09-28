@@ -134,6 +134,21 @@ const LEVEL_LABELS = {
 const HINT_INSTRUCTION = "For THIS reply, act as a tutor giving a HINT only: nudge the student toward the answer with a leading question or the first step. Do NOT reveal the final answer or full solution. Keep it short and encouraging. If they then ask for the full answer, give it.";
 const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer — do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.";
 
+// Cassie can DRAW what she explains. When a picture genuinely helps — graphing
+// a function, a geometry shape's area/perimeter, or a worked step-by-step — she
+// adds ONE fenced ```cassie-board``` block holding a compact JSON spec, on its
+// own lines, in addition to her normal words (never instead of them). The app
+// turns it into an interactive drawing inside the chat.
+const BOARD_INSTRUCTION = `You have a drawing board. When (and ONLY when) a visual would truly help a math, geometry, graphing, trig, or calculus answer, include exactly one fenced code block tagged cassie-board containing minified JSON. Still explain in words as usual — the board is an extra, not a replacement. Do not mention "JSON" or the block to the student. Never use a board for non-visual questions (essays, history, definitions, code).
+
+Supported specs:
+- Graph a function: {"type":"graph","title":"y = x^2 - 5x + 6","fn":"x^2 - 5*x + 6","xrange":[-1,6],"points":[{"x":2,"y":0,"label":"x=2"},{"x":3,"y":0,"label":"x=3"}],"vertex":{"x":2.5,"y":-0.25}}
+  fn MUST use explicit * for multiply and ^ for powers; allowed: + - * / ^ ( ), x, sin cos tan sqrt abs exp ln log, pi, e. Add "fill":[a,b] to shade area under the curve (calculus). points/vertex/caption/yrange are optional.
+- Geometry shape: {"type":"shape","shape":"rectangle","w":8,"h":5,"title":"Rectangle"}  (shape = rectangle|square|triangle|circle; square uses "side"; triangle uses "base","height" and optional "sides":[a,b,c]; circle uses "r"). Area and perimeter are computed and shown automatically.
+- Worked steps: {"type":"steps","title":"Solve x^2 - 5x + 6 = 0","steps":["Factor: (x-2)(x-3)=0","So x=2 or x=3"]}
+
+Keep numbers real and correct — the board draws exactly what you give it.`;
+
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 
 // Build the system prompt with the chosen level and (for chat) any active
@@ -148,6 +163,8 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   }
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
+  // Cassie's drawing board is available in the main chat (not the quick popover).
+  if (tutor && mode !== 'hint') sp += `\n\n${BOARD_INSTRUCTION}`;
   // personalize with what Cassie remembers about this student (on-device only)
   try { if (window.CassieMemory) sp += window.CassieMemory.summaryForPrompt(); } catch (e) { /* ignore */ }
   return sp;
@@ -891,9 +908,16 @@ function renderFormatted(container, text) {
     if (i % 2 === 1) {
       let body = seg;
       const nl = seg.indexOf('\n');
+      let lang = '';
       if (nl !== -1) {
         const first = seg.slice(0, nl).trim();
-        if (/^[a-zA-Z0-9+#.\-]{0,15}$/.test(first)) body = seg.slice(nl + 1); // strip language label
+        if (/^[a-zA-Z0-9+#.\-]{0,15}$/.test(first)) { lang = first.toLowerCase(); body = seg.slice(nl + 1); }
+      }
+      // Cassie's board: render the drawing instead of showing JSON as code.
+      if (lang === 'cassie-board' && window.CassieBoard) {
+        try { window.CassieBoard.renderInto(container, JSON.parse(body.trim())); }
+        catch (e) { /* malformed board — just skip it */ }
+        return;
       }
       const pre = document.createElement('pre');
       const code = document.createElement('code');
