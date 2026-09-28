@@ -1913,6 +1913,7 @@ function renderMemory() {
   const weak = M.weakTopics().slice(0, 12);
   const recent = M.recentTopics(8);
   const facts = d.facts || [];
+  const hasData = s.topics > 0 || s.streak > 0 || s.focusMinutes > 0 || facts.length > 0;
 
   memoryPanel.innerHTML = `
     <div class="settings-card memory-card">
@@ -1921,6 +1922,7 @@ function renderMemory() {
         <button class="icon-btn" id="mem-close" aria-label="Close">&times;</button>
       </div>
       <p class="mem-privacy">🔒 Everything here stays on your device. No account, no server — only you can see it.</p>
+      ${hasData ? `
       <div class="mem-stats">
         <div class="mem-stat"><b>🔥 ${s.streak}</b><small>day streak</small></div>
         <div class="mem-stat"><b>✅ ${s.mastered}</b><small>mastered</small></div>
@@ -1928,7 +1930,8 @@ function renderMemory() {
         <div class="mem-stat"><b>📚 ${s.topics}</b><small>topics</small></div>
         <div class="mem-stat"><b>🔁 ${s.due}</b><small>to review</small></div>
       </div>
-      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here. 💛</p>
+      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here. 💛</p>` : `
+      <p class="mem-welcome">This is where your progress will live. Ask Cassie a question or finish a focus session, and your streak, topics, and reviews start filling in here. 💛</p>`}
 
       <label class="field"><span>Your name (optional)</span><input id="mem-name" type="text" value="${memEsc(d.profile.name)}" placeholder="What should I call you?"></label>
       <label class="field"><span>Your goal (optional)</span><input id="mem-goal" type="text" value="${memEsc(d.profile.goal)}" placeholder="e.g. pass my chemistry finals"></label>
@@ -2097,7 +2100,7 @@ function renderChatList() {
   if (!chats.length) {
     const e = document.createElement('div');
     e.className = 'chat-empty';
-    e.textContent = 'No conversations yet.';
+    e.textContent = 'No past sessions yet. Start a chat to build your study trail.';
     chatList.appendChild(e);
     return;
   }
