@@ -49,6 +49,14 @@ export const EMOTIONS = {
     blurb: 'Head tilted, wondering aloud.',
     pose: { jump: 0, headX: 0.02, headZ: 0.38, armL: -0.28, armR: 0.28, rimColor: PINK_SOFT, eyes: 'oval', confetti: false, icon: 'question' },
   },
+  // Not shown as a showcase card; driven by the tutor at night via setEmotion('sleep').
+  sleep: {
+    key: 'sleep',
+    label: 'Sleeping',
+    emoji: '😴',
+    blurb: 'Taking a little nap.',
+    pose: { jump: 0, headX: 0.16, headZ: 0.12, armL: -0.2, armR: 0.2, rimColor: PINK_SOFT, eyes: 'closed', confetti: false, icon: 'zzz' },
+  },
 };
 
 export const EMOTION_ORDER = ['neutral', 'thinking', 'encouraging', 'celebratory', 'curious'];

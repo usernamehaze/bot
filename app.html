@@ -198,87 +198,10 @@
   <div id="mascot">
     <div id="mascot-bubble" class="mascot-bubble" hidden></div>
     <button id="mascot-btn" type="button" aria-label="Cassie" title="Cassie">
-      <!-- real 3D Cassie mounts here; the SVG below stays as a fallback -->
+      <!-- real 3D Cassie mounts here (WebGL); emoji is the no-WebGL fallback -->
       <div id="cassie-3d-root" class="mascot-3d"></div>
-      <svg class="mascot-face" viewBox="0 0 72 86" aria-hidden="true">
-        <!-- little arms -->
-        <rect class="r-arm" x="2" y="60" width="7" height="17" rx="3.5"/>
-        <rect class="r-arm" x="63" y="60" width="7" height="17" rx="3.5"/>
-        <!-- antennae with glowing tips -->
-        <line class="r-ant" x1="28" y1="16" x2="22" y2="7"/>
-        <circle class="r-ant-tip" cx="21" cy="5" r="3"/>
-        <line class="r-ant" x1="44" y1="16" x2="50" y2="7"/>
-        <circle class="r-ant-tip" cx="51" cy="5" r="3"/>
-        <!-- side ears -->
-        <rect class="r-ear" x="3" y="30" width="7" height="17" rx="3.5"/>
-        <rect class="r-ear" x="62" y="30" width="7" height="17" rx="3.5"/>
-        <circle class="r-ear-dot" cx="6.5" cy="38.5" r="1.7"/>
-        <circle class="r-ear-dot" cx="65.5" cy="38.5" r="1.7"/>
-        <!-- rounded body -->
-        <path class="r-body" d="M19 58 h34 a11 11 0 0 1 11 11 v8 a4 4 0 0 1 -4 4 h-48 a4 4 0 0 1 -4 -4 v-8 a11 11 0 0 1 11 -11 z"/>
-        <!-- glowing chest core -->
-        <g class="r-core">
-          <circle class="r-core-glow" cx="36" cy="70" r="7.5"/>
-          <circle class="r-core-ring" cx="36" cy="70" r="5"/>
-          <circle class="r-core-dot" cx="36" cy="70" r="2.4"/>
-        </g>
-        <!-- head + dark screen face -->
-        <rect class="r-head" x="9" y="15" width="54" height="45" rx="20"/>
-        <rect class="r-screen" x="15" y="21" width="42" height="33" rx="15"/>
-        <g class="r-eyes">
-          <rect class="r-eye" x="23" y="31" width="8" height="13" rx="4"/>
-          <rect class="r-eye" x="41" y="31" width="8" height="13" rx="4"/>
-        </g>
-        <g class="r-eyes-happy">
-          <path d="M22 41 q5 -7 11 0"/>
-          <path d="M39 41 q5 -7 11 0"/>
-        </g>
-        <g class="r-eyes-wink">
-          <rect x="23" y="31" width="8" height="13" rx="4"/>
-          <path d="M39 41 q5 -7 11 0"/>
-        </g>
-        <g class="r-eyes-love">
-          <path d="M27 41 c-3 -3 -5 -5 -5 -7 a2.6 2.6 0 0 1 5 -1 a2.6 2.6 0 0 1 5 1 c0 2 -2 4 -5 7 z"/>
-          <path d="M45 41 c-3 -3 -5 -5 -5 -7 a2.6 2.6 0 0 1 5 -1 a2.6 2.6 0 0 1 5 1 c0 2 -2 4 -5 7 z"/>
-        </g>
-        <g class="r-eyes-surprised">
-          <circle cx="27" cy="37" r="5"/>
-          <circle cx="45" cy="37" r="5"/>
-        </g>
-        <g class="r-eyes-sleepy">
-          <path d="M22 38 q5 5 11 0"/>
-          <path d="M39 38 q5 5 11 0"/>
-        </g>
-        <g class="r-eyes-star">
-          <path d="M27 31 l1.4 3.1 3.4.3 -2.6 2.2 .8 3.3 -3-1.8 -3 1.8 .8-3.3 -2.6-2.2 3.4-.3z"/>
-          <path d="M45 31 l1.4 3.1 3.4.3 -2.6 2.2 .8 3.3 -3-1.8 -3 1.8 .8-3.3 -2.6-2.2 3.4-.3z"/>
-        </g>
-        <g class="r-eyes-cool">
-          <path d="M18 33 h16 a2 2 0 0 1 2 2 v1 a2 2 0 0 1 -2 2 h-4.5 l-1.5 2 -1.5-2 h-4.5 l-1.5 2 -1.5-2 h-1 a2 2 0 0 1 -2 -2 v-1 a2 2 0 0 1 2 -2 z" transform="translate(9,0)"/>
-          <path class="r-cool-glass" d="M17 33 h9 v4 a3 3 0 0 1 -6 0 z M31 33 h9 v4 a3 3 0 0 1 -6 0 z"/>
-          <path class="r-cool-bar" d="M25 34 h6"/>
-        </g>
-        <g class="r-eyes-sad">
-          <rect x="23" y="34" width="8" height="11" rx="4"/>
-          <rect x="41" y="34" width="8" height="11" rx="4"/>
-          <path class="r-brow" d="M22 30 q5 3 10 3 M40 33 q5 -3 10 -3"/>
-        </g>
-        <g class="r-eyes-focused">
-          <rect x="22" y="35" width="10" height="4" rx="2"/>
-          <rect x="40" y="35" width="10" height="4" rx="2"/>
-        </g>
-        <g class="r-eyes-dizzy">
-          <path d="M23 33 a4 4 0 1 0 4 4 M23 37 h4" transform="translate(4,0)"/>
-          <path d="M41 33 a4 4 0 1 0 4 4 M41 37 h4" transform="translate(4,0)"/>
-        </g>
-        <g class="r-think">
-          <circle cx="26" cy="37" r="2.5"/><circle cx="36" cy="37" r="2.5"/><circle cx="46" cy="37" r="2.5"/>
-        </g>
-      </svg>
+      <span class="mascot-fallback" aria-hidden="true">🤖</span>
     </button>
-    <span class="mascot-z" aria-hidden="true">z</span>
-    <span class="mascot-z" aria-hidden="true">z</span>
-    <span class="mascot-z" aria-hidden="true">z</span>
   </div>
 
 </div>
