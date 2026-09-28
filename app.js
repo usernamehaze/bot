@@ -14,6 +14,7 @@ function loadState() {
     geminiKey: '',          // Gemini — used only for images (generation + reading photos)
     voiceOut: false,
     level: 'auto',          // explanation level: auto | elementary | middle | high | college
+    citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -140,6 +141,9 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (state.level && LEVEL_LABELS[state.level]) {
     sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level — match your vocabulary, depth, and examples to that level.`;
   }
+  if (state.citationStyle && state.citationStyle !== 'APA') {
+    sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
+  }
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
   return sp;
@@ -159,6 +163,7 @@ const groqModelSelect = document.getElementById('groq-model-select');
 const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const levelSelect = document.getElementById('level-select');
+const citationSelect = document.getElementById('citation-select');
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
@@ -964,12 +969,13 @@ async function runResearch(topic) {
   const sources = papers.map((p, i) =>
     `[${i + 1}] ${p.authors.join(', ') || 'Unknown'} (${p.year || 'n.d.'}). ${p.title}. ${p.venue || 'n.p.'}.`
     + (p.abstract ? `\nAbstract: ${p.abstract}` : '')).join('\n\n');
+  const style = state.citationStyle || 'APA';
   const prompt = `You are helping a student write the Review of Related Literature (RRL) for a thesis on "${topic}". `
     + `Using ONLY the sources listed below, write a well-organized RRL:\n`
     + `- Synthesize by theme (group related findings; do not just summarize each paper one by one).\n`
-    + `- Use in-text citations in APA style, e.g. (Surname, Year), referring ONLY to these sources.\n`
+    + `- Use in-text citations in ${style} style, referring ONLY to these sources.\n`
     + `- Note common findings, disagreements, and any research gap relevant to the topic.\n`
-    + `- End with a "References" section in APA format, built from the details provided.\n`
+    + `- End with a "References" section in ${style} format, built from the details provided.\n`
     + `Do NOT invent any source, author, year, or finding that is not in the list. If a detail is missing, leave it out rather than guessing.\n\n`
     + `SOURCES:\n${sources}`;
 
@@ -1147,6 +1153,7 @@ function openSettings() {
   geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
   if (levelSelect) levelSelect.value = state.level || 'auto';
+  if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   settingsPanel.hidden = false;
 }
 const MODEL_SHORT = {
@@ -1167,6 +1174,7 @@ function closeSettings() {
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
   if (levelSelect) state.level = levelSelect.value;
+  if (citationSelect) state.citationStyle = citationSelect.value;
   save();
   updateModelPill();
   settingsPanel.hidden = true;
