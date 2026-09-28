@@ -11,85 +11,142 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<!-- warm up the app so the jump is instant -->
 <link rel="prefetch" href="app.html">
 <link rel="prefetch" href="style.css">
 <link rel="prefetch" href="app.js">
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #0e0d12; }
+  html, body { margin: 0; height: 100%; }
   body {
     min-height: 100vh; min-height: 100dvh;
+    background: #100f16;
+    background-image: radial-gradient(65% 55% at 50% 42%, #1b1a24 0%, #100f16 62%, #0b0a0f 100%);
+    color: #f4efe4; overflow: hidden; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    overflow: hidden; cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  #loader {
-    position: fixed; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    background: #0e0d12;
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+
+  .stage { position: relative; width: min(72vw, 48vh, 420px); aspect-ratio: 1; }
+  .stage::before {
+    content: ""; position: absolute; inset: 19%; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,196,92,.34), rgba(255,170,60,.10) 45%, transparent 70%);
+    filter: blur(6px); animation: bloom 3.6s ease-in-out infinite;
   }
-  .enter {
-    position: fixed; left: 50%; bottom: clamp(40px, 12vh, 120px);
-    transform: translateX(-50%) translateY(10px);
-    display: inline-flex; align-items: center; gap: 10px;
-    background: #ff5fa2; color: #14121a;
-    border: none; border-radius: 999px;
-    padding: 14px 34px; font-size: 1rem; font-weight: 800;
-    text-decoration: none; cursor: pointer;
-    box-shadow: 0 10px 30px rgba(255,95,162,.34);
-    opacity: 0; pointer-events: none;
-    transition: opacity .6s ease, transform .6s ease;
-  }
-  .enter.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-  .enter svg { width: 17px; height: 17px; fill: currentColor; }
-  .enter:hover { box-shadow: 0 14px 36px rgba(255,95,162,.44); }
-  .skip { position: fixed; top: 18px; right: 20px; color: rgba(255,255,255,.5); font-size: .82rem; font-weight: 600; text-decoration: none; letter-spacing: .02em; opacity: 0; transition: opacity .6s ease; }
-  .skip.show { opacity: 1; }
-  .skip:hover { color: #fff; }
+  @keyframes bloom { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.12); opacity: 1; } }
+
+  .orbits { width: 100%; height: 100%; overflow: visible; display: block; }
+  .rings { transform-box: fill-box; transform-origin: center; }
+  .rings.a { animation: spin 30s linear infinite; }
+  .rings.b { animation: spin 22s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ring { fill: none; stroke: url(#gold); stroke-width: 1; opacity: .55; }
+  .ring.dim { opacity: .32; }
+  .node { fill: #ffd77a; }
+  .node.big { fill: #fff0c2; }
+  .sphere-wrap { animation: breathe 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+  .brand { text-align: center; }
+  .name { font-size: clamp(1.9rem, 6vw, 2.6rem); font-weight: 700; letter-spacing: -.01em; }
+  .name .spk { color: #ffd77a; font-size: .5em; vertical-align: super; margin-left: 2px; display: inline-block; animation: twinkle 2.2s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity: .5; transform: scale(.85) rotate(0); } 50% { opacity: 1; transform: scale(1.1) rotate(20deg); } }
+  .think { display: block; margin-top: 6px; color: #9a978c; font-size: .95rem; letter-spacing: .06em; }
+  .think .d { animation: dots 1.4s infinite; }
+  .think .d:nth-child(2) { animation-delay: .2s; }
+  .think .d:nth-child(3) { animation-delay: .4s; }
+  @keyframes dots { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+
+  .skip { position: fixed; top: 18px; right: 20px; color: rgba(255,255,255,.5); font-size: .82rem; font-weight: 600; text-decoration: none; opacity: 0; transition: opacity .6s ease; }
+  .skip.show { opacity: 1; } .skip:hover { color: #fff; }
+  .hint { position: fixed; left: 0; right: 0; bottom: clamp(28px, 8vh, 64px); text-align: center; color: rgba(255,255,255,.4); font-size: .82rem; letter-spacing: .04em; opacity: 0; transition: opacity .6s ease; }
+  .hint.show { opacity: 1; }
+
   @media (prefers-reduced-motion: reduce) {
-    #loader { object-fit: contain; }
+    .rings, .sphere-wrap, .stage::before, .name .spk, .think .d { animation: none; }
   }
 </style>
 </head>
 <body>
 
-  <video id="loader" autoplay muted loop playsinline poster="assets/loading-poster.jpg" aria-label="Cassie loading">
-    <source src="assets/loading.webm" type="video/webm">
-    <source src="assets/loading.mp4" type="video/mp4">
-  </video>
+  <div class="wrap">
+    <div class="stage" aria-label="Cassie loading" role="img">
+      <svg class="orbits" viewBox="0 0 400 400">
+        <defs>
+          <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8a5f1c"/>
+            <stop offset=".5" stop-color="#ffd77a"/>
+            <stop offset="1" stop-color="#9a6c1f"/>
+          </linearGradient>
+          <radialGradient id="ball" cx="38%" cy="32%" r="75%">
+            <stop offset="0" stop-color="#fff2c8"/>
+            <stop offset=".45" stop-color="#f3c25a"/>
+            <stop offset=".8" stop-color="#c78a2a"/>
+            <stop offset="1" stop-color="#8a5c17"/>
+          </radialGradient>
+          <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="rgba(255,205,110,.55)"/>
+            <stop offset="1" stop-color="rgba(255,205,110,0)"/>
+          </radialGradient>
+        </defs>
+
+        <g class="rings a">
+          <ellipse class="ring" cx="200" cy="200" rx="150" ry="150" transform="rotate(10 200 200)"/>
+          <ellipse class="ring dim" cx="200" cy="200" rx="150" ry="104" transform="rotate(48 200 200)"/>
+          <ellipse class="ring" cx="200" cy="200" rx="150" ry="52" transform="rotate(86 200 200)"/>
+          <ellipse class="ring dim" cx="200" cy="200" rx="150" ry="104" transform="rotate(124 200 200)"/>
+          <ellipse class="ring" cx="200" cy="200" rx="150" ry="150" transform="rotate(158 200 200)"/>
+        </g>
+
+        <g class="sphere-wrap">
+          <circle cx="200" cy="200" r="78" fill="url(#halo)"/>
+          <circle cx="200" cy="200" r="50" fill="url(#ball)"/>
+          <ellipse cx="184" cy="180" rx="17" ry="12" fill="#fff7dc" opacity=".45"/>
+        </g>
+
+        <g class="rings b">
+          <ellipse class="ring" cx="200" cy="200" rx="150" ry="128" transform="rotate(28 200 200)"/>
+          <ellipse class="ring dim" cx="200" cy="200" rx="150" ry="72" transform="rotate(68 200 200)"/>
+          <ellipse class="ring" cx="200" cy="200" rx="150" ry="72" transform="rotate(104 200 200)"/>
+          <ellipse class="ring dim" cx="200" cy="200" rx="150" ry="128" transform="rotate(142 200 200)"/>
+          <circle class="node big" cx="200" cy="50" r="3.4"/>
+          <circle class="node" cx="322" cy="118" r="2.6"/>
+          <circle class="node" cx="350" cy="212" r="2.2"/>
+          <circle class="node big" cx="300" cy="312" r="3"/>
+          <circle class="node" cx="206" cy="350" r="2.4"/>
+          <circle class="node" cx="96" cy="300" r="2.6"/>
+          <circle class="node big" cx="52" cy="196" r="3"/>
+          <circle class="node" cx="92" cy="96" r="2.4"/>
+          <circle class="node" cx="150" cy="66" r="2"/>
+          <circle class="node" cx="332" cy="256" r="2.2"/>
+          <circle class="node" cx="128" cy="336" r="2"/>
+          <circle class="node" cx="70" cy="140" r="2.2"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="brand">
+      <span class="name">Cassie<span class="spk">✦</span></span>
+      <span class="think">thinking<span class="d">.</span><span class="d">.</span><span class="d">.</span></span>
+    </div>
+  </div>
 
   <a href="app.html" class="skip" id="skip">Skip →</a>
-  <a href="app.html" class="enter" id="enter">
-    askCassie
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4z"/></svg>
-  </a>
+  <div class="hint" id="hint">tap anywhere to enter</div>
 
   <script>
     (function () {
       var done = false;
-      function go() {
-        if (done) return;
-        done = true;
-        window.location.href = 'app.html';
-      }
-      // reveal the enter/skip buttons shortly after load
+      function go() { if (done) return; done = true; window.location.href = 'app.html'; }
       setTimeout(function () {
-        var e = document.getElementById('enter'); if (e) e.classList.add('show');
+        var h = document.getElementById('hint'); if (h) h.classList.add('show');
         var s = document.getElementById('skip'); if (s) s.classList.add('show');
       }, 1400);
-      // tap/click anywhere continues to the app
       document.body.addEventListener('click', function (ev) {
-        // let the actual links navigate on their own
         if (ev.target.closest('a')) return;
         go();
       });
-      // auto-continue after the animation has had time to play
       setTimeout(go, 6500);
-      // if the video can't load at all, don't strand the user
-      var v = document.getElementById('loader');
-      if (v) v.addEventListener('error', function () { setTimeout(go, 1200); });
     })();
   </script>
 
