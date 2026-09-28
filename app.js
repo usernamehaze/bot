@@ -438,7 +438,7 @@ function maybeCelebrate(reply) {
   }
 }
 
-// ---- roaming: Cassie wanders around, as if showing the student things ----
+// ---- Cassie stays put unless you drag her; she just shares tips in place ----
 const MASCOT_NUGGETS = [
   'Highlight any word to ask about it!',
   'Tap Hint for a nudge, not the whole answer.',
@@ -449,7 +449,7 @@ const MASCOT_NUGGETS = [
   'Ask me to explain it simpler anytime.',
   'Mistakes are how we learn 💡',
 ];
-let mascotRoamTimer = null;
+let mascotTipTimer = null;
 let nuggetIdx = Math.floor(Math.random() * MASCOT_NUGGETS.length);
 function mascotBounds() {
   const w = mascot ? mascot.offsetWidth || 58 : 58;
@@ -470,20 +470,14 @@ function placeMascot(x, y) {
   mascot.style.left = nx + 'px';
   mascot.style.top = ny + 'px';
 }
-function mascotRoam() {
-  if (mascot && !mascotDragging && !mascot.classList.contains('thinking')) {
-    const b = mascotBounds();
-    placeMascot(b.minX + Math.random() * (b.maxX - b.minX), b.minY + Math.random() * (b.maxY - b.minY));
-    // every so often she pauses to "teach" a quick tip as she moves
-    if (Math.random() < 0.45 && (!mascotBubble || mascotBubble.hidden)) {
-      mascotEmote(Math.random() < 0.5 ? 'emote-focused' : 'emote-star');
-      setTimeout(() => mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000), 500);
-    } else {
-      mascotEmote(MASCOT_EMOTES[Math.floor(Math.random() * MASCOT_EMOTES.length)]);
-    }
+// She no longer roams; now and then she shares a quick study tip in place.
+function mascotIdleTip() {
+  if (mascot && !mascotDragging && !mascot.classList.contains('thinking') && (!mascotBubble || mascotBubble.hidden)) {
+    mascotEmote(Math.random() < 0.5 ? 'emote-focused' : 'emote-star');
+    setTimeout(() => mascotSay(MASCOT_NUGGETS[nuggetIdx++ % MASCOT_NUGGETS.length], 4000), 400);
   }
-  clearTimeout(mascotRoamTimer);
-  mascotRoamTimer = setTimeout(mascotRoam, 6500 + Math.random() * 5000);
+  clearTimeout(mascotTipTimer);
+  mascotTipTimer = setTimeout(mascotIdleTip, 18000 + Math.random() * 12000);
 }
 
 if (mascotBtn && mascot) {
@@ -548,14 +542,14 @@ if (mascotBtn && mascot) {
     });
   }
 
-  // start Cassie off in the bottom-right (clear of the home options), then wander
+  // start Cassie in the bottom-right; she stays there until you drag her
   placeMascot(mascotBounds().maxX, mascotBounds().maxY);
   window.addEventListener('resize', () => {
     const r = mascot.getBoundingClientRect();
     placeMascot(r.left, r.top);
   });
   scheduleEmote();
-  mascotRoamTimer = setTimeout(mascotRoam, 5000 + Math.random() * 4000);
+  mascotTipTimer = setTimeout(mascotIdleTip, 20000 + Math.random() * 10000);
   setTimeout(() => mascotReact('greet'), 1400);
 }
 
