@@ -433,7 +433,8 @@ function launchConfetti(x, y) {
   ensureConfetti();
   const cx = x != null ? x : window.innerWidth / 2;
   const cy = y != null ? y : window.innerHeight / 3;
-  const colors = ['#ff5fa2', '#ffd166', '#06d6a0', '#4dabf7', '#b197fc', '#ff922b'];
+  // marble monochrome — a spread of light-to-dark greys so pieces show on any background
+  const colors = ['#111111', '#3a3a3a', '#6d6d72', '#a9a9a9', '#d9d5cf', '#f5f3ef'];
   for (let i = 0; i < 90; i++) {
     const ang = Math.random() * Math.PI * 2;
     const spd = 4 + Math.random() * 7;

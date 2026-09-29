@@ -1,30 +1,33 @@
 :root {
-  --bg: #f4f2fb;
+  /* Marble monochrome — warm neutral greys, no colour in the UI. Colour lives
+     only on the loading screens and the 3D bot (see --bot-glow below). */
+  --bg: #f2f0ec;
   --surface: #ffffff;
-  --text: #1c1d2b;
-  --muted: #6b6f8a;
-  --primary: #1c1c24;
+  --text: #1b1b1d;
+  --muted: #6d6d72;
+  --primary: #1b1b1d;
   --primary-dark: #000000;
-  --border: #e6e2f5;
-  --bubble-user: #1c1c24;
+  --border: #e5e2dc;
+  --bubble-user: #1b1b1d;
   --bubble-user-text: #ffffff;
   --bubble-assistant: #ffffff;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
-  --cb-accent: #ff5ea8; /* Cassie's board — her signature pink */
+  --cb-accent: #2a2a2d; /* board ink — monochrome (was Cassie's pink) */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121018;
-    --surface: #1c1a26;
-    --text: #ecebf5;
-    --muted: #9997b3;
-    --border: #2c2938;
-    --bubble-assistant: #1c1a26;
-    --primary: #3a3a44;
-    --primary-dark: #2b2b33;
-    --bubble-user: #3a3a44;
+    --bg: #141414;
+    --surface: #1d1d1f;
+    --text: #ededed;
+    --muted: #9a9a9e;
+    --border: #2d2d30;
+    --bubble-assistant: #1d1d1f;
+    --primary: #34343a;
+    --primary-dark: #2b2b2f;
+    --bubble-user: #34343a;
+    --cb-accent: #ececec; /* board ink — light on dark */
   }
 }
 
@@ -348,7 +351,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   border-bottom-left-radius: 4px;
 }
 .bubble.intro { color: var(--muted); }
-.bubble.error { border-color: #dc2626; color: #dc2626; }
+.bubble.error { border-color: var(--text); color: var(--text); font-weight: 500; }
 
 .typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 4px 0; }
 .typing-dots span {
@@ -530,7 +533,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 @keyframes mascotHappy { 0% { transform: translateY(0) scale(1); } 30% { transform: translateY(-10px) scale(1.08); } 60% { transform: translateY(0) scale(1); } 80% { transform: translateY(-4px); } 100% { transform: translateY(0); } }
 #confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
 #prompt-input.nudge { animation: inputNudge .9s ease; }
-@keyframes inputNudge { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px var(--bot-glow); } 60% { box-shadow: 0 0 0 3px var(--bot-glow); } }
+@keyframes inputNudge { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px var(--muted); } 60% { box-shadow: 0 0 0 3px var(--muted); } }
 .mascot-bubble {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -747,7 +750,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .settings-card h2 { margin: 0 0 16px; }
 
 /* ---------- Cassie's memory panel ---------- */
-.memory-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: #ff5fa2; box-shadow: 0 0 6px #ff5fa2; }
+.memory-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 2px var(--surface); }
 .memory-dot[hidden] { display: none; }
 #memory-btn { position: relative; }
 .mem-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -763,10 +766,10 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 
 /* clickable "get a free key" links + tiny numbered guide in Settings */
 .key-link {
-  display: inline-block; margin-top: 2px; font-weight: 600; text-decoration: none;
-  color: var(--cb-accent);
+  display: inline-block; margin-top: 2px; font-weight: 700; text-decoration: underline;
+  text-underline-offset: 2px; color: var(--text);
 }
-.key-link:hover { text-decoration: underline; }
+.key-link:hover { opacity: .7; }
 .key-steps {
   margin: 4px 0 14px; padding-left: 20px; font-size: .78rem; color: var(--muted); line-height: 1.5;
 }
@@ -784,13 +787,13 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   border-radius: 999px; padding: 6px 13px; font-size: .84rem; font-weight: 600; cursor: pointer;
 }
 .mem-review:hover { border-color: var(--primary); }
-.mem-review.weak { border-color: #ff9db8; color: #d63384; }
+.mem-review.weak { border-color: var(--muted); color: var(--text); font-style: italic; }
 .mem-topics { display: flex; flex-direction: column; gap: 10px; }
 .mem-topic-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mem-topic-name { font-size: .9rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mem-topic .mem-review { padding: 3px 11px; font-size: .78rem; flex-shrink: 0; }
 .mem-bar { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 5px; }
-.mem-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff5fa2, #ff9db8); }
+.mem-bar i { display: block; height: 100%; background: var(--text); }
 .mem-facts { display: flex; flex-direction: column; gap: 6px; }
 .mem-fact { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: .88rem; }
 .mem-fact span { flex: 1; }
@@ -938,15 +941,15 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   border: 1px solid var(--border);
   background: linear-gradient(180deg, var(--surface), var(--bg));
 }
-.pomo.break { border-color: color-mix(in srgb, #57e39b 55%, var(--border)); }
+.pomo.break { border-color: var(--muted); }
 .pomo-head { display: flex; align-items: center; justify-content: space-between; font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 #pomo-cycles { display: inline-flex; gap: 4px; }
 #pomo-cycles span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
-#pomo-cycles span.on { background: var(--bot-glow, #ff5fa2); box-shadow: 0 0 5px var(--bot-glow, #ff5fa2); }
+#pomo-cycles span.on { background: var(--text); }
 .pomo-time { font-size: 2rem; font-weight: 800; text-align: center; letter-spacing: .02em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
 .pomo-ring { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 10px; }
-.pomo-ring i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff5fa2, #ff9db8); transition: width 1s linear; }
-.pomo.break .pomo-ring i { background: linear-gradient(90deg, #57e39b, #8ff0c0); }
+.pomo-ring i { display: block; height: 100%; width: 0; background: var(--text); transition: width 1s linear; }
+.pomo.break .pomo-ring i { background: var(--muted); }
 .pomo-btns { display: flex; gap: 6px; }
 .pomo-btn {
   flex: 1; border: 1px solid var(--border); background: var(--surface); color: var(--text);
