@@ -49,14 +49,33 @@ when you ask something.
 ## Using it
 
 Highlight a sentence, question, or term on any page. After a brief moment,
-a small "Cassie" popup appears near your selection with an explanation and
-answer. Click the **×** or press **Escape** to dismiss it; highlighting
-something new replaces it.
+a small "Cassie" popup appears near your selection with an **Explain /
+Answer / Code** choice. Click the **×** or press **Escape** to dismiss it;
+highlighting something new replaces it.
+
+This highlight → Explain/Answer/Code flow is the **core** of the extension
+and always works.
+
+## Experimental HUD add-on (premium — subject to change)
+
+The extension also ships an optional, more advanced "HUD" layer, kept
+separate from the core highlight flow. It is **experimental** and intended
+as a future **premium** feature, so its behaviour and shortcuts may change:
+
+- A floating, **draggable** panel you can move anywhere on the page.
+- A **hotkey** to summon Cassie at your cursor without highlighting first.
+- An **"explain a graphic"** mode: point at a graph/diagram and Cassie draws
+  a step-by-step explanation on top of the page.
+- An **emotional mini-bot avatar** in the panel header that reacts as she
+  works (curious → thinking → happy).
+
+None of this is required to use Cassie — the highlight popup stands on its
+own. Treat the HUD as opt-in polish while it's still being refined.
 
 ## Files
 
 - `manifest.json` — extension configuration (Manifest V3).
-- `background.js` — service worker that calls the Gemini API (keeps the
+- `background.js` — service worker that calls the Groq API (keeps the
   network request out of the page's own context).
 - `content.js` — injected into every page; watches for text selection and
   renders the popup in an isolated Shadow DOM so it can't be styled or
