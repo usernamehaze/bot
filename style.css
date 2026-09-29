@@ -13,7 +13,7 @@
   --bubble-assistant: #ffffff;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
-  --cb-accent: #2a2a2d; /* board ink — monochrome (was Cassie's pink) */
+  --cb-accent: var(--accent, #2a2a2d); /* board ink — accent if chosen, else monochrome */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,7 +27,7 @@
     --primary: #34343a;
     --primary-dark: #2b2b2f;
     --bubble-user: #34343a;
-    --cb-accent: #ececec; /* board ink — light on dark */
+    --cb-accent: var(--accent, #ececec); /* board ink — accent if chosen, else light on dark */
   }
 }
 
@@ -77,7 +77,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--accent, var(--primary));
   box-shadow: 0 0 0 4px rgba(28, 28, 36, 0.15);
 }
 
@@ -625,7 +625,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 #app[data-textsize="larger"] .bubble { font-size: 1.18rem; }
 #app[data-easyread="on"] .bubble { line-height: 1.75; letter-spacing: .015em; }
 #app[data-easyread="on"] .bubble li { margin: 5px 0; }
-.chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.chip.active { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); border-color: var(--accent, var(--primary)); }
 
 .attach-preview {
   display: flex;
@@ -750,7 +750,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .settings-card h2 { margin: 0 0 16px; }
 
 /* ---------- Cassie's memory panel ---------- */
-.memory-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 2px var(--surface); }
+.memory-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent, var(--text)); box-shadow: 0 0 0 2px var(--surface); }
 .memory-dot[hidden] { display: none; }
 #memory-btn { position: relative; }
 .mem-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -767,7 +767,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 /* clickable "get a free key" links + tiny numbered guide in Settings */
 .key-link {
   display: inline-block; margin-top: 2px; font-weight: 700; text-decoration: underline;
-  text-underline-offset: 2px; color: var(--text);
+  text-underline-offset: 2px; color: var(--accent, var(--text));
 }
 .key-link:hover { opacity: .7; }
 .key-steps {
@@ -793,7 +793,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .mem-topic-name { font-size: .9rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mem-topic .mem-review { padding: 3px 11px; font-size: .78rem; flex-shrink: 0; }
 .mem-bar { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 5px; }
-.mem-bar i { display: block; height: 100%; background: var(--text); }
+.mem-bar i { display: block; height: 100%; background: var(--accent, var(--text)); }
 .mem-facts { display: flex; flex-direction: column; gap: 6px; }
 .mem-fact { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: .88rem; }
 .mem-fact span { flex: 1; }
@@ -873,8 +873,8 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 
 .settings-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .btn {
-  background: var(--primary);
-  color: #fff;
+  background: var(--accent, var(--primary));
+  color: var(--accent-ink, #fff);
   border: none;
   border-radius: 10px;
   padding: 11px 18px;
@@ -945,10 +945,10 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .pomo-head { display: flex; align-items: center; justify-content: space-between; font-size: .74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
 #pomo-cycles { display: inline-flex; gap: 4px; }
 #pomo-cycles span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
-#pomo-cycles span.on { background: var(--text); }
+#pomo-cycles span.on { background: var(--accent, var(--text)); }
 .pomo-time { font-size: 2rem; font-weight: 800; text-align: center; letter-spacing: .02em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
 .pomo-ring { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 10px; }
-.pomo-ring i { display: block; height: 100%; width: 0; background: var(--text); transition: width 1s linear; }
+.pomo-ring i { display: block; height: 100%; width: 0; background: var(--accent, var(--text)); transition: width 1s linear; }
 .pomo.break .pomo-ring i { background: var(--muted); }
 .pomo-btns { display: flex; gap: 6px; }
 .pomo-btn {
@@ -1045,3 +1045,30 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .cb-geo-out { font-size: 14px; line-height: 1.7; }
 .cb-geo-out .cb-geo-name { font-weight: 700; margin-bottom: 2px; }
 .cb-geo-out b { color: var(--cb-accent); }
+
+/* Favorite-colour swatches (Appearance settings) */
+.accent-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.accent-sw {
+  width: 30px; height: 30px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid var(--border); background: var(--sw, var(--surface));
+  position: relative; transition: transform .1s ease;
+  display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.accent-sw:hover { transform: scale(1.08); }
+.accent-sw.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+.accent-none {
+  background:
+    linear-gradient(135deg, #ffffff 0 50%, #cfccc6 50% 100%);
+}
+.accent-none::after {
+  content: "∅"; color: var(--muted); font-size: 14px; font-weight: 700;
+}
+.accent-custom { border-style: dashed; }
+.accent-custom input[type="color"] {
+  position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px);
+  border: none; padding: 0; background: none; cursor: pointer;
+}
+.accent-custom::after {
+  content: "+"; position: absolute; color: var(--muted); font-size: 18px; font-weight: 700;
+  pointer-events: none;
+}

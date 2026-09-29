@@ -239,6 +239,33 @@
         </div>
       </details>
 
+      <details class="settings-group">
+        <summary>
+          <span class="sg-title">Appearance</span>
+          <span class="sg-sub">Make Cassie your colour</span>
+        </summary>
+        <div class="sg-body">
+          <label class="field">
+            <span>Favorite colour</span>
+            <div class="accent-swatches" id="accent-swatches">
+              <button type="button" class="accent-sw accent-none" data-accent="" title="None — marble monochrome" aria-label="None (marble monochrome)"></button>
+              <button type="button" class="accent-sw" data-accent="#e5484d" style="--sw:#e5484d" title="Red" aria-label="Red"></button>
+              <button type="button" class="accent-sw" data-accent="#f5a524" style="--sw:#f5a524" title="Amber" aria-label="Amber"></button>
+              <button type="button" class="accent-sw" data-accent="#30a46c" style="--sw:#30a46c" title="Green" aria-label="Green"></button>
+              <button type="button" class="accent-sw" data-accent="#12a594" style="--sw:#12a594" title="Teal" aria-label="Teal"></button>
+              <button type="button" class="accent-sw" data-accent="#3b82f6" style="--sw:#3b82f6" title="Blue" aria-label="Blue"></button>
+              <button type="button" class="accent-sw" data-accent="#6366f1" style="--sw:#6366f1" title="Indigo" aria-label="Indigo"></button>
+              <button type="button" class="accent-sw" data-accent="#8b5cf6" style="--sw:#8b5cf6" title="Purple" aria-label="Purple"></button>
+              <button type="button" class="accent-sw" data-accent="#ec4899" style="--sw:#ec4899" title="Pink" aria-label="Pink"></button>
+              <label class="accent-sw accent-custom" title="Custom colour">
+                <input type="color" id="accent-custom" value="#3b82f6" aria-label="Custom colour">
+              </label>
+            </div>
+          </label>
+          <p class="field-hint">Tints buttons, highlights and the board. Leave on <strong>None</strong> for marble monochrome. The loading screen and Cassie herself keep their own colours.</p>
+        </div>
+      </details>
+
       <div class="settings-actions">
         <button type="button" class="btn secondary" id="clear-chat-btn">Clear conversation</button>
         <button type="button" class="btn" id="settings-close-btn">Done</button>
