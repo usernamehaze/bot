@@ -758,6 +758,20 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .mem-stat b { display: block; font-size: 1rem; }
 .mem-stat small { color: var(--muted); font-size: .7rem; }
 .mem-note { font-size: .76rem; color: var(--muted); margin: 0 0 12px; text-align: center; }
+.mem-backup { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.mem-backup .btn { flex: 1; min-width: 130px; }
+
+/* clickable "get a free key" links + tiny numbered guide in Settings */
+.key-link {
+  display: inline-block; margin-top: 2px; font-weight: 600; text-decoration: none;
+  color: var(--cb-accent);
+}
+.key-link:hover { text-decoration: underline; }
+.key-steps {
+  margin: 4px 0 14px; padding-left: 20px; font-size: .78rem; color: var(--muted); line-height: 1.5;
+}
+.key-steps li { margin: 1px 0; }
+.key-steps strong { color: var(--text); }
 .mem-welcome {
   font-size: .86rem; color: var(--muted); line-height: 1.5; text-align: center;
   margin: 4px 0 14px; padding: 16px 14px;

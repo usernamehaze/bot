@@ -148,10 +148,14 @@
             <input type="password" id="groq-key-input" placeholder="gsk_...">
           </label>
           <p class="field-hint">
-            Powers all text answers — higher free limits (~30/min). Get a
-            <strong>free</strong> key (no credit card) at
-            <span class="mono">console.groq.com/keys</span>.
+            Powers all text answers — higher free limits (~30/min).
+            <a class="key-link" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a free Groq key →</a>
           </p>
+          <ol class="key-steps">
+            <li>Sign in (no credit card).</li>
+            <li>Click <strong>Create API Key</strong>.</li>
+            <li>Copy it and paste above.</li>
+          </ol>
           <label class="field">
             <span>Groq model</span>
             <select id="groq-model-select">
@@ -166,11 +170,18 @@
             <input type="password" id="gemini-key-input" placeholder="AIza... / AQ...">
           </label>
           <p class="field-hint">
-            Used to read photos you attach and for Web source-checking. Get a
-            <strong>free</strong> key at <span class="mono">aistudio.google.com/app/apikey</span>.
-            Note: Google currently turns <em>image generation</em> off on the free
-            tier, so making pictures may need billing enabled on your Google account.
-            Leave blank if you don't need these.
+            Reads photos you attach and checks the web.
+            <a class="key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Get a free Google key →</a>
+          </p>
+          <ol class="key-steps">
+            <li>Sign in with your Google account.</li>
+            <li>Click <strong>Create API key</strong>.</li>
+            <li>Copy it and paste above.</li>
+          </ol>
+          <p class="field-hint">
+            Optional — leave blank if you don't need photos or web search. Note:
+            Google turns <em>image generation</em> off on the free tier, so making
+            pictures may need billing enabled on your Google account.
           </p>
         </div>
       </details>
