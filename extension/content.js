@@ -322,13 +322,11 @@
     return { left: lastMouse.x, top: lastMouse.y, right: lastMouse.x, bottom: lastMouse.y, width: 0, height: 0 };
   }
 
-  // Feature: hotkey — Ctrl + M summons Cassie at the cursor (Clicky-style).
-  // Two keys only. Ctrl (not Cmd) works on every OS and dodges Mac's Cmd+M
-  // "minimize window". If text is selected, it opens Explain/Answer/Code for
-  // it; otherwise it opens the quick "ask about this page" box.
-  document.addEventListener('keydown', (e) => {
-    if (!(e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.key || '').toLowerCase() === 'm')) return;
-    e.preventDefault();
+  // Feature: hotkey — double-tap Ctrl summons Cassie at the cursor
+  // (Clicky-style). Ctrl alone does nothing, so a quick double tap is clean
+  // and never clashes with a real shortcut like Ctrl+C. If text is selected it
+  // opens Explain/Answer/Code for it; otherwise the "ask about this page" box.
+  function summonHud() {
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
     const inOurs = sel && sel.rangeCount && host.contains(sel.getRangeAt(0).commonAncestorContainer);
@@ -336,6 +334,18 @@
     setEmotion('curious');
     if (text && text.length > 1 && !inOurs) { lastAutoText = text; showChoice(text, cursorRect()); }
     else { showPageAsk(cursorRect()); }
+  }
+  let lastCtrlTap = 0;      // when Ctrl was last released as a clean tap
+  let ctrlUsedWithKey = false; // was another key pressed during this Ctrl hold?
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Control') { if (!e.repeat) ctrlUsedWithKey = false; }
+    else if (e.ctrlKey) { ctrlUsedWithKey = true; } // Ctrl+<something> — not a tap
+  }, true);
+  document.addEventListener('keyup', (e) => {
+    if (e.key !== 'Control' || ctrlUsedWithKey) return;
+    const now = Date.now();
+    if (now - lastCtrlTap < 450) { lastCtrlTap = 0; summonHud(); }
+    else lastCtrlTap = now;
   }, true);
 
   // Floating "ask about this page" button — top frame only, so there's just one.
@@ -747,7 +757,7 @@
       <div class="question">Ask about this page</div>
       <input type="text" class="page-input" placeholder="e.g. Summarize this page">
       <button type="button" class="page-ask-btn">Ask</button>
-      <div class="hint-key">Tip: press <kbd>Ctrl</kbd>+<kbd>M</kbd> anywhere to summon me</div>
+      <div class="hint-key">Tip: double-tap <kbd>Ctrl</kbd> anywhere to summon me</div>
     `;
     popover.hidden = false;
     positionPopover(rect);
