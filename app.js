@@ -1936,6 +1936,46 @@ function openSettings() {
   settingsPanel.hidden = false;
 }
 
+// Palette for the favorite-colour picker: many hues × 4 shades (light→dark),
+// plus a warm-neutral (marble) row. The custom picker still allows any colour.
+const ACCENT_COLORS = [
+  '#fca5a5', '#f87171', '#ef4444', '#b91c1c', // red
+  '#fdba74', '#fb923c', '#f97316', '#c2410c', // orange
+  '#fcd34d', '#fbbf24', '#f59e0b', '#b45309', // amber
+  '#bef264', '#a3e635', '#84cc16', '#4d7c0f', // lime
+  '#86efac', '#4ade80', '#22c55e', '#15803d', // green
+  '#5eead4', '#2dd4bf', '#14b8a6', '#0f766e', // teal
+  '#7dd3fc', '#38bdf8', '#0ea5e9', '#0369a1', // sky
+  '#93c5fd', '#60a5fa', '#3b82f6', '#1d4ed8', // blue
+  '#a5b4fc', '#818cf8', '#6366f1', '#4338ca', // indigo
+  '#d8b4fe', '#c084fc', '#a855f7', '#7e22ce', // purple
+  '#f0abfc', '#e879f9', '#d946ef', '#a21caf', // fuchsia
+  '#f9a8d4', '#f472b6', '#ec4899', '#be185d', // pink
+  '#d6d3ce', '#a8a29e', '#78716c', '#44403c', // warm neutral (marble)
+];
+function buildAccentSwatches() {
+  const wrap = document.getElementById('accent-swatches');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const none = document.createElement('button');
+  none.type = 'button'; none.className = 'accent-sw accent-none';
+  none.dataset.accent = ''; none.title = 'None — marble monochrome';
+  none.setAttribute('aria-label', 'None (marble monochrome)');
+  wrap.appendChild(none);
+  ACCENT_COLORS.forEach((c) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'accent-sw'; b.dataset.accent = c;
+    b.style.setProperty('--sw', c); b.title = c; b.setAttribute('aria-label', c);
+    wrap.appendChild(b);
+  });
+  const lab = document.createElement('label');
+  lab.className = 'accent-sw accent-custom'; lab.title = 'Custom colour';
+  const inp = document.createElement('input');
+  inp.type = 'color'; inp.id = 'accent-custom'; inp.value = '#3b82f6';
+  inp.setAttribute('aria-label', 'Custom colour');
+  lab.appendChild(inp); wrap.appendChild(lab);
+}
+
 // Mark the swatch matching the saved colour (or "None") as active.
 function syncAccentSwatches() {
   const cur = (state.accent || '').toLowerCase();
@@ -2569,6 +2609,7 @@ chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
+buildAccentSwatches();
 applyReading();
 applyAccent();
 renderHistory();
