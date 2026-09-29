@@ -973,7 +973,9 @@
   function checkSelection() {
     if (manualOpen) return; // a deliberately-summoned HUD isn't driven by the selection
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePopover(); return; }
+    // No selection (e.g. the user clicked elsewhere and it collapsed) — leave the
+    // popover exactly as it is. It only closes via × or Escape.
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return; // ignore selecting our own popover text
     const text = selectionText(sel);
@@ -998,16 +1000,10 @@
     selTimer = setTimeout(checkSelection, 500);
   });
 
+  // The popover stays open once shown; it only closes when the user clicks the
+  // × (below) or presses Escape. Clicking or scrolling elsewhere leaves it up,
+  // and highlighting new text replaces it with a fresh one.
   closeBtn.addEventListener('click', dismissPopover);
-
-  // Hide when the user starts a fresh interaction elsewhere (but not the
-  // mousedown that begins a new selection inside a page — checkSelection on
-  // the following mouseup will re-show it).
-  document.addEventListener('mousedown', (e) => {
-    const path = e.composedPath ? e.composedPath() : [];
-    if (e.target === host || path.includes(host) || path.includes(popover)) return; // clicks/drags inside our UI
-    hidePopover();
-  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popover.hidden) dismissPopover();
   });
@@ -1028,8 +1024,4 @@
     showChoice(text, rect);
   });
 
-  // Selection popovers are anchored to page content, so scrolling dismisses
-  // them; a deliberately-summoned (or dragged) HUD stays put.
-  window.addEventListener('scroll', () => { if (!manualOpen) hidePopover(); }, true);
-  window.addEventListener('resize', () => { if (!manualOpen) hidePopover(); });
 })();
