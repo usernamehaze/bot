@@ -46,6 +46,53 @@ Your key is stored in the extension's own local storage on your device —
 never synced anywhere, never sent anywhere except directly to Groq's API
 when you ask something.
 
+## Copying Cassie to your other computers (via Google Drive or USB)
+
+The extension is just a folder of files, so you can carry it between your own
+desktops/laptops with Google Drive (or a USB stick). Do this once per computer.
+
+**A. Get just the extension folder (do this once)**
+
+1. On GitHub, download the project ZIP (green **Code** button → **Download
+   ZIP**), or download an already-zipped extension file if one is provided.
+2. Extract/unzip it on your laptop.
+3. Inside, find the **`extension/`** folder — that folder *is* the whole
+   extension. You do **not** need the rest of the project (the web app, the
+   3D bot source, etc.).
+4. Copy the `extension/` folder into your Google Drive (rename it something
+   clear like `cassie-extension` so you recognise it).
+
+**B. Put it on another computer**
+
+5. On the other computer, open Google Drive and **download** the
+   `cassie-extension` folder to the actual disk — for example into your
+   **Documents** folder. *Don't* try to load it while it's still "cloud only"
+   in Drive; it must be really downloaded and stay in a permanent spot.
+6. Open `chrome://extensions` (or `edge://extensions`).
+7. Turn on **Developer mode** (top-right toggle).
+8. Click **Load unpacked** and select that downloaded `cassie-extension`
+   folder.
+9. Cassie's icon appears in the toolbar. Click it and paste your **free Groq
+   API key** (you enter the key once on each computer — it doesn't travel with
+   the files, on purpose).
+
+**Important notes**
+
+- **Keep the folder where it is.** Chrome keeps pointing at that exact folder,
+  so don't delete or move it after loading. If you move it, re-run steps 6–8.
+- **Desktop only.** This works on Chrome/Edge/Brave (and some Android
+  browsers). It does **not** work on iPhone/iPad — on a phone, just open the
+  web app at askcassie.pages.dev instead (no install needed).
+- **Updating.** If a newer version comes out, replace the folder's files with
+  the new ones, then click the **↻ reload** icon on the extension's card at
+  `chrome://extensions`.
+- **Work/school laptops** may block Developer mode by policy; if **Load
+  unpacked** is greyed out, that's why.
+
+For a true one-click install that auto-updates across all your devices, the
+extension would need to be published to the Chrome Web Store (a one-time ~$5
+developer fee) — a good step once you're ready to share it more widely.
+
 ## Using it
 
 Highlight a sentence, question, or term on any page. After a brief moment,
