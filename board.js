@@ -167,11 +167,11 @@
     const W = canvas.width, H = canvas.height, pad = 34;
     const PX = (v) => pad + (v - xmin) / (xmax - xmin) * (W - 2 * pad);
     const PY = (v) => H - pad - (v - ymin) / (ymax - ymin) * (H - 2 * pad);
-    const pink = css('--cb-accent', '#ff5ea8');
-    const surface = css('--surface', '#1c1a26');
-    const grid = css('--border', '#2c2938');
-    const muted = css('--muted', '#9997b3');
-    const text = css('--text', '#ecebf5');
+    const pink = css('--cb-accent', '#2a2a2d'); // monochrome board ink
+    const surface = css('--surface', '#ffffff');
+    const grid = css('--border', '#e5e2dc');
+    const muted = css('--muted', '#6d6d72');
+    const text = css('--text', '#1b1b1d');
 
     x.fillStyle = surface; x.fillRect(0, 0, W, H);
     x.strokeStyle = grid; x.lineWidth = 1;
@@ -182,7 +182,7 @@
     // area-under-curve fill (calculus)
     if (spec.fill && spec.fill.length === 2) {
       const [a, bb] = spec.fill;
-      x.fillStyle = 'rgba(255,94,168,.18)';
+      x.fillStyle = 'rgba(128,128,128,.22)'; // neutral area fill (works on light & dark)
       x.beginPath(); x.moveTo(PX(a), PY(0));
       for (let t = a; t <= bb; t += (bb - a) / 120) x.lineTo(PX(t), PY(f(t)));
       x.lineTo(PX(bb), PY(0)); x.closePath(); x.fill();
@@ -213,7 +213,7 @@
     });
     if (spec.vertex) {
       const px = PX(spec.vertex.x), py = PY(spec.vertex.y);
-      x.fillStyle = '#ffd36e'; x.save(); x.translate(px, py); x.rotate(Math.PI / 4); x.fillRect(-5, -5, 10, 10); x.restore();
+      x.fillStyle = muted; x.save(); x.translate(px, py); x.rotate(Math.PI / 4); x.fillRect(-5, -5, 10, 10); x.restore();
     }
 
     if (spec.caption) { const c = el('p', 'cb-note'); c.textContent = pretty(spec.caption); board.appendChild(c); }
@@ -229,25 +229,25 @@
     const kind = (spec.shape || '').toLowerCase();
     const wrap = el('div', 'cb-geo');
     const svg = svgEl('svg', { viewBox: '0 0 260 180', class: 'cb-geo-svg' });
-    const pink = css('--cb-accent', '#ff5ea8');
+    const pink = css('--cb-accent', '#2a2a2d');
     let area = null, perim = null, areaFormula = '', perimFormula = '';
     function label(x, y, t) { const e = svgEl('text', { x, y, fill: css('--text', '#ecebf5'), 'font-size': 13, 'font-weight': 700, 'text-anchor': 'middle', 'font-family': 'sans-serif' }); e.textContent = t; svg.appendChild(e); }
 
     if (kind === 'rectangle' || kind === 'square') {
       const w = spec.w != null ? spec.w : spec.side, h = spec.h != null ? spec.h : spec.side;
-      svg.appendChild(svgEl('rect', { x: 45, y: 40, width: 170, height: 100, fill: 'rgba(255,94,168,.10)', stroke: pink, 'stroke-width': 3, rx: 4 }));
+      svg.appendChild(svgEl('rect', { x: 45, y: 40, width: 170, height: 100, fill: 'rgba(128,128,128,.14)', stroke: pink, 'stroke-width': 3, rx: 4 }));
       label(130, 32, String(w)); label(228, 95, String(h));
       area = w * h; perim = 2 * (w + h); areaFormula = `${w} × ${h}`; perimFormula = `2(${w} + ${h})`;
     } else if (kind === 'triangle') {
       const b = spec.base, ht = spec.height;
-      svg.appendChild(svgEl('polygon', { points: '50,140 210,140 90,45', fill: 'rgba(255,94,168,.10)', stroke: pink, 'stroke-width': 3 }));
+      svg.appendChild(svgEl('polygon', { points: '50,140 210,140 90,45', fill: 'rgba(128,128,128,.14)', stroke: pink, 'stroke-width': 3 }));
       svg.appendChild(svgEl('line', { x1: 90, y1: 45, x2: 90, y2: 140, stroke: pink, 'stroke-dasharray': '4 4', 'stroke-width': 1.5 }));
       label(130, 158, 'base ' + b); label(112, 95, 'h ' + ht);
       area = 0.5 * b * ht; areaFormula = `½ × ${b} × ${ht}`;
       if (spec.sides && spec.sides.length === 3) { perim = spec.sides.reduce((a, c) => a + c, 0); perimFormula = spec.sides.join(' + '); }
     } else if (kind === 'circle') {
       const r = spec.r;
-      svg.appendChild(svgEl('circle', { cx: 130, cy: 90, r: 60, fill: 'rgba(255,94,168,.10)', stroke: pink, 'stroke-width': 3 }));
+      svg.appendChild(svgEl('circle', { cx: 130, cy: 90, r: 60, fill: 'rgba(128,128,128,.14)', stroke: pink, 'stroke-width': 3 }));
       svg.appendChild(svgEl('line', { x1: 130, y1: 90, x2: 190, y2: 90, stroke: pink, 'stroke-width': 2 }));
       label(160, 82, 'r = ' + r);
       area = Math.PI * r * r; perim = 2 * Math.PI * r; areaFormula = `π × ${r}²`; perimFormula = `2 × π × ${r}`;
