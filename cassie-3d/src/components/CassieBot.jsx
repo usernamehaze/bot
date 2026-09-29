@@ -6,6 +6,14 @@ import { PINK } from './constants';
 
 const lerp = THREE.MathUtils.lerp;
 
+// The bot's glow colour (eyes / core / rim). Defaults to pink; the app can set
+// it to the user's favorite colour via window.CassieMascot.setColor(). It's a
+// module value so the many GlossyPink materials pick it up without threading a
+// prop everywhere — CassieBot writes it at the top of each render, so it's
+// current for the children rendered right after.
+let BOT_GLOW = PINK;
+const glow = () => BOT_GLOW;
+
 // A five-point star, used for the celebratory eyes.
 function makeStarGeometry() {
   const shape = new THREE.Shape();
@@ -28,8 +36,8 @@ function makeStarGeometry() {
 function GlossyPink({ intensity = 2.6, transmission = 0.5, ...props }) {
   return (
     <meshPhysicalMaterial
-      color={PINK}
-      emissive={PINK}
+      color={glow()}
+      emissive={glow()}
       emissiveIntensity={intensity}
       roughness={0.12}
       metalness={0.1}
@@ -101,7 +109,7 @@ function Zzz() {
   return (
     <group ref={ref} position={[0.42, 0.72, 0]}>
       <Html center distanceFactor={9} occlude={false}>
-        <div style={{ color: '#FF1493', fontWeight: 800, fontSize: 18, textShadow: '0 0 8px rgba(255,20,147,.6)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+        <div style={{ color: glow(), fontWeight: 800, fontSize: 18, textShadow: '0 0 8px rgba(0,0,0,.35)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
           z z z
         </div>
       </Html>
@@ -171,7 +179,9 @@ function StatusIcon({ icon }) {
   return null;
 }
 
-export default function CassieBot({ emotion, hideIcons = false }) {
+export default function CassieBot({ emotion, hideIcons = false, accent = null }) {
+  // Make the glow colour current for the GlossyPink materials rendered below.
+  BOT_GLOW = accent || PINK;
   const rig = useRef();
   const head = useRef();
   const armL = useRef();
@@ -180,7 +190,10 @@ export default function CassieBot({ emotion, hideIcons = false }) {
   const starGeo = useMemo(() => makeStarGeometry(), []);
 
   const pose = emotion.pose;
-  const rimTarget = useMemo(() => new THREE.Color(pose.rimColor), [pose.rimColor]);
+  // When the user picks a favorite colour, the rim follows it too; otherwise it
+  // keeps the per-emotion pink tint.
+  const rimColor = accent || pose.rimColor;
+  const rimTarget = useMemo(() => new THREE.Color(rimColor), [rimColor]);
 
   useFrame((state, dt) => {
     const t = Math.min(1, dt * 6); // smoothing factor
@@ -209,7 +222,7 @@ export default function CassieBot({ emotion, hideIcons = false }) {
   return (
     <group ref={rig} position={[0, 0, 0]}>
       {/* rim light that tints per emotion */}
-      <pointLight ref={rim} position={[0, 0.5, -1.8]} intensity={18} distance={8} color={pose.rimColor} />
+      <pointLight ref={rim} position={[0, 0.5, -1.8]} intensity={18} distance={8} color={rimColor} />
 
       {/* HEAD */}
       <group ref={head} position={[0, 0.55, 0]}>

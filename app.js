@@ -207,14 +207,22 @@ function accentInk(hex) {
 function applyAccent() {
   const root = document.documentElement;
   const color = (state.accent || '').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+  const on = /^#[0-9a-fA-F]{6}$/.test(color);
+  if (on) {
     root.style.setProperty('--accent', color);
     root.style.setProperty('--accent-ink', accentInk(color));
   } else {
     root.style.removeProperty('--accent');
     root.style.removeProperty('--accent-ink');
   }
+  // Tint the 3D bot to match (null = her default pink). Guarded because the
+  // mascot bundle loads lazily; if it isn't ready yet, the ready event re-applies.
+  try { if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(on ? color : null); } catch (e) { /* ignore */ }
 }
+// When the lazy 3D bot finishes loading, apply the saved colour to it.
+window.addEventListener('cassie3d-ready', () => {
+  try { const c = (state.accent || '').trim(); if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(/^#[0-9a-fA-F]{6}$/.test(c) ? c : null); } catch (e) { /* ignore */ }
+});
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
