@@ -322,11 +322,12 @@
     return { left: lastMouse.x, top: lastMouse.y, right: lastMouse.x, bottom: lastMouse.y, width: 0, height: 0 };
   }
 
-  // Feature: hotkey — Ctrl/Cmd + Shift + K summons Cassie at the cursor
-  // (Clicky-style). If text is selected, it opens Explain/Answer/Code for it;
-  // otherwise it opens the quick "ask about this page" box.
+  // Feature: hotkey — Ctrl + M summons Cassie at the cursor (Clicky-style).
+  // Two keys only. Ctrl (not Cmd) works on every OS and dodges Mac's Cmd+M
+  // "minimize window". If text is selected, it opens Explain/Answer/Code for
+  // it; otherwise it opens the quick "ask about this page" box.
   document.addEventListener('keydown', (e) => {
-    if (!((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key || '').toLowerCase() === 'k')) return;
+    if (!(e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.key || '').toLowerCase() === 'm')) return;
     e.preventDefault();
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
@@ -746,7 +747,7 @@
       <div class="question">Ask about this page</div>
       <input type="text" class="page-input" placeholder="e.g. Summarize this page">
       <button type="button" class="page-ask-btn">Ask</button>
-      <div class="hint-key">Tip: press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> anywhere to summon me</div>
+      <div class="hint-key">Tip: press <kbd>Ctrl</kbd>+<kbd>M</kbd> anywhere to summon me</div>
     `;
     popover.hidden = false;
     positionPopover(rect);
