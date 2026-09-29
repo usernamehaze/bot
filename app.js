@@ -17,6 +17,7 @@ function loadState() {
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
+    accent: '',             // favorite colour (hex) — '' = marble monochrome
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -192,6 +193,27 @@ function applyReading() {
   if (!appEl) return;
   appEl.setAttribute('data-textsize', state.textSize || 'normal');
   appEl.setAttribute('data-easyread', state.easyRead ? 'on' : 'off');
+}
+
+// Favorite-colour theming: when the user picks a colour, it becomes --accent
+// and every accent-aware element (buttons, highlights, the board) adopts it.
+// Empty = marble monochrome (the default). Readable text colour is auto-picked.
+function accentInk(hex) {
+  const c = String(hex).replace('#', '');
+  if (c.length !== 6) return '#ffffff';
+  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#111111' : '#ffffff';
+}
+function applyAccent() {
+  const root = document.documentElement;
+  const color = (state.accent || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    root.style.setProperty('--accent', color);
+    root.style.setProperty('--accent-ink', accentInk(color));
+  } else {
+    root.style.removeProperty('--accent');
+    root.style.removeProperty('--accent-ink');
+  }
 }
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
@@ -1910,7 +1932,32 @@ function openSettings() {
   // every section collapsed so the screen stays calm.
   const keysGroup = document.getElementById('settings-keys');
   if (keysGroup) keysGroup.open = !state.groqKey;
+  syncAccentSwatches();
   settingsPanel.hidden = false;
+}
+
+// Mark the swatch matching the saved colour (or "None") as active.
+function syncAccentSwatches() {
+  const cur = (state.accent || '').toLowerCase();
+  const sws = settingsPanel.querySelectorAll('.accent-sw[data-accent]');
+  let matched = false;
+  sws.forEach((sw) => {
+    const on = (sw.dataset.accent || '').toLowerCase() === cur;
+    sw.classList.toggle('active', on);
+    if (on) matched = true;
+  });
+  const custom = document.getElementById('accent-custom');
+  if (custom) {
+    if (cur && !matched) { custom.value = cur; custom.parentElement.classList.add('active'); }
+    else custom.parentElement.classList.remove('active');
+    if (/^#[0-9a-f]{6}$/i.test(cur)) custom.value = cur;
+  }
+}
+function setAccent(color) {
+  state.accent = color || '';
+  save();
+  applyAccent();
+  syncAccentSwatches();
 }
 const MODEL_SHORT = {
   'openai/gpt-oss-120b': 'GPT-OSS 120B',
@@ -1944,6 +1991,14 @@ settingsBtn.addEventListener('click', () => {
   detourToElement(settingsBtn, { click: true, resumeAfter: 900 });
 });
 settingsCloseBtn.addEventListener('click', closeSettings);
+// Favorite-colour swatches: preset click, "None", or a custom colour.
+settingsPanel.addEventListener('click', (e) => {
+  const sw = e.target.closest('.accent-sw[data-accent]');
+  if (sw) setAccent(sw.dataset.accent);
+});
+settingsPanel.addEventListener('input', (e) => {
+  if (e.target.id === 'accent-custom') setAccent(e.target.value);
+});
 if (modelPill) {
   modelPill.addEventListener('click', () => {
     openSettings();
@@ -2515,6 +2570,7 @@ window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- init ---------- */
 applyReading();
+applyAccent();
 renderHistory();
 updateModelPill();
 updateMemoryDot();

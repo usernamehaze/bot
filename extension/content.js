@@ -170,9 +170,9 @@
     /* --- "Explain a graphic" overlay: Cassie draws on top of the page --- */
     .annotate-fab {
       position: fixed; right: 16px; bottom: 68px; width: 44px; height: 44px;
-      border-radius: 50%; background: #ff2e93; border: none; cursor: pointer;
+      border-radius: 50%; background: #5a5a5a; border: none; cursor: pointer;
       z-index: 2147483646; opacity: .62; transition: opacity .15s;
-      box-shadow: 0 4px 14px rgba(255,46,147,.4);
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
       display: flex; align-items: center; justify-content: center; padding: 0;
     }
     .annotate-fab:hover { opacity: 1; }
@@ -185,7 +185,7 @@
     .pt-backdrop[hidden] { display: none; }
     .pt-hint {
       position: fixed; left: 50%; top: 20px; transform: translateX(-50%);
-      background: #1c1a26; color: #fff; border: 1.5px solid #ff2e93; border-radius: 12px;
+      background: #1c1a26; color: #fff; border: 1.5px solid rgba(255,255,255,.22); border-radius: 12px;
       padding: 10px 16px; font-size: 14px; font-weight: 600; z-index: 2147483647;
       box-shadow: 0 8px 24px rgba(0,0,0,.3); display: flex; align-items: center; gap: 8px;
     }
@@ -193,25 +193,25 @@
     .pt-hint .x { margin-left: 6px; cursor: pointer; opacity: .7; font-size: 17px; }
     .pt-hint .x:hover { opacity: 1; }
     .ann-svg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2147483645; }
-    .ann-svg path, .ann-svg line { stroke: #ff2e93; fill: none; stroke-width: 3; stroke-linecap: round; }
-    .ann-dot { fill: #ff2e93; }
-    .ann-dot-ring { fill: none; stroke: #ff2e93; stroke-width: 2; opacity: .6; }
+    .ann-svg path, .ann-svg line { stroke: #1c1c24; fill: none; stroke-width: 3; stroke-linecap: round; }
+    .ann-dot { fill: #1c1c24; }
+    .ann-dot-ring { fill: none; stroke: #1c1c24; stroke-width: 2; opacity: .6; }
     .board-card {
       position: fixed; z-index: 2147483646; width: 300px; max-width: calc(100vw - 24px);
-      background: #1c1a26; color: #ecebf5; border: 1.5px solid #ff2e93; border-radius: 16px;
+      background: #1c1a26; color: #ecebf5; border: 1.5px solid rgba(255,255,255,.22); border-radius: 16px;
       box-shadow: 0 14px 40px rgba(0,0,0,.4); overflow: hidden;
     }
     .board-card[hidden] { display: none; }
     .board-card .bc-head {
       display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-      border-bottom: 1px solid rgba(255,46,147,.3); font-weight: 700; font-size: 13.5px;
+      border-bottom: 1px solid rgba(255,255,255,.12); font-weight: 700; font-size: 13.5px;
     }
     .board-card .bc-head .face {
       width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(160deg,#fff,#ffd9ec);
       border: 1.5px solid #ffb8dd; position: relative; flex-shrink: 0;
     }
     .board-card .bc-head .face::before, .board-card .bc-head .face::after {
-      content: ""; position: absolute; top: 7px; width: 3px; height: 5px; border-radius: 2px; background: #ff2e93;
+      content: ""; position: absolute; top: 7px; width: 3px; height: 5px; border-radius: 2px; background: #d0d0d0;
     }
     .board-card .bc-head .face::before { left: 6px } .board-card .bc-head .face::after { right: 6px }
     .board-card .bc-head .grow { flex: 1; }
@@ -232,8 +232,8 @@
       color: #b9b7c9; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
     }
     .board-steps li.done { opacity: .62; }
-    .board-steps li.active { background: rgba(255,46,147,.15); border-color: rgba(255,46,147,.5); }
-    .board-steps li.active::before { background: #ff2e93; color: #fff; border-color: #ff2e93; }
+    .board-steps li.active { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); }
+    .board-steps li.active::before { background: #e0e0e0; color: #1c1a26; border-color: #e0e0e0; }
 
     /* --- draggable header + emotional mini-bot avatar --- */
     .header { cursor: grab; touch-action: none; }
@@ -247,19 +247,19 @@
     }
     .cassie-ava::before, .cassie-ava::after {
       content: ""; position: absolute; top: 6px; width: 3px; height: 5px; border-radius: 2px;
-      background: #ec4899; transition: all .18s ease;
+      background: #d0d0d0; transition: all .18s ease;
     }
     .cassie-ava::before { left: 5px; } .cassie-ava::after { right: 5px; }
     .cassie-ava[data-emo="thinking"] { animation: cassieBob 1s ease-in-out infinite; }
     .cassie-ava[data-emo="thinking"]::before, .cassie-ava[data-emo="thinking"]::after { height: 3px; top: 5px; }
     .cassie-ava[data-emo="happy"]::before, .cassie-ava[data-emo="happy"]::after {
-      height: 3px; width: 5px; top: 8px; background: transparent; border-radius: 0 0 5px 5px; border-bottom: 2px solid #ec4899;
+      height: 3px; width: 5px; top: 8px; background: transparent; border-radius: 0 0 5px 5px; border-bottom: 2px solid #d0d0d0;
     }
     .cassie-ava[data-emo="happy"]::before { left: 4px; } .cassie-ava[data-emo="happy"]::after { right: 4px; }
     .cassie-ava[data-emo="curious"] { transform: rotate(-8deg); }
     .cassie-ava[data-emo="curious"]::after { height: 7px; top: 5px; }
     .cassie-ava[data-emo="sad"]::before, .cassie-ava[data-emo="sad"]::after {
-      height: 3px; width: 5px; top: 9px; background: transparent; border-radius: 5px 5px 0 0; border-top: 2px solid #ec4899;
+      height: 3px; width: 5px; top: 9px; background: transparent; border-radius: 5px 5px 0 0; border-top: 2px solid #d0d0d0;
     }
     .cassie-ava[data-emo="sad"]::before { left: 4px; } .cassie-ava[data-emo="sad"]::after { right: 4px; }
     @keyframes cassieBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
