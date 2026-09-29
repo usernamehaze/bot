@@ -234,6 +234,42 @@
     .board-steps li.done { opacity: .62; }
     .board-steps li.active { background: rgba(255,46,147,.15); border-color: rgba(255,46,147,.5); }
     .board-steps li.active::before { background: #ff2e93; color: #fff; border-color: #ff2e93; }
+
+    /* --- draggable header + emotional mini-bot avatar --- */
+    .header { cursor: grab; touch-action: none; }
+    .header:active { cursor: grabbing; }
+    .header button { cursor: pointer; }
+    .hleft { display: flex; align-items: center; gap: 8px; }
+    .cassie-ava {
+      width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; position: relative;
+      background: linear-gradient(160deg, #ffffff, #ffd9ec); border: 1.5px solid #ffb8dd;
+      transition: transform .2s ease;
+    }
+    .cassie-ava::before, .cassie-ava::after {
+      content: ""; position: absolute; top: 6px; width: 3px; height: 5px; border-radius: 2px;
+      background: #ec4899; transition: all .18s ease;
+    }
+    .cassie-ava::before { left: 5px; } .cassie-ava::after { right: 5px; }
+    .cassie-ava[data-emo="thinking"] { animation: cassieBob 1s ease-in-out infinite; }
+    .cassie-ava[data-emo="thinking"]::before, .cassie-ava[data-emo="thinking"]::after { height: 3px; top: 5px; }
+    .cassie-ava[data-emo="happy"]::before, .cassie-ava[data-emo="happy"]::after {
+      height: 3px; width: 5px; top: 8px; background: transparent; border-radius: 0 0 5px 5px; border-bottom: 2px solid #ec4899;
+    }
+    .cassie-ava[data-emo="happy"]::before { left: 4px; } .cassie-ava[data-emo="happy"]::after { right: 4px; }
+    .cassie-ava[data-emo="curious"] { transform: rotate(-8deg); }
+    .cassie-ava[data-emo="curious"]::after { height: 7px; top: 5px; }
+    .cassie-ava[data-emo="sad"]::before, .cassie-ava[data-emo="sad"]::after {
+      height: 3px; width: 5px; top: 9px; background: transparent; border-radius: 5px 5px 0 0; border-top: 2px solid #ec4899;
+    }
+    .cassie-ava[data-emo="sad"]::before { left: 4px; } .cassie-ava[data-emo="sad"]::after { right: 4px; }
+    @keyframes cassieBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+    .hint-key {
+      display: inline-block; margin-top: 8px; font-size: 11px; color: #8a8a93;
+    }
+    .hint-key kbd {
+      font-family: inherit; font-size: 10px; background: rgba(127,127,127,.16);
+      border: 1px solid rgba(127,127,127,.3); border-radius: 4px; padding: 1px 5px; margin: 0 1px;
+    }
   `;
   shadow.appendChild(style);
 
@@ -241,13 +277,65 @@
   popover.className = 'popover';
   popover.hidden = true;
   popover.innerHTML = `
-    <div class="header"><span>Cassie</span><button type="button" aria-label="Close">&times;</button></div>
+    <div class="header">
+      <span class="hleft"><span class="cassie-ava" data-emo="idle"></span><span>Cassie</span></span>
+      <button type="button" aria-label="Close">&times;</button>
+    </div>
     <div class="body"></div>
   `;
   shadow.appendChild(popover);
 
+  const header = popover.querySelector('.header');
   const closeBtn = popover.querySelector('.header button');
   const body = popover.querySelector('.body');
+  const avatar = popover.querySelector('.cassie-ava');
+  // Cassie's little face reacts: curious when she opens, thinking while she
+  // works, happy when she's done, sad if something breaks.
+  function setEmotion(name) { if (avatar) avatar.dataset.emo = name || 'idle'; }
+
+  // Feature: drag the popover anywhere by its header (it then stays put).
+  let dragging = false, dragDX = 0, dragDY = 0;
+  header.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return; // let the close button work
+    dragging = true;
+    const r = popover.getBoundingClientRect();
+    dragDX = e.clientX - r.left; dragDY = e.clientY - r.top;
+    popover.dataset.moved = '1';
+    try { header.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    e.preventDefault();
+  });
+  header.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const w = popover.offsetWidth, h = popover.offsetHeight;
+    const left = Math.max(6, Math.min(e.clientX - dragDX, window.innerWidth - w - 6));
+    const top = Math.max(6, Math.min(e.clientY - dragDY, window.innerHeight - h - 6));
+    popover.style.left = left + 'px'; popover.style.top = top + 'px';
+  });
+  function endDrag(e) { dragging = false; try { header.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ } }
+  header.addEventListener('pointerup', endDrag);
+  header.addEventListener('pointercancel', endDrag);
+
+  // Feature: remember the cursor so the hotkey HUD appears where you're looking.
+  let lastMouse = { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) };
+  document.addEventListener('mousemove', (e) => { lastMouse = { x: e.clientX, y: e.clientY }; }, { passive: true });
+  function cursorRect() {
+    return { left: lastMouse.x, top: lastMouse.y, right: lastMouse.x, bottom: lastMouse.y, width: 0, height: 0 };
+  }
+
+  // Feature: hotkey — Ctrl/Cmd + Shift + K summons Cassie at the cursor
+  // (Clicky-style). If text is selected, it opens Explain/Answer/Code for it;
+  // otherwise it opens the quick "ask about this page" box.
+  document.addEventListener('keydown', (e) => {
+    if (!((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key || '').toLowerCase() === 'k')) return;
+    e.preventDefault();
+    const sel = window.getSelection();
+    const text = sel ? selectionText(sel) : '';
+    const inOurs = sel && sel.rangeCount && host.contains(sel.getRangeAt(0).commonAncestorContainer);
+    popover.hidden = false;
+    setEmotion('curious');
+    if (text && text.length > 1 && !inOurs) { lastAutoText = text; showChoice(text, cursorRect()); }
+    else { showPageAsk(cursorRect()); }
+  }, true);
 
   // Floating "ask about this page" button — top frame only, so there's just one.
   let fab = null;
@@ -274,10 +362,16 @@
   let lastAutoText = '';
   let gen = 0;
   let selTimer = null;
+  // True while the HUD was opened deliberately (hotkey / "ask about this page"),
+  // so a selection change on the page doesn't auto-dismiss it.
+  let manualOpen = false;
 
   function hidePopover() {
     popover.hidden = true;
     lastAutoText = '';
+    manualOpen = false;
+    delete popover.dataset.moved; // a fresh open re-anchors to the selection
+    setEmotion('idle');
     gen++;
   }
 
@@ -585,6 +679,7 @@
     convoRect = rect;
     const myGen = ++gen;
     setContent('Thinking…', { muted: true });
+    setEmotion('thinking');
     positionPopover(rect);
     let positioned = false;
     askStream(convo, {
@@ -598,10 +693,12 @@
         if (myGen !== gen) return;
         convo.push({ role: 'assistant', content: full });
         saveToHistory(convoLabel, full);
+        setEmotion('happy');
         renderAnswerView(full || '(no response)', rect);
       },
       onError: (err) => {
         if (myGen !== gen) return;
+        setEmotion('sad');
         if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
         else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
         else setContent(err, { muted: true });
@@ -612,16 +709,23 @@
 
   function positionPopover(rect) {
     applyTheme();
+    if (popover.dataset.moved) return; // user dragged it — leave it where they put it
     const width = popover.offsetWidth || 300;
+    const estHeight = popover.offsetHeight || 90;
     let left = rect.left + rect.width / 2 - width / 2;
     left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
     popover.style.left = `${left}px`;
 
-    const estHeight = popover.offsetHeight || 90;
-    const spaceAbove = rect.top;
-    const top = spaceAbove > estHeight + 16
-      ? rect.top - estHeight - 8
-      : Math.min(rect.bottom + 8, window.innerHeight - estHeight - 12);
+    const isPoint = rect.width === 0 && rect.height === 0; // cursor/hotkey anchor
+    let top;
+    if (isPoint) {
+      top = rect.top + 16; // sit just below the cursor
+      if (top + estHeight > window.innerHeight - 12) top = rect.top - estHeight - 12; // flip up if no room
+    } else {
+      top = rect.top > estHeight + 16
+        ? rect.top - estHeight - 8
+        : Math.min(rect.bottom + 8, window.innerHeight - estHeight - 12);
+    }
     popover.style.top = `${Math.max(8, top)}px`;
   }
 
@@ -632,26 +736,30 @@
     return { left: x, top: y, right: x, bottom: y, width: 0, height: 0 };
   }
 
-  function showPageAsk() {
-    const rect = bottomRightRect();
+  function showPageAsk(rect) {
+    // The FAB passes a click event, not a rect — fall back to the corner then.
+    rect = (rect && typeof rect.left === 'number' && typeof rect.width === 'number') ? rect : bottomRightRect();
+    manualOpen = true;
     body.classList.remove('muted');
+    setEmotion('curious');
     body.innerHTML = `
       <div class="question">Ask about this page</div>
       <input type="text" class="page-input" placeholder="e.g. Summarize this page">
       <button type="button" class="page-ask-btn">Ask</button>
+      <div class="hint-key">Tip: press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> anywhere to summon me</div>
     `;
     popover.hidden = false;
     positionPopover(rect);
     const input = body.querySelector('.page-input');
     const askBtn = body.querySelector('.page-ask-btn');
     input.focus();
-    const run = () => runPageAsk(input.value.trim());
+    const run = () => runPageAsk(input.value.trim(), rect);
     askBtn.addEventListener('click', run);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
   }
 
-  function runPageAsk(question) {
-    const rect = bottomRightRect();
+  function runPageAsk(question, rect) {
+    rect = rect || bottomRightRect();
     const q = question || 'Summarize this page and list the key points.';
     setContent('Reading the page…', { muted: true });
     positionPopover(rect);
@@ -840,6 +948,8 @@
   function showChoice(text, rect) {
     pendingText = text;
     pendingRect = rect;
+    manualOpen = false; // this HUD tracks a selection
+    setEmotion('curious');
     body.classList.remove('muted');
     body.innerHTML = `
       <div class="question">What should I do with this?</div>
@@ -873,6 +983,7 @@
   }
 
   function checkSelection() {
+    if (manualOpen) return; // a deliberately-summoned HUD isn't driven by the selection
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePopover(); return; }
     const range = sel.getRangeAt(0);
@@ -905,7 +1016,9 @@
   // mousedown that begins a new selection inside a page — checkSelection on
   // the following mouseup will re-show it).
   document.addEventListener('mousedown', (e) => {
-    if (e.target !== host) hidePopover();
+    const path = e.composedPath ? e.composedPath() : [];
+    if (e.target === host || path.includes(host) || path.includes(popover)) return; // clicks/drags inside our UI
+    hidePopover();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popover.hidden) dismissPopover();
@@ -927,6 +1040,8 @@
     showChoice(text, rect);
   });
 
-  window.addEventListener('scroll', hidePopover, true);
-  window.addEventListener('resize', hidePopover);
+  // Selection popovers are anchored to page content, so scrolling dismisses
+  // them; a deliberately-summoned (or dragged) HUD stays put.
+  window.addEventListener('scroll', () => { if (!manualOpen) hidePopover(); }, true);
+  window.addEventListener('resize', () => { if (!manualOpen) hidePopover(); });
 })();
