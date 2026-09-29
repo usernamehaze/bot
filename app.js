@@ -1322,6 +1322,43 @@ function downloadBlob(filename, blob) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// --- Private, on-device backup: export/import your study state to a JSON file.
+// No server, no account — just a file you keep. API keys are deliberately left
+// OUT of the file so the backup isn't a secret you have to guard.
+const MEM_KEY = 'cassie.mem.v1';
+function exportBackup() {
+  const backup = { app: 'cassie', kind: 'backup', version: 1, exportedAt: new Date().toISOString() };
+  try { const m = localStorage.getItem(MEM_KEY); if (m) backup.memory = JSON.parse(m); } catch (e) { /* ignore */ }
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) { const s = JSON.parse(raw); delete s.groqKey; delete s.geminiKey; backup.state = s; }
+  } catch (e) { /* ignore */ }
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadBlob(`cassie-backup-${stamp}.json`, new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
+}
+function importBackupFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); } catch (e) { alert('That file isn’t valid JSON — it may be corrupted.'); return; }
+    if (!data || data.app !== 'cassie' || data.kind !== 'backup') { alert('That doesn’t look like a Cassie backup file.'); return; }
+    if (!confirm('Import this backup? It replaces the memory and chats on this device. Your saved API keys stay as they are.')) return;
+    try { if (data.memory) localStorage.setItem(MEM_KEY, JSON.stringify(data.memory)); } catch (e) { /* ignore */ }
+    try {
+      if (data.state) {
+        let cur = {};
+        try { cur = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { /* ignore */ }
+        // Restore everything except keys — keep whatever this device already has.
+        const merged = Object.assign({}, data.state, { groqKey: cur.groqKey || '', geminiKey: cur.geminiKey || '' });
+        localStorage.setItem(STORE_KEY, JSON.stringify(merged));
+      }
+    } catch (e) { /* ignore */ }
+    location.reload(); // simplest, safe way to re-init the app from restored data
+  };
+  reader.readAsText(file);
+}
+
 const DL_ICON = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5z"/></svg>';
 
 function addTextDownload(bubble, text) {
@@ -1975,6 +2012,14 @@ function renderMemory() {
       <div class="mem-facts">${facts.length ? facts.map((f, i) => `<div class="mem-fact"><span>${memEsc(f.text)}</span><button class="mem-del" data-i="${i}" aria-label="Remove">&times;</button></div>`).join('') : '<p class="mem-empty">No notes yet. Try telling her: “Remember my exam is on Friday.”</p>'}</div>
       <div class="mem-addrow"><input id="mem-fact" type="text" placeholder="Tell Cassie to remember something…"><button id="mem-add" class="btn">Add</button></div>
 
+      <div class="mem-section">Backup &amp; restore</div>
+      <p class="mem-empty">Your data lives only on this device. Save a private backup file to keep it safe, or bring it to another device.</p>
+      <div class="mem-backup">
+        <button class="btn secondary" id="mem-export">⬇ Export backup</button>
+        <button class="btn secondary" id="mem-import">⬆ Import backup</button>
+        <input type="file" id="mem-import-file" accept="application/json,.json" hidden>
+      </div>
+
       <div class="settings-actions">
         <button class="btn secondary" id="mem-clear">Clear all memory</button>
         <button class="btn" id="mem-done">Done</button>
@@ -2013,6 +2058,12 @@ if (memoryPanel) {
       if (inp && inp.value.trim()) { window.CassieMemory.addFact(inp.value); renderMemory(); }
       return;
     }
+    if (e.target.closest('#mem-export')) { exportBackup(); return; }
+    if (e.target.closest('#mem-import')) {
+      const f = document.getElementById('mem-import-file');
+      if (f) f.click();
+      return;
+    }
     if (e.target.closest('#mem-clear')) {
       if (confirm('Clear everything Cassie remembers about you? This cannot be undone.')) {
         window.CassieMemory.clearAll(); renderMemory(); updateMemoryDot();
@@ -2022,6 +2073,10 @@ if (memoryPanel) {
   memoryPanel.addEventListener('change', (e) => {
     if (e.target.id === 'mem-name') window.CassieMemory.setProfile('name', e.target.value);
     if (e.target.id === 'mem-goal') window.CassieMemory.setProfile('goal', e.target.value);
+    if (e.target.id === 'mem-import-file' && e.target.files && e.target.files[0]) {
+      importBackupFile(e.target.files[0]);
+      e.target.value = ''; // allow re-importing the same file later
+    }
   });
   memoryPanel.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'mem-fact') {
