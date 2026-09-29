@@ -4,6 +4,13 @@
   const HOST_ID = 'cassie-ext-host-92f1';
   if (document.getElementById(HOST_ID)) return; // avoid double injection
 
+  // Don't run on the Cassie web app itself — it already IS Cassie, and our
+  // floating buttons would sit on top of its send button and block it.
+  if (document.querySelector('meta[name="cassie-app"]') ||
+      /(^|\.)askcassie\.pages\.dev$|(^|\.)usernamehaze\.github\.io$/.test(location.hostname)) {
+    return;
+  }
+
   console.log('[Cassie] extension loaded on this page — highlight text to use it.');
 
   // Let the popup ask for the text of the page the user is viewing (top frame only).
