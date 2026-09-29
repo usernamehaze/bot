@@ -240,29 +240,6 @@
     .header:active { cursor: grabbing; }
     .header button { cursor: pointer; }
     .hleft { display: flex; align-items: center; gap: 8px; }
-    .cassie-ava {
-      width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; position: relative;
-      background: linear-gradient(160deg, #ffffff, #ffd9ec); border: 1.5px solid #ffb8dd;
-      transition: transform .2s ease;
-    }
-    .cassie-ava::before, .cassie-ava::after {
-      content: ""; position: absolute; top: 6px; width: 3px; height: 5px; border-radius: 2px;
-      background: #d0d0d0; transition: all .18s ease;
-    }
-    .cassie-ava::before { left: 5px; } .cassie-ava::after { right: 5px; }
-    .cassie-ava[data-emo="thinking"] { animation: cassieBob 1s ease-in-out infinite; }
-    .cassie-ava[data-emo="thinking"]::before, .cassie-ava[data-emo="thinking"]::after { height: 3px; top: 5px; }
-    .cassie-ava[data-emo="happy"]::before, .cassie-ava[data-emo="happy"]::after {
-      height: 3px; width: 5px; top: 8px; background: transparent; border-radius: 0 0 5px 5px; border-bottom: 2px solid #d0d0d0;
-    }
-    .cassie-ava[data-emo="happy"]::before { left: 4px; } .cassie-ava[data-emo="happy"]::after { right: 4px; }
-    .cassie-ava[data-emo="curious"] { transform: rotate(-8deg); }
-    .cassie-ava[data-emo="curious"]::after { height: 7px; top: 5px; }
-    .cassie-ava[data-emo="sad"]::before, .cassie-ava[data-emo="sad"]::after {
-      height: 3px; width: 5px; top: 9px; background: transparent; border-radius: 5px 5px 0 0; border-top: 2px solid #d0d0d0;
-    }
-    .cassie-ava[data-emo="sad"]::before { left: 4px; } .cassie-ava[data-emo="sad"]::after { right: 4px; }
-    @keyframes cassieBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
     .hint-key {
       display: inline-block; margin-top: 8px; font-size: 11px; color: #8a8a93;
     }
@@ -278,7 +255,7 @@
   popover.hidden = true;
   popover.innerHTML = `
     <div class="header">
-      <span class="hleft"><span class="cassie-ava" data-emo="idle"></span><span>Cassie</span></span>
+      <span class="hleft"><span>Cassie</span></span>
       <button type="button" aria-label="Close">&times;</button>
     </div>
     <div class="body"></div>
