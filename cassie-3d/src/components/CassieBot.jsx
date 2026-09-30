@@ -107,9 +107,9 @@ function Zzz() {
     if (ref.current) ref.current.position.y = 0.72 + Math.sin(state.clock.elapsedTime * 1.5) * 0.04;
   });
   return (
-    <group ref={ref} position={[0.42, 0.72, 0]}>
-      <Html center distanceFactor={9} occlude={false}>
-        <div style={{ color: glow(), fontWeight: 800, fontSize: 18, textShadow: '0 0 8px rgba(0,0,0,.35)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+    <group ref={ref} position={[0.12, 0.88, 0]}>
+      <Html center distanceFactor={12} occlude={false}>
+        <div style={{ color: glow(), fontWeight: 800, fontSize: 15, textShadow: '0 0 8px rgba(0,0,0,.35)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
           z z z
         </div>
       </Html>
@@ -253,10 +253,9 @@ export default function CassieBot({ emotion, hideIcons = false, accent = null, f
           <Ceramic />
         </RoundedBox>
 
-        {/* soft visor — a gentle recessed panel for the eyes, not a stark
-            dark square (kept subtle so it doesn't read as a black box) */}
-        <RoundedBox args={[0.7, 0.5, 0.08]} radius={0.24} smoothness={5} position={[0, 0, 0.33]}>
-          <meshPhysicalMaterial color="#e7e5ee" roughness={0.4} metalness={0.05} clearcoat={0.5} clearcoatRoughness={0.3} />
+        {/* dark screen face */}
+        <RoundedBox args={[0.78, 0.6, 0.12]} radius={0.22} smoothness={5} position={[0, 0, 0.32]}>
+          <meshPhysicalMaterial color="#101018" roughness={0.15} metalness={0.3} clearcoat={1} clearcoatRoughness={0.05} />
         </RoundedBox>
 
         {/* eyes */}
