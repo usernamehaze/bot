@@ -1445,9 +1445,13 @@ async function handleSend(text, opts = {}) {
   if (needKey) {
     openSettings();
     detourToElement(image ? geminiKeyInput : groqKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', image
+    // Show the reminder only once — don't stack a new bubble on every send.
+    const prev = chatLog.querySelector('.need-key-msg');
+    if (prev) prev.remove();
+    const b = renderMessage('assistant', image
       ? "To read an image I need your free Google (Gemini) API key — add it in Settings (top right)."
       : "I need your free Groq API key before I can answer — add it in Settings (top right).");
+    if (b) b.classList.add('need-key-msg');
     return;
   }
 
