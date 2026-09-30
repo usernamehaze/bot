@@ -39,7 +39,7 @@ function Mascot() {
       <directionalLight position={[-3, 2, 2]} intensity={0.7} color="#88aaff" />
       {/* scaled to leave head-room so raised / open arms stay inside the frame */}
       <group scale={1.02} position={[0, -0.1, 0]}>
-        <CassieBot emotion={emotion} hideIcons accent={accent} />
+        <CassieBot emotion={emotion} hideIcons accent={accent} feet={key !== 'neutral'} />
       </group>
       <Environment resolution={128}>
         <Lightformer intensity={2} color="#ffffff" position={[0, 2, 2]} scale={[6, 6, 1]} />

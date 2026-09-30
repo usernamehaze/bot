@@ -179,7 +179,7 @@ function StatusIcon({ icon }) {
   return null;
 }
 
-export default function CassieBot({ emotion, hideIcons = false, accent = null }) {
+export default function CassieBot({ emotion, hideIcons = false, accent = null, feet = false }) {
   // Make the glow colour current for the GlossyPink materials rendered below.
   BOT_GLOW = accent || PINK;
   const rig = useRef();
@@ -253,9 +253,10 @@ export default function CassieBot({ emotion, hideIcons = false, accent = null })
           <Ceramic />
         </RoundedBox>
 
-        {/* dark screen face */}
-        <RoundedBox args={[0.78, 0.6, 0.12]} radius={0.22} smoothness={5} position={[0, 0, 0.32]}>
-          <meshPhysicalMaterial color="#101018" roughness={0.15} metalness={0.3} clearcoat={1} clearcoatRoughness={0.05} />
+        {/* soft visor — a gentle recessed panel for the eyes, not a stark
+            dark square (kept subtle so it doesn't read as a black box) */}
+        <RoundedBox args={[0.7, 0.5, 0.08]} radius={0.24} smoothness={5} position={[0, 0, 0.33]}>
+          <meshPhysicalMaterial color="#e7e5ee" roughness={0.4} metalness={0.05} clearcoat={0.5} clearcoatRoughness={0.3} />
         </RoundedBox>
 
         {/* eyes */}
@@ -273,6 +274,13 @@ export default function CassieBot({ emotion, hideIcons = false, accent = null })
         <sphereGeometry args={[0.12, 32, 32]} />
         <GlossyPink intensity={3} transmission={0.3} />
       </mesh>
+
+      {/* tiny feet — only while she's expressing something (hidden at rest/neutral) */}
+      {feet && [-1, 1].map((s) => (
+        <RoundedBox key={s} args={[0.2, 0.12, 0.28]} radius={0.055} smoothness={4} position={[0.18 * s, -0.55, 0.05]} castShadow>
+          <Ceramic />
+        </RoundedBox>
+      ))}
 
       {/* ARMS (pivot at shoulder) */}
       <group ref={armL} position={[-0.5, 0.05, 0]}>
