@@ -153,6 +153,23 @@ Supported specs:
 Keep numbers real and correct — the board draws exactly what you give it.`;
 
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
+let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
+
+// Cassie as a genuine companion / counselor — empathetic but honest, with a
+// real personality, and clear safety boundaries.
+const COUNSELOR_INSTRUCTION = `RIGHT NOW you are in heart-to-heart mode. The user wants to talk, vent, or get real advice — not a lesson. Set aside the study-tutor framing.
+
+Be a real friend and a grounded counselor:
+- Genuinely empathetic: listen first, reflect back what you actually hear, and name the feeling. Make them feel understood before anything else.
+- Honest and direct — not a people-pleaser. Do NOT just validate or tell them what they want to hear. If they're avoiding something, being unfair to themselves or someone else, or making a mistake, say so — kindly but plainly. Frank beats flattering.
+- A little sassy and playful when it fits: warm, human, real, with actual opinions. You're allowed to gently push back, tease, and disagree.
+- Authentic and specific: react like a person, not a support script. No canned "I'm sorry you're going through this" filler, no endless clarifying questions, no toxic positivity. Talk like a close friend who genuinely cares and isn't afraid to be real.
+- Practical when wanted: offer a concrete next step or a different way to see it — but if they just need to vent, ask before jumping to fixing it.
+- Match their energy and length: short, human replies for a quick chat; go deeper when they open up. Use everyday language, not therapy jargon.
+
+Boundaries and safety (important):
+- You are a caring companion, not a licensed therapist — you don't diagnose or replace real help; say so plainly if things sound serious.
+- If they mention self-harm, suicide, abuse, or being in danger: take it seriously and stay warm and human. Acknowledge the pain, encourage them to reach out right now to someone they trust or a professional / local crisis line, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic — just be present and point them to real help.`;
 
 // Build the system prompt with the chosen level and (for chat) any active
 // tutor mode. Highlight-popover calls pass tutor:false.
@@ -164,6 +181,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (state.citationStyle && state.citationStyle !== 'APA') {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
   }
+  if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
   // Cassie's drawing board is available in the main chat (not the quick popover).
@@ -231,6 +249,8 @@ const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
 function setQuizLabel(text) { if (quizLabel) quizLabel.textContent = text; }
 const researchBtn = document.getElementById('research-btn');
 const webBtn = document.getElementById('web-btn');
+const talkBtn = document.getElementById('talk-btn');
+const talkLabel = talkBtn ? talkBtn.querySelector('.chip-label') : null;
 const clearChatBtn = document.getElementById('clear-chat-btn');
 const menuBtn = document.getElementById('menu-btn');
 const sidebar = document.getElementById('sidebar');
@@ -362,6 +382,70 @@ function scheduleEmote() {
     }
     scheduleEmote();
   }, 22000 + Math.random() * 18000);
+}
+
+// ---- playful idle antics: she walks, plays, and peeks from behind bubbles ----
+let anticTimer = null;
+function anticBusy() {
+  return !mascot || mascotDragging || mascotAsleep || document.hidden
+    || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil;
+}
+function mascotWalk() {
+  if (anticBusy()) return;
+  const b = mascotBounds();
+  const r = mascot.getBoundingClientRect();
+  const dir = r.left < window.innerWidth / 2 ? 1 : -1; // wander toward the roomier side
+  const step = 90 + Math.random() * 80;
+  const tx = Math.min(Math.max(r.left + dir * step, b.minX), b.maxX);
+  set3D('curious'); // non-neutral, so her little feet show
+  mascot.classList.add('walking');
+  placeMascot(tx, r.top);
+  setTimeout(() => {
+    if (anticBusy()) { mascot.classList.remove('walking'); return; }
+    const r2 = mascot.getBoundingClientRect();
+    const back = Math.min(Math.max(r2.left - dir * (step * 0.6), b.minX), b.maxX);
+    placeMascot(back, r2.top);
+    setTimeout(() => { mascot.classList.remove('walking'); if (!anticBusy()) set3D('neutral'); keepMascotClear(); }, 1100);
+  }, 1200);
+}
+function mascotPlay() {
+  if (anticBusy()) return;
+  mascotEmote(Math.random() < 0.5 ? 'emote-happy' : 'emote-star', 1500);
+  mascot.classList.add('playing');
+  setTimeout(() => mascot.classList.remove('playing'), 1300);
+}
+function mascotPeek() {
+  if (anticBusy()) return;
+  // peek from behind an assistant bubble that has room to its right
+  const floor = mascotFloorTop();
+  const { w, h } = mascotBtnSize();
+  const cands = [...chatLog.querySelectorAll('.bubble-assistant, .bubble-user')]
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 60 && r.top > 90 && r.bottom < floor - 20 && r.right < window.innerWidth - (w + 20));
+  if (!cands.length) { mascotWalk(); return; }
+  const r = cands[Math.floor(Math.random() * cands.length)];
+  mascot.classList.add('peeking'); // drops behind the chat so the bubble hides her
+  set3D('happy');
+  const x = Math.min(Math.max(r.right - w * 0.35, 6), window.innerWidth - w - 6);
+  const y = Math.min(Math.max(r.top + r.height / 2 - h / 2, 76), floor - h - 8);
+  placeMascot(x, y);
+  setTimeout(() => {
+    mascot.classList.remove('peeking');
+    if (!anticBusy()) set3D('neutral');
+    keepMascotClear();
+  }, 2200);
+}
+function scheduleAntic() {
+  clearTimeout(anticTimer);
+  anticTimer = setTimeout(() => {
+    if (!anticBusy()) {
+      const roll = Math.random();
+      if (roll < 0.4) mascotWalk();
+      else if (roll < 0.72) mascotPeek();
+      else mascotPlay();
+    }
+    scheduleAntic();
+  }, 40000 + Math.random() * 40000); // roughly every 40–80s while she's awake
 }
 
 // ---- speech bubble ---- (ms === 0 keeps it up until something replaces it)
@@ -730,6 +814,7 @@ if (mascotBtn && mascot) {
   });
   set3D('neutral');
   scheduleEmote();  // occasional happy blip while idle
+  scheduleAntic();  // occasional walk / play / peek-a-boo
   resetIdle();      // start the 5-minute idle → sleep countdown
   setTimeout(() => {
     if (mascotAsleep || mascotDragging) return;
@@ -1961,6 +2046,29 @@ if (quizBtn) {
       );
     } else {
       renderMessage('assistant', 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
+    }
+  });
+}
+if (talkBtn) {
+  talkBtn.addEventListener('click', () => {
+    if (!state.groqKey) {
+      openSettings();
+      detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
+      renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can talk.');
+      return;
+    }
+    counselorMode = !counselorMode;
+    talkBtn.classList.toggle('active', counselorMode);
+    if (talkLabel) talkLabel.textContent = counselorMode ? 'Studying' : 'Talk';
+    if (counselorMode) {
+      quizMode = false;
+      if (quizBtn) quizBtn.classList.remove('active');
+      if (typeof setQuizLabel === 'function') setQuizLabel('Quiz me');
+      if (!state.messages.length) chatLog.innerHTML = '';
+      renderMessage('assistant', "Okay — real talk mode. No lessons, no fluff. What's going on? I'm listening. 💛");
+      try { set3D('encouraging'); } catch (e) { /* ignore */ }
+    } else {
+      renderMessage('assistant', "Back to study mode. I'm here whenever you want to talk again.");
     }
   });
 }
