@@ -156,6 +156,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 #chat-log {
   flex: 1;
   overflow-y: auto;
+  position: relative; z-index: 5; /* so Cassie can duck BEHIND the bubbles when she peeks */
   /* center a readable column on wide/full-width screens while keeping
      left/right bubble alignment inside it */
   padding: 16px max(16px, calc((100% - 900px) / 2));
@@ -446,6 +447,14 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 }
 #mascot.dragging { transition: none; cursor: grabbing; }
 #mascot.dragging .mascot-face { animation: none; }
+/* playful antics: a waddle while walking, hops while playing, and ducking
+   behind the chat bubbles to peek */
+#mascot.walking { transition: left 1.15s ease-in-out, top 1.15s ease-in-out; }
+#mascot.walking #mascot-btn { animation: mascotWaddle .5s ease-in-out infinite; }
+@keyframes mascotWaddle { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
+#mascot.playing #mascot-btn { animation: mascotHop .42s ease-in-out 3; }
+@keyframes mascotHop { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-15px); } 70% { transform: translateY(-6px); } }
+#mascot.peeking { z-index: 4; } /* below #chat-log (z 5) → the bubble hides her body while her head pokes out */
 #mascot-btn { border: none; background: none; padding: 0; cursor: grab; width: 58px; height: 68px; touch-action: none; position: relative; }
 /* 3D Cassie canvas mount — larger than the button and centred on it so raised
    arms are never clipped by the canvas edge. Transparent + pointer-events:none,
