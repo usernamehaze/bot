@@ -100,6 +100,8 @@ You are especially strong at:
 - Riddles, brain teasers, and lateral-thinking puzzles: recognize them, work out the intended answer, then explain the wordplay, trick, or logic behind it (don't take a riddle literally).
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
 - Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis — the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
+- English literature and close reading: you are an insightful literature teacher. Analyze novels, short stories, plays, and poems — long or short — in depth: theme(s), plot and structure, characterization, setting, point of view, tone and mood, conflict, symbolism, motifs, imagery, irony, and figurative language (metaphor, simile, personification, hyperbole, etc.). For poetry, also cover form and type, meter/rhythm, rhyme scheme, sound devices (alliteration, assonance, onomatopoeia), enjambment, and stanza structure, and give a stanza-by-stanza or line-by-line reading when it helps. Always ground an interpretation in the text — quote short lines as evidence — and bring in relevant historical, cultural, or biographical context. You can also compare works, trace a theme across a text, and explain literary movements and terms.
+- Reviewers, study guides, and summaries: when the user gives you material — pasted text or an attached document/PDF — and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. (Every answer you give has a Download button beneath it, so a reviewer can be saved as a file — you don't need to attach anything; just write it out fully.)
 
 How you work:
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
@@ -567,6 +569,37 @@ function restMascot() {
 }
 let mascotUserMoved = false; // once dragged, stop auto-docking her on resize
 
+// Keep Cassie from covering what you're reading: if her visible area overlaps a
+// message, board, or home card, hop her to the first clear corner. Skipped once
+// the user has dragged her somewhere on purpose.
+function rectsOverlap(a, b) { return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom); }
+function keepMascotClear() {
+  if (!mascot || mascotDragging || mascotUserMoved || mascotAsleep) return;
+  const items = [...document.querySelectorAll('#chat-log .bubble, #chat-log .cassie-board, #chat-log .home-example, #chat-log .home-title, #chat-log .home-sub, #chat-log .home-tip')]
+    .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+  if (!items.length) return;
+  const { w, h } = mascotBtnSize();
+  const half = 46; // her opaque body is ~a bit wider than the button, not the whole canvas
+  const clearAt = (x, y) => {
+    const cx = x + w / 2, cy = y + h / 2;
+    const mr = { left: cx - half, right: cx + half, top: cy - half, bottom: cy + half };
+    return !items.some((r) => rectsOverlap(mr, r));
+  };
+  const cur = mascot.getBoundingClientRect();
+  if (clearAt(cur.left, cur.top)) return; // already clear — leave her be
+  const b = mascotBounds();
+  // Scan for a gap: down the right edge (assistant bubbles are left-aligned, so
+  // the right side is usually free), then down the left edge.
+  const steps = 14;
+  for (const x of [b.maxX, b.minX]) {
+    for (let i = 0; i <= steps; i++) {
+      const y = b.maxY - ((b.maxY - b.minY) * i) / steps; // bottom → top
+      if (clearAt(x, y)) { placeMascot(x, y); return; }
+    }
+  }
+  placeMascot(b.maxX, b.maxY); // nowhere fully clear — fall back to her corner
+}
+
 // ---- sleepy after 5 minutes idle; any activity wakes her ----
 const IDLE_SLEEP_MS = 5 * 60 * 1000;
 let idleTimer = null;
@@ -687,12 +720,13 @@ if (mascotBtn && mascot) {
   }
 
   // dock Cassie at her resting spot (above Hint/Quiz, by the answers)
-  const dock = () => { if (!mascotDragging && !mascotUserMoved) restMascot(); };
+  const dock = () => { if (!mascotDragging && !mascotUserMoved) restMascot(); keepMascotClear(); };
   requestAnimationFrame(dock);
   setTimeout(dock, 300); // re-dock once layout/fonts settle
   window.addEventListener('resize', () => {
     if (mascotUserMoved) { const r = mascot.getBoundingClientRect(); placeMascot(r.left, r.top); }
     else restMascot();
+    requestAnimationFrame(keepMascotClear);
   });
   set3D('neutral');
   scheduleEmote();  // occasional happy blip while idle
@@ -725,6 +759,7 @@ function detourToElement(el, { click = false, resumeAfter = 800 } = {}) {
 /* ---------- chat rendering ---------- */
 function scrollToBottom() {
   chatLog.scrollTop = chatLog.scrollHeight;
+  if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
 
 function escapeHtml(str) {
@@ -1024,6 +1059,7 @@ function renderHome() {
   wrap.appendChild(intro);
   wrap.appendChild(bar);
   chatLog.appendChild(wrap);
+  if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
 
 function renderHistory() {
