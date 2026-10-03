@@ -1,0 +1,503 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cassie — 60s ad</title>
+<link rel="stylesheet" href="assets/inter-local.css">
+<style>
+  :root { --ink:#f4efe4; --mute:#8d8a82; --bg:#0f0e14; --ui:#ffffff; --ui-bg:#f2f0ec; --ui-line:#e4e1da; --ui-ink:#1b1b1d; --ui-mute:#6d6d72; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; background: #000; overflow: hidden; }
+  body { font-family: Inter, 'Liberation Sans', Arial, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; background: var(--bg); overflow: hidden; }
+  #glow { position: absolute; inset: -20%; background:
+      radial-gradient(40% 36% at 30% 38%, rgba(70,66,96,.55), transparent 70%),
+      radial-gradient(34% 34% at 78% 72%, rgba(52,50,70,.5), transparent 70%); }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+
+  /* ---------- captions (left column of feature scenes) ---------- */
+  .cap { position: absolute; left: 110px; top: 50%; width: 640px; transform: translateY(-50%); }
+  .cap .eye { font-size: 22px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--mute); margin-bottom: 26px; opacity: 0; }
+  .cap h2 { font-size: 92px; line-height: 1.02; font-weight: 800; letter-spacing: -.035em; opacity: 0; }
+  .cap p { margin-top: 34px; font-size: 32px; line-height: 1.38; font-weight: 500; color: #b4b0a6; max-width: 560px; opacity: 0; }
+
+  /* ---------- browser / app windows ---------- */
+  .win { position: absolute; left: 800px; top: 128px; width: 1010px; height: 824px; border-radius: 22px; background: var(--ui); color: var(--ui-ink);
+         box-shadow: 0 50px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.07); overflow: hidden; opacity: 0; }
+  .bar { height: 62px; background: #ebe8e2; display: flex; align-items: center; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--ui-line); }
+  .bar i { width: 14px; height: 14px; border-radius: 50%; background: #cfcbc3; display: block; }
+  .bar .url { margin-left: 18px; flex: 1; height: 34px; border-radius: 17px; background: #f8f7f4; border: 1px solid var(--ui-line); font-size: 17px; font-weight: 500; color: var(--ui-mute); display: flex; align-items: center; padding: 0 18px; }
+  .wbody { position: absolute; top: 62px; left: 0; right: 0; bottom: 0; overflow: hidden; background: #fff; }
+
+  /* ---------- scene 3: article + highlight popup ---------- */
+  .art { padding: 54px 62px; }
+  .art .site { font-size: 15px; font-weight: 700; letter-spacing: .16em; color: #9a978f; text-transform: uppercase; }
+  .art h1 { font-size: 52px; font-weight: 800; letter-spacing: -.03em; margin: 14px 0 26px; }
+  .art p { font-size: 25px; line-height: 1.62; color: #3a3a3e; margin-bottom: 22px; }
+  .selwrap { position: relative; display: inline-block; white-space: nowrap; font-weight: 600; color: #1b1b1d; font-size: 25px; line-height: 1.6; }
+  .selbar { position: absolute; left: -3px; right: -3px; top: 3px; bottom: 3px; background: rgba(66,133,244,.32); border-radius: 4px; transform-origin: left; transform: scaleX(0); }
+  .selwrap span.tx { position: relative; }
+  .pop { position: absolute; width: 470px; background: #1c1c24; color: #f3f3f6; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.1); overflow: hidden; opacity: 0; transform-origin: 40px 0; }
+  .pop .ph { height: 46px; background: #0f0f14; display: flex; align-items: center; padding: 0 18px; font-size: 14px; font-weight: 800; letter-spacing: .16em; justify-content: space-between; }
+  .pop .ph b { font-size: 22px; font-weight: 400; color: #777; }
+  .pop .pb { position: relative; height: 150px; }
+  .pop .choice { position: absolute; inset: 0; padding: 20px 20px; }
+  .pop .choice .q { font-size: 20px; font-weight: 700; margin-bottom: 18px; }
+  .pop .row { display: flex; gap: 12px; }
+  .pbtn { flex: 1; height: 50px; border-radius: 10px; background: #3a3b44; font-size: 19px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .pop .ans { position: absolute; inset: 0; padding: 20px 22px; font-size: 21px; line-height: 1.5; font-weight: 500; color: #ececf2; opacity: 0; }
+  .pop .ans b { font-weight: 800; color: #fff; }
+  .w { opacity: 0; display: inline; }
+
+  /* ---------- scene 4: snip + side board ---------- */
+  .textbook { position: absolute; left: 0; top: 0; width: 520px; height: 100%; padding: 46px 40px; background: #fff; }
+  .textbook .site { font-size: 14px; font-weight: 700; letter-spacing: .16em; color: #9a978f; text-transform: uppercase; }
+  .textbook h1 { font-size: 40px; font-weight: 800; letter-spacing: -.03em; margin: 12px 0 18px; }
+  .textbook p { font-size: 20px; line-height: 1.55; color: #3a3a3e; margin-bottom: 22px; }
+  .figure { position: relative; width: 440px; height: 320px; border: 1px solid #ebe8e2; border-radius: 10px; margin-top: 8px; background: #fff; }
+  .figure svg { display: block; }
+  .figcap { font-size: 15px; color: #8d8a82; margin-top: 12px; }
+  .rightpage { position: absolute; left: 520px; top: 0; right: 0; bottom: 0; background: #fafaf8; padding: 46px 40px; }
+  .rightpage .bar2 { height: 14px; border-radius: 7px; background: #ecebe6; margin-bottom: 18px; }
+  .snip { position: absolute; border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 0 2000px rgba(10,8,16,.5); opacity: 0; outline: 1px dashed rgba(0,0,0,.6); outline-offset: -4px; }
+  .panel { position: absolute; top: 0; bottom: 0; right: 0; width: 500px; background: #f6f5f2; color: #1b1b1d; box-shadow: -18px 0 50px rgba(0,0,0,.28); border-radius: 16px 0 0 0; opacity: 0; }
+  .panel .ph2 { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid rgba(127,127,127,.25); }
+  .panel .ph2 .t { flex: 1; font-size: 18px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cb { height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid rgba(127,127,127,.38); display: inline-flex; align-items: center; font-size: 15px; font-weight: 700; background: transparent; }
+  .cb.pri { background: #1b1b1d; color: #fff; border-color: #1b1b1d; }
+  .panel .note { padding: 14px 18px; border-bottom: 1px solid rgba(127,127,127,.22); font-size: 17px; line-height: 1.5; min-height: 150px; position: relative; }
+  .panel .note b { display: block; margin-bottom: 6px; font-size: 17px; }
+  .panel .note .reply2 { position: absolute; left: 18px; right: 18px; top: 14px; opacity: 0; }
+  .panel .note .steps { }
+  .panel .tools { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid rgba(127,127,127,.2); align-items: center; }
+  .panel .tools i { width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); display: block; position: relative; }
+  .panel .tools i.on { background: #1b1b1d; border-color: #1b1b1d; }
+  .panel .tools .sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(127,127,127,.3); }
+  .panel .board { position: absolute; left: 16px; right: 16px; top: 340px; height: 390px; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.2); }
+  .pen { fill: none; stroke: #d93a3a; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- scene 5/6: the Cassie app ---------- */
+  .appbody { background: #f2f0ec; }
+  .topbar { position: absolute; left: 0; right: 0; top: 0; height: 68px; border-bottom: 1px solid var(--ui-line); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; background: #f6f4f0; }
+  .topbar .l { position: absolute; left: 24px; width: 28px; height: 20px; background: linear-gradient(#777 0 3px, transparent 3px 8.5px, #777 8.5px 11.5px, transparent 11.5px 17px, #777 17px 20px); border-radius: 2px; }
+  .chat { position: absolute; left: 0; right: 0; top: 68px; bottom: 150px; padding: 26px 34px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+  .bub { max-width: 82%; padding: 16px 22px; border-radius: 22px; font-size: 22px; line-height: 1.5; opacity: 0; }
+  .bub.u { align-self: flex-end; background: #1b1b1d; color: #fff; border-bottom-right-radius: 8px; }
+  .bub.a { align-self: flex-start; background: #fff; border: 1px solid var(--ui-line); border-bottom-left-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+  .bub.a b { font-weight: 800; }
+  .bub.a .li { display: block; margin: 7px 0; padding-left: 20px; position: relative; opacity: 0; }
+  .bub.a .li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: #1b1b1d; }
+  .status { color: var(--ui-mute); font-size: 20px; font-weight: 500; position: relative; height: 30px; }
+  .status span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; }
+  .tools2 { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 16px; font-weight: 700; color: var(--ui-mute); opacity: 0; }
+  .tools2 .fmt { padding: 6px 4px; }
+  .tools2 .fmt.sg { background: #1b1b1d; color: #fff; padding: 6px 16px; border-radius: 999px; }
+  .tools2 .sep { width: 1px; height: 22px; background: var(--ui-line); }
+  .comp { position: absolute; left: 22px; right: 22px; bottom: 22px; height: 112px; border-radius: 28px; background: #fff; border: 1px solid var(--ui-line); box-shadow: 0 8px 30px rgba(0,0,0,.07); }
+  .comp .ph { position: absolute; left: 28px; top: 22px; font-size: 23px; color: #a6a39b; font-weight: 500; }
+  .comp .typed { position: absolute; left: 28px; top: 22px; font-size: 23px; font-weight: 500; color: #1b1b1d; white-space: nowrap; }
+  .comp .typed .ch { opacity: 0; }
+  .comp .send { position: absolute; right: 20px; bottom: 18px; width: 54px; height: 54px; border-radius: 50%; background: #1b1b1d; display: flex; align-items: center; justify-content: center; }
+  .comp .send svg { width: 24px; height: 24px; fill: #fff; }
+  .comp .clip { position: absolute; right: 92px; bottom: 26px; width: 38px; height: 38px; opacity: .55; }
+  .chip { position: absolute; left: 22px; bottom: 16px; height: 40px; padding: 0 16px 0 12px; border-radius: 12px; background: #f2f0ec; border: 1px solid var(--ui-line); font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 9px; opacity: 0; }
+  .pdfico { width: 22px; height: 28px; border-radius: 4px; background: #1b1b1d; color: #fff; font-size: 8px; font-weight: 800; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; letter-spacing: .04em; position: relative; }
+  .tile { position: absolute; left: 90px; top: 300px; width: 190px; padding: 18px 12px 14px; border-radius: 18px; background: #fff; border: 1px solid var(--ui-line); box-shadow: 0 14px 40px rgba(0,0,0,.14); display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 16px; font-weight: 700; text-align: center; opacity: 0; }
+  .tile .pdfico { width: 58px; height: 74px; font-size: 16px; border-radius: 8px; padding-bottom: 8px; }
+  .toast { position: absolute; left: 50%; bottom: 150px; margin-left: -210px; width: 420px; height: 64px; border-radius: 18px; background: #1b1b1d; color: #fff; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.3); opacity: 0; }
+
+  .bcard { margin-top: 16px; border: 1px solid var(--ui-line); border-radius: 18px; background: #f6f4f0; overflow: hidden; width: 540px; opacity: 0; }
+  .bcard .bh { display: flex; align-items: center; padding: 12px 16px; font-weight: 800; font-size: 17px; border-bottom: 1px solid var(--ui-line); }
+  .bcard .bh .dr { margin-left: auto; border: 1px solid var(--ui-line); border-radius: 999px; padding: 6px 14px; font-size: 15px; font-weight: 700; background: #fff; }
+  .bcard .bb { padding: 14px; }
+  .bcard .bt { font-weight: 800; font-size: 19px; margin-bottom: 8px; }
+
+  /* ---------- scene 7: timer + memory ---------- */
+  .card { position: absolute; background: #1c1b24; border: 1px solid rgba(255,255,255,.1); border-radius: 26px; padding: 30px; box-shadow: 0 40px 90px rgba(0,0,0,.45); opacity: 0; }
+  .card .lab { font-size: 18px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); display: flex; justify-content: space-between; align-items: center; }
+  .card .big { font-size: 118px; font-weight: 800; letter-spacing: -.02em; text-align: center; margin: 14px 0 10px; font-variant-numeric: tabular-nums; position: relative; height: 140px; }
+  .card .big span { position: absolute; left: 0; right: 0; }
+  .rail { height: 9px; border-radius: 9px; background: #34333f; overflow: hidden; margin-bottom: 20px; }
+  .rail i { display: block; height: 100%; width: 0; background: #f4efe4; }
+  .btnrow { display: flex; gap: 10px; }
+  .dbtn { flex: 1; height: 56px; border-radius: 14px; border: 1px solid #3a3946; background: #262531; font-size: 19px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .dbtn.pri { background: #f4efe4; color: #15141b; border-color: #f4efe4; }
+  .gear { width: 40px; height: 40px; border-radius: 11px; border: 1px solid #3a3946; display: flex; align-items: center; justify-content: center; }
+  .gear svg { width: 22px; height: 22px; fill: none; stroke: #bdb9ad; stroke-width: 2; stroke-linecap: round; }
+  .settings { overflow: hidden; height: 0; opacity: 0; }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 22px; }
+  .presets div { height: 48px; border-radius: 11px; border: 1px solid #3a3946; background: #262531; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; position: relative; }
+  .presets div.on { background: #f4efe4; color: #15141b; }
+  .frow { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; font-size: 19px; font-weight: 700; }
+  .frow .st { display: flex; align-items: center; border: 1px solid #3a3946; border-radius: 11px; overflow: hidden; background: #262531; }
+  .frow .st b { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #bdb9ad; }
+  .frow .st em { width: 62px; text-align: center; font-style: normal; font-size: 21px; border-left: 1px solid #3a3946; border-right: 1px solid #3a3946; height: 44px; line-height: 44px; position: relative; }
+  .frow .st em span { position: absolute; inset: 0; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; }
+  .stat { background: #262531; border: 1px solid #34333f; border-radius: 18px; padding: 20px 10px; text-align: center; }
+  .stat b { display: flex; justify-content: center; align-items: center; gap: 9px; font-size: 44px; font-weight: 800; }
+  .stat b svg { width: 28px; height: 28px; fill: none; stroke: #bdb9ad; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .stat small { display: block; margin-top: 4px; color: var(--mute); font-size: 17px; font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .chips span { padding: 10px 16px; border-radius: 999px; background: #262531; border: 1px solid #34333f; font-size: 17px; font-weight: 600; color: #d8d4c9; }
+  .priv { margin-top: 22px; font-size: 17px; color: var(--mute); font-weight: 500; display: flex; gap: 10px; align-items: center; }
+  .priv svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- scene 8: real talk ---------- */
+  .talk { position: absolute; left: 860px; top: 150px; width: 880px; }
+  .tb { padding: 22px 30px; border-radius: 28px; font-size: 30px; line-height: 1.45; font-weight: 500; opacity: 0; max-width: 760px; }
+  .tb.u { margin-left: auto; background: #f4efe4; color: #15141b; border-bottom-right-radius: 10px; }
+  .tb.a { background: #23222d; border: 1px solid rgba(255,255,255,.1); border-bottom-left-radius: 10px; margin-top: 24px; }
+  .typing { position: absolute; left: 0; top: 0; display: flex; gap: 10px; padding: 30px 34px; opacity: 0; }
+  .typing i { width: 14px; height: 14px; border-radius: 50%; background: #8d8a82; display: block; }
+  .botbig { position: absolute; width: 420px; height: 420px; left: 1120px; top: 560px; opacity: 0; }
+
+  /* ---------- scene 9/10 ---------- */
+  .huge { position: absolute; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: -.045em; font-size: 230px; line-height: 1; opacity: 0; }
+  .pill { display: inline-block; padding: 16px 30px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.22); font-size: 26px; font-weight: 600; margin: 0 8px; color: #d8d4c9; opacity: 0; }
+  .center { position: absolute; left: 0; right: 0; text-align: center; opacity: 0; }
+
+  /* ---------- the cursor ---------- */
+  #cur { position: absolute; left: 0; top: 0; width: 52px; height: 60px; transform-origin: 0 0; z-index: 99; pointer-events: none; opacity: 0; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+  #cur svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .rip { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; border: 3px solid rgba(244,239,228,.9); opacity: 0; z-index: 98; pointer-events: none; }
+  .rip.dk { border-color: rgba(30,30,36,.7); }
+  .rip.dim { border-color: rgba(255,255,255,.85); }
+
+  /* word highlight (title motif) */
+  .wordwrap { position: absolute; left: 50%; transform: translateX(-50%); display: inline-block; white-space: nowrap; padding: .02em .14em; font-weight: 800; letter-spacing: -.045em; line-height: 1.1; }
+  .wordwrap .t1 { color: var(--ink); }
+  .wordwrap .sel { position: absolute; inset: 0; padding: .02em .14em; background: #f4efe4; color: #100f16; border-radius: .09em; clip-path: inset(0 100% 0 0); }
+</style></head>
+<body>
+<div id="stage">
+  <div id="glow"></div>
+
+  <!-- S1 · hook -->
+  <div class="scene" id="s1">
+    <div class="center" id="h1a" style="top:300px;font-size:92px;font-weight:800;letter-spacing:-.035em">A textbook you can’t read.</div>
+    <div class="center" id="h1b" style="top:440px;font-size:92px;font-weight:800;letter-spacing:-.035em">A graph you can’t crack.</div>
+    <div class="center" id="h1c" style="top:580px;font-size:92px;font-weight:800;letter-spacing:-.035em">A deadline you can’t dodge.</div>
+  </div>
+
+  <!-- S2 · brand -->
+  <div class="scene" id="s2">
+    <div class="center" id="meet" style="top:250px;font-size:56px;font-weight:600;color:#8d8a82;letter-spacing:-.01em">Meet</div>
+    <div class="wordwrap" id="word2" style="top:318px;font-size:330px">
+      <span class="t1">Cassie</span><span class="sel">Cassie</span>
+    </div>
+    <div class="center" id="tag2" style="top:700px;font-size:58px;font-weight:600;color:#cfcabe;letter-spacing:-.02em">Your free AI study buddy.</div>
+    <img id="bot2" src="assets/bot-encouraging.png" style="position:absolute;left:1450px;top:430px;width:460px;opacity:0">
+  </div>
+
+  <!-- S3 · highlight -->
+  <div class="scene" id="s3">
+    <div class="cap"><div class="eye">Highlight</div><h2>Highlight anything.</h2><p>Explain it, answer it, or write the code — right on the page.</p></div>
+    <div class="win" id="w3"><div class="bar"><i></i><i></i><i></i><div class="url">biology-notes.edu / cellular-respiration</div></div>
+      <div class="wbody"><div class="art">
+        <div class="site">BioNotes</div><h1>Cellular Respiration</h1>
+        <p>Cells release the energy stored in glucose in stages. After glycolysis, the process moves into the mitochondria, where the next stage takes place.</p>
+        <p><span class="selwrap" id="sent"><span class="selbar"></span><span class="tx">The Krebs cycle turns acetyl-CoA into CO<sub>2</sub>, NADH, FADH<sub>2</sub> and ATP.</span></span></p>
+        <p>The electron carriers made here power the final stage, the electron transport chain, which produces most of the cell’s ATP.</p>
+        <p>Without oxygen at the end of that chain, the whole process stalls — which is why we breathe.</p>
+        <div class="pop" id="pop3" style="left:62px;top:322px"><div class="ph"><span>CASSIE</span><b>&times;</b></div>
+          <div class="pb"><div class="choice"><div class="q">What should I do with this?</div><div class="row"><div class="pbtn" id="b-exp">Explain</div><div class="pbtn">Answer</div><div class="pbtn">Code</div></div></div>
+            <div class="ans" id="ans3"></div></div></div>
+      </div></div></div>
+  </div>
+
+  <!-- S4 · snip -->
+  <div class="scene" id="s4">
+    <div class="cap"><div class="eye">Snip</div><h2>Snip a graph. Sketch on it.</h2><p>Cassie explains it in a board beside the page — no tab switching.</p></div>
+    <div class="win" id="w4"><div class="bar"><i></i><i></i><i></i><div class="url">mathbook.edu / linear-functions</div></div>
+      <div class="wbody">
+        <div class="textbook"><div class="site">MathBook</div><h1>Linear Functions</h1>
+          <p>Plot two points, then draw the straight line that passes through both of them.</p>
+          <div class="figure" id="fig4"></div><div class="figcap">Figure 3 · y = 2x + 1</div></div>
+        <div class="rightpage"><div class="bar2" style="width:80%"></div><div class="bar2" style="width:92%"></div><div class="bar2" style="width:60%"></div><div class="bar2" style="width:86%;margin-top:30px"></div><div class="bar2" style="width:70%"></div></div>
+        <div class="snip" id="snip4"></div>
+        <div class="panel" id="panel4">
+          <div class="ph2"><div class="t" id="p4t">Graph of y = 2x + 1</div><div class="cb">New snip</div><div class="cb pri" id="chk4">Check my work</div></div>
+          <div class="note"><div class="steps" id="steps4"><b>Graph of y = 2x + 1</b></div><div class="reply2" id="reply4">Nice — your line through (0, 1) and (2, 5) is right. Slope = 2.</div></div>
+          <div class="tools"><i class="on"></i><i></i><i></i><i></i><i></i><span class="sw" style="background:#1b1b1d"></span><span class="sw" style="background:#d93a3a"></span><span class="sw" style="background:#2f6fd6"></span><span class="sw" style="background:#f2c200"></span></div>
+          <div class="board" id="board4"></div>
+        </div>
+      </div></div>
+  </div>
+
+  <!-- S5 · reviewer -->
+  <div class="scene" id="s5">
+    <div class="cap"><div class="eye">Study files</div><h2>Drop in a PDF. Get a reviewer.</h2><p>PDFs, slides and Word files — pictures included. Save it as Word, PDF or an image.</p></div>
+    <div class="win" id="w5"><div class="bar"><i></i><i></i><i></i><div class="url">askcassie.pages.dev</div></div>
+      <div class="wbody appbody">
+        <div class="topbar"><span class="l"></span>Cassie</div>
+        <div class="chat" id="chat5">
+          <div class="bub u" id="u5">Make a reviewer<div style="font-size:16px;opacity:.7;margin-top:4px">(attached: Module 6 – Social Media.pdf)</div></div>
+          <div class="bub a" id="a5" style="width:720px;max-width:92%"><div class="status" id="st5"><span>Reading all 24 pages…</span><span>Looking at the diagrams…</span><span>Writing your reviewer…</span></div>
+            <div id="rev5" style="position:absolute;opacity:0;left:22px;right:22px;top:16px"></div></div>
+        </div>
+        <div class="tile" id="tile5"><div class="pdfico">PDF</div>Module 6 – Social Media.pdf</div>
+        <div class="comp" id="comp5"><div class="ph" id="ph5">Ask Cassie a question…</div><div class="typed" id="typed5"></div>
+          <div class="chip" id="chip5"><div class="pdfico" style="width:20px;height:26px;font-size:7px">PDF</div>Module 6 – Social Media.pdf</div>
+          <div class="send" id="send5"><svg viewBox="0 0 24 24"><path d="M3 20.5v-6.8l11-1.7-11-1.7V3.5l19 8.5z"/></svg></div></div>
+        <div class="toast" id="toast5"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Saved · Reviewer – Module 6.pdf</div>
+      </div></div>
+  </div>
+
+  <!-- S6 · real graphs -->
+  <div class="scene" id="s6">
+    <div class="cap"><div class="eye">Graphs</div><h2>She draws real graphs.</h2><p>Then you pick up the pen and try it yourself.</p></div>
+    <div class="win" id="w6"><div class="bar"><i></i><i></i><i></i><div class="url">askcassie.pages.dev</div></div>
+      <div class="wbody appbody"><div class="topbar"><span class="l"></span>Cassie</div>
+        <div class="chat" style="bottom:20px">
+          <div class="bub u" id="u6">can you graph it</div>
+          <div class="bub a" id="a6" style="max-width:92%">Here it is — start at (0, 1), then go up 2 for every 1 right.
+            <div class="bcard" id="bcard6"><div class="bh">✎&nbsp; Cassie’s board<span class="dr" id="dr6">Draw on this</span></div><div class="bb"><div class="bt">y = 2x + 1</div><div id="graph6"></div></div></div></div>
+        </div></div></div>
+  </div>
+
+  <!-- S7 · focus + memory -->
+  <div class="scene" id="s7">
+    <div class="cap"><div class="eye">Your pace</div><h2>Your time. Your pace.</h2><p>Set your own focus timer. She remembers what you study — on your device.</p></div>
+    <div class="card" id="c7a" style="left:810px;top:150px;width:470px;height:auto">
+      <div class="lab"><span id="lab7">Focus</span><span class="gear" id="gear7"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span></div>
+      <div class="big"><span id="t7a">25:00</span><span id="t7b" style="opacity:0">50:00</span></div>
+      <div class="rail"><i id="rail7"></i></div>
+      <div class="btnrow"><div class="dbtn pri" id="start7">Start</div><div class="dbtn">Reset</div><div class="dbtn">Skip</div></div>
+      <div class="settings" id="set7">
+        <div class="presets"><div id="pr1" class="on">25 / 5</div><div>45 / 10</div><div id="pr3">50 / 10</div><div>90 / 20</div></div>
+        <div class="frow"><span>Study</span><span class="st"><b>&minus;</b><em><span id="sa">25</span><span id="sb" style="opacity:0">50</span></em><b>+</b></span><span style="color:#8d8a82;font-size:16px">min</span></div>
+        <div class="frow"><span>Break</span><span class="st"><b>&minus;</b><em>10</em><b>+</b></span><span style="color:#8d8a82;font-size:16px">min</span></div>
+      </div>
+    </div>
+    <div class="card" id="c7b" style="left:1320px;top:150px;width:490px">
+      <div class="lab"><span>What Cassie remembers</span></div>
+      <div class="stats">
+        <div class="stat"><b><svg viewBox="0 0 24 24"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .2 1.8 1 3 2.5 3.5C11.5 9 11 6 12 3z"/></svg><span id="n1">0</span></b><small>day streak</small></div>
+        <div class="stat"><b><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg><span id="n2">0</span></b><small>mastered</small></div>
+        <div class="stat"><b><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="n3">0</span><span style="font-size:30px">h</span></b><small>focus</small></div>
+        <div class="stat"><b><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5z"/></svg><span id="n4">0</span></b><small>topics</small></div>
+      </div>
+      <div class="chips"><span>Cell respiration</span><span>Linear functions</span><span>Hormones</span><span>Social media</span></div>
+      <div class="priv"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Stays on your device. No account.</div>
+    </div>
+  </div>
+
+  <!-- S8 · real talk -->
+  <div class="scene" id="s8">
+    <div class="cap"><div class="eye">Talk</div><h2>And when it’s not about homework.</h2><p>She listens — honest, never just flattering.</p></div>
+    <div class="talk">
+      <div class="tb u" id="tu">I’m so behind. I feel like I’m failing.</div>
+      <div style="position:relative;min-height:220px"><div class="typing" id="tdots"><i></i><i></i><i></i></div>
+        <div class="tb a" id="ta"></div></div>
+    </div>
+    <img class="botbig" id="bot8" src="assets/bot-encouraging.png">
+  </div>
+
+  <!-- S9 · free / private / yours -->
+  <div class="scene" id="s9">
+    <div class="huge" id="g1" style="top:120px">Free.</div>
+    <div class="huge" id="g2" style="top:340px">Private.</div>
+    <div class="huge" id="g3" style="top:560px">Yours.</div>
+    <div class="center" id="g4" style="top:850px;font-size:36px;font-weight:500;color:#b4b0a6">Bring your own free key. Everything stays on your device.</div>
+    <div class="center" id="g5" style="top:930px"><span class="pill">Phone</span><span class="pill">Web</span><span class="pill">Chrome extension</span></div>
+    <div class="center" id="g6" style="top:1020px;font-size:20px;font-weight:500;color:#6f6c65">Made for studying and homework help — not for use during tests or quizzes.</div>
+  </div>
+
+  <!-- S10 · end card -->
+  <div class="scene" id="s10">
+    <img id="botEnd" src="assets/bot-celebratory.png" style="position:absolute;left:50%;margin-left:-280px;top:-20px;width:560px;opacity:0">
+    <div class="wordwrap" id="word10" style="top:460px;font-size:250px"><span class="t1">Cassie</span><span class="sel">Cassie</span></div>
+    <div class="center" id="url10" style="top:760px;font-size:66px;font-weight:700;letter-spacing:-.02em">askcassie.pages.dev</div>
+    <div class="center" id="sub10" style="top:860px;font-size:36px;font-weight:500;color:#b4b0a6">Study smarter. For free.</div>
+  </div>
+
+  <div id="cur"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></div>
+</div>
+
+<script>
+const TOTAL = 60;
+const $ = (s) => document.querySelector(s);
+const EASE = 'cubic-bezier(.22,.8,.24,1)';
+const SOFT = 'cubic-bezier(.4,0,.2,1)';
+window.CLICKS = [];
+
+// One animation per (element, property-group) spanning the whole 60s; every keyframe
+// is [time, props, easing-to-next]. This makes the page fully seekable for rendering.
+function track(el, pts, ease = EASE) {
+  if (typeof el === 'string') el = $(el);
+  const kf = pts.map(([t, props, e]) => ({ offset: Math.max(0, Math.min(1, t / TOTAL)), ...props, easing: e || ease }));
+  if (kf[0].offset > 0) kf.unshift({ ...kf[0], offset: 0 });
+  if (kf[kf.length - 1].offset < 1) kf.push({ ...kf[kf.length - 1], offset: 1 });
+  return el.animate(kf, { duration: TOTAL * 1000, fill: 'both', easing: 'linear' });
+}
+const seek = (t) => { document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t * 1000; }); };
+window.seek = seek;
+
+// scene fade in/out
+function scene(id, t0, t1, inD = 0.5, outD = 0.5) {
+  track(id, [[t0, { opacity: 0 }], [t0 + inD, { opacity: 1 }], [t1 - outD, { opacity: 1 }], [t1, { opacity: 0 }]], 'linear');
+}
+// fade+rise in at t, optional out
+function rise(sel, t, dy = 30, dur = 0.7, out) {
+  const pts = [[t, { opacity: 0, translate: `0 ${dy}px` }], [t + dur, { opacity: 1, translate: '0 0' }]];
+  if (out) pts.push([out, { opacity: 1, translate: '0 0' }], [out + 0.4, { opacity: 0, translate: `0 ${-dy / 2}px` }]);
+  track(sel, pts);
+}
+function winIn(sel, t0, t1) {
+  track(sel, [[t0, { opacity: 0, translate: '140px 0', scale: .965 }], [t0 + 0.95, { opacity: 1, translate: '0 0', scale: 1 }], [t1 - 0.5, { opacity: 1, translate: '0 0', scale: 1 }, 'ease-in'], [t1, { opacity: 0, translate: '-90px 0', scale: .985 }]]);
+}
+function capIn(root, t0, t1) {
+  const e = $(root + ' .eye'), h = $(root + ' h2'), p = $(root + ' p');
+  rise(e, t0 + 0.15, 20, .6, t1 - 0.5); rise(h, t0 + 0.3, 36, .8, t1 - 0.5); rise(p, t0 + 0.6, 26, .8, t1 - 0.5);
+}
+// word-by-word reveal
+function words(container, html, t0, wps) {
+  const c = typeof container === 'string' ? $(container) : container;
+  const out = []; let i = 0;
+  html.split(/(\s+)/).forEach((tok) => {
+    if (!tok.trim()) { out.push(tok); return; }
+    const isTag = /^<.+>$/.test(tok);
+    out.push(`<span class="w" id="w_${c.id}_${i}">${tok}</span>`); i++;
+  });
+  c.insertAdjacentHTML('beforeend', out.join(''));
+  for (let k = 0; k < i; k++) track(`#w_${c.id}_${k}`, [[t0 + k / wps, { opacity: 0 }], [t0 + k / wps + 0.18, { opacity: 1 }]], 'linear');
+  return t0 + i / wps;
+}
+function typeText(container, text, t0, cps) {
+  const c = typeof container === 'string' ? $(container) : container;
+  c.innerHTML = [...text].map((ch, i) => `<span class="ch" id="ch_${c.id}_${i}">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+  [...text].forEach((ch, i) => track(`#ch_${c.id}_${i}`, [[t0 + i / cps, { opacity: 0 }], [t0 + i / cps + 0.001, { opacity: 1 }]], 'linear'));
+  return t0 + text.length / cps;
+}
+function counter(sel, to, t0, dur) {
+  // animate a number via stepped keyframes on content swap (one span per value would be heavy) — use ~14 steps
+  const el = $(sel); const steps = 14; const spans = [];
+  for (let i = 0; i <= steps; i++) {
+    const v = Math.round(to * (i / steps)); const s = document.createElement('span');
+    s.textContent = v; s.style.cssText = 'position:absolute;left:0;right:0;top:0;text-align:center;opacity:0'; spans.push(s);
+  }
+  el.style.position = 'relative'; el.style.display = 'inline-block'; el.style.minWidth = '1.3em'; el.style.height = '1.1em'; el.style.lineHeight = '1.1em'; el.textContent = '';
+  spans.forEach((s) => el.appendChild(s));
+  spans.forEach((s, i) => {
+    const ta = t0 + dur * (i / steps), tb = t0 + dur * ((i + 1) / steps);
+    const pts = [[ta - 0.001, { opacity: 0 }], [ta, { opacity: 1 }]]; if (i < steps) pts.push([tb - 0.001, { opacity: 1 }], [tb, { opacity: 0 }]);
+    track(s, pts, 'linear');
+  });
+}
+// SVG graph used in several scenes. returns markup; ids prefixed.
+function graphSVG(w, h, p, lineClass = 'gl') {
+  const pad = 30, xs = (x) => pad + (x + 2) / 6 * (w - 2 * pad), ys = (y) => h - pad - (y + 3) / 13 * (h - 2 * pad);
+  let g = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#fff"/>`;
+  for (let x = -2; x <= 4; x++) g += `<line x1="${xs(x)}" y1="${ys(-3)}" x2="${xs(x)}" y2="${ys(10)}" stroke="#e8e6e1"/>`;
+  for (let y = -3; y <= 10; y += 1) g += `<line x1="${xs(-2)}" y1="${ys(y)}" x2="${xs(4)}" y2="${ys(y)}" stroke="#eeece8"/>`;
+  g += `<line x1="${xs(-2)}" y1="${ys(0)}" x2="${xs(4)}" y2="${ys(0)}" stroke="#6d6f7c" stroke-width="1.6"/><line x1="${xs(0)}" y1="${ys(-3)}" x2="${xs(0)}" y2="${ys(10)}" stroke="#6d6f7c" stroke-width="1.6"/>`;
+  for (let x = -2; x <= 4; x++) if (x) g += `<text x="${xs(x) - 4}" y="${ys(0) + 17}" font-size="${w > 400 ? 13 : 11}" fill="#7a7b87" font-family="Inter,sans-serif">${x}</text>`;
+  for (let y = 2; y <= 10; y += 2) g += `<text x="${xs(0) + 6}" y="${ys(y) + 4}" font-size="${w > 400 ? 13 : 11}" fill="#7a7b87" font-family="Inter,sans-serif">${y}</text>`;
+  const L = Math.hypot(xs(4) - xs(-2), ys(9) - ys(-3));
+  g += `<line class="${lineClass}" id="${p}line" x1="${xs(-2)}" y1="${ys(-3)}" x2="${xs(4)}" y2="${ys(9)}" stroke="#1c1c24" stroke-width="4" stroke-linecap="round" stroke-dasharray="${L}" stroke-dashoffset="${L}" data-len="${L}"/>`;
+  [[0, 1, '(0, 1)'], [2, 5, '(2, 5)']].forEach(([x, y, l], i) => {
+    g += `<g id="${p}pt${i}" opacity="0"><circle cx="${xs(x)}" cy="${ys(y)}" r="7" fill="#1c1c24"/><text x="${xs(x) + 11}" y="${ys(y) - 11}" font-size="${w > 400 ? 15 : 13}" font-weight="800" fill="#1c1c24" font-family="Inter,sans-serif" stroke="#fff" stroke-width="4" paint-order="stroke">${l}</text></g>`;
+  });
+  g += `</svg>`;
+  return { svg: g, xs, ys, L };
+}
+
+/* ======================= timeline ======================= */
+const S = { // scene start/end
+  s1: [0, 5.0], s2: [4.5, 10.6], s3: [10.4, 19.0], s4: [19.0, 28.0], s5: [28.0, 37.0], s6: [37.0, 43.0], s7: [43.0, 48.0], s8: [48.0, 52.0], s9: [52.0, 56.0], s10: [56.0, 60.0],
+};
+// bg glow drift
+track('#glow', [[0, { translate: '-60px 20px' }], [60, { translate: '80px -40px' }]], 'linear');
+Object.entries(S).forEach(([k, [a, b]]) => scene('#' + k, a, k === 's10' ? 61 : b, k === 's1' ? 0.4 : .5, .5));
+
+/* ---- S1 hook ---- */
+rise('#h1a', 0.35, 36, .8); rise('#h1b', 1.45, 36, .8); rise('#h1c', 2.55, 36, .8);
+track('#h1a', [[0, { opacity: 0, translate: '0 36px' }], [0.35, { opacity: 0, translate: '0 36px' }], [1.15, { opacity: 1, translate: '0 0' }], [2.4, { opacity: 1, translate: '0 0' }], [3.0, { opacity: .3, translate: '0 0' }]]);
+track('#h1b', [[1.45, { opacity: 0, translate: '0 36px' }], [2.25, { opacity: 1, translate: '0 0' }], [3.3, { opacity: 1, translate: '0 0' }], [3.9, { opacity: .3, translate: '0 0' }]]);
+track('#h1c', [[2.55, { opacity: 0, translate: '0 36px' }], [3.35, { opacity: 1, translate: '0 0' }]]);
+
+/* ---- S2 brand ---- */
+rise('#meet', 4.9, 20, .6, 10.2);
+track('#word2', [[4.8, { opacity: 0, scale: .96 }], [5.5, { opacity: 1, scale: 1 }], [10.1, { opacity: 1, scale: 1 }], [10.5, { opacity: 0, scale: 1 }]]);
+rise('#tag2', 8.5, 30, .8, 10.2);
+track('#bot2', [[8.7, { opacity: 0, translate: '90px 120px', rotate: '4deg' }], [9.5, { opacity: 1, translate: '0 0', rotate: '0deg' }], [10.1, { opacity: 1, translate: '0 0', rotate: '0deg' }], [10.5, { opacity: 0, translate: '0 0', rotate: '0deg' }]], 'cubic-bezier(.3,1.5,.5,1)');
+track('#bot2', [[0, { filter: 'drop-shadow(0 30px 40px rgba(0,0,0,.45))' }]], 'linear');
+
+/* ---- S3 highlight ---- */
+(() => {
+  const [a, b] = S.s3; winIn('#w3', a, b); capIn('#s3', a, b);
+  track('#sent .selbar', [[a + 1.9, { transform: 'scaleX(0)' }], [a + 3.3, { transform: 'scaleX(1)' }]], 'linear');
+  track('#pop3', [[a + 3.7, { opacity: 0, scale: .9, translate: '0 -8px' }], [a + 4.1, { opacity: 1, scale: 1, translate: '0 0' }]], 'cubic-bezier(.3,1.4,.5,1)');
+  track('#pop3', [[0, { height: 'auto' }]], 'linear');
+  track('#pop3 .choice', [[a + 5.0, { opacity: 1 }], [a + 5.25, { opacity: 0 }]], 'linear');
+  track('#b-exp', [[a + 4.85, { background: '#3a3b44' }], [a + 4.9, { background: '#565764' }], [a + 5.2, { background: '#565764' }]], 'linear');
+  track('#ans3', [[a + 5.2, { opacity: 0 }], [a + 5.4, { opacity: 1 }]], 'linear');
+  track('#pop3 .pb', [[a + 5.1, { height: '150px' }], [a + 5.6, { height: '212px' }]]);
+  words('#ans3', 'It’s the cell’s <b>recycling loop</b>: it breaks acetyl-CoA down into carbon dioxide, and captures the energy as <b>NADH</b>, <b>FADH₂</b> and a little <b>ATP</b>.', a + 5.45, 10);
+})();
+
+/* ---- S4 snip ---- */
+let GR4;
+(() => {
+  const [a, b] = S.s4; winIn('#w4', a, b); capIn('#s4', a, b);
+  GR4 = graphSVG(438, 318, 'f4'); $('#fig4').innerHTML = GR4.svg;
+  ['#f4line'].forEach((s) => { const l = $(s); l.style.strokeDashoffset = 0; l.removeAttribute('stroke-dashoffset'); l.style.strokeDasharray = 'none'; });
+  ['#f4pt0', '#f4pt1'].forEach((s) => $(s).setAttribute('opacity', 1));
+  // the snip rectangle (win-body coords): around the figure
+  const fx = 40, fy = 232, fw = 440, fh = 322;
+  const sn = $('#snip4'); Object.assign(sn.style, { left: (fx - 12) + 'px', top: (fy - 12) + 'px' });
+  track(sn, [[a + 1.5, { opacity: 0, width: '0px', height: '0px' }], [a + 1.52, { opacity: 1, width: '0px', height: '0px' }], [a + 2.7, { opacity: 1, width: (fw + 24) + 'px', height: (fh + 24) + 'px' }, 'linear'], [a + 3.05, { opacity: 1, width: (fw + 24) + 'px', height: (fh + 24) + 'px' }], [a + 3.3, { opacity: 0, width: (fw + 24) + 'px', height: (fh + 24) + 'px' }]], 'linear');
+  track('#panel4', [[a + 3.0, { opacity: 0, translate: '520px 0' }], [a + 3.8, { opacity: 1, translate: '0 0' }]]);
+  // board shows the snip (scaled figure) in the panel
+  const bw = 468, bh = 340; const GP = graphSVG(bw, bh, 'p4'); $('#board4').innerHTML = GP.svg;
+  $('#p4line').style.strokeDasharray = 'none'; $('#p4line').removeAttribute('stroke-dashoffset');
+  ['#p4pt0', '#p4pt1'].forEach((s) => $(s).setAttribute('opacity', 1));
+  // explanation streams in
+  const ste = $('#steps4'); ste.insertAdjacentHTML('beforeend', '<div id="sl1"></div><div id="sl2"></div><div id="sl3"></div>');
+  track('#steps4 b', [[a + 3.5, { opacity: 0 }], [a + 3.8, { opacity: 1 }]], 'linear');
+  words('#sl1', '1. Start at the y-intercept, (0, 1).', a + 4.0, 9);
+  words('#sl2', '2. Slope 2: up 2 for every 1 right.', a + 4.9, 9);
+  words('#sl3', '3. Plot (2, 5) and join the dots.', a + 5.7, 9);
+  // student's pen stroke on the board (panel coords: board is at left16 top340 → svg coords below)
+  const px = (x) => GP.xs(x), py = (y) => GP.ys(y);
+  const pen = `<path id="penp" class="pen" d="M ${px(-1.7) + 4} ${py(-2.4) - 10} L ${px(3.8) + 4} ${py(8.6) - 10}" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>`
+    + `<text id="pent" x="${px(-1.5)}" y="${py(7.6)}" font-size="28" font-weight="800" fill="#d93a3a" font-family="Inter,sans-serif" opacity="0">slope = 2</text>`;
+  $('#board4 svg').insertAdjacentHTML('beforeend', pen);
+  track('#penp', [[a + 5.0, { strokeDashoffset: 1 }], [a + 6.2, { strokeDashoffset: 0 }]], 'linear');
+  track('#pent', [[a + 6.3, { opacity: 0 }], [a + 6.7, { opacity: 1 }]], 'linear');
+  track('#steps4', [[a + 7.3, { opacity: 1 }], [a + 7.55, { opacity: 0 }]], 'linear');
+  track('#reply4', [[a + 7.5, { opacity: 0 }], [a + 7.85, { opacity: 1 }]], 'linear');
+  window.S4 = { fx, fy, fw, fh, board: { w: bw, h: bh, GP } };
+})();
+
+/* ---- S5 reviewer ---- */
+(() => {
+  const [a, b] = S.s5; winIn('#w5', a, b); capIn('#s5', a, b);
+  track('#chip5', [[a + 2.0, { opacity: 0, scale: .8 }], [a + 2.35, { opacity: 1, scale: 1 }], [a + 3.55, { opacity: 1, scale: 1 }], [a + 3.75, { opacity: 0, scale: 1 }]]);
+  track('#ph5', [[a + 2.45, { opacity: 1 }], [a + 2.5, { opacity: 0 }], [a + 3.55, { opacity: 0 }], [a + 3.8, { opacity: 1 }]], 'linear');
+  typeText('#typed5', 'Make a reviewer', a + 2.5, 22);
+  track('#typed5', [[a + 3.5, { opacity: 1 }], [a + 3.65, { opacity: 0 }]], 'linear');
+  track('#send5', [[a + 3.45, { scale: 1 }], [a + 3.5, { scale: .86 }], [a + 3.7, { scale: 1 }]], 'ease-out');
+  track('#u5', [[a + 3.65, { opacity: 0, translate: '0 26px' }], [a + 4.1, { opacity: 1, translate: '0 0' }]]);
+  track('#a5', [[a + 4.1, { opacity: 0, translate: '0 26px' }], [a + 4.5, { opacity: 1, translate: '0 0' }]]);
+  const st = [...$('#st5').children];
+  track(st[0], [[a + 4.3, { opacity: 0 }], [a + 4.45, { opacity: 1 }], [a + 4.85, { opacity: 1 }], [a + 5.0, { opacity: 0 }]], 'linear');
+  track(st[1], [[a + 4.9, { opacity: 0 }], [a + 5.05, { opacity: 1 }], [a + 5.4, { opacity: 1 }], [a + 5.55, { opacity: 0 }]], 'linear');
+  track(st[2], [[a + 5.45, { opacity: 0 }], [a + 5.6, { opacity: 1 }], [a + 5.9, { opacity: 1 }], [a + 6.05, { opacity: 0 }]], 'linear');
+  const rev = $('#rev5');
+  rev.innerHTML = `<div id="r0" style="font-weight:800;font-size:25px;margin-bottom:10px">Reviewer — Module 6: Social Media</div>
+    <div id="r1" style="font-weight:800;margin:8px 0 4px">Key terms</div>
+    <span class="li" id="r2"><b>Social media</b> — platforms for sharing and building identity</span>
+    <span class="li" id="r3"><b>Algorithm</b> — the rules that rank the posts you see</span>
+    <span class="li" id="r4"><b>Digital footprint</b> — the data trail you leave online</span>
+    <div id="r5" style="font-weight:800;margin:10px 0 4px">Practice questions</div>
+    <div id="r6">1. What does an algorithm decide?</div>
+    <div class="tools2" id="tl5"><span>Copy</span><span class="sep"></span><span>Save as</span><span class="fmt">Word</span><span class="fmt sg" id="fpdf">PDF</span><span class="fmt">Image</span><span class="fmt">Text</span></div>`;
+  track(rev, [[a + 5.95, { opacity: 0 }], [a + 6.0, { opacity: 1 }]], 'linear');
+  ['#r0', '#r1', '#r2', '#r3', '#r4', '#r5', '#r6'].forEach((s, i) => { const e = $(s); track(e, [[a + 6.0 + i * 0.14, { opacity: 0, translate: '0 10px' }], [a + 6.3 + i * 0.14, { opacity: 1, translate: '0 0' }]]); });
+  track('#a5', [[a + 5.4, { height: '62px' }], [a + 6.0, { height: '372px' }]], EASE);
+  track('#tl5', [[a + 6.95, { opacity: 0 }], [a + 7.25, { opacity: 1 }]], 'linear');
+  track('#fpdf', [[a + 7.55, { scale: 1 }], [a + 7.6, { scale: .92 }], [a + 7.8, { scale: 1 }]], 'ease-out');
+  track('#toast5', [[a + 7.75, { opacity: 0, translate: '0 20px' }], [a + 8.1, { opacity: 1, translate: '0 0' }]]);
+})();
+</script>
+<script src="ad2.js"></script>
+</body></html>
