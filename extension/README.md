@@ -115,6 +115,11 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
   edge (hover or tap to open), so they never cover a site's own Send button.
   Drag it up or down (remembered per site), or tap **Hide here** to turn it off
   on that site — the toolbar popup can show it again.
+- **PDFs, Google Docs and Slides**: Chrome's PDF viewer (and Google's
+  canvas-based editors) don't let extensions see highlighted text. On those
+  tabs the side tab shows a **page** button that sends the whole file to the
+  Cassie app, which reads every page (pictures included) and writes the
+  reviewer. "Ask about this page" reads what's on screen instead.
 - **Snip & explain** (the crosshair button): drag a box around any graph,
   picture, diagram or question like a snipping tool — or just tap one — and
   Cassie reads the picture and explains it step by step. She then asks if you
@@ -134,6 +139,7 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 - `manifest.json` — extension configuration (Manifest V3).
 - `sketch.js` — the drawing board (identical copy of the web app's `sketch.js`).
 - `board.js` — draws real graphs/shapes in the popup (identical copy of the web app's `board.js`).
+- `bridge.js` — runs only on the Cassie web app; hands it a file from a PDF/Docs tab.
 - `background.js` — service worker that calls the Groq API (keeps the
   network request out of the page's own context).
 - `content.js` — injected into every page; watches for text selection and

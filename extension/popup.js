@@ -1,6 +1,7 @@
 'use strict';
 
 const groqKeyInput = document.getElementById('groq-key');
+try { document.getElementById('version').textContent = 'Cassie extension v' + chrome.runtime.getManifest().version; } catch (e) { /* ignore */ }
 const modelSelect = document.getElementById('model');
 const saveBtn = document.getElementById('save');
 const status = document.getElementById('status');

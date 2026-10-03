@@ -305,3 +305,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+// ---- "Make a reviewer" on a PDF / Google Doc / Slides tab: hand the whole file
+// to the Cassie web app, which reads it (pictures included) and writes the reviewer.
+const CASSIE_APP_URL = 'https://askcassie.pages.dev/app.html';
+const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt, groqKey }
+
+function bufToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === 'CASSIE_OPEN_IN_APP') {
+    (async () => {
+      let base64 = msg.base64;
+      if (!base64 && msg.url) {
+        const res = await fetch(msg.url, { credentials: 'include' });
+        if (!res.ok) throw new Error('download failed (' + res.status + ')');
+        base64 = bufToBase64(await res.arrayBuffer());
+      }
+      if (!base64) throw new Error('no file');
+      const { groqKey } = await chrome.storage.local.get(['groqKey']);
+      const tab = await chrome.tabs.create({ url: CASSIE_APP_URL, index: sender.tab ? sender.tab.index + 1 : undefined });
+      pendingImports.set(tab.id, { name: msg.name, mime: msg.mime, base64, prompt: msg.prompt, groqKey: groqKey || '' });
+      setTimeout(() => pendingImports.delete(tab.id), 120000);
+      sendResponse({ ok: true });
+    })().catch((e) => sendResponse({ error: e.message || 'failed' }));
+    return true;
+  }
+  // The bridge script on the Cassie app asks for the file meant for its tab.
+  if (msg?.type === 'CASSIE_BRIDGE_READY') {
+    const id = sender.tab && sender.tab.id;
+    const payload = pendingImports.get(id) || null;
+    if (payload) pendingImports.delete(id);
+    sendResponse(payload);
+    return false;
+  }
+  return false;
+});
+

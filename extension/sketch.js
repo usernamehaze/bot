@@ -64,6 +64,15 @@
     padding: 2px 4px; font-family: system-ui, sans-serif; outline: none; }
   .csk-hint { font-size: 11.5px; opacity: .65; padding: 0 12px 8px; }
   .csk-hidden { display: none !important; }
+  /* Phones: keep the header below the status bar / notch (clock, signal, battery)
+     and the board above the home indicator, so × and every tool can be tapped. */
+  @media (max-width: 700px), (max-height: 500px) {
+    .csk-head { padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px)); padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+    .csk-stage { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+    .csk-tools { gap: 5px; padding: 6px 10px; }
+    .csk-btn { height: 36px; min-width: 36px; }
+    .csk-title { font-size: 15px; }
+  }
   `;
 
   const ICON = {

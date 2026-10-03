@@ -346,6 +346,52 @@
     else lastCtrlTap = now;
   }, true);
 
+  // Is this tab showing a file Cassie can read whole? (Chrome's PDF viewer,
+  // Google Docs / Slides — pages where highlighting can't reach the text.)
+  function fileTab() {
+    const isPdf = document.contentType === 'application/pdf' || !!document.querySelector('embed[type="application/pdf"]');
+    if (isPdf) {
+      const name = decodeURIComponent((location.pathname.split('/').pop() || 'document.pdf').replace(/\?.*$/, '')) || 'document.pdf';
+      return { kind: 'pdf', url: location.href, name: /\.pdf$/i.test(name) ? name : name + '.pdf', mime: 'application/pdf' };
+    }
+    if (location.hostname === 'docs.google.com') {
+      const m = location.pathname.match(/^\/(document|presentation)\/d\/([^/]+)/);
+      const title = (document.title || 'Google file').replace(/\s+-\s+Google (Docs|Slides)$/, '').trim() || 'Google file';
+      if (m && m[1] === 'document') return { kind: 'gdoc', url: `https://docs.google.com/document/d/${m[2]}/export?format=docx`, name: title + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+      if (m && m[1] === 'presentation') return { kind: 'gslides', url: `https://docs.google.com/presentation/d/${m[2]}/export/pptx`, name: title + '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+    }
+    return null;
+  }
+
+  // Send the whole file to the Cassie app (opens in a new tab) to make a reviewer.
+  async function openFileInCassie(prompt) {
+    const f = fileTab();
+    if (!f) return 'This tab isn’t a PDF, Google Doc or Slides file.';
+    try {
+      let buf = null;
+      try {
+        const res = await fetch(f.url, { credentials: 'include' });
+        if (res.ok) buf = await res.arrayBuffer();
+      } catch (e) { buf = null; }
+      if (!buf) {
+        // Cross-site redirect (e.g. Google's download servers): let the background fetch it.
+        const r = await chrome.runtime.sendMessage({ type: 'CASSIE_OPEN_IN_APP', name: f.name, mime: f.mime, url: f.url, prompt: prompt || 'Read this whole file and make me a complete reviewer of it.' });
+        if (r && r.error) throw new Error(r.error);
+        return '';
+      }
+      if (buf.byteLength > 30 * 1024 * 1024) return 'That file is over 30 MB — download it and attach it in the Cassie app instead.';
+      let bin = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const r = await chrome.runtime.sendMessage({ type: 'CASSIE_OPEN_IN_APP', name: f.name, mime: f.mime, base64: btoa(bin), prompt: prompt || 'Read this whole file and make me a complete reviewer of it.' });
+      if (r && r.error) throw new Error(r.error);
+      return '';
+    } catch (e) {
+      if (location.protocol === 'file:') return 'To read files from your computer, turn on “Allow access to file URLs” for Cassie in chrome://extensions — or attach the file in the Cassie app.';
+      return 'I couldn’t download this file from the tab. Download it and attach it with the paperclip in the Cassie app.';
+    }
+  }
+
   // Side dock with the "ask about this page" and "snip" buttons — top frame only.
   // It sits as a slim tab on the right edge so it never covers a site's own
   // buttons (like a chat's Send). Hover or tap to open; drag it up or down;
@@ -382,10 +428,31 @@
     hideBtn.type = 'button';
     hideBtn.textContent = 'Hide here';
     hideBtn.title = 'Hide these buttons on this site (highlighting still works)';
+    // On a PDF / Google Doc / Slides tab: read the WHOLE file in the Cassie app.
+    let fileBtn = null;
+    if (fileTab()) {
+      fileBtn = document.createElement('button');
+      fileBtn.className = 'fab';
+      fileBtn.type = 'button';
+      fileBtn.title = 'Make a reviewer of this whole file in Cassie';
+      fileBtn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>';
+      fileBtn.addEventListener('click', async () => {
+        const r = dock.getBoundingClientRect();
+        const at = { left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height };
+        closeDock();
+        manualOpen = true;
+        popover.hidden = false;
+        setContent('Opening the whole file in Cassie…', { muted: true });
+        positionPopover(at);
+        const err = await openFileInCassie();
+        setContent(err || 'Opened in a new Cassie tab — she’s reading the whole file and writing your reviewer there.', { muted: true });
+        positionPopover(at);
+      });
+    }
     const grip = document.createElement('div');
     grip.className = 'dock-grip';
     grip.title = 'Drag to move';
-    tray.append(grip, fab, annotateBtn, hideBtn);
+    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, hideBtn);
     shadow.appendChild(dock);
 
     const site = location.hostname || 'local';
@@ -909,11 +976,42 @@
     positionPopover(rect);
     const pageText = ((document.body && document.body.innerText) || '')
       .replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
-    if (!pageText) { setContent('This page has no readable text.', { muted: true }); positionPopover(rect); return; }
+    if (pageText.length < 200 || fileTab()) { askAboutScreen(q, rect); return; }
     const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}`;
     convo = [{ role: 'user', content: prompt }];
     convoLabel = q;
     runConversation(rect);
+  }
+
+  // Pages whose text can't be read from the page itself (Chrome's PDF viewer,
+  // Google Docs/Slides canvases, image-only pages): read what's on screen instead.
+  async function askAboutScreen(q, rect) {
+    setContent('Reading what’s on your screen…', { muted: true });
+    positionPopover(rect);
+    const myGen = ++gen;
+    let image = null;
+    try { image = await captureRegion({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }); } catch (e) { image = null; }
+    if (myGen !== gen) return;
+    popover.hidden = false;
+    if (!image) { setContent('I couldn’t read this page. Try reloading the tab, or use the snip button on the right edge.', { muted: true }); positionPopover(rect); return; }
+    setEmotion('thinking');
+    try {
+      const reply = await askVision(image, `This is a screenshot of what a student is looking at (it may be a PDF page, slides, or a document). Read ALL the visible text, figures, tables and diagrams carefully, then answer their request: "${q}". Use short bullets with bold key terms. If it's a question, teach the reasoning step by step. Only use what you can actually see.`, null, 1400);
+      if (myGen !== gen) return;
+      convo = [{ role: 'user', content: `About the page on my screen: ${q}` }, { role: 'assistant', content: reply }];
+      convoLabel = q;
+      saveToHistory(q, reply);
+      setEmotion('happy');
+      const extra = fileTab() ? '\n\n*I can only see the part on your screen. For the whole file, open the right-edge tab and tap the page icon — I’ll read all of it in the Cassie app.*' : '';
+      renderAnswerView(reply + extra, rect);
+    } catch (e) {
+      if (myGen !== gen) return;
+      setEmotion('sad');
+      const m = e.message === 'no-key' ? 'Click the Cassie icon in your browser toolbar to add your free Groq API key first.'
+        : e.message === 'no-vision' ? 'Groq has no picture-reading model on your key right now, so I can’t read this page.' : e.message;
+      setContent(m, { muted: true });
+      positionPopover(rect);
+    }
   }
 
   // ===== "Explain a graphic": point at something, Cassie draws over it =====
