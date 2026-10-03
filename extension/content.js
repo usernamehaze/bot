@@ -207,25 +207,28 @@
       position: fixed; z-index: 2147483646; width: 300px; max-width: calc(100vw - 24px);
       background: #1c1a26; color: #ecebf5; border: 1.5px solid rgba(255,255,255,.22); border-radius: 16px;
       box-shadow: 0 14px 40px rgba(0,0,0,.4); overflow: hidden;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
     .board-card[hidden] { display: none; }
     .board-card .bc-head {
       display: flex; align-items: center; gap: 8px; padding: 10px 14px;
       border-bottom: 1px solid rgba(255,255,255,.12); font-weight: 700; font-size: 13.5px;
     }
-    .board-card .bc-head .face {
-      width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(160deg,#fff,#ffd9ec);
-      border: 1.5px solid #ffb8dd; position: relative; flex-shrink: 0;
-    }
-    .board-card .bc-head .face::before, .board-card .bc-head .face::after {
-      content: ""; position: absolute; top: 7px; width: 3px; height: 5px; border-radius: 2px; background: #d0d0d0;
-    }
-    .board-card .bc-head .face::before { left: 6px } .board-card .bc-head .face::after { right: 6px }
     .board-card .bc-head .grow { flex: 1; }
     .board-card .bc-head .x { cursor: pointer; opacity: .7; font-size: 18px; line-height: 1; }
     .board-card .bc-head .x:hover { opacity: 1; }
     .board-card .bc-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; font-size: 14px; line-height: 1.5; }
     .board-card .bc-headline { font-weight: 700; margin: 0 0 10px; }
+    .board-card .bc-snip { display: block; max-width: 100%; max-height: 120px; margin: 0 auto 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18); background: #fff; }
+    .board-card .bc-ask { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.12); }
+    .board-card .bc-ask p { margin: 0 0 8px; font-weight: 600; }
+    .board-card .bc-ask .row { display: flex; gap: 8px; }
+    .board-card .bc-ask button { flex: 1; border-radius: 9px; padding: 7px 10px; font: 600 12.5px/1.2 inherit; font-family: inherit; cursor: pointer; border: 1px solid rgba(255,255,255,.3); background: transparent; color: inherit; }
+    .board-card .bc-ask button.yes { background: #ececec; color: #1c1a26; border-color: #ececec; }
+    .snip-rect { position: fixed; z-index: 2147483645; pointer-events: none; border: 2px solid #fff; border-radius: 4px;
+      box-shadow: 0 0 0 100vmax rgba(10,8,16,.42); outline: 1px dashed rgba(0,0,0,.6); outline-offset: -4px; }
+    .snip-rect[hidden] { display: none; }
+    .pt-backdrop.dragging { background: transparent; backdrop-filter: none; }
     .board-steps { list-style: none; margin: 0; padding: 0; counter-reset: bs; }
     .board-steps li {
       position: relative; padding: 8px 10px 8px 34px; margin-bottom: 6px; border-radius: 10px;
@@ -348,7 +351,7 @@
     annotateBtn = document.createElement('button');
     annotateBtn.className = 'annotate-fab';
     annotateBtn.type = 'button';
-    annotateBtn.title = 'Explain a graph or diagram on this page';
+    annotateBtn.title = 'Snip a graph, picture or question for Cassie to explain';
     annotateBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>';
     shadow.appendChild(annotateBtn);
     annotateBtn.addEventListener('click', enterPointMode);
@@ -771,15 +774,19 @@
   const SVGNS = 'http://www.w3.org/2000/svg';
   let ptBackdrop = null, ptHint = null, annSvg = null, boardCard = null;
 
+  let snipRect = null, snipStart = null;
   function ensureOverlayEls() {
     if (ptBackdrop) return;
     ptBackdrop = document.createElement('div'); ptBackdrop.className = 'pt-backdrop'; ptBackdrop.hidden = true;
     ptHint = document.createElement('div'); ptHint.className = 'pt-hint'; ptHint.hidden = true;
-    ptHint.innerHTML = '<span>Tap the graph, diagram or equation you want explained</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
+    ptHint.innerHTML = '<span>Drag to snip a graph, picture or question — or tap one</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
+    snipRect = document.createElement('div'); snipRect.className = 'snip-rect'; snipRect.hidden = true;
     annSvg = document.createElementNS(SVGNS, 'svg'); annSvg.setAttribute('class', 'ann-svg'); annSvg.style.display = 'none';
     boardCard = document.createElement('div'); boardCard.className = 'board-card'; boardCard.hidden = true;
-    shadow.appendChild(ptBackdrop); shadow.appendChild(annSvg); shadow.appendChild(boardCard); shadow.appendChild(ptHint);
-    ptBackdrop.addEventListener('click', onPointClick);
+    shadow.appendChild(ptBackdrop); shadow.appendChild(snipRect); shadow.appendChild(annSvg); shadow.appendChild(boardCard); shadow.appendChild(ptHint);
+    ptBackdrop.addEventListener('pointerdown', onSnipDown);
+    ptBackdrop.addEventListener('pointermove', onSnipMove);
+    ptBackdrop.addEventListener('pointerup', onSnipUp);
     ptHint.querySelector('.x').addEventListener('click', (e) => { e.stopPropagation(); exitPointMode(); });
   }
 
@@ -794,22 +801,96 @@
   }
   function escPoint(e) { if (e.key === 'Escape') exitPointMode(); }
   function exitPointMode() {
-    if (ptBackdrop) ptBackdrop.hidden = true;
+    if (ptBackdrop) { ptBackdrop.hidden = true; ptBackdrop.classList.remove('dragging'); }
     if (ptHint) ptHint.hidden = true;
+    if (snipRect) snipRect.hidden = true;
+    snipStart = null;
     if (fab) fab.hidden = false;
     if (annotateBtn) annotateBtn.hidden = false;
     document.removeEventListener('keydown', escPoint, true);
   }
 
-  function onPointClick(e) {
+  // Drag = snip a rectangle (like a snipping tool). Tap = pick the thing under the finger.
+  function onSnipDown(e) {
     e.preventDefault(); e.stopPropagation();
-    const x = e.clientX, y = e.clientY;
+    snipStart = { x: e.clientX, y: e.clientY };
+    try { ptBackdrop.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  }
+  function snipBox(e) {
+    const x1 = Math.min(snipStart.x, e.clientX), y1 = Math.min(snipStart.y, e.clientY);
+    return { left: x1, top: y1, width: Math.abs(e.clientX - snipStart.x), height: Math.abs(e.clientY - snipStart.y) };
+  }
+  function onSnipMove(e) {
+    if (!snipStart) return;
+    const r = snipBox(e);
+    if (r.width < 6 && r.height < 6) return;
+    ptBackdrop.classList.add('dragging');
+    ptHint.hidden = true;
+    Object.assign(snipRect.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+    snipRect.hidden = false;
+  }
+  function onSnipUp(e) {
+    if (!snipStart) return;
+    e.preventDefault(); e.stopPropagation();
+    let r = snipBox(e);
+    const tap = r.width < 8 && r.height < 8;
+    const cx = tap ? e.clientX : r.left + r.width / 2, cy = tap ? e.clientY : r.top + r.height / 2;
     ptBackdrop.style.pointerEvents = 'none';
-    let el = document.elementFromPoint(x, y);
+    const el = document.elementFromPoint(cx, cy);
     ptBackdrop.style.pointerEvents = '';
     exitPointMode();
-    if (!el || (host && host.contains(el)) || el === document.documentElement) return;
-    explainTarget(el, x, y);
+    if (tap) {
+      if (!el || (host && host.contains(el)) || el === document.documentElement) return;
+      const b = el.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      r = { left: Math.max(0, b.left - 6), top: Math.max(0, b.top - 6) };
+      r.width = Math.min(vw, b.right + 6) - r.left; r.height = Math.min(vh, b.bottom + 6) - r.top;
+      // a whole-page wrapper isn't what they meant — take the area around the tap instead
+      if (r.width * r.height > vw * vh * 0.6 || r.width < 20 || r.height < 20) {
+        r = { left: Math.max(0, cx - 230), top: Math.max(0, cy - 160), width: 460, height: 320 };
+      }
+    }
+    snipAndExplain(r, el, cx, cy);
+  }
+
+  // Grab the visible tab and cut out the snipped rectangle. Returns a JPEG data URL.
+  async function captureRegion(r) {
+    host.style.visibility = 'hidden'; // keep Cassie's own overlay out of the picture
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 40))));
+    let shot;
+    try { shot = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP' }); }
+    finally { host.style.visibility = ''; }
+    if (!shot || !shot.dataUrl) throw new Error((shot && shot.error) || 'capture failed');
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = shot.dataUrl; });
+    const k = img.width / window.innerWidth;
+    const sw = Math.max(1, Math.round(r.width * k)), sh = Math.max(1, Math.round(r.height * k));
+    const scale = Math.min(1, 1400 / Math.max(sw, sh));
+    const c = document.createElement('canvas');
+    c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
+    c.getContext('2d').drawImage(img, Math.round(r.left * k), Math.round(r.top * k), sw, sh, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.9);
+  }
+
+  function askVision(image, prompt, system, maxTokens) {
+    return chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens })
+      .then((r) => { if (!r || r.error) throw new Error((r && r.error) || 'no reply'); return r.reply; });
+  }
+
+  async function snipAndExplain(r, el, x, y) {
+    const rect = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
+    let image = null;
+    try { image = await captureRegion(r); } catch (e) { image = null; }
+    openBoardLoading(rect, x, y, image);
+    const ctx = el && !(host && host.contains(el)) ? gatherContext(el) : (document.title ? 'Page: ' + document.title : '');
+    if (!image) { explainTarget(el, x, y, rect, null); return; }
+    const prompt = `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~18 words each. Read every label and number you can see; don't invent ones you can't.`;
+    try {
+      const reply = await askVision(image, prompt, null, 700);
+      renderBoard(rect, x, y, parseBoardJSON(reply), image);
+    } catch (e) {
+      if (e.message === 'no-key') { renderBoard(rect, x, y, { headline: 'Add your free Groq key first — click the Cassie toolbar icon.', steps: [] }, image); return; }
+      explainTarget(el, x, y, rect, image); // no picture model → explain from the page text instead
+    }
   }
 
   // Read the text around the pointed-at element so Cassie knows what it is.
@@ -834,19 +915,19 @@
     return parts.join('\n');
   }
 
-  function explainTarget(el, x, y) {
-    const rect = el.getBoundingClientRect();
-    const ctx = gatherContext(el);
-    openBoardLoading(rect, x, y);
+  function explainTarget(el, x, y, rect, image) {
+    rect = rect || el.getBoundingClientRect();
+    const ctx = el ? gatherContext(el) : (document.title || '');
+    if (!image) openBoardLoading(rect, x, y, null);
     const prompt = `A student is viewing a webpage and pointed at one specific graphic on it (a graph, diagram, shape, equation, or illustration). Surrounding context:\n\n"""\n${ctx}\n"""\n\nExplain what this graphic shows and how to read it, like a friendly step-by-step tutor. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~14 words each. If context is thin, still give your best explanation of that kind of graphic.`;
     askStream([{ role: 'user', content: prompt }], {
       onDelta() {},
-      onDone(full) { renderBoard(rect, x, y, parseBoardJSON(full)); },
+      onDone(full) { renderBoard(rect, x, y, parseBoardJSON(full), image); },
       onError(err) {
         renderBoard(rect, x, y, {
           headline: err === 'no-key' ? 'Add your free Groq key first — click the Cassie toolbar icon.' : 'Couldn’t reach Cassie — please try again.',
           steps: [],
-        });
+        }, image);
       },
     });
   }
@@ -870,25 +951,42 @@
   }
 
   function boardHead() {
-    return '<div class="bc-head"><span class="face"></span><span class="grow">Cassie</span><span class="x" role="button" aria-label="Close">&times;</span></div>';
+    return '<div class="bc-head"><span class="grow">Cassie</span><span class="x" role="button" aria-label="Close">&times;</span></div>';
   }
-  function openBoardLoading(rect, x, y) {
+  function snipThumb(image) {
+    if (!image) return null;
+    const im = document.createElement('img'); im.className = 'bc-snip'; im.alt = 'Your snip'; im.src = image;
+    return im;
+  }
+  function openBoardLoading(rect, x, y, image) {
     ensureOverlayEls();
     boardCard.hidden = false;
     boardCard.innerHTML = boardHead() + '<div class="bc-body"><p style="opacity:.7;margin:0">Looking at this…</p></div>';
+    const th = snipThumb(image);
+    if (th) boardCard.querySelector('.bc-body').prepend(th);
     boardCard.querySelector('.x').addEventListener('click', closeBoard);
     positionBoard(rect);
     drawPointer(x, y);
   }
-  function renderBoard(rect, x, y, data) {
+  function renderBoard(rect, x, y, data, image) {
     ensureOverlayEls();
     boardCard.hidden = false;
     boardCard.innerHTML = boardHead();
     const bodyEl = document.createElement('div'); bodyEl.className = 'bc-body';
+    const th = snipThumb(image);
+    if (th) bodyEl.appendChild(th);
     if (data.headline) { const h = document.createElement('p'); h.className = 'bc-headline'; h.textContent = data.headline; bodyEl.appendChild(h); }
     const ol = document.createElement('ol'); ol.className = 'board-steps';
     const items = (data.steps || []).map((s) => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); return li; });
     bodyEl.appendChild(ol);
+    // Cassie asks: put it on the board so you can write / sketch on it?
+    if (window.CassieSketch && (data.steps || []).length) {
+      const ask = document.createElement('div'); ask.className = 'bc-ask';
+      ask.innerHTML = '<p>Want to put this on my board so you can write or sketch on it?</p><div class="row"><button type="button" class="yes">Open board</button><button type="button" class="no">No thanks</button></div>';
+      ask.querySelector('.yes').addEventListener('click', (e) => { e.stopPropagation(); openSnipBoard(image, data); });
+      ask.querySelector('.no').addEventListener('click', (e) => { e.stopPropagation(); ask.remove(); });
+      bodyEl.appendChild(ask);
+    }
     boardCard.appendChild(bodyEl);
     boardCard.querySelector('.x').addEventListener('click', closeBoard);
     positionBoard(rect);
@@ -901,6 +999,33 @@
       else setTimeout(() => items.forEach((li) => li.classList.remove('active')), 800);
     })();
     setTimeout(() => { document.addEventListener('click', outsideBoard, true); window.addEventListener('scroll', closeBoard, true); }, 60);
+  }
+
+  // The student's own board, docked beside the page so there's no tab switching.
+  function openSnipBoard(image, data) {
+    closeBoard();
+    if (fab) fab.hidden = true;
+    if (annotateBtn) annotateBtn.hidden = true;
+    window.CassieSketch.open({
+      root: shadow,
+      image: image || null,
+      dark: image ? false : undefined,
+      dock: 'side',
+      allowDock: true,
+      title: data && data.headline ? data.headline : 'Your board',
+      note: data && (data.steps || []).length ? { headline: data.headline, steps: data.steps } : null,
+      checkLabel: 'Check my work',
+      onCheck: async (png) => {
+        try {
+          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson with their own writing and sketches on top' : 'their own sketch / working'}. ${data && data.headline ? 'Topic: ' + data.headline + '. ' : ''}Check their work like a kind but honest tutor: say what is right, point out any mistake and why, and give a hint for the next step. Keep it short (under 120 words), plain text.`, null, 500);
+        } catch (e) {
+          if (e.message === 'no-key') return 'Add your free Groq key first — click the Cassie toolbar icon.';
+          if (e.message === 'no-vision') return 'Groq has no picture-reading model on your key right now, so I can’t check drawings yet.';
+          return e.message;
+        }
+      },
+      onClose: () => { if (fab) fab.hidden = false; if (annotateBtn) annotateBtn.hidden = false; },
+    });
   }
 
   function positionBoard(rect) {

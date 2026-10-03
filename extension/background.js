@@ -239,3 +239,62 @@ chrome.runtime.onConnect.addListener((port) => {
     })();
   });
 });
+
+// ---- Snip & see: capture the visible tab, and read pictures with Groq vision ----
+async function discoverGroqVisionModel(groqKey) {
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${groqKey}` } });
+    if (!res.ok) return '';
+    const ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
+    return ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '';
+  } catch (e) { return ''; }
+}
+let _visionModel = null;
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === 'CASSIE_SNIP') {
+    // The page's own overlay is hidden by the content script before this runs.
+    chrome.tabs.captureVisibleTab(sender.tab ? sender.tab.windowId : undefined, { format: 'png' })
+      .then((dataUrl) => sendResponse({ dataUrl }))
+      .catch((e) => sendResponse({ error: e.message || 'capture failed' }));
+    return true;
+  }
+  if (msg?.type === 'CASSIE_VISION') {
+    (async () => {
+      const { groqKey } = await chrome.storage.local.get(['groqKey']);
+      if (!groqKey) { sendResponse({ error: 'no-key' }); return; }
+      if (!_visionModel) _visionModel = await discoverGroqVisionModel(groqKey);
+      if (!_visionModel) { sendResponse({ error: 'no-vision' }); return; }
+      const body = {
+        model: _visionModel,
+        max_tokens: msg.maxTokens || 900,
+        temperature: 0.4,
+        messages: [
+          ...(msg.system ? [{ role: 'system', content: msg.system }] : []),
+          { role: 'user', content: [{ type: 'text', text: msg.prompt }, { type: 'image_url', image_url: { url: msg.image } }] },
+        ],
+      };
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) { sendResponse({ reply: ((await res.json()).choices?.[0]?.message?.content || '').trim() }); return; }
+        let detail = '';
+        try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+        if (res.status === 404) { _visionModel = null; sendResponse({ error: 'no-vision' }); return; }
+        if (res.status === 429 && attempt < 2) {
+          const m = detail.match(/try again in ([0-9.]+)s/i);
+          const secs = m ? parseFloat(m[1]) : 3;
+          if (secs <= 20) { await sleep(secs * 1000 + 300); continue; }
+        }
+        sendResponse({ error: res.status === 429 ? rateLimitMessage(res, detail) : (detail || `Request failed (${res.status})`) });
+        return;
+      }
+    })().catch((e) => sendResponse({ error: e.message }));
+    return true;
+  }
+  return false;
+});
+

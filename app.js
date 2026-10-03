@@ -2373,6 +2373,80 @@ if (webBtn) {
   webBtn.addEventListener('click', () => runWebCheck(promptInput.value));
 }
 
+/* ---------- the student's drawing board ---------- */
+const prefersDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+
+// Put a picture (e.g. the student's sketch) into the composer as an attachment.
+function attachDataUrl(dataUrl, prompt) {
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(img, 0, 0, c.width, c.height);
+    const jpg = c.toDataURL('image/jpeg', 0.88);
+    pendingImage = { mimeType: 'image/jpeg', base64: jpg.split(',')[1], dataUrl: jpg };
+    pendingDoc = null;
+    attachThumb.src = jpg; attachThumb.hidden = false;
+    attachName.hidden = true; attachPreview.hidden = false;
+    if (prompt && !promptInput.value.trim()) promptInput.value = prompt;
+    autoGrow();
+    promptInput.focus();
+  };
+  img.src = dataUrl;
+}
+
+function openSketch(opts = {}) {
+  if (!window.CassieSketch) return;
+  window.CassieSketch.open({
+    title: opts.title || 'Your board',
+    dark: opts.dark != null ? opts.dark : prefersDark(),
+    image: opts.image || null,
+    note: opts.note || null,
+    checkLabel: 'Send to Cassie',
+    onCheck: (png) => {
+      window.CassieSketch.close();
+      attachDataUrl(png, 'Check my work on this board — what did I get right, and what should I fix?');
+      return '';
+    },
+  });
+}
+
+// Turn one of Cassie's chat boards (graph canvas or shape drawing) into a picture.
+function boardToImage(boardEl) {
+  return new Promise((resolve) => {
+    const canvas = boardEl.querySelector('.cb-canvas-wrap canvas');
+    if (canvas) { resolve(canvas.toDataURL('image/png')); return; }
+    const svgEl = boardEl.querySelector('svg');
+    if (!svgEl) { resolve(null); return; }
+    const vb = (svgEl.getAttribute('viewBox') || '0 0 260 180').split(/\s+/).map(Number);
+    const xml = new XMLSerializer().serializeToString(svgEl);
+    const img = new Image();
+    img.onload = () => {
+      const k = 4, c = document.createElement('canvas');
+      c.width = vb[2] * k; c.height = vb[3] * k;
+      const x = c.getContext('2d');
+      x.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#fff';
+      x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+  });
+}
+
+if (window.CassieBoard) {
+  window.CassieBoard.onDraw = async (boardEl, spec) => {
+    const image = await boardToImage(boardEl);
+    openSketch({ image, title: spec.title ? `Board — ${spec.title}` : 'Your board' });
+  };
+}
+const boardBtn = document.getElementById('board-btn');
+if (boardBtn) boardBtn.addEventListener('click', () => openSketch());
+
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', async () => {

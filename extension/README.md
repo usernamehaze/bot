@@ -111,8 +111,14 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
 
 - A floating, **draggable** panel you can move anywhere on the page.
 - A **hotkey** to summon Cassie at your cursor without highlighting first.
-- An **"explain a graphic"** mode: point at a graph/diagram and Cassie draws
-  a step-by-step explanation on top of the page.
+- **Snip & explain** (the crosshair button): drag a box around any graph,
+  picture, diagram or question like a snipping tool — or just tap one — and
+  Cassie reads the picture and explains it step by step. She then asks if you
+  want it on **her board**: a sketch board docked beside the page where you
+  can write, highlight, draw lines and type on the snip, then tap
+  **Check my work** for feedback — no tab switching. Reading pictures uses
+  Groq's free vision model on your same key. Snipping needs the extension to
+  capture the visible tab, which is why it asks for access to all sites.
 - An **emotional mini-bot avatar** in the panel header that reacts as she
   works (curious → thinking → happy).
 
@@ -122,6 +128,7 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 ## Files
 
 - `manifest.json` — extension configuration (Manifest V3).
+- `sketch.js` — the drawing board (identical copy of the web app's `sketch.js`).
 - `background.js` — service worker that calls the Groq API (keeps the
   network request out of the page's own context).
 - `content.js` — injected into every page; watches for text selection and
