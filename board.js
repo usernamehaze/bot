@@ -194,6 +194,8 @@
     if (xmin <= 0 && xmax >= 0) { x.beginPath(); x.moveTo(PX(0), PY(ymin)); x.lineTo(PX(0), PY(ymax)); x.stroke(); }
     x.fillStyle = muted; x.font = '11px sans-serif';
     for (let g = Math.ceil(xmin / xStep) * xStep; g <= xmax; g += xStep) { if (Math.abs(g) > 1e-9) x.fillText(fmt(g), PX(g) - 4, PY(0) + 14); }
+    const yAxisX = xmin <= 0 && xmax >= 0 ? PX(0) : PX(xmin);
+    for (let g = Math.ceil(ymin / yStep) * yStep; g <= ymax; g += yStep) { if (Math.abs(g) > 1e-9) x.fillText(fmt(g), yAxisX + 5, PY(g) + 4); }
 
     // the curve
     x.strokeStyle = pink; x.lineWidth = 3; x.beginPath();
@@ -268,6 +270,15 @@
     const head = el('div', 'cb-head');
     head.innerHTML = '<span class="cb-pin">✎</span> Cassie\'s board';
     board.appendChild(head);
+    // "Draw on this" — open it on the student's sketch board (app provides onDraw)
+    const t = (spec.type || '').toLowerCase();
+    if (t === 'graph' || t === 'shape') {
+      const draw = el('button', 'cb-draw');
+      draw.type = 'button';
+      draw.textContent = 'Draw on this';
+      draw.addEventListener('click', () => { if (typeof window.CassieBoard.onDraw === 'function') window.CassieBoard.onDraw(board, spec); });
+      head.appendChild(draw);
+    }
     const body = el('div', 'cb-body');
     board.appendChild(body);
     try {
