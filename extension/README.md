@@ -129,6 +129,7 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 
 - `manifest.json` — extension configuration (Manifest V3).
 - `sketch.js` — the drawing board (identical copy of the web app's `sketch.js`).
+- `board.js` — draws real graphs/shapes in the popup (identical copy of the web app's `board.js`).
 - `background.js` — service worker that calls the Groq API (keeps the
   network request out of the page's own context).
 - `content.js` — injected into every page; watches for text selection and
