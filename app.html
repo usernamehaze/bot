@@ -34,13 +34,34 @@
 
   <!-- Pomodoro focus timer -->
   <div class="pomo" id="pomo">
-    <div class="pomo-head"><span id="pomo-mode">Focus</span><span id="pomo-cycles"></span></div>
-    <div class="pomo-time" id="pomo-time">25:00</div>
+    <div class="pomo-head">
+      <span id="pomo-mode">Focus</span>
+      <span class="pomo-head-r">
+        <span id="pomo-cycles"></span>
+        <button id="pomo-edit" class="pomo-edit" type="button" title="Set your study and break times" aria-label="Set your study and break times" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        </button>
+      </span>
+    </div>
+    <button class="pomo-time" id="pomo-time" type="button" title="Tap to set your times">25:00</button>
     <div class="pomo-ring"><i id="pomo-ring-fill"></i></div>
     <div class="pomo-btns">
       <button id="pomo-toggle" class="pomo-btn primary">Start</button>
       <button id="pomo-reset" class="pomo-btn" title="Reset">Reset</button>
       <button id="pomo-skip" class="pomo-btn" title="Skip to next">Skip</button>
+    </div>
+    <div class="pomo-set" id="pomo-set" hidden>
+      <div class="pomo-presets">
+        <button type="button" data-preset="25,5,15">25 / 5</button>
+        <button type="button" data-preset="45,10,20">45 / 10</button>
+        <button type="button" data-preset="50,10,30">50 / 10</button>
+        <button type="button" data-preset="90,20,30">90 / 20</button>
+      </div>
+      <div class="pomo-field"><span>Study</span><span class="pomo-step"><button type="button" data-k="focus" data-d="-5" aria-label="Less study time">&minus;</button><input id="pomo-in-focus" type="number" inputmode="numeric" min="1" max="240" aria-label="Study minutes"><button type="button" data-k="focus" data-d="5" aria-label="More study time">+</button></span><small>min</small></div>
+      <div class="pomo-field"><span>Break</span><span class="pomo-step"><button type="button" data-k="brk" data-d="-1" aria-label="Shorter break">&minus;</button><input id="pomo-in-brk" type="number" inputmode="numeric" min="1" max="120" aria-label="Break minutes"><button type="button" data-k="brk" data-d="1" aria-label="Longer break">+</button></span><small>min</small></div>
+      <div class="pomo-field"><span>Long break</span><span class="pomo-step"><button type="button" data-k="long" data-d="-5" aria-label="Shorter long break">&minus;</button><input id="pomo-in-long" type="number" inputmode="numeric" min="1" max="120" aria-label="Long break minutes"><button type="button" data-k="long" data-d="5" aria-label="Longer long break">+</button></span><small>min</small></div>
+      <p class="pomo-set-note">A long break comes after every 4 study blocks.</p>
+      <button id="pomo-done" type="button" class="pomo-btn primary">Done</button>
     </div>
   </div>
 

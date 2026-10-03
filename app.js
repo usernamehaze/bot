@@ -2862,7 +2862,6 @@ if (memoryPanel) {
 
 /* ---------- Pomodoro focus timer ---------- */
 (function pomodoro() {
-  const FOCUS = 25 * 60, BREAK = 5 * 60, LONG = 15 * 60;
   const wrap = document.getElementById('pomo');
   const modeEl = document.getElementById('pomo-mode');
   const timeEl = document.getElementById('pomo-time');
@@ -2871,19 +2870,34 @@ if (memoryPanel) {
   const toggleBtn = document.getElementById('pomo-toggle');
   const resetBtn = document.getElementById('pomo-reset');
   const skipBtn = document.getElementById('pomo-skip');
+  const editBtn = document.getElementById('pomo-edit');
+  const setPanel = document.getElementById('pomo-set');
+  const doneBtn = document.getElementById('pomo-done');
+  const inputs = { focus: document.getElementById('pomo-in-focus'), brk: document.getElementById('pomo-in-brk'), long: document.getElementById('pomo-in-long') };
   if (!wrap || !toggleBtn) return;
 
+  // The student's own times (minutes), saved with the rest of their settings.
+  const LIMITS = { focus: [1, 240], brk: [1, 120], long: [1, 120] };
+  const clampMin = (k, v) => Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], Math.round(+v || 0)));
+  const times = Object.assign({ focus: 25, brk: 5, long: 15 }, state.pomo || {});
+  Object.keys(LIMITS).forEach((k) => { times[k] = clampMin(k, times[k]); });
+
   let mode = 'focus';       // 'focus' | 'break' | 'long'
-  let remaining = FOCUS;
+  let remaining = times.focus * 60;
   let running = false;
+  let endAt = 0;            // wall-clock end time, so the timer stays right in background tabs
   let tick = null;
   let cycles = 0;           // completed focus blocks
 
-  const total = () => (mode === 'focus' ? FOCUS : mode === 'long' ? LONG : BREAK);
-  const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const total = () => 60 * (mode === 'focus' ? times.focus : mode === 'long' ? times.long : times.brk);
+  const fmt = (s) => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const mm = h ? String(m).padStart(2, '0') : String(Math.floor(s / 60)).padStart(2, '0');
+    return `${h ? h + ':' : ''}${mm}:${String(sec).padStart(2, '0')}`;
+  };
 
   function render() {
-    timeEl.textContent = fmt(remaining);
+    timeEl.textContent = fmt(Math.max(0, remaining));
     modeEl.textContent = mode === 'focus' ? 'Focus' : mode === 'long' ? 'Long break' : 'Break';
     const dots = [0, 1, 2, 3].map((i) => `<span class="${i < (cycles % 4 || (cycles && mode !== 'focus' ? 4 : 0)) ? 'on' : ''}"></span>`).join('');
     cyclesEl.innerHTML = dots;
@@ -2899,28 +2913,81 @@ if (memoryPanel) {
   function start() {
     if (running) return;
     running = true;
+    endAt = Date.now() + remaining * 1000;
     clearInterval(tick);
-    tick = setInterval(() => { remaining -= 1; if (remaining <= 0) return complete(); render(); }, 1000);
+    tick = setInterval(() => {
+      remaining = Math.round((endAt - Date.now()) / 1000);
+      if (remaining <= 0) { remaining = 0; complete(); return; }
+      render();
+    }, 500);
     render();
   }
-  function pause() { running = false; clearInterval(tick); render(); }
+  function pause() { if (running) remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000)); running = false; clearInterval(tick); render(); }
   function complete() {
     clearInterval(tick); running = false;
     if (mode === 'focus') {
       cycles += 1;
-      try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(FOCUS / 60); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
+      try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(times.focus); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
       const long = cycles % 4 === 0;
       switchMode(long ? 'long' : 'break');
-      nudge(long ? 'Awesome focus! 🎉 Take a longer break — stretch & breathe.' : 'Nice work! ☕ 5-min break — hydrate 💧 and rest your eyes.', 'encouraging');
+      nudge(long ? `Awesome focus! Take a ${times.long}-minute break — stretch and breathe.` : `Nice work! ${times.brk}-minute break — drink some water and rest your eyes.`, 'encouraging');
     } else {
       switchMode('focus');
-      nudge('Break\'s over — ready to focus? Let\'s go! ✎', 'thinking');
+      nudge(`Break's over — ${times.focus} minutes of focus. Let's go!`, 'thinking');
     }
     start(); // auto-flow into the next block
   }
 
-  toggleBtn.addEventListener('click', () => (running ? pause() : (nudge(mode === 'focus' ? 'Focus time! I\'ll keep you company 💪' : 'Rest up! 🌿', mode === 'focus' ? 'thinking' : 'encouraging'), start())));
-  resetBtn.addEventListener('click', () => { pause(); mode = 'focus'; cycles = 0; remaining = FOCUS; render(); });
+  // ---- setting your own times ----
+  function fillInputs() {
+    Object.keys(inputs).forEach((k) => { if (inputs[k]) inputs[k].value = times[k]; });
+    setPanel.querySelectorAll('[data-preset]').forEach((b) => {
+      const [f, br, l] = b.dataset.preset.split(',').map(Number);
+      b.classList.toggle('on', f === times.focus && br === times.brk && l === times.long);
+    });
+  }
+  function applyTimes(next) {
+    const before = total();
+    Object.keys(next).forEach((k) => { times[k] = clampMin(k, next[k]); });
+    state.pomo = { ...times };
+    save();
+    // A block that hasn't started yet picks up the new length right away;
+    // a running or half-done block keeps going and the new times apply next.
+    if (!running && remaining === before) remaining = total();
+    fillInputs();
+    render();
+  }
+  function openSet(open) {
+    setPanel.hidden = !open;
+    editBtn.setAttribute('aria-expanded', String(open));
+    if (open) { fillInputs(); setTimeout(() => inputs[mode === 'focus' ? 'focus' : mode === 'long' ? 'long' : 'brk'].focus(), 0); }
+  }
+  editBtn.addEventListener('click', () => openSet(setPanel.hidden));
+  timeEl.addEventListener('click', () => openSet(setPanel.hidden));
+  doneBtn.addEventListener('click', () => openSet(false));
+  setPanel.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.preset) {
+      const [f, br, l] = b.dataset.preset.split(',').map(Number);
+      applyTimes({ focus: f, brk: br, long: l });
+    } else if (b.dataset.k) {
+      const k = b.dataset.k, d = +b.dataset.d;
+      // step to the next round number (e.g. 25 → 30 → 35), but allow 1-minute precision below 5
+      let v = times[k] + d;
+      if (Math.abs(d) >= 5 && times[k] % 5 !== 0) v = d > 0 ? Math.ceil(times[k] / 5) * 5 : Math.floor(times[k] / 5) * 5;
+      applyTimes({ [k]: v < 1 ? 1 : v });
+    }
+  });
+  Object.keys(inputs).forEach((k) => {
+    const inp = inputs[k];
+    if (!inp) return;
+    inp.addEventListener('change', () => applyTimes({ [k]: inp.value }));
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { inp.blur(); openSet(false); } });
+  });
+
+  toggleBtn.addEventListener('click', () => (running ? pause() : (nudge(mode === 'focus' ? "Focus time! I'll keep you company." : 'Rest up!', mode === 'focus' ? 'thinking' : 'encouraging'), start())));
+  resetBtn.addEventListener('click', () => { pause(); mode = 'focus'; cycles = 0; remaining = times.focus * 60; render(); });
   skipBtn.addEventListener('click', () => { pause(); switchMode(mode === 'focus' ? 'break' : 'focus'); });
   render();
 })();

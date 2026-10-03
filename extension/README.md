@@ -111,6 +111,10 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
 
 - A floating, **draggable** panel you can move anywhere on the page.
 - A **hotkey** to summon Cassie at your cursor without highlighting first.
+- **Side tab**: the page-ask and snip buttons live in a slim tab on the right
+  edge (hover or tap to open), so they never cover a site's own Send button.
+  Drag it up or down (remembered per site), or tap **Hide here** to turn it off
+  on that site — the toolbar popup can show it again.
 - **Snip & explain** (the crosshair button): drag a box around any graph,
   picture, diagram or question like a snipping tool — or just tap one — and
   Cassie reads the picture and explains it step by step. She then asks if you

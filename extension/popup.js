@@ -22,6 +22,26 @@ saveBtn.addEventListener('click', () => {
   );
 });
 
+/* ---------- side buttons hidden on some sites ("Hide here") ---------- */
+const dockNote = document.getElementById('dock-note');
+function refreshDockNote() {
+  chrome.storage.local.get(['cassieDock'], ({ cassieDock }) => {
+    const off = Object.keys(cassieDock || {}).filter((k) => cassieDock[k] && cassieDock[k].off);
+    if (!dockNote) return;
+    dockNote.hidden = !off.length;
+    document.getElementById('dock-sites').textContent = off.length > 2 ? `${off.length} sites` : off.join(' and ');
+  });
+}
+refreshDockNote();
+document.getElementById('dock-show')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.storage.local.get(['cassieDock'], ({ cassieDock }) => {
+    const all = cassieDock || {};
+    Object.keys(all).forEach((k) => { if (all[k]) delete all[k].off; });
+    chrome.storage.local.set({ cassieDock: all }, refreshDockNote);
+  });
+});
+
 /* ---------- Ask about this page ---------- */
 const pageQ = document.getElementById('page-q');
 const pageAsk = document.getElementById('page-ask');
