@@ -120,6 +120,12 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
   tabs the side tab shows a **page** button that sends the whole file to the
   Cassie app, which reads every page (pictures included) and writes the
   reviewer. "Ask about this page" reads what's on screen instead.
+- **Board beside the page**: the side tab has a **board** button, and every snip
+  opens straight into the side board — your snip on the canvas, Cassie's
+  step-by-step explanation above it, an "Ask Cassie about this snip…" box, and
+  **Check my work** / **New snip** buttons. Add a free Google (Gemini) key in the
+  toolbar popup for the most reliable picture reading (Groq's picture models are
+  tried first-come otherwise).
 - **Snip & explain** (the crosshair button): drag a box around any graph,
   picture, diagram or question like a snipping tool — or just tap one — and
   Cassie reads the picture and explains it step by step. She then asks if you

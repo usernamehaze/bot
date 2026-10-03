@@ -2,12 +2,14 @@
 
 const groqKeyInput = document.getElementById('groq-key');
 try { document.getElementById('version').textContent = 'Cassie extension v' + chrome.runtime.getManifest().version; } catch (e) { /* ignore */ }
+const geminiKeyInput = document.getElementById('gemini-key');
 const modelSelect = document.getElementById('model');
 const saveBtn = document.getElementById('save');
 const status = document.getElementById('status');
 
-chrome.storage.local.get(['groqKey', 'groqModel'], ({ groqKey, groqModel }) => {
+chrome.storage.local.get(['groqKey', 'groqModel', 'geminiKey'], ({ groqKey, groqModel, geminiKey }) => {
   if (groqKey) groqKeyInput.value = groqKey;
+  if (geminiKey) geminiKeyInput.value = geminiKey;
   if (groqModel && [...modelSelect.options].some((o) => o.value === groqModel)) {
     modelSelect.value = groqModel;
   }
@@ -15,7 +17,7 @@ chrome.storage.local.get(['groqKey', 'groqModel'], ({ groqKey, groqModel }) => {
 
 saveBtn.addEventListener('click', () => {
   chrome.storage.local.set(
-    { groqKey: groqKeyInput.value.trim(), groqModel: modelSelect.value },
+    { groqKey: groqKeyInput.value.trim(), geminiKey: geminiKeyInput.value.trim(), groqModel: modelSelect.value },
     () => {
       status.textContent = 'Saved.';
       setTimeout(() => { status.textContent = ''; }, 1500);

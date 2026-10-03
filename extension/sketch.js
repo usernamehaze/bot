@@ -62,6 +62,8 @@
   .csk-board canvas.csk-live { cursor: crosshair; touch-action: none; }
   .csk-text { position: absolute; z-index: 3; min-width: 60px; border: 1px dashed rgba(127,127,127,.7); background: rgba(255,255,255,.85);
     padding: 2px 4px; font-family: system-ui, sans-serif; outline: none; }
+  .csk-ask { display: flex; gap: 6px; padding: 7px 12px; border-bottom: 1px solid rgba(127,127,127,.2); }
+  .csk-ask input { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: 0 11px; font: 13px system-ui, sans-serif; }
   .csk-hint { font-size: 11.5px; opacity: .65; padding: 0 12px 8px; }
   .csk-hidden { display: none !important; }
   /* Phones: keep the header below the status bar / notch (clock, signal, battery)
@@ -123,6 +125,7 @@
       <div class="csk-panel" role="dialog" aria-label="Sketch board">
         <div class="csk-head">
           <span class="csk-title"></span>
+          ${(opts.extra || []).map((b, i) => `<button class="csk-btn" data-extra="${i}" title="${b.title || ''}">${b.label}</button>`).join('')}
           ${opts.onCheck ? `<button class="csk-btn primary" data-act="check" title="Send your sketch to Cassie">${svg('check')}<span>${opts.checkLabel || 'Check my work'}</span></button>` : ''}
           <button class="csk-btn" data-act="save" title="Save as picture">${svg('save')}</button>
           ${opts.allowDock ? `<button class="csk-btn" data-act="dock" title="Dock to the side / full screen">${svg(opts.dock === 'side' ? 'full' : 'side')}</button>` : ''}
@@ -147,6 +150,7 @@
           <button class="csk-btn" data-act="pic" title="Draw on a picture">${svg('image')}</button>
           <input type="file" accept="image/*" class="csk-hidden">
         </div>
+        ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie"><button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
         <div class="csk-stage"><div class="csk-board">
           <canvas class="csk-bg"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-live"></canvas>
         </div></div>
@@ -317,6 +321,7 @@
     wrap.addEventListener('click', async (e) => {
       const t = e.target.closest('button');
       if (!t || !wrap.contains(t)) return;
+      if (t.dataset.extra != null) { const b = (opts.extra || [])[+t.dataset.extra]; if (b && b.onClick) b.onClick(); return; }
       if (t.dataset.tool) {
         tool = t.dataset.tool;
         wrap.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b === t));
@@ -376,6 +381,22 @@
       }
       if (n.reply) { const p = document.createElement('div'); p.className = 'csk-reply'; p.textContent = n.reply; note.appendChild(p); }
     }
+    const askForm = $('.csk-ask');
+    if (askForm) {
+      askForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = askForm.querySelector('input'), btn = askForm.querySelector('button');
+        const q = input.value.trim();
+        if (!q || btn.disabled) return;
+        btn.disabled = true; btn.textContent = '…';
+        showNote({ reply: 'Cassie is thinking…' });
+        try { const reply = await opts.onAsk(snapshot(), q); showNote({ reply: reply || '(no reply)' }); input.value = ''; }
+        catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' }); }
+        finally { btn.disabled = false; btn.textContent = 'Ask'; }
+      });
+      askForm.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    function setTitle(t) { $('.csk-title').textContent = t || 'Board'; }
     function snapshot() {
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const x = c.getContext('2d');
@@ -413,7 +434,7 @@
     }
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
-    current = { wrap, close, snapshot, showNote };
+    current = { wrap, close, snapshot, showNote, setTitle };
     return current;
   }
 

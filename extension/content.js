@@ -449,10 +449,17 @@
         positionPopover(at);
       });
     }
+    // Open Cassie's board (blank) in the side panel — draw or work things out beside the page.
+    const boardBtn = document.createElement('button');
+    boardBtn.className = 'fab';
+    boardBtn.type = 'button';
+    boardBtn.title = 'Open Cassie’s board beside this page';
+    boardBtn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>';
+    boardBtn.addEventListener('click', () => { closeDock(); if (window.CassieSketch) openSnipBoard(null, { headline: 'Your board', steps: [] }); });
     const grip = document.createElement('div');
     grip.className = 'dock-grip';
     grip.title = 'Drag to move';
-    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, hideBtn);
+    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, boardBtn, hideBtn);
     shadow.appendChild(dock);
 
     const site = location.hostname || 'local';
@@ -1007,8 +1014,7 @@
     } catch (e) {
       if (myGen !== gen) return;
       setEmotion('sad');
-      const m = e.message === 'no-key' ? 'Click the Cassie icon in your browser toolbar to add your free Groq API key first.'
-        : e.message === 'no-vision' ? 'Groq has no picture-reading model on your key right now, so I can’t read this page.' : e.message;
+      const m = errorText(e);
       setContent(m, { muted: true });
       positionPopover(rect);
     }
@@ -1104,34 +1110,98 @@
     finally { host.style.visibility = ''; }
     if (!shot || !shot.dataUrl) throw new Error((shot && shot.error) || 'capture failed');
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = shot.dataUrl; });
-    const k = img.width / window.innerWidth;
-    const sw = Math.max(1, Math.round(r.width * k)), sh = Math.max(1, Math.round(r.height * k));
+    // Scale each axis on its own (zoom / scrollbars can make them differ) and
+    // keep the crop inside the screenshot so no black edges sneak in.
+    const kx = img.width / window.innerWidth, ky = img.height / window.innerHeight;
+    let sx = Math.max(0, Math.round(r.left * kx)), sy = Math.max(0, Math.round(r.top * ky));
+    let sw = Math.min(img.width - sx, Math.max(1, Math.round(r.width * kx)));
+    let sh = Math.min(img.height - sy, Math.max(1, Math.round(r.height * ky)));
+    if (sw < 4 || sh < 4) throw new Error('That box is outside the visible page.');
     const scale = Math.min(1, 1400 / Math.max(sw, sh));
     const c = document.createElement('canvas');
-    c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
-    c.getContext('2d').drawImage(img, Math.round(r.left * k), Math.round(r.top * k), sw, sh, 0, 0, c.width, c.height);
+    c.width = Math.max(1, Math.round(sw * scale)); c.height = Math.max(1, Math.round(sh * scale));
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+    cx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.9);
   }
 
-  function askVision(image, prompt, system, maxTokens) {
-    return chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens })
-      .then((r) => { if (!r || r.error) throw new Error((r && r.error) || 'no reply'); return r.reply; });
+  // Turn any failure code/message into a sentence a student can act on.
+  function errorText(err) {
+    const m = String((err && err.message) || err || '');
+    if (m === 'no-key') return 'Add your free Groq key first — click the Cassie icon in the toolbar.';
+    if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup and I can read snips.';
+    if (m === 'reload' || /context invalidated|receiving end does not exist|Could not establish connection/i.test(m)) return 'Cassie was just updated — refresh this tab (F5) and try again.';
+    return m || 'Something went wrong — please try again.';
+  }
+
+  async function askVision(image, prompt, system, maxTokens) {
+    let r;
+    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens }); }
+    catch (e) { throw new Error('reload'); }
+    if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — please try again.');
+    return r.reply;
+  }
+
+  // Is this picture basically one flat colour (nothing to read)?
+  function isFlat(dataUrl) {
+    return new Promise((resolve) => {
+      const i = new Image();
+      i.onload = () => {
+        try {
+          const c = document.createElement('canvas'); c.width = 40; c.height = 40;
+          const x = c.getContext('2d'); x.drawImage(i, 0, 0, 40, 40);
+          const d = x.getImageData(0, 0, 40, 40).data;
+          let sum = 0, sq = 0, n = d.length / 4;
+          for (let k = 0; k < d.length; k += 4) { const l = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; sum += l; sq += l * l; }
+          const mean = sum / n;
+          resolve(Math.sqrt(Math.max(0, sq / n - mean * mean)) < 2.5);
+        } catch (e) { resolve(false); }
+      };
+      i.onerror = () => resolve(false);
+      i.src = dataUrl;
+    });
   }
 
   async function snipAndExplain(r, el, x, y) {
     const rect = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
-    let image = null;
-    try { image = await captureRegion(r); } catch (e) { image = null; }
-    openBoardLoading(rect, x, y, image);
-    const ctx = el && !(host && host.contains(el)) ? gatherContext(el) : (document.title ? 'Page: ' + document.title : '');
-    if (!image) { explainTarget(el, x, y, rect, null); return; }
-    const prompt = `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~18 words each. Read every label and number you can see; don't invent ones you can't.`;
+    let image = null, capErr = '';
     try {
-      const reply = await askVision(image, prompt, null, 700);
-      renderBoard(rect, x, y, parseBoardJSON(reply), image);
+      image = await captureRegion(r);
+      if (image && await isFlat(image)) { await new Promise((res) => setTimeout(res, 250)); image = await captureRegion(r); } // one retry
+    } catch (e) { image = null; capErr = errorText(e); }
+    const ctx = el && !(host && host.contains(el)) ? gatherContext(el) : (document.title ? 'Page: ' + document.title : '');
+
+    // No sketch board available → the old floating card.
+    if (!window.CassieSketch) {
+      openBoardLoading(rect, x, y, image);
+      if (!image) { explainTarget(el, x, y, rect, null); return; }
+    }
+    // The snip and Cassie's explanation open TOGETHER in the side board.
+    const session = window.CassieSketch ? await openSnipBoard(image, { headline: 'Your snip', steps: [] }, { loading: true }) : null;
+    const say = (n) => { if (session) session.showNote(n); };
+    if (!image) { say({ reply: capErr ? `I couldn’t capture the screen: ${capErr}` : 'I couldn’t capture that area — try again.' }); return; }
+    if (await isFlat(image)) { say({ reply: 'That box looks empty. Close this and drag a box around the question, graph or picture you want me to read.' }); return; }
+    say({ reply: 'Cassie is reading your snip…' });
+    const prompt = `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+    try {
+      const reply = await askVision(image, prompt, null, 800);
+      const data = parseBoardJSON(reply);
+      if (session) { session.setTitle(data.headline || 'Your snip'); session.showNote({ headline: data.headline, steps: data.steps }); }
+      else renderBoard(rect, x, y, data, image);
     } catch (e) {
-      if (e.message === 'no-key') { renderBoard(rect, x, y, { headline: 'Add your free Groq key first — click the Cassie toolbar icon.', steps: [] }, image); return; }
-      explainTarget(el, x, y, rect, image); // no picture model → explain from the page text instead
+      // No picture model (or it failed): explain from the page text so she still helps.
+      const text = ctx && ctx.length > 40 ? ctx : '';
+      if (text && (e.message === 'no-vision' || /unavailable|empty/i.test(e.message))) {
+        say({ reply: 'I couldn’t read the picture itself, so I’m using the text around it…' });
+        askStream([{ role: 'user', content: `A student is on a webpage and snipped part of it. Here is the text around it:\n"""\n${text}\n"""\nExplain what it is about and how to work through it, step by step, in under 150 words.` }], {
+          onDelta() {},
+          onDone(full) { say({ reply: full + '\n\nTo read the picture itself, add a free Google (Gemini) key in the Cassie toolbar popup.' }); },
+          onError(err) { say({ reply: errorText(err) }); },
+        });
+      } else {
+        say({ reply: errorText(e) });
+      }
     }
   }
 
@@ -1166,10 +1236,7 @@
       onDelta() {},
       onDone(full) { renderBoard(rect, x, y, parseBoardJSON(full), image); },
       onError(err) {
-        renderBoard(rect, x, y, {
-          headline: err === 'no-key' ? 'Add your free Groq key first — click the Cassie toolbar icon.' : 'Couldn’t reach Cassie — please try again.',
-          steps: [],
-        }, image);
+        renderBoard(rect, x, y, { headline: errorText(err), steps: [] }, image);
       },
     });
   }
@@ -1258,26 +1325,30 @@
   }
 
   // The student's own board, docked beside the page so there's no tab switching.
-  function openSnipBoard(image, data) {
+  function openSnipBoard(image, data, opts = {}) {
     closeBoard();
     setDock(false);
-    window.CassieSketch.open({
+    const topic = () => (data && data.headline && data.headline !== 'Your snip' ? `Topic: ${data.headline}. ` : '');
+    return window.CassieSketch.open({
       root: shadow,
       image: image || null,
       dark: image ? false : undefined,
       dock: 'side',
       allowDock: true,
-      title: data && data.headline ? data.headline : 'Your board',
-      note: data && (data.steps || []).length ? { headline: data.headline, steps: data.steps } : null,
+      title: opts.loading ? 'Your snip' : (data && data.headline ? data.headline : 'Your board'),
+      note: !opts.loading && data && (data.steps || []).length ? { headline: data.headline, steps: data.steps } : null,
       checkLabel: 'Check my work',
+      extra: [{ label: 'New snip', title: 'Snip something else from the page', onClick: () => { const cur = window.CassieSketch; cur.close(); setTimeout(enterPointMode, 50); } }],
+      onAsk: async (png, q) => {
+        try {
+          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, null, 600);
+        } catch (e) { return errorText(e); }
+      },
+      askPlaceholder: 'Ask Cassie about this snip…',
       onCheck: async (png) => {
         try {
-          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson with their own writing and sketches on top' : 'their own sketch / working'}. ${data && data.headline ? 'Topic: ' + data.headline + '. ' : ''}Check their work like a kind but honest tutor: say what is right, point out any mistake and why, and give a hint for the next step. Keep it short (under 120 words), plain text.`, null, 500);
-        } catch (e) {
-          if (e.message === 'no-key') return 'Add your free Groq key first — click the Cassie toolbar icon.';
-          if (e.message === 'no-vision') return 'Groq has no picture-reading model on your key right now, so I can’t check drawings yet.';
-          return e.message;
-        }
+          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Check their work like a kind but honest tutor: say what is right, point out any mistake and why, and give a hint for the next step. Keep it short (under 120 words), plain text.`, null, 500);
+        } catch (e) { return errorText(e); }
       },
       onClose: () => setDock(true),
     });

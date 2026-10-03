@@ -247,16 +247,99 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-// ---- Snip & see: capture the visible tab, and read pictures with Groq vision ----
-async function discoverGroqVisionModel(groqKey) {
+// ---- Snip & see: capture the visible tab, and read pictures (Gemini or Groq vision) ----
+// Every failure comes back as a plain-English sentence (never a bare "couldn't reach").
+const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+
+async function visionViaGemini(key, { image, prompt, system, maxTokens }) {
+  const m = String(image).match(/^data:([^;]+);base64,(.*)$/);
+  if (!m) throw new Error('That picture couldn’t be read.');
+  let last = null;
+  for (const model of GEMINI_VISION_MODELS) {
+    let res;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+          contents: [{ role: 'user', parts: [{ inlineData: { mimeType: m[1], data: m[2] } }, { text: prompt }] }],
+          generationConfig: { maxOutputTokens: maxTokens || 900, temperature: 0.4 },
+        }),
+      });
+    } catch (e) { throw new Error('Couldn’t connect to Google — check your internet connection.'); }
+    if (res.ok) {
+      const cand = (await res.json()).candidates?.[0];
+      const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+      if (text) return text;
+      throw new Error('Gemini sent back an empty answer — try again.');
+    }
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); continue; }
+    if (res.status === 429) throw new Error('Gemini’s free tier is rate-limiting right now — wait a minute and try again.');
+    if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected — check it in the Cassie toolbar popup.');
+    if (res.status === 403) throw new Error('Your Gemini key isn’t allowed to read pictures — check it in the Cassie toolbar popup.');
+    throw new Error(detail || `Gemini request failed (${res.status})`);
+  }
+  throw last || new Error('Gemini isn’t available right now.');
+}
+
+// Groq pictures: try every vision-capable model this key can see until one works.
+let _visionModelOK = null;
+async function groqVisionCandidates(groqKey) {
+  let ids = [];
   try {
     const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${groqKey}` } });
-    if (!res.ok) return '';
-    const ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
-    return ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '';
-  } catch (e) { return ''; }
+    if (res.ok) ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
+  } catch (e) { /* offline — handled by caller */ }
+  const score = (id) => (/llama-4-scout/i.test(id) ? 0 : /llama-4-maverick/i.test(id) ? 1 : /vision|llava|pixtral|(^|[-/])vl([-/]|$)|multimodal/i.test(id) ? 2 : 9);
+  const list = ids.filter((id) => !/whisper|tts|guard|playai|orpheus|embed/i.test(id) && score(id) < 9).sort((a, b) => score(a) - score(b));
+  if (_visionModelOK && list.includes(_visionModelOK)) list.splice(list.indexOf(_visionModelOK), 1), list.unshift(_visionModelOK);
+  return list;
 }
-let _visionModel = null;
+async function visionViaGroq(groqKey, { image, prompt, system, maxTokens }) {
+  const models = await groqVisionCandidates(groqKey);
+  if (!models.length) throw new Error('NO_VISION');
+  let lastDetail = '';
+  for (const model of models) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let res;
+      try {
+        res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
+          body: JSON.stringify({
+            model, max_tokens: maxTokens || 900, temperature: 0.4,
+            messages: [
+              ...(system ? [{ role: 'system', content: system }] : []),
+              { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] },
+            ],
+          }),
+        });
+      } catch (e) { throw new Error('Couldn’t connect to Groq — check your internet connection.'); }
+      if (res.ok) {
+        _visionModelOK = model;
+        return ((await res.json()).choices?.[0]?.message?.content || '').trim() || '(no answer)';
+      }
+      let detail = '';
+      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+      lastDetail = detail || `HTTP ${res.status}`;
+      if (res.status === 429) {
+        // Wait out a short per-minute limit; a daily limit (hours) is reported instead.
+        let secs = 0;
+        try { secs = parseDuration(res.headers.get('retry-after')); } catch (e) { /* ignore */ }
+        if (!secs) { const w = detail.match(/try again in ([0-9hms.\s]+)/i); if (w) secs = parseDuration(w[1]); }
+        if (secs > 0 && secs <= 20 && attempt < 2) { await sleep(secs * 1000 + 300); continue; }
+        throw new Error(rateLimitMessage(res, detail).replace(/ Tip:.*$/, ' Tip: add a free Google (Gemini) key in the Cassie toolbar popup — snips will use that instead.'));
+      }
+      if (res.status === 401) throw new Error('Groq rejected your key — check it in the Cassie toolbar popup.');
+      if (res.status === 413 || /too large|reduce/i.test(detail)) throw new Error('That snip is too big for Groq’s free limit — drag a smaller box around just the part you need.');
+      break; // 400/404 etc: this model can't take pictures — try the next one
+    }
+  }
+  throw new Error(/does not exist|not found|decommission|no longer/i.test(lastDetail) ? 'NO_VISION' : lastDetail);
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'CASSIE_SNIP') {
@@ -268,38 +351,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg?.type === 'CASSIE_VISION') {
     (async () => {
-      const { groqKey } = await chrome.storage.local.get(['groqKey']);
-      if (!groqKey) { sendResponse({ error: 'no-key' }); return; }
-      if (!_visionModel) _visionModel = await discoverGroqVisionModel(groqKey);
-      if (!_visionModel) { sendResponse({ error: 'no-vision' }); return; }
-      const body = {
-        model: _visionModel,
-        max_tokens: msg.maxTokens || 900,
-        temperature: 0.4,
-        messages: [
-          ...(msg.system ? [{ role: 'system', content: msg.system }] : []),
-          { role: 'user', content: [{ type: 'text', text: msg.prompt }, { type: 'image_url', image_url: { url: msg.image } }] },
-        ],
-      };
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${groqKey}` },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) { sendResponse({ reply: ((await res.json()).choices?.[0]?.message?.content || '').trim() }); return; }
-        let detail = '';
-        try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-        if (res.status === 404) { _visionModel = null; sendResponse({ error: 'no-vision' }); return; }
-        if (res.status === 429 && attempt < 2) {
-          const m = detail.match(/try again in ([0-9.]+)s/i);
-          const secs = m ? parseFloat(m[1]) : 3;
-          if (secs <= 20) { await sleep(secs * 1000 + 300); continue; }
-        }
-        sendResponse({ error: res.status === 429 ? rateLimitMessage(res, detail) : (detail || `Request failed (${res.status})`) });
-        return;
+      const { groqKey, geminiKey } = await chrome.storage.local.get(['groqKey', 'geminiKey']);
+      if (!groqKey && !geminiKey) { sendResponse({ error: 'no-key' }); return; }
+      let geminiErr = null;
+      if (geminiKey) {
+        try { sendResponse({ reply: await visionViaGemini(geminiKey, msg) }); return; }
+        catch (e) { geminiErr = e; if (!groqKey) { sendResponse({ error: e.message }); return; } }
       }
-    })().catch((e) => sendResponse({ error: e.message }));
+      try { sendResponse({ reply: await visionViaGroq(groqKey, msg) }); }
+      catch (e) {
+        if (e.message === 'NO_VISION') sendResponse({ error: geminiErr ? geminiErr.message : 'no-vision' });
+        else sendResponse({ error: e.message });
+      }
+    })().catch((e) => sendResponse({ error: e.message || 'Something went wrong reading the picture.' }));
     return true;
   }
   return false;
