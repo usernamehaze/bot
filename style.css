@@ -976,7 +976,25 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 #pomo-cycles { display: inline-flex; gap: 4px; }
 #pomo-cycles span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
 #pomo-cycles span.on { background: var(--accent, var(--text)); }
-.pomo-time { font-size: 2rem; font-weight: 800; text-align: center; letter-spacing: .02em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+.pomo-head-r { display: inline-flex; align-items: center; gap: 8px; }
+.pomo-edit { background: none; border: none; padding: 2px; margin: -2px -2px -2px 0; color: var(--muted); cursor: pointer; border-radius: 6px; display: inline-flex; }
+.pomo-edit:hover, .pomo-edit[aria-expanded="true"] { color: var(--text); background: var(--border); }
+.pomo-edit svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.pomo-time { display: block; width: 100%; background: none; border: none; color: var(--text); cursor: pointer; font: inherit; font-size: 2rem; font-weight: 800; text-align: center; letter-spacing: .02em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; border-radius: 10px; }
+.pomo-time:hover { background: var(--border); }
+.pomo-set { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.pomo-set[hidden] { display: none; }
+.pomo-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.pomo-presets button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 0; font-size: .74rem; font-weight: 600; cursor: pointer; }
+.pomo-presets button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pomo-field { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; font-size: .82rem; font-weight: 600; }
+.pomo-field small { color: var(--muted); font-size: .72rem; width: 22px; }
+.pomo-step { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.pomo-step button { width: 28px; height: 30px; border: none; background: none; color: var(--text); font-size: 1rem; cursor: pointer; }
+.pomo-step button:hover { background: var(--border); }
+.pomo-step input { width: 40px; height: 30px; border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); background: none; color: var(--text); text-align: center; font: inherit; font-weight: 700; -moz-appearance: textfield; }
+.pomo-step input::-webkit-inner-spin-button, .pomo-step input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.pomo-set-note { margin: 0; font-size: .72rem; color: var(--muted); }
 .pomo-ring { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 10px; }
 .pomo-ring i { display: block; height: 100%; width: 0; background: var(--accent, var(--text)); transition: width 1s linear; }
 .pomo.break .pomo-ring i { background: var(--muted); }

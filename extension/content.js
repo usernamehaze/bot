@@ -135,28 +135,36 @@
       cursor: pointer;
     }
     .choice-btn:hover { background: #000000; }
-    .fab {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: #1c1c24;
-      border: none;
-      cursor: pointer;
-      z-index: 2147483646;
-      opacity: .55;
-      transition: opacity .15s;
-      box-shadow: 0 4px 14px rgba(0,0,0,.35);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
+    /* Side dock: a slim tab on the right edge, out of the way of the page's own
+       buttons (send buttons usually live bottom-right). Hover / tap opens it. */
+    .dock { position: fixed; right: 0; top: 50%; z-index: 2147483646; display: flex; align-items: center; transform: translateY(-50%); }
+    .dock[hidden] { display: none; }
+    .dock-handle {
+      width: 12px; height: 54px; padding: 0; border: none; border-radius: 10px 0 0 10px;
+      background: rgba(28,28,36,.42); cursor: grab; touch-action: none;
+      display: flex; align-items: center; justify-content: center; transition: background .15s, width .15s;
     }
-    .fab:hover { opacity: 1; }
-    .fab[hidden] { display: none; }
-    .fab svg { width: 22px; height: 22px; fill: #fff; }
+    .dock-handle::before { content: ""; width: 3px; height: 22px; border-radius: 2px; background: rgba(255,255,255,.75); }
+    .dock-handle:hover { background: rgba(28,28,36,.8); width: 16px; }
+    .dock.dragging .dock-handle { cursor: grabbing; background: rgba(28,28,36,.9); }
+    .dock-tray {
+      display: none; flex-direction: column; align-items: center; gap: 8px; padding: 9px 8px;
+      background: rgba(22,22,28,.94); border-radius: 14px 0 0 14px; box-shadow: -4px 6px 22px rgba(0,0,0,.35);
+    }
+    .dock.open .dock-tray { display: flex; }
+    .dock.open .dock-handle { display: none; }
+    .fab, .annotate-fab {
+      width: 40px; height: 40px; border-radius: 50%; background: #34343e; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; padding: 0; transition: background .15s;
+    }
+    .fab:hover, .annotate-fab:hover { background: #4a4a56; }
+    .fab svg { width: 20px; height: 20px; fill: #fff; }
+    .annotate-fab svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 2.4; }
+    .dock-grip { width: 26px; height: 10px; cursor: grab; touch-action: none; display: flex; align-items: center; justify-content: center; }
+    .dock-grip::before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.45); }
+    .dock-grip:hover::before { background: rgba(255,255,255,.8); }
+    .dock-hide { background: none; border: none; color: rgba(255,255,255,.6); font: 600 10px/1.2 system-ui, sans-serif; cursor: pointer; padding: 2px 0 0; text-align: center; }
+    .dock-hide:hover { color: #fff; }
     .page-input {
       width: 100%;
       box-sizing: border-box;
@@ -188,16 +196,6 @@
     .followup-send:hover { background: #000; }
 
     /* --- "Explain a graphic" overlay: Cassie draws on top of the page --- */
-    .annotate-fab {
-      position: fixed; right: 16px; bottom: 68px; width: 44px; height: 44px;
-      border-radius: 50%; background: #5a5a5a; border: none; cursor: pointer;
-      z-index: 2147483646; opacity: .62; transition: opacity .15s;
-      box-shadow: 0 4px 14px rgba(0,0,0,.35);
-      display: flex; align-items: center; justify-content: center; padding: 0;
-    }
-    .annotate-fab:hover { opacity: 1; }
-    .annotate-fab[hidden] { display: none; }
-    .annotate-fab svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2.4; }
     .pt-backdrop {
       position: fixed; inset: 0; z-index: 2147483644; cursor: crosshair;
       background: rgba(10,8,16,.28); backdrop-filter: blur(.5px);
@@ -348,26 +346,143 @@
     else lastCtrlTap = now;
   }, true);
 
-  // Floating "ask about this page" button — top frame only, so there's just one.
+  // Side dock with the "ask about this page" and "snip" buttons — top frame only.
+  // It sits as a slim tab on the right edge so it never covers a site's own
+  // buttons (like a chat's Send). Hover or tap to open; drag it up or down;
+  // "Hide here" turns it off for this site (the toolbar popup can bring it back).
   let fab = null;
   let annotateBtn = null;
+  let dock = null;
+  let dockBusy = false; // hidden while snipping / sketching
+  function setDock(show) { dockBusy = !show; if (dock) dock.hidden = !show || dock.dataset.off === '1'; }
   if (window.top === window) {
+    dock = document.createElement('div');
+    dock.className = 'dock';
+    dock.innerHTML = '<button type="button" class="dock-handle" title="Cassie — hover or tap. Drag to move." aria-label="Open Cassie tools"></button><div class="dock-tray"></div>';
+    const handle = dock.querySelector('.dock-handle');
+    const tray = dock.querySelector('.dock-tray');
+
     fab = document.createElement('button');
     fab.className = 'fab';
     fab.type = 'button';
     fab.title = 'Ask Cassie about this page';
     fab.innerHTML = '<svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg>';
-    shadow.appendChild(fab);
-    fab.addEventListener('click', showPageAsk);
+    fab.addEventListener('click', () => { const r = dock.getBoundingClientRect(); closeDock(); showPageAsk({ left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height }); });
 
-    // "Explain a graphic" — point at a graph/diagram and Cassie draws on it.
+    // "Snip & explain" — drag a box around a graph/picture/question.
     annotateBtn = document.createElement('button');
     annotateBtn.className = 'annotate-fab';
     annotateBtn.type = 'button';
     annotateBtn.title = 'Snip a graph, picture or question for Cassie to explain';
     annotateBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>';
-    shadow.appendChild(annotateBtn);
-    annotateBtn.addEventListener('click', enterPointMode);
+    annotateBtn.addEventListener('click', () => { closeDock(); enterPointMode(); });
+
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'dock-hide';
+    hideBtn.type = 'button';
+    hideBtn.textContent = 'Hide here';
+    hideBtn.title = 'Hide these buttons on this site (highlighting still works)';
+    const grip = document.createElement('div');
+    grip.className = 'dock-grip';
+    grip.title = 'Drag to move';
+    tray.append(grip, fab, annotateBtn, hideBtn);
+    shadow.appendChild(dock);
+
+    const site = location.hostname || 'local';
+    let closeTimer = null;
+    function openDock() { clearTimeout(closeTimer); dock.classList.add('open'); }
+    function closeDock() { clearTimeout(closeTimer); dock.classList.remove('open'); }
+    dock.addEventListener('mouseenter', () => { if (!dragging) openDock(); });
+    dock.addEventListener('mouseleave', () => { clearTimeout(closeTimer); closeTimer = setTimeout(closeDock, 450); });
+    // tap outside closes it on touch screens
+    document.addEventListener('pointerdown', (e) => {
+      if (dock.classList.contains('open') && !(e.composedPath && e.composedPath().includes(dock))) closeDock();
+    }, true);
+
+    // position (fraction of the window height), remembered per site
+    let yFrac = 0.5;
+    function placeDock() {
+      const h = 54, vh = window.innerHeight;
+      const y = Math.min(vh - h / 2 - 8, Math.max(h / 2 + 8, yFrac * vh));
+      dock.style.top = y + 'px';
+    }
+    // If the tab would sit on top of something clickable on the page, slide it to a free spot.
+    const CLICKABLE = 'a, button, input, textarea, select, label, [role="button"], [role="link"], [contenteditable=""], [contenteditable="true"]';
+    function pointBusy(y) {
+      const els = document.elementsFromPoint(window.innerWidth - 6, y) || [];
+      return els.some((el) => el !== host && !host.contains(el) && el.closest && el.closest(CLICKABLE));
+    }
+    // the whole tab (54px tall) plus a little breathing room must be clear
+    function spotIsBusy(y) { for (let d = -34; d <= 34; d += 8) if (pointBusy(y + d)) return true; return false; }
+    function avoidObstacles() {
+      if (dock.hidden || dock.classList.contains('open')) return;
+      const vh = window.innerHeight;
+      const y0 = dock.getBoundingClientRect().top + 27;
+      if (!spotIsBusy(y0)) return;
+      for (let step = 1; step < 14; step++) {
+        for (const dir of [-1, 1]) {
+          const y = y0 + dir * step * 40;
+          if (y < 40 || y > vh - 40) continue;
+          if (!spotIsBusy(y)) { yFrac = y / vh; placeDock(); return; }
+        }
+      }
+    }
+    try {
+      chrome.storage.local.get(['cassieDock'], ({ cassieDock }) => {
+        const pref = (cassieDock || {})[site] || {};
+        if (typeof pref.y === 'number') yFrac = pref.y;
+        if (pref.off) { dock.dataset.off = '1'; dock.hidden = true; }
+        placeDock();
+        setTimeout(avoidObstacles, 800);
+      });
+    } catch (e) { placeDock(); }
+    function savePref(patch) {
+      try {
+        chrome.storage.local.get(['cassieDock'], ({ cassieDock }) => {
+          const all = cassieDock || {};
+          all[site] = Object.assign({}, all[site], patch);
+          chrome.storage.local.set({ cassieDock: all });
+        });
+      } catch (e) { /* storage unavailable */ }
+    }
+    hideBtn.addEventListener('click', () => {
+      dock.dataset.off = '1'; dock.hidden = true; closeDock();
+      savePref({ off: true });
+    });
+    try {
+      chrome.storage.onChanged.addListener((changes) => {
+        if (!changes.cassieDock) return;
+        const pref = (changes.cassieDock.newValue || {})[site] || {};
+        if (!pref.off && dock.dataset.off === '1') { delete dock.dataset.off; if (!dockBusy) dock.hidden = false; }
+      });
+    } catch (e) { /* ignore */ }
+    window.addEventListener('resize', () => { placeDock(); avoidObstacles(); });
+    let lastAvoid = 0;
+    window.addEventListener('scroll', () => { const n = Date.now(); if (n - lastAvoid > 600) { lastAvoid = n; setTimeout(avoidObstacles, 250); } }, true);
+
+    // drag the tab up/down the edge; a plain tap opens it
+    let dragging = false, dragStart = null;
+    function dragDown(e) {
+      dragStart = { y: e.clientY, top: dock.getBoundingClientRect().top + dock.getBoundingClientRect().height / 2, target: e.currentTarget };
+      dragging = false;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+    function dragMove(e) {
+      if (!dragStart) return;
+      if (!dragging && Math.abs(e.clientY - dragStart.y) > 5) { dragging = true; dock.classList.add('dragging'); }
+      if (dragging) { yFrac = (dragStart.top + e.clientY - dragStart.y) / window.innerHeight; placeDock(); }
+    }
+    function dragUp() {
+      if (dragging) { dock.classList.remove('dragging'); savePref({ y: yFrac }); }
+      else if (dragStart && dragStart.target === handle) openDock(); // a tap on the tab opens it
+      dragging = false; dragStart = null;
+    }
+    [handle, grip].forEach((el) => {
+      el.addEventListener('pointerdown', dragDown);
+      el.addEventListener('pointermove', dragMove);
+      el.addEventListener('pointerup', dragUp);
+      el.addEventListener('pointercancel', dragUp);
+    });
   }
 
   let lastAutoText = '';
@@ -825,8 +940,7 @@
     ensureOverlayEls();
     hidePopover();
     closeBoard();
-    if (fab) fab.hidden = true;
-    if (annotateBtn) annotateBtn.hidden = true;
+    setDock(false);
     ptBackdrop.hidden = false; ptHint.hidden = false;
     document.addEventListener('keydown', escPoint, true);
   }
@@ -836,8 +950,7 @@
     if (ptHint) ptHint.hidden = true;
     if (snipRect) snipRect.hidden = true;
     snipStart = null;
-    if (fab) fab.hidden = false;
-    if (annotateBtn) annotateBtn.hidden = false;
+    setDock(true);
     document.removeEventListener('keydown', escPoint, true);
   }
 
@@ -1049,8 +1162,7 @@
   // The student's own board, docked beside the page so there's no tab switching.
   function openSnipBoard(image, data) {
     closeBoard();
-    if (fab) fab.hidden = true;
-    if (annotateBtn) annotateBtn.hidden = true;
+    setDock(false);
     window.CassieSketch.open({
       root: shadow,
       image: image || null,
@@ -1069,7 +1181,7 @@
           return e.message;
         }
       },
-      onClose: () => { if (fab) fab.hidden = false; if (annotateBtn) annotateBtn.hidden = false; },
+      onClose: () => setDock(true),
     });
   }
 
