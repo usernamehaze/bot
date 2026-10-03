@@ -8,6 +8,9 @@
  *
  * Everything is drawn in plain <canvas>/<svg> — no libraries, no network — so
  * it works offline and identically on phone, tablet and desktop.
+ *
+ * The extension keeps an identical copy at extension/board.js — keep the two
+ * files the same.
  */
 (function () {
   'use strict';
@@ -101,7 +104,11 @@
 
   // ---------- helpers ----------
   const NS = 'http://www.w3.org/2000/svg';
+  // Optional colour overrides (the extension has no page CSS variables to read).
+  let THEME = null;
+  let SIZE = 0; // logical drawing width when the host asks for one (extension popup)
   function css(name, fallback) {
+    if (THEME && THEME[name]) return THEME[name];
     try { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fallback; }
     catch (e) { return fallback; }
   }
@@ -143,7 +150,10 @@
   function renderGraph(board, spec) {
     if (spec.title) { const h = el('p', 'cb-title'); h.textContent = pretty(spec.title); board.appendChild(h); }
     const wrap = el('div', 'cb-canvas-wrap');
-    const canvas = el('canvas'); canvas.width = 640; canvas.height = 380;
+    // Draw at the size it will be shown (crisp text in a small popup too).
+    const LW = SIZE || 640, LH = Math.round(LW * (SIZE ? 0.68 : 380 / 640));
+    const dpr = SIZE ? Math.min(3, Math.max(1, window.devicePixelRatio || 1) * 1.5) : 1;
+    const canvas = el('canvas'); canvas.width = Math.round(LW * dpr); canvas.height = Math.round(LH * dpr);
     wrap.appendChild(canvas); board.appendChild(wrap);
 
     let f;
@@ -164,7 +174,8 @@
     }
 
     const x = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height, pad = 34;
+    x.scale(dpr, dpr);
+    const W = LW, H = LH, pad = SIZE ? 26 : 34;
     const PX = (v) => pad + (v - xmin) / (xmax - xmin) * (W - 2 * pad);
     const PY = (v) => H - pad - (v - ymin) / (ymax - ymin) * (H - 2 * pad);
     const pink = css('--cb-accent', '#2a2a2d'); // monochrome board ink
@@ -211,7 +222,12 @@
     (spec.points || []).forEach((pt) => {
       const px = PX(pt.x), py = PY(pt.y);
       x.fillStyle = pink; x.beginPath(); x.arc(px, py, 6, 0, 7); x.fill();
-      if (pt.label) { x.fillStyle = text; x.font = 'bold 12px sans-serif'; x.fillText(pretty(pt.label), px + 8, py - 8); }
+      if (pt.label) {
+        // a halo in the paper colour keeps the label readable where the line crosses it
+        x.font = 'bold 12px sans-serif'; x.lineJoin = 'round';
+        x.strokeStyle = surface; x.lineWidth = 4; x.strokeText(pretty(pt.label), px + 8, py - 8);
+        x.fillStyle = text; x.fillText(pretty(pt.label), px + 8, py - 8);
+      }
     });
     if (spec.vertex) {
       const px = PX(spec.vertex.x), py = PY(spec.vertex.y);
@@ -265,7 +281,9 @@
   }
 
   // ---------- public: render a spec into a container ----------
-  function renderInto(container, spec) {
+  function renderInto(container, spec, opts) {
+    THEME = (opts && opts.colors) || null;
+    SIZE = (opts && opts.width) || 0;
     const board = el('div', 'cassie-board');
     const head = el('div', 'cb-head');
     head.innerHTML = '<span class="cb-pin">✎</span> Cassie\'s board';
@@ -291,6 +309,7 @@
       const p = el('p', 'cb-note'); p.textContent = 'Couldn’t draw this one.'; body.appendChild(p);
     }
     container.appendChild(board);
+    THEME = null; SIZE = 0;
     return board;
   }
 

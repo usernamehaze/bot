@@ -86,6 +86,19 @@
     }
     .body pre code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; background: none; padding: 0; }
     .body code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; background: rgba(127,127,127,.18); padding: 1px 4px; border-radius: 4px; }
+    .body .cassie-board { margin: 8px 0; border: 1px solid rgba(127,127,127,.35); border-radius: 10px; overflow: hidden; }
+    .body .cb-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-weight: 700; font-size: 12px; border-bottom: 1px solid rgba(127,127,127,.3); }
+    .body .cb-draw { margin-left: auto; background: none; border: 1px solid rgba(127,127,127,.45); color: inherit; border-radius: 999px; padding: 3px 9px; font: 600 11px/1.2 inherit; font-family: inherit; cursor: pointer; }
+    .body .cb-draw:hover { background: rgba(127,127,127,.15); }
+    .body .cb-body { padding: 8px 10px; }
+    .body .cb-title { margin: 0 0 6px; font-weight: 700; font-size: 13px; white-space: normal; }
+    .body .cb-note { margin: 6px 0 0; font-size: 12px; opacity: .75; white-space: normal; }
+    .body .cb-canvas-wrap canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+    .body .cb-geo { display: flex; flex-direction: column; gap: 6px; }
+    .body .cb-geo-svg { width: 100%; max-height: 160px; }
+    .body .cb-steps { margin: 0; padding-left: 18px; }
+    .body .cb-steps li { opacity: 1; }
+    .body .cb-drawing { opacity: .7; font-style: italic; margin: 8px 0; }
     .body .table-wrap { overflow-x: auto; margin: 8px 0; }
     .body table.md-table { border-collapse: collapse; width: 100%; font-size: 13px; }
     .body table.md-table th, .body table.md-table td { text-align: left; padding: 6px 9px; border-bottom: 1px solid rgba(127,127,127,.35); vertical-align: top; }
@@ -570,7 +583,25 @@
   function setContent(text, { muted = false } = {}) {
     body.classList.toggle('muted', muted);
     body.innerHTML = '';
-    String(text).split('```').forEach((seg, i) => {
+    const segs = String(text).split('```');
+    segs.forEach((seg, i) => {
+      if (i % 2 === 1 && /^\s*cassie-board\b/.test(seg)) {
+        // Cassie drew a graph — render it as a real chart, not text.
+        const closed = i < segs.length - 1;
+        let spec = null;
+        try { spec = JSON.parse(seg.replace(/^\s*cassie-board\s*/, '').trim()); } catch (e) { spec = null; }
+        if (spec && window.CassieBoard) {
+          const dark = popover.classList.contains('dark');
+          window.CassieBoard.renderInto(body, spec, { width: Math.max(240, Math.min(420, (body.clientWidth || 300) - 24)), colors: dark
+            ? { '--surface': '#16171d', '--border': '#30313a', '--muted': '#9a9cab', '--text': '#e9e9ef', '--cb-accent': '#ececf2' }
+            : { '--surface': '#ffffff', '--border': '#e6e6ea', '--muted': '#6d6f7c', '--text': '#1c1d2b', '--cb-accent': '#1c1c24' } });
+        } else {
+          const p = document.createElement('p'); p.className = 'cb-drawing';
+          p.textContent = closed ? 'I couldn’t draw that graph — ask me again.' : 'Drawing the graph…';
+          body.appendChild(p);
+        }
+        return;
+      }
       if (i % 2 === 1) {
         let code = seg;
         const nl = seg.indexOf('\n');
@@ -637,7 +668,7 @@
     copyBtn.addEventListener('click', () => {
       const done = () => { copyBtn.textContent = 'Copied ✓'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500); };
       try {
-        navigator.clipboard.writeText(full).then(done, () => {
+        navigator.clipboard.writeText(String(full).replace(/```cassie-board[\s\S]*?```/g, '').replace(/\n{3,}/g, '\n\n').trim()).then(done, () => {
           const ta = document.createElement('textarea'); ta.value = full; document.body.appendChild(ta); ta.select();
           try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
         });
@@ -999,6 +1030,20 @@
       else setTimeout(() => items.forEach((li) => li.classList.remove('active')), 800);
     })();
     setTimeout(() => { document.addEventListener('click', outsideBoard, true); window.addEventListener('scroll', closeBoard, true); }, 60);
+  }
+
+  // "Draw on this" under a graph Cassie drew in the popover.
+  if (window.CassieBoard) {
+    window.CassieBoard.onDraw = (boardEl, spec) => {
+      const canvas = boardEl.querySelector('canvas');
+      let image = null;
+      if (canvas) image = canvas.toDataURL('image/png');
+      else {
+        const svgEl = boardEl.querySelector('svg');
+        if (svgEl) image = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svgEl));
+      }
+      openSnipBoard(image, { headline: spec.title || 'Your board', steps: [] });
+    };
   }
 
   // The student's own board, docked beside the page so there's no tab switching.

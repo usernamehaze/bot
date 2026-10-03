@@ -152,7 +152,8 @@ Supported specs:
 - Geometry shape: {"type":"shape","shape":"rectangle","w":8,"h":5,"title":"Rectangle"}  (shape = rectangle|square|triangle|circle; square uses "side"; triangle uses "base","height" and optional "sides":[a,b,c]; circle uses "r"). Area and perimeter are computed and shown automatically.
 - Worked steps: {"type":"steps","title":"Solve x^2 - 5x + 6 = 0","steps":["Factor: (x-2)(x-3)=0","So x=2 or x=3"]}
 
-Keep numbers real and correct — the board draws exactly what you give it.`;
+Keep numbers real and correct — the board draws exactly what you give it.
+When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board — never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.`;
 
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
