@@ -2374,6 +2374,28 @@ if (webBtn) {
   webBtn.addEventListener('click', () => runWebCheck(promptInput.value));
 }
 
+/* ---------- files handed over by the Cassie browser extension ----------
+   On a PDF / Google Doc / Slides tab the extension's "Make a reviewer" button
+   opens this app and passes the file in (via its small bridge script on this
+   site). We attach it and start the reviewer straight away. */
+window.addEventListener('message', async (e) => {
+  const d = e.data;
+  if (e.source !== window || !d || d.source !== 'cassie-ext' || d.type !== 'import-file' || !d.base64) return;
+  try {
+    // Convenience: if this app has no Groq key yet, use the one saved in the extension.
+    if (!state.groqKey && typeof d.groqKey === 'string' && /^gsk_/.test(d.groqKey)) { state.groqKey = d.groqKey; save(); }
+    const bin = atob(d.base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const file = new File([bytes], d.name || 'file.pdf', { type: d.mime || 'application/pdf' });
+    const ok = await attachFile(file);
+    if (ok && d.prompt) handleSend(d.prompt);
+  } catch (err) {
+    renderMessage('assistant', 'I couldn’t open the file from your browser tab — download it and attach it with the paperclip instead.');
+  }
+});
+document.documentElement.dataset.cassieReady = '1';
+
 /* ---------- the student's drawing board ---------- */
 const prefersDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
 
@@ -2450,9 +2472,13 @@ if (boardBtn) boardBtn.addEventListener('click', () => openSketch());
 
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', async () => {
+fileInput.addEventListener('change', () => {
   const file = fileInput.files && fileInput.files[0];
-  if (!file) return;
+  if (file) attachFile(file);
+});
+
+// Attach a picture or document to the next message. Returns true when it's ready.
+async function attachFile(file) {
   const lname = (file.name || '').toLowerCase();
 
   // Image → existing vision flow.
@@ -2464,8 +2490,8 @@ fileInput.addEventListener('change', async () => {
       attachThumb.hidden = false;
       attachName.hidden = true;
       attachPreview.hidden = false;
-    } catch (e) { clearAttach(); }
-    return;
+      return true;
+    } catch (e) { clearAttach(); return false; }
   }
 
   // Document → extract text in-browser.
@@ -2480,18 +2506,19 @@ fileInput.addEventListener('change', async () => {
       if (!doc.text && !doc.hasVisuals) {
         pendingDoc = null;
         attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
-        return;
+        return false;
       }
       pendingDoc = doc;
       attachName.textContent = doc.scanned
         ? `${file.name} — scanned pages, I’ll read them as pictures`
         : file.name;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
+      return true;
     } catch (e) {
       pendingDoc = null;
       attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, .docx, or .pptx.`;
+      return false;
     }
-    return;
   }
 
   // Old binary Office formats aren't supported by the in-browser parsers.
@@ -2502,7 +2529,8 @@ fileInput.addEventListener('change', async () => {
     attachName.textContent = 'Please save it as .docx or .pptx and try again.';
     attachPreview.hidden = false;
   }
-});
+  return false;
+}
 attachRemove.addEventListener('click', clearAttach);
 imageBtn.addEventListener('click', handleGenerateImage);
 
