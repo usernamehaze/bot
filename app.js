@@ -24,7 +24,9 @@ function loadState() {
 
 // Text runs on Groq (higher free limits); images run on Gemini.
 // Smartest first — it's also the default and the head of the fallback chain.
-const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'];
+const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
+// Gemini models for reading whole files (PDF pages, slides, pictures). Newest first.
+const GEMINI_DOC_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
 const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
 const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
@@ -101,7 +103,7 @@ You are especially strong at:
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
 - Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis — the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
 - English literature and close reading: you are an insightful literature teacher. Analyze novels, short stories, plays, and poems — long or short — in depth: theme(s), plot and structure, characterization, setting, point of view, tone and mood, conflict, symbolism, motifs, imagery, irony, and figurative language (metaphor, simile, personification, hyperbole, etc.). For poetry, also cover form and type, meter/rhythm, rhyme scheme, sound devices (alliteration, assonance, onomatopoeia), enjambment, and stanza structure, and give a stanza-by-stanza or line-by-line reading when it helps. Always ground an interpretation in the text — quote short lines as evidence — and bring in relevant historical, cultural, or biographical context. You can also compare works, trace a theme across a text, and explain literary movements and terms.
-- Reviewers, study guides, and summaries: when the user gives you material — pasted text or an attached document/PDF — and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. (Every answer you give has a Download button beneath it, so a reviewer can be saved as a file — you don't need to attach anything; just write it out fully.)
+- Reviewers, study guides, and summaries: when the user gives you material — pasted text or an attached document/PDF — and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word — just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
 
 How you work:
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
@@ -386,6 +388,7 @@ function scheduleEmote() {
 
 // ---- playful idle antics: she walks, plays, and peeks from behind bubbles ----
 let anticTimer = null;
+let anticFirst = true;
 function anticBusy() {
   return !mascot || mascotDragging || mascotAsleep || document.hidden
     || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil;
@@ -445,7 +448,8 @@ function scheduleAntic() {
       else mascotPlay();
     }
     scheduleAntic();
-  }, 40000 + Math.random() * 40000); // roughly every 40–80s while she's awake
+  }, anticFirst ? 12000 + Math.random() * 8000 : 25000 + Math.random() * 20000); // first soon, then every ~25–45s
+  anticFirst = false;
 }
 
 // ---- speech bubble ---- (ms === 0 keeps it up until something replaces it)
@@ -1254,7 +1258,7 @@ function rateLimitMessage(res, detail) {
   if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
   const daily = secs > 3600;
   if (daily) {
-    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to a lighter model (Llama 3.1 8B) in Settings — it has a higher daily limit.`;
+    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in Settings — each model has its own daily limit.`;
   }
   if (wait) {
     return `Slow down a sec — that's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
@@ -1262,12 +1266,112 @@ function rateLimitMessage(res, detail) {
   return "Groq's free tier is busy for a moment — wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
 }
 
-/* Text → Groq (OpenAI-compatible chat completions). Falls back through a list of
-   models if the chosen one has been retired. `msgs` = [{role, content}]. */
+// Seconds Groq asks us to wait before retrying (from headers or the message).
+function retryAfterSecs(res, detail) {
+  let secs = 0;
+  try {
+    secs = parseDuration(res.headers.get('retry-after'));
+    if (!secs) secs = parseDuration(res.headers.get('x-ratelimit-reset-tokens'));
+  } catch (e) { /* headers unavailable */ }
+  if (!secs && detail) { const mm = detail.match(/try again in ([0-9hms.\s]+)/i); if (mm) secs = parseDuration(mm[1]); }
+  return secs;
+}
+
+// Groq retires models now and then. When the ones we know about are gone, ask
+// Groq which chat models this key can use right now, so Cassie keeps working.
+let groqModelCache = null;
+async function discoverGroqModels() {
+  if (groqModelCache) return groqModelCache;
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${state.groqKey}` } });
+    if (!res.ok) return [];
+    const ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
+    groqModelCache = ids;
+    return ids;
+  } catch (e) { return []; }
+}
+async function discoverGroqTextModels() {
+  const rank = (id) => (/gpt-oss-120b/.test(id) ? 0 : /70b|maverick|120b|qwen3-32b|kimi/i.test(id) ? 1 : 2);
+  return (await discoverGroqModels())
+    .filter((id) => !/whisper|tts|guard|playai|orpheus|embed|compound|distil/i.test(id))
+    .sort((a, b) => rank(a) - rank(b));
+}
+// A Groq model that can see pictures (used for photos when there's no Gemini key).
+async function discoverGroqVisionModel() {
+  const ids = await discoverGroqModels();
+  return ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '';
+}
+async function nextGroqModel(tried) {
+  return GROQ_MODELS.find((m) => !tried.has(m)) || (await discoverGroqTextModels()).find((m) => !tried.has(m)) || '';
+}
+function retiredError() {
+  const e = new Error("Groq just retired the AI model I was using. Open Settings (gear icon), pick a different Groq model, and ask again — your chat is saved.");
+  e.friendly = true;
+  return e;
+}
+
+/* One raw Groq chat call with all the resilience built in: retired models are
+   swapped out, short per-minute limits are waited out (onWait tells the UI),
+   and overloads are retried. Returns the reply text. */
+async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false } = {}) {
+  model = model || state.groqModel;
+  const tried = new Set();
+  let overloadTries = 0, waitTries = 0;
+  while (true) {
+    tried.add(model);
+    const body = { model, messages, max_tokens: maxTokens, temperature: 0.6 };
+    // gpt-oss models "think" first; keep that short on long jobs so the answer fits.
+    if (lean && /gpt-oss/.test(model)) body.reasoning_effort = 'low';
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return (data.choices?.[0]?.message?.content || '').trim();
+    }
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (modelRetired(res.status, detail)) {
+      const next = await nextGroqModel(tried);
+      if (!next) throw retiredError();
+      if (model === state.groqModel) { state.groqModel = next; save(); if (typeof updateModelPill === 'function') updateModelPill(); }
+      model = next;
+      continue;
+    }
+    // A per-minute limit that resets soon: just wait it out instead of failing.
+    if (res.status === 429) {
+      const secs = retryAfterSecs(res, detail);
+      if (secs && secs <= 65 && waitTries < 4) {
+        waitTries += 1;
+        if (onWait) onWait(Math.ceil(secs));
+        await sleep(Math.ceil(secs * 1000) + 400);
+        continue;
+      }
+    }
+    if (isTooLarge(res.status, detail) && res.status !== 429) {
+      const e = new Error('too large'); e.tooLarge = true; e.model = model; throw e;
+    }
+    if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
+      overloadTries += 1;
+      await sleep(1000 * Math.pow(2, overloadTries - 1));
+      continue;
+    }
+    if (isRateLimited(res.status, detail)) {
+      const e = new Error(rateLimitMessage(res, detail));
+      e.friendly = true; // already a complete, user-facing message
+      throw e;
+    }
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+}
+
+/* Text → Groq. Trims old history if the request is too big for the free
+   per-minute budget, then tries a roomier model before giving up kindly. */
 async function askGroq(msgs, opts = {}) {
   let model = state.groqModel;
   const tried = new Set();
-  let overloadTries = 0;
   let historyBudget = 4000; // tokens of chat history to include (trimmed on overflow)
   while (true) {
     tried.add(model);
@@ -1275,83 +1379,311 @@ async function askGroq(msgs, opts = {}) {
       { role: 'system', content: buildSystemPrompt(opts) },
       ...trimHistory(msgs, historyBudget).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
     ];
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
-      body: JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.7 }),
-    });
-    if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-      if (modelRetired(res.status, detail)) {
-        const next = GROQ_MODELS.find((m) => !tried.has(m));
-        if (next) { model = next; state.groqModel = next; save(); continue; }
-      }
-      if (isTooLarge(res.status, detail)) {
-        if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
-        const next = GROQ_MODELS.find((m) => !tried.has(m));
-        if (next) { model = next; state.groqModel = next; save(); historyBudget = 4000; continue; }
-        const e = new Error("This conversation got too long for the free per-minute limit. Clear the chat (gear icon → Clear conversation) or ask a shorter question, and I'll be right back.");
-        e.friendly = true;
-        throw e;
-      }
-      if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
-        overloadTries += 1;
-        await sleep(1000 * Math.pow(2, overloadTries - 1));
-        continue;
-      }
-      if (isRateLimited(res.status, detail)) {
-        const e = new Error(rateLimitMessage(res, detail));
-        e.friendly = true; // already a complete, user-facing message
-        throw e;
-      }
-      throw new Error(detail || `Request failed (${res.status})`);
+    try {
+      const text = await groqChat(messages, { model, onWait: opts.onWait });
+      return text || '(no response)';
+    } catch (e) {
+      if (!e.tooLarge) throw e;
+      if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
+      const next = GROQ_MODELS.find((m) => !tried.has(m) && m !== e.model);
+      if (next) { model = next; historyBudget = 4000; continue; }
+      const err = new Error("That message is too long for Groq's free per-minute limit. Try a shorter question, start a new chat, or attach the material as a file (the paperclip) — I read long files in parts.");
+      err.friendly = true;
+      throw err;
     }
-    const data = await res.json();
-    const text = (data.choices?.[0]?.message?.content || '').trim();
-    return text || '(no response)';
   }
+}
+
+/* Gemini generateContent with model fallback (newest first). */
+async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GEMINI_VISION_MODEL, ...GEMINI_DOC_MODELS] }) {
+  const list = [...new Set(models)];
+  let lastErr;
+  for (const model of list) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system || buildSystemPrompt() }] },
+        contents,
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.6 },
+      }),
+    });
+    if (res.ok) {
+      const cand = (await res.json()).candidates?.[0];
+      const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+      if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one — try rephrasing it." : '(no response)';
+      return text;
+    }
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); continue; }
+    if (isRateLimited(res.status, detail)) {
+      const e = new Error("Gemini's free tier is rate-limiting right now — wait a minute and try again.");
+      e.friendly = true; e.rateLimited = true; throw e;
+    }
+    if (/api key/i.test(detail)) {
+      const e = new Error('Your Gemini key was rejected — check it in Settings (gear icon). It should start with "AIza".');
+      e.friendly = true; throw e;
+    }
+    throw new Error(detail || `Request failed (${res.status})`);
+  }
+  const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon — meanwhile text questions still work.");
+  e.friendly = true; e.cause = lastErr;
+  throw e;
 }
 
 /* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
 async function askGeminiVision(msgs, image) {
-  const contents = msgs.map((m) => ({
+  const contents = trimHistory(msgs, 3000).map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
   if (contents.length) {
     contents[contents.length - 1].parts.unshift({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
   }
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VISION_MODEL}:generateContent`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
-      contents,
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-    }),
-  });
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (isRateLimited(res.status, detail)) throw new Error("Gemini's free tier is rate-limiting right now — wait a minute and try again.");
-    throw new Error(detail || `Request failed (${res.status})`);
-  }
-  const cand = (await res.json()).candidates?.[0];
-  const text = (cand?.content?.parts || []).map((p) => p.text || '').join('').trim();
-  if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one — try rephrasing it." : '(no response)';
-  return text;
+  return geminiGenerate({ contents, system: buildSystemPrompt() });
 }
 
-/* Router: text goes to Groq; anything with an attached image goes to Gemini. */
+/* Image reading with only a Groq key: Groq's vision model (up to 5 pictures). */
+async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } = {}) {
+  const model = await discoverGroqVisionModel();
+  if (!model) {
+    const e = new Error('To read pictures, add your free Google (Gemini) API key in Settings — Groq has no picture-reading model on your key right now.');
+    e.friendly = true; throw e;
+  }
+  const hist = trimHistory(msgs, 2000).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  const last = hist.pop() || { role: 'user', content: 'Please look at this image and help me with it.' };
+  const content = [{ type: 'text', text: last.content }, ...images.slice(0, 5).map((img) => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } }))];
+  const text = await groqChat([{ role: 'system', content: system || buildSystemPrompt() }, ...hist, { role: 'user', content }], { model, maxTokens, onWait });
+  return text || '(no response)';
+}
+
+/* Router: text goes to Groq; pictures go to Gemini (or Groq vision without a Gemini key). */
 async function askCassie(msgs, image, opts = {}) {
   if (image) {
-    if (!state.geminiKey) throw new Error('Add your Google (Gemini) API key in Settings to use images.');
-    return askGeminiVision(msgs, image);
+    if (state.geminiKey) return askGeminiVision(msgs, image);
+    if (state.groqKey) return askGroqVision(msgs, [image], { onWait: opts.onWait });
+    throw new Error('Add your Google (Gemini) API key in Settings to use images.');
   }
   if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
   return askGroq(msgs, opts);
+}
+
+/* ---------- reading whole files: reviewers, summaries, answers ---------- */
+const DOC_INSTRUCTION = `The user attached a file. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables — or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
+Do exactly what they ask with it — a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
+For a reviewer / study guide: follow the file's order and cover EVERY section, slide, or topic — don't stop early. Use bold section labels on their own line, tight bullets, every key term in bold with a short definition, important facts, numbers, dates, formulas, processes as numbered steps, and what each diagram, chart, table, or picture shows and why it matters. End with 5–10 practice questions, then the answers. Stick to the file — don't invent facts that aren't in it.
+The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content — don't tell them to copy it anywhere.`;
+
+function leanDocSystem() {
+  let sp = `You are Cassie, a sharp, warm study buddy. Formatting: lead with what matters; label sections with a short **bold** phrase on its own line (never # headings); tight bullet points; key terms in **bold**; plain-text math (no LaTeX); a small table only when it truly helps.`;
+  if (state.level && LEVEL_LABELS[state.level]) sp += ` Explain at a ${LEVEL_LABELS[state.level]} level.`;
+  return sp + '\n\n' + DOC_INSTRUCTION;
+}
+
+function fileToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.readAsDataURL(blob);
+  });
+}
+// Downscale any image blob to a JPEG (keeps requests small). Returns { mimeType, base64 } or null.
+function blobToJpeg(blob, maxDim = 1000) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      if (img.width < 48 || img.height < 48) { resolve(null); return; } // bullets, icons, logos
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      resolve({ mimeType: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.82).split(',')[1] });
+    };
+    img.src = url;
+  });
+}
+
+// Pictures inside a file: slide/Word images, or rendered PDF pages that hold figures.
+async function docImages(doc, max) {
+  const out = [];
+  try {
+    if (doc.kind === 'pdf') {
+      await loadScript(PDFJS_URL);
+      const pdf = await window.pdfjsLib.getDocument({ data: await doc.file.arrayBuffer() }).promise;
+      const pages = (doc.visualPages && doc.visualPages.length ? doc.visualPages : [...Array(Math.min(pdf.numPages, max)).keys()].map((i) => i + 1)).slice(0, max);
+      for (const n of pages) {
+        const page = await pdf.getPage(n);
+        const base = page.getViewport({ scale: 1 });
+        const vp = page.getViewport({ scale: Math.min(2, 1100 / Math.max(base.width, base.height)) });
+        const c = document.createElement('canvas');
+        c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        out.push({ mimeType: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.8).split(',')[1], label: `page ${n}` });
+      }
+      return out;
+    }
+    await loadScript(JSZIP_URL);
+    const zip = await window.JSZip.loadAsync(await doc.file.arrayBuffer());
+    const isPic = (n) => /\.(png|jpe?g|gif|bmp|webp)$/i.test(n);
+    let targets = []; // [{ path, label }]
+    if (doc.kind === 'pptx') {
+      const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+        .sort((a, b) => (+a.match(/slide(\d+)/)[1]) - (+b.match(/slide(\d+)/)[1]));
+      for (const sl of slides) {
+        const num = sl.match(/slide(\d+)/)[1];
+        const rel = zip.files[`ppt/slides/_rels/slide${num}.xml.rels`];
+        if (!rel) continue;
+        const xml = await rel.async('string');
+        (xml.match(/Target="\.\.\/media\/[^"]+"/g) || []).forEach((t) => {
+          const path = 'ppt/media/' + t.slice('Target="../media/'.length, -1);
+          if (isPic(path) && !targets.some((x) => x.path === path)) targets.push({ path, label: `slide ${num}` });
+        });
+      }
+    } else {
+      targets = Object.keys(zip.files).filter((n) => /^word\/media\//.test(n) && isPic(n))
+        .sort((a, b) => (+(a.match(/(\d+)/) || [0, 0])[1]) - (+(b.match(/(\d+)/) || [0, 0])[1]))
+        .map((path, i) => ({ path, label: `picture ${i + 1}` }));
+    }
+    for (const t of targets) {
+      if (out.length >= max) break;
+      const blob = await zip.files[t.path].async('blob');
+      if (blob.size < 4000) continue; // tiny decorations
+      const img = await blobToJpeg(blob, 1000);
+      if (img) out.push({ ...img, label: t.label });
+    }
+  } catch (e) { /* pictures are a bonus — text still works */ }
+  return out;
+}
+
+// Split long text into parts at paragraph boundaries.
+function splitChunks(text, size) {
+  const parts = [];
+  let cur = '';
+  for (const para of text.split(/\n{2,}/)) {
+    if (cur && cur.length + para.length + 2 > size) { parts.push(cur); cur = ''; }
+    if (para.length > size) {
+      for (let i = 0; i < para.length; i += size) parts.push(para.slice(i, i + size));
+      continue;
+    }
+    cur += (cur ? '\n\n' : '') + para;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
+// Earlier turns, kept small (a document conversation can't afford the full history).
+function compactHistory(history, budget = 1500) {
+  return trimHistory(history.filter((m) => m && m.content), budget)
+    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+}
+
+/* With a Gemini key: send the WHOLE file — PDFs natively (Gemini sees every
+   page, diagrams included), slides/Word as text plus their pictures. */
+async function geminiDocument(doc, request, history, onStatus) {
+  const parts = [];
+  if (doc.kind === 'pdf' && doc.file.size <= 14 * 1024 * 1024) {
+    onStatus(`Reading all of ${doc.name} — pages, pictures and diagrams…`);
+    parts.push({ inlineData: { mimeType: 'application/pdf', data: await fileToBase64(doc.file) } });
+    parts.push({ text: `(That PDF is "${doc.name}".)` });
+  } else {
+    onStatus(`Reading ${doc.name} and its pictures…`);
+    if (doc.text) parts.push({ text: `File "${doc.name}":\n"""\n${doc.text.slice(0, 500000)}\n"""` });
+    const imgs = await docImages(doc, 16);
+    imgs.forEach((img) => { parts.push({ text: `[Picture from ${img.label}]` }); parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }); });
+  }
+  parts.push({ text: request });
+  const contents = compactHistory(history, 3000).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  while (contents.length && contents[0].role !== 'user') contents.shift();
+  contents.push({ role: 'user', parts });
+  onStatus('Writing it up…');
+  return geminiGenerate({ contents, system: buildSystemPrompt({ tutor: false }) + '\n\n' + DOC_INSTRUCTION, maxTokens: 8192, models: GEMINI_DOC_MODELS });
+}
+
+/* With only a Groq key: read the file part by part (the free tier has a small
+   per-minute budget), take notes on each part, then write the final answer. */
+const GROQ_DOC_PART = 9000;   // characters per part (~2.3k tokens)
+const GROQ_DOC_MAX_PARTS = 10;
+async function groqDocument(doc, request, history, onStatus) {
+  const sys = leanDocSystem();
+  const waitNote = (label) => (secs) => onStatus(`${label} (Groq's free per-minute limit — continuing in ${secs}s)`);
+  let visualNotes = '';
+  if (doc.hasVisuals) {
+    const imgs = await docImages(doc, 5);
+    if (imgs.length && await discoverGroqVisionModel()) {
+      onStatus('Looking at the pictures and diagrams…');
+      try {
+        visualNotes = await askGroqVision([{ role: 'user', content: `These are pictures/pages from "${doc.name}" (${imgs.map((i) => i.label).join(', ')}). For each one, write study notes: what it shows, every label, value, and term on it, and the concept it explains. If a page is mostly text, write out its key content.` }],
+          imgs, { system: 'You turn pictures from a student\'s lesson file into accurate, complete study notes. Bullets only. Never invent labels you cannot read.', maxTokens: 1500, onWait: waitNote('Looking at the pictures…') });
+      } catch (e) { if (e.friendly && /limit/i.test(e.message)) throw e; /* otherwise carry on with the text */ }
+    }
+  }
+  const text = doc.text || '';
+  if (!text && !visualNotes) {
+    const e = new Error(`I couldn't find readable text in ${doc.name} — it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
+    e.friendly = true; throw e;
+  }
+  const visualBlock = visualNotes ? `\n\nWhat the pictures / diagrams in the file show:\n${visualNotes}` : '';
+  const hist = compactHistory(history, 800);
+
+  if (estimateTokens(text) <= 3800) {
+    onStatus(`Reading ${doc.name}…`);
+    try {
+      const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
+        { role: 'user', content: `File "${doc.name}":\n"""\n${text}\n"""${visualBlock}\n\n${request}` }],
+        { maxTokens: 3000, lean: true, onWait: waitNote('Reading…') });
+      if (reply) return reply;
+    } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
+  }
+
+  let parts = splitChunks(text, GROQ_DOC_PART);
+  const truncated = parts.length > GROQ_DOC_MAX_PARTS;
+  if (truncated) parts = parts.slice(0, GROQ_DOC_MAX_PARTS);
+  const notes = [];
+  for (let i = 0; i < parts.length; i++) {
+    const label = `Reading part ${i + 1} of ${parts.length} of ${doc.name}…`;
+    onStatus(label);
+    const note = await groqChat([
+      { role: 'system', content: 'You take complete, accurate study notes from one part of a student\'s lesson file. Capture EVERY key term with its definition, facts, numbers, dates, names, formulas, processes (as steps), examples, and any questions in the text. Bullets only, no intro. Max ~350 words. Never invent anything.' },
+      { role: 'user', content: `Part ${i + 1} of ${parts.length} of "${doc.name}":\n"""\n${parts[i]}\n"""` },
+    ], { maxTokens: 900, lean: true, onWait: waitNote(label) });
+    notes.push(`[Part ${i + 1}]\n${note}`);
+  }
+  // Fit all notes into one final request.
+  let combined = notes.join('\n\n');
+  const budgetChars = 16000 - visualBlock.length;
+  if (combined.length > budgetChars) {
+    const each = Math.floor(budgetChars / notes.length);
+    combined = notes.map((n) => n.slice(0, each)).join('\n\n');
+  }
+  onStatus('Putting it all together…');
+  let reply = await groqChat([{ role: 'system', content: sys },
+    { role: 'user', content: `Complete study notes taken from every part of "${doc.name}" (in order):\n"""\n${combined}\n"""${visualBlock}\n\nUsing these notes as the file's content: ${request}` }],
+    { maxTokens: 3000, lean: true, onWait: waitNote('Writing it up…') });
+  if (truncated) reply += `\n\n*This file is long, so I covered roughly the first ${Math.round((GROQ_DOC_MAX_PARTS * GROQ_DOC_PART) / 2500)} pages. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*`;
+  return reply;
+}
+
+async function answerAboutDocument(doc, request, history, onStatus) {
+  if (state.geminiKey) {
+    try { return await geminiDocument(doc, request, history, onStatus); }
+    catch (e) {
+      if (!state.groqKey) throw e;
+      onStatus('Gemini is busy — reading it with Groq instead…');
+    }
+  }
+  if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
+  return groqDocument(doc, request, history, onStatus);
 }
 
 /* ---------- upload / download / image + document helpers ---------- */
@@ -1386,23 +1718,35 @@ const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.mi
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
 const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-const DOC_TEXT_CAP = 16000; // characters of extracted text we keep
+const DOC_TEXT_CAP = 400000; // characters of extracted text we keep (long files are read in parts)
 
-async function extractPdfText(file) {
+// Returns { text, numPages, visualPages } — visualPages are pages holding
+// pictures/figures or almost no text (scanned), so they can be looked at too.
+async function extractPdf(file) {
   await loadScript(PDFJS_URL);
   const pdfjs = window.pdfjsLib;
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   const data = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data }).promise;
-  const maxPages = Math.min(pdf.numPages, 50);
+  const maxPages = Math.min(pdf.numPages, 300);
+  const imgOps = new Set([pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintJpegXObject].filter(Boolean));
+  const visualPages = [];
   let text = '';
   for (let i = 1; i <= maxPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map((it) => it.str).join(' ') + '\n\n';
-    if (text.length > DOC_TEXT_CAP + 4000) break;
+    const pageText = content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join('').trim();
+    if (pageText) text += `[Page ${i}]\n${pageText}\n\n`;
+    if (i <= 80 && visualPages.length < 16) {
+      let hasPic = pageText.length < 200;
+      if (!hasPic) {
+        try { hasPic = (await page.getOperatorList()).fnArray.some((fn) => imgOps.has(fn)); } catch (e) { /* ignore */ }
+      }
+      if (hasPic) visualPages.push(i);
+    }
+    if (text.length > DOC_TEXT_CAP) break;
   }
-  return text;
+  return { text, numPages: pdf.numPages, visualPages };
 }
 
 async function extractDocxText(file) {
@@ -1425,19 +1769,41 @@ async function extractPptxText(file) {
   let text = '';
   for (const name of slides) {
     const xml = await zip.files[name].async('string');
-    const runs = xml.match(/<a:t>[\s\S]*?<\/a:t>/g) || [];
-    const slideText = runs.map((r) => decodeXml(r.replace(/^<a:t>/, '').replace(/<\/a:t>$/, ''))).join(' ').trim();
-    if (slideText) text += slideText + '\n\n';
-    if (text.length > DOC_TEXT_CAP + 4000) break;
+    // keep each paragraph on its own line so bullets stay readable
+    const paras = (xml.match(/<a:p>[\s\S]*?<\/a:p>/g) || []).map((p) =>
+      (p.match(/<a:t>[\s\S]*?<\/a:t>/g) || []).map((r) => decodeXml(r.replace(/^<a:t>/, '').replace(/<\/a:t>$/, ''))).join('').trim()
+    ).filter(Boolean);
+    if (paras.length) text += `[Slide ${name.match(/slide(\d+)/)[1]}]\n${paras.join('\n')}\n\n`;
+    if (text.length > DOC_TEXT_CAP) break;
   }
-  return text;
+  const hasMedia = Object.keys(zip.files).some((n) => /^ppt\/media\/.+\.(png|jpe?g|gif|bmp|webp)$/i.test(n));
+  return { text, hasMedia };
 }
 
-async function extractDocText(file) {
+// Read an attached file into { name, kind, file, text, hasVisuals, visualPages, scanned }.
+async function readDocument(file) {
   const name = (file.name || '').toLowerCase();
-  if (name.endsWith('.pdf') || file.type === 'application/pdf') return extractPdfText(file);
-  if (name.endsWith('.docx') || /wordprocessingml/.test(file.type)) return extractDocxText(file);
-  if (name.endsWith('.pptx') || /presentationml/.test(file.type)) return extractPptxText(file);
+  const tidy = (t) => (t || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, DOC_TEXT_CAP);
+  if (name.endsWith('.pdf') || file.type === 'application/pdf') {
+    const r = await extractPdf(file);
+    const text = tidy(r.text);
+    return { name: file.name, kind: 'pdf', file, text, visualPages: r.visualPages, hasVisuals: r.visualPages.length > 0, scanned: text.length < 40 * Math.min(r.numPages, 300) };
+  }
+  if (name.endsWith('.docx') || /wordprocessingml/.test(file.type)) {
+    const text = tidy(await extractDocxText(file));
+    let hasVisuals = false;
+    try {
+      await loadScript(JSZIP_URL);
+      const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+      hasVisuals = Object.keys(zip.files).some((n) => /^word\/media\/.+\.(png|jpe?g|gif|bmp|webp)$/i.test(n));
+    } catch (e) { /* ignore */ }
+    return { name: file.name, kind: 'docx', file, text, hasVisuals, scanned: !text };
+  }
+  if (name.endsWith('.pptx') || /presentationml/.test(file.type)) {
+    const r = await extractPptxText(file);
+    const text = tidy(r.text);
+    return { name: file.name, kind: 'pptx', file, text, hasVisuals: r.hasMedia, scanned: !text };
+  }
   throw new Error('unsupported');
 }
 
@@ -1450,7 +1816,7 @@ function processImageFile(file) {
       const img = new Image();
       img.onerror = reject;
       img.onload = () => {
-        const maxDim = 1024;
+        const maxDim = 1600; // big enough to read small print on a photographed page
         const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
         const w = Math.max(1, Math.round(img.width * scale));
         const h = Math.max(1, Math.round(img.height * scale));
@@ -1513,7 +1879,15 @@ function importBackupFile(file) {
 
 const DL_ICON = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5z"/></svg>';
 
-function addTextDownload(bubble, text) {
+// Copy + "Save as" Word / PDF / Image / Text under an answer. `want` highlights
+// the format the user asked for ("make it a pdf").
+const SAVE_FORMATS = [
+  { key: 'docx', label: 'Word', ext: 'docx', make: (md, t) => window.CassieExport.toDocx(md, t) },
+  { key: 'pdf', label: 'PDF', ext: 'pdf', make: (md, t) => window.CassieExport.toPdf(md, t) },
+  { key: 'png', label: 'Image', ext: 'png', make: (md, t) => window.CassieExport.toPng(md, t) },
+  { key: 'txt', label: 'Text', ext: 'txt', make: (md, t) => Promise.resolve(window.CassieExport.toTxt(md, t)) },
+];
+function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
   const tools = document.createElement('div');
   tools.className = 'bubble-tools';
   const copyBtn = document.createElement('button');
@@ -1529,12 +1903,51 @@ function addTextDownload(bubble, text) {
     } catch (e) { /* clipboard blocked */ }
   });
   tools.appendChild(copyBtn);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.innerHTML = `${DL_ICON} Download`;
-  btn.addEventListener('click', () => downloadBlob('cassie-answer.txt', new Blob([text], { type: 'text/plain' })));
-  tools.appendChild(btn);
+  if (!window.CassieExport) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerHTML = `${DL_ICON} Download`;
+    btn.addEventListener('click', () => downloadBlob('cassie-answer.txt', new Blob([text], { type: 'text/plain' })));
+    tools.appendChild(btn);
+    bubble.appendChild(tools);
+    return;
+  }
+  const label = document.createElement('span');
+  label.className = 'save-label';
+  label.innerHTML = `${DL_ICON} Save as`;
+  tools.appendChild(label);
+  const docTitle = window.CassieExport.titleOf(text, title);
+  SAVE_FORMATS.forEach((f) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = f.label;
+    btn.dataset.format = f.key;
+    if (f.key === want) btn.classList.add('suggest');
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const blob = await f.make(text, docTitle);
+        downloadBlob(`${window.CassieExport.fileBase(docTitle)}.${f.ext}`, blob);
+        btn.textContent = 'Saved ✓';
+      } catch (e) {
+        btn.textContent = 'Try again';
+        alert(`Couldn't make the ${f.label} file — check your internet connection and try again.`);
+      } finally {
+        setTimeout(() => { btn.textContent = f.label; btn.disabled = false; }, 1600);
+      }
+    });
+    tools.appendChild(btn);
+  });
   bubble.appendChild(tools);
+  if (want) {
+    const f = SAVE_FORMATS.find((x) => x.key === want);
+    const hint = document.createElement('div');
+    hint.className = 'save-hint';
+    hint.textContent = `Your ${f.label === 'Image' ? 'image' : f.label} file is ready — tap “${f.label}” above to save it.`;
+    bubble.appendChild(hint);
+  }
 }
 
 function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
@@ -1557,12 +1970,24 @@ function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
 }
 
 /* ---------- send flow ---------- */
+// The file this chat is about, so follow-ups ("now quiz me on the file") can re-read it.
+let activeDoc = null; // { chatId, doc }
+const DOC_FOLLOWUP_RE = /\b(file|pdf|docx?|document|module|lesson|slides?|powerpoint|ppt|handout|reading|chapter|reviewer|flash ?cards?|quiz me|practice (test|questions)|page \d+|slide \d+)\b/i;
+
+function setTypingStatus(bubble, text) {
+  let el = bubble.querySelector('.typing-status');
+  if (!el) { el = document.createElement('span'); el.className = 'typing-status'; bubble.appendChild(el); }
+  el.textContent = text;
+  scrollToBottom();
+}
+
 async function handleSend(text, opts = {}) {
   const image = pendingImage;
-  const doc = pendingDoc;
+  let doc = pendingDoc;
   if (!text.trim() && !image && !doc) return;
+  if (!doc && !image && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
 
-  const needKey = image ? !state.geminiKey : !state.groqKey;
+  const needKey = (image || doc) ? !(state.geminiKey || state.groqKey) : !state.groqKey;
   if (needKey) {
     openSettings();
     detourToElement(image ? geminiKeyInput : groqKeyInput, { click: true, resumeAfter: 1200 });
@@ -1577,24 +2002,28 @@ async function handleSend(text, opts = {}) {
   }
 
   let sendText = text.trim();
-  if (!sendText && image) sendText = 'Please look at this image and help me with it.';
-  if (!sendText && doc) sendText = 'Please read this document and help me with it.';
+  if (!sendText && image) sendText = 'Please look at this image and help me with it. If it has questions or a lesson on it, read all of it carefully.';
+  if (!sendText && doc) sendText = 'Please read this file and make me a complete reviewer of it.';
 
   clearFollowups();
   // if the home screen is showing, clear it before the first message
   if (!state.messages.length) chatLog.innerHTML = '';
-  // A document is fed to the model as context, but the chat bubble stays clean.
+  // A document is read separately; history only keeps a short note + excerpt,
+  // so later questions don't blow past the free per-minute limits.
   let modelContent = sendText;
   let displayContent = sendText;
-  if (doc) {
-    modelContent = `Here is the document "${doc.name}":\n"""\n${doc.text}\n"""\n\n${sendText}`;
+  if (pendingDoc) {
+    const excerpt = doc.text ? `\n\n(Excerpt from the start of the file:)\n${doc.text.slice(0, 1200)}` : '';
+    modelContent = `[I attached the file "${doc.name}".] ${sendText}${excerpt}`;
     displayContent = `${sendText}\n\n(attached: ${doc.name})`;
   }
+  const history = state.messages.slice();
   const userMsg = { role: 'user', content: modelContent };
-  if (doc) userMsg.display = displayContent;
+  if (pendingDoc) userMsg.display = displayContent;
   state.messages.push(userMsg);
   touchChat();
   save();
+  if (doc) activeDoc = { chatId: state.currentId, doc };
   const userBubble = renderMessage('user', displayContent);
   if (image) addImageToBubble(userBubble, image.dataUrl);
   clearAttach();
@@ -1613,14 +2042,21 @@ async function handleSend(text, opts = {}) {
   setCursorMode('thinking');
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
+  const onWait = (secs) => setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`);
 
   try {
-    const reply = await askCassie(state.messages, image, { tutor: true, mode: opts.mode });
+    const reply = doc
+      ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
+      : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait });
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
-    addTextDownload(bubble, reply);
+    const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
+    const title = doc
+      ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
+      : '';
+    addTextDownload(bubble, reply, { title, want: window.CassieExport ? window.CassieExport.wantedFormat(sendText) : '' });
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
@@ -1965,15 +2401,17 @@ fileInput.addEventListener('change', async () => {
     attachName.textContent = `Reading ${file.name}…`;
     attachPreview.hidden = false;
     try {
-      let text = await extractDocText(file);
-      text = (text || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-      if (!text) {
+      const doc = await readDocument(file);
+      if (!doc.text && !doc.hasVisuals) {
         pendingDoc = null;
-        attachName.textContent = `Couldn’t find text in ${file.name} (it may be scanned images).`;
+        attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
         return;
       }
-      pendingDoc = { name: file.name, text: text.slice(0, DOC_TEXT_CAP) };
-      attachName.textContent = file.name;
+      pendingDoc = doc;
+      attachName.textContent = doc.scanned
+        ? `${file.name} — scanned pages, I’ll read them as pictures`
+        : file.name;
+      if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
     } catch (e) {
       pendingDoc = null;
       attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, .docx, or .pptx.`;
@@ -2065,7 +2503,7 @@ if (talkBtn) {
       if (quizBtn) quizBtn.classList.remove('active');
       if (typeof setQuizLabel === 'function') setQuizLabel('Quiz me');
       if (!state.messages.length) chatLog.innerHTML = '';
-      renderMessage('assistant', "Okay — real talk mode. No lessons, no fluff. What's going on? I'm listening. 💛");
+      renderMessage('assistant', "Okay — real talk mode. No lessons, no fluff. What's going on? I'm listening.");
       try { set3D('encouraging'); } catch (e) { /* ignore */ }
     } else {
       renderMessage('assistant', "Back to study mode. I'm here whenever you want to talk again.");
@@ -2158,7 +2596,6 @@ function setAccent(color) {
 const MODEL_SHORT = {
   'openai/gpt-oss-120b': 'GPT-OSS 120B',
   'llama-3.3-70b-versatile': 'Llama 3.3 70B',
-  'llama-3.1-8b-instant': 'Llama 3.1 8B',
   'openai/gpt-oss-20b': 'GPT-OSS 20B',
 };
 function updateModelPill() {
@@ -2222,6 +2659,16 @@ function memTopicRow(t) {
     `<div class="mem-bar"><i style="width:${pct}%"></i></div></div>`;
 }
 
+// Monochrome line icons for the memory panel (no emoji — matches the marble UI).
+const MEM_ICONS = {
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  flame: '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .2 1.8 1 3 2.5 3.5C11.5 9 11 6 12 3z"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5z"/>',
+  repeat: '<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+};
+const memIcon = (k) => `<svg class="mem-ico" viewBox="0 0 24 24" aria-hidden="true">${MEM_ICONS[k]}</svg>`;
 function renderMemory() {
   if (!memoryPanel || !window.CassieMemory) return;
   const M = window.CassieMemory;
@@ -2239,22 +2686,22 @@ function renderMemory() {
         <h2>What Cassie remembers</h2>
         <button class="icon-btn" id="mem-close" aria-label="Close">&times;</button>
       </div>
-      <p class="mem-privacy">🔒 Everything here stays on your device. No account, no server — only you can see it.</p>
+      <p class="mem-privacy">${memIcon('lock')}Everything here stays on your device. No account, no server — only you can see it.</p>
       ${hasData ? `
       <div class="mem-stats">
-        <div class="mem-stat"><b>🔥 ${s.streak}</b><small>day streak</small></div>
-        <div class="mem-stat"><b>✅ ${s.mastered}</b><small>mastered</small></div>
-        <div class="mem-stat"><b>⏱️ ${s.focusHours}h</b><small>focus</small></div>
-        <div class="mem-stat"><b>📚 ${s.topics}</b><small>topics</small></div>
-        <div class="mem-stat"><b>🔁 ${s.due}</b><small>to review</small></div>
+        <div class="mem-stat"><b>${memIcon('flame')}${s.streak}</b><small>day streak</small></div>
+        <div class="mem-stat"><b>${memIcon('check')}${s.mastered}</b><small>mastered</small></div>
+        <div class="mem-stat"><b>${memIcon('clock')}${s.focusHours}h</b><small>focus</small></div>
+        <div class="mem-stat"><b>${memIcon('book')}${s.topics}</b><small>topics</small></div>
+        <div class="mem-stat"><b>${memIcon('repeat')}${s.due}</b><small>to review</small></div>
       </div>
-      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here. 💛</p>` : `
-      <p class="mem-welcome">This is where your progress will live. Ask Cassie a question or finish a focus session, and your streak, topics, and reviews start filling in here. 💛</p>`}
+      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here.</p>` : `
+      <p class="mem-welcome">This is where your progress will live. Ask Cassie a question or finish a focus session, and your streak, topics, and reviews start filling in here.</p>`}
 
       <label class="field"><span>Your name (optional)</span><input id="mem-name" type="text" value="${memEsc(d.profile.name)}" placeholder="What should I call you?"></label>
       <label class="field"><span>Your goal (optional)</span><input id="mem-goal" type="text" value="${memEsc(d.profile.goal)}" placeholder="e.g. pass my chemistry finals"></label>
 
-      ${due.length ? `<div class="mem-section">🔁 Due for review</div><div class="mem-chips">${due.map((t) => `<button class="mem-review" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
+      ${due.length ? `<div class="mem-section">Due for review</div><div class="mem-chips">${due.map((t) => `<button class="mem-review" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
       ${weak.length ? `<div class="mem-section">Weak spots</div><div class="mem-chips">${weak.map((t) => `<button class="mem-review weak" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
 
       <div class="mem-section">Recently studied</div>

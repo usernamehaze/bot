@@ -35,7 +35,7 @@ Formatting — this shows in a small popup beside the user's selection, so keep 
 
 // Text runs on Groq (OpenAI-compatible, higher free limits than Gemini).
 // Smartest first — also the default and the head of the fallback chain.
-const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'];
+const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 
 function modelRetired(status, msg) {
   return status === 404 || /no longer available|not found|is not supported|unsupported|not exist|does not exist|decommission/i.test(msg || '');
@@ -99,7 +99,7 @@ function rateLimitMessage(res, detail) {
   if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
   const daily = secs > 3600; // a long reset means the daily cap, not the per-minute burst
   if (daily) {
-    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to a lighter model (Llama 3.1 8B) in the Cassie popup — it has a higher daily limit.`;
+    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in the Cassie popup — each model has its own daily limit.`;
   }
   if (wait) {
     return `Slow down a sec — that's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
@@ -108,6 +108,21 @@ function rateLimitMessage(res, detail) {
 }
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// When Groq retires models, ask it which chat models this key can use right now.
+let _groqModelCache = null;
+async function discoverGroqModels(groqKey) {
+  if (_groqModelCache) return _groqModelCache;
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${groqKey}` } });
+    if (!res.ok) return [];
+    const ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id)
+      .filter((id) => !/whisper|tts|guard|playai|orpheus|embed|compound|prompt-guard/i.test(id));
+    const rank = (id) => (/gpt-oss-120b/.test(id) ? 0 : /70b|maverick|120b|qwen3-32b|kimi/i.test(id) ? 1 : 2);
+    _groqModelCache = ids.sort((a, b) => rank(a) - rank(b));
+    return _groqModelCache;
+  } catch (e) { return []; }
+}
 
 // Ask Groq. If onDelta is given, stream the reply (calling onDelta with each
 // chunk of text as it arrives) so the answer appears while it's generated;
@@ -135,8 +150,9 @@ async function askCassie(input, groqKey, model, onDelta) {
       let detail = '';
       try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
       if (modelRetired(res.status, detail)) {
-        const next = GROQ_MODELS.find((m) => !tried.has(m));
+        const next = GROQ_MODELS.find((m) => !tried.has(m)) || (await discoverGroqModels(groqKey)).find((m) => !tried.has(m));
         if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); continue; }
+        throw new Error("Groq retired the models I know about. Open the Cassie popup and pick a different model, then try again.");
       }
       if (isTooLarge(res.status, detail)) {
         if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; }
