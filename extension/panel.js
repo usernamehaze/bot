@@ -19,6 +19,30 @@ function errorText(m) {
   return m || 'Something went wrong — please try again.';
 }
 
+// "Invalid API Key" / no key → fix it right here in the panel, then try again.
+const isKeyProblem = (m) => /^no-key$|key (saved in the Cassie extension )?was rejected|invalid api key|key isn.t allowed/i.test(String((m && m.message) || m || ''));
+function keyForm(onFixed) {
+  const f = document.createElement('div');
+  f.className = 'keyfix';
+  f.innerHTML = `<p class="hint">Paste your keys here — they’re saved only in this browser.</p>
+    <input type="password" data-k="groqKey" placeholder="Groq key (gsk_…)" autocomplete="off">
+    <input type="password" data-k="geminiKey" placeholder="Gemini key (AIza…) — optional" autocomplete="off">
+    <div class="row"><button class="btn" type="button">Save &amp; try again</button></div>
+    <p class="hint st"></p>`;
+  const [gi, ki] = f.querySelectorAll('input'), st = f.querySelector('.st'), btn = f.querySelector('button');
+  chrome.storage.local.get(['groqKey', 'geminiKey'], (o) => { gi.value = o.groqKey || ''; ki.value = o.geminiKey || ''; });
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; st.textContent = 'Checking your keys…';
+    let r = null;
+    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_CHECK_KEYS', save: { groqKey: gi.value, geminiKey: ki.value } }); } catch (e) { /* ignore */ }
+    btn.disabled = false;
+    if (r && (r.groq === 'ok' || r.gemini === 'ok')) { st.textContent = `Groq: ${r.groq} · Gemini: ${r.gemini}`; onFixed(); return; }
+    st.textContent = !r ? 'Couldn’t check — reload the extension and try again.'
+      : `Groq key: ${r.groq === 'invalid' ? 'rejected' : r.groq}. Gemini key: ${r.gemini === 'invalid' ? 'rejected' : r.gemini}. Copy a fresh key from console.groq.com/keys or aistudio.google.com/apikey.`;
+  });
+  return f;
+}
+
 function home(extra = '') {
   view.innerHTML = `<div class="help">
     ${extra ? `<div class="card">${extra}</div>` : ''}
@@ -80,7 +104,14 @@ function ask(messages, outEl, onDone) {
   port.onMessage.addListener((m) => {
     if (m.delta != null) { acc += m.delta; renderMd(outEl, acc); }
     else if (m.done) { const full = m.reply != null ? m.reply : acc; renderMd(outEl, full); onDone && onDone(full); try { port.disconnect(); } catch (e) { /* ignore */ } }
-    else if (m.error) { outEl.innerHTML = `<p class="muted">${esc(errorText(m.error))}</p>`; try { port.disconnect(); } catch (e) { /* ignore */ } }
+    else if (m.error) {
+      const keyIssue = isKeyProblem(m.error);
+      outEl.innerHTML = `<p class="muted">${esc(keyIssue && m.error !== 'no-key'
+        ? 'Groq rejected the key saved in the Cassie extension (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — paste your key below.'
+        : errorText(m.error))}</p>`;
+      if (keyIssue) outEl.appendChild(keyForm(() => ask(messages, outEl, onDone)));
+      try { port.disconnect(); } catch (e) { /* ignore */ }
+    }
   });
   port.postMessage({ type: 'CASSIE_ASK', messages });
 }
