@@ -145,12 +145,22 @@ function showTextJob(text, mode = 'explain') {
 /* ---------- pictures → board + explanation ---------- */
 const SNIP_PROMPT = (ctx) => `A student snipped part of what they're studying (a graph, diagram, picture, equation, question, or a page of notes).${ctx ? ` Context: ${ctx}.` : ''}\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 function parseBoardJSON(text) {
-  try { const m = String(text).match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch (e) { /* fall through */ }
-  const lines = String(text).split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
+  const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+  const clean = (d) => ({ headline: String(d.headline || '').trim(), steps: (Array.isArray(d.steps) ? d.steps : []).map((x) => String(x).trim()).filter(Boolean) });
+  try { const m = t.match(/\{[\s\S]*\}/); if (m) { const d = JSON.parse(m[0]); if (d && (d.headline || d.steps)) return clean(d); } } catch (e) { /* cut off — pull the pieces out below */ }
+  if (/"(headline|steps)"\s*:/.test(t)) {
+    // the answer was cut off mid-JSON: keep every complete piece (and the last partial step)
+    const unq = (s) => { try { return JSON.parse('"' + s + '"'); } catch (e) { return s.replace(/\\"/g, '"').replace(/\\n/g, ' '); } };
+    const h = t.match(/"headline"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    const after = t.split(/"steps"\s*:\s*\[/)[1] || '';
+    const steps = [...after.matchAll(/"((?:[^"\\]|\\.)*)(?:"|$)/g)].map((m) => unq(m[1]).trim()).filter((x) => x.length > 1);
+    return { headline: h ? unq(h[1]).trim() : '', steps };
+  }
+  const lines = t.split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
   return { headline: lines[0] || 'Here’s how to read this', steps: lines.slice(1, 6) };
 }
-async function vision(image, prompt, maxTokens = 800) {
-  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens });
+async function vision(image, prompt, maxTokens = 800, board) {
+  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board });
   if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — try again.');
   return r.reply;
 }
@@ -159,7 +169,7 @@ async function explainOnBoard(sess, image, ctx = '') {
   sess.showNote({ reply: 'Cassie is reading your picture…' });
   try {
     const d = parseBoardJSON(await vision(image, SNIP_PROMPT(ctx)));
-    sess.setTitle(d.headline || 'Your snip');
+    sess.setTitle('Your snip');
     sess.showNote({ headline: d.headline, steps: d.steps || [] });
   } catch (e) { sess.showNote({ reply: errorText(e) }); }
 }
@@ -171,9 +181,9 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
     onImage: (url) => { if (url) explainOnBoard(sess, url, ''); },
     extra: [{ label: 'New snip', title: 'Snip the tab again', onClick: () => { window.CassieSketch.close(); snip(); } }],
     askPlaceholder: 'Ask Cassie about this…',
-    onAsk: async (png, q) => { try { return await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text.`, 600); } catch (e) { return errorText(e); } },
+    onAsk: async (png, q, board) => { try { return await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text.`, 600, board); } catch (e) { return errorText(e); } },
     checkLabel: 'Check my work',
-    onCheck: async (png) => { try { return await vision(png, 'This is a student\'s board with their own writing and sketches. Check their work like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. Under 120 words, plain text.', 500); } catch (e) { return errorText(e); } },
+    onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board); } catch (e) { return errorText(e); } },
   });
   p.then((x) => { sess = x; if (explain && image) explainOnBoard(sess, image, ctx); });
   return p;

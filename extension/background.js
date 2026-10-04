@@ -364,7 +364,8 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
         body: JSON.stringify({
           ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
           contents: [{ role: 'user', parts: [...pics.map((m) => ({ inlineData: { mimeType: m[1], data: m[2] } })), { text: prompt }] }],
-          generationConfig: { maxOutputTokens: maxTokens || 900, temperature: 0.4 },
+          // flash models think first, and thinking counts toward this cap — leave room so answers aren't cut off
+          generationConfig: { maxOutputTokens: Math.max(2048, (maxTokens || 900) * 3), temperature: 0.4 },
         }),
       });
     } catch (e) { throw new Error('Couldn’t connect to Google — check your internet connection.'); }
@@ -469,7 +470,52 @@ async function prepareVision(dataUrl) {
 const DARK_NOTE = '\n\n(This page is in dark mode: the second picture is the same snip with its colours inverted so the text is easier to read. Use the first picture for colours.)';
 const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\s+(to be\s+)?(dark|black|blank|empty)\b|\bcan(?:not|'t|’t)\s+see\s+(the|any|anything)\b|\bunable to see\b|\b(image|picture|snip)\s+(is|was)\s+(blank|empty|black)\b|\bre-?upload\b/i;
 
+// Rebuild the student's board here from plain data (picture + strokes) — reading a
+// page canvas back can give a blank picture on some graphics drivers.
+function paintStroke(ctx, s) {
+  ctx.save();
+  if (s.tool === 'text') {
+    ctx.fillStyle = s.color; ctx.font = `600 ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
+    String(s.text || '').split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
+    ctx.restore(); return;
+  }
+  const p = s.points || [];
+  if (!p.length) { ctx.restore(); return; }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = s.tool === 'eraser' ? '#000' : s.color;
+  ctx.globalAlpha = s.tool === 'hl' ? 0.35 : 1;
+  ctx.lineWidth = s.tool === 'hl' ? s.size * 4 : s.tool === 'eraser' ? s.size * 4 : s.size;
+  ctx.beginPath();
+  ctx.moveTo(p[0][0], p[0][1]);
+  if (p.length === 1) ctx.lineTo(p[0][0] + 0.01, p[0][1]);
+  else if (s.tool === 'line') ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+  else {
+    for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+    ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+async function composeBoard(b) {
+  const w = Math.max(1, Math.min(4000, b.w | 0)), h = Math.max(1, Math.min(4000, b.h | 0));
+  const c = new OffscreenCanvas(w, h);
+  const x = c.getContext('2d');
+  x.fillStyle = b.paper || '#ffffff'; x.fillRect(0, 0, w, h);
+  if (b.image) x.drawImage(await createImageBitmap(await (await fetch(b.image)).blob()), 0, 0, w, h);
+  if (b.strokes && b.strokes.length) {
+    const ink = new OffscreenCanvas(w, h); // own layer, so the eraser only removes ink
+    const ix = ink.getContext('2d');
+    b.strokes.forEach((s) => paintStroke(ix, s));
+    x.drawImage(ink, 0, 0);
+  }
+  return blobToDataUrl(await c.convertToBlob({ type: 'image/png' }));
+}
+
 async function readPicture(keys, msg) {
+  if (msg.board && (msg.board.image || (msg.board.strokes || []).length)) {
+    try { msg = { ...msg, image: await composeBoard(msg.board) }; } catch (e) { /* use the page's own snapshot */ }
+  }
   const prep = await prepareVision(msg.image);
   const ask = async (images, prompt) => {
     let geminiErr = null;
