@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- briefcase -->
+  <g transform="translate(28 40)"><rect y="12" width="74" height="50" rx="7"/><path d="M26 12V5a5 5 0 0 1 5-5h12a5 5 0 0 1 5 5v7M0 32h74M32 28h10v8H32z"/></g>
+  <!-- laptop -->
+  <g transform="translate(206 36)"><rect width="84" height="54" rx="4"/><path d="M-12 62h108l-8 9H-4zM12 40l14-14 12 10 20-20"/></g>
+  <!-- bar chart -->
+  <g transform="translate(40 168)"><path d="M0 0v66h86"/><rect x="12" y="38" width="12" height="28"/><rect x="32" y="22" width="12" height="44"/><rect x="52" y="30" width="12" height="36"/><rect x="72" y="8" width="12" height="58"/></g>
+  <!-- coffee cup -->
+  <g transform="translate(250 176)"><path d="M0 14h46v24a18 18 0 0 1-18 18H18A18 18 0 0 1 0 38z"/><path d="M46 20h6a9 9 0 0 1 0 18h-6M14 0q-5 5 0 10M26 0q-5 5 0 10"/></g>
+  <!-- calendar -->
+  <g transform="translate(34 280)"><rect width="62" height="54" rx="5"/><path d="M0 16h62M16 -6v12M46 -6v12M12 28h8M27 28h8M42 28h8M12 40h8M27 40h8"/></g>
+  <!-- pie chart -->
+  <g transform="translate(196 300)"><circle r="26"/><path d="M0 0V-26M0 0l22 14"/></g>
+  <!-- document -->
+  <g transform="translate(290 270) rotate(8)"><path d="M0 0h30l12 12v48H0z"/><path d="M30 0v12h12M8 24h26M8 34h26M8 44h18"/></g>
+  <!-- necktie -->
+  <g transform="translate(150 150)"><path d="M0 0h18l-4 9 8 40-13 12L-4 49l8-40z"/></g>
+  <g fill="#000" stroke="none" font-family="Helvetica, Arial, sans-serif" font-weight="600">
+    <text x="128" y="64" font-size="20">Q4 ↑</text>
+    <text x="300" y="150" font-size="24">%</text>
+    <text x="236" y="254" font-size="18">₱ 12k</text>
+    <text x="120" y="262" font-size="16">KPI</text>
+  </g>
+</svg>

@@ -50,6 +50,14 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 #app-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; }
 #app-bg.live { opacity: 1; }
 #app-bg canvas { display: block; }
+/* Student / Professional doodles drawn over the gradient (the gradient itself never changes) */
+#aud-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#aud-bg .pat { position: absolute; inset: 0; background: var(--text); opacity: 0; transition: opacity .7s ease;
+  -webkit-mask-repeat: repeat; mask-repeat: repeat; -webkit-mask-size: 360px 360px; mask-size: 360px 360px; }
+#aud-bg .pat-student { -webkit-mask-image: url(patterns/student.svg); mask-image: url(patterns/student.svg); }
+#aud-bg .pat-pro { -webkit-mask-image: url(patterns/pro.svg); mask-image: url(patterns/pro.svg); }
+html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat-pro { opacity: .055; }
+@media (prefers-color-scheme: dark) { html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat-pro { opacity: .075; } }
 #app {
   z-index: 1;
   max-width: 100%;
@@ -1184,6 +1192,14 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   font: 600 .8rem/1 inherit; font-family: inherit; color: var(--muted); transition: color .2s;
 }
 .aud-switch button[aria-pressed="true"] { color: var(--accent-ink, #fff); }
+.topbar-actions .aud-switch { margin-right: 6px; }
+.aud-short { display: none; }
+@media (max-width: 520px) {
+  .aud-full { display: none; } .aud-short { display: inline; }
+  .topbar { grid-template-columns: auto 1fr auto; column-gap: 6px; } /* room for the switch: Cassie sits by the menu */
+  .topbar .brand { justify-self: start; }
+  .topbar-actions .aud-switch button { padding: 6px 10px; }
+}
 /* the 3D Cassie walks for real, so the flat waddle isn't needed */
 #mascot.has3d.walking #mascot-btn { animation: none; }
 .quick-actions .chip.active { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); }
@@ -1207,20 +1223,9 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .field-toggle { flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; }
 .field-toggle[hidden] { display: none !important; }
 .bubble.error .retry-btn { display: block; margin-top: 10px; }
-/* feedback under answers */
-.rate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: .82rem; color: var(--muted); }
-.rate-btn { background: none; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; cursor: pointer; line-height: 0; color: var(--muted); }
-.rate-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-.rate-btn:hover { color: var(--text); }
-.rate-btn:hover { border-color: var(--text); }
-.rate-reasons { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
-.rate-reasons .fu-chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
-.rate-more { display: flex; gap: 6px; width: 100%; }
-.rate-more input { flex: 1; min-width: 0; font: inherit; font-size: .9rem; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 .pf-field textarea { font: inherit; font-size: 1rem; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 .pf-row { display: flex; gap: 10px; justify-content: flex-end; }
 .pf-row .pf-go { flex: 1; }
-.beta-tag { font-size: .62rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; margin-left: 5px; padding: 1px 5px; border-radius: 999px; border: 1px solid currentColor; opacity: .6; vertical-align: 1px; }
 .wn-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; }
 .report-row { margin: 14px 0 4px; } .report-row .btn { width: 100%; }
 .mascot-fallback svg { width: 34px; height: 39px; fill: var(--surface, #fff); stroke: var(--text); stroke-width: 20; stroke-linejoin: round; paint-order: stroke; }

@@ -13,12 +13,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=104">
+<link rel="stylesheet" href="style.css?v=105">
 </head>
 <body>
 
 <!-- the living gradient behind the chat (follows the student's colour) -->
 <div id="app-bg" aria-hidden="true"></div>
+<div id="aud-bg" aria-hidden="true"><div class="pat pat-student"></div><div class="pat pat-pro"></div></div>
 <div id="sidebar-overlay"></div>
 <aside id="sidebar" class="sidebar" aria-label="Your conversations">
   <div class="sidebar-head">
@@ -82,6 +83,10 @@
       <span>Cassie</span>
     </div>
     <div class="topbar-actions">
+    <div class="aud-switch" id="aud-switch" role="group" aria-label="Who is Cassie helping?">
+      <button type="button" data-aud="student" aria-pressed="true" title="Study help — Cassie in her classic felt">Student</button>
+      <button type="button" data-aud="pro" aria-pressed="false" title="Work help — Cassie in her suit"><span class="aud-full">Professional</span><span class="aud-short">Pro</span></button>
+    </div>
     <button id="board-btn" class="icon-btn" title="Board — draw, sketch, or work on a graph" aria-label="Open the drawing board">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>
     </button>
@@ -118,10 +123,6 @@
   </div>
 
   <div id="quick-actions" class="quick-actions">
-    <div class="aud-switch" id="aud-switch" role="group" aria-label="Who is Cassie helping?">
-      <button type="button" data-aud="student" aria-pressed="true" title="Study help — Cassie in her classic felt">Student</button>
-      <button type="button" data-aud="pro" aria-pressed="false" title="Work help — Cassie in her suit">Professional</button>
-    </div>
     <button type="button" id="hint-btn" class="chip" title="Get a hint instead of the full answer">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-3.8 10.65c.52.42.8 1.03.8 1.68V15h6v-.67c0-.65.28-1.26.8-1.68A6 6 0 0 0 12 2zM9 16.5h6v.5a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-.5zm1 3h4v.25a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75V19.5z"/></svg>
       <span class="chip-label">Hint</span>
@@ -132,11 +133,11 @@
     </button>
     <button type="button" id="research-btn" class="chip" title="Find real academic papers for a thesis / RRL">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z"/></svg>
-      <span class="chip-label">Research</span><span class="beta-tag">Beta</span>
+      <span class="chip-label">Research</span>
     </button>
     <button type="button" id="web-btn" class="chip" title="Answer with live web sources (needs a Gemini key)">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-      <span class="chip-label">Web</span><span class="beta-tag">Beta</span>
+      <span class="chip-label">Web</span>
     </button>
     <button type="button" id="talk-btn" class="chip" title="Talk to Cassie — vent, get real advice, a heart-to-heart">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.716-4.35-9.302-8.213C1.128 10.44 1.62 7.343 4 6.02a4.3 4.3 0 0 1 5.02.86L12 9.86l2.98-2.98A4.3 4.3 0 0 1 20 6.02c2.38 1.323 2.872 4.42 1.302 6.767C18.716 16.65 12 21 12 21z"/></svg>
@@ -156,7 +157,7 @@
       <button type="button" id="attach-btn" class="icon-btn round" title="Attach a file (PDF, Word, PowerPoint, or image)" aria-label="Attach a file">
         <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5S13.5 3.62 13.5 5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
       </button>
-      <button type="button" id="mic-btn" class="icon-btn round" title="Ask by voice (beta)" aria-label="Ask by voice" hidden>
+      <button type="button" id="mic-btn" class="icon-btn round" title="Ask by voice" aria-label="Ask by voice" hidden>
         <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg>
       </button>
       <button type="submit" id="send-btn" class="icon-btn round primary" title="Send" aria-label="Send">
@@ -339,12 +340,12 @@
 
 </div>
 
-<script src="memory.js?v=104"></script>
-<script src="board.js?v=104"></script>
-<script src="export.js?v=104"></script>
-<script src="sketch.js?v=104"></script>
-<script src="config.js?v=104"></script>
-<script src="app.js?v=104"></script>
+<script src="memory.js?v=105"></script>
+<script src="board.js?v=105"></script>
+<script src="export.js?v=105"></script>
+<script src="sketch.js?v=105"></script>
+<script src="config.js?v=105"></script>
+<script src="app.js?v=105"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -359,7 +360,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=104';
+      s.src = 'mascot3d/cassie-3d.js?v=105';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

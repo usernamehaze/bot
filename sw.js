@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v104';
+const CACHE_NAME = 'cassie-v105';
 const ASSETS = [
   './',
   'index.html',
@@ -13,6 +13,8 @@ const ASSETS = [
   'export.js',
   'sketch.js',
   'manifest.json',
+  'patterns/student.svg',
+  'patterns/pro.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
 ];
