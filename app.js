@@ -159,7 +159,7 @@ When the user asks you to graph, plot, sketch, or draw a function, line, or shap
 // What the app does around her answers, so she never claims she can't.
 const ABILITIES_INSTRUCTION = `What this app can do with your answers:
 - Files: when the student asks for a reviewer, notes, flashcards, a worksheet, or a Word/PDF/image file, the app turns your answer into that file automatically and gives them a download button. Never say you can't create files — just write the complete content, organized with a title, headings, bullets, and key terms in bold.
-- Pictures: requests like "generate an image of …" are handled by the app's picture maker. Never say you can't make images.
+- Pictures: the app has a real picture maker. If the student asks you to draw, generate, create or show an image, picture, photo, illustration or drawing of something (not a math graph), do NOT draw it with text or ASCII art and don't describe what you would draw — reply with exactly one line: [[IMAGE: a short, vivid description of the picture]] and nothing else. Never say you can't make images.
 - If they ask for a reviewer without naming a topic, make it about what you've been discussing. Only ask which topic when there is nothing to go on.`;
 
 // The Student / Professional switch: for working professionals Cassie is a sharp,
@@ -195,6 +195,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (state.citationStyle && state.citationStyle !== 'APA') {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
   }
+  if (state.profile) sp += `\n\n${profileLine(state.profile)}`;
   if (state.audience === 'pro') sp += `\n\n${PRO_INSTRUCTION}`;
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
@@ -406,6 +407,7 @@ if (audSwitch) {
     if (!b || b.dataset.aud === (state.audience || 'student')) return;
     state.audience = b.dataset.aud;
     save();
+    track('feature', 'mode:' + state.audience);
     renderAudience();
     taskOutfit = null;
     dressCassie();
@@ -1159,10 +1161,14 @@ function renderFormatted(container, text) {
         const first = seg.slice(0, nl).trim();
         if (/^[a-zA-Z0-9+#.\-]{0,15}$/.test(first)) { lang = first.toLowerCase(); body = seg.slice(nl + 1); }
       }
-      // Cassie's board: render the drawing instead of showing JSON as code.
-      if (lang === 'cassie-board' && window.CassieBoard) {
-        try { window.CassieBoard.renderInto(container, JSON.parse(body.trim())); }
-        catch (e) { /* malformed board — just skip it */ }
+      // Cassie's board: render the drawing instead of showing JSON as code — whatever
+      // the block was tagged, and even if the JSON is a little off.
+      const B = window.CassieBoard;
+      if (B && (lang === 'cassie-board' || (B.looksLikeBoard && B.looksLikeBoard(lang, body)))) {
+        const spec = B.parseSpec ? B.parseSpec(body) : null;
+        if (spec) { try { B.renderInto(container, spec); return; } catch (e) { /* fall through to the equation */ } }
+        const eq = B.findEquation && B.findEquation(body.replace(/"fn"\s*:\s*"([^"]+)"/, 'y = $1'));
+        if (eq) { try { B.renderInto(container, B.graphSpec(eq)); } catch (e) { /* skip */ } }
         return;
       }
       const pre = document.createElement('pre');
@@ -2104,6 +2110,7 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
     if (f.key === want) btn.classList.add('suggest');
     btn.addEventListener('click', async () => {
       if (btn.disabled) return;
+      track('feature', 'save:' + f.key);
       btn.disabled = true;
       btn.textContent = 'Saving…';
       try {
@@ -2161,6 +2168,36 @@ function addImageToBubble(bubble, dataUrl, { download = false, name = 'cassie-im
     bubble.appendChild(tools);
   }
   scrollToBottom();
+}
+
+const PICTURE_WORD_RE = /\b(image|picture|pic|photo|illustration|drawing|draw|paint|poster|logo|wallpaper|larawan)\b/i;
+// a reply that is mostly a block of symbol art
+function looksLikeAsciiArt(text) {
+  const blocks = String(text).match(/```[\s\S]*?```/g) || [];
+  const body = blocks.length ? blocks.join('\n') : String(text);
+  const lines = body.split('\n').filter((l) => l.trim());
+  const arty = lines.filter((l) => /[\\\/|_()\-=*^~<>o.'`]{3,}/.test(l) && (l.replace(/[\s\\\/|_()\-=*^~<>o.'`+#@]/g, '').length < l.trim().length * 0.35));
+  return arty.length >= 3;
+}
+
+/* Asked for a graph but the answer has no drawing (or drew it in ASCII)? Draw it here,
+   from the equation in the question, the answer, or the last few messages. */
+const GRAPH_ASK_RE = /\b(graph|plot|sketch|draw|chart|visuali[sz]e)\b/i;
+function ensureGraph(bubble, question, reply) {
+  const B = window.CassieBoard;
+  if (!B || !B.findEquation || !GRAPH_ASK_RE.test(question || '') || bubble.querySelector('.cassie-board')) return;
+  let eq = B.findEquation(question) || B.findEquation(reply);
+  for (let i = state.messages.length - 1; !eq && i >= 0 && i >= state.messages.length - 8; i--) eq = B.findEquation(state.messages[i].display || state.messages[i].content);
+  if (!eq) return;
+  // hide an ASCII-art "graph" if the model drew one
+  bubble.querySelectorAll('pre').forEach((pre) => { if (/[|_\-+*.]{3,}/.test(pre.textContent) && !/[;{}=()]\s*$/m.test(pre.textContent.split('\n')[0] || '')) pre.remove(); });
+  try {
+    const spec = B.graphSpec(eq);
+    B.renderInto(bubble, spec);
+    // keep it with the answer so it's still there when the chat is reopened
+    const last = state.messages[state.messages.length - 1];
+    if (last && last.role === 'assistant') { last.content += '\n\n```cassie-board\n' + JSON.stringify(spec) + '\n```'; save(); }
+  } catch (e) { /* couldn't draw it */ }
 }
 
 /* "make me a reviewer / notes / flashcards…" → the answer also arrives as a file */
@@ -2236,6 +2273,8 @@ async function handleSend(text, opts = {}) {
   autoGrow();
   taskOutfit = null;
   dressCassie();
+  track('feature', doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat');
+  if (!doc && !image) trackWords(sendText);
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
   // remember what the student is studying + any explicit "remember ..." note
   try {
@@ -2254,10 +2293,22 @@ async function handleSend(text, opts = {}) {
     const reply = doc
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait });
+    // A picture request the detector missed: the model hands it over as [[IMAGE: …]],
+    // or draws ASCII art for something that isn't a graph → make a real picture.
+    const marker = !doc && !image && reply.match(/\[\[\s*IMAGE\s*:\s*([^\]]+)\]\]/i);
+    const asciiPic = !doc && !image && !marker && PICTURE_WORD_RE.test(sendText) && !GRAPH_ASK_RE.test(sendText) && looksLikeAsciiArt(reply);
+    if (marker || asciiPic) {
+      const subject = marker ? marker[1].trim() : ((imageRequest(sendText) || {}).subject || (sendText.match(/\bof\s+(.+)$/i) || [0, sendText.replace(PICTURE_WORD_RE, '')])[1].replace(/[?!.\s]+$/, '').trim());
+      setCursorMode('idle');
+      await pictureReply(subject, typingBubble);
+      return;
+    }
     state.messages.push({ role: 'assistant', content: reply });
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
+    ensureGraph(bubble, sendText, reply);
+    if (bubble.querySelector('.cassie-board')) track('feature', 'graph');
     const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
     const title = doc
       ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
@@ -2315,14 +2366,17 @@ async function tryGenerateImage(prompt, model) {
    generation on, Gemini paints it; otherwise a free, keyless image service
    (Pollinations) does. Graphs and plots stay on Cassie's board, which draws
    them exactly. */
-const IMAGE_ASK_RE = /^\s*(?:hey\s+)?(?:cassie[,!]?\s*)?(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:generate|create|make|draw|paint|render|design|produce|show\s+me|give\s+me|send\s+me|i\s+(?:want|need)|gawa(?:n|in)?\s+mo\s+ako\s+ng)\s+(?:me\s+)?(?:an?\s+|some\s+|the\s+|ng\s+)?(?:(?:ai|realistic|cartoon|cute|simple|colorful|colourful|labeled|labelled|detailed|3d|nice|cool|new)\s+)*(?:image|images|picture|pictures|pic|pics|photo|photos|illustration|illustrations|drawing|painting|artwork|art|poster|logo|wallpaper|icon|sticker|infographic|larawan)\b\s*(?:of|showing|about|for|with|that\s+shows|depicting|na|ng)?\s*[:\-]?\s*(.*)$/i;
-const DRAW_ASK_RE = /^\s*(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:draw|paint|sketch)\s+(?:me\s+)?((?:an?|the|some)\s+.+)$/i;
+const IMAGE_ASK_RE = /(?:^|[\s,.!?])(?:generate|create|make|draw|paint|render|design|produce|show\s+me|give\s+me|send\s+me|i\s+(?:want|need)|gawa(?:n|in)?\s+mo\s+ako\s+ng)\s+(?:me\s+)?(?:an?\s+|some\s+|the\s+|ng\s+)?(?:(?:ai|realistic|cartoon|cute|simple|colorful|colourful|labeled|labelled|detailed|3d|nice|cool|new)\s+)*(?:image|images|picture|pictures|pic|pics|photo|photos|illustration|illustrations|drawing|painting|artwork|art|poster|logo|wallpaper|icon|sticker|infographic|larawan)\b\s*(?:of|showing|about|for|with|that\s+shows|depicting|na|ng)?\s*[:\-]?\s*(.*)$/i;
+const DRAW_ASK_RE = /(?:^|[\s,.!?])(?:draw|paint|illustrate)\s+(?:me\s+|us\s+)?((?:an?|the|some|my)\s+.+)$/i;
+// also: "a picture of a cat", "image of the solar system please" (no verb at all)
+const NOUN_ASK_RE = /^\s*(?:an?\s+)?(?:(?:ai|realistic|cartoon|cute|simple|labeled|labelled|detailed|3d)\s+)*(?:image|picture|pic|photo|illustration|drawing)\s+(?:of|showing)\s+(.+)$/i;
 const BOARD_SUBJECT_RE = /\b(graph|plot|chart|function|equation|parabola|line|slope|axis|axes|triangle|rectangle|square|circle|area|perimeter|y\s*=|f\(x\)|x\^)/i;
 function imageRequest(text) {
   const t = String(text || '').trim();
-  const m = t.match(IMAGE_ASK_RE) || t.match(DRAW_ASK_RE);
+  const m = t.match(IMAGE_ASK_RE) || t.match(DRAW_ASK_RE) || t.match(NOUN_ASK_RE);
   if (!m) return null;
-  const subject = (m[1] || '').trim().replace(/^please\s+/i, '').replace(/[?!.\s]+$/, '');
+  const subject = (m[1] || '').trim().replace(/^please\s+/i, '').replace(/[?!.\s]+$/, '')
+    .replace(/\s+(?:for\s+(?:me|us|my|our)|please|pls|po|thanks?|thank\s+you)\b.*$/i, '').replace(/[?!.,\s]+$/, '');
   if (BOARD_SUBJECT_RE.test(subject)) return null; // the board draws these accurately
   return { subject };
 }
@@ -2350,9 +2404,16 @@ async function geminiImage(prompt) {
   geminiImageOff = true;
   throw lastErr || new Error('image generation is off for this key');
 }
+// Style follows the request: realistic by default; clean diagrams for labelled /
+// scientific diagrams; the student's own style words (cartoon, anime…) win.
+function imageStyle(prompt) {
+  if (/\b(cartoon|anime|chibi|pixel|clipart|clip art|watercolou?r|sketch|line art|3d render|illustration|drawing|painting|logo|icon|sticker|poster)\b/i.test(prompt)) return 'high quality, detailed';
+  if (/\b(diagram|labell?ed|parts of|cross[- ]section|infographic|chart|cycle|anatomy|structure)\b/i.test(prompt)) return 'clean educational diagram, accurate, clearly labelled parts, white background, high detail';
+  return 'photorealistic, natural lighting, sharp focus, realistic textures, high detail, 4k photo';
+}
 function freeImageUrl(prompt, seed) {
-  const p = `${prompt}. Clear, detailed, high quality, accurate, educational.`.slice(0, 700);
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=768&seed=${seed}&nologo=true&safe=true`;
+  const p = `${prompt}, ${imageStyle(prompt)}`.slice(0, 700);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=768&seed=${seed}&model=flux&enhance=true&nologo=true&safe=true`;
 }
 function loadImageUrl(url, ms = 90000) {
   return new Promise((resolve, reject) => {
@@ -2401,6 +2462,13 @@ async function handleImageRequest(text, subject) {
   mascotReact('image');
   setCursorMode('thinking');
   const typingBubble = renderTyping();
+  await pictureReply(subject, typingBubble);
+}
+
+// Make the picture and post it as Cassie's reply (also used when the chat model
+// answers a picture request with [[IMAGE: …]] instead of drawing ASCII art).
+async function pictureReply(subject, typingBubble) {
+  track('feature', 'image');
   setTypingStatus(typingBubble, 'Making your picture…');
   sendBtn.disabled = true;
   try {
@@ -2463,7 +2531,7 @@ function authorsShort(list) {
 async function runResearch(topic) {
   topic = (topic || '').trim();
   if (!topic) { promptInput.placeholder = 'Type a topic first, then tap Research…'; promptInput.focus(); return; }
-  taskOutfit = 'graduate'; dressCassie();
+  taskOutfit = 'graduate'; dressCassie(); track('feature', 'web'); trackWords(text); track('feature', 'research'); trackWords(topic);
   if (!state.groqKey) {
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
@@ -2715,7 +2783,7 @@ if (window.CassieBoard) {
   };
 }
 const boardBtn = document.getElementById('board-btn');
-if (boardBtn) boardBtn.addEventListener('click', () => openSketch());
+if (boardBtn) boardBtn.addEventListener('click', () => { track('feature', 'board'); openSketch(); });
 
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
@@ -2947,6 +3015,7 @@ function syncAccentSwatches() {
 }
 function setAccent(color) {
   state.accent = color || '';
+  track('feature', 'colour');
   save();
   applyAccent();
   syncAccentSwatches();
@@ -2967,6 +3036,7 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
+  if (state.voiceOut) track('feature', 'voice-out');
   if (levelSelect) state.level = levelSelect.value;
   if (citationSelect) state.citationStyle = citationSelect.value;
   if (textsizeSelect) state.textSize = textsizeSelect.value;
@@ -3196,6 +3266,7 @@ if (memoryPanel) {
   function start() {
     if (running) return;
     running = true;
+    try { track('feature', 'timer'); } catch (e) { /* ignore */ }
     endAt = Date.now() + remaining * 1000;
     clearInterval(tick);
     tick = setInterval(() => {
@@ -3398,6 +3469,7 @@ if (SpeechRecognitionCtor) {
     if (listening) { recognizer.stop(); return; }
     try {
       recognizer.start();
+      track('feature', 'voice-in');
       listening = true;
       micBtn.classList.add('primary');
       detourToElement(micBtn, { click: true, resumeAfter: 700 });
@@ -3491,6 +3563,7 @@ function depthBarHTML() {
     </div>`;
 }
 function setPopoverResult(reply, mode) {
+  track('feature', 'highlight:' + (mode || 'explain'));
   highlightPopoverBody.classList.remove('muted');
   const withDepth = mode === 'explain' || mode === 'code';
   highlightPopoverBody.innerHTML = (withDepth ? depthBarHTML() : '') + '<div class="popover-result"></div>';
@@ -3638,6 +3711,147 @@ document.addEventListener('selectionchange', () => scheduleSelectionPopover(450)
 chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
+/* ---------- anonymous usage stats (optional, opt-out in Settings → You) ---------- */
+// Paste your analytics Worker URL here (see analytics/README.md). Empty = nothing is sent.
+const ANALYTICS_URL = window.CASSIE_ANALYTICS_URL || '';
+// What is sent: a random install id, the event (app opened / feature used), and coarse
+// profile buckets (student/pro, grade band, age band). With "topics" on (adults only),
+// up to 5 single keywords per message — never names, messages, files, or keys, and
+// nothing at all from Talk mode.
+function installId() {
+  try {
+    let id = localStorage.getItem('cassie.aid');
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)); localStorage.setItem('cassie.aid', id); }
+    return id;
+  } catch (e) { return ''; }
+}
+const STOP = new Set(('the a an and or but if then so to of in on at for with from by about as is are was were be been being do does did can could would should will shall may might must have has had this that these those it its i me my we our you your he she they them their what which who whom whose why how when where please thanks thank explain answer tell show give make help need want like just also more most very really some any each every there here into onto than too much many cassie okay yes hello hi hey get got know think use using used write writing list summarize summary summarise example examples simple simply terms word words mean means meaning define definition question questions answer answers step steps easy quick short long better best good great thing things something kind type make made does done doing find look give gave take took want wanted able sure about again only even still well other another first second last next same ' +
+  'ang ng sa mga na at ko mo ako ikaw siya ito iyan yan yung po ba naman lang din rin kasi para pero kung may wala hindi oo opo ano paano bakit saan kailan sino nga pa ni nila namin natin kami tayo sila kayo').split(' '));
+let trackQ = [], wordQ = [], trackTimer = null;
+function track(event, name = '') {
+  const an = state.analytics;
+  if (!ANALYTICS_URL || !an || an.usage === false || !installId()) return;
+  trackQ.push({ e: event, n: String(name || '').slice(0, 40), t: Date.now() });
+  clearTimeout(trackTimer); trackTimer = setTimeout(flushTrack, 5000);
+  if (trackQ.length >= 20) flushTrack();
+}
+function trackWords(text) {
+  const an = state.analytics, p = state.profile || {};
+  if (!ANALYTICS_URL || !an || !an.usage || !an.topics || counselorMode || (p.age && p.age < 18)) return;
+  const own = String(p.name || '').toLowerCase();
+  const words = String(text || '').toLowerCase().replace(/\S+@\S+|https?:\/\/\S+/g, ' ').split(/[^\p{L}]+/u)
+    .filter((w) => w.length >= 4 && w.length <= 24 && !STOP.has(w) && w !== own);
+  [...new Set(words)].slice(0, 5).forEach((w) => wordQ.push(w));
+}
+function flushTrack() {
+  if (!ANALYTICS_URL || (!trackQ.length && !wordQ.length)) return;
+  const p = state.profile || {};
+  const grp = p.role === 'student' ? (GRADE_GROUPS.find((g) => g[2].includes(p.grade)) || [''])[0] : '';
+  const standalone = window.matchMedia && matchMedia('(display-mode: standalone)').matches;
+  const body = JSON.stringify({
+    uid: installId(),
+    ctx: { role: p.role || '', grade: grp, age: ageBand(p.age), platform: (/Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'phone' : 'computer') + (standalone ? ' app' : ''), lang: (navigator.language || '').slice(0, 5) },
+    events: trackQ.splice(0, 50), words: wordQ.splice(0, 50),
+  });
+  try {
+    if (navigator.sendBeacon) navigator.sendBeacon(ANALYTICS_URL, new Blob([body], { type: 'text/plain' }));
+    else fetch(ANALYTICS_URL, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(() => {});
+  } catch (e) { /* offline — fine */ }
+}
+addEventListener('pagehide', flushTrack);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushTrack(); });
+
+/* ---------- profile: a quick sign-up on first open ---------- */
+// Name, student or professional, grade (students) or field (professionals), and age.
+// Sets Cassie's explanation level and Student/Pro mode, and personalises answers.
+// Stored only in this browser.
+const GRADE_GROUPS = [
+  ['Elementary', 'elementary', ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']],
+  ['Junior High School', 'middle', ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10']],
+  ['Senior High School', 'high', ['Grade 11', 'Grade 12']],
+  ['College / University', 'college', ['1st year college', '2nd year college', '3rd year college', '4th year college', '5th year college']],
+  ['Graduate school', 'college', ['Graduate school']],
+];
+const levelForGrade = (g) => { const grp = GRADE_GROUPS.find((x) => x[2].includes(g)); return grp ? grp[1] : 'auto'; };
+const ageBand = (a) => (!a ? '' : a < 13 ? 'under 13' : a < 18 ? '13-17' : a < 25 ? '18-24' : a < 35 ? '25-34' : a < 50 ? '35-49' : '50+');
+function profileLine(p) {
+  const who = p.role === 'pro' ? `a working professional${p.field ? ` (${p.field})` : ''}` : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
+  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then, and pitch every explanation to that level.${p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
+}
+function openProfile(first) {
+  const p = state.profile || {};
+  const wrap = document.createElement('div');
+  wrap.className = 'profile-overlay';
+  wrap.innerHTML = `<form class="profile-card" novalidate>
+    <h2>${first ? 'Let’s set up Cassie for you' : 'Your profile'}</h2>
+    <p class="pf-sub">So she explains things at the right level. Saved only on this device.</p>
+    <label class="pf-field"><span>Your name</span><input name="name" maxlength="40" autocomplete="given-name" placeholder="e.g. Hazel"></label>
+    <div class="pf-field"><span>I’m a…</span><div class="pf-seg"><button type="button" data-role="student">Student</button><button type="button" data-role="pro">Working professional</button></div></div>
+    <label class="pf-field pf-student"><span>Grade level</span><select name="grade"><option value="">Choose your grade…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    <label class="pf-field pf-pro"><span>What do you do?</span><input name="field" maxlength="60" list="pf-fields" placeholder="e.g. nurse, accountant, teacher"><datalist id="pf-fields"><option>Teacher</option><option>Nurse</option><option>Engineer</option><option>Accountant</option><option>Software developer</option><option>Marketing</option><option>Customer service</option><option>Business owner</option><option>Researcher</option></datalist></label>
+    <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="5" max="100" placeholder="e.g. 16"></label>
+    <label class="pf-check"><input type="checkbox" name="usage"> <span>Help improve Cassie: share <b>anonymous</b> usage — which features you use and how often. No names, no messages.</span></label>
+    <label class="pf-check pf-topics"><input type="checkbox" name="topics"> <span>Also share the <b>topics</b> I ask about (single keywords only, never my messages).</span></label>
+    <p class="pf-err" hidden></p>
+    <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save'}</button>
+  </form>`;
+  document.body.appendChild(wrap);
+  const f = wrap.querySelector('form');
+  let role = p.role || '';
+  f.name.value = p.name || ''; f.grade.value = p.grade || ''; f.field.value = p.field || ''; f.age.value = p.age || '';
+  const an = state.analytics || { usage: true, topics: true };
+  f.usage.checked = an.usage !== false; f.topics.checked = an.topics !== false;
+  function sync() {
+    f.querySelectorAll('[data-role]').forEach((b) => b.classList.toggle('on', b.dataset.role === role));
+    f.querySelector('.pf-student').hidden = role !== 'student';
+    f.querySelector('.pf-pro').hidden = role !== 'pro';
+    const minor = +f.age.value > 0 && +f.age.value < 18;
+    f.querySelector('.pf-topics').hidden = minor; // no topic sharing for under-18s
+    if (minor) f.topics.checked = false;
+  }
+  f.querySelectorAll('[data-role]').forEach((b) => b.addEventListener('click', () => { role = b.dataset.role; sync(); }));
+  f.age.addEventListener('input', sync);
+  f.addEventListener('input', () => { f.querySelector('.pf-err').hidden = true; });
+  f.addEventListener('click', (ev) => { if (ev.target.closest('[data-role]')) f.querySelector('.pf-err').hidden = true; });
+  sync();
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value, field = f.field.value.trim();
+    const err = !name ? 'Please type your name.' : !role ? 'Are you a student or a working professional?'
+      : role === 'student' && !grade ? 'Please choose your grade level.' : role === 'pro' && !field ? 'Please tell us what you do.'
+      : !(age >= 5 && age <= 100) ? 'Please enter your age (5–100).' : '';
+    const errEl = f.querySelector('.pf-err');
+    if (err) { errEl.textContent = err; errEl.hidden = false; return; }
+    state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? field : '', age, at: p.at || Date.now() };
+    state.audience = role === 'pro' ? 'pro' : 'student';
+    state.level = role === 'pro' ? 'auto' : levelForGrade(grade);
+    state.analytics = { usage: f.usage.checked, topics: f.topics.checked && age >= 18 };
+    save();
+    try { if (window.CassieMemory) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
+    if (typeof renderAudience === 'function') renderAudience();
+    dressCassie();
+    wrap.remove();
+    if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
+    try { mascotSay(first ? `Nice to meet you, ${name}! 👋` : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
+    renderProfileSummary();
+  });
+  setTimeout(() => f.name.focus(), 50);
+}
+function renderProfileSummary() {
+  const el = document.getElementById('profile-summary'); const p = state.profile;
+  if (el) el.textContent = p ? `${p.name} · ${p.role === 'pro' ? p.field : p.grade} · age ${p.age}` : 'No profile yet.';
+  const u = document.getElementById('share-usage-toggle'), t = document.getElementById('share-topics-toggle'), row = document.getElementById('share-topics-row');
+  const an = state.analytics || { usage: true, topics: true };
+  if (u) u.checked = an.usage !== false;
+  if (t) t.checked = an.topics !== false && !(p && p.age < 18);
+  if (row) row.hidden = !!(p && p.age < 18);
+}
+document.getElementById('edit-profile-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openProfile(false); });
+['share-usage-toggle', 'share-topics-toggle'].forEach((id) => document.getElementById(id)?.addEventListener('change', () => {
+  state.analytics = { usage: document.getElementById('share-usage-toggle').checked, topics: document.getElementById('share-topics-toggle').checked };
+  save();
+}));
+
 /* ---------- init ---------- */
 buildAccentSwatches();
 applyReading();
@@ -3645,6 +3859,9 @@ applyAccent();
 renderHistory();
 updateModelPill();
 updateMemoryDot();
+renderProfileSummary();
+if (!state.profile) setTimeout(() => openProfile(true), 300);
+else track('open');
 requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();
