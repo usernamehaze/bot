@@ -2,7 +2,7 @@
   "name": "Cassie — Study Tutor",
   "short_name": "Cassie",
   "description": "A free AI study buddy that tutors you through any subject, by voice or text.",
-  "start_url": "./",
+  "start_url": "./start.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#100f16",

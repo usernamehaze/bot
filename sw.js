@@ -1,7 +1,9 @@
-const CACHE_NAME = 'cassie-v95';
+const CACHE_NAME = 'cassie-v96';
 const ASSETS = [
   './',
   'index.html',
+  'start.html',
+  'landing/landing.js',
   'app.html',
   'style.css',
   'app.js',
@@ -58,7 +60,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() =>
-          caches.match(event.request).then((c) => c || caches.match('index.html'))
+          caches.match(event.request).then((c) => c || caches.match('start.html'))
         )
     );
     return;
