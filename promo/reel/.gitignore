@@ -1,0 +1,6 @@
+frames/
+build/
+stills/
+*.wav
+*.log
+sheet*.png
