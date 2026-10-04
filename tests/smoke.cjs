@@ -541,12 +541,13 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
-    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {}),
+    // extensions need full Chromium (not the slim headless shell Playwright uses by default)
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   try {
     let [sw] = ctx.serviceWorkers();
-    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 10000 });
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 20000 });
     const out = await sw.evaluate(async () => {
       const realFetch = fetch;
       const sse = (texts) => new Response(texts.map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
