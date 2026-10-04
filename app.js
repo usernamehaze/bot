@@ -45,8 +45,9 @@ function slowDevice() {
   try {
     const c = navigator.connection || {};
     if (c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '')) return true;
+    // Only Chrome/Android report memory; iPhones hide it (and always say "2 cores"),
+    // so the core count isn't used — it made every iPhone look slow.
     if (navigator.deviceMemory && navigator.deviceMemory <= 2) return true;
-    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return true;
   } catch (e) { /* unknown → assume fine */ }
   return false;
 }
