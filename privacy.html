@@ -82,6 +82,23 @@
     key. The developer of Cassie never receives, sees, or stores this content.
   </p>
 
+  <h2>When Cassie answers without your own key (web app)</h2>
+  <p>
+    If you haven't added your own Groq key, your question goes to Cassie's server, which
+    passes it to Groq (or, if Groq is busy, to Cloudflare Workers AI) and sends the answer
+    back. The server does <strong>not</strong> save your questions or Cassie's answers. It only
+    counts how many questions each device asked today, using the random ID below, so everyone
+    gets a fair share. If you add your own key, your questions go straight to Groq instead.
+  </p>
+
+  <h2>Feedback you choose to send</h2>
+  <p>
+    If you tap thumbs up or down on an answer, or use <strong>Report a problem</strong>, Cassie
+    sends what you picked or typed, which feature it was about, and the same broad groups listed
+    below (student or working, school level, age range, device). It does not include your
+    question, Cassie's answer, or your name. Please don't type personal details in a report.
+  </p>
+
   <h2>Anonymous usage counts (web app)</h2>
   <p>
     To learn how many people use Cassie and which features help most, the web app

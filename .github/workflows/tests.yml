@@ -1,0 +1,28 @@
+name: Cassie tests
+
+# Opens Cassie in a real browser after every push and checks the main features.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Check the server bundle is up to date
+        working-directory: server
+        run: |
+          python3 build.py
+          git diff --exit-code worker.js || (echo "server/worker.js is out of date — run python3 build.py in server/" && exit 1)
