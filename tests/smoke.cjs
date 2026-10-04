@@ -419,6 +419,18 @@ test('board: paste a screenshot with Ctrl+V', async (b) => {
   await ctx.close();
 });
 
+test('an iPhone (reports 2 cores) still gets the 3D Cassie', async (b) => {
+  const ctx = await b.newContext({ ...devices['iPhone 13'], serviceWorkers: 'block' });
+  await ctx.addInitScript((v) => {
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 });
+    localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 9', age: 14 }, seenVersion: v }));
+  }, APP_VERSION);
+  const page = await ctx.newPage();
+  await page.goto(APP);
+  expect(await page.evaluate(() => window.CASSIE_LITE) === false, 'Lite mode turned on for an iPhone');
+  await ctx.close();
+});
+
 test('Lite mode skips the 3D Cassie', async (b) => {
   const { ctx, page } = await open(b, { lite: 'on' });
   await page.waitForTimeout(1500);
