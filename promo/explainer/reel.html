@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cassie explainer reel</title>
+<link rel="stylesheet" href="../source/assets/inter-local.css">
+<style>
+  :root { --ink: #16131c; --mute: #6f6a76; --red: #d8343c; --pink: #f2a7b5; --lav: #b9a6ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #000; font-family: Inter, system-ui, sans-serif; color: var(--ink); }
+  #frame { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+
+  /* the glow that spills out under the card */
+  #glow { position: absolute; left: -200px; right: -200px; top: 900px; height: 760px; filter: blur(60px); opacity: 1; }
+  #glow2 { position: absolute; left: 0; right: 0; top: 1080px; height: 420px; background: radial-gradient(60% 70% at 50% 20%, rgba(255,255,255,.35), transparent 70%); mix-blend-mode: screen; }
+  #glow i { position: absolute; border-radius: 50%; }
+
+  /* brand mark */
+  .brand { position: absolute; top: 470px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 12px; color: rgba(255,255,255,.85); font: 700 34px Inter; letter-spacing: -.02em; }
+  .brand svg { width: 30px; height: 34px; }
+
+  /* the screen card */
+  #card { position: absolute; left: 40px; top: 540px; width: 1000px; height: 600px; border-radius: 34px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 40px 120px rgba(0,0,0,.6); }
+  #wave { position: absolute; left: 0; right: 0; bottom: 0; height: 300px; }
+  #content { position: absolute; inset: 0; }
+  #stage { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  #top { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+  .cmark { position: absolute; left: 26px; top: 20px; font: 700 22px Inter; color: rgba(22,19,28,.35); display: flex; gap: 8px; align-items: center; z-index: 5; }
+  .cmark svg { width: 18px; height: 20px; }
+  .ftag { position: absolute; right: 24px; top: 18px; z-index: 5; background: var(--ink); color: #fff; font: 700 22px Inter; padding: 9px 16px; border-radius: 999px; letter-spacing: -.01em; }
+  .ftag b { color: #ffb3bd; margin-right: 8px; }
+
+  .scene { position: absolute; inset: 0; display: none; }
+  .kin { z-index: 2; text-shadow: 0 0 18px #fff, 0 0 30px #fff; position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 18px; padding: 0 70px; font-size: 64px; font-weight: 550; letter-spacing: -.035em; text-align: center; }
+  .kin .w { display: inline-block; }
+  .kin .acc { color: var(--red); }
+  .ico { position: absolute; width: 44px; height: 44px; }
+
+  /* chapter bar */
+  #chapters { position: absolute; left: 40px; right: 120px; top: 1180px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  #chapters div { position: relative; overflow: hidden; height: 74px; border-radius: 16px; background: #fff; color: var(--ink); font: 650 28px Inter; display: grid; place-items: center; letter-spacing: -.01em; }
+  #chapters div.on { background: #0c0b0f; color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.18); }
+  #chapters div .streak { position: absolute; top: 0; bottom: 0; width: 10px; background: linear-gradient(180deg, transparent, #fff, transparent); box-shadow: 0 0 22px 8px rgba(242,167,181,.85); opacity: 0; }
+  #ringbtn { position: absolute; right: 40px; top: 1180px; width: 74px; height: 74px; border-radius: 50%; border: 3px solid rgba(255,255,255,.85); }
+  #ruler { position: absolute; left: 40px; right: 40px; top: 1290px; height: 22px; overflow: hidden; }
+  #ruler i { position: absolute; top: 0; width: 3px; height: 16px; border-radius: 2px; background: rgba(255,255,255,.45); }
+  #ruler i.big { height: 22px; background: rgba(255,255,255,.8); }
+
+  /* --- mock UI pieces --- */
+  .pop { position: absolute; background: #17161b; color: #fff; border-radius: 18px; padding: 16px 20px 18px; box-shadow: 0 18px 40px rgba(0,0,0,.35); font-size: 20px; line-height: 1.45; }
+  .pop .ph { display: flex; justify-content: space-between; font: 800 13px Inter; letter-spacing: .18em; color: #b9b5bd; margin-bottom: 10px; }
+  .pop .chips { display: flex; gap: 8px; margin-bottom: 10px; }
+  .pop .chips span { flex: 1; text-align: center; font: 700 15px Inter; padding: 7px 0; border-radius: 9px; background: rgba(255,255,255,.12); }
+  .pop .chips span.on { background: #f6f2ec; color: var(--ink); }
+  .pop b { color: #ffd166; }
+  .card2 { position: absolute; background: #fff; border-radius: 16px; box-shadow: 0 16px 40px rgba(40,20,60,.18); overflow: hidden; }
+  .bub { position: absolute; max-width: 70%; padding: 12px 16px; border-radius: 16px; font-size: 18px; line-height: 1.4; }
+  .bub.u { right: 24px; background: var(--ink); color: #fff; }
+  .bub.a { left: 24px; background: #fff; color: var(--ink); box-shadow: 0 8px 22px rgba(0,0,0,.08); }
+  .monitor { position: absolute; }
+  .monitor .scr { position: absolute; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: inset 0 0 0 10px #111; }
+  .monitor .stand { position: absolute; background: linear-gradient(#c9c6cf, #9e9aa6); }
+  .phone { position: absolute; border-radius: 46px; background: #0f0f12; padding: 12px; box-shadow: 0 40px 80px rgba(0,0,0,.35); }
+  .phone .in { width: 100%; height: 100%; border-radius: 36px; overflow: hidden; background: #f3efe9; position: relative; }
+  .lbl { font: 800 13px Inter; letter-spacing: .14em; color: var(--mute); }
+  .letter { position: absolute; font-size: 170px; font-weight: 750; letter-spacing: -.04em; color: #2a1640; }
+  .guide { position: absolute; background: rgba(120,90,200,.25); }
+  .dot { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #2a1640; }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 9; }
+</style></head>
+<body>
+<div id="frame">
+  <div id="glow"></div><div id="glow2"></div>
+  <div class="brand"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#000" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/></svg>Cassie</div>
+  <div id="card">
+    <canvas id="wave" width="500" height="150"></canvas>
+    <div id="content"></div>
+    <div id="stage"></div>
+    <div id="top"></div>
+    <div class="cmark"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="currentColor"/></svg>Cassie</div>
+    <div class="flash" id="flash"></div>
+  </div>
+  <div id="chapters"><div>Intro<span class="streak"></span></div><div>Problem<span class="streak"></span></div><div>Features<span class="streak"></span></div><div>Try it<span class="streak"></span></div></div>
+  <div id="ringbtn"></div>
+  <div id="ruler"></div>
+</div>
+<script src="../reel/build/cassie-stage.js"></script>
+<script src="reel.js"></script>
+</body></html>
