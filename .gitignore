@@ -5,3 +5,4 @@ cassie-screenshot-*.png
 
 # test dependencies
 tests/node_modules/
+_site/

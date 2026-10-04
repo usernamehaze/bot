@@ -2,7 +2,7 @@
 
 There are four parts. Each one can be done on its own.
 
-1. [Keep askcassie.pages.dev up to date](#1-keep-askcassiepagesdev-up-to-date) (do this first, about 10 minutes)
+1. [Keep askcassie.pages.dev up to date](#1-keep-askcassiepagesdev-up-to-date) (do this first, about 2 minutes)
 2. [Chrome Web Store](#2-chrome-web-store-the-extension), so people install the extension in one click
 3. [Google Play Store](#3-google-play-store-android), for Android phones
 4. [Apple App Store](#4-apple-app-store-iphone), for iPhones
@@ -11,34 +11,23 @@ There are four parts. Each one can be done on its own.
 
 ## 1. Keep askcassie.pages.dev up to date
 
-askcassie.pages.dev was uploaded by hand, so it doesn't change when Cassie is
-updated. This step makes it update automatically after every change. It also
-puts the Chrome extension on the site as a download (`/cassie-extension.zip`).
-The website's **Get the Chrome extension** button links to it.
+askcassie.pages.dev is connected to GitHub, so Cloudflare rebuilds it after
+every change. It needs two build settings, so that it publishes only the
+website and leaves out the big promo videos (Cloudflare refuses any file over
+25 MB):
 
-1. **Make a Cloudflare API token**
-   - Go to dash.cloudflare.com → your profile icon (top right) → **My Profile**
-     → **API Tokens** → **Create Token** → **Create Custom Token**.
-   - Name it `GitHub deploy`.
-   - Under Permissions, choose **Account** → **Cloudflare Pages** → **Edit**.
-   - Click **Continue to summary** → **Create Token**, then copy the token. It is
-     shown only once.
-2. **Find your Account ID.** Open **Workers & Pages**. The Account ID is in the
-   right-hand column; copy it.
-3. **Add both to GitHub**
-   - Open github.com/usernamehaze/bot → **Settings** → **Secrets and variables**
-     → **Actions** → **New repository secret**.
-   - Add `CLOUDFLARE_API_TOKEN` with the token as its value.
-   - Add `CLOUDFLARE_ACCOUNT_ID` with the Account ID as its value.
-4. **Run it once.** Go to the **Actions** tab → **Deploy website** → **Run workflow**.
-   After about a minute, askcassie.pages.dev shows the latest Cassie.
+1. dash.cloudflare.com → **Workers & Pages** → click **askcassie**.
+2. **Settings** → **Build** (or **Builds & deployments**) → **Build
+   configuration** → **Edit**.
+3. Set:
+   - **Framework preset:** None
+   - **Build command:** `bash scripts/build-site.sh`
+   - **Build output directory:** `_site`
+4. **Save**. Then open the **Deployments** tab → the newest failed deploy →
+   **⋯** → **Retry deployment**. Or just wait for the next change.
 
-**If it doesn't change**, open Cloudflare → Workers & Pages → your Cassie project.
-
-- If the project isn't called `askcassie`, add a repository **variable** (not a
-  secret) named `PAGES_PROJECT` with its real name.
-- If the latest deploy is marked **Preview**, check **Settings** → **Production
-  branch**. Then add a variable named `PAGES_BRANCH` with that branch name.
+It's working when the newest deployment shows **Success**. The site then also
+offers the Chrome extension as a download at `/cassie-extension.zip`.
 
 ---
 
