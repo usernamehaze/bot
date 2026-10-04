@@ -41,6 +41,28 @@
     if (document.readyState === 'complete') setTimeout(start, 200); else addEventListener('load', () => setTimeout(start, 200));
   }
 
+  /* ---------- the 3D Cassie in the hero (same bundle the app uses) ---------- */
+  const botRoot = $('#cassie-3d-root');
+  if (botRoot && !saveData && webglOK()) {
+    addEventListener('cassie3d-ready', () => {
+      botRoot.classList.add('live');
+      const M = window.CassieMascot;
+      if (!M || !M.setEmotion) return;
+      M.setEmotion('encouraging');
+      if (reduce) return;
+      // a few moods on a slow loop so she feels alive, never busy
+      const moods = ['encouraging', 'curious', 'thinking', 'celebratory', 'neutral'];
+      let i = 0;
+      setInterval(() => { if (!document.hidden && M.setEmotion) M.setEmotion(moods[++i % moods.length]); }, 4200);
+    });
+    const loadBot = () => {
+      const s = document.createElement('script');
+      s.src = 'mascot3d/cassie-mascot.js'; s.async = true;
+      document.body.appendChild(s);
+    };
+    if (document.readyState === 'complete') setTimeout(loadBot, 350); else addEventListener('load', () => setTimeout(loadBot, 350));
+  }
+
   /* ---------- reveal on scroll ---------- */
   if ('IntersectionObserver' in window && !reduce) {
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
