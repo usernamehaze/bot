@@ -351,7 +351,7 @@
         const label = t.querySelector('span'); const was = label.textContent;
         t.disabled = true; label.textContent = 'Cassie is looking…';
         try {
-          const reply = await opts.onCheck(snapshot());
+          const reply = await opts.onCheck(snapshot(), parts());
           if (reply) showNote({ reply });
         } catch (err) {
           showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' });
@@ -413,13 +413,20 @@
         if (!q || btn.disabled) return;
         btn.disabled = true; btn.textContent = '…';
         showNote({ reply: 'Cassie is thinking…' });
-        try { const reply = await opts.onAsk(snapshot(), q); showNote({ reply: reply || '(no reply)' }); input.value = ''; }
+        try { const reply = await opts.onAsk(snapshot(), q, parts()); showNote({ reply: reply || '(no reply)' }); input.value = ''; }
         catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' }); }
         finally { btn.disabled = false; btn.textContent = 'Ask'; }
       });
       askForm.addEventListener('keydown', (e) => e.stopPropagation());
     }
     function setTitle(t) { $('.csk-title').textContent = t || 'Board'; }
+    // The board as plain data (original picture + strokes). Reading pixels back from
+    // a page canvas comes out blank on some machines' graphics drivers, so callers
+    // that can (the extension) rebuild the picture from this instead.
+    function parts() {
+      const src = bgImage && bgImage.src && /^data:image\//.test(bgImage.src) ? bgImage.src : null;
+      return { image: src, strokes: strokes.map((s) => ({ ...s, points: s.points ? s.points.map((p) => [p[0], p[1]]) : undefined })), w: W, h: H, paper };
+    }
     function snapshot() {
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const x = c.getContext('2d');

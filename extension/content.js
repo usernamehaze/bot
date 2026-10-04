@@ -1386,9 +1386,9 @@
     return m || 'Something went wrong — please try again.';
   }
 
-  async function askVision(image, prompt, system, maxTokens) {
+  async function askVision(image, prompt, system, maxTokens, board) {
     let r;
-    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens }); }
+    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens, board }); }
     catch (e) { throw new Error('reload'); }
     if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — please try again.');
     return r.reply;
@@ -1409,7 +1409,7 @@
       const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 800);
       if (SEEMS_BLANK.test(raw) && boxText.length >= 25) { explainFromText(sess, boxText, '', 'I read the words in your box:'); return; }
       const data = parseBoardJSON(raw);
-      if (sess) { sess.setTitle(data.headline || 'Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
+      if (sess) { sess.setTitle('Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
     } catch (e) {
       const text = ctx && ctx.length > 40 ? ctx : '';
       if (text && (e.message === 'no-vision' || /unavailable|empty/i.test(e.message))) explainFromText(sess, text, 'To read the picture itself, add a free Google (Gemini) key in the Cassie toolbar popup.');
@@ -1500,8 +1500,18 @@
   }
 
   function parseBoardJSON(text) {
-    try { const m = String(text).match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch (e) { /* fall through */ }
-    const lines = String(text).split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
+    const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+    const clean = (d) => ({ headline: String(d.headline || '').trim(), steps: (Array.isArray(d.steps) ? d.steps : []).map((x) => String(x).trim()).filter(Boolean) });
+    try { const m = t.match(/\{[\s\S]*\}/); if (m) { const d = JSON.parse(m[0]); if (d && (d.headline || d.steps)) return clean(d); } } catch (e) { /* cut off — pull the pieces out below */ }
+    if (/"(headline|steps)"\s*:/.test(t)) {
+      // the answer was cut off mid-JSON: keep every complete piece (and the last partial step)
+      const unq = (s) => { try { return JSON.parse('"' + s + '"'); } catch (e) { return s.replace(/\\"/g, '"').replace(/\\n/g, ' '); } };
+      const h = t.match(/"headline"\s*:\s*"((?:[^"\\]|\\.)*)/);
+      const after = t.split(/"steps"\s*:\s*\[/)[1] || '';
+      const steps = [...after.matchAll(/"((?:[^"\\]|\\.)*)(?:"|$)/g)].map((m) => unq(m[1]).trim()).filter((x) => x.length > 1);
+      return { headline: h ? unq(h[1]).trim() : '', steps };
+    }
+    const lines = t.split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
     return { headline: lines[0] || 'Here’s how to read this', steps: lines.slice(1, 6) };
   }
 
@@ -1600,15 +1610,15 @@
       note: !opts.loading && data && (data.steps || []).length ? { headline: data.headline, steps: data.steps } : null,
       checkLabel: 'Check my work',
       extra: [{ label: 'New snip', title: 'Snip something else from the page', onClick: () => { const cur = window.CassieSketch; cur.close(); setTimeout(enterPointMode, 50); } }],
-      onAsk: async (png, q) => {
+      onAsk: async (png, q, board) => {
         try {
-          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600, board);
         } catch (e) { return errorText(e); }
       },
       askPlaceholder: 'Ask Cassie about this snip…',
-      onCheck: async (png) => {
+      onCheck: async (png, board) => {
         try {
-          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500, board);
         } catch (e) { return errorText(e); }
       },
       onClose: () => setDock(true),
