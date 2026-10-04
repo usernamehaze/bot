@@ -525,6 +525,48 @@ test('works offline after the first visit (app opens)', async (b) => {
   await ctx.close();
 });
 
+test('extension: a Gemini key alone answers (and streams), and covers for a busy Groq', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {}),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    let [sw] = ctx.serviceWorkers();
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 10000 });
+    const out = await sw.evaluate(async () => {
+      const realFetch = fetch;
+      const sse = (texts) => new Response(texts.map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+      let groqMode = 'ok';
+      globalThis.fetch = async (url, init) => {
+        const u = String(url);
+        if (u.includes('generativelanguage')) return u.includes('stream') ? sse(['Gemini ', 'streams ', 'this.']) : Response.json({ candidates: [{ content: { parts: [{ text: 'Gemini answer.' }] } }] });
+        if (u.includes('api.groq.com')) return groqMode === 'busy'
+          ? Response.json({ error: { message: 'Rate limit reached. Please try again in 3h.' } }, { status: 429, headers: { 'retry-after': '12000' } })
+          : Response.json({ choices: [{ message: { content: 'Groq answer.' } }] });
+        return realFetch(url, init);
+      };
+      const r = {};
+      r.plain = await answerText('What is osmosis?', { geminiKey: 'AIza_x' });
+      const parts = [];
+      r.streamed = await answerText('What is osmosis?', { geminiKey: 'AIza_x' }, (d) => parts.push(d));
+      r.parts = parts.length;
+      r.groq = await answerText('hi', { groqKey: 'gsk_x', geminiKey: 'AIza_x' });
+      groqMode = 'busy';
+      r.covered = await answerText('hi', { groqKey: 'gsk_x', geminiKey: 'AIza_x' });
+      try { await answerText('hi', {}); } catch (e) { r.noKey = e.message; }
+      globalThis.fetch = realFetch;
+      return r;
+    });
+    expect(out.plain === 'Gemini answer.', 'Gemini-only answer: ' + out.plain);
+    expect(out.streamed === 'Gemini streams this.' && out.parts === 3, 'Gemini streaming: ' + JSON.stringify(out));
+    expect(out.groq === 'Groq answer.', 'Groq should answer first when it has a key');
+    expect(out.covered === 'Gemini answer.' || /Gemini/.test(out.covered), 'Gemini should cover a busy Groq: ' + out.covered);
+    expect(out.noKey === 'no-key', 'no keys should say no-key');
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
 /* ---------- run ---------- */
 (async () => {
   const { startFakeServer } = await import('./fake-server.mjs');

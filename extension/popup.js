@@ -93,7 +93,7 @@ pageAsk.addEventListener('click', () => {
       const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${question}`;
       chrome.runtime.sendMessage({ type: 'CASSIE_ASK', text: prompt }, (res) => {
         if (chrome.runtime.lastError) { showPageAnswer('Something went wrong talking to the extension. Reload it and try again.'); return; }
-        if (res?.error === 'no-key') { showPageAnswer('Add your free Groq API key above and Save first.'); return; }
+        if (res?.error === 'no-key') { showPageAnswer('Add a free Groq or Gemini key above and Save first.'); return; }
         if (res?.error) { showPageAnswer(res.error); return; }
         showPageAnswer(res.reply || '(no response)');
       });

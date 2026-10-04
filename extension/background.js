@@ -159,39 +159,81 @@ async function checkKey(kind, key) {
 }
 const BAD_GROQ_KEY = 'The Groq key saved in the Cassie extension was rejected (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — click the Cassie icon in the toolbar and paste your Groq key again (it starts with gsk_). Opening the Cassie website once also copies working keys over.';
 
-// Plain text answer from Gemini (used when the Groq key is rejected).
-async function geminiText(key, turns) {
+// Text answer from Gemini — used when Gemini is the only key, or Groq can't answer.
+// Streams like Groq does when onDelta is given, so the answer appears as it's written.
+const GEMINI_RATE = 'Gemini’s free plan is busy for a moment — wait a minute and try again. (Adding a free Groq key in the Cassie toolbar popup gives you more questions per minute.)';
+async function geminiText(key, turns, onDelta) {
+  const contents = trimHistory(turns, 6000).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  while (contents.length && contents[0].role !== 'user') contents.shift();
+  const stream = typeof onDelta === 'function';
+  let last = null;
   for (const model of GEMINI_VISION_MODELS) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: turns.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.6 },
-      }),
-    });
+    let res;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+          generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
+        }),
+      });
+    } catch (e) { throw new Error('Couldn’t connect to Gemini — check your internet connection.'); }
     if (res.ok) {
-      const cand = (await res.json()).candidates?.[0];
-      const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
-      if (text) return text;
+      const textOf = (j) => (j?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
+      if (!stream) {
+        const text = textOf(await res.json()).trim();
+        if (text) return text;
+        last = new Error('Gemini sent back an empty answer — try again.'); continue;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '', full = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith('data:')) continue;
+          try { const d = textOf(JSON.parse(t.slice(5))); if (d) { full += d; onDelta(d); } } catch (e) { /* partial line */ }
+        }
+      }
+      if (full.trim()) return full.trim();
+      last = new Error('Gemini sent back an empty answer — try again.'); continue;
     }
-    if (res.status !== 404) break;
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 404 || /no longer available|not found|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); continue; }
+    if (res.status === 429 || /quota|exhausted/i.test(detail)) throw new Error(GEMINI_RATE);
+    if ((res.status === 400 && /api key/i.test(detail)) || res.status === 401 || res.status === 403) throw new Error('Your Gemini key was rejected — click the Cassie icon in the toolbar and paste it again (it starts with AIza). Get one free at aistudio.google.com/apikey.');
+    if (res.status === 503 || /overloaded|unavailable/i.test(detail)) { last = new Error('Gemini is busy right now — try again in a moment.'); continue; }
+    throw new Error(detail || `Gemini request failed (${res.status})`);
   }
-  throw new Error(BAD_GROQ_KEY);
+  throw last || new Error('Gemini isn’t available right now — try again in a moment.');
 }
-// Groq first; if Groq rejects the key and there's a Gemini key, Gemini answers.
+// Groq answers when there's a Groq key (it's faster). Gemini answers when it's the
+// only key, or when Groq rejects the key or runs out of free questions.
 async function answerText(input, keys, onDelta) {
+  const turns = Array.isArray(input) ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') : [{ role: 'user', content: String(input) }];
+  if (!keys.groqKey) {
+    if (!keys.geminiKey) throw new Error('no-key');
+    return geminiText(keys.geminiKey, turns, onDelta);
+  }
   try {
-    if (!keys.groqKey) throw Object.assign(new Error('no-key'), { badKey: true });
     return await askCassie(input, keys.groqKey, keys.groqModel, onDelta);
   } catch (e) {
-    if (!e.badKey) throw e;
-    if (!keys.geminiKey) throw new Error(keys.groqKey ? BAD_GROQ_KEY : 'no-key');
-    const turns = Array.isArray(input) ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant')) : [{ role: 'user', content: String(input) }];
-    let reply = await geminiText(keys.geminiKey, turns);
-    if (keys.groqKey) reply += '\n\n*(Your Groq key in the extension was rejected, so Gemini answered this one. Paste a fresh Groq key in the Cassie toolbar popup.)*';
-    if (onDelta) onDelta(reply);
+    const limited = /limit|busy|too many|slow down/i.test(e.message || '');
+    if (!keys.geminiKey || !(e.badKey || limited)) throw e;
+    let reply = await geminiText(keys.geminiKey, turns, onDelta);
+    if (e.badKey) {
+      const note = '\n\n*(Your Groq key in the extension was rejected, so Gemini answered this one. Paste a fresh Groq key in the Cassie toolbar popup.)*';
+      reply += note;
+      if (onDelta) onDelta(note);
+    }
     return reply;
   }
 }

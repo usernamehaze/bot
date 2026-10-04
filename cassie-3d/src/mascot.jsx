@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
 import FuzzyCassie, { OUTFITS, MOODS } from './components/FuzzyCassie';
 
@@ -11,6 +11,20 @@ import FuzzyCassie, { OUTFITS, MOODS } from './components/FuzzyCassie';
 //   setFacing(dir)    -1 left · 1 right (which way she walks)
 //   setOutfit(name)   classic | professor | graduate | coder | heart
 //   setColor(hex)     tints the classic blob to the student's favourite colour (null = red)
+// Draw at most 30 frames a second: her moves still look smooth, and the phone's
+// graphics chip does half the work (less battery, less heat). Nothing is drawn
+// while the tab is hidden.
+function FrameCap({ fps = 30 }) {
+  const invalidate = useThree((st) => st.invalidate);
+  useEffect(() => {
+    let id = 0, last = 0;
+    const tick = (t) => { id = requestAnimationFrame(tick); if (t - last >= 1000 / fps - 2) { last = t; invalidate(); } };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [invalidate, fps]);
+  return null;
+}
+
 function Mascot() {
   const [key, setKey] = useState('neutral');
   const [outfit, setOutfit] = useState('classic');
@@ -31,9 +45,10 @@ function Mascot() {
   }, []);
 
   return (
-    <Canvas camera={{ position: [0, 0.15, 4.4], fov: 40 }} dpr={[1, 1.75]}
+    <Canvas frameloop="demand" camera={{ position: [0, 0.15, 4.4], fov: 40 }} dpr={[1, 1.75]}
       gl={{ alpha: true, antialias: true, preserveDrawingBuffer: false }}
       style={{ background: 'transparent', pointerEvents: 'none' }}>
+      <FrameCap />
       <ambientLight intensity={0.55} />
       <directionalLight position={[2.5, 4, 4]} intensity={2.1} color="#fff4ea" />
       <directionalLight position={[-3, 2, 2]} intensity={0.6} color="#cfe0ff" />

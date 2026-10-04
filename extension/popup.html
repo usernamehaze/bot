@@ -95,22 +95,23 @@
   <h1>Cassie</h1>
   <p class="subtitle">Highlight text on any page to get an explanation or answer.</p>
 
-  <label for="groq-key">Groq API key — free</label>
+  <p class="hint" style="margin-top:0">Add <b>one</b> free key — either works on its own. Both together is best.</p>
+
+  <label for="groq-key">Groq API key — free (fastest answers)</label>
   <input type="password" id="groq-key" placeholder="gsk_...">
   <p class="hint">
-    Powers all answers, with higher free limits (~30/min). Stored only in this
-    browser. Get a <strong>free</strong> key (no credit card) at
-    console.groq.com/keys.
+    Quick answers with high free limits. Stored only in this browser. Get a
+    <strong>free</strong> key (no credit card) at console.groq.com/keys.
   </p>
 
-  <label for="gemini-key">Google (Gemini) API key — optional, free</label>
+  <label for="gemini-key">Google (Gemini) API key — free (works on its own too)</label>
   <input type="password" id="gemini-key" placeholder="AIza...">
   <p class="hint">
-    Makes reading snips, PDFs and pictures more reliable. Stored only in this
-    browser. Get one free at aistudio.google.com/apikey.
+    Answers questions and reads snips, PDFs and pictures. Stored only in this
+    browser. Get one free with your Google account at aistudio.google.com/apikey.
   </p>
 
-  <label for="model">Model</label>
+  <label for="model">Groq model</label>
   <select id="model">
     <option value="openai/gpt-oss-120b">GPT-OSS 120B — smartest (best for hard problems)</option>
     <option value="llama-3.3-70b-versatile">Llama 3.3 70B — balanced</option>

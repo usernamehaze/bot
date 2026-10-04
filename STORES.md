@@ -53,7 +53,7 @@ few days.
 
 1. Go to **chrome.google.com/webstore/devconsole** and sign in with the Google
    account you want to own Cassie. Pay the $5 fee.
-2. Click **New item** and upload **cassie-extension-store-v3.37.0.zip**. In this
+2. Click **New item** and upload **cassie-extension-store-v3.38.0.zip**. In this
    zip, `manifest.json` is at the top level, which the store requires. The zip
    for installing by hand has a folder inside, so don't upload that one.
 3. **Store listing**
