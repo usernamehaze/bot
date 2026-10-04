@@ -59,6 +59,32 @@ Open your Worker URL in a browser and enter your `ADMIN_TOKEN`. That's your
 dashboard. Then ask Cassie something on a phone that has no key. On the
 dashboard, the **Questions answered through your server** row should go up.
 
+## Accounts and "Continue with Google" (optional)
+
+Once Cassie is connected to this server, a sign-in page opens first. People can
+create an account with an email and password, or tap **Continue without an
+account**. An account keeps their name, grade, settings and saved quiz mistakes
+on every device. Chats and API keys never leave their device.
+
+To add **Continue with Google**:
+
+1. Go to **console.cloud.google.com** → create a project, for example `Cassie`.
+2. **APIs & Services** → **OAuth consent screen**: choose **External**, enter the
+   app name `Cassie` and your email, and save.
+3. **APIs & Services** → **Credentials** → **Create credentials** → **OAuth
+   client ID** → **Web application**.
+   - Under **Authorized JavaScript origins**, add `https://askcassie.pages.dev`
+     and `https://usernamehaze.github.io`.
+   - Click **Create**, then copy the **Client ID**. It ends in
+     `.apps.googleusercontent.com`.
+4. In this Worker → **Settings** → **Variables and Secrets** → add a **Text**
+   variable named `GOOGLE_CLIENT_ID` with that Client ID.
+5. Send the Client ID to be put in `config.js`, or paste it there yourself.
+
+There's no "reset password" email yet. People who forget their password can
+use Continue with Google with the same email, which signs them into the same
+account.
+
 ## Fair use and cost
 
 - Each person can ask **150 questions a day** through your key, and at most 12
@@ -84,6 +110,7 @@ dashboard, the **Questions answered through your server** row should go up.
 | Open and feature counts; student or working, grade group, age range, device | Names, emails, exact ages, files, photos |
 | Topic keywords from adults who allowed it | Anything from Talk mode |
 | Feedback and reports that users choose to send | |
+| Accounts: email, a scrambled (hashed) password, profile, settings, saved quiz mistakes | Chats, files, API keys, or the password itself |
 
 ## Changing the server
 
