@@ -45,8 +45,10 @@ self.addEventListener('fetch', (event) => {
   // from a service worker for a navigation (ERR_FAILED). So follow the
   // redirect ourselves and hand back a fresh, non-redirected response.
   if (event.request.mode === 'navigate') {
+    // cache: 'no-cache' makes the browser re-check the page with the server,
+    // so a phone never keeps showing yesterday's app.html (and its old scripts).
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then((response) => {
           if (response.redirected) {
             return response.clone().blob().then((body) =>
@@ -60,7 +62,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() =>
-          caches.match(event.request).then((c) => c || caches.match('start.html'))
+          caches.match(event.request, { ignoreSearch: true }).then((c) => c || caches.match('start.html'))
         )
     );
     return;
@@ -78,6 +80,6 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((c) => c || caches.match(event.request, { ignoreSearch: true })))
   );
 });
