@@ -349,16 +349,20 @@
   // Is this tab showing a file Cassie can read whole? (Chrome's PDF viewer,
   // Google Docs / Slides — pages where highlighting can't reach the text.)
   function fileTab() {
+    if (/^image\//.test(document.contentType || '')) {
+      const name = decodeURIComponent((location.pathname.split('/').pop() || 'photo').replace(/\?.*$/, '')) || 'photo';
+      return { kind: 'image', url: location.href, name, mime: document.contentType, label: 'Explain this photo' };
+    }
     const isPdf = document.contentType === 'application/pdf' || !!document.querySelector('embed[type="application/pdf"]');
     if (isPdf) {
       const name = decodeURIComponent((location.pathname.split('/').pop() || 'document.pdf').replace(/\?.*$/, '')) || 'document.pdf';
-      return { kind: 'pdf', url: location.href, name: /\.pdf$/i.test(name) ? name : name + '.pdf', mime: 'application/pdf' };
+      return { kind: 'pdf', url: location.href, name: /\.pdf$/i.test(name) ? name : name + '.pdf', mime: 'application/pdf', label: 'Make a reviewer of this whole PDF in Cassie' };
     }
     if (location.hostname === 'docs.google.com') {
       const m = location.pathname.match(/^\/(document|presentation)\/d\/([^/]+)/);
       const title = (document.title || 'Google file').replace(/\s+-\s+Google (Docs|Slides)$/, '').trim() || 'Google file';
-      if (m && m[1] === 'document') return { kind: 'gdoc', url: `https://docs.google.com/document/d/${m[2]}/export?format=docx`, name: title + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
-      if (m && m[1] === 'presentation') return { kind: 'gslides', url: `https://docs.google.com/presentation/d/${m[2]}/export/pptx`, name: title + '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+      if (m && m[1] === 'document') return { kind: 'gdoc', url: `https://docs.google.com/document/d/${m[2]}/export?format=docx`, name: title + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'Make a reviewer of this document in Cassie' };
+      if (m && m[1] === 'presentation') return { kind: 'gslides', url: `https://docs.google.com/presentation/d/${m[2]}/export/pptx`, name: title + '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', label: 'Make a reviewer of these slides in Cassie' };
     }
     return null;
   }
@@ -434,9 +438,21 @@
       fileBtn = document.createElement('button');
       fileBtn.className = 'fab';
       fileBtn.type = 'button';
-      fileBtn.title = 'Make a reviewer of this whole file in Cassie';
+      fileBtn.title = fileTab().label || 'Make a reviewer of this whole file in Cassie';
       fileBtn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>';
       fileBtn.addEventListener('click', async () => {
+        const ft = fileTab();
+        if (ft && ft.kind === 'image' && window.CassieSketch) {
+          // A photo opened in its own tab: read it on the board.
+          closeDock();
+          let url = null;
+          const img = document.querySelector('img');
+          try { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); url = c.toDataURL('image/jpeg', 0.9); }
+          catch (e) { try { const r2 = await chrome.runtime.sendMessage({ type: 'CASSIE_FETCH_IMG', url: ft.url }); url = r2 && r2.dataUrl; } catch (e2) { url = null; } }
+          const sess = await openSnipBoard(url, { headline: 'Your photo', steps: [] }, { loading: true });
+          if (url) explainPicture(sess, url, 'A photo the student opened in a browser tab: ' + ft.name); else sess.showNote({ reply: 'I couldn’t open this photo. Save it and paste it here with Ctrl+V.' });
+          return;
+        }
         const r = dock.getBoundingClientRect();
         const at = { left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height };
         closeDock();
@@ -1156,6 +1172,28 @@
     return c.toDataURL('image/jpeg', 0.9);
   }
 
+  // Is there visible text or a picture inside this box on the page itself?
+  function boxHasContent(r) {
+    const nx = 6, ny = 5;
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+      const x = r.left + (i + 0.5) / nx * r.width, y = r.top + (j + 0.5) / ny * r.height;
+      const el = (document.elementsFromPoint(x, y) || []).find((e) => e !== host && !host.contains(e));
+      if (!el || el === document.documentElement || el === document.body) continue;
+      if (el.closest('img, svg, canvas, video, picture, math, mjx-container, .katex')) return true;
+      const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 0);
+      if (own) return true;
+      if (document.caretRangeFromPoint) {
+        const cr = document.caretRangeFromPoint(x, y);
+        const n = cr && cr.startContainer;
+        if (n && n.nodeType === 3 && n.textContent.trim() && !host.contains(n.parentNode)) {
+          const rr = document.createRange(); rr.selectNodeContents(n);
+          if ([...rr.getClientRects()].some((b) => x >= b.left - 2 && x <= b.right + 2 && y >= b.top - 2 && y <= b.bottom + 2)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // Plan B when Chrome's quick screenshot is black: ask for a ONE-TIME screen share of this tab
   // (Chrome shows its own "Share this tab" box), take a single frame, stop sharing.
   async function grabViaShare() {
@@ -1191,33 +1229,46 @@
   // Screenshot + crop with sanity checks. On some machines Chrome hands extensions a black
   // screenshot (whole picture, or at least the part we cut out). We notice, retry, then fall
   // back to a one-time screen share. status: 'ok' | 'empty' (the box is genuinely blank) | 'broken'.
+  const CAP = { tabBroken: false, shareBroken: false }; // what doesn't work on this machine (this page)
   async function captureSnip(r, hooks = {}) {
     const diag = [];
     const judge = async (img, label, whole = false) => {
       const st = await lumStats(img);
-      const black = st.mean < 8 && st.std < 2.5;
-      diag.push(`${label} ${img.width}x${img.height}${black ? ' black' : ''}`);
-      if (black) return null;
+      // A real page is never one flat colour edge to edge. If the WHOLE screenshot is flat
+      // (black, or just the page's background colour with no text drawn), the capture is broken.
+      const flatAll = st.std < 4;
+      diag.push(`${label} ${img.width}x${img.height}${flatAll ? ` flat(${Math.round(st.mean)})` : ''}`);
+      if (flatAll) return null;
       const image = whole ? wholeToJpeg(img) : cropFrom(img, r);
       const cs = await lumStats(image);
-      if (cs.mean < 10 && cs.std < 3) { diag.push('box black'); return null; } // a flat DARK crop is a black capture, not an empty page
-      return { image, status: cs.std < 2.5 ? 'empty' : 'ok', diag };
+      if (cs.std < 2.5) {
+        // The box came out blank — but if the page clearly has text/pictures there, the
+        // screenshot is wrong, not the box.
+        if (whole || boxHasContent(r)) { diag.push(`box blank(${Math.round(cs.mean)}) but page has content`); return null; }
+        return { image, status: 'empty', diag };
+      }
+      return { image, status: 'ok', diag };
     };
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < (CAP.tabBroken ? 1 : 2); attempt++) {
       let img;
       try { img = await grabScreen(attempt === 0); } catch (e) { diag.push('tab: ' + (e.message || 'error')); if (e.message === 'reload') throw e; continue; }
       const res = await judge(img, 'tab');
-      if (res) return res;
+      if (res) { CAP.tabBroken = false; return res; }
       await nap(150);
     }
-    if (hooks.onNeedShare) {
+    CAP.tabBroken = true;
+    if (hooks.onNeedShare && !CAP.shareBroken) {
       try {
         hooks.onNeedShare();
         const { img, whole } = await grabViaShare();
         hooks.onShareDone && hooks.onShareDone();
         const res = await judge(img, whole ? 'share(screen)' : 'share(tab)', whole);
         if (res) return res;
-      } catch (e) { hooks.onShareDone && hooks.onShareDone(); diag.push('share: ' + (e.name || e.message || 'cancelled')); }
+        CAP.shareBroken = true;
+      } catch (e) {
+        hooks.onShareDone && hooks.onShareDone(); diag.push('share: ' + (e.name || e.message || 'cancelled'));
+        if (e.name === 'NotSupportedError' || /unavailable/.test(e.message || '')) CAP.shareBroken = true;
+      }
     }
     return { image: null, status: 'broken', diag };
   }
