@@ -147,7 +147,7 @@
           <button class="csk-btn" data-act="redo" title="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="clear" title="Clear your drawing">${svg('trash')}</button>
           <button class="csk-btn" data-act="grid" title="Graph paper">${svg('grid')}</button>
-          <button class="csk-btn" data-act="pic" title="Draw on a picture">${svg('image')}</button>
+          <button class="csk-btn" data-act="pic" title="Draw on a picture — or paste one with Ctrl+V">${svg('image')}</button>
           <input type="file" accept="image/*" class="csk-hidden">
         </div>
         ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie"><button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
@@ -358,15 +358,38 @@
         } finally { t.disabled = false; label.textContent = was; }
       }
     });
-    $('input[type=file]').addEventListener('change', async (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      const url = URL.createObjectURL(f);
+    // Put a picture on the board: from the picture button, a paste (Ctrl+V — e.g. after
+    // Win+Shift+S / Cmd+Shift+4), or a drag-and-drop.
+    async function useImageSource(url, { ask = true } = {}) {
       const img = await loadImage(url);
-      if (!img) return;
-      if (strokes.length && !confirm('Start over on this picture? Your current drawing will be cleared.')) return;
+      if (!img) return false;
+      if (ask && strokes.length && !confirm('Start over on this picture? Your current drawing will be cleared.')) return false;
       bgImage = img; grid = false; strokes.length = 0; redo.length = 0;
       setSize(); drawBg(); redraw();
+      if (opts.onImage) { try { opts.onImage(typeof url === 'string' ? url : null, img); } catch (e) { /* ignore */ } }
+      return true;
+    }
+    const fileToUrl = (f) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(f); });
+    $('input[type=file]').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (f) useImageSource(await fileToUrl(f));
+    });
+    function onPaste(e) {
+      if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.target.tagName || ''))) return;
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.kind === 'file' && /^image\//.test(it.type)) {
+          const f = it.getAsFile();
+          if (f) { e.preventDefault(); fileToUrl(f).then((u) => u && useImageSource(u, { ask: false })); return; }
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste, true);
+    wrap.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+    wrap.addEventListener('drop', (e) => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f && /^image\//.test(f.type)) { e.preventDefault(); fileToUrl(f).then((u) => u && useImageSource(u)); }
     });
 
     function showNote(n) {
@@ -411,6 +434,7 @@
     function close() {
       window.removeEventListener('resize', fit);
       document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('paste', onPaste, true);
       wrap.remove();
       if (current && current.wrap === wrap) current = null;
       if (opts.onClose) opts.onClose();
@@ -434,7 +458,7 @@
     }
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
-    current = { wrap, close, snapshot, showNote, setTitle };
+    current = { wrap, close, snapshot, showNote, setTitle, setImage: (u) => useImageSource(u, { ask: false }) };
     return current;
   }
 

@@ -996,11 +996,11 @@
     setContent('Reading what’s on your screen…', { muted: true });
     positionPopover(rect);
     const myGen = ++gen;
-    let image = null;
-    try { image = await captureRegion({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }); } catch (e) { image = null; }
+    let image = null, capMsg = '';
+    try { image = await captureRegion({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }); } catch (e) { image = null; capMsg = errorText(e); }
     if (myGen !== gen) return;
     popover.hidden = false;
-    if (!image) { setContent('I couldn’t read this page. Try reloading the tab, or use the snip button on the right edge.', { muted: true }); positionPopover(rect); return; }
+    if (!image) { setContent(capMsg || 'I couldn’t read this page. Try reloading the tab.', { muted: true }); positionPopover(rect); return; }
     setEmotion('thinking');
     try {
       const reply = await askVision(image, `This is a screenshot of what a student is looking at (it may be a PDF page, slides, or a document). Read ALL the visible text, figures, tables and diagrams carefully, then answer their request: "${q}". Use short bullets with bold key terms. If it's a question, teach the reasoning step by step. Only use what you can actually see.`, null, 1400);
@@ -1101,21 +1101,43 @@
     snipAndExplain(r, el, cx, cy);
   }
 
-  // Grab the visible tab and cut out the snipped rectangle. Returns a JPEG data URL.
-  async function captureRegion(r) {
-    host.style.visibility = 'hidden'; // keep Cassie's own overlay out of the picture
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 40))));
+  const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('picture failed to load')); i.src = src; });
+  const nap = (ms) => new Promise((res) => setTimeout(res, ms));
+
+  // Ask the background for a screenshot of the visible tab (our own overlay hidden).
+  async function grabScreen(hideHost = true) {
+    if (hideHost) host.style.visibility = 'hidden';
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 70))));
     let shot;
     try { shot = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP' }); }
+    catch (e) { throw new Error('reload'); }
     finally { host.style.visibility = ''; }
     if (!shot || !shot.dataUrl) throw new Error((shot && shot.error) || 'capture failed');
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = shot.dataUrl; });
+    return loadImg(shot.dataUrl);
+  }
+
+  // Average brightness + spread of a picture (tiny 40x40 sample).
+  function lumStats(src) {
+    return (typeof src === 'string' ? loadImg(src) : Promise.resolve(src)).then((i) => {
+      const c = document.createElement('canvas'); c.width = 40; c.height = 40;
+      const x = c.getContext('2d'); x.drawImage(i, 0, 0, 40, 40);
+      const d = x.getImageData(0, 0, 40, 40).data;
+      let sum = 0, sq = 0; const n = d.length / 4;
+      for (let k = 0; k < d.length; k += 4) { const l = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; sum += l; sq += l * l; }
+      const mean = sum / n;
+      return { mean, std: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
+    }).catch(() => ({ mean: 128, std: 50 }));
+  }
+  const isFlat = (src) => lumStats(src).then((st) => st.std < 2.5);
+
+  // Cut a rectangle (viewport coordinates) out of a screenshot → JPEG data URL.
+  function cropFrom(img, r) {
     // Scale each axis on its own (zoom / scrollbars can make them differ) and
     // keep the crop inside the screenshot so no black edges sneak in.
     const kx = img.width / window.innerWidth, ky = img.height / window.innerHeight;
-    let sx = Math.max(0, Math.round(r.left * kx)), sy = Math.max(0, Math.round(r.top * ky));
-    let sw = Math.min(img.width - sx, Math.max(1, Math.round(r.width * kx)));
-    let sh = Math.min(img.height - sy, Math.max(1, Math.round(r.height * ky)));
+    const sx = Math.max(0, Math.round(r.left * kx)), sy = Math.max(0, Math.round(r.top * ky));
+    const sw = Math.min(img.width - sx, Math.max(1, Math.round(r.width * kx)));
+    const sh = Math.min(img.height - sy, Math.max(1, Math.round(r.height * ky)));
     if (sw < 4 || sh < 4) throw new Error('That box is outside the visible page.');
     const scale = Math.min(1, 1400 / Math.max(sw, sh));
     const c = document.createElement('canvas');
@@ -1124,6 +1146,74 @@
     cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
     cx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.9);
+  }
+
+  // Screenshot + crop with a sanity check. On some machines Chrome hands extensions a
+  // completely black screenshot; we notice (whole picture black), retry a few ways,
+  // and report status 'broken' so the caller can fall back. 'empty' = the box really is blank.
+  async function captureSnip(r) {
+    const diag = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const img = await grabScreen(attempt !== 1);
+      const st = await lumStats(img);
+      const black = st.mean < 8 && st.std < 2.5;
+      diag.push(`${img.width}x${img.height} ${black ? 'black' : 'ok'}`);
+      if (!black) {
+        const image = cropFrom(img, r);
+        return { image, status: (await isFlat(image)) ? 'empty' : 'ok', diag };
+      }
+      await nap(350 * (attempt + 1));
+    }
+    return { image: null, status: 'broken', diag };
+  }
+
+  // Back-compat: just the picture (throws if Chrome gave nothing usable).
+  async function captureRegion(r) {
+    const c = await captureSnip(r);
+    if (c.status === 'broken') throw new Error(BLANK_SHOT_MSG);
+    return c.image;
+  }
+  const BLANK_SHOT_MSG = 'Chrome gave Cassie a blank (black) screenshot of this tab, so I can’t see the page. Tip: press Win+Shift+S (Cmd+Shift+4 on Mac) to snip, then open Cassie’s board and press Ctrl+V — I’ll read it.';
+
+  // When the screenshot is unusable: read what's inside the box straight from the page —
+  // the text, plus any SVG / canvas / image there (graphs are often SVG or canvas).
+  async function domRegion(r) {
+    const els = [];
+    const nx = 8, ny = 6;
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+      const x = r.left + (i + 0.5) / nx * r.width, y = r.top + (j + 0.5) / ny * r.height;
+      const el = (document.elementsFromPoint(x, y) || []).find((e) => e !== host && !host.contains(e) && e !== document.documentElement && e !== document.body);
+      let n = el, hops = 0;
+      while (n && n !== document.body && hops++ < 6) {
+        const t = (n.innerText || '').replace(/\s+/g, ' ').trim();
+        if (t.length >= 8 && t.length <= 800) { if (!els.includes(n)) els.push(n); break; }
+        n = n.parentElement;
+      }
+    }
+    els.sort((a, b) => { const p = a.getBoundingClientRect(), q = b.getBoundingClientRect(); return (p.top - q.top) || (p.left - q.left); });
+    let texts = els.map((e) => e.innerText.replace(/\s+/g, ' ').trim());
+    texts = texts.filter((t, i) => !texts.some((u, j) => j !== i && u.length > t.length && u.includes(t)));
+    const text = [...new Set(texts)].join('\n').slice(0, 3500);
+
+    const pics = [];
+    const inBox = (e) => { const b = e.getBoundingClientRect(); const w = Math.min(b.right, r.left + r.width) - Math.max(b.left, r.left), h = Math.min(b.bottom, r.top + r.height) - Math.max(b.top, r.top); return b.width >= 40 && b.height >= 40 && w > 0 && h > 0 && (w * h) / (b.width * b.height) > 0.3; };
+    for (const e of document.querySelectorAll('svg, canvas, img')) {
+      if (pics.length >= 2 || host.contains(e) || !inBox(e)) continue;
+      try {
+        const b = e.getBoundingClientRect();
+        const c = document.createElement('canvas'); const k = Math.min(1, 1200 / Math.max(b.width, b.height));
+        c.width = Math.round(b.width * k); c.height = Math.round(b.height * k);
+        const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+        if (e.tagName === 'svg') {
+          const clone = e.cloneNode(true); clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); clone.setAttribute('width', b.width); clone.setAttribute('height', b.height);
+          const im = await loadImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone)));
+          cx.drawImage(im, 0, 0, c.width, c.height);
+        } else cx.drawImage(e, 0, 0, c.width, c.height);
+        const url = c.toDataURL('image/png'); // throws if the picture is cross-origin (tainted)
+        if (!(await isFlat(url))) pics.push(url);
+      } catch (err) { /* cross-origin or unrenderable — skip */ }
+    }
+    return { text, pics };
   }
 
   // Turn any failure code/message into a sentence a student can act on.
@@ -1143,66 +1233,58 @@
     return r.reply;
   }
 
-  // Is this picture basically one flat colour (nothing to read)?
-  function isFlat(dataUrl) {
-    return new Promise((resolve) => {
-      const i = new Image();
-      i.onload = () => {
-        try {
-          const c = document.createElement('canvas'); c.width = 40; c.height = 40;
-          const x = c.getContext('2d'); x.drawImage(i, 0, 0, 40, 40);
-          const d = x.getImageData(0, 0, 40, 40).data;
-          let sum = 0, sq = 0, n = d.length / 4;
-          for (let k = 0; k < d.length; k += 4) { const l = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; sum += l; sq += l * l; }
-          const mean = sum / n;
-          resolve(Math.sqrt(Math.max(0, sq / n - mean * mean)) < 2.5);
-        } catch (e) { resolve(false); }
-      };
-      i.onerror = () => resolve(false);
-      i.src = dataUrl;
+  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+
+  // Explain a picture (a snip, or one pasted/dropped on the board) into the side board.
+  async function explainPicture(sess, image, ctx = '') {
+    const say = (n) => sess && sess.showNote(n);
+    say({ reply: 'Cassie is reading your picture…' });
+    try {
+      const data = parseBoardJSON(await askVision(image, SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), null, 800));
+      if (sess) { sess.setTitle(data.headline || 'Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
+    } catch (e) {
+      const text = ctx && ctx.length > 40 ? ctx : '';
+      if (text && (e.message === 'no-vision' || /unavailable|empty/i.test(e.message))) explainFromText(sess, text, 'To read the picture itself, add a free Google (Gemini) key in the Cassie toolbar popup.');
+      else say({ reply: errorText(e) });
+    }
+  }
+  function explainFromText(sess, text, footer = '', header = '') {
+    const say = (n) => sess && sess.showNote(n);
+    say({ reply: (header ? header + '\n\n' : '') + 'Reading the text in your box…' });
+    askStream([{ role: 'user', content: `A student is on a webpage and snipped part of it. Here is the text in that part:\n"""\n${text}\n"""\nExplain what it is about and how to work through it, step by step, in under 150 words. If it is a question, give the answer with the reasoning.` }], {
+      onDelta() {},
+      onDone(full) { say({ reply: [header, full, footer].filter(Boolean).join('\n\n') }); },
+      onError(err) { say({ reply: errorText(err) }); },
     });
   }
 
   async function snipAndExplain(r, el, x, y) {
     const rect = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
-    let image = null, capErr = '';
-    try {
-      image = await captureRegion(r);
-      if (image && await isFlat(image)) { await new Promise((res) => setTimeout(res, 250)); image = await captureRegion(r); } // one retry
-    } catch (e) { image = null; capErr = errorText(e); }
+    let cap = { image: null, status: 'broken', diag: [] }, capErr = '';
+    try { cap = await captureSnip(r); } catch (e) { capErr = errorText(e); }
     const ctx = el && !(host && host.contains(el)) ? gatherContext(el) : (document.title ? 'Page: ' + document.title : '');
+    if (!window.CassieSketch) { explainTarget(el, x, y, rect, cap.image); return; }
 
-    // No sketch board available → the old floating card.
-    if (!window.CassieSketch) {
-      openBoardLoading(rect, x, y, image);
-      if (!image) { explainTarget(el, x, y, rect, null); return; }
+    // Nothing usable from the screenshot → read the box straight from the page instead.
+    if (cap.status === 'broken' || !cap.image) {
+      const dom = await domRegion(r);
+      const sess = await openSnipBoard(dom.pics[0] || null, { headline: 'Your snip', steps: [] }, { loading: true });
+      const why = capErr ? `I couldn’t capture the screen (${capErr}).` : 'Chrome gave me a blank screenshot of this tab.';
+      const tip = 'Tip: press Win+Shift+S (Cmd+Shift+4 on Mac), snip, then click here and press Ctrl+V — I’ll read your screenshot.';
+      const diag = cap.diag.length ? `(capture: ${cap.diag.join(', ')})` : '';
+      if (dom.pics[0]) { sess.showNote({ reply: `${why} I found a picture in your box and I’m reading that instead…` }); explainPicture(sess, dom.pics[0], dom.text); }
+      else if (dom.text.length >= 25) explainFromText(sess, dom.text, `${tip}\n${diag}`.trim(), `${why} I read the text in your box instead.`);
+      else sess.showNote({ reply: `${why} I also couldn’t find readable text in that box.\n\n${tip}\n${diag}`.trim() });
+      return;
+    }
+    if (cap.status === 'empty') {
+      const sess = await openSnipBoard(null, { headline: 'Your board', steps: [] }, { loading: true });
+      sess.showNote({ reply: 'That box looks empty. Close this and drag a box around the question, graph or picture you want me to read — or press Ctrl+V to paste a screenshot here.' });
+      return;
     }
     // The snip and Cassie's explanation open TOGETHER in the side board.
-    const session = window.CassieSketch ? await openSnipBoard(image, { headline: 'Your snip', steps: [] }, { loading: true }) : null;
-    const say = (n) => { if (session) session.showNote(n); };
-    if (!image) { say({ reply: capErr ? `I couldn’t capture the screen: ${capErr}` : 'I couldn’t capture that area — try again.' }); return; }
-    if (await isFlat(image)) { say({ reply: 'That box looks empty. Close this and drag a box around the question, graph or picture you want me to read.' }); return; }
-    say({ reply: 'Cassie is reading your snip…' });
-    const prompt = `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
-    try {
-      const reply = await askVision(image, prompt, null, 800);
-      const data = parseBoardJSON(reply);
-      if (session) { session.setTitle(data.headline || 'Your snip'); session.showNote({ headline: data.headline, steps: data.steps }); }
-      else renderBoard(rect, x, y, data, image);
-    } catch (e) {
-      // No picture model (or it failed): explain from the page text so she still helps.
-      const text = ctx && ctx.length > 40 ? ctx : '';
-      if (text && (e.message === 'no-vision' || /unavailable|empty/i.test(e.message))) {
-        say({ reply: 'I couldn’t read the picture itself, so I’m using the text around it…' });
-        askStream([{ role: 'user', content: `A student is on a webpage and snipped part of it. Here is the text around it:\n"""\n${text}\n"""\nExplain what it is about and how to work through it, step by step, in under 150 words.` }], {
-          onDelta() {},
-          onDone(full) { say({ reply: full + '\n\nTo read the picture itself, add a free Google (Gemini) key in the Cassie toolbar popup.' }); },
-          onError(err) { say({ reply: errorText(err) }); },
-        });
-      } else {
-        say({ reply: errorText(e) });
-      }
-    }
+    const sess = await openSnipBoard(cap.image, { headline: 'Your snip', steps: [] }, { loading: true });
+    explainPicture(sess, cap.image, ctx);
   }
 
   // Read the text around the pointed-at element so Cassie knows what it is.
@@ -1329,8 +1411,10 @@
     closeBoard();
     setDock(false);
     const topic = () => (data && data.headline && data.headline !== 'Your snip' ? `Topic: ${data.headline}. ` : '');
-    return window.CassieSketch.open({
+    let sess = null;
+    const opened = window.CassieSketch.open({
       root: shadow,
+      onImage: (url) => { if (url) explainPicture(sess, url, ''); },
       image: image || null,
       dark: image ? false : undefined,
       dock: 'side',
@@ -1352,6 +1436,8 @@
       },
       onClose: () => setDock(true),
     });
+    opened.then((x) => { sess = x; });
+    return opened;
   }
 
   function positionBoard(rect) {
