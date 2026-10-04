@@ -1472,7 +1472,7 @@ async function askCassie(msgs, image, opts = {}) {
 }
 
 /* ---------- reading whole files: reviewers, summaries, answers ---------- */
-const DOC_INSTRUCTION = `The user attached a file. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables — or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
+const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables — or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
 Do exactly what they ask with it — a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
 For a reviewer / study guide: follow the file's order and cover EVERY section, slide, or topic — don't stop early. Use bold section labels on their own line, tight bullets, every key term in bold with a short definition, important facts, numbers, dates, formulas, processes as numbered steps, and what each diagram, chart, table, or picture shows and why it matters. End with 5–10 practice questions, then the answers. Stick to the file — don't invent facts that aren't in it.
 The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content — don't tell them to copy it anywhere.`;
@@ -1596,10 +1596,10 @@ async function geminiDocument(doc, request, history, onStatus) {
   if (doc.kind === 'pdf' && doc.file.size <= 14 * 1024 * 1024) {
     onStatus(`Reading all of ${doc.name} — pages, pictures and diagrams…`);
     parts.push({ inlineData: { mimeType: 'application/pdf', data: await fileToBase64(doc.file) } });
-    parts.push({ text: `(That PDF is "${doc.name}".)` });
+    parts.push({ text: `(That is "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.)` });
   } else {
     onStatus(`Reading ${doc.name} and its pictures…`);
-    if (doc.text) parts.push({ text: `File "${doc.name}":\n"""\n${doc.text.slice(0, 500000)}\n"""` });
+    if (doc.text) parts.push({ text: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${doc.text.slice(0, 500000)}\n"""` });
     const imgs = await docImages(doc, 16);
     imgs.forEach((img) => { parts.push({ text: `[Picture from ${img.label}]` }); parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }); });
   }
@@ -1641,7 +1641,7 @@ async function groqDocument(doc, request, history, onStatus) {
     onStatus(`Reading ${doc.name}…`);
     try {
       const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
-        { role: 'user', content: `File "${doc.name}":\n"""\n${text}\n"""${visualBlock}\n\n${request}` }],
+        { role: 'user', content: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualBlock}\n\n${request}` }],
         { maxTokens: 3000, lean: true, onWait: waitNote('Reading…') });
       if (reply) return reply;
     } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
@@ -1778,19 +1778,56 @@ async function extractPptxText(file) {
     if (text.length > DOC_TEXT_CAP) break;
   }
   const hasMedia = Object.keys(zip.files).some((n) => /^ppt\/media\/.+\.(png|jpe?g|gif|bmp|webp)$/i.test(n));
-  return { text, hasMedia };
+  return { text, hasMedia, slideCount: slides.length };
 }
 
-// Read an attached file into { name, kind, file, text, hasVisuals, visualPages, scanned }.
-async function readDocument(file) {
+// What kind of file is this REALLY? Checks the first bytes (and the zip contents for Office
+// files), so a PDF/slides/photo is recognised even with a missing or wrong extension.
+async function sniffKind(file) {
   const name = (file.name || '').toLowerCase();
+  let b = new Uint8Array(0);
+  try { b = new Uint8Array(await file.slice(0, 64).arrayBuffer()); } catch (e) { /* ignore */ }
+  const str = (i, n) => String.fromCharCode(...b.slice(i, i + n));
+  if (str(0, 4) === '%PDF') return 'pdf';
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return 'image';
+  if (b[0] === 0x89 && str(1, 3) === 'PNG') return 'image';
+  if (str(0, 4) === 'GIF8' || str(0, 2) === 'BM') return 'image';
+  if (str(0, 4) === 'RIFF' && str(8, 4) === 'WEBP') return 'image';
+  if (str(4, 4) === 'ftyp') return /^(heic|heix|hevc|heim|heis|mif1|msf1)/.test(str(8, 4)) ? 'heic' : (/^avi[fs]/.test(str(8, 4)) ? 'image' : 'unknown');
+  if (b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0) return /\.(ppt|pps)$/.test(name) ? 'legacy-ppt' : /\.xls$/.test(name) ? 'xlsx' : 'legacy-doc';
+  if (str(0, 2) === 'PK') {
+    try {
+      await loadScript(JSZIP_URL);
+      const names = Object.keys((await window.JSZip.loadAsync(await file.arrayBuffer())).files);
+      if (names.some((n) => n.startsWith('ppt/'))) return 'pptx';
+      if (names.some((n) => n.startsWith('word/'))) return 'docx';
+      if (names.some((n) => n.startsWith('xl/'))) return 'xlsx';
+    } catch (e) { /* fall through to the name */ }
+  }
+  if (/^image\//.test(file.type) || /\.(jpe?g|png|gif|webp|bmp|avif)$/.test(name)) return /\.(heic|heif)$/.test(name) || /hei[cf]/.test(file.type) ? 'heic' : 'image';
+  if (/\.(heic|heif)$/.test(name) || /hei[cf]/.test(file.type)) return 'heic';
+  if (/\.pdf$/.test(name) || file.type === 'application/pdf') return 'pdf';
+  if (/\.pptx$/.test(name) || /presentationml/.test(file.type)) return 'pptx';
+  if (/\.docx$/.test(name) || /wordprocessingml/.test(file.type)) return 'docx';
+  if (/\.(ppt|pps)$/.test(name)) return 'legacy-ppt';
+  if (/\.doc$/.test(name)) return 'legacy-doc';
+  if (/\.(xlsx?|csv)$/.test(name)) return 'xlsx';
+  if (/^text\//.test(file.type) || /\.(txt|md|markdown|rtf)$/.test(name)) return 'txt';
+  return 'unknown';
+}
+const KIND_WORD = { pdf: 'PDF document', pptx: 'PowerPoint presentation (slides)', docx: 'Word document', txt: 'text document', image: 'photo / picture' };
+
+// Read an attached file into { name, kind, label, file, text, hasVisuals, visualPages, scanned }.
+async function readDocument(file, kind) {
+  kind = kind || await sniffKind(file);
   const tidy = (t) => (t || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, DOC_TEXT_CAP);
-  if (name.endsWith('.pdf') || file.type === 'application/pdf') {
+  const words = (t) => (t.match(/\S+/g) || []).length.toLocaleString();
+  if (kind === 'pdf') {
     const r = await extractPdf(file);
     const text = tidy(r.text);
-    return { name: file.name, kind: 'pdf', file, text, visualPages: r.visualPages, hasVisuals: r.visualPages.length > 0, scanned: text.length < 40 * Math.min(r.numPages, 300) };
+    return { name: file.name, kind, label: `PDF · ${r.numPages} page${r.numPages === 1 ? '' : 's'}`, pages: r.numPages, file, text, visualPages: r.visualPages, hasVisuals: r.visualPages.length > 0, scanned: text.length < 40 * Math.min(r.numPages, 300) };
   }
-  if (name.endsWith('.docx') || /wordprocessingml/.test(file.type)) {
+  if (kind === 'docx') {
     const text = tidy(await extractDocxText(file));
     let hasVisuals = false;
     try {
@@ -1798,12 +1835,16 @@ async function readDocument(file) {
       const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
       hasVisuals = Object.keys(zip.files).some((n) => /^word\/media\/.+\.(png|jpe?g|gif|bmp|webp)$/i.test(n));
     } catch (e) { /* ignore */ }
-    return { name: file.name, kind: 'docx', file, text, hasVisuals, scanned: !text };
+    return { name: file.name, kind, label: `Word document · ${words(text)} words`, file, text, hasVisuals, scanned: !text };
   }
-  if (name.endsWith('.pptx') || /presentationml/.test(file.type)) {
+  if (kind === 'pptx') {
     const r = await extractPptxText(file);
     const text = tidy(r.text);
-    return { name: file.name, kind: 'pptx', file, text, hasVisuals: r.hasMedia, scanned: !text };
+    return { name: file.name, kind, label: `PowerPoint · ${r.slideCount} slide${r.slideCount === 1 ? '' : 's'}`, slides: r.slideCount, file, text, hasVisuals: r.hasMedia, scanned: !text };
+  }
+  if (kind === 'txt') {
+    const text = tidy(await file.text());
+    return { name: file.name, kind, label: `Text · ${words(text)} words`, file, text, hasVisuals: false, scanned: false };
   }
   throw new Error('unsupported');
 }
@@ -2015,8 +2056,8 @@ async function handleSend(text, opts = {}) {
   let displayContent = sendText;
   if (pendingDoc) {
     const excerpt = doc.text ? `\n\n(Excerpt from the start of the file:)\n${doc.text.slice(0, 1200)}` : '';
-    modelContent = `[I attached the file "${doc.name}".] ${sendText}${excerpt}`;
-    displayContent = `${sendText}\n\n(attached: ${doc.name})`;
+    modelContent = `[I attached the file "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.] ${sendText}${excerpt}`;
+    displayContent = `${sendText}\n\n(attached: ${doc.name} — ${doc.label})`;
   }
   const history = state.messages.slice();
   const userMsg = { role: 'user', content: modelContent };
@@ -2026,7 +2067,7 @@ async function handleSend(text, opts = {}) {
   save();
   if (doc) activeDoc = { chatId: state.currentId, doc };
   const userBubble = renderMessage('user', displayContent);
-  if (image) addImageToBubble(userBubble, image.dataUrl);
+  if (image && image.dataUrl) addImageToBubble(userBubble, image.dataUrl);
   clearAttach();
   promptInput.value = '';
   promptInput.placeholder = 'Ask Cassie a question…';
@@ -2479,10 +2520,11 @@ fileInput.addEventListener('change', () => {
 
 // Attach a picture or document to the next message. Returns true when it's ready.
 async function attachFile(file) {
-  const lname = (file.name || '').toLowerCase();
+  const kind = await sniffKind(file);
+  const showName = (t) => { attachThumb.hidden = true; attachName.hidden = false; attachName.textContent = t; attachPreview.hidden = false; };
 
-  // Image → existing vision flow.
-  if (file.type.startsWith('image/')) {
+  // Photos / screenshots → picture reading.
+  if (kind === 'image' || kind === 'heic') {
     try {
       pendingImage = await processImageFile(file);
       pendingDoc = null;
@@ -2491,44 +2533,50 @@ async function attachFile(file) {
       attachName.hidden = true;
       attachPreview.hidden = false;
       return true;
-    } catch (e) { clearAttach(); return false; }
+    } catch (e) {
+      // iPhone HEIC photos can't be drawn by most browsers — Gemini can still read them as-is.
+      pendingDoc = null;
+      if (kind === 'heic' && state.geminiKey) {
+        const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.readAsDataURL(file); });
+        pendingImage = { mimeType: file.type || 'image/heic', base64, dataUrl: '' };
+        showName(`Photo (iPhone HEIC) · ${file.name}`);
+        return true;
+      }
+      clearAttach();
+      showName(kind === 'heic'
+        ? 'That’s an iPhone HEIC photo, which this browser can’t open. Send a screenshot of it instead, or set iPhone Camera → Formats → Most Compatible.'
+        : `Couldn’t open ${file.name} as a picture.`);
+      return false;
+    }
   }
 
-  // Document → extract text in-browser.
-  if (/\.(pdf|docx|pptx)$/.test(lname)) {
+  // Documents → read the whole thing in the browser.
+  if (kind === 'pdf' || kind === 'docx' || kind === 'pptx' || kind === 'txt') {
     pendingImage = null;
-    attachThumb.hidden = true;
-    attachName.hidden = false;
-    attachName.textContent = `Reading ${file.name}…`;
-    attachPreview.hidden = false;
+    showName(`Reading ${file.name}…`);
     try {
-      const doc = await readDocument(file);
+      const doc = await readDocument(file, kind);
       if (!doc.text && !doc.hasVisuals) {
         pendingDoc = null;
         attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
         return false;
       }
       pendingDoc = doc;
-      attachName.textContent = doc.scanned
-        ? `${file.name} — scanned pages, I’ll read them as pictures`
-        : file.name;
+      attachName.textContent = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
       return true;
     } catch (e) {
       pendingDoc = null;
-      attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, .docx, or .pptx.`;
+      attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, PowerPoint (.pptx), Word (.docx) or a photo.`;
       return false;
     }
   }
 
-  // Old binary Office formats aren't supported by the in-browser parsers.
-  if (/\.(doc|ppt)$/.test(lname)) {
-    pendingImage = null;
-    attachThumb.hidden = true;
-    attachName.hidden = false;
-    attachName.textContent = 'Please save it as .docx or .pptx and try again.';
-    attachPreview.hidden = false;
-  }
+  pendingImage = null; pendingDoc = null;
+  if (kind === 'legacy-ppt') showName('That’s an old PowerPoint (.ppt). Open it and Save As .pptx or PDF, then attach it again.');
+  else if (kind === 'legacy-doc') showName('That’s an old Word file (.doc). Open it and Save As .docx or PDF, then attach it again.');
+  else if (kind === 'xlsx') showName('Spreadsheets aren’t supported yet — save it as a PDF and attach that.');
+  else showName(`I can’t open ${file.name}. I read PDFs, PowerPoint (.pptx), Word (.docx), text files and photos.`);
   return false;
 }
 attachRemove.addEventListener('click', clearAttach);
