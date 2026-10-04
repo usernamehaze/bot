@@ -24,10 +24,36 @@
   };
   const CONSTS = { pi: Math.PI, e: Math.E };
 
+  // Accept the many ways an equation gets written: "y = 2x² − 5x + 6", "f(x)=x**2",
+  // LaTeX like "x^{2}" or "\\frac{1}{2}x", "×", "÷", "|x|" …  → "2*x^2-5*x+6"
+  function normalize(src) {
+    let s = String(src || '').trim();
+    s = s.replace(/^\s*(?:y|f\s*\(\s*x\s*\)|g\s*\(\s*x\s*\))\s*=\s*/i, '');
+    s = s.replace(/\$/g, '').replace(/\\left|\\right/g, '').replace(/\\cdot|\\times|×|·|∙/g, '*').replace(/÷/g, '/')
+      .replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '(($1)/($2))').replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)')
+      .replace(/\\(sin|cos|tan|ln|log|exp|pi)/g, '$1').replace(/π/g, 'pi').replace(/√\s*\(/g, 'sqrt(').replace(/√\s*([a-z0-9.]+)/gi, 'sqrt($1)')
+      .replace(/[−–—]/g, '-').replace(/\*\*/g, '^').replace(/[{[]/g, '(').replace(/[}\]]/g, ')')
+      .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (m) => '^' + m.split('').map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c)).join(''))
+      .replace(/\|([^|]+)\|/g, 'abs($1)');
+    s = s.split(/[,;]|\bfor\b|\bwhere\b/i)[0]; // drop trailing ", for x > 0" etc.
+    return s;
+  }
+  // split an unknown run of letters into known pieces: "xsin" → x, sin; "xx" → x, x
+  function splitName(name) {
+    const out = []; let i = 0;
+    const known = ['sqrt', 'sin', 'cos', 'tan', 'abs', 'exp', 'ln', 'log', 'pi', 'x', 'e'];
+    while (i < name.length) {
+      const k = known.find((w) => name.startsWith(w, i));
+      if (!k) return null;
+      out.push(k); i += k.length;
+    }
+    return out;
+  }
+
   function tokenize(src) {
     // insert explicit * for "5x", "2(", ")(" and "x(" so authors can be loose
-    let s = String(src).toLowerCase().replace(/\s+/g, '');
-    s = s.replace(/(\d)(x|\()/g, '$1*$2').replace(/(x|\))(\()/g, '$1*$2').replace(/\)(\d|x)/g, ')*$1');
+    let s = normalize(src).toLowerCase().replace(/\s+/g, '');
+    s = s.replace(/(\d)(x|\(|sin|cos|tan|sqrt|abs|exp|ln|log|pi|e\b)/g, '$1*$2').replace(/(x|\))(\()/g, '$1*$2').replace(/\)(\d|x|[a-z])/g, ')*$1');
     const out = [];
     let i = 0;
     while (i < s.length) {
@@ -41,10 +67,14 @@
         let j = i + 1;
         while (j < s.length && /[a-z0-9]/.test(s[j])) j++;
         const name = s.slice(i, j);
-        if (name === 'x') out.push({ t: 'x' });
-        else if (CONSTS[name] !== undefined) out.push({ t: 'num', v: CONSTS[name] });
-        else if (FUNCS[name]) out.push({ t: 'func', v: name });
-        else throw new Error('unknown ' + name);
+        const pieces = (name === 'x' || CONSTS[name] !== undefined || FUNCS[name]) ? [name] : splitName(name.replace(/\d+$/, ''));
+        if (!pieces) throw new Error('unknown ' + name);
+        pieces.forEach((p, k) => {
+          if (k > 0) out.push({ t: 'op', v: '*' });
+          if (p === 'x') out.push({ t: 'x' });
+          else if (CONSTS[p] !== undefined) out.push({ t: 'num', v: CONSTS[p] });
+          else out.push({ t: 'func', v: p });
+        });
         i = j;
       } else if ('+-*/^()'.includes(c)) {
         out.push({ t: 'op', v: c });
@@ -158,7 +188,7 @@
 
     let f;
     try { f = compile(spec.fn); } catch (e) { const p = el('p', 'cb-note'); p.textContent = 'y = ' + pretty(spec.fn || ''); board.appendChild(p); return; }
-    const [xmin, xmax] = spec.xrange && spec.xrange.length === 2 ? spec.xrange : [-6, 6];
+    const [xmin, xmax] = spec.xrange && spec.xrange.length === 2 ? spec.xrange : autoRange(spec.fn);
 
     // sample; auto-fit y unless given
     const pts = [];
@@ -315,14 +345,70 @@
 
   // pull ```cassie-board {json}``` blocks out of a reply.
   // returns { clean: textWithoutBoards, boards: [specObj, ...] }
+  // JSON as models actually write it: trailing commas, single quotes, bare keys, // comments
+  function parseSpec(text) {
+    let t = String(text || '').trim().replace(/^[a-z_-]*\s*\n/i, '');
+    const m = t.match(/\{[\s\S]*\}/); if (!m) return null;
+    t = m[0];
+    const tries = [t, t.replace(/\/\/[^\n]*/g, '').replace(/,\s*([}\]])/g, '$1').replace(/([{,]\s*)([A-Za-z_][\w]*)\s*:/g, '$1"$2":').replace(/'/g, '"')];
+    for (const x of tries) { try { const o = JSON.parse(x); if (o && typeof o === 'object' && (o.type || o.fn)) { if (!o.type && o.fn) o.type = 'graph'; if (o.type === 'graph' && !o.title && o.fn) o.title = 'y = ' + o.fn; return o; } } catch (e) { /* next */ } }
+    return null;
+  }
+  // a fenced block that is really a board, whatever the model tagged it
+  function looksLikeBoard(lang, body) {
+    return /^(cassie-?board|board|json|graph)?$/i.test(lang || '') && /"?type"?\s*:\s*["']?(graph|shape|steps)|"?fn"?\s*:/.test(body);
+  }
+  // find "y = …" / "f(x) = …" in plain text (the student's message or the answer)
+  function findEquation(text) {
+    const s = String(text || '').replace(/\*\*/g, '^');
+    const re = /(?:\by|\bf\s*\(\s*x\s*\))\s*=\s*([-+−0-9x(.\s][^\n=?!]*?)(?=$|[\n?!]|\s(?:and|from|for|where|when|on|over|between|then)\b|,\s|\.\s|\.$)/gi;
+    let m;
+    while ((m = re.exec(s))) {
+      // drop trailing words ("… please", "… on a graph") until what's left is maths
+      const words = m[1].replace(/[.,;:]+$/, '').trim().split(/\s+/);
+      for (let n = words.length; n > 0; n--) {
+        const cand = words.slice(0, n).join(' ').replace(/[.,;:]+$/, '');
+        if (!/x/i.test(cand)) continue;
+        try { const f = compile(cand); if (isFinite(f(1.3)) || isFinite(f(2.7))) return cand; } catch (e) { /* shorter */ }
+      }
+    }
+    return '';
+  }
+  // pick an x-range that shows the interesting part (roots, turning points)
+  function autoRange(fn) {
+    let f; try { f = compile(fn); } catch (e) { return [-6, 6]; }
+    const xs = [];
+    let prev = f(-30);
+    for (let x = -30; x <= 30; x += 0.05) {
+      const y = f(x);
+      if (isFinite(y) && isFinite(prev) && Math.sign(y) !== Math.sign(prev)) xs.push(x);
+      prev = y;
+    }
+    // turning points
+    for (let x = -30; x <= 30; x += 0.05) { const a = f(x - 0.05), b = f(x), c = f(x + 0.05); if ([a, b, c].every(isFinite) && (b - a) * (c - b) < 0) xs.push(x); }
+    if (!xs.length) return [-6, 6];
+    if (xs.length > 8) return [-7, 7]; // waves (sin, cos…): a couple of cycles
+    const lo = Math.min(...xs), hi = Math.max(...xs), padX = Math.max(2, (hi - lo) * 0.35);
+    let a = Math.floor(lo - padX), b = Math.ceil(hi + padX);
+    if (b - a > 40) { a = Math.max(a, -20); b = Math.min(b, 20); }
+    a = Math.min(a, -1); b = Math.max(b, 1); // keep the y-axis in view
+    return [a, b];
+  }
+  // a ready-to-draw graph spec for an equation
+  function graphSpec(fn) {
+    const pretty0 = normalize(fn);
+    return { type: 'graph', title: 'y = ' + String(fn).replace(/^\s*(y|f\(x\))\s*=\s*/i, ''), fn: pretty0, xrange: autoRange(pretty0) };
+  }
+
   function extract(text) {
     const boards = [];
-    const clean = String(text).replace(/```cassie-board\s*([\s\S]*?)```/g, (m, body) => {
-      try { boards.push(JSON.parse(body.trim())); } catch (e) { /* ignore malformed */ }
+    const clean = String(text).replace(/```([a-z_-]*)\s*([\s\S]*?)```/gi, (m, lang, body) => {
+      if (!looksLikeBoard(lang, body)) return m;
+      const o = parseSpec(body); if (o) boards.push(o);
       return '';
     }).replace(/\n{3,}/g, '\n\n').trim();
     return { clean, boards };
   }
 
-  window.CassieBoard = { renderInto, extract, compile };
+  window.CassieBoard = { renderInto, extract, compile, normalize, parseSpec, looksLikeBoard, findEquation, graphSpec, autoRange };
 })();
