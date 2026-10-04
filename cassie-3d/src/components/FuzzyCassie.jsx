@@ -558,9 +558,10 @@ export default function FuzzyCassie({ mood: moodKey = 'neutral', outfit = 'class
       if (!ref.current) return;
       const s = i ? 1 : -1, p = ph + (i ? Math.PI : 0);
       const lift = walking ? Math.max(0, Math.sin(p)) * 0.09 : (mood.jump ? 0 : 0);
-      const stride = walking ? Math.cos(p) * 0.1 : 0;
+      // the lifted foot swings FORWARD (toward her face, +z) and the planted one pushes back
+      const stride = walking ? -Math.cos(p) * 0.11 : 0;
       ref.current.position.set(0.22 * s, -0.55 + lift, 0.2 + stride);
-      ref.current.rotation.x = walking ? -Math.sin(p) * 0.4 : 0;
+      ref.current.rotation.x = walking ? -Math.max(0, Math.sin(p)) * 0.35 : 0; // toes up as the foot swings through
     });
     // paws (and sleeves) glide to the pose's targets; arms swing while walking
     paws.forEach((ref, i) => {
