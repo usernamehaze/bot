@@ -18,6 +18,7 @@ function loadState() {
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
     accent: '',             // favorite colour (hex) — '' = marble monochrome
+    audience: 'student',    // student | pro — the Student / Professional switch
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -161,6 +162,10 @@ const ABILITIES_INSTRUCTION = `What this app can do with your answers:
 - Pictures: requests like "generate an image of …" are handled by the app's picture maker. Never say you can't make images.
 - If they ask for a reviewer without naming a topic, make it about what you've been discussing. Only ask which topic when there is nothing to go on.`;
 
+// The Student / Professional switch: for working professionals Cassie is a sharp,
+// practical colleague rather than a tutor.
+const PRO_INSTRUCTION = `The user is a working professional, not a student. Act as a sharp, practical colleague: lead with the answer, keep it concise, and make it workplace-ready — emails, reports, proposals, slide outlines, meeting notes, data and spreadsheet help, analysis with clear recommendations. Use a professional, friendly tone. Skip school-style framing (no grade levels, no "let's learn") unless they ask to learn something.`;
+
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
 
@@ -190,6 +195,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (state.citationStyle && state.citationStyle !== 'APA') {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
   }
+  if (state.audience === 'pro') sp += `\n\n${PRO_INSTRUCTION}`;
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
@@ -370,23 +376,45 @@ function set3D(name) {
     if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
   } catch (e) { /* ignore */ }
 }
-
-// Cassie dresses for the job: a suit & beret for research and web checks, cap &
-// gown for quizzes and reviewers, thick glasses + code for coding, a felt heart for
-// heart-to-hearts, and her classic red felt the rest of the time.
-let taskOutfit = null; // set per message (code / reviewer / research), cleared by the next plain one
-const CODE_ASK_RE = /```|\b(code|coding|program(ming)?|python|javascript|typescript|java|c\+\+|c#|html|css|sql|function|debug|bug|compile|algorithm|script|api)\b/i;
-const STUDY_ASK_RE = /\b(reviewer|quiz|flash ?cards?|practice (test|questions|exam)|study guide|mock (exam|test)|exam prep)\b/i;
-function outfitForMessage(text, doc) {
-  if (CODE_ASK_RE.test(text || '')) return 'coder';
-  if (doc || STUDY_ASK_RE.test(text || '')) return 'graduate';
-  return null;
+// which way the 3D Cassie turns while she walks (-1 left, 1 right)
+function face3D(dir) {
+  try { if (window.CassieMascot && window.CassieMascot.setFacing) window.CassieMascot.setFacing(dir); } catch (e) { /* ignore */ }
 }
+
+// Cassie dresses for the job:
+//   Student (default) → her classic fluffy felt · Professional → the suit & beret
+//   Research / Web → cap & gown · Quiz me → thick glasses · Talk → the felt heart
+let taskOutfit = null; // 'graduate' while a Research / Web answer is up; the next plain message clears it
 function dressCassie() {
-  const outfit = counselorMode ? 'heart' : quizMode ? 'graduate' : (taskOutfit || 'classic');
+  const base = state.audience === 'pro' ? 'professor' : 'classic';
+  const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
   try { if (window.CassieMascot && window.CassieMascot.setOutfit) window.CassieMascot.setOutfit(outfit); } catch (e) { /* ignore */ }
 }
 window.addEventListener('cassie3d-ready', () => dressCassie());
+
+// Student / Professional switch
+const audSwitch = document.getElementById('aud-switch');
+function renderAudience() {
+  if (!audSwitch) return;
+  const pro = state.audience === 'pro';
+  audSwitch.classList.toggle('pro', pro);
+  audSwitch.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.aud === (pro ? 'pro' : 'student'))));
+}
+if (audSwitch) {
+  audSwitch.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-aud]');
+    if (!b || b.dataset.aud === (state.audience || 'student')) return;
+    state.audience = b.dataset.aud;
+    save();
+    renderAudience();
+    taskOutfit = null;
+    dressCassie();
+    set3D('happy');
+    setTimeout(() => set3D('neutral'), 1600);
+    try { if (typeof mascotSay === 'function') mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode — let’s learn!', 2600); } catch (err) { /* ignore */ }
+  });
+  renderAudience();
+}
 
 function setCursorMode(mode) {
   cursorState = mode;
@@ -460,13 +488,15 @@ function mascotWalk() {
   const dir = r.left < window.innerWidth / 2 ? 1 : -1; // wander toward the roomier side
   const step = 90 + Math.random() * 80;
   const tx = Math.min(Math.max(r.left + dir * step, b.minX), b.maxX);
-  set3D('curious'); // non-neutral, so her little feet show
+  set3D('walk'); // a real waddle: feet stepping, body bobbing, arms swinging
+  face3D(dir);
   mascot.classList.add('walking');
   placeMascot(tx, r.top);
   setTimeout(() => {
     if (anticBusy()) { mascot.classList.remove('walking'); return; }
     const r2 = mascot.getBoundingClientRect();
     const back = Math.min(Math.max(r2.left - dir * (step * 0.6), b.minX), b.maxX);
+    face3D(-dir);
     placeMascot(back, r2.top);
     setTimeout(() => { mascot.classList.remove('walking'); if (!anticBusy()) set3D('neutral'); keepMascotClear(); }, 1100);
   }, 1200);
@@ -474,6 +504,7 @@ function mascotWalk() {
 function mascotPlay() {
   if (anticBusy()) return;
   mascotEmote(Math.random() < 0.5 ? 'emote-happy' : 'emote-star', 1500);
+  set3D(Math.random() < 0.5 ? 'happy' : 'celebratory');
   mascot.classList.add('playing');
   setTimeout(() => mascot.classList.remove('playing'), 1300);
 }
@@ -488,7 +519,7 @@ function mascotPeek() {
   if (!cands.length) { mascotWalk(); return; }
   const r = cands[Math.floor(Math.random() * cands.length)];
   mascot.classList.add('peeking'); // drops behind the chat so the bubble hides her
-  set3D('happy');
+  set3D('peek'); // leans out and waves
   const x = Math.min(Math.max(r.right - w * 0.35, 6), window.innerWidth - w - 6);
   const y = Math.min(Math.max(r.top + r.height / 2 - h / 2, 76), floor - h - 8);
   placeMascot(x, y);
@@ -2203,7 +2234,7 @@ async function handleSend(text, opts = {}) {
   promptInput.value = '';
   promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
-  taskOutfit = outfitForMessage(sendText, doc);
+  taskOutfit = null;
   dressCassie();
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
   // remember what the student is studying + any explicit "remember ..." note
@@ -2227,7 +2258,6 @@ async function handleSend(text, opts = {}) {
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
-    if (!taskOutfit && /```/.test(reply)) { taskOutfit = 'coder'; dressCassie(); }
     const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
     const title = doc
       ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
@@ -2433,7 +2463,7 @@ function authorsShort(list) {
 async function runResearch(topic) {
   topic = (topic || '').trim();
   if (!topic) { promptInput.placeholder = 'Type a topic first, then tap Research…'; promptInput.focus(); return; }
-  taskOutfit = 'professor'; dressCassie();
+  taskOutfit = 'graduate'; dressCassie();
   if (!state.groqKey) {
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
@@ -2547,7 +2577,7 @@ async function askGeminiGrounded(q) {
 async function runWebCheck(text) {
   text = (text || '').trim();
   if (!text) { promptInput.placeholder = 'Type a question first, then tap Web…'; promptInput.focus(); return; }
-  taskOutfit = 'professor'; dressCassie();
+  taskOutfit = 'graduate'; dressCassie();
   if (!state.geminiKey) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });

@@ -1167,3 +1167,23 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   background: color-mix(in srgb, var(--surface) 82%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
+
+/* Student / Professional switch */
+.aud-switch {
+  position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); flex-shrink: 0;
+}
+.aud-switch::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px;
+  background: var(--accent, var(--primary)); transition: transform .28s cubic-bezier(.3,.8,.3,1);
+}
+.aud-switch.pro::before { transform: translateX(100%); }
+.aud-switch button {
+  position: relative; z-index: 1; border: 0; background: none; cursor: pointer; padding: 6px 12px; border-radius: 999px;
+  font: 600 .8rem/1 inherit; font-family: inherit; color: var(--muted); transition: color .2s;
+}
+.aud-switch button[aria-pressed="true"] { color: var(--accent-ink, #fff); }
+/* the 3D Cassie walks for real, so the flat waddle isn't needed */
+#mascot.has3d.walking #mascot-btn { animation: none; }
+.quick-actions .chip.active { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); }
