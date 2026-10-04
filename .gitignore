@@ -2,3 +2,6 @@
 *.zip
 cassie-extension-*.zip
 cassie-screenshot-*.png
+
+# test dependencies
+tests/node_modules/

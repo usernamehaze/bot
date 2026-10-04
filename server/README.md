@@ -1,82 +1,95 @@
-# Cassie usage stats (Cloudflare Worker + D1)
+# Cassie server (one Cloudflare Worker)
 
-This shows you **how many people use Cassie, how often they open it, which
-features they use most, and the most common topic words** in chats. It runs on
-a Cloudflare Worker with a D1 database.
+One small server that does four jobs:
 
-**Free** on Cloudflare's free tier. No credit card.
+1. **No keys needed.** People can use Cassie without making a Groq account. The
+   server answers with *your* Groq key, which stays secret here.
+2. **Backup brain.** When Groq is busy or out of free questions, Cloudflare
+   Workers AI answers instead, so users don't see an error.
+3. **Usage dashboard.** How many people use Cassie, how often they open it, the
+   most-used features, and common topic words.
+4. **Feedback.** Thumbs up/down on answers, plus "Report a problem" messages.
 
-## What it collects (and what it doesn't)
+It runs on Cloudflare's free tier. No credit card is needed to start.
 
-| Sent | Never sent |
-|---|---|
-| A random ID made on the user's device | Names, emails, exact ages |
-| Each time Cassie is opened | Full messages or Cassie's answers |
-| Which feature was used (chat, quiz, graph, picture, research…) | Files, photos, API keys |
-| Student or working, school level, age range, phone or computer | Anything from Talk mode |
-| Up to 5 topic keywords per message, **adults (18+) who left it on** | Words from anyone under 18 |
+## Before you start
 
-Users can switch both off in **Settings → You**. The extension does not send stats.
+Get a Groq key at [console.groq.com/keys](https://console.groq.com/keys). Use a
+**new** key that you have never shared or pasted anywhere public.
 
 ## Deploy it (about 10 minutes)
 
-1. Go to **dash.cloudflare.com** and log in. You can use the same account as the
-   Cassie proxy.
-2. **Workers & Pages** → **Create** → **Create Worker**. Name it something like
-   `cassie-stats`, then click **Deploy**.
-3. Click **Edit code**. Delete everything, paste the contents of
+1. Go to **dash.cloudflare.com** and sign up or log in.
+2. **Workers & Pages** → **Create** → **Create Worker**. Name it `cassie`, then
+   click **Deploy**.
+3. Click **Edit code**. Delete everything, paste the whole of
    [`worker.js`](./worker.js), then click **Deploy**.
-4. Create the database:
+4. **Database** (for the dashboard, fair-use limits and feedback):
    - Left menu: **Storage & Databases** → **D1 SQL Database** → **Create**.
-     Name it `cassie-stats`.
-   - Open the Worker → **Settings** → **Bindings** → **Add** → **D1 database**.
-   - Variable name: `DB`. Database: `cassie-stats`. **Save**.
-   - You don't need to create any tables. The Worker creates them itself.
-5. Set your dashboard password:
-   - Worker → **Settings** → **Variables and Secrets** → **Add**.
-   - Name: `ADMIN_TOKEN`. Value: a long password only you know. Click **Encrypt**,
-     then **Save**.
-6. Copy the Worker's URL. It looks like
-   `https://cassie-stats.<your-subdomain>.workers.dev`.
+     Name it `cassie`.
+   - Open your Worker → **Settings** → **Bindings** → **Add** → **D1 database**.
+     Variable name: `DB`. Database: `cassie`. **Save**.
+   - You don't need to make any tables. The server creates them itself.
+5. **Backup brain:** in the same **Bindings** → **Add** → **Workers AI**.
+   Variable name: `AI`. **Save**.
+6. **Secrets:** go to **Settings** → **Variables and Secrets** → **Add**, and add
+   both of these as type **Secret**:
+   - `GROQ_KEY`: your Groq key.
+   - `ADMIN_TOKEN`: a long password only you know. It opens the dashboard.
+7. Copy the Worker's URL. It looks like `https://cassie.<your-name>.workers.dev`.
 
 ## Connect Cassie to it
 
-In `app.js`, find this line:
+Open [`config.js`](../config.js) and paste the URL between the quotes:
 
 ```js
-const ANALYTICS_URL = window.CASSIE_ANALYTICS_URL || '';
+window.CASSIE_SERVER = window.CASSIE_SERVER || 'https://cassie.<your-name>.workers.dev';
 ```
 
-Put your URL in the quotes, with `/e` added to the end:
+Or send the URL and it will be done for you. After that:
 
-```js
-const ANALYTICS_URL = window.CASSIE_ANALYTICS_URL || 'https://cassie-stats.<your-subdomain>.workers.dev/e';
-```
+- New users can chat straight away, with no key.
+- Users who add their own key still use it. If their key runs out, the server
+  takes over.
+- Usage counts and feedback start appearing on your dashboard.
 
-Or send the URL and it will be wired in for you. Until a URL is set, Cassie
-sends nothing.
+## Check it works
 
-## See your numbers
+Open your Worker URL in a browser and enter your `ADMIN_TOKEN`. That's your
+dashboard. Then ask Cassie something on a phone that has no key. On the
+dashboard, the **Questions answered through your server** row should go up.
 
-Open the Worker URL (`https://cassie-stats.<your-subdomain>.workers.dev`) in a
-browser and enter your `ADMIN_TOKEN`. The dashboard shows:
+## Fair use and cost
 
-- **Total users**, plus active today and this week
-- **Opens** and opens per user, with a daily chart of active users and opens
-- **New users** per day
-- **Most-used features**
-- **Top topic words**
-- **Who uses Cassie**: student or working, grade level, age range, and device
-- **Most active users**: anonymous IDs with their open and use counts
+- Each person can ask **150 questions a day** through your key, and at most 12
+  a minute. To change this, add variables `DAILY_LIMIT` and `MINUTE_LIMIT`
+  under **Settings** → **Variables and Secrets**.
+- The Groq free plan has daily limits, and every user shares them. When the
+  dashboard shows lots of **Workers AI (backup)** answers, Groq is running out.
+  Then either:
+  - upgrade Groq to pay-as-you-go at console.groq.com → Settings → Billing, and
+    set a **monthly spending limit** there so you can't get a surprise bill; or
+  - tell heavy users to add their own free key in Settings.
+- Workers AI includes a free daily amount. After that it charges small amounts
+  per question, but only if you've added a paid Cloudflare plan. Otherwise it
+  stops and Cassie shows "very busy, try again".
+- Photos are read with your Groq key (Llama 4 Scout). If Groq is down, photo
+  questions can't use the backup.
 
-Change the range (7, 30, 90 or 365 days) at the top. Days follow Philippine time.
+## What it stores
 
-## Notes
+| Stored | Never stored |
+|---|---|
+| A random ID per device, how many questions it asked today | Chat messages or answers (they pass through to Groq and are not saved) |
+| Open and feature counts; student or working, grade group, age range, device | Names, emails, exact ages, files, photos |
+| Topic keywords from adults who allowed it | Anything from Talk mode |
+| Feedback and reports that users choose to send | |
 
-- Only Cassie's own sites can send events: askcassie.pages.dev,
-  usernamehaze.github.io and localhost. If you host Cassie elsewhere, add a
-  variable `ALLOWED_ORIGINS` with your sites, separated by commas.
-- To change the dashboard: edit `dashboard.html` or `worker.src.js`, run
-  `python3 build.py` in this folder, then paste the new `worker.js` again.
-- D1's free tier allows 5 million reads and 100,000 writes a day. Events are
-  sent in batches, so this covers a lot of users.
+## Changing the server
+
+Edit `worker.src.js` or `dashboard.html`, run `python3 build.py` in this folder,
+then paste the new `worker.js` into Cloudflare again. Your data is kept.
+
+Only Cassie's own sites can use the server: askcassie.pages.dev,
+usernamehaze.github.io and localhost. If you host Cassie somewhere else, add a
+variable `ALLOWED_ORIGINS` listing your sites, separated by commas.

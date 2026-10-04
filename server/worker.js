@@ -1,14 +1,22 @@
-/* Cassie usage stats — a Cloudflare Worker + D1 database (free tier).
+/* Cassie server — one Cloudflare Worker (free tier) that does three jobs:
  *
- *   POST /e          the app sends anonymous events here (no login, no names, no messages)
- *   GET  /           the dashboard (asks for your ADMIN_TOKEN)
+ *   POST /chat       answers questions for people who haven't added their own Groq key,
+ *                    using YOUR Groq key (kept secret here), with Cloudflare Workers AI as
+ *                    an automatic backup when Groq is busy or out of free questions
+ *   POST /e          anonymous usage counts (no login, no names, no messages)
+ *   POST /f          thumbs up / down on answers and "Report a problem" notes
+ *   GET  /           your dashboard (asks for your ADMIN_TOKEN)
  *   GET  /stats      the numbers behind the dashboard (needs the token)
  *
- * Bindings (Worker → Settings):
+ * Bindings (Worker → Settings → Bindings / Variables and Secrets):
  *   DB           a D1 database (tables are created automatically)
- *   ADMIN_TOKEN  a secret you choose — the dashboard password
- * Optional:
- *   ALLOWED_ORIGINS  comma-separated sites allowed to send events
+ *   ADMIN_TOKEN  secret — a password you choose for the dashboard
+ *   GROQ_KEY     secret — your Groq API key (console.groq.com/keys)
+ *   AI           Workers AI binding — the backup brain (optional but recommended)
+ * Optional variables:
+ *   DAILY_LIMIT      questions per person per day through your key (default 150)
+ *   MINUTE_LIMIT     questions per person per minute (default 12)
+ *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
  */
@@ -23,6 +31,10 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, day TEXT, uid TEXT, event TEXT, name TEXT)`,
   `CREATE INDEX IF NOT EXISTS events_day ON events(day)`,
   `CREATE TABLE IF NOT EXISTS words (day TEXT, word TEXT, n INTEGER, PRIMARY KEY (day, word))`,
+  `CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, day TEXT, uid TEXT, kind TEXT, feature TEXT, text TEXT, ctx TEXT)`,
+  `CREATE INDEX IF NOT EXISTS feedback_day ON feedback(day)`,
+  `CREATE TABLE IF NOT EXISTS quota (k TEXT PRIMARY KEY, day TEXT, n INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS chats (day TEXT, src TEXT, n INTEGER, PRIMARY KEY (day, src))`,
 ];
 let schemaReady = false;
 async function ensureSchema(db) {
@@ -37,7 +49,7 @@ const clean = (v, n = 40) => String(v == null ? '' : v).replace(/[\u0000-\u001f]
 function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
   const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)));
-  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', vary: 'origin' } : {};
+  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...extra } });
 
@@ -75,6 +87,152 @@ async function ingest(request, env) {
   return new Response(null, { status: 204, headers: h });
 }
 
+/* ------------------------------------------------------------------ chat */
+const GROQ = 'https://api.groq.com/openai/v1';
+const CHAT_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
+const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
+const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
+let vision = { id: '', at: 0 };
+
+function allowedOrigin(request, env) {
+  const origin = request.headers.get('origin') || '';
+  const h = cors(origin, env);
+  return h['access-control-allow-origin'] ? h : null;
+}
+function msUntilMidnightPH(now) {
+  const ph = new Date(now + TZ_OFFSET_H * 3600e3);
+  return 864e5 - ((ph.getUTCHours() * 3600 + ph.getUTCMinutes() * 60 + ph.getUTCSeconds()) * 1000);
+}
+function chatError(message, status, h, extra = {}) {
+  return json({ error: { message } }, status, { ...h, ...extra });
+}
+// Groq's picture-reading model changes over time — ask Groq which one it has now.
+async function visionModel(env) {
+  if (vision.id && Date.now() - vision.at < 6 * 3600e3) return vision.id;
+  try {
+    const r = await fetch(`${GROQ}/models`, { headers: { authorization: `Bearer ${env.GROQ_KEY}` } });
+    const ids = ((await r.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
+    vision = { id: ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '', at: Date.now() };
+  } catch (e) { /* keep the old one */ }
+  return vision.id;
+}
+function cleanMessages(list) {
+  if (!Array.isArray(list) || !list.length || list.length > 40) return null;
+  let chars = 0, image = false;
+  const out = [];
+  for (const m of list) {
+    if (!m || !['system', 'user', 'assistant'].includes(m.role)) return null;
+    if (typeof m.content === 'string') { chars += m.content.length; out.push({ role: m.role, content: m.content }); continue; }
+    if (!Array.isArray(m.content)) return null;
+    const parts = [];
+    for (const p of m.content.slice(0, 8)) {
+      if (p && p.type === 'text' && typeof p.text === 'string') { chars += p.text.length; parts.push({ type: 'text', text: p.text }); }
+      else if (p && p.type === 'image_url' && p.image_url && /^data:image\//.test(p.image_url.url || '')) { image = true; parts.push({ type: 'image_url', image_url: { url: p.image_url.url } }); }
+    }
+    out.push({ role: m.role, content: parts });
+  }
+  if (chars > 120000) return null;
+  return { messages: out, image };
+}
+const textOnly = (messages) => messages.map((m) => ({ role: m.role, content: typeof m.content === 'string' ? m.content : m.content.filter((p) => p.type === 'text').map((p) => p.text).join('\n') }));
+
+async function countChat(env, day, src) {
+  try { await env.DB.prepare('INSERT INTO chats (day, src, n) VALUES (?, ?, 1) ON CONFLICT(day, src) DO UPDATE SET n = n + 1').bind(day, src).run(); } catch (e) { /* stats only */ }
+}
+
+async function chat(request, env, ctx) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  const text = await request.text();
+  if (text.length > 8e6) return chatError('That photo or file is too big to send — try a smaller one.', 413, h);
+  let body; try { body = JSON.parse(text); } catch (e) { return chatError('Bad request.', 400, h); }
+  const cleaned = cleanMessages(body.messages);
+  if (!cleaned) return chatError('That message is too long — try a shorter question or start a new chat.', 413, h);
+
+  // Fair use: each person gets a daily allowance through this shared key.
+  const now = Date.now(), today = dayOf(now);
+  const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : 'anon';
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const perMin = +env.MINUTE_LIMIT || 12, perDay = +env.DAILY_LIMIT || 150;
+  const minute = Math.floor(now / 60e3), mk = `${uid}|${ip}`;
+  const hit = minuteHits.get(mk);
+  const n = hit && hit.m === minute ? hit.n + 1 : 1;
+  minuteHits.set(mk, { m: minute, n });
+  if (minuteHits.size > 5000) minuteHits.clear();
+  if (n > perMin) return chatError('Whoa, lots of questions! Give me a few seconds, then ask again.', 429, h, { 'retry-after': String(60 - Math.floor((now / 1000) % 60)) });
+  await ensureSchema(env.DB);
+  const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
+  const [u, i] = await env.DB.batch([bump('u:' + uid), bump('i:' + ip)]);
+  const usedU = u.results?.[0]?.n || 0, usedI = i.results?.[0]?.n || 0;
+  if (Math.random() < 0.01) ctx.waitUntil(env.DB.prepare('DELETE FROM quota WHERE day < ?').bind(today).run());
+  if ((uid !== 'anon' && usedU > perDay) || usedI > perDay * 25) {
+    const secs = Math.ceil(msUntilMidnightPH(now) / 1000);
+    return chatError(`You've used today's ${perDay} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
+  }
+  const left = { 'x-cassie-left': String(Math.max(0, perDay - usedU)) };
+
+  const maxTokens = Math.min(Math.max(+body.max_tokens || 2048, 64), 4000);
+  const temperature = typeof body.temperature === 'number' ? Math.min(Math.max(body.temperature, 0), 1.2) : 0.6;
+  let lastStatus = 503, lastDetail = '';
+  if (env.GROQ_KEY) {
+    let models;
+    if (cleaned.image || body.model === 'vision') { const v = await visionModel(env); models = v ? [v] : []; }
+    else models = [CHAT_MODELS.includes(body.model) ? body.model : CHAT_MODELS[0], ...CHAT_MODELS].filter((m, k, a) => a.indexOf(m) === k);
+    for (const model of models) {
+      const payload = { model, messages: cleaned.messages, max_tokens: maxTokens, temperature };
+      if (/gpt-oss/.test(model) && ['low', 'medium', 'high'].includes(body.reasoning_effort)) payload.reasoning_effort = body.reasoning_effort;
+      let r;
+      try {
+        r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify(payload) });
+      } catch (e) { lastStatus = 503; continue; }
+      if (r.ok) {
+        ctx.waitUntil(countChat(env, today, 'groq'));
+        return new Response(r.body, { status: 200, headers: { 'content-type': 'application/json', ...h, ...left, 'x-cassie-source': 'groq' } });
+      }
+      lastStatus = r.status;
+      try { lastDetail = (await r.json()).error?.message || ''; } catch (e) { lastDetail = ''; }
+      // too long / bad request: the app trims the chat and retries, so hand it back
+      if (r.status === 400 || r.status === 413) return chatError(lastDetail || 'Too long.', r.status, h);
+      // 429 / 5xx / retired model: try the next model, then the backup
+    }
+  }
+  if (env.AI && !cleaned.image) {
+    try {
+      const out = await env.AI.run(BACKUP_MODEL, { messages: textOnly(cleaned.messages), max_tokens: Math.min(maxTokens, 2048), temperature });
+      const reply = (out && (out.response ?? out.result?.response)) || '';
+      if (reply) {
+        ctx.waitUntil(countChat(env, today, 'backup'));
+        return json({ choices: [{ index: 0, message: { role: 'assistant', content: String(reply) }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'backup' });
+      }
+    } catch (e) { lastDetail = lastDetail || String(e && e.message || e); }
+  }
+  ctx.waitUntil(countChat(env, today, 'failed'));
+  // an unanswered question shouldn't use up the person's daily allowance
+  ctx.waitUntil(env.DB.batch(['u:' + uid, 'i:' + ip].map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k))));
+  if (cleaned.image && !env.GROQ_KEY) return chatError('Reading photos needs a Groq or Gemini key — add one in Settings.', 503, h);
+  return chatError(lastStatus === 429 ? 'Cassie is very busy right now — try again in a minute.' : 'Cassie can’t reach her brain right now — try again in a moment.', lastStatus === 429 ? 429 : 503, h, { 'retry-after': '20' });
+}
+
+/* ------------------------------------------------------------------ feedback */
+const FEEDBACK = new Set(['up', 'down', 'report']);
+async function feedback(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  const text = await request.text();
+  if (text.length > 8000) return new Response('too big', { status: 413, headers: h });
+  let b; try { b = JSON.parse(text); } catch (e) { return new Response('bad json', { status: 400, headers: h }); }
+  const uid = clean(b.uid, 64);
+  if (!/^[\w-]{8,64}$/.test(uid) || !FEEDBACK.has(b.kind)) return new Response('bad', { status: 400, headers: h });
+  const c = b.ctx || {};
+  const ctxText = [c.role, c.grade, c.age, c.platform, c.version].map((v) => clean(v, 30)).filter(Boolean).join(' · ');
+  await ensureSchema(env.DB);
+  const now = Date.now();
+  await env.DB.prepare('INSERT INTO feedback (ts, day, uid, kind, feature, text, ctx) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(now, dayOf(now), uid, b.kind, clean(b.feature, 40), String(b.text || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, 1500), ctxText).run();
+  return new Response(null, { status: 204, headers: h });
+}
+
 async function stats(request, env) {
   const url = new URL(request.url);
   const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -100,15 +258,22 @@ async function stats(request, env) {
     all(`SELECT COALESCE(NULLIF(platform,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
     all(`SELECT substr(uid,1,8) AS id, opens, uses, first_day, last_day, role, grade, age FROM users ORDER BY opens + uses DESC LIMIT 25`),
   ]);
-  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top });
+  const [ratings, reports, chats] = await Promise.all([
+    all(`SELECT COALESCE(NULLIF(feature,''),'chat') AS name, SUM(kind = 'up') AS up, SUM(kind = 'down') AS down FROM feedback WHERE day >= ? AND kind IN ('up','down') GROUP BY name ORDER BY up + down DESC LIMIT 20`, since),
+    all(`SELECT ts, kind, feature, text, ctx FROM feedback WHERE day >= ? AND text != '' ORDER BY ts DESC LIMIT 60`, since),
+    all(`SELECT src, SUM(n) AS n FROM chats WHERE day >= ? GROUP BY src ORDER BY n DESC`, since),
+  ]);
+  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats });
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
+      if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
+      if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
       return new Response('not found', { status: 404 });
@@ -174,6 +339,10 @@ const DASHBOARD = `<!doctype html>
   .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
   .bar .val { color: var(--text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
   .bar:hover .fill { filter: brightness(1.12); }
+  .reports { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow: auto; }
+  .rep { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .rep .meta { color: var(--text-secondary); font-size: 12.5px; margin-bottom: 4px; }
+  .rep .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { color: var(--text-secondary); font-weight: 600; }
@@ -228,10 +397,10 @@ const DASHBOARD = `<!doctype html>
   }
 
   function tile(k, v, s) { return \`<div class="tile"><div class="k">\${k}</div><div class="v">\${v}</div>\${s ? \`<div class="s">\${s}</div>\` : ''}</div>\`; }
-  function bars(rows, label, value, extra) {
+  function bars(rows, label, value, extra, o = {}) {
     if (!rows.length) return '<div class="empty">No data yet</div>';
-    const max = Math.max(...rows.map(value), 1);
-    return \`<div class="bars">\${rows.map((r) => \`<div class="bar" data-tip="\${esc(label(r))}|\${esc(extra ? extra(r) : fmt(value(r)))}"><span class="lbl">\${esc(label(r))}</span><span class="trk"><span class="fill" style="width:\${(value(r) / max * 100).toFixed(1)}%"></span></span><span class="val">\${fmt(value(r))}</span></div>\`).join('')}</div>\`;
+    const max = o.max || Math.max(...rows.map(value), 1);
+    return \`<div class="bars">\${rows.map((r) => \`<div class="bar" data-tip="\${esc(label(r))}|\${esc(extra ? extra(r) : fmt(value(r)))}"><span class="lbl">\${esc(label(r))}</span><span class="trk"><span class="fill" style="width:\${(value(r) / max * 100).toFixed(1)}%"></span></span><span class="val">\${fmt(value(r))}\${o.suffix || ''}</span></div>\`).join('')}</div>\`;
   }
   // every day in the range, zero-filled
   function series(d) {
@@ -340,6 +509,12 @@ const DASHBOARD = `<!doctype html>
           <p class="muted" style="margin:12px 0 4px">Age</p>\${bars(d.ages, (r) => r.k, (r) => r.n)}
           <p class="muted" style="margin:12px 0 4px">Device</p>\${bars(d.platforms, (r) => r.k, (r) => r.n)}
         </div>
+      </div>
+      <div class="grid two">
+        <div class="card"><h2>Were answers helpful?</h2><p class="sub">Share of thumbs-up per feature, last \${d.days} days</p>\${bars((d.ratings || []), (r) => fname(r.name), (r) => Math.round(100 * r.up / Math.max(1, r.up + r.down)), (r) => \`\${r.up} 👍 · \${r.down} 👎\`, { max: 100, suffix: '%' })}
+          <p class="muted" style="margin:14px 0 4px">Questions answered through your server</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem” or with a thumbs-down</p>
+          \${(d.reports || []).length ? \`<div class="reports">\${d.reports.map((r) => \`<div class="rep"><div class="meta">\${esc(new Date(r.ts).toLocaleString())} · \${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}\${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">\${esc(r.text)}</div></div>\`).join('')}</div>\` : '<div class="empty">No reports yet</div>'}</div>
       </div>
       <div class="card"><h2>Most active users</h2><p class="sub">Anonymous — a random id per device, never a name</p><div class="scroll"><table>
         <tr><th>User</th><th>Opens</th><th>Features used</th><th>First seen</th><th>Last seen</th><th>Who</th></tr>

@@ -33,6 +33,25 @@ const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
 let state = loadState();
 
+// Cassie's own server (config.js / server/README.md). With it, nobody needs a key to start.
+const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
+const canChat = () => !!(state.groqKey || SERVER);
+const APP_VERSION = '104';
+
+/* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
+function slowDevice() {
+  try {
+    const c = navigator.connection || {};
+    if (c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '')) return true;
+    if (navigator.deviceMemory && navigator.deviceMemory <= 2) return true;
+    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return true;
+  } catch (e) { /* unknown → assume fine */ }
+  return false;
+}
+window.CASSIE_LITE = state.lite === 'on' || ((state.lite || 'auto') === 'auto' && slowDevice());
+document.documentElement.classList.toggle('lite', window.CASSIE_LITE);
+
+
 // Migrate old single-key state (apiKey was the Gemini key) to the new fields.
 if (state.apiKey && !state.geminiKey) { state.geminiKey = state.apiKey; }
 if (state.groqKey === undefined) state.groqKey = '';
@@ -138,7 +157,7 @@ const LEVEL_LABELS = {
   college: 'college',
 };
 const HINT_INSTRUCTION = "For THIS reply, act as a tutor giving a HINT only: nudge the student toward the answer with a leading question or the first step. Do NOT reveal the final answer or full solution. Keep it short and encouraging. If they then ask for the full answer, give it.";
-const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer — do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.";
+const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer — do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.\n\nBookkeeping (the app hides these lines from the student): right after you grade an answer, add ONE line at the very end of your message — if they were wrong or only partly right: [[MISSED: the exact question || the correct answer in a few words]]; if they were right: [[GOT: the exact question]]. Never add these lines when you are only asking a question.";
 
 // Cassie can DRAW what she explains. When a picture genuinely helps — graphing
 // a function, a geometry shape's area/perimeter, or a worked step-by-step — she
@@ -1242,6 +1261,18 @@ function renderHome() {
     });
     bar.appendChild(btn);
   });
+  const due = dueMistakes().length, saved = (state.mistakes || []).length;
+  if (saved) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-example review-mistakes';
+    btn.innerHTML = '<svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>';
+    const lbl = document.createElement('span');
+    lbl.textContent = due ? `Review my mistakes (${due})` : `Review my mistakes (${saved} saved)`;
+    btn.appendChild(lbl);
+    btn.addEventListener('click', () => reviewMistakes(!due));
+    bar.prepend(btn);
+  }
   wrap.appendChild(intro);
   wrap.appendChild(bar);
   chatLog.appendChild(wrap);
@@ -1433,21 +1464,31 @@ async function groqAlternative(tried) {
    swapped out, per-minute limits switch to another model (rotate) or are waited
    out (onWait tells the UI; noWait throws instead so a caller can use Gemini),
    and overloads are retried. Returns the reply text. */
-async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false, rotate = false, noWait = false } = {}) {
+async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false, rotate = false, noWait = false, viaServer = false } = {}) {
+  // No key of their own → Cassie's server answers (it holds the key and has a backup brain).
+  if (!state.groqKey && SERVER) viaServer = true;
+  if (viaServer) return serverChat(messages, { model, maxTokens, onWait, lean });
   model = model || state.groqModel;
   const tried = new Set();
   let overloadTries = 0, waitTries = 0, switches = 0;
   if (rotate && groqCooling(model)) model = (await groqAlternative(new Set([model]))) || model;
+  // When the user's own key can't answer (daily limit, bad key, Groq down), use Cassie's server.
+  const viaServerInstead = (e) => (SERVER ? serverChat(messages, { model, maxTokens, onWait, lean }) : Promise.reject(e));
   while (true) {
     tried.add(model);
     const body = { model, messages, max_tokens: maxTokens, temperature: 0.6 };
     // gpt-oss models "think" first; keep that short on long jobs so the answer fits.
     if (lean && /gpt-oss/.test(model)) body.reasoning_effort = 'low';
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${state.groqKey}` },
+        body: JSON.stringify(body),
+      });
+    } catch (netErr) {
+      return viaServerInstead(friendlyError("I couldn't reach Groq — check your internet connection and try again."));
+    }
     if (res.ok) {
       noteGroqBudget(model, res);
       const data = await res.json();
@@ -1456,9 +1497,10 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 401) return viaServerInstead(friendlyError('Your Groq key isn’t working (it may have been deleted). Open Settings and paste a fresh key from console.groq.com/keys.'));
     if (modelRetired(res.status, detail)) {
       const next = await nextGroqModel(tried);
-      if (!next) throw retiredError();
+      if (!next) return viaServerInstead(retiredError());
       if (model === state.groqModel) { state.groqModel = next; save(); if (typeof updateModelPill === 'function') updateModelPill(); }
       model = next;
       continue;
@@ -1471,6 +1513,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
         const alt = await groqAlternative(tried);
         if (alt) { switches += 1; model = alt; continue; }
       }
+      if (SERVER && (!secs || secs > 20)) return viaServerInstead();
       if (noWait && secs && secs <= 65) {
         const e = new Error('groq per-minute limit'); e.groqLimited = true; e.waitSecs = secs; throw e;
       }
@@ -1489,12 +1532,46 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       await sleep(1000 * Math.pow(2, overloadTries - 1));
       continue;
     }
-    if (isRateLimited(res.status, detail)) {
-      const e = new Error(rateLimitMessage(res, detail));
-      e.friendly = true; // already a complete, user-facing message
-      throw e;
-    }
+    if (isRateLimited(res.status, detail)) return viaServerInstead(friendlyError(rateLimitMessage(res, detail)));
+    if (res.status >= 500) return viaServerInstead(friendlyError('Groq is having a problem right now — try again in a minute.'));
     throw new Error(detail || `Request failed (${res.status})`);
+  }
+}
+
+function friendlyError(msg) { const e = new Error(msg); e.friendly = true; return e; }
+
+/* Cassie's own server (server/worker.js): the same chat call, but with the owner's
+   key, a fair daily allowance per person, and Workers AI as a backup brain. */
+async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false } = {}) {
+  let waits = 0;
+  while (true) {
+    let res;
+    try {
+      res = await fetch(SERVER + '/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined }),
+      });
+    } catch (e) {
+      throw friendlyError("I couldn't connect — check your internet connection and try again.");
+    }
+    if (res.ok) {
+      const data = await res.json();
+      return (data.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+    }
+    let detail = '';
+    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    if (res.status === 413 || (res.status === 400 && isTooLarge(400, detail))) {
+      const e = new Error('too large'); e.tooLarge = true; e.model = model; throw e;
+    }
+    const secs = parseDuration(res.headers.get('retry-after'));
+    if ((res.status === 429 || res.status === 503) && secs && secs <= 30 && waits < 2) {
+      waits += 1;
+      if (onWait) onWait(Math.ceil(secs));
+      await sleep(Math.ceil(secs * 1000) + 300);
+      continue;
+    }
+    throw friendlyError(detail || 'Cassie couldn’t answer just now — please try again in a moment.');
   }
 }
 
@@ -1511,15 +1588,21 @@ async function askGroq(msgs, opts = {}) {
       ...trimHistory(msgs, historyBudget).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
     ];
     try {
-      const text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey });
-      return text || '(no response)';
+      let text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey });
+      if (!text) text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true }); // blank once? ask again
+      if (!text) throw friendlyError('I went blank on that one — please ask again, maybe in different words.');
+      return text;
     } catch (e) {
       if (e.groqLimited) {
         // every Groq model is out for this minute — answer with Gemini instead of waiting
         try { return await geminiFromChat(messages); } catch (g) { /* Gemini busy too: wait for Groq */ }
         return (await groqChat(messages, { model, onWait: opts.onWait, rotate: true })) || '(no response)';
       }
-      if (!e.tooLarge) throw e;
+      if (!e.tooLarge) {
+        // Groq (and the server) couldn't answer: try Gemini before giving up.
+        if (state.geminiKey) { try { return await geminiFromChat(messages); } catch (g) { /* fall through */ } }
+        throw e;
+      }
       if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
       const next = GROQ_MODELS.find((m) => !tried.has(m) && m !== e.model);
       if (next) { model = next; historyBudget = 3000; continue; }
@@ -1591,7 +1674,7 @@ async function askGeminiVision(msgs, image) {
 
 /* Image reading with only a Groq key: Groq's vision model (up to 5 pictures). */
 async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } = {}) {
-  const model = await discoverGroqVisionModel();
+  const model = state.groqKey ? await discoverGroqVisionModel() : 'vision'; // the server picks its own
   if (!model) {
     const e = new Error('To read pictures, add your free Google (Gemini) API key in Settings — Groq has no picture-reading model on your key right now.');
     e.friendly = true; throw e;
@@ -1607,10 +1690,10 @@ async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } 
 async function askCassie(msgs, image, opts = {}) {
   if (image) {
     if (state.geminiKey) return askGeminiVision(msgs, image);
-    if (state.groqKey) return askGroqVision(msgs, [image], { onWait: opts.onWait });
+    if (canChat()) return askGroqVision(msgs, [image], { onWait: opts.onWait });
     throw new Error('Add your Google (Gemini) API key in Settings to use images.');
   }
-  if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
+  if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
   return askGroq(msgs, opts);
 }
 
@@ -1822,17 +1905,18 @@ async function answerAboutDocument(doc, request, history, onStatus) {
   if (state.geminiKey) {
     try { return await geminiDocument(doc, request, history, onStatus); }
     catch (e) {
-      if (!state.groqKey) throw e;
-      onStatus('Gemini is busy — reading it with Groq instead…');
+      if (!canChat()) throw e;
+      onStatus('Gemini is busy — reading it another way…');
     }
   }
-  if (!state.groqKey) throw new Error('Add your Groq API key in Settings first.');
+  if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
   return groqDocument(doc, request, history, onStatus);
 }
 
 /* ---------- upload / download / image + document helpers ---------- */
 let pendingImage = null; // { mimeType, base64, dataUrl }
 let pendingDoc = null;   // { name, text } — extracted text from a PDF/DOCX/PPTX
+let attachReading = null; // the file still being read, if any
 
 function clearAttach() {
   pendingImage = null;
@@ -2218,7 +2302,86 @@ function setTypingStatus(bubble, text) {
   scrollToBottom();
 }
 
+/* Errors read like Cassie, never like a crash, and come with a "Try again". */
+function errorText(err, prefix = 'Something went wrong') {
+  if (err && err.friendly) return err.message;
+  const m = String((err && err.message) || err || '');
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return "I couldn't connect — check your internet and try again.";
+  if (/timeout|timed out|aborted/i.test(m)) return 'That took too long — please try again.';
+  return `${prefix}. Please try again — if it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
+}
+function renderError(err, retry, prefix) {
+  const b = renderMessage('assistant', errorText(err, prefix));
+  b.classList.add('error');
+  if (retry) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fu-chip retry-btn';
+    btn.textContent = 'Try again';
+    btn.addEventListener('click', () => { b.remove(); retry(); });
+    b.appendChild(btn);
+  }
+  return b;
+}
+// Take back the last question (its bubble and its saved message) so it can be asked again.
+function takeBackLastQuestion(text) {
+  const last = state.messages[state.messages.length - 1];
+  if (last && last.role === 'user') { state.messages.pop(); save(); }
+  const users = chatLog.querySelectorAll('.bubble-user');
+  const lastB = users[users.length - 1];
+  if (lastB) lastB.remove();
+  return text;
+}
+
+/* ---------- Review my mistakes: quiz questions the student missed come back later ---------- */
+const DAY_MS = 864e5;
+function captureQuizMarks(reply) {
+  if (!/\[\[\s*(MISSED|GOT)\s*:/i.test(reply || '')) return reply;
+  if (!Array.isArray(state.mistakes)) state.mistakes = [];
+  const norm = (q) => q.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  let changed = false;
+  reply = reply.replace(/\[\[\s*(MISSED|GOT)\s*:\s*([\s\S]*?)\]\]/gi, (_, kind, body) => {
+    const [q, a] = body.split('||').map((x) => (x || '').trim());
+    if (!q) return '';
+    const key = norm(q);
+    const i = state.mistakes.findIndex((m) => norm(m.q) === key);
+    if (/missed/i.test(kind)) {
+      const m = i >= 0 ? state.mistakes[i] : null;
+      if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
+      else state.mistakes.unshift({ q: q.slice(0, 400), a: (a || '').slice(0, 300), at: Date.now(), due: Date.now() + DAY_MS, misses: 1 });
+    } else if (i >= 0) {
+      const m = state.mistakes[i];
+      m.right = (m.right || 0) + 1;
+      if (m.right >= 2) state.mistakes.splice(i, 1); // right twice → learned
+      else m.due = Date.now() + 3 * DAY_MS;
+    }
+    changed = true;
+    return '';
+  }).replace(/\n{3,}/g, '\n\n').trim();
+  if (state.mistakes.length > 200) state.mistakes.length = 200;
+  if (changed) save();
+  return reply;
+}
+const dueMistakes = () => (Array.isArray(state.mistakes) ? state.mistakes : []).filter((m) => (m.due || 0) <= Date.now());
+function reviewMistakes(all = false) {
+  const list = (all ? state.mistakes || [] : dueMistakes()).slice(0, 10);
+  if (!list.length) { renderMessage('assistant', 'No mistakes to review right now — nice! Start a quiz with “Quiz me”, and any you miss will come back here.'); return; }
+  if (!canChat()) { openSettings(); return; }
+  track('feature', 'review');
+  quizMode = true;
+  if (quizBtn) quizBtn.classList.add('active');
+  if (typeof setQuizLabel === 'function') setQuizLabel('Stop quiz');
+  dressCassie();
+  const qs = list.map((m, k) => `${k + 1}. ${m.q}${m.a ? ` (correct answer: ${m.a})` : ''}`).join('\n');
+  handleSend(`Let's review the quiz questions I got wrong before. Ask them one at a time (you may reword them slightly), wait for my answer, then grade it:\n${qs}`);
+}
+
 async function handleSend(text, opts = {}) {
+  if (attachReading) {
+    const wait = attachReading;
+    sendBtn.disabled = true;
+    try { await wait; } finally { sendBtn.disabled = false; if (attachReading === wait) attachReading = null; }
+  }
   const image = pendingImage;
   let doc = pendingDoc;
   if (!text.trim() && !image && !doc) return;
@@ -2228,7 +2391,7 @@ async function handleSend(text, opts = {}) {
     if (pic) return handleImageRequest(text, pic.subject);
   }
 
-  const needKey = (image || doc) ? !(state.geminiKey || state.groqKey) : !state.groqKey;
+  const needKey = (image || doc) ? !(state.geminiKey || canChat()) : !canChat();
   if (needKey) {
     openSettings();
     detourToElement(image ? geminiKeyInput : groqKeyInput, { click: true, resumeAfter: 1200 });
@@ -2273,7 +2436,8 @@ async function handleSend(text, opts = {}) {
   autoGrow();
   taskOutfit = null;
   dressCassie();
-  track('feature', doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat');
+  const featureName = doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat';
+  track('feature', featureName);
   if (!doc && !image) trackWords(sendText);
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
   // remember what the student is studying + any explicit "remember ..." note
@@ -2290,9 +2454,11 @@ async function handleSend(text, opts = {}) {
   const onWait = (secs) => setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`);
 
   try {
-    const reply = doc
+    let reply = doc
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait });
+    reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
+    if (!reply) throw friendlyError('I went blank on that one — please ask again.');
     // A picture request the detector missed: the model hands it over as [[IMAGE: …]],
     // or draws ASCII art for something that isn't a graph → make a real picture.
     const marker = !doc && !image && reply.match(/\[\[\s*IMAGE\s*:\s*([^\]]+)\]\]/i);
@@ -2315,6 +2481,7 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
+    addRating(bubble, bubble.querySelector('.cassie-board') ? 'graph' : featureName);
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
@@ -2324,7 +2491,8 @@ async function handleSend(text, opts = {}) {
     speak(reply);
   } catch (err) {
     typingBubble.remove();
-    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
+    const again = !image && text.trim() ? () => handleSend(takeBackLastQuestion(text), opts) : null;
+    renderError(err, again);
     setCursorMode('idle');
   } finally {
     sendBtn.disabled = false;
@@ -2477,6 +2645,7 @@ async function pictureReply(subject, typingBubble) {
     const caption = `Here’s your picture of ${subject}.`;
     const bubble = renderMessage('assistant', caption);
     addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
+    addRating(bubble, 'image');
     // free-service links are stable, so the picture comes back when the chat reopens
     state.messages.push({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: caption, image: keep ? src : undefined });
     save();
@@ -2484,7 +2653,7 @@ async function pictureReply(subject, typingBubble) {
     mascotCelebrate();
   } catch (err) {
     typingBubble.remove();
-    renderMessage('assistant', err.friendly ? err.message : `Couldn't make that picture: ${err.message}`).classList.add('error');
+    renderError(err, () => pictureReply(subject, renderTyping()), "Couldn't make that picture");
     setCursorMode('idle');
   } finally {
     sendBtn.disabled = false;
@@ -2531,8 +2700,8 @@ function authorsShort(list) {
 async function runResearch(topic) {
   topic = (topic || '').trim();
   if (!topic) { promptInput.placeholder = 'Type a topic first, then tap Research…'; promptInput.focus(); return; }
-  taskOutfit = 'graduate'; dressCassie(); track('feature', 'web'); trackWords(text); track('feature', 'research'); trackWords(topic);
-  if (!state.groqKey) {
+  taskOutfit = 'graduate'; dressCassie(); track('feature', 'research'); trackWords(topic);
+  if (!canChat()) {
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
     renderMessage('assistant', 'Add your free Groq API key in Settings first, then I can research for you.');
@@ -2607,7 +2776,7 @@ async function runResearch(topic) {
     setCursorMode('idle');
   } catch (err) {
     typing.remove();
-    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
+    renderError(err);
     setCursorMode('idle');
   }
 }
@@ -2645,7 +2814,7 @@ async function askGeminiGrounded(q) {
 async function runWebCheck(text) {
   text = (text || '').trim();
   if (!text) { promptInput.placeholder = 'Type a question first, then tap Web…'; promptInput.focus(); return; }
-  taskOutfit = 'graduate'; dressCassie();
+  taskOutfit = 'graduate'; dressCassie(); track('feature', 'web'); trackWords(text);
   if (!state.geminiKey) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
@@ -2677,7 +2846,7 @@ async function runWebCheck(text) {
     setCursorMode('idle');
   } catch (err) {
     typing.remove();
-    renderMessage('assistant', err.friendly ? err.message : `Something went wrong: ${err.message}`).classList.add('error');
+    renderError(err);
     setCursorMode('idle');
   }
 }
@@ -2828,8 +2997,10 @@ async function attachFile(file) {
   if (kind === 'pdf' || kind === 'docx' || kind === 'pptx' || kind === 'txt') {
     pendingImage = null;
     showName(`Reading ${file.name}…`);
+    const reading = readDocument(file, kind);
+    attachReading = reading.catch(() => null); // Send waits for this, so the file is never left behind
     try {
-      const doc = await readDocument(file, kind);
+      const doc = await reading;
       if (!doc.text && !doc.hasVisuals) {
         pendingDoc = null;
         attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
@@ -2887,7 +3058,7 @@ if (hintBtn) {
 }
 if (quizBtn) {
   quizBtn.addEventListener('click', () => {
-    if (!state.groqKey) {
+    if (!canChat()) {
       openSettings();
       detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
       renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can start a quiz.');
@@ -2908,13 +3079,16 @@ if (quizBtn) {
         {}
       );
     } else {
-      renderMessage('assistant', 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
+      const saved = (state.mistakes || []).length;
+      renderMessage('assistant', saved
+        ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again — tap “Review my mistakes” on the home screen (New chat) any time.`
+        : 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
     }
   });
 }
 if (talkBtn) {
   talkBtn.addEventListener('click', () => {
-    if (!state.groqKey) {
+    if (!canChat()) {
       openSettings();
       detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
       renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can talk.');
@@ -2951,7 +3125,10 @@ function openSettings() {
   // for them (that's where they need to paste it). Once a key is saved, keep
   // every section collapsed so the screen stays calm.
   const keysGroup = document.getElementById('settings-keys');
-  if (keysGroup) keysGroup.open = !state.groqKey;
+  if (keysGroup) keysGroup.open = !canChat();
+  const keysOpt = document.getElementById('keys-optional'), keysSub = document.getElementById('keys-sub');
+  if (keysOpt) keysOpt.hidden = !SERVER;
+  if (keysSub && SERVER) keysSub.textContent = 'Optional — for heavy use';
   syncAccentSwatches();
   settingsPanel.hidden = false;
 }
@@ -3590,7 +3767,7 @@ async function runExplainOrAnswer(text, rect, mode) {
   setPopoverContent('Thinking…', { muted: true });
   positionPopover(rect);
 
-  if (!state.groqKey) {
+  if (!canChat()) {
     setPopoverContent('Add your free Groq API key in Settings first.', { muted: true });
     positionPopover(rect);
     openSettings();
@@ -3620,7 +3797,7 @@ async function runExplainOrAnswer(text, rect, mode) {
     detourToElement(highlightPopover, { click: true, resumeAfter: 900 });
   } catch (err) {
     if (myGen !== highlightGen) return;
-    setPopoverContent(err.friendly ? err.message : `Something went wrong: ${err.message}`, { muted: true });
+    setPopoverContent(errorText(err), { muted: true });
     positionPopover(rect);
   } finally {
     if (myGen === highlightGen) setCursorMode('idle');
@@ -3712,8 +3889,8 @@ chatLog.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- anonymous usage stats (optional, opt-out in Settings → You) ---------- */
-// Paste your analytics Worker URL here (see analytics/README.md). Empty = nothing is sent.
-const ANALYTICS_URL = window.CASSIE_ANALYTICS_URL || '';
+// Usage counts go to Cassie's server (config.js). No server = nothing is sent.
+const ANALYTICS_URL = window.CASSIE_ANALYTICS_URL || (SERVER ? SERVER + '/e' : '');
 // What is sent: a random install id, the event (app opened / feature used), and coarse
 // profile buckets (student/pro, grade band, age band). With "topics" on (adults only),
 // up to 5 single keywords per message — never names, messages, files, or keys, and
@@ -3743,14 +3920,17 @@ function trackWords(text) {
     .filter((w) => w.length >= 4 && w.length <= 24 && !STOP.has(w) && w !== own);
   [...new Set(words)].slice(0, 5).forEach((w) => wordQ.push(w));
 }
-function flushTrack() {
-  if (!ANALYTICS_URL || (!trackQ.length && !wordQ.length)) return;
+function trackCtx() {
   const p = state.profile || {};
   const grp = p.role === 'student' ? (GRADE_GROUPS.find((g) => g[2].includes(p.grade)) || [''])[0] : '';
   const standalone = window.matchMedia && matchMedia('(display-mode: standalone)').matches;
+  return { role: p.role || '', grade: grp, age: ageBand(p.age), platform: (/Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'phone' : 'computer') + (standalone ? ' app' : ''), lang: (navigator.language || '').slice(0, 5), version: 'v' + APP_VERSION };
+}
+function flushTrack() {
+  if (!ANALYTICS_URL || (!trackQ.length && !wordQ.length)) return;
   const body = JSON.stringify({
     uid: installId(),
-    ctx: { role: p.role || '', grade: grp, age: ageBand(p.age), platform: (/Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'phone' : 'computer') + (standalone ? ' app' : ''), lang: (navigator.language || '').slice(0, 5) },
+    ctx: trackCtx(),
     events: trackQ.splice(0, 50), words: wordQ.splice(0, 50),
   });
   try {
@@ -3852,6 +4032,112 @@ document.getElementById('edit-profile-btn')?.addEventListener('click', () => { s
   save();
 }));
 
+/* ---------- feedback: 👍 / 👎 under answers, and "Report a problem" ---------- */
+async function sendFeedback(kind, feature, text = '') {
+  if (!SERVER) return false;
+  try {
+    const r = await fetch(SERVER + '/f', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ uid: installId(), kind, feature, text, ctx: trackCtx() }) });
+    return r.ok;
+  } catch (e) { return false; }
+}
+const DOWN_REASONS = ['Wrong answer', 'Confusing', 'Too long', 'Not what I asked', 'Something broke'];
+function addRating(bubble, feature) {
+  if (!SERVER || !bubble) return;
+  const row = document.createElement('div');
+  row.className = 'rate-row';
+  row.innerHTML = '<span class="rate-q">Helpful?</span><button type="button" class="rate-btn" data-k="up" aria-label="Helpful" title="Helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4zm2 11h8.3a2 2 0 0 0 2-1.6l1.4-7A2 2 0 0 0 18.7 10H14l.7-4.4A1.8 1.8 0 0 0 11.5 4L9 10v11z"/></svg></button><button type="button" class="rate-btn" data-k="down" aria-label="Not helpful" title="Not helpful"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(180deg)"><path d="M7 10v11H3V10h4zm2 11h8.3a2 2 0 0 0 2-1.6l1.4-7A2 2 0 0 0 18.7 10H14l.7-4.4A1.8 1.8 0 0 0 11.5 4L9 10v11z"/></svg></button>';
+  row.querySelectorAll('.rate-btn').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.k === 'up') {
+      sendFeedback('up', feature);
+      row.innerHTML = '<span class="rate-q">Thanks!</span>';
+      return;
+    }
+    row.innerHTML = `<span class="rate-q">What went wrong?</span><div class="rate-reasons">${DOWN_REASONS.map((r) => `<button type="button" class="fu-chip">${r}</button>`).join('')}</div>
+      <div class="rate-more"><input type="text" maxlength="300" placeholder="Tell us more (optional — no personal info)"><button type="button" class="fu-chip rate-send">Send</button></div>`;
+    let reason = '';
+    row.querySelectorAll('.rate-reasons .fu-chip').forEach((c) => c.addEventListener('click', () => {
+      reason = c.textContent;
+      row.querySelectorAll('.rate-reasons .fu-chip').forEach((x) => x.classList.toggle('on', x === c));
+    }));
+    row.querySelector('.rate-send').addEventListener('click', async () => {
+      const more = row.querySelector('input').value.trim();
+      sendFeedback('down', feature, [reason, more].filter(Boolean).join(' — '));
+      row.innerHTML = '<span class="rate-q">Thanks — this helps Cassie get better.</span>';
+    });
+  }));
+  bubble.appendChild(row);
+}
+function openReport() {
+  const wrap = document.createElement('div');
+  wrap.className = 'profile-overlay';
+  wrap.innerHTML = `<form class="profile-card" novalidate>
+    <h2>Report a problem</h2>
+    <p class="pf-sub">What happened? What did you expect? Please don’t include personal info like your full name, phone number, or passwords.</p>
+    <label class="pf-field"><span>What went wrong</span><textarea name="text" rows="5" maxlength="1200" placeholder="e.g. The graph didn't show when I asked for y = x^2"></textarea></label>
+    <p class="pf-err" hidden></p>
+    <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Cancel</button><button type="submit" class="pf-go">Send</button></div>
+  </form>`;
+  document.body.appendChild(wrap);
+  const f = wrap.querySelector('form');
+  const close = () => wrap.remove();
+  wrap.querySelector('.pf-cancel').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+  f.text.focus();
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = f.text.value.trim();
+    const err = f.querySelector('.pf-err');
+    if (text.length < 5) { err.textContent = 'Please describe the problem in a few words.'; err.hidden = false; return; }
+    f.querySelector('.pf-go').disabled = true;
+    const ok = await sendFeedback('report', 'report', text);
+    if (!ok) { err.textContent = "Couldn't send — check your internet and try again."; err.hidden = false; f.querySelector('.pf-go').disabled = false; return; }
+    f.innerHTML = '<h2>Thank you!</h2><p class="pf-sub">Your report was sent. It helps make Cassie better for everyone.</p><button type="button" class="pf-go">Close</button>';
+    f.querySelector('.pf-go').addEventListener('click', close);
+  });
+}
+document.getElementById('report-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openReport(); });
+if (!SERVER) { const rb = document.getElementById('report-row'); if (rb) rb.hidden = true; }
+
+const liteSelect = document.getElementById('lite-select');
+function renderLiteHint() {
+  const h = document.getElementById('lite-hint');
+  if (h) h.textContent = window.CASSIE_LITE ? 'Lite mode is on right now.' : 'Lite mode is off right now.';
+}
+if (liteSelect) {
+  liteSelect.value = state.lite || 'auto';
+  renderLiteHint();
+  liteSelect.addEventListener('change', () => {
+    state.lite = liteSelect.value; save();
+    const want = state.lite === 'on' || (state.lite === 'auto' && slowDevice());
+    if (want !== window.CASSIE_LITE) {
+      const h = document.getElementById('lite-hint');
+      if (h) h.textContent = 'Reloading to apply…';
+      setTimeout(() => location.reload(), 600);
+    }
+  });
+}
+
+/* ---------- What's new (once per update, for returning users) ---------- */
+const WHATS_NEW = [
+  'Graphs now draw on the board — try “graph y = x² − 4”.',
+  'Pictures look real now — just say “make me a picture of…”.',
+  'Paste a screenshot on the board with Ctrl+V and draw on it.',
+  'Rate answers with the thumbs, or tap Settings → Report a problem.',
+  'Lite mode keeps Cassie fast on slow phones (Settings → Appearance).',
+  'Quiz me now saves the ones you missed — tap “Review my mistakes” to practise them.',
+];
+function showWhatsNew() {
+  if (state.seenVersion === APP_VERSION) return;
+  state.seenVersion = APP_VERSION; save();
+  const wrap = document.createElement('div');
+  wrap.className = 'profile-overlay';
+  wrap.innerHTML = `<div class="profile-card"><h2>What’s new in Cassie</h2><ul class="wn-list">${WHATS_NEW.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul><button type="button" class="pf-go">Got it</button></div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.querySelector('.pf-go').addEventListener('click', close);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+}
+
 /* ---------- init ---------- */
 buildAccentSwatches();
 applyReading();
@@ -3860,8 +4146,8 @@ renderHistory();
 updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
-if (!state.profile) setTimeout(() => openProfile(true), 300);
-else track('open');
+if (!state.profile) { state.seenVersion = APP_VERSION; setTimeout(() => openProfile(true), 300); }
+else { track('open'); setTimeout(showWhatsNew, 1200); }
 requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();

@@ -53,6 +53,10 @@
   .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
   .bar .val { color: var(--text-primary); font-variant-numeric: tabular-nums; font-weight: 600; }
   .bar:hover .fill { filter: brightness(1.12); }
+  .reports { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow: auto; }
+  .rep { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .rep .meta { color: var(--text-secondary); font-size: 12.5px; margin-bottom: 4px; }
+  .rep .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { color: var(--text-secondary); font-weight: 600; }
@@ -107,10 +111,10 @@
   }
 
   function tile(k, v, s) { return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`; }
-  function bars(rows, label, value, extra) {
+  function bars(rows, label, value, extra, o = {}) {
     if (!rows.length) return '<div class="empty">No data yet</div>';
-    const max = Math.max(...rows.map(value), 1);
-    return `<div class="bars">${rows.map((r) => `<div class="bar" data-tip="${esc(label(r))}|${esc(extra ? extra(r) : fmt(value(r)))}"><span class="lbl">${esc(label(r))}</span><span class="trk"><span class="fill" style="width:${(value(r) / max * 100).toFixed(1)}%"></span></span><span class="val">${fmt(value(r))}</span></div>`).join('')}</div>`;
+    const max = o.max || Math.max(...rows.map(value), 1);
+    return `<div class="bars">${rows.map((r) => `<div class="bar" data-tip="${esc(label(r))}|${esc(extra ? extra(r) : fmt(value(r)))}"><span class="lbl">${esc(label(r))}</span><span class="trk"><span class="fill" style="width:${(value(r) / max * 100).toFixed(1)}%"></span></span><span class="val">${fmt(value(r))}${o.suffix || ''}</span></div>`).join('')}</div>`;
   }
   // every day in the range, zero-filled
   function series(d) {
@@ -219,6 +223,12 @@
           <p class="muted" style="margin:12px 0 4px">Age</p>${bars(d.ages, (r) => r.k, (r) => r.n)}
           <p class="muted" style="margin:12px 0 4px">Device</p>${bars(d.platforms, (r) => r.k, (r) => r.n)}
         </div>
+      </div>
+      <div class="grid two">
+        <div class="card"><h2>Were answers helpful?</h2><p class="sub">Share of thumbs-up per feature, last ${d.days} days</p>${bars((d.ratings || []), (r) => fname(r.name), (r) => Math.round(100 * r.up / Math.max(1, r.up + r.down)), (r) => `${r.up} 👍 · ${r.down} 👎`, { max: 100, suffix: '%' })}
+          <p class="muted" style="margin:14px 0 4px">Questions answered through your server</p>${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem” or with a thumbs-down</p>
+          ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
       </div>
       <div class="card"><h2>Most active users</h2><p class="sub">Anonymous — a random id per device, never a name</p><div class="scroll"><table>
         <tr><th>User</th><th>Opens</th><th>Features used</th><th>First seen</th><th>Last seen</th><th>Who</th></tr>
