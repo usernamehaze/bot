@@ -155,6 +155,12 @@ Supported specs:
 Keep numbers real and correct — the board draws exactly what you give it.
 When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board — never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.`;
 
+// What the app does around her answers, so she never claims she can't.
+const ABILITIES_INSTRUCTION = `What this app can do with your answers:
+- Files: when the student asks for a reviewer, notes, flashcards, a worksheet, or a Word/PDF/image file, the app turns your answer into that file automatically and gives them a download button. Never say you can't create files — just write the complete content, organized with a title, headings, bullets, and key terms in bold.
+- Pictures: requests like "generate an image of …" are handled by the app's picture maker. Never say you can't make images.
+- If they ask for a reviewer without naming a topic, make it about what you've been discussing. Only ask which topic when there is nothing to go on.`;
+
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
 
@@ -189,6 +195,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
   // Cassie's drawing board is available in the main chat (not the quick popover).
   if (tutor && mode !== 'hint') sp += `\n\n${BOARD_INSTRUCTION}`;
+  if (tutor) sp += `\n\n${ABILITIES_INSTRUCTION}`;
   // personalize with what Cassie remembers about this student (on-device only)
   try { if (window.CassieMemory) sp += window.CassieMemory.summaryForPrompt(); } catch (e) { /* ignore */ }
   return sp;
@@ -271,7 +278,6 @@ const attachPreview = document.getElementById('attach-preview');
 const attachThumb = document.getElementById('attach-thumb');
 const attachName = document.getElementById('attach-name');
 const attachRemove = document.getElementById('attach-remove');
-const imageBtn = document.getElementById('image-btn');
 const highlightPopover = document.getElementById('highlight-popover');
 const highlightPopoverBody = document.getElementById('highlight-popover-body');
 const highlightPopoverClose = document.getElementById('highlight-popover-close');
@@ -508,8 +514,8 @@ const MASCOT_REACTIONS = {
     { t: 'Never give up!', e: 'emote-happy' },
   ],
   image: [
-    { t: 'Tell me what to draw!', e: 'emote-surprised' },
-    { t: 'Describe it first 🎨', e: 'emote-star' },
+    { t: 'Painting it… 🎨', e: 'emote-star' },
+    { t: 'Ooh, fun one!', e: 'emote-happy' },
   ],
   celebrate: [
     { t: 'Correct! 🎉', e: 'emote-star' },
@@ -1159,7 +1165,10 @@ function renderHistory() {
     renderHome();
     return;
   }
-  state.messages.forEach((m) => renderMessage(m.role, m.display || m.content));
+  state.messages.forEach((m) => {
+    const b = renderMessage(m.role, m.display || m.content);
+    if (m.image && b) addImageToBubble(b, m.image, { download: true });
+  });
 }
 
 /* ---------- one-tap follow-ups + double-check (under the latest answer) ---------- */
@@ -1311,13 +1320,34 @@ function retiredError() {
   return e;
 }
 
+/* Groq's free tier gives every model its OWN per-minute budget. So when one
+   model runs out, Cassie switches to another one instead of making the student
+   wait — and only waits when every model is out for the minute. */
+const groqCooldown = {}; // model -> when (ms) its per-minute budget resets
+const groqCooling = (model) => (groqCooldown[model] || 0) > Date.now();
+function noteGroqBudget(model, res) {
+  try {
+    const left = parseInt(res.headers.get('x-ratelimit-remaining-tokens'), 10);
+    const reset = parseDuration(res.headers.get('x-ratelimit-reset-tokens'));
+    if (Number.isFinite(left) && left < 2500 && reset) groqCooldown[model] = Date.now() + reset * 1000;
+  } catch (e) { /* headers unavailable */ }
+}
+const WEAK_GROQ = /8b|instant|allam|gemma|scout|prompt-guard/i;
+async function groqAlternative(tried) {
+  const pool = [...new Set([...GROQ_MODELS, ...(await discoverGroqTextModels())])]
+    .filter((m) => !tried.has(m) && !groqCooling(m));
+  return pool.find((m) => !WEAK_GROQ.test(m)) || pool[0] || '';
+}
+
 /* One raw Groq chat call with all the resilience built in: retired models are
-   swapped out, short per-minute limits are waited out (onWait tells the UI),
+   swapped out, per-minute limits switch to another model (rotate) or are waited
+   out (onWait tells the UI; noWait throws instead so a caller can use Gemini),
    and overloads are retried. Returns the reply text. */
-async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false } = {}) {
+async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false, rotate = false, noWait = false } = {}) {
   model = model || state.groqModel;
   const tried = new Set();
-  let overloadTries = 0, waitTries = 0;
+  let overloadTries = 0, waitTries = 0, switches = 0;
+  if (rotate && groqCooling(model)) model = (await groqAlternative(new Set([model]))) || model;
   while (true) {
     tried.add(model);
     const body = { model, messages, max_tokens: maxTokens, temperature: 0.6 };
@@ -1329,8 +1359,10 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       body: JSON.stringify(body),
     });
     if (res.ok) {
+      noteGroqBudget(model, res);
       const data = await res.json();
-      return (data.choices?.[0]?.message?.content || '').trim();
+      // some models (Qwen) think out loud in <think> tags — keep only the answer
+      return (data.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
@@ -1341,9 +1373,17 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       model = next;
       continue;
     }
-    // A per-minute limit that resets soon: just wait it out instead of failing.
+    // A per-minute limit: switch to a model that still has budget, or wait it out.
     if (res.status === 429) {
       const secs = retryAfterSecs(res, detail);
+      if (secs && secs <= 65) groqCooldown[model] = Date.now() + secs * 1000;
+      if (rotate && switches < 4) {
+        const alt = await groqAlternative(tried);
+        if (alt) { switches += 1; model = alt; continue; }
+      }
+      if (noWait && secs && secs <= 65) {
+        const e = new Error('groq per-minute limit'); e.groqLimited = true; e.waitSecs = secs; throw e;
+      }
       if (secs && secs <= 65 && waitTries < 4) {
         waitTries += 1;
         if (onWait) onWait(Math.ceil(secs));
@@ -1373,7 +1413,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
 async function askGroq(msgs, opts = {}) {
   let model = state.groqModel;
   const tried = new Set();
-  let historyBudget = 4000; // tokens of chat history to include (trimmed on overflow)
+  let historyBudget = 3000; // tokens of chat history to include (trimmed on overflow)
   while (true) {
     tried.add(model);
     const messages = [
@@ -1381,13 +1421,18 @@ async function askGroq(msgs, opts = {}) {
       ...trimHistory(msgs, historyBudget).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
     ];
     try {
-      const text = await groqChat(messages, { model, onWait: opts.onWait });
+      const text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey });
       return text || '(no response)';
     } catch (e) {
+      if (e.groqLimited) {
+        // every Groq model is out for this minute — answer with Gemini instead of waiting
+        try { return await geminiFromChat(messages); } catch (g) { /* Gemini busy too: wait for Groq */ }
+        return (await groqChat(messages, { model, onWait: opts.onWait, rotate: true })) || '(no response)';
+      }
       if (!e.tooLarge) throw e;
       if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
       const next = GROQ_MODELS.find((m) => !tried.has(m) && m !== e.model);
-      if (next) { model = next; historyBudget = 4000; continue; }
+      if (next) { model = next; historyBudget = 3000; continue; }
       const err = new Error("That message is too long for Groq's free per-minute limit. Try a shorter question, start a new chat, or attach the material as a file (the paperclip) — I read long files in parts.");
       err.friendly = true;
       throw err;
@@ -1432,6 +1477,14 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GE
   const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon — meanwhile text questions still work.");
   e.friendly = true; e.cause = lastErr;
   throw e;
+}
+
+/* A Groq-style chat ([{role, content}], system first) answered by Gemini. */
+function geminiFromChat(messages) {
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const contents = messages.filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] }));
+  return geminiGenerate({ contents, system, models: GEMINI_DOC_MODELS });
 }
 
 /* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
@@ -1642,7 +1695,7 @@ async function groqDocument(doc, request, history, onStatus) {
     try {
       const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
         { role: 'user', content: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualBlock}\n\n${request}` }],
-        { maxTokens: 3000, lean: true, onWait: waitNote('Reading…') });
+        { maxTokens: 3000, lean: true, rotate: true, onWait: waitNote('Reading…') });
       if (reply) return reply;
     } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
   }
@@ -1657,7 +1710,7 @@ async function groqDocument(doc, request, history, onStatus) {
     const note = await groqChat([
       { role: 'system', content: 'You take complete, accurate study notes from one part of a student\'s lesson file. Capture EVERY key term with its definition, facts, numbers, dates, names, formulas, processes (as steps), examples, and any questions in the text. Bullets only, no intro. Max ~350 words. Never invent anything.' },
       { role: 'user', content: `Part ${i + 1} of ${parts.length} of "${doc.name}":\n"""\n${parts[i]}\n"""` },
-    ], { maxTokens: 900, lean: true, onWait: waitNote(label) });
+    ], { maxTokens: 900, lean: true, rotate: true, onWait: waitNote(label) });
     notes.push(`[Part ${i + 1}]\n${note}`);
   }
   // Fit all notes into one final request.
@@ -1670,7 +1723,7 @@ async function groqDocument(doc, request, history, onStatus) {
   onStatus('Putting it all together…');
   let reply = await groqChat([{ role: 'system', content: sys },
     { role: 'user', content: `Complete study notes taken from every part of "${doc.name}" (in order):\n"""\n${combined}\n"""${visualBlock}\n\nUsing these notes as the file's content: ${request}` }],
-    { maxTokens: 3000, lean: true, onWait: waitNote('Writing it up…') });
+    { maxTokens: 3000, lean: true, rotate: true, onWait: waitNote('Writing it up…') });
   if (truncated) reply += `\n\n*This file is long, so I covered roughly the first ${Math.round((GROQ_DOC_MAX_PARTS * GROQ_DOC_PART) / 2500)} pages. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*`;
   return reply;
 }
@@ -1983,16 +2036,29 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
     tools.appendChild(btn);
   });
   bubble.appendChild(tools);
-  if (want) {
-    const f = SAVE_FORMATS.find((x) => x.key === want);
-    const hint = document.createElement('div');
-    hint.className = 'save-hint';
-    hint.textContent = `Your ${f.label === 'Image' ? 'image' : f.label} file is ready — tap “${f.label}” above to save it.`;
-    bubble.appendChild(hint);
-  }
+  if (want) addFileCard(bubble, text, docTitle, SAVE_FORMATS.find((x) => x.key === want));
 }
 
-function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
+// The file the student asked for, made right away and shown as a card.
+const FILE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>';
+function addFileCard(bubble, text, docTitle, f) {
+  const name = `${window.CassieExport.fileBase(docTitle)}.${f.ext}`;
+  const card = document.createElement('div');
+  card.className = 'file-card';
+  card.innerHTML = `<span class="fc-ico">${FILE_ICON}</span><span class="fc-txt"><b></b><small>Making your ${f.label} file…</small></span><button type="button" class="fc-btn" disabled>${DL_ICON} Download</button>`;
+  card.querySelector('b').textContent = name;
+  const small = card.querySelector('small'), btn = card.querySelector('button');
+  bubble.appendChild(card);
+  let blob = null;
+  f.make(text, docTitle).then((b) => {
+    blob = b;
+    small.textContent = `${f.label === 'Image' ? 'Image' : f.label} file · ready`;
+    btn.disabled = false;
+  }).catch(() => { small.textContent = 'Couldn’t make the file — use “Save as” above.'; });
+  btn.addEventListener('click', () => { if (blob) downloadBlob(name, blob); });
+}
+
+function addImageToBubble(bubble, dataUrl, { download = false, name = 'cassie-image' } = {}) {
   const img = document.createElement('img');
   img.className = 'chat-img';
   img.src = dataUrl;
@@ -2004,12 +2070,20 @@ function addImageToBubble(bubble, dataUrl, { download = false } = {}) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.innerHTML = `${DL_ICON} Download image`;
-    btn.addEventListener('click', () => fetch(dataUrl).then((r) => r.blob()).then((b) => downloadBlob('cassie-image.png', b)));
+    btn.addEventListener('click', () => fetch(dataUrl).then((r) => r.blob())
+      .then((b) => downloadBlob(`${name}.${/png/.test(b.type) ? 'png' : 'jpg'}`, b))
+      .catch(() => window.open(dataUrl, '_blank', 'noopener')));
     tools.appendChild(btn);
     bubble.appendChild(tools);
   }
   scrollToBottom();
 }
+
+/* "make me a reviewer / notes / flashcards…" → the answer also arrives as a file */
+const STUDY_FILE_RE = /\b(make|generate|create|give|write|prepare|build|produce|turn|gawa)\b[^.?!]{0,60}?\b(reviewers?|study guides?|study notes|lecture notes|notes|flash ?cards|worksheets?|cheat ?sheets?|handouts?|outlines?|summary sheet|practice (?:questions|exam|test)|mock (?:exam|test)|lesson plan)\b/i;
+const wantsStudyFile = (t) => STUDY_FILE_RE.test(String(t || ''));
+// a real reviewer, not a "Sure — which topic?" question
+const looksLikeContent = (md) => md.length > 300 && /(^|\n)\s*(#{1,4}\s|[-*•]\s|\d+[.)]\s|\*\*)/.test(md);
 
 /* ---------- send flow ---------- */
 // The file this chat is about, so follow-ups ("now quiz me on the file") can re-read it.
@@ -2028,6 +2102,10 @@ async function handleSend(text, opts = {}) {
   let doc = pendingDoc;
   if (!text.trim() && !image && !doc) return;
   if (!doc && !image && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
+  if (!image && !pendingDoc && !opts.mode) {
+    const pic = imageRequest(text);
+    if (pic) return handleImageRequest(text, pic.subject);
+  }
 
   const needKey = (image || doc) ? !(state.geminiKey || state.groqKey) : !state.groqKey;
   if (needKey) {
@@ -2098,7 +2176,8 @@ async function handleSend(text, opts = {}) {
     const title = doc
       ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
       : '';
-    addTextDownload(bubble, reply, { title, want: window.CassieExport ? window.CassieExport.wantedFormat(sendText) : '' });
+    const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
+    addTextDownload(bubble, reply, { title, want });
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
@@ -2145,77 +2224,116 @@ async function tryGenerateImage(prompt, model) {
   return `data:${imgPart.inlineData.mimeType || 'image/png'};base64,${imgPart.inlineData.data}`;
 }
 
-async function generateImage(prompt) {
+/* Typed picture requests — "generate an image of a plant cell", "draw me a
+   volcano", "make a poster about recycling". With a Gemini key that has image
+   generation on, Gemini paints it; otherwise a free, keyless image service
+   (Pollinations) does. Graphs and plots stay on Cassie's board, which draws
+   them exactly. */
+const IMAGE_ASK_RE = /^\s*(?:hey\s+)?(?:cassie[,!]?\s*)?(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:generate|create|make|draw|paint|render|design|produce|show\s+me|give\s+me|send\s+me|i\s+(?:want|need)|gawa(?:n|in)?\s+mo\s+ako\s+ng)\s+(?:me\s+)?(?:an?\s+|some\s+|the\s+|ng\s+)?(?:(?:ai|realistic|cartoon|cute|simple|colorful|colourful|labeled|labelled|detailed|3d|nice|cool|new)\s+)*(?:image|images|picture|pictures|pic|pics|photo|photos|illustration|illustrations|drawing|painting|artwork|art|poster|logo|wallpaper|icon|sticker|infographic|larawan)\b\s*(?:of|showing|about|for|with|that\s+shows|depicting|na|ng)?\s*[:\-]?\s*(.*)$/i;
+const DRAW_ASK_RE = /^\s*(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:draw|paint|sketch)\s+(?:me\s+)?((?:an?|the|some)\s+.+)$/i;
+const BOARD_SUBJECT_RE = /\b(graph|plot|chart|function|equation|parabola|line|slope|axis|axes|triangle|rectangle|square|circle|area|perimeter|y\s*=|f\(x\)|x\^)/i;
+function imageRequest(text) {
+  const t = String(text || '').trim();
+  const m = t.match(IMAGE_ASK_RE) || t.match(DRAW_ASK_RE);
+  if (!m) return null;
+  const subject = (m[1] || '').trim().replace(/^please\s+/i, '').replace(/[?!.\s]+$/, '');
+  if (BOARD_SUBJECT_RE.test(subject)) return null; // the board draws these accurately
+  return { subject };
+}
+// "generate an image" with nothing after it → picture whatever we were just talking about
+function imageSubjectFromChat() {
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const m = state.messages[i];
+    if (m.role !== 'user' || m.image || imageRequest(m.display || m.content)) continue;
+    const t = String(m.display || m.content).replace(/\(attached:[^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+    if (t) return t.slice(0, 240);
+  }
+  return '';
+}
+
+let geminiImageOff = false; // free Gemini keys usually have image generation set to 0
+async function geminiImage(prompt) {
   let lastErr;
   for (const model of GEMINI_IMAGE_MODELS) {
-    try {
-      return await tryGenerateImage(prompt, model);
-    } catch (e) {
+    try { return await tryGenerateImage(prompt, model); } catch (e) {
       lastErr = e;
-      // only keep trying other models when this one is unavailable/quota-capped
       if (e.quota || e.notAvailable) continue;
       throw e;
     }
   }
-  // Every model was capped/unavailable — give an honest, friendly explanation.
-  if (lastErr && (lastErr.quota || lastErr.notAvailable)) {
-    const friendly = new Error(
-      "Google's free tier has image generation turned off for your key right now (they set the limit to 0), so I can't create pictures at the moment. Everything else still works — text answers, reading photos you upload, research, and web search are all free. To make images you'd need to enable billing on your Google AI Studio account."
-    );
-    friendly.friendly = true;
-    throw friendly;
+  geminiImageOff = true;
+  throw lastErr || new Error('image generation is off for this key');
+}
+function freeImageUrl(prompt, seed) {
+  const p = `${prompt}. Clear, detailed, high quality, accurate, educational.`.slice(0, 700);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=768&seed=${seed}&nologo=true&safe=true`;
+}
+function loadImageUrl(url, ms = 90000) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const t = setTimeout(() => { img.src = ''; reject(new Error('timeout')); }, ms);
+    img.onload = () => { clearTimeout(t); resolve(url); };
+    img.onerror = () => { clearTimeout(t); reject(new Error('failed')); };
+    img.src = url;
+  });
+}
+async function generateImage(prompt) {
+  if (state.geminiKey && !geminiImageOff) {
+    try { return { src: await geminiImage(prompt), keep: false }; } catch (e) { /* fall back to the free service */ }
   }
-  throw lastErr || new Error('image generation failed');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const url = freeImageUrl(prompt, Math.floor(Math.random() * 1e9));
+    try { return { src: await loadImageUrl(url), keep: true }; } catch (e) { if (attempt === 0) await sleep(4000); }
+  }
+  const e = new Error("The free picture maker is busy right now — give it a minute and ask again. (Everything else still works.)");
+  e.friendly = true;
+  throw e;
+}
+function imageFileName(subject) {
+  return (subject || 'cassie-image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'cassie-image';
 }
 
-async function handleGenerateImage() {
-  const text = promptInput.value.trim();
-  if (!text) {
-    // Nothing typed yet — guide the student instead of silently doing nothing.
-    promptInput.placeholder = 'Describe the image you want, then tap the picture button…';
-    promptInput.focus();
-    promptInput.classList.add('nudge');
-    setTimeout(() => promptInput.classList.remove('nudge'), 900);
-    mascotReact('image');
-    return;
-  }
-  if (!state.geminiKey) {
-    openSettings();
-    detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', "Image generation uses Google Gemini — add your free Gemini API key in Settings (top right).");
-    return;
-  }
-  // don't double up the prefix if the box already starts with it
-  const clean = text.replace(/^\s*generate an image:\s*/i, '').trim() || text;
-  const label = `Generate an image: ${clean}`;
+async function handleImageRequest(text, subject) {
+  const label = text.trim();
+  if (!subject) subject = imageSubjectFromChat();
+  if (!state.messages.length) chatLog.innerHTML = ''; // clear the home screen
   state.messages.push({ role: 'user', content: label });
   touchChat();
   save();
   renderMessage('user', label);
   promptInput.value = '';
+  promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
-
+  clearFollowups();
+  if (!subject) {
+    const ask = 'Sure! What should the picture show? For example: “an image of a plant cell with its parts labeled”.';
+    state.messages.push({ role: 'assistant', content: ask });
+    save();
+    renderMessage('assistant', ask);
+    return;
+  }
+  mascotReact('image');
   setCursorMode('thinking');
   const typingBubble = renderTyping();
-  sendBtn.disabled = imageBtn.disabled = true;
-
+  setTypingStatus(typingBubble, 'Making your picture…');
+  sendBtn.disabled = true;
   try {
-    const dataUrl = await generateImage(clean);
+    const { src, keep } = await generateImage(subject);
     typingBubble.remove();
-    const bubble = renderMessage('assistant', '');
-    addImageToBubble(bubble, dataUrl, { download: true });
-    state.messages.push({ role: 'assistant', content: '[generated an image]' });
+    const caption = `Here’s your picture of ${subject}.`;
+    const bubble = renderMessage('assistant', caption);
+    addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
+    // free-service links are stable, so the picture comes back when the chat reopens
+    state.messages.push({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: caption, image: keep ? src : undefined });
     save();
     setCursorMode('idle');
     mascotCelebrate();
   } catch (err) {
     typingBubble.remove();
-    // friendly (e.g. free-tier quota) messages show as-is; others get a prefix
-    const msg = err.friendly ? err.message : `Couldn't generate that image: ${err.message}`;
-    renderMessage('assistant', msg).classList.add('error');
+    renderMessage('assistant', err.friendly ? err.message : `Couldn't make that picture: ${err.message}`).classList.add('error');
     setCursorMode('idle');
   } finally {
-    sendBtn.disabled = imageBtn.disabled = false;
+    sendBtn.disabled = false;
   }
 }
 
@@ -2580,7 +2698,6 @@ async function attachFile(file) {
   return false;
 }
 attachRemove.addEventListener('click', clearAttach);
-imageBtn.addEventListener('click', handleGenerateImage);
 
 composer.addEventListener('submit', (e) => {
   e.preventDefault();
