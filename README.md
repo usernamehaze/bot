@@ -110,9 +110,13 @@ you selected.
 ## Website layout
 
 - `index.html` — the landing page (marble ShaderGradient hero, features, pricing, FAQ).
-  Its background is `landing/cassie-gradient.js`, built from `cassie-3d/src/landing-bg.jsx`
-  with `npx vite build -c vite.landing.config.js` (uses [ShaderGradient](https://github.com/ruucm/shadergradient), MIT).
+  Its background and the 3D Cassie come from `mascot3d/cassie-3d.js`.
   Set `WAITLIST_URL` in `landing/landing.js` to turn the paid-plan buttons into a waitlist link.
 - `start.html` — the loading screen (cursor highlights “Cassie”, clicks) that opens the app.
   The installed app (PWA) starts here.
 - `app.html` — the app itself.
+- `mascot3d/cassie-3d.js` — one bundle with the living gradient (behind the landing hero and
+  the chat, following the student's colour) and the felt 3D Cassie with her outfits
+  (classic, professor, graduate, coder, heart). Built from `cassie-3d/` with
+  `npx vite build -c vite.bundle.config.js && cp dist-bundle/cassie-3d.js ../mascot3d/`
+  (uses [ShaderGradient](https://github.com/ruucm/shadergradient), MIT).

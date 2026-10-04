@@ -46,7 +46,12 @@ html, body {
 input, textarea, select, button { font-family: inherit; }
 
 html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* the living gradient (landing-style ShaderGradient) sits behind everything */
+#app-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; }
+#app-bg.live { opacity: 1; }
+#app-bg canvas { display: block; }
 #app {
+  z-index: 1;
   max-width: 100%;
   width: 100%;
   margin: 0;
@@ -1140,4 +1145,25 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .accent-custom::after {
   content: "+"; position: absolute; color: var(--muted); font-size: 18px; font-weight: 700;
   pointer-events: none;
+}
+
+/* ---------- surfaces float over the living gradient ---------- */
+.topbar {
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1); backdrop-filter: blur(16px) saturate(1.1);
+  border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+.composer {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1); backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .10);
+}
+.bubble-assistant { box-shadow: 0 6px 22px rgba(0, 0, 0, .07); }
+@media (prefers-color-scheme: dark) {
+  .bubble-assistant { box-shadow: 0 6px 22px rgba(0, 0, 0, .35); }
+}
+.quick-actions { background: transparent; }
+.quick-actions .chip {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
