@@ -228,6 +228,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Streaming path (used by the on-page popover): the content script opens a
 // long-lived port so we can push the reply chunk-by-chunk as it generates.
+// ---- screenshot + crop in the service worker ----
+function statsOf(src) {
+  const c = new OffscreenCanvas(40, 40);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(src, 0, 0, 40, 40);
+  const d = x.getImageData(0, 0, 40, 40).data;
+  let sum = 0, sq = 0; const n = d.length / 4;
+  for (let k = 0; k < d.length; k += 4) { const l = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; sum += l; sq += l * l; }
+  const mean = sum / n;
+  return { mean, std: Math.sqrt(Math.max(0, sq / n - mean * mean)) };
+}
+async function blobToDataUrl(blob) { return 'data:' + blob.type + ';base64,' + bufToBase64(await blob.arrayBuffer()); }
+async function captureAndCrop(windowId, rect, vw, vh) {
+  const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+  if (!rect) {
+    const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    return { dataUrl, full: statsOf(bmp), w: bmp.width, h: bmp.height };
+  }
+  const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const full = statsOf(bmp);
+  const kx = bmp.width / (vw || bmp.width), ky = bmp.height / (vh || bmp.height);
+  const sx = Math.max(0, Math.round(rect.left * kx)), sy = Math.max(0, Math.round(rect.top * ky));
+  const sw = Math.min(bmp.width - sx, Math.max(1, Math.round(rect.width * kx)));
+  const sh = Math.min(bmp.height - sy, Math.max(1, Math.round(rect.height * ky)));
+  if (sw < 4 || sh < 4) throw new Error('That box is outside the visible page.');
+  const scale = Math.min(1, 1400 / Math.max(sw, sh));
+  const c = new OffscreenCanvas(Math.max(1, Math.round(sw * scale)), Math.max(1, Math.round(sh * scale)));
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const crop = statsOf(c);
+  return { dataUrl: await blobToDataUrl(await c.convertToBlob({ type: 'image/jpeg', quality: 0.9 })), full, crop, w: bmp.width, h: bmp.height };
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'cassie-stream') return;
   const post = (m) => { try { port.postMessage(m); } catch (e) { /* port closed */ } };
@@ -344,9 +378,18 @@ async function visionViaGroq(groqKey, { image, prompt, system, maxTokens }) {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'CASSIE_SNIP') {
     // The page's own overlay is hidden by the content script before this runs.
-    chrome.tabs.captureVisibleTab(sender.tab ? sender.tab.windowId : undefined, { format: 'png' })
-      .then((dataUrl) => sendResponse({ dataUrl }))
+    // With a rect, the crop happens HERE (OffscreenCanvas, software) — a different path
+    // from the page's canvas, which misbehaves on some machines.
+    captureAndCrop(msg.windowId || (sender.tab ? sender.tab.windowId : undefined), msg.rect, msg.vw, msg.vh)
+      .then((out) => sendResponse(out))
       .catch((e) => sendResponse({ error: e.message || 'capture failed' }));
+    return true;
+  }
+  if (msg?.type === 'CASSIE_H2C') {
+    // Load the page renderer (html2canvas) into the content script's world on demand.
+    chrome.scripting.executeScript({ target: { tabId: sender.tab.id, frameIds: [sender.frameId || 0] }, files: ['vendor/html2canvas.min.js'] })
+      .then(() => sendResponse({ ok: true }))
+      .catch((e) => sendResponse({ error: e.message }));
     return true;
   }
   if (msg?.type === 'CASSIE_VISION') {
@@ -374,6 +417,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 const CASSIE_APP_URL = 'https://askcassie.pages.dev/app.html';
 const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt, groqKey }
 
+async function openInApp(file, index) {
+  const { groqKey } = await chrome.storage.local.get(['groqKey']);
+  const tab = await chrome.tabs.create({ url: CASSIE_APP_URL, index });
+  pendingImports.set(tab.id, { ...file, groqKey: groqKey || '' });
+  setTimeout(() => pendingImports.delete(tab.id), 120000);
+}
+
 function bufToBase64(buf) {
   const bytes = new Uint8Array(buf);
   let bin = '';
@@ -391,10 +441,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         base64 = bufToBase64(await res.arrayBuffer());
       }
       if (!base64) throw new Error('no file');
-      const { groqKey } = await chrome.storage.local.get(['groqKey']);
-      const tab = await chrome.tabs.create({ url: CASSIE_APP_URL, index: sender.tab ? sender.tab.index + 1 : undefined });
-      pendingImports.set(tab.id, { name: msg.name, mime: msg.mime, base64, prompt: msg.prompt, groqKey: groqKey || '' });
-      setTimeout(() => pendingImports.delete(tab.id), 120000);
+      await openInApp({ name: msg.name, mime: msg.mime, base64, prompt: msg.prompt }, sender.tab ? sender.tab.index + 1 : undefined);
       sendResponse({ ok: true });
     })().catch((e) => sendResponse({ error: e.message || 'failed' }));
     return true;
@@ -422,5 +469,83 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ dataUrl: 'data:' + blob.type + ';base64,' + bufToBase64(await blob.arrayBuffer()) });
   })().catch((e) => sendResponse({ error: e.message }));
   return true;
+});
+
+// ---- the Cassie side panel (works beside ANY tab, including Chrome's PDF viewer) ----
+try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* older Chrome */ }
+
+// What file is this tab showing? (PDF / Google Doc / Google Slides / photo)
+async function tabFile(tab) {
+  const url = tab.url || '';
+  let m = url.match(/^https:\/\/docs\.google\.com\/(document|presentation)\/d\/([^/]+)/);
+  const title = (tab.title || 'file').replace(/\s+-\s+Google (Docs|Slides)$/, '').trim() || 'file';
+  if (m && m[1] === 'document') return { kind: 'docx', url: `https://docs.google.com/document/d/${m[2]}/export?format=docx`, name: title + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+  if (m && m[1] === 'presentation') return { kind: 'pptx', url: `https://docs.google.com/presentation/d/${m[2]}/export/pptx`, name: title + '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+  if (!/^(https?|file):/.test(url)) return null;
+  const last = decodeURIComponent((new URL(url).pathname.split('/').pop() || ''));
+  if (/\.pdf$/i.test(last)) return { kind: 'pdf', url, name: last, mime: 'application/pdf' };
+  if (/\.(png|jpe?g|gif|webp)$/i.test(last)) return { kind: 'image', url, name: last, mime: 'image/*' };
+  if (/\.pptx$/i.test(last)) return { kind: 'pptx', url, name: last, mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+  if (/\.docx$/i.test(last)) return { kind: 'docx', url, name: last, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+  // No telling extension: ask the server what it is.
+  try {
+    const r = await fetch(url, { method: 'HEAD', credentials: 'include' });
+    const ct = (r.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('pdf')) return { kind: 'pdf', url, name: (last || 'document') + (/\.pdf$/i.test(last) ? '' : '.pdf'), mime: 'application/pdf' };
+    if (ct.startsWith('image/')) return { kind: 'image', url, name: last || 'photo', mime: ct };
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === 'CASSIE_TAB_FILE') {
+    chrome.tabs.get(msg.tabId).then(tabFile).then((f) => sendResponse({ file: f })).catch((e) => sendResponse({ error: e.message }));
+    return true;
+  }
+  if (msg?.type === 'CASSIE_PANEL_OPEN_FILE') {
+    (async () => {
+      const tab = await chrome.tabs.get(msg.tabId);
+      const f = await tabFile(tab);
+      if (!f || f.kind === 'image') throw new Error('This tab isn’t a PDF, Google Doc, Google Slides or Office file.');
+      const res = await fetch(f.url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Couldn’t download it (' + res.status + '). Download the file and attach it in the Cassie app.');
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > 30 * 1024 * 1024) throw new Error('That file is over 30 MB — download it and attach it in the Cassie app.');
+      await openInApp({ name: f.name, mime: f.mime, base64: bufToBase64(buf), prompt: msg.prompt || 'Read this whole file and make me a complete reviewer of it.' }, tab.index + 1);
+      sendResponse({ ok: true, kind: f.kind, name: f.name });
+    })().catch((e) => sendResponse({ error: e.message }));
+    return true;
+  }
+  return false;
+});
+
+// Right-click menu: works on highlighted text everywhere — including inside Chrome's PDF
+// viewer, where pages can't see the selection — and on pictures.
+function makeMenus() {
+  try {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({ id: 'cassie-explain', title: 'Explain with Cassie', contexts: ['selection'] });
+      chrome.contextMenus.create({ id: 'cassie-answer', title: 'Answer with Cassie', contexts: ['selection'] });
+      chrome.contextMenus.create({ id: 'cassie-image', title: 'Explain this picture with Cassie', contexts: ['image'] });
+      chrome.contextMenus.create({ id: 'cassie-panel', title: 'Open Cassie side panel', contexts: ['page', 'frame'] });
+    });
+  } catch (e) { /* ignore */ }
+}
+chrome.runtime.onInstalled.addListener(makeMenus);
+chrome.runtime.onStartup.addListener(makeMenus);
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  // Open the panel first — it must happen inside the click (a user gesture).
+  try { chrome.sidePanel.open(tab && tab.id >= 0 ? { tabId: tab.id } : { windowId: tab.windowId }); } catch (e) { /* ignore */ }
+  const job = { at: Date.now(), tabId: tab ? tab.id : null, windowId: tab ? tab.windowId : null, pageUrl: info.pageUrl || (tab && tab.url) || '' };
+  if (info.menuItemId === 'cassie-explain' || info.menuItemId === 'cassie-answer') Object.assign(job, { kind: 'text', mode: info.menuItemId === 'cassie-answer' ? 'answer' : 'explain', text: info.selectionText || '' });
+  else if (info.menuItemId === 'cassie-image') Object.assign(job, { kind: 'image', srcUrl: info.srcUrl });
+  else Object.assign(job, { kind: 'open' });
+  chrome.storage.session.set({ cassieJob: job });
+});
+
+chrome.commands.onCommand.addListener((cmd, tab) => {
+  if (cmd !== 'open-panel') return;
+  try { chrome.sidePanel.open(tab && tab.id >= 0 ? { tabId: tab.id } : { windowId: tab.windowId }); } catch (e) { /* ignore */ }
 });
 

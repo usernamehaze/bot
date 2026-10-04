@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cassie</title>
+<style>
+  :root { --bg: #f6f5f2; --card: #fff; --ink: #1b1b1d; --mute: #6d6d72; --line: #e4e1da; --pri: #1b1b1d; --pri-ink: #fff; --code: #0d0d12; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #18181c; --card: #222228; --ink: #ececf0; --mute: #9b9ba3; --line: #34343c; --pri: #ececf0; --pri-ink: #18181c; --code: #0b0b0f; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+  header { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 6px; }
+  header b { font-size: 18px; letter-spacing: -.01em; }
+  header span { color: var(--mute); font-size: 12px; }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 16px 12px; border-bottom: 1px solid var(--line); }
+  .tool { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 12px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 12.5px/1.2 inherit; font-family: inherit; cursor: pointer; }
+  .tool:hover { border-color: var(--mute); }
+  .tool svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #view { flex: 1; overflow: auto; padding: 14px 16px 24px; }
+  .help p { margin: 0 0 12px; color: var(--mute); }
+  .help b { color: var(--ink); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+  .quote { color: var(--mute); font-size: 13px; max-height: 120px; overflow: auto; white-space: pre-wrap; border-left: 3px solid var(--line); padding-left: 10px; margin-bottom: 10px; }
+  .chips { display: flex; gap: 6px; margin-bottom: 10px; }
+  .chip { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 5px 12px; font: 600 12.5px/1 inherit; font-family: inherit; cursor: pointer; }
+  .chip.on { background: var(--pri); color: var(--pri-ink); border-color: var(--pri); }
+  .answer p { margin: 0 0 8px; }
+  .answer ul, .answer ol { margin: 0 0 8px; padding-left: 20px; }
+  .answer pre { background: var(--code); color: #f2f2f5; padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  .answer code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
+  .muted { color: var(--mute); font-style: italic; }
+  .row { display: flex; gap: 6px; margin-top: 10px; }
+  .row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; }
+  .btn { border: 1px solid var(--pri); background: var(--pri); color: var(--pri-ink); border-radius: 10px; padding: 8px 12px; font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .crop { position: relative; user-select: none; touch-action: none; cursor: crosshair; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  .crop img { display: block; width: 100%; height: auto; pointer-events: none; }
+  .crop .sel { position: absolute; border: 2px solid #fff; outline: 1px dashed #000; box-shadow: 0 0 0 2000px rgba(0,0,0,.45); display: none; }
+  .hint { color: var(--mute); font-size: 12.5px; margin: 8px 0; }
+  /* Cassie's graphs inside answers */
+  .cassie-board { margin: 8px 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .cb-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-weight: 700; font-size: 12px; border-bottom: 1px solid var(--line); }
+  .cb-draw { margin-left: auto; background: none; border: 1px solid var(--line); color: inherit; border-radius: 999px; padding: 3px 9px; font: 600 11px/1.2 inherit; font-family: inherit; cursor: pointer; }
+  .cb-body { padding: 8px 10px; } .cb-title { margin: 0 0 6px; font-weight: 700; } .cb-note { margin: 6px 0 0; font-size: 12px; color: var(--mute); }
+  .cb-canvas-wrap canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+  .cb-geo-svg { width: 100%; max-height: 160px; } .cb-steps { margin: 0; padding-left: 18px; } .cb-steps li { opacity: 1; }
+</style>
+</head>
+<body>
+  <header><b>Cassie</b><span>side panel</span></header>
+  <div class="tools">
+    <button class="tool" id="t-snip" title="Grab part of this tab and have Cassie explain it"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3"/></svg>Snip</button>
+    <button class="tool" id="t-file" title="Read this whole PDF / Slides / Doc and make a reviewer"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Whole file</button>
+    <button class="tool" id="t-board" title="Open Cassie's board"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>Board</button>
+  </div>
+  <div id="view"></div>
+  <script src="sketch.js"></script>
+  <script src="board.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

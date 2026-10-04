@@ -1136,7 +1136,7 @@
   function lumStats(src) {
     return (typeof src === 'string' ? loadImg(src) : Promise.resolve(src)).then((i) => {
       const c = document.createElement('canvas'); c.width = 40; c.height = 40;
-      const x = c.getContext('2d'); x.drawImage(i, 0, 0, 40, 40);
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(i, 0, 0, 40, 40);
       const d = x.getImageData(0, 0, 40, 40).data;
       let sum = 0, sq = 0; const n = d.length / 4;
       for (let k = 0; k < d.length; k += 4) { const l = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; sum += l; sq += l * l; }
@@ -1158,7 +1158,7 @@
     const scale = Math.min(1, 1400 / Math.max(sw, sh));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(sw * scale)); c.height = Math.max(1, Math.round(sh * scale));
-    const cx = c.getContext('2d');
+    const cx = c.getContext('2d', { willReadFrequently: true });
     cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
     cx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.9);
@@ -1230,44 +1230,88 @@
   // screenshot (whole picture, or at least the part we cut out). We notice, retry, then fall
   // back to a one-time screen share. status: 'ok' | 'empty' (the box is genuinely blank) | 'broken'.
   const CAP = { tabBroken: false, shareBroken: false }; // what doesn't work on this machine (this page)
+  const waitFrames = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 70))));
+
+  // Plan B: draw the box straight from the page (html2canvas) — no screenshot involved, so it
+  // works even where Chrome's screenshots come back blank. Cross-origin pictures in the box are
+  // downloaded by the extension and swapped in so they show up too.
+  async function renderRegion(r) {
+    if (!window.html2canvas) {
+      let res; try { res = await chrome.runtime.sendMessage({ type: 'CASSIE_H2C' }); } catch (e) { throw new Error('reload'); }
+      if (!window.html2canvas) throw new Error((res && res.error) || 'renderer unavailable');
+    }
+    const box = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height };
+    const hits = (el) => { const b = el.getBoundingClientRect(); return b.width > 4 && b.height > 4 && b.right > box.left && b.left < box.right && b.bottom > box.top && b.top < box.bottom; };
+    const imgs = [...document.images]; const swap = new Map();
+    for (let i = 0; i < imgs.length && swap.size < 12; i++) {
+      const im = imgs[i], src = im.currentSrc || im.src;
+      if (!src || src.startsWith('data:') || !hits(im)) continue;
+      try { if (new URL(src, location.href).origin === location.origin) continue; } catch (e) { continue; }
+      try { const res = await chrome.runtime.sendMessage({ type: 'CASSIE_FETCH_IMG', url: src }); if (res && res.dataUrl) swap.set(i, res.dataUrl); } catch (e) { /* ignore */ }
+    }
+    const pick = (el) => { const c = el && getComputedStyle(el).backgroundColor; return c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c) ? c : null; };
+    const bg = pick(document.body) || pick(document.documentElement) || '#ffffff';
+    const canvas = await window.html2canvas(document.documentElement, {
+      x: window.scrollX + r.left, y: window.scrollY + r.top, width: Math.round(r.width), height: Math.round(r.height),
+      windowWidth: document.documentElement.clientWidth, windowHeight: window.innerHeight,
+      scale: Math.min(2, window.devicePixelRatio || 1), useCORS: true, logging: false, backgroundColor: bg, imageTimeout: 6000,
+      ignoreElements: (el) => el === host,
+      onclone: (doc) => { const ci = doc.images; swap.forEach((url, i) => { if (ci[i]) { ci[i].removeAttribute('srcset'); ci[i].src = url; } }); },
+    });
+    const k = Math.min(1, 1400 / Math.max(canvas.width, canvas.height));
+    const out = document.createElement('canvas'); out.width = Math.max(1, Math.round(canvas.width * k)); out.height = Math.max(1, Math.round(canvas.height * k));
+    const ox = out.getContext('2d', { willReadFrequently: true }); ox.fillStyle = bg; ox.fillRect(0, 0, out.width, out.height); ox.drawImage(canvas, 0, 0, out.width, out.height);
+    return out.toDataURL('image/jpeg', 0.92);
+  }
+
+  // Get a real picture of the snipped box, trying several independent ways. Some machines hand
+  // extensions a blank screenshot (black, or just the page background), so every result is checked.
+  // status: 'ok' | 'empty' (the box is genuinely blank) | 'broken' (no usable picture).
   async function captureSnip(r, hooks = {}) {
     const diag = [];
-    const judge = async (img, label, whole = false) => {
+    // 1) Chrome's quick screenshot, cropped in the extension's background.
+    if (!CAP.tabBroken) {
+      let out = null;
+      host.style.visibility = 'hidden';
+      await waitFrames();
+      try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP', rect: { left: r.left, top: r.top, width: r.width, height: r.height }, vw: window.innerWidth, vh: window.innerHeight }); }
+      catch (e) { host.style.visibility = ''; throw new Error('reload'); }
+      host.style.visibility = '';
+      if (out && out.dataUrl && out.full) {
+        const flatAll = out.full.std < 4;
+        diag.push(`tab ${out.w}x${out.h}${flatAll ? ` flat(${Math.round(out.full.mean)})` : ''}`);
+        if (!flatAll) {
+          if (out.crop.std >= 2.5) return { image: out.dataUrl, status: 'ok', diag };
+          if (!boxHasContent(r)) return { image: out.dataUrl, status: 'empty', diag };
+          diag.push(`box blank(${Math.round(out.crop.mean)}) but page has content`);
+        }
+      } else diag.push('tab: ' + ((out && out.error) || 'no picture'));
+      CAP.tabBroken = true;
+    } else diag.push('tab skipped');
+    // 2) Draw the box from the page itself.
+    try {
+      const img = await renderRegion(r);
       const st = await lumStats(img);
-      // A real page is never one flat colour edge to edge. If the WHOLE screenshot is flat
-      // (black, or just the page's background colour with no text drawn), the capture is broken.
-      const flatAll = st.std < 4;
-      diag.push(`${label} ${img.width}x${img.height}${flatAll ? ` flat(${Math.round(st.mean)})` : ''}`);
-      if (flatAll) return null;
-      const image = whole ? wholeToJpeg(img) : cropFrom(img, r);
-      const cs = await lumStats(image);
-      if (cs.std < 2.5) {
-        // The box came out blank — but if the page clearly has text/pictures there, the
-        // screenshot is wrong, not the box.
-        if (whole || boxHasContent(r)) { diag.push(`box blank(${Math.round(cs.mean)}) but page has content`); return null; }
-        return { image, status: 'empty', diag };
-      }
-      return { image, status: 'ok', diag };
-    };
-    for (let attempt = 0; attempt < (CAP.tabBroken ? 1 : 2); attempt++) {
-      let img;
-      try { img = await grabScreen(attempt === 0); } catch (e) { diag.push('tab: ' + (e.message || 'error')); if (e.message === 'reload') throw e; continue; }
-      const res = await judge(img, 'tab');
-      if (res) { CAP.tabBroken = false; return res; }
-      await nap(150);
-    }
-    CAP.tabBroken = true;
+      diag.push(`render${st.std < 2.5 ? ' blank' : ''}`);
+      if (st.std >= 2.5) return { image: img, status: 'ok', diag };
+      if (!boxHasContent(r)) return { image: img, status: 'empty', diag };
+    } catch (e) { if (e.message === 'reload') throw e; diag.push('render: ' + (e.message || 'error').slice(0, 60)); }
+    // 3) One-time screen share of this tab.
     if (hooks.onNeedShare && !CAP.shareBroken) {
       try {
         hooks.onNeedShare();
         const { img, whole } = await grabViaShare();
         hooks.onShareDone && hooks.onShareDone();
-        const res = await judge(img, whole ? 'share(screen)' : 'share(tab)', whole);
-        if (res) return res;
+        const st = await lumStats(img);
+        diag.push(`share${st.std < 4 ? ' flat' : ''}`);
+        if (st.std >= 4) {
+          const image = whole ? wholeToJpeg(img) : cropFrom(img, r);
+          if ((await lumStats(image)).std >= 2.5) return { image, status: 'ok', diag };
+        }
         CAP.shareBroken = true;
       } catch (e) {
         hooks.onShareDone && hooks.onShareDone(); diag.push('share: ' + (e.name || e.message || 'cancelled'));
-        if (e.name === 'NotSupportedError' || /unavailable/.test(e.message || '')) CAP.shareBroken = true;
+        if (e.name === 'NotSupportedError' || e.name === 'NotAllowedError' || /unavailable/.test(e.message || '')) CAP.shareBroken = true;
       }
     }
     return { image: null, status: 'broken', diag };
