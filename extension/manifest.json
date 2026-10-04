@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cassie — Study Tutor",
-  "version": "3.32.0",
+  "version": "3.33.0",
   "description": "Highlight text on any page for an explanation, answer, or code. Runs on Groq's free tier.",
   "homepage_url": "https://askcassie.pages.dev/",
   "icons": {
@@ -50,10 +50,25 @@
   ],
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "contextMenus",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://api.groq.com/*",
     "<all_urls>"
-  ]
+  ],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "minimum_chrome_version": "116",
+  "commands": {
+    "open-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Open the Cassie side panel"
+    }
+  }
 }

@@ -115,6 +115,11 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
   edge (hover or tap to open), so they never cover a site's own Send button.
   Drag it up or down (remembered per site), or tap **Hide here** to turn it off
   on that site — the toolbar popup can show it again.
+- **Side panel** (toolbar popup → *Open Cassie side panel*, or **Alt+Shift+C**): sits beside
+  any tab — including Chrome's PDF viewer — with **Snip** (picture of the tab, drag over the
+  part you want → board + explanation), **Whole file** (reviewer of a PDF / Slides / Doc) and
+  **Board**. Highlight text anywhere (PDFs too) → right-click → **Explain with Cassie** /
+  **Answer with Cassie**; right-click a picture → **Explain this picture with Cassie**.
 - **PDFs, Google Docs and Slides**: Chrome's PDF viewer (and Google's
   canvas-based editors) don't let extensions see highlighted text. On those
   tabs the side tab shows a **page** button that sends the whole file to the
@@ -151,6 +156,8 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 - `manifest.json` — extension configuration (Manifest V3).
 - `sketch.js` — the drawing board (identical copy of the web app's `sketch.js`).
 - `board.js` — draws real graphs/shapes in the popup (identical copy of the web app's `board.js`).
+- `panel.html` / `panel.js` — the side panel.
+- `vendor/html2canvas.min.js` — MIT-licensed page renderer, loaded only when a snip needs it.
 - `bridge.js` — runs only on the Cassie web app; hands it a file from a PDF/Docs tab.
 - `background.js` — service worker that calls the Groq API (keeps the
   network request out of the page's own context).
