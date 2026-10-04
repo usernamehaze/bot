@@ -127,8 +127,9 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
   toolbar popup for the most reliable picture reading (Groq's picture models are
   tried first-come otherwise).
 - **If Chrome's screenshot comes back black** (it does on a few machines): Cassie
-  detects it, retries, and then reads the text/SVG/canvas inside your box straight
-  from the page. You can also take your own screenshot (Win+Shift+S, or
+  detects it, retries, then asks Chrome for a one-time screen share of the tab
+  (choose “This tab” → Share; she takes one picture and stops), and as a last
+  resort reads the text / SVG / canvas / images inside your box straight from the page. You can also take your own screenshot (Win+Shift+S, or
   Cmd+Shift+4 on Mac), click the board, and press **Ctrl+V** — or drag an image onto
   it — and she explains that.
 - **Snip & explain** (the crosshair button): drag a box around any graph,

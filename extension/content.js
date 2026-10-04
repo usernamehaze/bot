@@ -1148,21 +1148,76 @@
     return c.toDataURL('image/jpeg', 0.9);
   }
 
-  // Screenshot + crop with a sanity check. On some machines Chrome hands extensions a
-  // completely black screenshot; we notice (whole picture black), retry a few ways,
-  // and report status 'broken' so the caller can fall back. 'empty' = the box really is blank.
-  async function captureSnip(r) {
+  // Whole-frame JPEG (used when a screen share isn't the tab itself, so we can't crop reliably).
+  function wholeToJpeg(img) {
+    const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.9);
+  }
+
+  // Plan B when Chrome's quick screenshot is black: ask for a ONE-TIME screen share of this tab
+  // (Chrome shows its own "Share this tab" box), take a single frame, stop sharing.
+  async function grabViaShare() {
+    const md = navigator.mediaDevices;
+    if (!md || !md.getDisplayMedia) throw new Error('screen sharing unavailable');
+    // Don't wait forever if nobody answers Chrome's "Share this tab" box.
+    let waitMs = 30000;
+    try { const o = await chrome.storage.local.get(['cassieShareTimeout']); if (o.cassieShareTimeout) waitMs = o.cassieShareTimeout; } catch (e) { /* ignore */ }
+    let timedOut = false, timer;
+    const pending = md.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude' });
+    pending.then((late) => { if (timedOut) late.getTracks().forEach((t) => t.stop()); }, () => {});
+    const stream = await Promise.race([pending, new Promise((_, rej) => { timer = setTimeout(() => { timedOut = true; rej(new Error('no answer')); }, waitMs); })]);
+    clearTimeout(timer);
+    try {
+      host.style.visibility = 'hidden';
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream;
+      await v.play();
+      await nap(450); // let a real frame arrive and our overlay disappear from it
+      const w = v.videoWidth, h = v.videoHeight;
+      if (!w || !h) throw new Error('no frame');
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(v, 0, 0, w, h);
+      const img = await loadImg(c.toDataURL('image/png'));
+      // Is this frame the tab itself? (same shape as the viewport) — otherwise it's a window/screen.
+      const same = Math.abs(w / h - window.innerWidth / window.innerHeight) / (window.innerWidth / window.innerHeight) < 0.06;
+      return { img, whole: !same };
+    } finally {
+      host.style.visibility = '';
+      stream.getTracks().forEach((t) => t.stop());
+    }
+  }
+
+  // Screenshot + crop with sanity checks. On some machines Chrome hands extensions a black
+  // screenshot (whole picture, or at least the part we cut out). We notice, retry, then fall
+  // back to a one-time screen share. status: 'ok' | 'empty' (the box is genuinely blank) | 'broken'.
+  async function captureSnip(r, hooks = {}) {
     const diag = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const img = await grabScreen(attempt !== 1);
+    const judge = async (img, label, whole = false) => {
       const st = await lumStats(img);
       const black = st.mean < 8 && st.std < 2.5;
-      diag.push(`${img.width}x${img.height} ${black ? 'black' : 'ok'}`);
-      if (!black) {
-        const image = cropFrom(img, r);
-        return { image, status: (await isFlat(image)) ? 'empty' : 'ok', diag };
-      }
-      await nap(350 * (attempt + 1));
+      diag.push(`${label} ${img.width}x${img.height}${black ? ' black' : ''}`);
+      if (black) return null;
+      const image = whole ? wholeToJpeg(img) : cropFrom(img, r);
+      const cs = await lumStats(image);
+      if (cs.mean < 10 && cs.std < 3) { diag.push('box black'); return null; } // a flat DARK crop is a black capture, not an empty page
+      return { image, status: cs.std < 2.5 ? 'empty' : 'ok', diag };
+    };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let img;
+      try { img = await grabScreen(attempt === 0); } catch (e) { diag.push('tab: ' + (e.message || 'error')); if (e.message === 'reload') throw e; continue; }
+      const res = await judge(img, 'tab');
+      if (res) return res;
+      await nap(150);
+    }
+    if (hooks.onNeedShare) {
+      try {
+        hooks.onNeedShare();
+        const { img, whole } = await grabViaShare();
+        hooks.onShareDone && hooks.onShareDone();
+        const res = await judge(img, whole ? 'share(screen)' : 'share(tab)', whole);
+        if (res) return res;
+      } catch (e) { hooks.onShareDone && hooks.onShareDone(); diag.push('share: ' + (e.name || e.message || 'cancelled')); }
     }
     return { image: null, status: 'broken', diag };
   }
@@ -1190,13 +1245,15 @@
         n = n.parentElement;
       }
     }
+    const inBox = (e) => { const b = e.getBoundingClientRect(); const w = Math.min(b.right, r.left + r.width) - Math.max(b.left, r.left), h = Math.min(b.bottom, r.top + r.height) - Math.max(b.top, r.top); return b.width >= 40 && b.height >= 40 && w > 0 && h > 0 && (w * h) / (b.width * b.height) > 0.3; };
     els.sort((a, b) => { const p = a.getBoundingClientRect(), q = b.getBoundingClientRect(); return (p.top - q.top) || (p.left - q.left); });
     let texts = els.map((e) => e.innerText.replace(/\s+/g, ' ').trim());
     texts = texts.filter((t, i) => !texts.some((u, j) => j !== i && u.length > t.length && u.includes(t)));
+    const alts = [...document.querySelectorAll('img[alt], [aria-label]')].filter((e) => !host.contains(e) && inBox(e)).map((e) => (e.getAttribute('alt') || e.getAttribute('aria-label') || '').trim()).filter((t) => t.length > 3);
+    if (alts.length) texts.push('Picture labels: ' + [...new Set(alts)].slice(0, 6).join(' | '));
     const text = [...new Set(texts)].join('\n').slice(0, 3500);
 
     const pics = [];
-    const inBox = (e) => { const b = e.getBoundingClientRect(); const w = Math.min(b.right, r.left + r.width) - Math.max(b.left, r.left), h = Math.min(b.bottom, r.top + r.height) - Math.max(b.top, r.top); return b.width >= 40 && b.height >= 40 && w > 0 && h > 0 && (w * h) / (b.width * b.height) > 0.3; };
     for (const e of document.querySelectorAll('svg, canvas, img')) {
       if (pics.length >= 2 || host.contains(e) || !inBox(e)) continue;
       try {
@@ -1211,7 +1268,15 @@
         } else cx.drawImage(e, 0, 0, c.width, c.height);
         const url = c.toDataURL('image/png'); // throws if the picture is cross-origin (tainted)
         if (!(await isFlat(url))) pics.push(url);
-      } catch (err) { /* cross-origin or unrenderable — skip */ }
+      } catch (err) {
+        // A cross-origin <img> taints the canvas — have the extension download it instead.
+        if (e.tagName === 'IMG' && (e.currentSrc || e.src)) {
+          try {
+            const r2 = await chrome.runtime.sendMessage({ type: 'CASSIE_FETCH_IMG', url: e.currentSrc || e.src });
+            if (r2 && r2.dataUrl) pics.push(r2.dataUrl);
+          } catch (e2) { /* ignore */ }
+        }
+      }
     }
     return { text, pics };
   }
@@ -1261,7 +1326,13 @@
   async function snipAndExplain(r, el, x, y) {
     const rect = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
     let cap = { image: null, status: 'broken', diag: [] }, capErr = '';
-    try { cap = await captureSnip(r); } catch (e) { capErr = errorText(e); }
+    const at = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
+    try {
+      cap = await captureSnip(r, {
+        onNeedShare: () => { manualOpen = true; popover.hidden = false; setContent('Chrome blocked Cassie’s quick screenshot. In the box Chrome shows next, choose “This tab” and press Share — I take one picture and stop sharing.', { muted: true }); positionPopover(at); },
+        onShareDone: () => { hidePopover(); },
+      });
+    } catch (e) { capErr = errorText(e); }
     const ctx = el && !(host && host.contains(el)) ? gatherContext(el) : (document.title ? 'Page: ' + document.title : '');
     if (!window.CassieSketch) { explainTarget(el, x, y, rect, cap.image); return; }
 
@@ -1279,7 +1350,7 @@
     }
     if (cap.status === 'empty') {
       const sess = await openSnipBoard(null, { headline: 'Your board', steps: [] }, { loading: true });
-      sess.showNote({ reply: 'That box looks empty. Close this and drag a box around the question, graph or picture you want me to read — or press Ctrl+V to paste a screenshot here.' });
+      sess.showNote({ reply: `That box looks empty. Close this and drag a box around the question, graph or picture you want me to read — or press Ctrl+V to paste a screenshot here.\n(capture: ${cap.diag.join(', ')})` });
       return;
     }
     // The snip and Cassie's explanation open TOGETHER in the side board.

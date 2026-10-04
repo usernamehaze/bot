@@ -410,3 +410,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+// Download a (cross-origin) picture on behalf of the page, so Cassie can read it even when the
+// page can't draw it to a canvas. Extensions with host access can fetch it without CORS.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== 'CASSIE_FETCH_IMG') return false;
+  (async () => {
+    const res = await fetch(msg.url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    if (!/^image\//.test(blob.type) || blob.size > 8 * 1024 * 1024) throw new Error('not a usable picture');
+    sendResponse({ dataUrl: 'data:' + blob.type + ';base64,' + bufToBase64(await blob.arrayBuffer()) });
+  })().catch((e) => sendResponse({ error: e.message }));
+  return true;
+});
+
