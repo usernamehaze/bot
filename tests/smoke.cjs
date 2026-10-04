@@ -340,6 +340,58 @@ test('a scanned PDF (pictures only) is read page by page', async (b) => {
   await ctx.close();
 });
 
+test('a Gemini key alone: chat, graph, quiz, research, file, photo and Save as PDF', async (b) => {
+  const calls = [];
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { geminiKey: 'AIza_test' } });
+  await ctx.route(/generativelanguage\.googleapis\.com/, (route) => {
+    const body = JSON.parse(route.request().postData() || '{}');
+    const all = JSON.stringify((body.contents || []).slice(-1)); // only the latest message, not Cassie's instructions
+    calls.push(all);
+    let text = 'Gemini answer: photosynthesis turns light into food.';
+    if (/application\/pdf/.test(all)) text = '**Reviewer**\n- **People** — Rizal — hero (p. 1)';
+    else if (/"mimeType":"image\//.test(all)) text = 'I see a red square in your photo.';
+    else if (/graph y = x\^2/.test(all)) text = 'Here is the parabola. It crosses at -2 and 2.';
+    else if (/Quiz me/.test(all)) text = 'Question 1: What is 2 + 2?';
+    else if (/Review of Related Literature/.test(all)) text = 'RRL: sleep helps memory (Smith, 2020).';
+    else if (/simpler|explain/i.test(all) && /Osmosis/.test(all)) text = 'Simply put: water moves across.';
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] } });
+  });
+  await ctx.route(/api\.openalex\.org/, (route) => route.fulfill({ json: { results: [{ title: 'Sleep and memory', publication_year: 2020, authorships: [{ author: { display_name: 'J. Smith' } }], cited_by_count: 3 }] } }));
+  expect(await page.locator('#model-pill-model').textContent() === 'Gemini', 'model pill should say Gemini');
+  // chat
+  let a = await ask(page, 'What is photosynthesis?');
+  expect(/Gemini answer/.test(await a.textContent()), 'chat failed: ' + await a.textContent());
+  // graph
+  a = await ask(page, 'graph y = x^2 - 4');
+  expect(await a.locator('.cassie-board canvas').count() >= 1, 'no graph');
+  // quiz
+  await page.fill('#prompt-input', 'math'); await page.click('#quiz-btn');
+  await page.waitForSelector('text=Question 1', { timeout: 10000 });
+  await page.click('#quiz-btn');
+  // research
+  await page.fill('#prompt-input', 'sleep and memory'); await page.click('#research-btn');
+  await page.waitForSelector('text=RRL: sleep helps memory', { timeout: 10000 });
+  // file (PDF read whole by Gemini)
+  const pdf = await page.evaluate(async () => {
+    const blob = await window.CassieExport.toPdf('# History\n\nRizal was born in 1861.', 'History');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'history.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  a = await ask(page, 'Make me a reviewer of this');
+  expect(/Reviewer/.test(await a.textContent()), 'file failed: ' + await a.textContent());
+  // save that answer as a PDF
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), a.locator('.bubble-tools button[data-format=pdf]').click()]);
+  expect(fs.statSync(await dl.path()).size > 500, 'PDF download empty');
+  // photo
+  const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+  await page.setInputFiles('#file-input', { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
+  await page.waitForSelector('#attach-preview:not([hidden])');
+  a = await ask(page, 'What is in this photo?');
+  expect(/red square/.test(await a.textContent()), 'photo failed: ' + await a.textContent());
+  expect(groqCalls.length === 0, 'should never call Groq without a Groq key');
+  await ctx.close();
+});
+
 test('save an answer as Word and PDF', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: '**Photosynthesis**\n\n- Plants use light, water and carbon dioxide.\n- They make glucose and oxygen.' }) });
   const a = await ask(page, 'Notes on photosynthesis');

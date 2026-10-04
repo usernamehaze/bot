@@ -35,7 +35,9 @@ let state = loadState();
 
 // Cassie's own server (config.js / server/README.md). With it, nobody needs a key to start.
 const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
-const canChat = () => !!(state.groqKey || SERVER);
+const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
+// Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
+const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
 const APP_VERSION = '105';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
@@ -1471,6 +1473,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
   // No key of their own → Cassie's server answers (it holds the key and has a backup brain).
   if (!state.groqKey && SERVER) viaServer = true;
   if (viaServer) return serverChat(messages, { model, maxTokens, onWait, lean });
+  if (geminiOnly()) return geminiFromChat(messages, { maxTokens });
   model = model || state.groqModel;
   const tried = new Set();
   let overloadTries = 0, waitTries = 0, switches = 0;
@@ -1657,11 +1660,16 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GE
 }
 
 /* A Groq-style chat ([{role, content}], system first) answered by Gemini. */
-function geminiFromChat(messages) {
+function geminiFromChat(messages, { maxTokens = 4096 } = {}) {
   const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const toParts = (c) => (Array.isArray(c) ? c : [{ type: 'text', text: String(c) }]).map((p) => {
+    const d = p.type === 'image_url' && /^data:([^;]+);base64,(.+)$/.exec((p.image_url && p.image_url.url) || '');
+    return d ? { inlineData: { mimeType: d[1], data: d[2] } } : { text: p.text != null ? String(p.text) : '' };
+  });
   const contents = messages.filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] }));
-  return geminiGenerate({ contents, system, models: GEMINI_DOC_MODELS });
+    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: toParts(m.content) }));
+  while (contents.length && contents[0].role !== 'user') contents.shift();
+  return geminiGenerate({ contents, system, maxTokens, models: [GEMINI_VISION_MODEL, ...GEMINI_DOC_MODELS] });
 }
 
 /* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
@@ -1678,6 +1686,14 @@ async function askGeminiVision(msgs, image) {
 
 /* Image reading with only a Groq key: Groq's vision model (up to 5 pictures). */
 async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } = {}) {
+  if (geminiOnly()) {
+    const hist = trimHistory(msgs, 2000);
+    const last = hist.pop() || { content: 'Please look at these pictures and help me with them.' };
+    const contents = [...hist.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+      { role: 'user', parts: [...images.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })), { text: last.content }] }];
+    while (contents.length && contents[0].role !== 'user') contents.shift();
+    return geminiGenerate({ contents, system: system || buildSystemPrompt(), maxTokens });
+  }
   const model = state.groqKey ? await discoverGroqVisionModel() : 'vision'; // the server picks its own
   if (!model) {
     const e = new Error('To read pictures, add your free Google (Gemini) API key in Settings — Groq has no picture-reading model on your key right now.');
@@ -2083,7 +2099,7 @@ async function readDocumentAnswer(doc, request, history, onStatus) {
   if (state.geminiKey) {
     try { return await geminiDocument(doc, request, history, onStatus); }
     catch (e) {
-      if (!canChat()) throw e;
+      if (!canChat() || geminiOnly()) throw e;
       onStatus('Gemini is busy — reading it another way…');
     }
   }
@@ -2578,7 +2594,7 @@ async function handleSend(text, opts = {}) {
     if (prev) prev.remove();
     const b = renderMessage('assistant', image
       ? "To read an image I need your free Google (Gemini) API key — add it in Settings (top right)."
-      : "I need your free Groq API key before I can answer — add it in Settings (top right).");
+      : "I need a free key before I can answer — add a Groq or a Gemini key in Settings (top right). Either one works.");
     if (b) b.classList.add('need-key-msg');
     return;
   }
@@ -2880,7 +2896,7 @@ async function runResearch(topic) {
   if (!canChat()) {
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
-    renderMessage('assistant', 'Add your free Groq API key in Settings first, then I can research for you.');
+    renderMessage('assistant', 'Add a free Groq or Gemini key in Settings first, then I can research for you.');
     return;
   }
   state.messages.push({ role: 'user', content: `Research: ${topic}` });
@@ -3237,7 +3253,7 @@ if (quizBtn) {
     if (!canChat()) {
       openSettings();
       detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
-      renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can start a quiz.');
+      renderMessage('assistant', 'Add a free Groq or Gemini key in Settings first, then we can start a quiz.');
       return;
     }
     quizMode = !quizMode;
@@ -3267,7 +3283,7 @@ if (talkBtn) {
     if (!canChat()) {
       openSettings();
       detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
-      renderMessage('assistant', 'Add your free Groq API key in Settings first, then we can talk.');
+      renderMessage('assistant', 'Add a free Groq or Gemini key in Settings first, then we can talk.');
       return;
     }
     counselorMode = !counselorMode;
@@ -3380,7 +3396,7 @@ const MODEL_SHORT = {
 };
 function updateModelPill() {
   if (!modelPill) return;
-  modelPillModel.textContent = MODEL_SHORT[state.groqModel] || 'Cassie';
+  modelPillModel.textContent = geminiOnly() ? 'Gemini' : (MODEL_SHORT[state.groqModel] || 'Cassie');
   const lvl = state.level && state.level !== 'auto' ? (LEVEL_LABELS[state.level] || 'Auto') : 'Auto';
   modelPillLevel.textContent = lvl.charAt(0).toUpperCase() + lvl.slice(1);
 }
@@ -3944,7 +3960,7 @@ async function runExplainOrAnswer(text, rect, mode) {
   positionPopover(rect);
 
   if (!canChat()) {
-    setPopoverContent('Add your free Groq API key in Settings first.', { muted: true });
+    setPopoverContent('Add a free Groq or Gemini key in Settings first.', { muted: true });
     positionPopover(rect);
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
