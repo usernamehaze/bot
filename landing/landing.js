@@ -34,12 +34,15 @@
       M.setEmotion('encouraging');
       if (reduce) return;
       // she tries on her outfits — classic, cap & gown, coder, suit, heart — on a slow loop
-      const looks = [['classic', 'encouraging'], ['graduate', 'thinking'], ['coder', 'curious'], ['professor', 'neutral'], ['heart', 'encouraging'], ['classic', 'celebratory']];
+      // like the reel: she walks in, the graduate has an idea, the coder types, the
+      // professional celebrates, the heart naps on her pillow, then a wave
+      const looks = [['classic', 'walk', 1], ['graduate', 'thinking'], ['coder', 'thinking'], ['professor', 'celebratory'], ['heart', 'sleep'], ['classic', 'peek'], ['professor', 'walk', -1], ['classic', 'happy']];
       let i = 0;
+      const show = ([o, e, dir]) => { M.setOutfit(o); M.setEmotion(e); if (dir && M.setFacing) M.setFacing(dir); };
+      show(looks[0]);
       setInterval(() => {
         if (document.hidden || !M.setOutfit) return;
-        const [o, e] = looks[++i % looks.length];
-        M.setOutfit(o); M.setEmotion(e);
+        show(looks[++i % looks.length]);
       }, 4200);
     });
     const start = () => {
