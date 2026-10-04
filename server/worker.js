@@ -511,9 +511,8 @@ const DASHBOARD = `<!doctype html>
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Were answers helpful?</h2><p class="sub">Share of thumbs-up per feature, last \${d.days} days</p>\${bars((d.ratings || []), (r) => fname(r.name), (r) => Math.round(100 * r.up / Math.max(1, r.up + r.down)), (r) => \`\${r.up} 👍 · \${r.down} 👎\`, { max: 100, suffix: '%' })}
-          <p class="muted" style="margin:14px 0 4px">Questions answered through your server</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer' }[r.src] || r.src), (r) => r.n)}</div>
-        <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem” or with a thumbs-down</p>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           \${(d.reports || []).length ? \`<div class="reports">\${d.reports.map((r) => \`<div class="rep"><div class="meta">\${esc(new Date(r.ts).toLocaleString())} · \${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}\${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">\${esc(r.text)}</div></div>\`).join('')}</div>\` : '<div class="empty">No reports yet</div>'}</div>
       </div>
       <div class="card"><h2>Most active users</h2><p class="sub">Anonymous — a random id per device, never a name</p><div class="scroll"><table>

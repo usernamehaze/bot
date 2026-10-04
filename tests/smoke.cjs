@@ -138,16 +138,18 @@ test('daily limit shows a friendly message with Try again', async (b) => {
   await ctx.close();
 });
 
-test('thumbs down with a reason reaches the dashboard', async (b) => {
+test('Student / Professional switch is top right and changes the background', async (b) => {
   const { ctx, page } = await open(b);
-  const a = await ask(page, 'What is a cell?');
-  await a.locator('.rate-btn[data-k=down]').click();
-  await a.locator('.rate-reasons .fu-chip', { hasText: 'Confusing' }).click();
-  await a.locator('.rate-more input').fill('too many big words');
-  await a.locator('.rate-send').click();
-  await page.waitForTimeout(500);
-  const d = await serverStats();
-  expect(d.reports.some((r) => r.kind === 'down' && /Confusing — too many big words/.test(r.text)), 'report missing: ' + JSON.stringify(d.reports));
+  const sw = await page.locator('.topbar-actions #aud-switch').boundingBox();
+  const brand = await page.locator('.topbar .brand').boundingBox();
+  expect(sw && sw.x > brand.x + brand.width && sw.y < 80, 'switch is not in the top right: ' + JSON.stringify(sw));
+  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'student', 'not student by default');
+  await page.click('#aud-switch [data-aud=pro]');
+  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'background did not switch to pro');
+  await page.waitForTimeout(900); // it fades in
+  const op = await page.evaluate(() => getComputedStyle(document.querySelector('.pat-pro')).opacity);
+  expect(+op > 0, 'pro pattern not visible');
+  expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
   await ctx.close();
 });
 

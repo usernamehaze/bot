@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- pencil -->
+  <g transform="translate(26 70) rotate(-32)"><path d="M0 0h62l16 8-16 8H0z"/><path d="M50 0v16M0 0v16M70 4.5l8 3.5-8 3.5"/></g>
+  <!-- open book -->
+  <g transform="translate(200 28)"><path d="M0 10q26-11 52 0q26-11 52 0v54q-26-11-52 0q-26-11-52 0z"/><path d="M52 10v54M10 22q14-4 32 0M10 34q14-4 32 0M62 22q14-4 32 0M62 34q14-4 32 0"/></g>
+  <!-- graduation cap -->
+  <g transform="translate(40 170)"><path d="M0 16 42 0l42 16-42 16z"/><path d="M16 23v18q26 13 52 0V23M84 16v22"/><circle cx="84" cy="41" r="3"/></g>
+  <!-- atom -->
+  <g transform="translate(262 196)"><ellipse rx="34" ry="12"/><ellipse rx="34" ry="12" transform="rotate(60)"/><ellipse rx="34" ry="12" transform="rotate(-60)"/><circle r="3.5" fill="#000"/></g>
+  <!-- light bulb -->
+  <g transform="translate(36 268)"><path d="M16 0a16 16 0 0 1 9 29v7H7v-7A16 16 0 0 1 16 0z"/><path d="M8 41h16M10 46h12M16 12v10"/></g>
+  <!-- ruler -->
+  <g transform="translate(150 292) rotate(-8)"><rect width="104" height="22" rx="3"/><path d="M12 0v8M24 0v12M36 0v8M48 0v12M60 0v8M72 0v12M84 0v8M96 0v12"/></g>
+  <!-- notebook -->
+  <g transform="translate(296 286) rotate(10)"><rect width="44" height="56" rx="4"/><path d="M10 0v56M18 14h18M18 24h18M18 34h12"/></g>
+  <g fill="#000" stroke="none" font-family="Georgia, 'Times New Roman', serif" font-style="italic">
+    <text x="140" y="150" font-size="22">a²+b²=c²</text>
+    <text x="150" y="232" font-size="28">π</text>
+    <text x="300" y="132" font-size="22">√x</text>
+    <text x="108" y="44" font-size="18" font-style="normal" font-family="'Comic Sans MS', 'Segoe Print', sans-serif">ABC</text>
+    <text x="190" y="266" font-size="18">E=mc²</text>
+  </g>
+</svg>

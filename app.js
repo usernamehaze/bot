@@ -36,7 +36,7 @@ let state = loadState();
 // Cassie's own server (config.js / server/README.md). With it, nobody needs a key to start.
 const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER);
-const APP_VERSION = '104';
+const APP_VERSION = '105';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -417,6 +417,7 @@ const audSwitch = document.getElementById('aud-switch');
 function renderAudience() {
   if (!audSwitch) return;
   const pro = state.audience === 'pro';
+  document.documentElement.dataset.aud = pro ? 'pro' : 'student'; // student or office doodles behind the chat
   audSwitch.classList.toggle('pro', pro);
   audSwitch.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.aud === (pro ? 'pro' : 'student'))));
 }
@@ -2481,7 +2482,6 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
-    addRating(bubble, bubble.querySelector('.cassie-board') ? 'graph' : featureName);
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
@@ -2645,7 +2645,6 @@ async function pictureReply(subject, typingBubble) {
     const caption = `Here’s your picture of ${subject}.`;
     const bubble = renderMessage('assistant', caption);
     addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
-    addRating(bubble, 'image');
     // free-service links are stable, so the picture comes back when the chat reopens
     state.messages.push({ role: 'assistant', content: `[I made a picture of: ${subject}]`, display: caption, image: keep ? src : undefined });
     save();
@@ -4032,40 +4031,13 @@ document.getElementById('edit-profile-btn')?.addEventListener('click', () => { s
   save();
 }));
 
-/* ---------- feedback: 👍 / 👎 under answers, and "Report a problem" ---------- */
+/* ---------- feedback: "Report a problem" in Settings ---------- */
 async function sendFeedback(kind, feature, text = '') {
   if (!SERVER) return false;
   try {
     const r = await fetch(SERVER + '/f', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ uid: installId(), kind, feature, text, ctx: trackCtx() }) });
     return r.ok;
   } catch (e) { return false; }
-}
-const DOWN_REASONS = ['Wrong answer', 'Confusing', 'Too long', 'Not what I asked', 'Something broke'];
-function addRating(bubble, feature) {
-  if (!SERVER || !bubble) return;
-  const row = document.createElement('div');
-  row.className = 'rate-row';
-  row.innerHTML = '<span class="rate-q">Helpful?</span><button type="button" class="rate-btn" data-k="up" aria-label="Helpful" title="Helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4zm2 11h8.3a2 2 0 0 0 2-1.6l1.4-7A2 2 0 0 0 18.7 10H14l.7-4.4A1.8 1.8 0 0 0 11.5 4L9 10v11z"/></svg></button><button type="button" class="rate-btn" data-k="down" aria-label="Not helpful" title="Not helpful"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(180deg)"><path d="M7 10v11H3V10h4zm2 11h8.3a2 2 0 0 0 2-1.6l1.4-7A2 2 0 0 0 18.7 10H14l.7-4.4A1.8 1.8 0 0 0 11.5 4L9 10v11z"/></svg></button>';
-  row.querySelectorAll('.rate-btn').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.k === 'up') {
-      sendFeedback('up', feature);
-      row.innerHTML = '<span class="rate-q">Thanks!</span>';
-      return;
-    }
-    row.innerHTML = `<span class="rate-q">What went wrong?</span><div class="rate-reasons">${DOWN_REASONS.map((r) => `<button type="button" class="fu-chip">${r}</button>`).join('')}</div>
-      <div class="rate-more"><input type="text" maxlength="300" placeholder="Tell us more (optional — no personal info)"><button type="button" class="fu-chip rate-send">Send</button></div>`;
-    let reason = '';
-    row.querySelectorAll('.rate-reasons .fu-chip').forEach((c) => c.addEventListener('click', () => {
-      reason = c.textContent;
-      row.querySelectorAll('.rate-reasons .fu-chip').forEach((x) => x.classList.toggle('on', x === c));
-    }));
-    row.querySelector('.rate-send').addEventListener('click', async () => {
-      const more = row.querySelector('input').value.trim();
-      sendFeedback('down', feature, [reason, more].filter(Boolean).join(' — '));
-      row.innerHTML = '<span class="rate-q">Thanks — this helps Cassie get better.</span>';
-    });
-  }));
-  bubble.appendChild(row);
 }
 function openReport() {
   const wrap = document.createElement('div');
@@ -4122,7 +4094,7 @@ const WHATS_NEW = [
   'Graphs now draw on the board — try “graph y = x² − 4”.',
   'Pictures look real now — just say “make me a picture of…”.',
   'Paste a screenshot on the board with Ctrl+V and draw on it.',
-  'Rate answers with the thumbs, or tap Settings → Report a problem.',
+  'Something not working? Tap Settings → Report a problem.',
   'Lite mode keeps Cassie fast on slow phones (Settings → Appearance).',
   'Quiz me now saves the ones you missed — tap “Review my mistakes” to practise them.',
 ];
