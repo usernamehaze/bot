@@ -63,6 +63,7 @@ if (!state.groqModel) state.groqModel = 'openai/gpt-oss-120b';
 function save() {
   const { messages, ...rest } = state; // `messages` is a runtime alias to the current chat
   try { localStorage.setItem(STORE_KEY, JSON.stringify(rest)); } catch (e) { /* quota */ }
+  if (typeof syncAccount === 'function') syncAccount();
 }
 
 if (!GROQ_MODELS.includes(state.groqModel)) {
@@ -4152,7 +4153,7 @@ function profileLine(p) {
   return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then, and pitch every explanation to that level.${p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
 }
 function openProfile(first) {
-  const p = state.profile || {};
+  const p = state.profile || (state.account && state.account.name ? { name: state.account.name } : {});
   const wrap = document.createElement('div');
   wrap.className = 'profile-overlay';
   wrap.innerHTML = `<form class="profile-card" novalidate>
@@ -4210,6 +4211,202 @@ function openProfile(first) {
   });
   setTimeout(() => f.name.focus(), 50);
 }
+/* ---------- Cassie accounts: sign in once, and your profile follows you ---------- */
+// Only with Cassie's server (config.js). What syncs: profile, settings and saved quiz
+// mistakes — never chats or API keys. Without an account everything stays on the device.
+const GOOGLE_CLIENT_ID = String(window.CASSIE_GOOGLE_CLIENT_ID || '').trim();
+// (var/function, not const: save() can run before this part of the file has loaded)
+function accountsOn() { return !!SERVER; }
+var AUTH_KEY = 'cassie.auth';
+function authToken() { try { return localStorage.getItem(AUTH_KEY) || ''; } catch (e) { return ''; } }
+async function authCall(path, body, method = 'POST') {
+  const token = authToken();
+  let res;
+  try {
+    res = await fetch(SERVER + path, {
+      method,
+      headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) { throw friendlyError("Couldn't connect — check your internet and try again."); }
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* empty */ }
+  if (!res.ok) { const e = friendlyError(data.error || 'Something went wrong — please try again.'); e.status = res.status; throw e; }
+  return data;
+}
+function accountData() {
+  return { profile: state.profile || null, mistakes: state.mistakes || [], audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics };
+}
+var syncTimer = null, lastSynced = '';
+function syncAccount(now) {
+  if (!accountsOn() || !authToken() || !state.profile) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    const data = accountData();
+    const js = JSON.stringify(data);
+    if (js === lastSynced) return;
+    authCall('/auth/save', { data }).then(() => { lastSynced = js; }).catch((e) => { if (e.status === 401) signedOutLocally(); });
+  }, now ? 0 : 2500);
+}
+function applyAccountData(d) {
+  if (!d) return;
+  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  if (Array.isArray(d.mistakes)) { // keep both devices' saved mistakes
+    const have = new Set((state.mistakes || []).map((m) => (m.q || '').toLowerCase()));
+    state.mistakes = [...(state.mistakes || []), ...d.mistakes.filter((m) => m && m.q && !have.has(m.q.toLowerCase()))].slice(0, 200);
+  }
+  lastSynced = JSON.stringify(accountData());
+  save();
+  try { renderAudience(); applyAccent(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
+  if (!state.messages.length) renderHistory();
+}
+function signedIn(token, account) {
+  try { localStorage.setItem(AUTH_KEY, token); } catch (e) { /* ignore */ }
+  state.account = { email: account.email || '', name: account.name || '', google: !!account.google };
+  save();
+}
+function signedOutLocally() {
+  try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
+  state.account = null; save(); renderProfileSummary();
+}
+// After any sign-in: bring the account's profile here, or ask the profile questions once.
+function afterSignIn(res) {
+  signedIn(res.token, res.account);
+  if (res.account.data && res.account.data.profile) {
+    applyAccountData(res.account.data);
+    track('open');
+    try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
+  } else {
+    if (state.profile) syncAccount(true); // this device already has a profile → save it to the account
+    else openProfile(true);
+  }
+  renderProfileSummary();
+}
+
+function loadGoogle() {
+  if (window.google && window.google.accounts) return Promise.resolve();
+  return new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = bad; document.head.appendChild(sc); });
+}
+
+function openAuth({ first = false, mode = 'signin' } = {}) {
+  document.querySelector('.auth-page')?.remove();
+  const page = document.createElement('div');
+  page.className = 'auth-page';
+  page.innerHTML = `
+    <div class="auth-left">
+      <div class="auth-brand"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z"/></svg>Cassie</div>
+      <form class="auth-form" novalidate>
+        <h1 class="auth-title"></h1>
+        <p class="auth-sub"></p>
+        <div class="auth-google" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><div class="auth-gbtn"></div></div>
+        <div class="auth-or" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><span>or</span></div>
+        <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+        <p class="auth-err" role="alert" hidden></p>
+        <button type="submit" class="auth-go"></button>
+        <p class="auth-switch"></p>
+        <p class="auth-forgot" hidden></p>
+        <button type="button" class="auth-skip">Continue without an account</button>
+        <p class="auth-legal">Your chats stay on your device. An account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      </form>
+    </div>
+    <div class="auth-right" aria-hidden="true">
+      <div class="auth-glow"></div>
+      <div class="auth-copy">
+        <p class="auth-kicker">Your study buddy</p>
+        <h2>Learn anything.<br>On every device.</h2>
+        <p>Sign in once — your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
+      </div>
+      <img class="auth-hero" src="landing/cassie-hero.webp" alt="" width="545" height="458">
+    </div>`;
+  document.body.appendChild(page);
+  const f = page.querySelector('form');
+  const err = f.querySelector('.auth-err');
+  const go = f.querySelector('.auth-go');
+  const showErr = (m) => { err.textContent = m; err.hidden = !m; };
+  const setMode = (m) => {
+    mode = m;
+    f.querySelector('.auth-title').textContent = m === 'signup' ? 'Create your Cassie account' : 'Sign in to Cassie';
+    f.querySelector('.auth-sub').textContent = m === 'signup' ? 'Free. Keeps your profile and progress on every device.' : 'Welcome back! Pick up right where you left off.';
+    go.textContent = m === 'signup' ? 'Create account' : 'Sign in';
+    f.password.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
+    f.password.placeholder = m === 'signup' ? 'At least 8 characters' : '';
+    f.querySelector('.auth-switch').innerHTML = m === 'signup'
+      ? 'Already have an account? <button type="button" data-to="signin">Sign in</button>'
+      : 'Don’t have an account? <button type="button" data-to="signup">Sign up</button> · <button type="button" data-to="forgot">Forgot password?</button>';
+    f.querySelector('.auth-forgot').hidden = true;
+    showErr('');
+  };
+  f.querySelector('.auth-switch').addEventListener('click', (e) => {
+    const to = e.target.closest('[data-to]')?.dataset.to;
+    if (!to) return;
+    if (to === 'forgot') {
+      const fp = f.querySelector('.auth-forgot');
+      fp.textContent = GOOGLE_CLIENT_ID
+        ? 'If your account uses the same email as your Google account, tap “Continue with Google” to get back in — no password needed.'
+        : 'Password resets aren’t available yet. Tap “Report a problem” in Settings with your email and we’ll help, or create a new account.';
+      fp.hidden = false; return;
+    }
+    setMode(to);
+  });
+  f.querySelector('.auth-eye').addEventListener('click', () => { f.password.type = f.password.type === 'password' ? 'text' : 'password'; });
+  f.addEventListener('input', () => showErr(''));
+  const close = () => page.remove();
+  const done = (res) => { close(); afterSignIn(res); };
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = f.email.value.trim(), password = f.password.value;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return showErr('Please type your email address.');
+    if (mode === 'signup' && password.length < 8) return showErr('Use at least 8 characters for your password.');
+    if (!password) return showErr('Please type your password.');
+    go.disabled = true; go.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
+    try { done(await authCall(mode === 'signup' ? '/auth/signup' : '/auth/login', { email, password })); }
+    catch (e2) { setMode(mode); showErr(e2.message); go.disabled = false; }
+  });
+  f.querySelector('.auth-skip').addEventListener('click', () => {
+    close();
+    state.skippedAuth = true; save();
+    if (!state.profile) openProfile(true);
+  });
+  if (!first) page.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  if (GOOGLE_CLIENT_ID) {
+    loadGoogle().then(() => {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async ({ credential }) => {
+          try { done(await authCall('/auth/google', { credential })); } catch (e) { showErr(e.message); }
+        },
+      });
+      const box = page.querySelector('.auth-gbtn');
+      window.google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', width: Math.min(360, box.clientWidth || 320) });
+    }).catch(() => { page.querySelector('.auth-google').hidden = true; page.querySelector('.auth-or').hidden = true; });
+  }
+  setMode(mode);
+  setTimeout(() => f.email.focus(), 60);
+}
+
+function renderAccountRow() {
+  const row = document.getElementById('account-row');
+  if (!row) return;
+  row.hidden = !accountsOn();
+  const a = state.account && authToken() ? state.account : null;
+  row.innerHTML = a
+    ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${a.google ? ' (Google)' : ''}. Your profile and saved mistakes sync to your account.</p>
+       <div class="acct-btns"><button type="button" class="new-chat-btn" data-act="signout">Sign out</button><button type="button" class="new-chat-btn acct-del" data-act="delete">Delete account</button></div>`
+    : `<p class="field-hint">Sign in to keep your profile and progress on every device.</p>
+       <button type="button" class="new-chat-btn" data-act="signin">Sign in or create an account</button>`;
+}
+document.getElementById('account-row')?.addEventListener('click', async (e) => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (!act) return;
+  if (act === 'signin') { settingsPanel.hidden = true; openAuth({ mode: 'signin' }); return; }
+  if (act === 'signout') { try { await authCall('/auth/logout', {}); } catch (e2) { /* signed out anyway */ } signedOutLocally(); mascotSay('Signed out. Your stuff is still here on this device.', 3000); return; }
+  if (act === 'delete') {
+    if (!confirm('Delete your Cassie account? Your profile and saved mistakes are removed from the server. What’s on this device stays.')) return;
+    try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(e2.message); }
+  }
+});
+
 function renderProfileSummary() {
   const el = document.getElementById('profile-summary'); const p = state.profile;
   if (el) el.textContent = p ? `${p.name} · ${p.role === 'pro' ? p.field : p.grade} · age ${p.age}` : 'No profile yet.';
@@ -4218,6 +4415,7 @@ function renderProfileSummary() {
   if (u) u.checked = an.usage !== false;
   if (t) t.checked = an.topics !== false && !(p && p.age < 18);
   if (row) row.hidden = !!(p && p.age < 18);
+  renderAccountRow();
 }
 document.getElementById('edit-profile-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openProfile(false); });
 ['share-usage-toggle', 'share-topics-toggle'].forEach((id) => document.getElementById(id)?.addEventListener('change', () => {
@@ -4312,8 +4510,16 @@ renderHistory();
 updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
-if (!state.profile) { state.seenVersion = APP_VERSION; setTimeout(() => openProfile(true), 300); }
-else { track('open'); setTimeout(showWhatsNew, 1200); }
+if (!state.profile) {
+  state.seenVersion = APP_VERSION;
+  // with Cassie's server: the sign-in page first (or "Continue without an account")
+  setTimeout(() => (accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
+} else { track('open'); setTimeout(showWhatsNew, 1200); }
+// signed in: fetch the latest profile from the account (another device may have changed it)
+if (accountsOn() && authToken()) {
+  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = { email: r.account.email, name: r.account.name, google: r.account.google }; if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
+    .catch((e) => { if (e.status === 401) signedOutLocally(); });
+}
 requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();

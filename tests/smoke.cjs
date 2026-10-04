@@ -94,6 +94,8 @@ const test = (name, fn) => tests.push({ name, fn });
 
 test('sign-up shows on first open and saves the profile', async (b) => {
   const { ctx, page } = await open(b, { state: null });
+  await page.waitForSelector('.auth-page', { timeout: 5000 }); // with a server: sign-in page first
+  await page.click('.auth-skip');
   await page.waitForSelector('.profile-overlay', { timeout: 5000 });
   await page.fill('.profile-card input[name=name]', 'Hazel');
   await page.click('.profile-card [data-role=student]');
@@ -103,6 +105,47 @@ test('sign-up shows on first open and saves the profile', async (b) => {
   await page.waitForSelector('.profile-overlay', { state: 'detached' });
   const p = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
   expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15, 'profile not saved: ' + JSON.stringify(p));
+  await ctx.close();
+});
+
+test('accounts: sign up, profile syncs, sign in on another device gets it back', async (b) => {
+  const email = `hazel${Date.now()}@example.com`;
+  // device 1: create an account, answer the profile questions
+  let { ctx, page } = await open(b, { state: null });
+  await page.waitForSelector('.auth-page');
+  expect(await page.locator('.auth-title').textContent() === 'Create your Cassie account', 'should open on sign up');
+  await page.fill('.auth-form input[name=email]', email);
+  await page.fill('.auth-form input[name=password]', 'short');
+  await page.click('.auth-go');
+  expect(/8 characters/.test(await page.locator('.auth-err').textContent()), 'short password not caught');
+  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+  await page.click('.auth-go');
+  await page.waitForSelector('.profile-overlay', { timeout: 5000 });
+  await page.fill('.profile-card input[name=name]', 'Hazel');
+  await page.click('.profile-card [data-role=student]');
+  await page.selectOption('.profile-card select[name=grade]', 'Grade 11');
+  await page.fill('.profile-card input[name=age]', '16');
+  await page.click('.profile-card .pf-go');
+  await page.evaluate(() => syncAccount(true));
+  await page.waitForTimeout(800);
+  await ctx.close();
+  // device 2: sign in → the profile comes back, no questions asked
+  ({ ctx, page } = await open(b, { state: null }));
+  await page.waitForSelector('.auth-page');
+  await page.click('.auth-switch [data-to=signin]');
+  await page.fill('.auth-form input[name=email]', email);
+  await page.fill('.auth-form input[name=password]', 'wrong-password');
+  await page.click('.auth-go');
+  await page.waitForSelector('.auth-err:not([hidden])');
+  expect(/don’t match/.test(await page.locator('.auth-err').textContent()), 'wrong password not caught');
+  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+  await page.click('.auth-go');
+  await page.waitForSelector('.auth-page', { state: 'detached' });
+  const p = await page.evaluate(() => state.profile);
+  expect(p && p.name === 'Hazel' && p.grade === 'Grade 11', 'profile did not come back: ' + JSON.stringify(p));
+  expect(await page.locator('.profile-overlay').count() === 0, 'asked the profile questions again');
+  await page.click('#settings-btn');
+  expect(/Signed in as/.test(await page.locator('#account-row').textContent()), 'settings should say signed in');
   await ctx.close();
 });
 
@@ -546,8 +589,9 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   try {
-    let [sw] = ctx.serviceWorkers();
-    if (!sw) sw = await ctx.waitForEvent('serviceworker', { timeout: 20000 });
+    const isCassie = (w) => /\/background\.js$/.test(w.url());
+    let sw = ctx.serviceWorkers().find(isCassie);
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { predicate: isCassie, timeout: 20000 });
     const out = await sw.evaluate(async () => {
       const realFetch = fetch;
       const sse = (texts) => new Response(texts.map((t) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });

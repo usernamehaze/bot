@@ -4,7 +4,9 @@
  *                    using YOUR Groq key (kept secret here), with Cloudflare Workers AI as
  *                    an automatic backup when Groq is busy or out of free questions
  *   POST /e          anonymous usage counts (no login, no names, no messages)
- *   POST /f          thumbs up / down on answers and "Report a problem" notes
+ *   POST /f          "Report a problem" notes
+ *   POST /auth/...   Cassie accounts: sign up, sign in (email + password, or Google),
+ *                    and the profile / saved mistakes that follow a person to every device
  *   GET  /           your dashboard (asks for your ADMIN_TOKEN)
  *   GET  /stats      the numbers behind the dashboard (needs the token)
  *
@@ -13,6 +15,7 @@
  *   ADMIN_TOKEN  secret — a password you choose for the dashboard
  *   GROQ_KEY     secret — your Groq API key (console.groq.com/keys)
  *   AI           Workers AI binding — the backup brain (optional but recommended)
+ *   GOOGLE_CLIENT_ID  (optional) turns on "Continue with Google" — see server/README.md
  * Optional variables:
  *   DAILY_LIMIT      questions per person per day through your key (default 150)
  *   MINUTE_LIMIT     questions per person per minute (default 12)
@@ -35,6 +38,8 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS feedback_day ON feedback(day)`,
   `CREATE TABLE IF NOT EXISTS quota (k TEXT PRIMARY KEY, day TEXT, n INTEGER)`,
   `CREATE TABLE IF NOT EXISTS chats (day TEXT, src TEXT, n INTEGER, PRIMARY KEY (day, src))`,
+  `CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, email TEXT UNIQUE, pass TEXT, salt TEXT, google TEXT UNIQUE, name TEXT, data TEXT, created INTEGER, updated INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, account TEXT, created INTEGER, seen INTEGER)`,
 ];
 let schemaReady = false;
 async function ensureSchema(db) {
@@ -49,7 +54,7 @@ const clean = (v, n = 40) => String(v == null ? '' : v).replace(/[\u0000-\u001f]
 function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
   const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)));
-  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
+  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...extra } });
 
@@ -233,6 +238,132 @@ async function feedback(request, env) {
   return new Response(null, { status: 204, headers: h });
 }
 
+/* ------------------------------------------------------------------ accounts */
+// Passwords are never stored: only a salted PBKDF2 hash. Sessions are random
+// tokens; only their SHA-256 is stored, so a leaked database can't sign anyone in.
+const SESSION_DAYS = 90;
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const randomToken = (n = 32) => b64u(crypto.getRandomValues(new Uint8Array(n)));
+async function sha256(text) { return b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))); }
+async function hashPassword(password, salt) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 100000 }, key, 256);
+  return b64u(bits);
+}
+function sameText(a, b) { // compare without leaking timing
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+const publicAccount = (a) => ({ email: a.email || '', name: a.name || '', google: !!a.google, data: a.data ? JSON.parse(a.data) : null });
+
+async function newSession(env, accountId) {
+  const token = randomToken();
+  const now = Date.now();
+  await env.DB.prepare('INSERT INTO sessions (token, account, created, seen) VALUES (?, ?, ?, ?)').bind(await sha256(token), accountId, now, now).run();
+  return token;
+}
+async function accountFromRequest(request, env) {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!/^[\w-]{20,100}$/.test(token)) return null;
+  const hash = await sha256(token);
+  const row = await env.DB.prepare('SELECT a.*, s.created AS s_created FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.token = ?').bind(hash).first();
+  if (!row || Date.now() - row.s_created > SESSION_DAYS * 864e5) return null;
+  return { ...row, sessionHash: hash };
+}
+// Slow down password guessing: at most 30 sign-in attempts per address per hour.
+async function authAllowed(request, env) {
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const hour = new Date().toISOString().slice(0, 13);
+  const r = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('auth:' + ip, hour).first();
+  return !r || r.n <= 30;
+}
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+async function verifyGoogle(credential, env) {
+  if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in isn’t set up on this server yet.');
+  const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+  const t = r.ok ? await r.json() : null;
+  if (!t || t.aud !== env.GOOGLE_CLIENT_ID || !/^(https:\/\/)?accounts\.google\.com$/.test(t.iss || '') || +t.exp * 1000 < Date.now() || !t.sub) throw new Error('Google sign-in didn’t work — please try again.');
+  return { sub: String(t.sub), email: String(t.email || '').toLowerCase(), verified: t.email_verified === true || t.email_verified === 'true', name: String(t.given_name || t.name || '').slice(0, 40) };
+}
+
+async function auth(request, env, path) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  await ensureSchema(env.DB);
+  const fail = (message, status = 400) => json({ error: message }, status, h);
+  const ok = (data) => json(data, 200, h);
+  let body = {};
+  if (request.method === 'POST') {
+    const text = await request.text();
+    if (text.length > 300000) return fail('That’s too much to save.', 413);
+    try { body = JSON.parse(text || '{}'); } catch (e) { return fail('Bad request.'); }
+  }
+
+  if (path === '/auth/signup' || path === '/auth/login' || path === '/auth/google') {
+    if (!(await authAllowed(request, env))) return fail('Too many tries — please wait an hour and try again.', 429);
+    const now = Date.now();
+    if (path === '/auth/google') {
+      let g; try { g = await verifyGoogle(String(body.credential || ''), env); } catch (e) { return fail(e.message, 401); }
+      let acc = await env.DB.prepare('SELECT * FROM accounts WHERE google = ?').bind(g.sub).first();
+      if (!acc && g.verified && g.email) { // same email signed up with a password before → link them
+        acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(g.email).first();
+        if (acc) { await env.DB.prepare('UPDATE accounts SET google = ?, updated = ? WHERE id = ?').bind(g.sub, now, acc.id).run(); acc.google = g.sub; }
+      }
+      if (!acc) {
+        acc = { id: randomToken(12), email: g.verified ? g.email : null, google: g.sub, name: g.name, data: null };
+        await env.DB.prepare('INSERT INTO accounts (id, email, google, name, created, updated) VALUES (?, ?, ?, ?, ?, ?)').bind(acc.id, acc.email, acc.google, acc.name, now, now).run();
+      }
+      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data });
+    }
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
+    if (!EMAIL_RE.test(email)) return fail('Please type a valid email address.');
+    if (path === '/auth/signup') {
+      if (password.length < 8) return fail('Use at least 8 characters for your password.');
+      if (password.length > 200) return fail('That password is too long.');
+      const exists = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first();
+      if (exists) return fail('There’s already an account with that email — sign in instead.', 409);
+      const salt = randomToken(16);
+      const acc = { id: randomToken(12), email, name: String(body.name || '').trim().slice(0, 40), data: null };
+      await env.DB.prepare('INSERT INTO accounts (id, email, pass, salt, name, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(acc.id, email, await hashPassword(password, salt), salt, acc.name, now, now).run();
+      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: true });
+    }
+    const acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(email).first();
+    const good = acc && acc.pass && sameText(await hashPassword(password, acc.salt), acc.pass);
+    if (!good) {
+      if (acc && !acc.pass && acc.google) return fail('This account uses Google — tap “Continue with Google”.', 401);
+      return fail('That email and password don’t match. Check them and try again.', 401);
+    }
+    return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data });
+  }
+
+  const acc = await accountFromRequest(request, env);
+  if (!acc) return fail('Please sign in again.', 401);
+  if (path === '/auth/me') {
+    await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
+    return ok({ account: publicAccount(acc) });
+  }
+  if (path === '/auth/save') {
+    const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;
+    if (!data || data.length > 250000) return fail('Nothing to save.');
+    const name = String((body.data.profile && body.data.profile.name) || acc.name || '').slice(0, 40);
+    await env.DB.prepare('UPDATE accounts SET data = ?, name = ?, updated = ? WHERE id = ?').bind(data, name, Date.now(), acc.id).run();
+    return ok({ saved: true });
+  }
+  if (path === '/auth/logout') {
+    await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(acc.sessionHash).run();
+    return ok({ signedOut: true });
+  }
+  if (path === '/auth/delete') { // "Delete my account" — removes everything about it
+    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
+    return ok({ deleted: true });
+  }
+  return fail('Not found.', 404);
+}
+
 async function stats(request, env) {
   const url = new URL(request.url);
   const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -258,12 +389,13 @@ async function stats(request, env) {
     all(`SELECT COALESCE(NULLIF(platform,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
     all(`SELECT substr(uid,1,8) AS id, opens, uses, first_day, last_day, role, grade, age FROM users ORDER BY opens + uses DESC LIMIT 25`),
   ]);
-  const [ratings, reports, chats] = await Promise.all([
+  const [ratings, reports, chats, accountsRow] = await Promise.all([
     all(`SELECT COALESCE(NULLIF(feature,''),'chat') AS name, SUM(kind = 'up') AS up, SUM(kind = 'down') AS down FROM feedback WHERE day >= ? AND kind IN ('up','down') GROUP BY name ORDER BY up + down DESC LIMIT 20`, since),
     all(`SELECT ts, kind, feature, text, ctx FROM feedback WHERE day >= ? AND text != '' ORDER BY ts DESC LIMIT 60`, since),
     all(`SELECT src, SUM(n) AS n FROM chats WHERE day >= ? GROUP BY src ORDER BY n DESC`, since),
+    one(`SELECT COUNT(*) AS n, SUM(google IS NOT NULL) AS google FROM accounts`),
   ]);
-  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats });
+  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow });
 }
 
 export default {
@@ -274,6 +406,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
+      if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
       return new Response('not found', { status: 404 });

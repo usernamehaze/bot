@@ -27,6 +27,12 @@ export async function startFakeServer(port = 4630) {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
+    if (u.startsWith('https://oauth2.googleapis.com/tokeninfo')) { // fake Google: credential "good-<sub>-<email>"
+      const cred = decodeURIComponent(u.split('id_token=')[1] || '');
+      const m = /^good-(\w+)-(.+)$/.exec(cred);
+      if (!m) return Response.json({ error: 'invalid_token' }, { status: 400 });
+      return Response.json({ aud: 'test-client-id', iss: 'https://accounts.google.com', exp: String(Math.floor(Date.now() / 1000) + 600), sub: m[1], email: m[2], email_verified: 'true', given_name: 'Gia' });
+    }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
     if (u.endsWith('/models')) return Response.json({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] });
     const body = JSON.parse(init.body);
@@ -36,7 +42,7 @@ export async function startFakeServer(port = 4630) {
     return Response.json({ choices: [{ message: { role: 'assistant', content: mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
   };
   const env = {
-    DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5',
+    DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id',
     AI: { async run(model, input) { if (mode.ai !== 'ok') throw new Error('AI down'); return { response: 'Backup brain answer: plants use sunlight.' }; } },
   };
   const ctx = { waitUntil() {} };
