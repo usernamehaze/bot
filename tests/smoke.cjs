@@ -56,7 +56,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on' 
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
     const req = route.request();
-    if (req.url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'openai/gpt-oss-120b' }, { id: 'llama-3.3-70b-versatile' }] } });
+    if (req.url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'openai/gpt-oss-120b' }, { id: 'llama-3.3-70b-versatile' }, { id: 'meta-llama/llama-4-scout-17b-16e-instruct' }] } });
     const body = JSON.parse(req.postData() || '{}');
     groqCalls.push(body);
     const out = fakeGroq ? await fakeGroq(body, groqCalls.length) : { text: 'Own-key answer.' };
@@ -284,6 +284,59 @@ test('a long PDF is read in parts even when the model says "too long"', async (b
   // and "pages 2-3" keeps only those pages
   const only = await page.evaluate(() => pagesAskedFor('[Page 1]\nA\n\n[Page 2]\nB\n\n[Page 3]\nC\n\n[Page 4]\nD\n\n', 'make a reviewer of pages 2-3'));
   expect(/B/.test(only) && /C/.test(only) && !/A|D/.test(only.replace(/Page/g, '')), 'page range not applied: ' + only);
+  await ctx.close();
+});
+
+test('a 49-page file becomes a complete reviewer with people, timeline and terms', async (b) => {
+  const seen = { notes: 0, sections: 0, questions: 0, pictures: 0 };
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages);
+    if (/image_url/.test(all)) { seen.pictures++; return { text: '- **Pictures, tables & charts** — a map of Luzon (p. 2)' }; }
+    if (/study notes from one part/.test(all)) { seen.notes++; return { text: ('- **People** — José Rizal — national hero (p. 3)\n- **Dates & times** — 30 December 1896 — Rizal is executed\n').repeat(30) }; }
+    if (/Write ONLY this section/.test(all)) { seen.sections++; return { text: `**Rizal's life**\n- Born in Calamba\n@@PERSON: José Rizal — national hero\n@@DATE: 30 December 1896 — Rizal is executed in Bagumbayan\n@@DATE: 1861 — Rizal is born\n@@TERM: Propaganda Movement — campaign for reforms` }; }
+    if (/practice questions/.test(all)) { seen.questions++; return { text: '1. Who wrote Noli Me Tangere?\n\n**Answers**\n1. José Rizal' }; }
+    return { text: 'ok' };
+  } });
+  const pdf = await page.evaluate(async () => {
+    const para = 'José Rizal was born in Calamba in 1861 and executed on 30 December 1896. ';
+    const md = Array.from({ length: 49 }, (_, i) => `## Page topic ${i + 1}\n\n${para.repeat(25)}`).join('\n\n');
+    const blob = await window.CassieExport.toPdf(md, 'History');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'history.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  const a = await ask(page, 'Read this whole file and take note of all the important details');
+  const t = await a.textContent();
+  expect(seen.notes >= 5 && seen.sections >= 2, `expected notes on every part and several sections, got ${JSON.stringify(seen)}`);
+  expect(/People to remember/.test(t) && /Timeline/.test(t) && /Key terms/.test(t) && /Practice questions/.test(t), 'missing master lists: ' + t.slice(0, 300));
+  expect(!/@@/.test(t), 'raw @@ lines leaked');
+  if (process.env.SHOT) await a.screenshot({ path: process.env.SHOT }); // to look at the result
+  const tl = t.slice(t.indexOf('Timeline'));
+  expect(tl.indexOf('1861') < tl.indexOf('1896'), 'timeline not in order');
+  await ctx.close();
+});
+
+test('a scanned PDF (pictures only) is read page by page', async (b) => {
+  let pictureCalls = 0;
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages);
+    if (/image_url/.test(all)) { pictureCalls++; return { text: '- **Key terms** — **Photosynthesis** — plants make food from light (p. 1)' }; }
+    return { text: 'Reviewer: photosynthesis is how plants make food.' };
+  } });
+  const pdf = await page.evaluate(async () => {
+    await new Promise((r) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload = r; document.head.appendChild(sc); });
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    for (let i = 0; i < 6; i++) {
+      if (i) doc.addPage();
+      const c = document.createElement('canvas'); c.width = 600; c.height = 800; const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 800); g.fillStyle = '#000'; g.font = '28px serif'; g.fillText(`Scanned page ${i + 1}: photosynthesis`, 30, 100);
+      doc.addImage(c.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, 595, 842);
+    }
+    const buf = new Uint8Array(doc.output('arraybuffer')); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'scan.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  const a = await ask(page, 'Make me a reviewer of this');
+  expect(pictureCalls >= 2, 'expected the 6 scanned pages to be read in batches, got ' + pictureCalls);
+  expect(/photosynthesis/i.test(await a.textContent()), 'no reviewer');
   await ctx.close();
 });
 

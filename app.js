@@ -1702,9 +1702,23 @@ async function askCassie(msgs, image, opts = {}) {
 }
 
 /* ---------- reading whole files: reviewers, summaries, answers ---------- */
+// What "take note of everything" means — used for every file, photo and page.
+const NOTES_GUIDE = `Take note of EVERYTHING a student could be asked about. One fact per bullet, under these labels when they apply (skip a label with nothing under it):
+**People** — full name — who they are / what they did
+**Key terms** — **term** — what it means
+**Dates & times** — exact date, year or time — what happened (keep every single one)
+**Places, groups & things** — countries, cities, organisations, laws, treaties, books, inventions, species, objects — why each matters
+**Events & history** — in the order they happened, with causes and effects
+**Numbers & formulas** — statistics, amounts, measurements, equations (with units)
+**Processes** — numbered steps
+**Lists, types & comparisons**
+**Pictures, tables & charts** — what each shows, every label and value you can read
+**Questions in the file** — exercises or questions it asks
+Put the page or slide after a fact when you know it, like (p. 12). Copy names, dates and numbers exactly. Never invent anything.`;
+const REVIEWER_TAIL = 'After the sections, add **People to remember** (name — who), **Timeline** (every date and time in order — what happened), and **Key terms** (term — meaning), then 10 practice questions and an **Answers** list.';
 const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables — or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
 Do exactly what they ask with it — a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
-For a reviewer / study guide: follow the file's order and cover EVERY section, slide, or topic — don't stop early. Use bold section labels on their own line, tight bullets, every key term in bold with a short definition, important facts, numbers, dates, formulas, processes as numbered steps, and what each diagram, chart, table, or picture shows and why it matters. End with 5–10 practice questions, then the answers. Stick to the file — don't invent facts that aren't in it.
+For a reviewer, notes, summary or study guide: follow the file's order and cover EVERY page, section, slide or topic — don't stop early or skip the middle. Use bold section labels on their own line and tight bullets. Keep every person (full name and who they are), key term (in bold, with its meaning), date and time (with what happened), place, event, number, formula and process (as numbered steps), and say what each diagram, chart, table or picture shows and why it matters. Put the page or slide in brackets after a fact when you know it, like (p. 12). ${REVIEWER_TAIL} Stick to the file — don't invent facts that aren't in it.
 The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content — don't tell them to copy it anywhere.`;
 
 function leanDocSystem() {
@@ -1744,13 +1758,14 @@ function blobToJpeg(blob, maxDim = 1000) {
 }
 
 // Pictures inside a file: slide/Word images, or rendered PDF pages that hold figures.
-async function docImages(doc, max) {
+async function docImages(doc, max, onlyPages) {
   const out = [];
   try {
     if (doc.kind === 'pdf') {
       await loadScript(PDFJS_URL);
-      const pdf = await window.pdfjsLib.getDocument({ data: await doc.file.arrayBuffer() }).promise;
-      const pages = (doc.visualPages && doc.visualPages.length ? doc.visualPages : [...Array(Math.min(pdf.numPages, max)).keys()].map((i) => i + 1)).slice(0, max);
+      if (!doc.pdfDoc) doc.pdfDoc = window.pdfjsLib.getDocument({ data: await doc.file.arrayBuffer() }).promise; // open once, reuse
+      const pdf = await doc.pdfDoc;
+      const pages = (onlyPages || (doc.visualPages && doc.visualPages.length ? doc.visualPages : [...Array(Math.min(pdf.numPages, max)).keys()].map((i) => i + 1))).slice(0, max);
       for (const n of pages) {
         const page = await pdf.getPage(n);
         const base = page.getViewport({ scale: 1 });
@@ -1838,13 +1853,14 @@ async function geminiDocument(doc, request, history, onStatus) {
   while (contents.length && contents[0].role !== 'user') contents.shift();
   contents.push({ role: 'user', parts });
   onStatus('Writing it up…');
-  return geminiGenerate({ contents, system: buildSystemPrompt({ tutor: false }) + '\n\n' + DOC_INSTRUCTION, maxTokens: 8192, models: GEMINI_DOC_MODELS });
+  const whole = WHOLE_FILE_RE.test(request) || wantsStudyFile(request);
+  return geminiGenerate({ contents, system: buildSystemPrompt({ tutor: false }) + '\n\n' + DOC_INSTRUCTION, maxTokens: whole ? 32768 : 8192, models: GEMINI_DOC_MODELS });
 }
 
 /* With only a Groq key: read the file part by part (the free tier has a small
    per-minute budget), take notes on each part, then write the final answer. */
 const GROQ_DOC_PART = 9000;   // characters per part (~2.3k tokens)
-const GROQ_DOC_MAX_PARTS = 10;
+const GROQ_DOC_MAX_PARTS = 50; // ≈ 180+ pages
 // "pages 5-12" / "page 3" / "slides 2 to 6" in the request → only those pages of the file.
 function pagesAskedFor(text, request) {
   const m = (request || '').match(/\b(?:pages?|slides?|p{1,2}\.)\s*(\d{1,4})(?:\s*(?:-|–|—|to|through|until)\s*(\d{1,4}))?/i);
@@ -1856,80 +1872,204 @@ function pagesAskedFor(text, request) {
   });
   return keep.length ? keep.join('') : text;
 }
-async function groqDocument(doc, request, history, onStatus) {
-  const sys = leanDocSystem();
-  const waitNote = (label) => (secs) => onStatus(`${label} (Groq's free per-minute limit — continuing in ${secs}s)`);
-  let visualNotes = '';
-  if (doc.hasVisuals) {
-    const imgs = await docImages(doc, 5);
-    if (imgs.length && await discoverGroqVisionModel()) {
-      onStatus('Looking at the pictures and diagrams…');
-      try {
-        visualNotes = await askGroqVision([{ role: 'user', content: `These are pictures/pages from "${doc.name}" (${imgs.map((i) => i.label).join(', ')}). For each one, write study notes: what it shows, every label, value, and term on it, and the concept it explains. If a page is mostly text, write out its key content.` }],
-          imgs, { system: 'You turn pictures from a student\'s lesson file into accurate, complete study notes. Bullets only. Never invent labels you cannot read.', maxTokens: 1500, onWait: waitNote('Looking at the pictures…') });
-      } catch (e) { if (e.friendly && /limit/i.test(e.message)) throw e; /* otherwise carry on with the text */ }
+// Which pages a part of the file covers, from its [Page N] / [Slide N] markers.
+function partSpan(part, fallback) {
+  const nums = [...part.matchAll(/\[(Page|Slide) (\d+)\]/g)].map((m) => +m[2]);
+  if (!nums.length) return fallback;
+  const word = /\[Slide /.test(part) ? 'slide' : 'page';
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  return lo === hi ? `${word} ${lo}` : `${word}s ${lo}–${hi}`;
+}
+// Which pages a group of notes covers, from their [Pages 4–7] labels.
+function groupSpan(group) {
+  const nums = [], word = /^\[Slide/i.test(group[0] || '') ? 'slides' : 'pages';
+  group.forEach((n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)(?:–(\d+))?/i); if (m) nums.push(+m[1], +(m[2] || m[1])); });
+  if (!nums.length) return '';
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  return lo === hi ? `${word.slice(0, -1)} ${lo}` : `${word} ${lo}–${hi}`;
+}
+// Asking for everything (a reviewer, notes, a summary…) rather than one question about the file.
+const WHOLE_FILE_RE = /\b(reviewers?|review|notes?|summar\w*|outline|study guide|everything|whole|entire|complete|all (?:the )?(?:pages|details|info\w*)|important (?:details|points|facts)|key (?:points|facts|details)|take note|flash ?cards?|buod|lahat)\b/i;
+
+// Notes from the pictures in a file: every page with a picture (every page of a
+// scanned PDF), four at a time, so diagrams, tables and scanned text aren't missed.
+async function pictureNotes(doc, onStatus, waitNote) {
+  if (state.groqKey && !(await discoverGroqVisionModel())) return [];
+  const out = [];
+  let batches;
+  if (doc.kind === 'pdf') {
+    const pages = (doc.visualPages || []).slice(0, 48);
+    batches = [];
+    for (let i = 0; i < pages.length; i += 4) batches.push({ pages: pages.slice(i, i + 4) });
+  } else {
+    const imgs = await docImages(doc, 16);
+    batches = [];
+    for (let i = 0; i < imgs.length; i += 4) batches.push({ imgs: imgs.slice(i, i + 4) });
+  }
+  for (let i = 0; i < batches.length; i++) {
+    const imgs = batches[i].imgs || await docImages(doc, 4, batches[i].pages);
+    if (!imgs.length) continue;
+    const labels = imgs.map((x) => x.label).join(', ');
+    onStatus(`Looking at the pictures — ${labels} (${i + 1} of ${batches.length})…`);
+    try {
+      const note = await askGroqVision([{ role: 'user', content: `These are ${labels} from "${doc.name}". For each one, take study notes. If it is mostly text, write out ALL of its important content. If it is a diagram, table, chart or picture, say what it shows and every label and value you can read.\n\n${NOTES_GUIDE}` }],
+        imgs, { system: 'You turn pages and pictures from a student\'s file into accurate, complete study notes. Bullets only. Never invent anything you cannot read.', maxTokens: 1500, onWait: waitNote(`Looking at ${labels}…`) });
+      if (note) out.push(`[${labels.replace(/^\w/, (c) => c.toUpperCase())} — pictures]\n${note}`);
+    } catch (e) {
+      if (e.friendly && /limit|free questions/i.test(e.message)) break; // out of budget: keep what we have
     }
   }
+  return out;
+}
+
+// Pull "@@PERSON: …", "@@DATE: …", "@@TERM: …" lines out of a section into the master lists.
+function takeMasterLines(md, lists) {
+  return md.replace(/^\s*[-*•]?\s*@@\s*(PERSON|DATE|TERM)\s*:\s*(.+)$/gim, (_, kind, body) => {
+    const [head, ...rest] = body.split(/\s+[—–-]\s+/);
+    const item = { head: (head || '').replace(/\*\*/g, '').trim(), tail: rest.join(' — ').trim() };
+    if (!item.head) return '';
+    const key = kind.toUpperCase();
+    const k = (item.head + (key === 'DATE' ? item.tail : '')).toLowerCase();
+    if (!lists[key].some((x) => x.k === k)) lists[key].push({ ...item, k });
+    return '';
+  }).replace(/\n{3,}/g, '\n\n').trim();
+}
+function masterListsMd(lists) {
+  const yearOf = (t) => { const m = t.match(/\b(\d{3,4})\b/); return m ? +m[1] : Infinity; };
+  const bullets = (arr) => arr.map((x) => `- **${x.head}**${x.tail ? ` — ${x.tail}` : ''}`).join('\n');
+  let md = '';
+  if (lists.PERSON.length) md += `**People to remember**\n${bullets(lists.PERSON)}\n\n`;
+  if (lists.DATE.length) md += `**Timeline — every date and time**\n${bullets([...lists.DATE].sort((a, b) => yearOf(a.head) - yearOf(b.head)))}\n\n`;
+  if (lists.TERM.length) md += `**Key terms**\n${bullets(lists.TERM)}\n\n`;
+  return md.trim();
+}
+
+async function groqDocument(doc, request, history, onStatus) {
+  const sys = leanDocSystem();
+  const waitNote = (label) => (secs) => onStatus(`${label} (free per-minute limit — continuing in ${secs}s)`);
+  const whole = WHOLE_FILE_RE.test(request) || wantsStudyFile(request);
   const text = pagesAskedFor(doc.text || '', request);
-  if (!text && !visualNotes) {
-    const e = new Error(`I couldn't find readable text in ${doc.name} — it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
-    e.friendly = true; throw e;
+  const visualNotes = doc.hasVisuals ? await pictureNotes(doc, onStatus, waitNote) : [];
+  if (!text && !visualNotes.length) {
+    throw friendlyError(`I couldn't find readable text in ${doc.name} — it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
   }
-  const visualBlock = visualNotes ? `\n\nWhat the pictures / diagrams in the file show:\n${visualNotes}` : '';
   const hist = compactHistory(history, 800);
 
-  if (estimateTokens(text) <= 3800) {
+  // A short file: read it all in one go.
+  const visualAll = visualNotes.join('\n\n');
+  if (estimateTokens(text) <= 3800 && visualAll.length < 6000) {
     onStatus(`Reading ${doc.name}…`);
     try {
       const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
-        { role: 'user', content: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualBlock}\n\n${request}` }],
-        { maxTokens: 3000, lean: true, rotate: true, onWait: waitNote('Reading…') });
+        { role: 'user', content: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualAll ? `\n\nNotes on the pictures and pages in the file:\n${visualAll}` : ''}\n\n${request}` }],
+        { maxTokens: 3500, lean: true, rotate: true, onWait: waitNote('Reading…') });
       if (reply) return reply;
     } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
   }
 
-  let parts = splitChunks(text, GROQ_DOC_PART);
+  // A long file: careful notes on every part, in order.
+  let parts = text ? splitChunks(text, GROQ_DOC_PART) : [];
   const truncated = parts.length > GROQ_DOC_MAX_PARTS;
   if (truncated) parts = parts.slice(0, GROQ_DOC_MAX_PARTS);
-  const notes = [];
-  const NOTE_SYS = 'You take complete, accurate study notes from one part of a student\'s lesson file. Capture EVERY key term with its definition, facts, numbers, dates, names, formulas, processes (as steps), examples, and any questions in the text. Bullets only, no intro. Max ~350 words. Never invent anything.';
-  // Notes for one part; if it's too big for the model right now, split it in two and try again.
+  const NOTE_SYS = `You take complete, accurate study notes from one part of a student's file.\n${NOTES_GUIDE}\nBullets only, no intro. Be thorough — usually 250–500 words, more if the part is dense.`;
+  // if a part is too big for the model right now, split it in two and try again
   const noteFor = async (chunk, label, depth = 0) => {
     try {
-      return await groqChat([{ role: 'system', content: NOTE_SYS }, { role: 'user', content: `${label}:\n"""\n${chunk}\n"""` }],
-        { maxTokens: 900, lean: true, rotate: true, onWait: waitNote(`Reading ${label}…`) });
+      return await groqChat([{ role: 'system', content: NOTE_SYS }, { role: 'user', content: `${label} of "${doc.name}":\n"""\n${chunk}\n"""` }],
+        { maxTokens: 1300, lean: true, rotate: true, onWait: waitNote(`Reading ${label}…`) });
     } catch (e) {
       if (!e.tooLarge || depth >= 2 || chunk.length < 1500) throw e;
       const half = Math.ceil(chunk.length / 2);
       return `${await noteFor(chunk.slice(0, half), label, depth + 1)}\n${await noteFor(chunk.slice(half), label, depth + 1)}`;
     }
   };
+  const notes = [];
+  let span = 'the start';
   for (let i = 0; i < parts.length; i++) {
-    const label = `Part ${i + 1} of ${parts.length} of "${doc.name}"`;
-    onStatus(`Reading part ${i + 1} of ${parts.length} of ${doc.name}…`);
-    notes.push(`[Part ${i + 1}]\n${await noteFor(parts[i], label)}`);
+    span = partSpan(parts[i], span);
+    onStatus(`Reading ${span} of ${doc.name} — part ${i + 1} of ${parts.length}…`);
+    notes.push(`[${span.replace(/^\w/, (c) => c.toUpperCase())}]\n${await noteFor(parts[i], span.replace(/^\w/, (c) => c.toUpperCase()))}`);
   }
-  // Fit all notes into one final request — smaller each time if the model says it's too long.
-  onStatus('Putting it all together…');
-  let reply = '';
-  for (let budget = 16000, tries = 0; ; budget = Math.floor(budget * 0.6), tries++) {
-    let combined = notes.join('\n\n');
-    const budgetChars = Math.max(3000, budget - visualBlock.length);
-    if (combined.length > budgetChars) {
-      const each = Math.floor(budgetChars / notes.length);
-      combined = notes.map((n) => n.slice(0, each)).join('\n\n');
+  notes.push(...visualNotes);
+  // picture notes slot in by page, so everything reads in the file's order
+  const firstNum = (n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)/i); return m ? +m[1] : Infinity; };
+  notes.sort((x, y) => firstNum(x) - firstNum(y));
+  const tail = truncated ? `\n\n*This file is very long, so I read the first ${GROQ_DOC_MAX_PARTS} parts. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*` : '';
+
+  // One answer from the notes (shrinking them if the model says it's too long).
+  const finalFrom = async (list, ask, maxTokens = 3000) => {
+    for (let budget = 16000, tries = 0; ; budget = Math.floor(budget * 0.6), tries++) {
+      let combined = list.join('\n\n');
+      if (combined.length > budget) {
+        const each = Math.floor(budget / list.length);
+        combined = list.map((n) => n.slice(0, each)).join('\n\n');
+      }
+      try {
+        return await groqChat([{ role: 'system', content: sys },
+          { role: 'user', content: `Complete study notes from "${doc.name}" (in order):\n"""\n${combined}\n"""\n\nUsing these notes as the file's content: ${ask}` }],
+          { maxTokens: tries ? Math.min(maxTokens, 2200) : maxTokens, lean: true, rotate: true, onWait: waitNote('Writing it up…') });
+      } catch (e) { if (!e.tooLarge || tries >= 2) throw e; }
     }
+  };
+
+  // A question about the file: answer from the parts that matter most.
+  if (!whole) {
+    const words = (request.toLowerCase().match(/\p{L}{4,}/gu) || []).filter((w) => !STOP.has(w));
+    const score = (n) => words.reduce((t, w) => t + (n.toLowerCase().includes(w) ? 1 : 0), 0);
+    let picked = notes;
+    if (notes.join('\n\n').length > 16000) {
+      const ranked = notes.map((n, i) => ({ n, i, s: score(n) })).sort((a, b) => b.s - a.s);
+      const keep = new Set();
+      let used = 0;
+      for (const r of ranked) { if (used + r.n.length > 16000 && keep.size) break; keep.add(r.i); used += r.n.length; }
+      picked = notes.filter((_, i) => keep.has(i));
+    }
+    onStatus('Putting it all together…');
+    return (await finalFrom(picked, request)) + tail;
+  }
+
+  // A reviewer / notes of a long file: write it section by section so nothing is dropped,
+  // then add the people, timeline and key terms from the WHOLE file, and practice questions.
+  const groups = [];
+  for (const n of notes) {
+    const g = groups[groups.length - 1];
+    if (g && g.join('\n\n').length + n.length < 11000) g.push(n); else groups.push([n]);
+  }
+  if (groups.length === 1) {
+    onStatus('Putting it all together…');
+    return (await finalFrom(notes, `${request}\n\nCover every note above. ${REVIEWER_TAIL}`, 3500)) + tail;
+  }
+  const lists = { PERSON: [], DATE: [], TERM: [] };
+  const sections = [];
+  const writeSection = async (group, i, n, depth = 0) => {
+    const where = groupSpan(group) || `section ${i + 1}`;
+    onStatus(`Writing it up — ${where} (section ${i + 1} of ${n})…`);
     try {
-      reply = await groqChat([{ role: 'system', content: sys },
-        { role: 'user', content: `Complete study notes taken from every part of "${doc.name}" (in order):\n"""\n${combined}\n"""${visualBlock}\n\nUsing these notes as the file's content: ${request}` }],
-        { maxTokens: tries ? 2200 : 3000, lean: true, rotate: true, onWait: waitNote('Writing it up…') });
-      break;
+      return await groqChat([{ role: 'system', content: sys },
+        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this section of the answer. Cover every note above, in order — keep every name, date, time, place, number and term. No intro, no conclusion, no practice questions (those come at the end).\nThen, after the section, add one line for every person, date/time and key term in these notes, exactly like this:\n@@PERSON: full name — who they are / what they did\n@@DATE: date or time — what happened\n@@TERM: term — what it means` }],
+        { maxTokens: 3200, lean: true, rotate: true, onWait: waitNote(`Writing ${where}…`) });
     } catch (e) {
-      if (!e.tooLarge || tries >= 2) throw e;
+      if (!e.tooLarge || depth >= 1 || group.length < 2) throw e;
+      const half = Math.ceil(group.length / 2);
+      return `${await writeSection(group.slice(0, half), i, n, depth + 1)}\n\n${await writeSection(group.slice(half), i, n, depth + 1)}`;
     }
+  };
+  for (let i = 0; i < groups.length; i++) {
+    const where = groupSpan(groups[i]) || `Section ${i + 1}`;
+    const body = takeMasterLines(await writeSection(groups[i], i, groups.length), lists);
+    sections.push(`**${where.replace(/^\w/, (c) => c.toUpperCase())}**\n\n${body}`);
   }
-  if (truncated) reply += `\n\n*This file is long, so I covered roughly the first ${Math.round((GROQ_DOC_MAX_PARTS * GROQ_DOC_PART) / 2500)} pages. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*`;
-  return reply;
+  const master = masterListsMd(lists);
+  let questions = '';
+  try {
+    onStatus('Writing practice questions…');
+    const facts = (master || sections.join('\n\n')).slice(0, 9000);
+    questions = await groqChat([{ role: 'system', content: sys },
+      { role: 'user', content: `Key facts from all of "${doc.name}":\n"""\n${facts}\n"""\n\nWrite 10 practice questions that cover the whole file (mix multiple choice, identification and short answer), then an **Answers** list.` }],
+      { maxTokens: 1600, lean: true, rotate: true, onWait: waitNote('Writing practice questions…') });
+  } catch (e) { /* the reviewer is still complete without them */ }
+  const pagesNote = doc.pages ? ` — all ${doc.pages} pages` : '';
+  return [`**${doc.name}${pagesNote}**`, ...sections, master, questions ? `**Practice questions**\n\n${questions}` : ''].filter(Boolean).join('\n\n') + tail;
 }
 
 async function answerAboutDocument(doc, request, history, onStatus) {
@@ -2003,7 +2143,7 @@ async function extractPdf(file) {
     const content = await page.getTextContent();
     const pageText = content.items.map((it) => it.str + (it.hasEOL ? '\n' : ' ')).join('').trim();
     if (pageText) text += `[Page ${i}]\n${pageText}\n\n`;
-    if (i <= 80 && visualPages.length < 16) {
+    if (i <= 200 && visualPages.length < 60) {
       let hasPic = pageText.length < 200;
       if (!hasPic) {
         try { hasPic = (await page.getOperatorList()).fnArray.some((fn) => imgOps.has(fn)); } catch (e) { /* ignore */ }
