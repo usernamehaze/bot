@@ -2588,13 +2588,13 @@ async function handleSend(text, opts = {}) {
   const needKey = (image || doc) ? !(state.geminiKey || canChat()) : !canChat();
   if (needKey) {
     openSettings();
-    detourToElement(image ? geminiKeyInput : groqKeyInput, { click: true, resumeAfter: 1200 });
+    detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 }); // one Google key covers everything
     // Show the reminder only once — don't stack a new bubble on every send.
     const prev = chatLog.querySelector('.need-key-msg');
     if (prev) prev.remove();
     const b = renderMessage('assistant', image
       ? "To read an image I need your free Google (Gemini) API key — add it in Settings (top right)."
-      : "I need a free key before I can answer — add a Groq or a Gemini key in Settings (top right). Either one works.");
+      : "I need one free key to start — the easiest is Google's: go to **aistudio.google.com/apikey**, sign in with your Google account, tap **Create API key**, and paste it in Settings. It takes about a minute, and that one key covers everything.");
     if (b) b.classList.add('need-key-msg');
     return;
   }

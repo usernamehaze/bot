@@ -14,7 +14,7 @@ async function activeTab() {
 }
 function errorText(m) {
   m = String((m && m.message) || m || '');
-  if (m === 'no-key') return 'Add your free Groq key first — click the Cassie icon in the toolbar.';
+  if (m === 'no-key') return 'Add a free Groq or Gemini key first — click the Cassie icon in the toolbar.';
   if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup.';
   return m || 'Something went wrong — please try again.';
 }

@@ -933,7 +933,7 @@
       onError: (err) => {
         if (myGen !== gen) return;
         setEmotion('sad');
-        if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add your free Groq API key first.', { muted: true });
+        if (err === 'no-key') setContent('Click the Cassie icon in your browser toolbar to add a free Groq or Gemini key first.', { muted: true });
         else if (err === 'reload') setContent('Something went wrong talking to the extension. Try reloading the page.', { muted: true });
         else setContent(err, { muted: true });
         positionPopover(rect);
@@ -1380,7 +1380,7 @@
   // Turn any failure code/message into a sentence a student can act on.
   function errorText(err) {
     const m = String((err && err.message) || err || '');
-    if (m === 'no-key') return 'Add your free Groq key first — click the Cassie icon in the toolbar.';
+    if (m === 'no-key') return 'Add a free Groq or Gemini key first — click the Cassie icon in the toolbar.';
     if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup and I can read snips.';
     if (m === 'reload' || /context invalidated|receiving end does not exist|Could not establish connection/i.test(m)) return 'Cassie was just updated — refresh this tab (F5) and try again.';
     return m || 'Something went wrong — please try again.';
