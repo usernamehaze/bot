@@ -54,7 +54,11 @@
   .csk-note { padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.2); max-height: 26%; overflow: auto; font-size: 13px; }
   .csk-note b { display: block; margin-bottom: 4px; }
   .csk-note ol { margin: 0; padding-left: 20px; }
-  .csk-note .csk-reply { white-space: pre-wrap; }
+  .csk-note .csk-reply p { margin: 0 0 6px; }
+  .csk-note .csk-reply ul, .csk-note .csk-reply ol { margin: 0 0 6px; padding-left: 20px; }
+  .csk-note .csk-reply li { margin: 2px 0; }
+  .csk-note strong { font-weight: 700; }
+  .csk-note code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   .csk-note[hidden] { display: none; }
   .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px; touch-action: none; }
   .csk-board { position: relative; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
@@ -392,17 +396,51 @@
       if (f && /^image\//.test(f.type)) { e.preventDefault(); fileToUrl(f).then((u) => u && useImageSource(u)); }
     });
 
+    // Cassie's replies come with light markdown — show **bold** as real bold and
+    // "- " lines as a list, never the raw asterisks.
+    const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    function mdInline(t) {
+      return escHtml(t)
+        .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong>$1</strong>')
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+        .replace(/\*{2,}/g, ''); // stray, unpaired markers
+    }
+    function mdBlock(text) {
+      const out = document.createElement('div');
+      out.className = 'csk-reply';
+      let list = null;
+      String(text).replace(/\r/g, '').split('\n').forEach((line) => {
+        const t = line.trim();
+        const li = t.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+        if (li) {
+          const tag = /^\d/.test(t) ? 'OL' : 'UL';
+          if (!list || list.tagName !== tag) { list = document.createElement(tag); out.appendChild(list); }
+          const item = document.createElement('li'); item.innerHTML = mdInline(li[1]); list.appendChild(item);
+          return;
+        }
+        list = null;
+        if (!t) return;
+        const p = document.createElement('p');
+        const h = t.match(/^#{1,6}\s+(.*)$/);
+        p.innerHTML = h ? `<strong>${mdInline(h[1].replace(/\*\*/g, ''))}</strong>` : mdInline(t);
+        out.appendChild(p);
+      });
+      return out;
+    }
     function showNote(n) {
       if (!n) { note.hidden = true; return; }
       note.hidden = false;
       note.innerHTML = '';
-      if (n.headline) { const b = document.createElement('b'); b.textContent = n.headline; note.appendChild(b); }
+      if (n.headline) { const b = document.createElement('b'); b.innerHTML = mdInline(String(n.headline).replace(/\*\*/g, '')); note.appendChild(b); }
       if (n.steps && n.steps.length) {
         const ol = document.createElement('ol');
-        n.steps.forEach((s) => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); });
+        n.steps.forEach((s) => { const li = document.createElement('li'); li.innerHTML = mdInline(s); ol.appendChild(li); });
         note.appendChild(ol);
       }
-      if (n.reply) { const p = document.createElement('div'); p.className = 'csk-reply'; p.textContent = n.reply; note.appendChild(p); }
+      if (n.reply) note.appendChild(mdBlock(n.reply));
     }
     const askForm = $('.csk-ask');
     if (askForm) {
