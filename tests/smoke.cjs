@@ -261,6 +261,32 @@ test('attach a Word file and Cassie reads it', async (b) => {
   await ctx.close();
 });
 
+test('a long PDF is read in parts even when the model says "too long"', async (b) => {
+  const LIMIT = 14000; // pretend the model can only take this many characters
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const len = JSON.stringify(body.messages).length;
+    if (len > LIMIT) return { status: 400, message: 'Please reduce the length of the messages or completion.' };
+    return { text: /Complete study notes/.test(JSON.stringify(body.messages)) ? '**Reviewer** — cells, DNA and enzymes.' : '- notes for this part' };
+  } });
+  const pdf = await page.evaluate(async () => {
+    const para = 'Cells are the basic unit of life. DNA stores genetic information. Enzymes speed up reactions. ';
+    const md = Array.from({ length: 40 }, (_, i) => `## Chapter ${i + 1}\n\n${para.repeat(12)}`).join('\n\n');
+    const blob = await window.CassieExport.toPdf(md, 'Biology');
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let s = ''; for (const x of buf) s += String.fromCharCode(x);
+    return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'biology.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  const a = await ask(page, 'Read this whole file and make me a complete reviewer of it.');
+  const t = await a.textContent();
+  expect(/Reviewer/.test(t), 'no reviewer, got: ' + t.slice(0, 200));
+  expect(groqCalls.length > 3, 'expected the file to be read in parts');
+  // and "pages 2-3" keeps only those pages
+  const only = await page.evaluate(() => pagesAskedFor('[Page 1]\nA\n\n[Page 2]\nB\n\n[Page 3]\nC\n\n[Page 4]\nD\n\n', 'make a reviewer of pages 2-3'));
+  expect(/B/.test(only) && /C/.test(only) && !/A|D/.test(only.replace(/Page/g, '')), 'page range not applied: ' + only);
+  await ctx.close();
+});
+
 test('save an answer as Word and PDF', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: '**Photosynthesis**\n\n- Plants use light, water and carbon dioxide.\n- They make glucose and oxygen.' }) });
   const a = await ask(page, 'Notes on photosynthesis');

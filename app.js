@@ -1334,7 +1334,7 @@ function isRateLimited(status, msg) {
 }
 // Request exceeded the model's per-minute token budget (long conversation).
 function isTooLarge(status, msg) {
-  return status === 413 || /too large|reduce your (message|prompt)|tokens per minute|\bTPM\b|context length|maximum context/i.test(msg || '');
+  return status === 413 || /too large|too long|reduce your (message|prompt)|reduce the length|tokens per minute|\bTPM\b|context.length|maximum context|context window/i.test(msg || '');
 }
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1455,10 +1455,12 @@ function noteGroqBudget(model, res) {
   } catch (e) { /* headers unavailable */ }
 }
 const WEAK_GROQ = /8b|instant|allam|gemma|scout|prompt-guard/i;
-async function groqAlternative(tried) {
+// Small models have small memories: only hand them small requests. For a big one
+// (a long file), waiting a few seconds for a big model beats a "too long" error.
+async function groqAlternative(tried, size = 0) {
   const pool = [...new Set([...GROQ_MODELS, ...(await discoverGroqTextModels())])]
     .filter((m) => !tried.has(m) && !groqCooling(m));
-  return pool.find((m) => !WEAK_GROQ.test(m)) || pool[0] || '';
+  return pool.find((m) => !WEAK_GROQ.test(m)) || (size < 2500 ? pool[0] : '') || '';
 }
 
 /* One raw Groq chat call with all the resilience built in: retired models are
@@ -1472,7 +1474,8 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
   model = model || state.groqModel;
   const tried = new Set();
   let overloadTries = 0, waitTries = 0, switches = 0;
-  if (rotate && groqCooling(model)) model = (await groqAlternative(new Set([model]))) || model;
+  const size = estimateTokens(JSON.stringify(messages)) + maxTokens;
+  if (rotate && groqCooling(model)) model = (await groqAlternative(new Set([model]), size)) || model;
   // When the user's own key can't answer (daily limit, bad key, Groq down), use Cassie's server.
   const viaServerInstead = (e) => (SERVER ? serverChat(messages, { model, maxTokens, onWait, lean }) : Promise.reject(e));
   while (true) {
@@ -1511,7 +1514,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       const secs = retryAfterSecs(res, detail);
       if (secs && secs <= 65) groqCooldown[model] = Date.now() + secs * 1000;
       if (rotate && switches < 4) {
-        const alt = await groqAlternative(tried);
+        const alt = await groqAlternative(tried, size);
         if (alt) { switches += 1; model = alt; continue; }
       }
       if (SERVER && (!secs || secs > 20)) return viaServerInstead();
@@ -1842,6 +1845,17 @@ async function geminiDocument(doc, request, history, onStatus) {
    per-minute budget), take notes on each part, then write the final answer. */
 const GROQ_DOC_PART = 9000;   // characters per part (~2.3k tokens)
 const GROQ_DOC_MAX_PARTS = 10;
+// "pages 5-12" / "page 3" / "slides 2 to 6" in the request → only those pages of the file.
+function pagesAskedFor(text, request) {
+  const m = (request || '').match(/\b(?:pages?|slides?|p{1,2}\.)\s*(\d{1,4})(?:\s*(?:-|–|—|to|through|until)\s*(\d{1,4}))?/i);
+  if (!m || !/\[(?:Page|Slide) \d+\]/.test(text)) return text;
+  const from = +m[1], to = Math.max(from, +(m[2] || m[1]));
+  const keep = text.split(/(?=\[(?:Page|Slide) \d+\])/).filter((block) => {
+    const n = +((block.match(/^\[(?:Page|Slide) (\d+)\]/) || [])[1] || 0);
+    return n >= from && n <= to;
+  });
+  return keep.length ? keep.join('') : text;
+}
 async function groqDocument(doc, request, history, onStatus) {
   const sys = leanDocSystem();
   const waitNote = (label) => (secs) => onStatus(`${label} (Groq's free per-minute limit — continuing in ${secs}s)`);
@@ -1856,7 +1870,7 @@ async function groqDocument(doc, request, history, onStatus) {
       } catch (e) { if (e.friendly && /limit/i.test(e.message)) throw e; /* otherwise carry on with the text */ }
     }
   }
-  const text = doc.text || '';
+  const text = pagesAskedFor(doc.text || '', request);
   if (!text && !visualNotes) {
     const e = new Error(`I couldn't find readable text in ${doc.name} — it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
     e.friendly = true; throw e;
@@ -1878,31 +1892,54 @@ async function groqDocument(doc, request, history, onStatus) {
   const truncated = parts.length > GROQ_DOC_MAX_PARTS;
   if (truncated) parts = parts.slice(0, GROQ_DOC_MAX_PARTS);
   const notes = [];
+  const NOTE_SYS = 'You take complete, accurate study notes from one part of a student\'s lesson file. Capture EVERY key term with its definition, facts, numbers, dates, names, formulas, processes (as steps), examples, and any questions in the text. Bullets only, no intro. Max ~350 words. Never invent anything.';
+  // Notes for one part; if it's too big for the model right now, split it in two and try again.
+  const noteFor = async (chunk, label, depth = 0) => {
+    try {
+      return await groqChat([{ role: 'system', content: NOTE_SYS }, { role: 'user', content: `${label}:\n"""\n${chunk}\n"""` }],
+        { maxTokens: 900, lean: true, rotate: true, onWait: waitNote(`Reading ${label}…`) });
+    } catch (e) {
+      if (!e.tooLarge || depth >= 2 || chunk.length < 1500) throw e;
+      const half = Math.ceil(chunk.length / 2);
+      return `${await noteFor(chunk.slice(0, half), label, depth + 1)}\n${await noteFor(chunk.slice(half), label, depth + 1)}`;
+    }
+  };
   for (let i = 0; i < parts.length; i++) {
-    const label = `Reading part ${i + 1} of ${parts.length} of ${doc.name}…`;
-    onStatus(label);
-    const note = await groqChat([
-      { role: 'system', content: 'You take complete, accurate study notes from one part of a student\'s lesson file. Capture EVERY key term with its definition, facts, numbers, dates, names, formulas, processes (as steps), examples, and any questions in the text. Bullets only, no intro. Max ~350 words. Never invent anything.' },
-      { role: 'user', content: `Part ${i + 1} of ${parts.length} of "${doc.name}":\n"""\n${parts[i]}\n"""` },
-    ], { maxTokens: 900, lean: true, rotate: true, onWait: waitNote(label) });
-    notes.push(`[Part ${i + 1}]\n${note}`);
+    const label = `Part ${i + 1} of ${parts.length} of "${doc.name}"`;
+    onStatus(`Reading part ${i + 1} of ${parts.length} of ${doc.name}…`);
+    notes.push(`[Part ${i + 1}]\n${await noteFor(parts[i], label)}`);
   }
-  // Fit all notes into one final request.
-  let combined = notes.join('\n\n');
-  const budgetChars = 16000 - visualBlock.length;
-  if (combined.length > budgetChars) {
-    const each = Math.floor(budgetChars / notes.length);
-    combined = notes.map((n) => n.slice(0, each)).join('\n\n');
-  }
+  // Fit all notes into one final request — smaller each time if the model says it's too long.
   onStatus('Putting it all together…');
-  let reply = await groqChat([{ role: 'system', content: sys },
-    { role: 'user', content: `Complete study notes taken from every part of "${doc.name}" (in order):\n"""\n${combined}\n"""${visualBlock}\n\nUsing these notes as the file's content: ${request}` }],
-    { maxTokens: 3000, lean: true, rotate: true, onWait: waitNote('Writing it up…') });
+  let reply = '';
+  for (let budget = 16000, tries = 0; ; budget = Math.floor(budget * 0.6), tries++) {
+    let combined = notes.join('\n\n');
+    const budgetChars = Math.max(3000, budget - visualBlock.length);
+    if (combined.length > budgetChars) {
+      const each = Math.floor(budgetChars / notes.length);
+      combined = notes.map((n) => n.slice(0, each)).join('\n\n');
+    }
+    try {
+      reply = await groqChat([{ role: 'system', content: sys },
+        { role: 'user', content: `Complete study notes taken from every part of "${doc.name}" (in order):\n"""\n${combined}\n"""${visualBlock}\n\nUsing these notes as the file's content: ${request}` }],
+        { maxTokens: tries ? 2200 : 3000, lean: true, rotate: true, onWait: waitNote('Writing it up…') });
+      break;
+    } catch (e) {
+      if (!e.tooLarge || tries >= 2) throw e;
+    }
+  }
   if (truncated) reply += `\n\n*This file is long, so I covered roughly the first ${Math.round((GROQ_DOC_MAX_PARTS * GROQ_DOC_PART) / 2500)} pages. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*`;
   return reply;
 }
 
 async function answerAboutDocument(doc, request, history, onStatus) {
+  try { return await readDocumentAnswer(doc, request, history, onStatus); }
+  catch (e) {
+    if (!e.tooLarge) throw e;
+    throw friendlyError(`${doc.name} is too big for me to read in one go right now. Wait a minute and try again, ask about one part (for example “make a reviewer of pages 1–10”), or add your free Gemini key in Settings — then I can read the whole file at once.`);
+  }
+}
+async function readDocumentAnswer(doc, request, history, onStatus) {
   if (state.geminiKey) {
     try { return await geminiDocument(doc, request, history, onStatus); }
     catch (e) {
