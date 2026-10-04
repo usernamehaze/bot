@@ -106,3 +106,13 @@ highlighted text on). It doesn't capture your screen, doesn't run
 silently in the background, and doesn't require any special OS-level
 permissions — everything it does is a direct, visible reaction to text
 you selected.
+
+## Website layout
+
+- `index.html` — the landing page (marble ShaderGradient hero, features, pricing, FAQ).
+  Its background is `landing/cassie-gradient.js`, built from `cassie-3d/src/landing-bg.jsx`
+  with `npx vite build -c vite.landing.config.js` (uses [ShaderGradient](https://github.com/ruucm/shadergradient), MIT).
+  Set `WAITLIST_URL` in `landing/landing.js` to turn the paid-plan buttons into a waitlist link.
+- `start.html` — the loading screen (cursor highlights “Cassie”, clicks) that opens the app.
+  The installed app (PWA) starts here.
+- `app.html` — the app itself.
