@@ -1,6 +1,6 @@
 /* Cassie landing page — small, dependency-free behaviour.
- * - mounts the marble ShaderGradient (landing/cassie-gradient.js) after first paint,
- *   only where WebGL works and motion is welcome; a CSS marble shows otherwise
+ * - loads mascot3d/cassie-3d.js (the marble ShaderGradient + the felt 3D Cassie) after
+ *   first paint where WebGL works; a CSS marble shows otherwise
  * - pricing: ₱ / $ and monthly / yearly
  * - reveal-on-scroll, feature videos that play only while visible, the tour video
  */
@@ -20,47 +20,41 @@
   const onScroll = () => nav.classList.toggle('light', hero.getBoundingClientRect().bottom < 80);
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-  /* ---------- the living marble background ---------- */
+  /* ---------- the living marble background + the 3D felt Cassie (one bundle) ---------- */
   function webglOK() {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
   }
   const saveData = navigator.connection && navigator.connection.saveData;
-  if (!reduce && !saveData && webglOK()) {
-    const start = () => {
-      const s = document.createElement('script');
-      s.src = 'landing/cassie-gradient.js'; s.async = true;
-      s.onload = () => {
-        try {
-          const bg = $('#hero-bg');
-          window.CassieGradient.mount(bg, { pixelDensity: Math.min(1.25, window.devicePixelRatio || 1) });
-          setTimeout(() => bg.classList.add('live'), 300);
-        } catch (e) { /* the CSS marble stays */ }
-      };
-      document.head.appendChild(s);
-    };
-    if (document.readyState === 'complete') setTimeout(start, 200); else addEventListener('load', () => setTimeout(start, 200));
-  }
-
-  /* ---------- the 3D Cassie in the hero (same bundle the app uses) ---------- */
   const botRoot = $('#cassie-3d-root');
-  if (botRoot && !saveData && webglOK()) {
+  if (!saveData && webglOK()) {
     addEventListener('cassie3d-ready', () => {
-      botRoot.classList.add('live');
+      botRoot && botRoot.classList.add('live');
       const M = window.CassieMascot;
       if (!M || !M.setEmotion) return;
       M.setEmotion('encouraging');
       if (reduce) return;
-      // a few moods on a slow loop so she feels alive, never busy
-      const moods = ['encouraging', 'curious', 'thinking', 'celebratory', 'neutral'];
+      // she tries on her outfits — classic, cap & gown, coder, suit, heart — on a slow loop
+      const looks = [['classic', 'encouraging'], ['graduate', 'thinking'], ['coder', 'curious'], ['professor', 'neutral'], ['heart', 'encouraging'], ['classic', 'celebratory']];
       let i = 0;
-      setInterval(() => { if (!document.hidden && M.setEmotion) M.setEmotion(moods[++i % moods.length]); }, 4200);
+      setInterval(() => {
+        if (document.hidden || !M.setOutfit) return;
+        const [o, e] = looks[++i % looks.length];
+        M.setOutfit(o); M.setEmotion(e);
+      }, 4200);
     });
-    const loadBot = () => {
+    const start = () => {
       const s = document.createElement('script');
-      s.src = 'mascot3d/cassie-mascot.js'; s.async = true;
+      s.src = 'mascot3d/cassie-3d.js'; s.async = true;
+      s.onload = () => {
+        try {
+          const bg = $('#hero-bg');
+          window.CassieGradient.mount(bg, { still: reduce, pixelDensity: Math.min(1.25, window.devicePixelRatio || 1) });
+          setTimeout(() => bg.classList.add('live'), 300);
+        } catch (e) { /* the CSS marble stays */ }
+      };
       document.body.appendChild(s);
     };
-    if (document.readyState === 'complete') setTimeout(loadBot, 350); else addEventListener('load', () => setTimeout(loadBot, 350));
+    if (document.readyState === 'complete') setTimeout(start, 200); else addEventListener('load', () => setTimeout(start, 200));
   }
 
   /* ---------- reveal on scroll ---------- */

@@ -248,7 +248,43 @@ function applyAccent() {
   // Tint the 3D bot to match (null = her default pink). Guarded because the
   // mascot bundle loads lazily; if it isn't ready yet, the ready event re-applies.
   try { if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(on ? color : null); } catch (e) { /* ignore */ }
+  if (typeof updateBackdrop === 'function') updateBackdrop();
 }
+/* ---------- the living gradient behind the chat ---------- */
+// Marble monochrome by default; when the student picks a colour the gradient
+// flows to that colour (soft tints in light mode, a deep glow in dark mode).
+function mixHex(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const darkScheme = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function backdropColors() {
+  const dark = !!(darkScheme && darkScheme.matches);
+  const c = (state.accent || '').trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(c)) {
+    return dark ? { color1: '#0e0e11', color2: '#45434c', color3: '#8a8590', brightness: 0.95 }
+      : { color1: '#ece8e1', color2: '#d3cfd6', color3: '#fbf8f3', brightness: 1.25 };
+  }
+  return dark ? { color1: '#0c0c0f', color2: mixHex(c, '#000000', 0.35), color3: mixHex(c, '#000000', 0.68), brightness: 1 }
+    : { color1: mixHex(c, '#ffffff', 0.72), color2: mixHex(c, '#ffffff', 0.38), color3: '#fbf8f3', brightness: 1.2 };
+}
+let backdrop = null;
+function startBackdrop() {
+  const el = document.getElementById('app-bg');
+  if (backdrop || !el || !window.CassieGradient) return;
+  const saveData = navigator.connection && navigator.connection.saveData;
+  if (saveData) return;
+  const still = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  try {
+    backdrop = window.CassieGradient.mount(el, { props: { ...backdropColors(), uSpeed: 0.12 }, still, pixelDensity: Math.min(1, window.devicePixelRatio || 1) });
+    setTimeout(() => el.classList.add('live'), 250);
+  } catch (e) { backdrop = null; }
+}
+function updateBackdrop() { try { if (backdrop) backdrop.update(backdropColors()); } catch (e) { /* ignore */ } }
+window.addEventListener('cassie3d-loaded', startBackdrop);
+if (darkScheme && darkScheme.addEventListener) darkScheme.addEventListener('change', updateBackdrop);
+
 // When the lazy 3D bot finishes loading, apply the saved colour to it.
 window.addEventListener('cassie3d-ready', () => {
   try { const c = (state.accent || '').trim(); if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(/^#[0-9a-fA-F]{6}$/.test(c) ? c : null); } catch (e) { /* ignore */ }
@@ -334,6 +370,23 @@ function set3D(name) {
     if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
   } catch (e) { /* ignore */ }
 }
+
+// Cassie dresses for the job: a suit & beret for research and web checks, cap &
+// gown for quizzes and reviewers, thick glasses + code for coding, a felt heart for
+// heart-to-hearts, and her classic red felt the rest of the time.
+let taskOutfit = null; // set per message (code / reviewer / research), cleared by the next plain one
+const CODE_ASK_RE = /```|\b(code|coding|program(ming)?|python|javascript|typescript|java|c\+\+|c#|html|css|sql|function|debug|bug|compile|algorithm|script|api)\b/i;
+const STUDY_ASK_RE = /\b(reviewer|quiz|flash ?cards?|practice (test|questions|exam)|study guide|mock (exam|test)|exam prep)\b/i;
+function outfitForMessage(text, doc) {
+  if (CODE_ASK_RE.test(text || '')) return 'coder';
+  if (doc || STUDY_ASK_RE.test(text || '')) return 'graduate';
+  return null;
+}
+function dressCassie() {
+  const outfit = counselorMode ? 'heart' : quizMode ? 'graduate' : (taskOutfit || 'classic');
+  try { if (window.CassieMascot && window.CassieMascot.setOutfit) window.CassieMascot.setOutfit(outfit); } catch (e) { /* ignore */ }
+}
+window.addEventListener('cassie3d-ready', () => dressCassie());
 
 function setCursorMode(mode) {
   cursorState = mode;
@@ -2150,6 +2203,8 @@ async function handleSend(text, opts = {}) {
   promptInput.value = '';
   promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
+  taskOutfit = outfitForMessage(sendText, doc);
+  dressCassie();
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
   // remember what the student is studying + any explicit "remember ..." note
   try {
@@ -2172,6 +2227,7 @@ async function handleSend(text, opts = {}) {
     save();
     typingBubble.remove();
     const bubble = renderMessage('assistant', reply);
+    if (!taskOutfit && /```/.test(reply)) { taskOutfit = 'coder'; dressCassie(); }
     const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
     const title = doc
       ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
@@ -2377,6 +2433,7 @@ function authorsShort(list) {
 async function runResearch(topic) {
   topic = (topic || '').trim();
   if (!topic) { promptInput.placeholder = 'Type a topic first, then tap Research…'; promptInput.focus(); return; }
+  taskOutfit = 'professor'; dressCassie();
   if (!state.groqKey) {
     openSettings();
     detourToElement(groqKeyInput, { click: true, resumeAfter: 1200 });
@@ -2490,6 +2547,7 @@ async function askGeminiGrounded(q) {
 async function runWebCheck(text) {
   text = (text || '').trim();
   if (!text) { promptInput.placeholder = 'Type a question first, then tap Web…'; promptInput.focus(); return; }
+  taskOutfit = 'professor'; dressCassie();
   if (!state.geminiKey) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
@@ -2739,6 +2797,7 @@ if (quizBtn) {
     }
     quizMode = !quizMode;
     quizBtn.classList.toggle('active', quizMode);
+    dressCassie();
     setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
     if (quizMode) {
       const topic = promptInput.value.trim();
@@ -2765,6 +2824,7 @@ if (talkBtn) {
     }
     counselorMode = !counselorMode;
     talkBtn.classList.toggle('active', counselorMode);
+    setTimeout(dressCassie, 0);
     if (talkLabel) talkLabel.textContent = counselorMode ? 'Studying' : 'Talk';
     if (counselorMode) {
       quizMode = false;
@@ -3201,6 +3261,8 @@ clearChatBtn.addEventListener('click', () => {
 /* ---------- sidebar: multiple conversations ---------- */
 function resetQuizUi() {
   quizMode = false;
+  taskOutfit = null;
+  setTimeout(dressCassie, 0);
   if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
 }
 function openSidebar() {

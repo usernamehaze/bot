@@ -4,3 +4,4 @@ dist-mascot
 .vite
 *.local
 dist-landing
+dist-bundle

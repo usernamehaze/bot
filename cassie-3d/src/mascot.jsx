@@ -2,52 +2,55 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
-import CassieBot from './components/CassieBot';
+import FuzzyCassie, { OUTFITS } from './components/FuzzyCassie';
 import { EMOTIONS } from './components/constants';
 
-// A compact, transparent 3D Cassie that drops into the vanilla tutor's mascot
-// spot. It exposes window.CassieMascot.setEmotion(name) so app.js can drive it
-// from the existing emotion / thinking / celebrate / sleep logic.
+// A compact, transparent 3D Cassie — a little felt creature — for the app's mascot
+// spot and the landing page. window.CassieMascot drives it:
+//   setEmotion(name)  neutral | thinking | encouraging | celebratory | curious | sleep | angry | dizzy
+//   setOutfit(name)   classic | professor | graduate | coder | heart
+//   setColor(hex)     tints the classic blob to the student's favourite colour (null = red)
 function Mascot() {
   const [key, setKey] = useState('neutral');
+  const [outfit, setOutfit] = useState('classic');
   const [accent, setAccent] = useState(null);
 
   useEffect(() => {
-    window.CassieMascot = window.CassieMascot || {};
-    window.CassieMascot.setEmotion = (name) => setKey(EMOTIONS[name] ? name : 'neutral');
-    // Let the app tint Cassie to the user's favorite colour (or null = pink).
-    window.CassieMascot.setColor = (hex) => setAccent(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(hex || '') ? hex : null);
-    window.CassieMascot.ready = true;
+    const M = (window.CassieMascot = window.CassieMascot || {});
+    M.setEmotion = (name) => setKey(EMOTIONS[name] ? name : 'neutral');
+    M.setOutfit = (name) => setOutfit(OUTFITS[name] ? name : 'classic');
+    M.setColor = (hex) => setAccent(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(hex || '') ? hex : null);
+    M.outfits = Object.keys(OUTFITS);
+    M.ready = true;
     window.dispatchEvent(new Event('cassie3d-ready'));
-    return () => {
-      if (window.CassieMascot) { window.CassieMascot.setEmotion = null; window.CassieMascot.setColor = null; }
-    };
+    return () => { M.setEmotion = M.setOutfit = M.setColor = null; };
   }, []);
 
   const emotion = EMOTIONS[key] || EMOTIONS.neutral;
-  const keyLight = accent || '#FF1493';
-
   return (
-    <Canvas
-      camera={{ position: [0, 0.1, 4.4], fov: 40 }}
-      dpr={[1, 1.5]}
+    <Canvas camera={{ position: [0, 0.15, 4.4], fov: 40 }} dpr={[1, 1.75]}
       gl={{ alpha: true, antialias: true, preserveDrawingBuffer: false }}
-      style={{ background: 'transparent', pointerEvents: 'none' }}
-    >
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[3, 4, 4]} intensity={2.2} color={keyLight} />
-      <directionalLight position={[-3, 2, 2]} intensity={0.7} color="#88aaff" />
-      {/* scaled to leave head-room so raised / open arms stay inside the frame */}
-      <group scale={1.02} position={[0, -0.1, 0]}>
-        <CassieBot emotion={emotion} hideIcons accent={accent} feet={key !== 'neutral'} />
+      style={{ background: 'transparent', pointerEvents: 'none' }}>
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[2.5, 4, 4]} intensity={2.1} color="#fff4ea" />
+      <directionalLight position={[-3, 2, 2]} intensity={0.6} color="#cfe0ff" />
+      {/* scaled so the cap / beret and raised paws stay inside the frame */}
+      <group scale={1.32} position={[0, -0.18, 0]}>
+        <FuzzyCassie emotion={emotion} outfit={outfit} accent={accent} />
       </group>
       <Environment resolution={128}>
-        <Lightformer intensity={2} color="#ffffff" position={[0, 2, 2]} scale={[6, 6, 1]} />
-        <Lightformer intensity={1.4} color={keyLight} position={[-3, 1, 2]} scale={[3, 3, 1]} />
+        <Lightformer intensity={2.2} color="#ffffff" position={[0, 2, 3]} scale={[6, 4, 1]} />
+        <Lightformer intensity={1.2} color="#ffe8d6" position={[-3, 1, 2]} scale={[3, 3, 1]} />
       </Environment>
     </Canvas>
   );
 }
 
-const el = document.getElementById('cassie-3d-root');
-if (el) createRoot(el).render(<Mascot />);
+function mountMascot(el) {
+  if (!el || el.__cassieRoot) return;
+  el.__cassieRoot = createRoot(el);
+  el.__cassieRoot.render(<Mascot />);
+}
+window.CassieMascot = window.CassieMascot || {};
+window.CassieMascot.mount = mountMascot;
+mountMascot(document.getElementById('cassie-3d-root'));
