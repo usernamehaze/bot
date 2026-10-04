@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=103">
 </head>
 <body>
 
@@ -328,11 +328,11 @@
 
 </div>
 
-<script src="memory.js"></script>
-<script src="board.js"></script>
-<script src="export.js"></script>
-<script src="sketch.js"></script>
-<script src="app.js"></script>
+<script src="memory.js?v=103"></script>
+<script src="board.js?v=103"></script>
+<script src="export.js?v=103"></script>
+<script src="sketch.js?v=103"></script>
+<script src="app.js?v=103"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -347,7 +347,7 @@
     function load3D() {
       if (!hasWebGL()) return;
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js';
+      s.src = 'mascot3d/cassie-3d.js?v=103';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
