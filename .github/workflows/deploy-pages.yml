@@ -1,0 +1,50 @@
+name: Deploy website
+
+# Puts the latest Cassie on askcassie.pages.dev after every push.
+# Needs two GitHub secrets (see STORES.md → "Keep askcassie.pages.dev up to date"):
+#   CLOUDFLARE_API_TOKEN  and  CLOUDFLARE_ACCOUNT_ID
+# Until they're added, this workflow just skips the deploy.
+on:
+  push:
+    branches: [claude/brave-tesla-ofygom]
+  workflow_dispatch:
+
+concurrency: deploy-website
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PAGES_PROJECT: ${{ vars.PAGES_PROJECT || 'askcassie' }}
+      PAGES_BRANCH: ${{ vars.PAGES_BRANCH || 'main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the Cloudflare secrets are set
+        id: cf
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::Skipping deploy — add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in GitHub → Settings → Secrets and variables → Actions."; fi
+
+      - name: Collect the website files
+        if: steps.cf.outputs.ok == 'true'
+        run: |
+          mkdir _site
+          cp index.html app.html start.html privacy.html ./*.js style.css manifest.json _site/
+          cp -r icons landing mascot3d patterns _site/
+          [ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)
+          mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/
+          # the Chrome extension, ready to download from the site
+          cp -r extension /tmp/cassie-extension && rm -f /tmp/cassie-extension/*.zip
+          (cd /tmp && zip -qr "$GITHUB_WORKSPACE/_site/cassie-extension.zip" cassie-extension)
+          du -sh _site
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.cf.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name=${{ env.PAGES_PROJECT }} --branch=${{ env.PAGES_BRANCH }} --commit-dirty=true
