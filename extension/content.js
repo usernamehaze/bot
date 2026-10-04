@@ -1327,7 +1327,7 @@
 
   // When the screenshot is unusable: read what's inside the box straight from the page —
   // the text, plus any SVG / canvas / image there (graphs are often SVG or canvas).
-  async function domRegion(r) {
+  async function domRegion(r, { textOnly = false } = {}) {
     const els = [];
     const nx = 8, ny = 6;
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
@@ -1347,6 +1347,7 @@
     const alts = [...document.querySelectorAll('img[alt], [aria-label]')].filter((e) => !host.contains(e) && inBox(e)).map((e) => (e.getAttribute('alt') || e.getAttribute('aria-label') || '').trim()).filter((t) => t.length > 3);
     if (alts.length) texts.push('Picture labels: ' + [...new Set(alts)].slice(0, 6).join(' | '));
     const text = [...new Set(texts)].join('\n').slice(0, 3500);
+    if (textOnly) return { text, pics: [] };
 
     const pics = [];
     for (const e of document.querySelectorAll('svg, canvas, img')) {
@@ -1395,12 +1396,19 @@
 
   const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 
+  // The words inside the snipped box, sent along with the picture: if a model
+  // struggles to read the screenshot, Cassie still knows the question.
+  const withBoxText = (prompt, boxText) => boxText ? `${prompt}\n\nText found in the snipped part of the page (use it if the picture is hard to read):\n"""\n${boxText.slice(0, 2500)}\n"""` : prompt;
+  const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\s+(to be\s+)?(dark|black|blank|empty)\b|\bcan(?:not|'t|’t)\s+see\s+(the|any|anything)\b|\bunable to see\b|\bre-?upload\b/i;
+
   // Explain a picture (a snip, or one pasted/dropped on the board) into the side board.
-  async function explainPicture(sess, image, ctx = '') {
+  async function explainPicture(sess, image, ctx = '', boxText = '') {
     const say = (n) => sess && sess.showNote(n);
     say({ reply: 'Cassie is reading your picture…' });
     try {
-      const data = parseBoardJSON(await askVision(image, SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), null, 800));
+      const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 800);
+      if (SEEMS_BLANK.test(raw) && boxText.length >= 25) { explainFromText(sess, boxText, '', 'I read the words in your box:'); return; }
+      const data = parseBoardJSON(raw);
       if (sess) { sess.setTitle(data.headline || 'Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
     } catch (e) {
       const text = ctx && ctx.length > 40 ? ctx : '';
@@ -1449,8 +1457,10 @@
       return;
     }
     // The snip and Cassie's explanation open TOGETHER in the side board.
-    const sess = await openSnipBoard(cap.image, { headline: 'Your snip', steps: [] }, { loading: true });
-    explainPicture(sess, cap.image, ctx);
+    let boxText = '';
+    try { boxText = (await domRegion(r, { textOnly: true })).text; } catch (e) { /* no text — the picture is enough */ }
+    const sess = await openSnipBoard(cap.image, { headline: 'Your snip', steps: [] }, { loading: true, boxText });
+    explainPicture(sess, cap.image, ctx, boxText);
   }
 
   // Read the text around the pointed-at element so Cassie knows what it is.
@@ -1578,9 +1588,10 @@
     setDock(false);
     const topic = () => (data && data.headline && data.headline !== 'Your snip' ? `Topic: ${data.headline}. ` : '');
     let sess = null;
+    let boxText = opts.boxText || ''; // words in the snipped box (cleared when a new picture is pasted)
     const opened = window.CassieSketch.open({
       root: shadow,
-      onImage: (url) => { if (url) explainPicture(sess, url, ''); },
+      onImage: (url) => { boxText = ''; if (url) explainPicture(sess, url, ''); },
       image: image || null,
       dark: image ? false : undefined,
       dock: 'side',
@@ -1591,13 +1602,13 @@
       extra: [{ label: 'New snip', title: 'Snip something else from the page', onClick: () => { const cur = window.CassieSketch; cur.close(); setTimeout(enterPointMode, 50); } }],
       onAsk: async (png, q) => {
         try {
-          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, null, 600);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600);
         } catch (e) { return errorText(e); }
       },
       askPlaceholder: 'Ask Cassie about this snip…',
       onCheck: async (png) => {
         try {
-          return await askVision(png, `This is a student's board: ${image ? 'a snip from their lesson with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Check their work like a kind but honest tutor: say what is right, point out any mistake and why, and give a hint for the next step. Keep it short (under 120 words), plain text.`, null, 500);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500);
         } catch (e) { return errorText(e); }
       },
       onClose: () => setDock(true),

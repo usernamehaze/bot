@@ -15,14 +15,35 @@ chrome.storage.local.get(['groqKey', 'groqModel', 'geminiKey'], ({ groqKey, groq
   }
 });
 
+// Test the keys (Groq / Google say whether they work) and say so plainly.
+const KEY_WORDS = {
+  ok: (n) => `${n} key works ✓`,
+  invalid: (n) => `${n} key was rejected — copy it again from ${n === 'Groq' ? 'console.groq.com/keys' : 'aistudio.google.com/apikey'}`,
+  missing: () => '',
+  offline: (n) => `Couldn’t check the ${n} key (offline?)`,
+  unknown: (n) => `Couldn’t check the ${n} key right now`,
+};
+function showKeyStatus(r, saved) {
+  if (!r) { status.textContent = saved ? 'Saved.' : ''; return; }
+  const parts = [KEY_WORDS[r.groq]('Groq'), KEY_WORDS[r.gemini]('Gemini')].filter(Boolean);
+  const bad = r.groq === 'invalid' || r.gemini === 'invalid';
+  status.style.color = bad ? '#dc2626' : '#16a34a';
+  status.textContent = (saved ? 'Saved. ' : '') + parts.join(' · ');
+}
+function checkKeys(save) {
+  status.style.color = '#6b7280';
+  status.textContent = save ? 'Saving and checking your keys…' : '';
+  chrome.runtime.sendMessage({ type: 'CASSIE_CHECK_KEYS', save }).then((r) => {
+    // keys may have been tidied or un-swapped — show what's really stored
+    chrome.storage.local.get(['groqKey', 'geminiKey'], (o) => { groqKeyInput.value = o.groqKey || ''; geminiKeyInput.value = o.geminiKey || ''; });
+    showKeyStatus(r, !!save);
+  }).catch(() => { status.textContent = save ? 'Saved.' : ''; });
+}
+checkKeys(null);
+
 saveBtn.addEventListener('click', () => {
-  chrome.storage.local.set(
-    { groqKey: groqKeyInput.value.trim(), geminiKey: geminiKeyInput.value.trim(), groqModel: modelSelect.value },
-    () => {
-      status.textContent = 'Saved.';
-      setTimeout(() => { status.textContent = ''; }, 1500);
-    }
-  );
+  chrome.storage.local.set({ groqModel: modelSelect.value });
+  checkKeys({ groqKey: groqKeyInput.value, geminiKey: geminiKeyInput.value });
 });
 
 /* ---------- side buttons hidden on some sites ("Hide here") ---------- */

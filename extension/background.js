@@ -131,6 +131,71 @@ async function discoverGroqModels(groqKey) {
   } catch (e) { return []; }
 }
 
+// ---- keys: tidy, un-swap, and check that they work ----
+// The extension keeps its OWN copy of the keys (separate from the website), so a
+// stale or mistyped one here gives "Invalid API Key" even when the site works.
+function tidyKey(k) {
+  return String(k || '').trim().replace(/^bearer\s+/i, '').replace(/^["'`]+|["'`]+$/g, '').replace(/\s+/g, '');
+}
+async function getKeys() {
+  const o = await chrome.storage.local.get(['groqKey', 'geminiKey', 'groqModel']);
+  let groqKey = tidyKey(o.groqKey), geminiKey = tidyKey(o.geminiKey);
+  // pasted into the wrong boxes? Groq keys start with gsk_, Google keys with AIza
+  if (/^AIza/.test(groqKey) && (!geminiKey || /^gsk_/.test(geminiKey))) [groqKey, geminiKey] = [geminiKey, groqKey];
+  else if (/^gsk_/.test(geminiKey) && !groqKey) [groqKey, geminiKey] = [geminiKey, ''];
+  if (groqKey !== (o.groqKey || '') || geminiKey !== (o.geminiKey || '')) chrome.storage.local.set({ groqKey, geminiKey });
+  return { groqKey, geminiKey, groqModel: o.groqModel };
+}
+async function checkKey(kind, key) {
+  if (!key) return 'missing';
+  try {
+    const res = kind === 'groq'
+      ? await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${key}` } })
+      : await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', { headers: { 'x-goog-api-key': key } });
+    if (res.ok) return 'ok';
+    if (res.status === 400 || res.status === 401 || res.status === 403) return 'invalid';
+    return 'unknown';
+  } catch (e) { return 'offline'; }
+}
+const BAD_GROQ_KEY = 'The Groq key saved in the Cassie extension was rejected (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — click the Cassie icon in the toolbar and paste your Groq key again (it starts with gsk_). Opening the Cassie website once also copies working keys over.';
+
+// Plain text answer from Gemini (used when the Groq key is rejected).
+async function geminiText(key, turns) {
+  for (const model of GEMINI_VISION_MODELS) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: turns.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.6 },
+      }),
+    });
+    if (res.ok) {
+      const cand = (await res.json()).candidates?.[0];
+      const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+      if (text) return text;
+    }
+    if (res.status !== 404) break;
+  }
+  throw new Error(BAD_GROQ_KEY);
+}
+// Groq first; if Groq rejects the key and there's a Gemini key, Gemini answers.
+async function answerText(input, keys, onDelta) {
+  try {
+    if (!keys.groqKey) throw Object.assign(new Error('no-key'), { badKey: true });
+    return await askCassie(input, keys.groqKey, keys.groqModel, onDelta);
+  } catch (e) {
+    if (!e.badKey) throw e;
+    if (!keys.geminiKey) throw new Error(keys.groqKey ? BAD_GROQ_KEY : 'no-key');
+    const turns = Array.isArray(input) ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant')) : [{ role: 'user', content: String(input) }];
+    let reply = await geminiText(keys.geminiKey, turns);
+    if (keys.groqKey) reply += '\n\n*(Your Groq key in the extension was rejected, so Gemini answered this one. Paste a fresh Groq key in the Cassie toolbar popup.)*';
+    if (onDelta) onDelta(reply);
+    return reply;
+  }
+}
+
 // Ask Groq. If onDelta is given, stream the reply (calling onDelta with each
 // chunk of text as it arrives) so the answer appears while it's generated;
 // otherwise return the whole reply at once. Returns the full text either way.
@@ -156,6 +221,7 @@ async function askCassie(input, groqKey, model, onDelta) {
     if (!res.ok) {
       let detail = '';
       try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+      if (res.status === 401 || /invalid api key/i.test(detail)) throw Object.assign(new Error(BAD_GROQ_KEY), { badKey: true });
       if (modelRetired(res.status, detail)) {
         const next = GROQ_MODELS.find((m) => !tried.has(m)) || (await discoverGroqModels(groqKey)).find((m) => !tried.has(m));
         if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); continue; }
@@ -210,13 +276,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
   (async () => {
-    const { groqKey, groqModel } = await chrome.storage.local.get(['groqKey', 'groqModel']);
-    if (!groqKey) {
+    const keys = await getKeys();
+    if (!keys.groqKey && !keys.geminiKey) {
       sendResponse({ error: 'no-key' });
       return;
     }
     try {
-      const reply = await askCassie(msg.text, groqKey, groqModel);
+      const reply = await answerText(msg.text, keys);
       sendResponse({ reply });
     } catch (err) {
       sendResponse({ error: err.message });
@@ -268,11 +334,11 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener((msg) => {
     if (msg?.type !== 'CASSIE_ASK') return;
     (async () => {
-      const { groqKey, groqModel } = await chrome.storage.local.get(['groqKey', 'groqModel']);
-      if (!groqKey) { post({ error: 'no-key' }); return; }
+      const keys = await getKeys();
+      if (!keys.groqKey && !keys.geminiKey) { post({ error: 'no-key' }); return; }
       try {
         const input = Array.isArray(msg.messages) ? msg.messages : msg.text;
-        const reply = await askCassie(input, groqKey, groqModel, (delta) => post({ delta }));
+        const reply = await answerText(input, keys, (delta) => post({ delta }));
         post({ done: true, reply });
       } catch (err) {
         post({ error: err.message });
@@ -285,9 +351,9 @@ chrome.runtime.onConnect.addListener((port) => {
 // Every failure comes back as a plain-English sentence (never a bare "couldn't reach").
 const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
 
-async function visionViaGemini(key, { image, prompt, system, maxTokens }) {
-  const m = String(image).match(/^data:([^;]+);base64,(.*)$/);
-  if (!m) throw new Error('That picture couldn’t be read.');
+async function visionViaGemini(key, { image, images, prompt, system, maxTokens }) {
+  const pics = (images || [image]).map((u) => String(u).match(/^data:([^;]+);base64,(.*)$/));
+  if (!pics.length || pics.some((m) => !m)) throw new Error('That picture couldn’t be read.');
   let last = null;
   for (const model of GEMINI_VISION_MODELS) {
     let res;
@@ -297,7 +363,7 @@ async function visionViaGemini(key, { image, prompt, system, maxTokens }) {
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
           ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-          contents: [{ role: 'user', parts: [{ inlineData: { mimeType: m[1], data: m[2] } }, { text: prompt }] }],
+          contents: [{ role: 'user', parts: [...pics.map((m) => ({ inlineData: { mimeType: m[1], data: m[2] } })), { text: prompt }] }],
           generationConfig: { maxOutputTokens: maxTokens || 900, temperature: 0.4 },
         }),
       });
@@ -332,7 +398,7 @@ async function groqVisionCandidates(groqKey) {
   if (_visionModelOK && list.includes(_visionModelOK)) list.splice(list.indexOf(_visionModelOK), 1), list.unshift(_visionModelOK);
   return list;
 }
-async function visionViaGroq(groqKey, { image, prompt, system, maxTokens }) {
+async function visionViaGroq(groqKey, { image, images, prompt, system, maxTokens }) {
   const models = await groqVisionCandidates(groqKey);
   if (!models.length) throw new Error('NO_VISION');
   let lastDetail = '';
@@ -347,7 +413,7 @@ async function visionViaGroq(groqKey, { image, prompt, system, maxTokens }) {
             model, max_tokens: maxTokens || 900, temperature: 0.4,
             messages: [
               ...(system ? [{ role: 'system', content: system }] : []),
-              { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] },
+              { role: 'user', content: [{ type: 'text', text: prompt }, ...(images || [image]).map((u) => ({ type: 'image_url', image_url: { url: u } }))] },
             ],
           }),
         });
@@ -367,12 +433,65 @@ async function visionViaGroq(groqKey, { image, prompt, system, maxTokens }) {
         if (secs > 0 && secs <= 20 && attempt < 2) { await sleep(secs * 1000 + 300); continue; }
         throw new Error(rateLimitMessage(res, detail).replace(/ Tip:.*$/, ' Tip: add a free Google (Gemini) key in the Cassie toolbar popup — snips will use that instead.'));
       }
-      if (res.status === 401) throw new Error('Groq rejected your key — check it in the Cassie toolbar popup.');
+      if (res.status === 401) throw new Error(BAD_GROQ_KEY);
       if (res.status === 413 || /too large|reduce/i.test(detail)) throw new Error('That snip is too big for Groq’s free limit — drag a smaller box around just the part you need.');
       break; // 400/404 etc: this model can't take pictures — try the next one
     }
   }
   throw new Error(/does not exist|not found|decommission|no longer/i.test(lastDetail) ? 'NO_VISION' : lastDetail);
+}
+
+// Make a snip easy for a vision model to read: flattened onto white, JPEG, a sensible
+// size (small snips are enlarged) — and for dark-mode pages, a light (inverted) copy
+// too, because some models call a dark screenshot "blank".
+async function prepareVision(dataUrl) {
+  try {
+    const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    const long = Math.max(bmp.width, bmp.height);
+    const k = long > 1600 ? 1600 / long : long < 700 ? Math.min(2, 700 / long) : 1;
+    const w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+    const c = new OffscreenCanvas(w, h);
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(bmp, 0, 0, w, h);
+    const st = statsOf(c);
+    const jpeg = async () => blobToDataUrl(await c.convertToBlob({ type: 'image/jpeg', quality: 0.92 }));
+    const original = await jpeg();
+    let light = null;
+    if (st.mean < 110) {
+      x.globalCompositeOperation = 'difference'; x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+      light = await jpeg();
+    }
+    return { original, light, flat: st.std < 2.5 };
+  } catch (e) { return { original: dataUrl, light: null, flat: false }; }
+}
+const DARK_NOTE = '\n\n(This page is in dark mode: the second picture is the same snip with its colours inverted so the text is easier to read. Use the first picture for colours.)';
+const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\s+(to be\s+)?(dark|black|blank|empty)\b|\bcan(?:not|'t|’t)\s+see\s+(the|any|anything)\b|\bunable to see\b|\b(image|picture|snip)\s+(is|was)\s+(blank|empty|black)\b|\bre-?upload\b/i;
+
+async function readPicture(keys, msg) {
+  const prep = await prepareVision(msg.image);
+  const ask = async (images, prompt) => {
+    let geminiErr = null;
+    if (keys.geminiKey) {
+      try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); }
+      catch (e) { geminiErr = e; if (!keys.groqKey) throw e; }
+    }
+    try { return await visionViaGroq(keys.groqKey, { ...msg, images, prompt }); }
+    catch (e) {
+      if (e.message === 'NO_VISION') throw new Error(geminiErr ? geminiErr.message : 'no-vision');
+      throw geminiErr && e.message === BAD_GROQ_KEY ? geminiErr : e;
+    }
+  };
+  let reply = await ask(prep.light ? [prep.original, prep.light] : [prep.original], msg.prompt + (prep.light ? DARK_NOTE : ''));
+  // The model said it's blank, but the picture has content: one more careful look
+  // at the easiest-to-read version.
+  if (SEEMS_BLANK.test(reply) && !prep.flat) {
+    try {
+      reply = await ask([prep.light || prep.original], 'This picture is NOT blank — it is a screenshot with text and/or a diagram on it' + (prep.light ? ' (colours inverted from a dark-mode page)' : '') + '. Read it carefully.\n\n' + msg.prompt);
+    } catch (e) { /* keep the first reply */ }
+  }
+  return reply;
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -385,6 +504,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((e) => sendResponse({ error: e.message || 'capture failed' }));
     return true;
   }
+  if (msg?.type === 'CASSIE_CHECK_KEYS') {
+    // Popup / side panel: save (optional) and test the keys.
+    (async () => {
+      if (msg.save) await chrome.storage.local.set({ groqKey: tidyKey(msg.save.groqKey), geminiKey: tidyKey(msg.save.geminiKey) });
+      const k = await getKeys();
+      const [groq, gemini] = await Promise.all([checkKey('groq', k.groqKey), checkKey('gemini', k.geminiKey)]);
+      sendResponse({ groq, gemini });
+    })();
+    return true;
+  }
+  if (msg?.type === 'CASSIE_APP_KEYS') {
+    // The Cassie website (via bridge.js) shares its keys: take one only when the
+    // extension has none, or its own was rejected and the website's works.
+    (async () => {
+      const k = await getKeys(), updated = [];
+      for (const [kind, field] of [['groq', 'groqKey'], ['gemini', 'geminiKey']]) {
+        const app = tidyKey(msg[field]);
+        if (!app || app === k[field]) continue;
+        if (!k[field] || ((await checkKey(kind, k[field])) === 'invalid' && (await checkKey(kind, app)) === 'ok')) {
+          await chrome.storage.local.set({ [field]: app }); updated.push(kind);
+        }
+      }
+      sendResponse({ updated });
+    })();
+    return true;
+  }
   if (msg?.type === 'CASSIE_H2C') {
     // Load the page renderer (html2canvas) into the content script's world on demand.
     chrome.scripting.executeScript({ target: { tabId: sender.tab.id, frameIds: [sender.frameId || 0] }, files: ['vendor/html2canvas.min.js'] })
@@ -394,18 +539,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg?.type === 'CASSIE_VISION') {
     (async () => {
-      const { groqKey, geminiKey } = await chrome.storage.local.get(['groqKey', 'geminiKey']);
-      if (!groqKey && !geminiKey) { sendResponse({ error: 'no-key' }); return; }
-      let geminiErr = null;
-      if (geminiKey) {
-        try { sendResponse({ reply: await visionViaGemini(geminiKey, msg) }); return; }
-        catch (e) { geminiErr = e; if (!groqKey) { sendResponse({ error: e.message }); return; } }
-      }
-      try { sendResponse({ reply: await visionViaGroq(groqKey, msg) }); }
-      catch (e) {
-        if (e.message === 'NO_VISION') sendResponse({ error: geminiErr ? geminiErr.message : 'no-vision' });
-        else sendResponse({ error: e.message });
-      }
+      const keys = await getKeys();
+      if (!keys.groqKey && !keys.geminiKey) { sendResponse({ error: 'no-key' }); return; }
+      try { sendResponse({ reply: await readPicture(keys, msg) }); }
+      catch (e) { sendResponse({ error: e.message }); }
     })().catch((e) => sendResponse({ error: e.message || 'Something went wrong reading the picture.' }));
     return true;
   }
@@ -418,7 +555,7 @@ const CASSIE_APP_URL = 'https://askcassie.pages.dev/app.html';
 const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt, groqKey }
 
 async function openInApp(file, index) {
-  const { groqKey } = await chrome.storage.local.get(['groqKey']);
+  const { groqKey } = await getKeys();
   const tab = await chrome.tabs.create({ url: CASSIE_APP_URL, index });
   pendingImports.set(tab.id, { ...file, groqKey: groqKey || '' });
   setTimeout(() => pendingImports.delete(tab.id), 120000);
