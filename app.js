@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '106';
+const APP_VERSION = '107';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -136,6 +136,7 @@ How you work:
 - Teach when explanation is wanted: show the reasoning step by step, build from what the user seems to know, and use concrete examples.
 - Text may be pasted from a webpage with math notation flattened: "x2" usually means x squared (x^2), "x3" means x^3, and one number over another means a fraction. Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and solve it; for multiple choice, pick the correct option and show the key steps.
 - For coding: give correct, runnable code inside fenced code blocks (triple backticks with the language, e.g. \`\`\`python). Explain what the code does and why, call out edge cases and complexity, and when useful suggest a cleaner or more idiomatic approach. When debugging, identify the actual cause, show the fix, and explain it so they learn.
+- Writing the user will hand in as their own — reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters, "my experience" pieces: write it AS THE USER, in the first person ("I"), in their voice and at their level. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name (or "you") inside the paper. Build it from the experiences, feelings and details they gave you. Where a real personal detail is needed and they didn't give one, write a short bracketed placeholder such as [a moment from the activity that stuck with me] instead of inventing a memory. After the paper, outside it, add one short line inviting them to fill in the brackets and make it their own.
 - Match the format the user asks for. If they ask for only the answer, give just the answer. If they ask you to explain, give the answer AND the reasoning.
 - For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example — unless they asked for only one of those.
 - Adapt your tone: friendly and encouraging for students, crisp and professional for work tasks.
@@ -3187,6 +3188,52 @@ window.addEventListener('message', async (e) => {
     renderMessage('assistant', 'I couldn’t open the file from your browser tab — download it and attach it with the paperclip instead.');
   }
 });
+
+/* ---------- what was asked in the Chrome extension shows up here too ----------
+   The bridge script hands over the extension's history (highlights, snips, pasted
+   pictures, page questions). Each page gets one chat per day, "From Chrome · …". */
+const EXT_KIND = { snip: 'Snip', paste: 'Pasted picture', photo: 'Photo', page: 'About this page', board: 'Board' };
+function extItemId(it) { return String(it.id || ('h' + (it.ts || 0) + ':' + String(it.q || '').slice(0, 24))); }
+function importExtensionHistory(items) {
+  const seen = new Set(Array.isArray(state.extSeen) ? state.extSeen : []);
+  const fresh = items
+    .filter((it) => it && typeof it === 'object' && (it.q || it.a) && !seen.has(extItemId(it)))
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  if (!fresh.length) return 0;
+  let touchedCurrent = false;
+  for (const it of fresh) {
+    seen.add(extItemId(it));
+    let page = '', host = '';
+    try { const u = new URL(it.url); page = u.origin + u.pathname; host = u.hostname.replace(/^www\./, ''); } catch (e) { /* no page */ }
+    const key = `ext|${new Date(it.ts || Date.now()).toDateString()}|${page}`;
+    let chat = state.chats.find((c) => c.extKey === key);
+    if (!chat) {
+      chat = makeChat();
+      chat.extKey = key;
+      const name = String(it.title || host || 'a web page').replace(/\s+/g, ' ').trim();
+      chat.title = `From Chrome · ${name.length > 34 ? name.slice(0, 34) + '…' : name}`;
+      state.chats.push(chat);
+    }
+    const q = String(it.q || '').trim() || EXT_KIND[it.kind] || 'Question';
+    const label = EXT_KIND[it.kind] && !q.startsWith(EXT_KIND[it.kind]) ? `${EXT_KIND[it.kind]}: ${q}` : q;
+    const userMsg = { role: 'user', content: label };
+    if (typeof it.image === 'string' && it.image.startsWith('data:image/')) userMsg.image = it.image;
+    chat.messages.push(userMsg, { role: 'assistant', content: String(it.a || '') });
+    chat.updatedAt = Math.max(chat.updatedAt || 0, it.ts || Date.now());
+    if (chat.id === state.currentId) touchedCurrent = true;
+  }
+  state.extSeen = [...seen].slice(-600);
+  save();
+  if (typeof renderChatList === 'function') renderChatList();
+  if (touchedCurrent) renderHistory();
+  islandShow('done', fresh.length === 1 ? '1 answer from Chrome added' : `${fresh.length} answers from Chrome added`, 3200);
+  return fresh.length;
+}
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (e.source !== window || !d || d.source !== 'cassie-ext' || d.type !== 'import-history' || !Array.isArray(d.items)) return;
+  try { importExtensionHistory(d.items.slice(0, 100)); } catch (err) { /* a bad item never breaks the app */ }
+});
 document.documentElement.dataset.cassieReady = '1';
 
 /* ---------- the student's drawing board ---------- */
@@ -4276,7 +4323,7 @@ const levelForGrade = (g) => { const grp = GRADE_GROUPS.find((x) => x[2].include
 const ageBand = (a) => (!a ? '' : a < 13 ? 'under 13' : a < 18 ? '13-17' : a < 25 ? '18-24' : a < 35 ? '25-34' : a < 50 ? '35-49' : '50+');
 function profileLine(p) {
   const who = p.role === 'pro' ? `a working professional${p.field ? ` (${p.field})` : ''}` : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
-  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then, and pitch every explanation to that level.${p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
+  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then when talking with them — but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
 }
 function openProfile(first) {
   const p = state.profile || (state.account && state.account.name ? { name: state.account.name } : {});
@@ -4631,6 +4678,8 @@ if (liteSelect) {
 const WHATS_NEW = [
   'Meet the new Cassie: a little cursor who changes colour with her mood. Tap her to poke her!',
   'While she works, a pill at the top shows what she’s doing — “Reading pages 3–8…”, then “Done”.',
+  'Using the Chrome extension? What you highlight, snip or paste there now shows up in your chats here (“From Chrome”).',
+  'Reflection papers and personal essays are now written in your voice — with [brackets] for your own moments to fill in.',
   'Miss the 3D felt Cassie? Pick her in Settings → Appearance → Cassie’s look.',
   'Quiz me saves the ones you missed — tap “Review my mistakes” to practise them.',
 ];

@@ -19,6 +19,7 @@ How you work:
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources.
 - Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully, use the right approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before committing. Watch for trick questions, hidden assumptions, and distractor details that don't matter (e.g. a fact given only to mislead). Better slower and right than fast and wrong.
 - Teach when explanation is wanted: show the reasoning step by step and use concrete examples.
+- Writing the user will hand in as their own — reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters: write it AS THE USER, in the first person ("I"), in their voice. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name inside the paper. Use the details they gave you; where a personal detail is missing, write a short bracketed placeholder like [a moment that stuck with me] instead of inventing a memory, and after the paper add one line inviting them to fill in the brackets.
 - The highlighted text is copied from a webpage, so math notation may be flattened: "x2" almost always means x squared (x^2), "x3" means x^3, and a lone number over another (like "25" above "6") is a fraction (25/6). Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and work it out. For a multiple-choice question, pick the correct option and show the key steps briefly.
 - Match the format the user asks for. If they ask for only the answer, give just the answer. If they ask you to explain, give the answer AND the reasoning.
 - For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example — unless they asked for only one of those.
@@ -314,6 +315,51 @@ async function askCassie(input, groqKey, model, onDelta) {
   }
 }
 
+// ---- Everything asked in the extension is kept in a short history (cassieHistory).
+// The toolbar popup lists it, and on the Cassie website the bridge copies it into
+// the app's chats, so highlights, snips and pastes all end up in one place.
+let logChain = Promise.resolve();
+function tidyReply(reply) {
+  const t = String(reply || '').trim();
+  try {
+    const m = t.replace(/```(?:json)?/gi, '').match(/\{[\s\S]*\}/);
+    const d = m && JSON.parse(m[0]);
+    if (d && (d.headline || Array.isArray(d.steps))) {
+      return [d.headline ? `**${String(d.headline).trim()}**` : '', ...(d.steps || []).map((x, i) => `${i + 1}. ${String(x).trim()}`)].filter(Boolean).join('\n');
+    }
+  } catch (e) { /* not the board JSON — keep the text */ }
+  return t;
+}
+async function thumbOf(dataUrl) {
+  const bmp = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const k = Math.min(1, 360 / Math.max(bmp.width, bmp.height));
+  const c = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * k)), Math.max(1, Math.round(bmp.height * k)));
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(bmp, 0, 0, c.width, c.height);
+  return blobToDataUrl(await c.convertToBlob({ type: 'image/jpeg', quality: 0.72 }));
+}
+function logAnswer(log, reply, image, sender) {
+  if (!log || !reply || reply === '(no response)') return;
+  logChain = logChain.then(async () => {
+    let tab = sender && sender.tab;
+    if (!tab) { try { [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); } catch (e) { tab = null; } }
+    let thumb = '';
+    if (image) { try { thumb = await thumbOf(image); } catch (e) { thumb = ''; } }
+    const { cassieHistory } = await chrome.storage.local.get('cassieHistory');
+    const list = Array.isArray(cassieHistory) ? cassieHistory : [];
+    list.unshift({
+      id: 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      kind: log.kind || 'highlight', q: String(log.q || '').slice(0, 600), a: tidyReply(reply).slice(0, 8000),
+      url: (tab && tab.url) || '', title: String((tab && tab.title) || '').slice(0, 140), ts: Date.now(),
+      ...(thumb ? { image: thumb } : {}),
+    });
+    let pics = 0;
+    for (const it of list) if (it.image && ++pics > 10) delete it.image; // pictures are big: keep the newest 10
+    await chrome.storage.local.set({ cassieHistory: list.slice(0, 60) });
+  }).catch(() => { /* storage full or unavailable */ });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
@@ -382,6 +428,7 @@ chrome.runtime.onConnect.addListener((port) => {
         const input = Array.isArray(msg.messages) ? msg.messages : msg.text;
         const reply = await answerText(input, keys, (delta) => post({ delta }));
         post({ done: true, reply });
+        logAnswer(msg.log, reply, null, port.sender);
       } catch (err) {
         post({ error: err.message });
       }
@@ -629,7 +676,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       const keys = await getKeys();
       if (!keys.groqKey && !keys.geminiKey) { sendResponse({ error: 'no-key' }); return; }
-      try { sendResponse({ reply: await readPicture(keys, msg) }); }
+      try { const reply = await readPicture(keys, msg); sendResponse({ reply }); logAnswer(msg.log, reply, msg.image, sender); }
       catch (e) { sendResponse({ error: e.message }); }
     })().catch((e) => sendResponse({ error: e.message || 'Something went wrong reading the picture.' }));
     return true;

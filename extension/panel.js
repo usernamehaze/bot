@@ -96,7 +96,7 @@ const PROMPTS = {
   code: (t) => `Write clean, well-commented code that correctly solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, make sure it actually works, and briefly explain how it works:\n\n"${t}"`,
 };
 let convo = [];
-function ask(messages, outEl, onDone) {
+function ask(messages, outEl, onDone, log) {
   let port;
   try { port = chrome.runtime.connect({ name: 'cassie-stream' }); } catch (e) { outEl.textContent = 'Reload the extension and try again.'; return; }
   let acc = '';
@@ -109,11 +109,11 @@ function ask(messages, outEl, onDone) {
       outEl.innerHTML = `<p class="muted">${esc(keyIssue && m.error !== 'no-key'
         ? 'Groq rejected the key saved in the Cassie extension (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — paste your key below.'
         : errorText(m.error))}</p>`;
-      if (keyIssue) outEl.appendChild(keyForm(() => ask(messages, outEl, onDone)));
+      if (keyIssue) outEl.appendChild(keyForm(() => ask(messages, outEl, onDone, log)));
       try { port.disconnect(); } catch (e) { /* ignore */ }
     }
   });
-  port.postMessage({ type: 'CASSIE_ASK', messages });
+  port.postMessage({ type: 'CASSIE_ASK', messages, log });
 }
 function showTextJob(text, mode = 'explain') {
   view.innerHTML = `<div class="card">
@@ -127,7 +127,7 @@ function showTextJob(text, mode = 'explain') {
   const run = (m) => {
     view.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.m === m));
     convo = [{ role: 'user', content: PROMPTS[m](text) }];
-    ask(convo, out, (full) => convo.push({ role: 'assistant', content: full }));
+    ask(convo, out, (full) => convo.push({ role: 'assistant', content: full }), { kind: 'highlight', q: `${m === 'answer' ? 'Answer' : m === 'code' ? 'Code' : 'Explain'}: ${text}` });
   };
   view.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => run(c.dataset.m)));
   const input = view.querySelector('.row input');
@@ -135,7 +135,7 @@ function showTextJob(text, mode = 'explain') {
     const q = input.value.trim(); if (!q) return;
     input.value = '';
     convo.push({ role: 'user', content: q });
-    ask(convo, out, (full) => convo.push({ role: 'assistant', content: full }));
+    ask(convo, out, (full) => convo.push({ role: 'assistant', content: full }), { kind: 'highlight', q });
   };
   view.querySelector('.row .btn').addEventListener('click', follow);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') follow(); });
@@ -159,16 +159,16 @@ function parseBoardJSON(text) {
   const lines = t.split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
   return { headline: lines[0] || 'Here’s how to read this', steps: lines.slice(1, 6) };
 }
-async function vision(image, prompt, maxTokens = 800, board) {
-  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board });
+async function vision(image, prompt, maxTokens = 800, board, log) {
+  const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board, log });
   if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — try again.');
   return r.reply;
 }
-async function explainOnBoard(sess, image, ctx = '') {
+async function explainOnBoard(sess, image, ctx = '', kind = 'snip') {
   if (!sess || !image) return;
   sess.showNote({ reply: 'Cassie is reading your picture…' });
   try {
-    const d = parseBoardJSON(await vision(image, SNIP_PROMPT(ctx)));
+    const d = parseBoardJSON(await vision(image, SNIP_PROMPT(ctx), 800, undefined, { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' }));
     sess.setTitle('Your snip');
     sess.showNote({ headline: d.headline, steps: d.steps || [] });
   } catch (e) { sess.showNote({ reply: errorText(e) }); }
@@ -178,12 +178,12 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
   const p = window.CassieSketch.open({
     root: document.body, image: image || null, dark: image ? false : undefined, dock: 'full',
     title, note,
-    onImage: (url) => { if (url) explainOnBoard(sess, url, ''); },
+    onImage: (url) => { if (url) explainOnBoard(sess, url, '', 'paste'); },
     extra: [{ label: 'New snip', title: 'Snip the tab again', onClick: () => { window.CassieSketch.close(); snip(); } }],
     askPlaceholder: 'Ask Cassie about this…',
-    onAsk: async (png, q, board) => { try { return await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text.`, 600, board); } catch (e) { return errorText(e); } },
+    onAsk: async (png, q, board) => { try { return await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text.`, 600, board, { kind: 'board', q }); } catch (e) { return errorText(e); } },
     checkLabel: 'Check my work',
-    onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board); } catch (e) { return errorText(e); } },
+    onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board, { kind: 'board', q: 'Check my work' }); } catch (e) { return errorText(e); } },
   });
   p.then((x) => { sess = x; if (explain && image) explainOnBoard(sess, image, ctx); });
   return p;

@@ -1,6 +1,6 @@
 /* Cassie landing page — small, dependency-free behaviour.
- * - loads mascot3d/cassie-3d.js (the marble ShaderGradient + the felt 3D Cassie) after
- *   first paint where WebGL works; a CSS marble shows otherwise
+ * - loads mascot3d/cassie-3d.js (the marble ShaderGradient) after first paint where
+ *   WebGL works; a CSS marble shows otherwise. Cassie herself is Cursor Cassie (play.js).
  * - pricing: ₱ / $ and monthly / yearly
  * - reveal-on-scroll, feature videos that play only while visible, the tour video
  */
@@ -20,31 +20,12 @@
   const onScroll = () => nav.classList.toggle('light', hero.getBoundingClientRect().bottom < 80);
   addEventListener('scroll', onScroll, { passive: true }); onScroll();
 
-  /* ---------- the living marble background + the 3D felt Cassie (one bundle) ---------- */
+  /* ---------- the living marble background ---------- */
   function webglOK() {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
   }
   const saveData = navigator.connection && navigator.connection.saveData;
-  const botRoot = $('#cassie-3d-root');
   if (!saveData && webglOK()) {
-    addEventListener('cassie3d-ready', () => {
-      botRoot && botRoot.classList.add('live');
-      const M = window.CassieMascot;
-      if (!M || !M.setEmotion) return;
-      M.setEmotion('encouraging');
-      if (reduce) return;
-      // she tries on her outfits — classic, cap & gown, coder, suit, heart — on a slow loop
-      // like the reel: she walks in, the graduate has an idea, the coder types, the
-      // professional celebrates, the heart naps on her pillow, then a wave
-      const looks = [['classic', 'walk', 1], ['graduate', 'thinking'], ['coder', 'thinking'], ['professor', 'celebratory'], ['heart', 'sleep'], ['classic', 'peek'], ['professor', 'walk', -1], ['classic', 'happy']];
-      let i = 0;
-      const show = ([o, e, dir]) => { M.setOutfit(o); M.setEmotion(e); if (dir && M.setFacing) M.setFacing(dir); };
-      show(looks[0]);
-      setInterval(() => {
-        if (document.hidden || !M.setOutfit) return;
-        show(looks[++i % looks.length]);
-      }, 4200);
-    });
     const start = () => {
       const s = document.createElement('script');
       s.src = 'mascot3d/cassie-3d.js'; s.async = true;
@@ -81,8 +62,8 @@
 
   /* ---------- pricing ---------- */
   const PRICES = {
-    php: { sym: '₱', free: 0, plus: { month: 149, year: 1490 }, pro: { month: 349, year: 3490 } },
-    usd: { sym: '$', free: 0, plus: { month: 4.99, year: 49.9 }, pro: { month: 9.99, year: 99.9 } },
+    php: { sym: '₱', free: 0, plus: { month: 149, year: 1490 }, pro: { month: 499, year: 4990 } },
+    usd: { sym: '$', free: 0, plus: { month: 4.99, year: 49.9 }, pro: { month: 12.99, year: 129.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();

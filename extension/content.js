@@ -450,7 +450,7 @@
           try { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); url = c.toDataURL('image/jpeg', 0.9); }
           catch (e) { try { const r2 = await chrome.runtime.sendMessage({ type: 'CASSIE_FETCH_IMG', url: ft.url }); url = r2 && r2.dataUrl; } catch (e2) { url = null; } }
           const sess = await openSnipBoard(url, { headline: 'Your photo', steps: [] }, { loading: true });
-          if (url) explainPicture(sess, url, 'A photo the student opened in a browser tab: ' + ft.name); else sess.showNote({ reply: 'I couldn’t open this photo. Save it and paste it here with Ctrl+V.' });
+          if (url) explainPicture(sess, url, 'A photo the student opened in a browser tab: ' + ft.name, '', 'photo'); else sess.showNote({ reply: 'I couldn’t open this photo. Save it and paste it here with Ctrl+V.' });
           return;
         }
         const r = dock.getBoundingClientRect();
@@ -828,7 +828,7 @@
   // Ask Groq via a streaming port so the answer appears as it's written.
   // `payload` is a single prompt string or a [{role, content}] history.
   // handlers: onDelta(fullTextSoFar), onDone(fullText), onError(code|message).
-  function askStream(payload, handlers) {
+  function askStream(payload, handlers, log) {
     let port;
     try { port = chrome.runtime.connect({ name: 'cassie-stream' }); }
     catch (e) { handlers.onError('reload'); return; }
@@ -841,6 +841,7 @@
     });
     port.onDisconnect.addListener(() => { if (!finished) handlers.onError('reload'); });
     const msg = Array.isArray(payload) ? { type: 'CASSIE_ASK', messages: payload } : { type: 'CASSIE_ASK', text: payload };
+    if (log) msg.log = log; // saved to the history, which the Cassie app picks up
     try { port.postMessage(msg); }
     catch (e) { handlers.onError('reload'); }
   }
@@ -849,17 +850,6 @@
   let convo = [];          // [{role, content}] sent to the model
   let convoLabel = '';     // the human-readable question, for the history log
   let convoRect = null;    // where to anchor the popover for this conversation
-
-  // Save each completed Q&A to local history (capped), for the popup to show.
-  function saveToHistory(question, answer) {
-    try {
-      chrome.storage.local.get(['cassieHistory'], ({ cassieHistory }) => {
-        const list = Array.isArray(cassieHistory) ? cassieHistory : [];
-        list.unshift({ q: (question || '').slice(0, 400), a: (answer || '').slice(0, 4000), url: location.href, ts: Date.now() });
-        chrome.storage.local.set({ cassieHistory: list.slice(0, 50) });
-      });
-    } catch (e) { /* storage unavailable */ }
-  }
 
   // Render a finished answer plus a Copy button and a follow-up input.
   function renderAnswerView(full, rect) {
@@ -916,6 +906,7 @@
     setEmotion('thinking');
     positionPopover(rect);
     let positioned = false;
+    const log = { kind: 'highlight', q: convoLabel };
     askStream(convo, {
       onDelta: (soFar) => {
         if (myGen !== gen) return;
@@ -926,7 +917,6 @@
       onDone: (full) => {
         if (myGen !== gen) return;
         convo.push({ role: 'assistant', content: full });
-        saveToHistory(convoLabel, full);
         setEmotion('happy');
         renderAnswerView(full || '(no response)', rect);
       },
@@ -938,7 +928,7 @@
         else setContent(err, { muted: true });
         positionPopover(rect);
       },
-    });
+    }, log);
   }
 
   function positionPopover(rect) {
@@ -1019,11 +1009,10 @@
     if (!image) { setContent(capMsg || 'I couldn’t read this page. Try reloading the tab.', { muted: true }); positionPopover(rect); return; }
     setEmotion('thinking');
     try {
-      const reply = await askVision(image, `This is a screenshot of what a student is looking at (it may be a PDF page, slides, or a document). Read ALL the visible text, figures, tables and diagrams carefully, then answer their request: "${q}". Use short bullets with bold key terms. If it's a question, teach the reasoning step by step. Only use what you can actually see.`, null, 1400);
+      const reply = await askVision(image, `This is a screenshot of what a student is looking at (it may be a PDF page, slides, or a document). Read ALL the visible text, figures, tables and diagrams carefully, then answer their request: "${q}". Use short bullets with bold key terms. If it's a question, teach the reasoning step by step. Only use what you can actually see.`, null, 1400, undefined, { kind: 'page', q });
       if (myGen !== gen) return;
       convo = [{ role: 'user', content: `About the page on my screen: ${q}` }, { role: 'assistant', content: reply }];
       convoLabel = q;
-      saveToHistory(q, reply);
       setEmotion('happy');
       const extra = fileTab() ? '\n\n*I can only see the part on your screen. For the whole file, open the right-edge tab and tap the page icon — I’ll read all of it in the Cassie app.*' : '';
       renderAnswerView(reply + extra, rect);
@@ -1386,9 +1375,9 @@
     return m || 'Something went wrong — please try again.';
   }
 
-  async function askVision(image, prompt, system, maxTokens, board) {
+  async function askVision(image, prompt, system, maxTokens, board, log) {
     let r;
-    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens, board }); }
+    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens, board, log }); }
     catch (e) { throw new Error('reload'); }
     if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — please try again.');
     return r.reply;
@@ -1402,11 +1391,11 @@
   const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\s+(to be\s+)?(dark|black|blank|empty)\b|\bcan(?:not|'t|’t)\s+see\s+(the|any|anything)\b|\bunable to see\b|\bre-?upload\b/i;
 
   // Explain a picture (a snip, or one pasted/dropped on the board) into the side board.
-  async function explainPicture(sess, image, ctx = '', boxText = '') {
+  async function explainPicture(sess, image, ctx = '', boxText = '', kind = 'snip') {
     const say = (n) => sess && sess.showNote(n);
     say({ reply: 'Cassie is reading your picture…' });
     try {
-      const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 800);
+      const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 800, undefined, { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' });
       if (SEEMS_BLANK.test(raw) && boxText.length >= 25) { explainFromText(sess, boxText, '', 'I read the words in your box:'); return; }
       const data = parseBoardJSON(raw);
       if (sess) { sess.setTitle('Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
@@ -1423,7 +1412,7 @@
       onDelta() {},
       onDone(full) { say({ reply: [header, full, footer].filter(Boolean).join('\n\n') }); },
       onError(err) { say({ reply: errorText(err) }); },
-    });
+    }, { kind: 'snip', q: `Explain my snip: ${text.slice(0, 300)}` });
   }
 
   async function snipAndExplain(r, el, x, y) {
@@ -1496,7 +1485,7 @@
       onError(err) {
         renderBoard(rect, x, y, { headline: errorText(err), steps: [] }, image);
       },
-    });
+    }, { kind: 'snip', q: 'Explain this picture' });
   }
 
   function parseBoardJSON(text) {
@@ -1601,7 +1590,7 @@
     let boxText = opts.boxText || ''; // words in the snipped box (cleared when a new picture is pasted)
     const opened = window.CassieSketch.open({
       root: shadow,
-      onImage: (url) => { boxText = ''; if (url) explainPicture(sess, url, ''); },
+      onImage: (url) => { boxText = ''; if (url) explainPicture(sess, url, '', '', 'paste'); },
       image: image || null,
       dark: image ? false : undefined,
       dock: 'side',
@@ -1612,13 +1601,13 @@
       extra: [{ label: 'New snip', title: 'Snip something else from the page', onClick: () => { const cur = window.CassieSketch; cur.close(); setTimeout(enterPointMode, 50); } }],
       onAsk: async (png, q, board) => {
         try {
-          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600, board);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600, board, { kind: 'board', q });
         } catch (e) { return errorText(e); }
       },
       askPlaceholder: 'Ask Cassie about this snip…',
       onCheck: async (png, board) => {
         try {
-          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500, board);
+          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500, board, { kind: 'board', q: 'Check my work' });
         } catch (e) { return errorText(e); }
       },
       onClose: () => setDock(true),
@@ -1697,7 +1686,7 @@
       prompt = `Work through this carefully step by step and double-check your result, then give the answer followed by a clear explanation of why/how:\n\n"${text}"`;
     }
     convo = [{ role: 'user', content: prompt }];
-    convoLabel = text;
+    convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text}`;
     runConversation(rect);
   }
 
