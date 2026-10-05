@@ -716,6 +716,52 @@ test('Talk mode and Hint answer', async (b) => {
   await ctx.close();
 });
 
+test('phones: a ?text= link (iPhone Shortcut) asks what to do, then answers about it', async (b) => {
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Mitochondria make the cell’s energy.' }) });
+  await page.goto(APP + '?text=' + encodeURIComponent('The mitochondria is the powerhouse of the cell.') + '&url=' + encodeURIComponent('https://www.biology.org/cells'));
+  await page.waitForSelector('.share-card', { timeout: 5000 });
+  expect(/powerhouse/.test(await page.locator('.share-quote').textContent()) && /biology\.org/.test(await page.locator('.share-from').textContent()), 'the card shows the words and where they came from');
+  expect(!/text=/.test(page.url()), 'the link is cleaned from the address bar');
+  await page.click('.share-card .chip:has-text("Explain")');
+  await page.waitForSelector('text=Mitochondria make', { timeout: 10000 });
+  const sent = JSON.stringify(groqCalls.at(-1).messages.at(-1));
+  expect(/Explain this step by step/.test(sent) && /powerhouse/.test(sent), 'Explain should send the shared words');
+  // a typed question about shared words includes them
+  await page.goto(APP + '?text=' + encodeURIComponent('E = mc^2'));
+  await page.waitForSelector('.share-card');
+  await ask(page, 'what does c stand for?');
+  expect(/what does c stand for\?[\s\S]*E = mc\^2/.test(JSON.stringify(groqCalls.at(-1).messages.at(-1))), 'the typed question should include the shared words');
+  await ctx.close();
+});
+
+test('Android: Share → Cassie (text and a screenshot) opens the app with it', async (b) => {
+  const ctx = await b.newContext({ ...devices['Pixel 7'] }); // the service worker receives the share
+  await ctx.addInitScript(() => { window.CASSIE_SERVER = ''; });
+  await ctx.addInitScript((v) => { if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 9', age: 14 }, seenVersion: v, lite: 'on', groqKey: 'gsk_test' })); }, APP_VERSION);
+  const page = await ctx.newPage();
+  await page.goto(APP);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+  const share = (fields, file) => page.evaluate(([fields, file]) => {
+    const f = document.createElement('form'); f.method = 'POST'; f.action = 'share-target'; f.enctype = 'multipart/form-data';
+    for (const [k, v] of Object.entries(fields)) { const i = document.createElement('input'); i.name = k; i.value = v; f.appendChild(i); }
+    if (file) {
+      const bin = Uint8Array.from(atob(file.b64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer(); dt.items.add(new File([bin], file.name, { type: file.type }));
+      const i = document.createElement('input'); i.type = 'file'; i.name = 'file'; i.files = dt.files; f.appendChild(i);
+    }
+    document.body.appendChild(f); f.submit();
+  }, [fields, file]);
+  await share({ text: 'Photosynthesis turns light into chemical energy. https://www.example.com/bio', title: '', url: '' });
+  await page.waitForSelector('.share-card', { timeout: 10000 });
+  expect(/Photosynthesis/.test(await page.locator('.share-quote').textContent()) && !/https/.test(await page.locator('.share-quote').textContent()), 'shared words (without the link) should show');
+  expect(/example\.com/.test(await page.locator('.share-from').textContent()), 'where it came from');
+  await share({ text: '', title: '', url: '' }, { name: 'screenshot.png', type: 'image/png', b64: PNG.toString('base64') });
+  await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+  expect(await page.locator('#attach-thumb').isVisible(), 'the shared screenshot is attached, ready to ask about');
+  await ctx.close();
+});
+
 test('works offline after the first visit (app opens)', async (b) => {
   // no network fakes here: Playwright's fakes and service workers don't mix
   const ctx = await b.newContext({ ...devices['Pixel 7'] });

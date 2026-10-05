@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '108';
+const APP_VERSION = '109';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -2717,6 +2717,12 @@ async function handleSend(text, opts = {}) {
     sendBtn.disabled = true;
     try { await wait; } finally { sendBtn.disabled = false; if (attachReading === wait) attachReading = null; }
   }
+  // a question typed under a share card is about what was shared
+  if (sharedText && chatLog.querySelector('.share-card') && text.trim() && !text.includes(sharedText.slice(0, 40))) {
+    text = `${text.trim()}\n\n"${sharedText}"`;
+    chatLog.querySelector('.share-card').remove();
+  }
+  sharedText = chatLog.querySelector('.share-card') ? sharedText : '';
   const image = pendingImage;
   let doc = pendingDoc;
   if (!text.trim() && !image && !doc) return;
@@ -4728,6 +4734,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Highlight on your phone: select words in any app → Share → Cassie (Android). iPhone/iPad: Settings → Use Cassie in other apps.',
   'Cassie can draw on your board now: open the board and type “graph y = x² − 4”, or “graph the answer” on a snip.',
   'Photo questions don’t stop when Google is busy: another picture reader takes over.',
   'She follows your instructions more exactly, and sounds more like a friend than a robot.',
@@ -4748,6 +4755,77 @@ function showWhatsNew() {
   const close = () => wrap.remove();
   wrap.querySelector('.pf-go').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+}
+
+/* ---------- text and files shared from other apps (phones and tablets) ----------
+   Android: select text in any app → Share → Cassie (the manifest's share_target; sw.js keeps
+   what was shared). iPhone / iPad, or any link: app.html?text=… (an iOS Shortcut can send it).
+   Cassie then asks what to do with it. */
+const SHARE_ACTIONS = [
+  ['Explain', (t) => `Explain this step by step, simply:\n\n"${t}"`],
+  ['Answer', (t) => `Answer this. Give the answer first, then a short explanation of why:\n\n"${t}"`],
+  ['Summarize', (t) => `Summarize this in a few short bullet points with the key terms in bold:\n\n"${t}"`],
+  ['Quiz me', (t) => `Quiz me on this, one question at a time:\n\n"${t}"`],
+];
+function showShareCard(text, source) {
+  const t = String(text || '').trim().slice(0, 6000);
+  if (!t) return;
+  if (state.messages.length) createNewChat();
+  const card = document.createElement('div');
+  card.className = 'share-card';
+  card.innerHTML = '<div class="share-head">What should I do with this?</div><blockquote class="share-quote"></blockquote><div class="share-from"></div><div class="share-row"></div>';
+  card.querySelector('.share-quote').textContent = t.length > 600 ? t.slice(0, 600) + '…' : t;
+  if (source) card.querySelector('.share-from').textContent = 'From ' + source;
+  const row = card.querySelector('.share-row');
+  SHARE_ACTIONS.forEach(([label, make]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'chip'; btn.textContent = label;
+    btn.addEventListener('click', () => { card.remove(); track('feature', 'share-' + label.toLowerCase().replace(/\s+/g, '-')); handleSend(make(t)); });
+    row.appendChild(btn);
+  });
+  chatLog.innerHTML = '';
+  chatLog.appendChild(card);
+  promptInput.placeholder = 'Or ask your own question about it…';
+  islandShow('upload', 'Got what you shared', 2200); botMood('upload', 2200);
+  sharedText = t;
+}
+let sharedText = ''; // a typed question about shared text includes the text
+// the link an iOS Shortcut opens (this site's own address)
+document.querySelectorAll('.share-link').forEach((el) => { el.textContent = new URL('app.html?text=', location.href).href; });
+async function receiveShare() {
+  const params = new URLSearchParams(location.search);
+  const clean = () => { try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } };
+  // a plain link: app.html?text=…&url=…
+  if (params.get('text') || params.get('q')) {
+    const text = params.get('text') || params.get('q');
+    let host = ''; try { host = new URL(params.get('url') || '').hostname.replace(/^www\./, ''); } catch (e) { /* no page */ }
+    clean(); showShareCard(text, host); return;
+  }
+  if (params.get('shared') !== '1' || !('caches' in window)) return;
+  clean();
+  try {
+    const cache = await caches.open('cassie-share');
+    const meta = await cache.match('shared.json');
+    if (!meta) return;
+    const d = await meta.json();
+    const fileRes = d.file ? await cache.match('shared-file') : null;
+    await cache.delete('shared.json'); await cache.delete('shared-file');
+    if (fileRes) {
+      const blob = await fileRes.blob();
+      const file = new File([blob], d.file.name, { type: d.file.type || blob.type });
+      if (state.messages.length) createNewChat();
+      const ok = await attachFile(file);
+      if (ok) { promptInput.placeholder = /^image\//.test(file.type) ? 'What should I do with it? e.g. “Solve this”' : 'What should I do with it? e.g. “Make a reviewer”'; promptInput.focus(); }
+      return;
+    }
+    // Android puts the selected words in text (sometimes with the page link after them)
+    let text = d.text || '', host = '';
+    const link = (d.url || (text.match(/https?:\/\/\S+\s*$/) || [''])[0]).trim();
+    if (link && !d.url) text = text.replace(link, '').trim();
+    try { host = new URL(link).hostname.replace(/^www\./, ''); } catch (e) { /* no page */ }
+    if (!text && link) { showShareCard(`(Only a link was shared: ${link}) Select the words you want first, then Share them to Cassie.`, host); return; }
+    showShareCard(text || d.title, host || d.title);
+  } catch (e) { /* nothing to pick up */ }
 }
 
 /* ---------- init ---------- */
@@ -4772,6 +4850,7 @@ requestAnimationFrame(() => {
   setCursorMode('idle');
   followMouseNow();
 });
+receiveShare();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

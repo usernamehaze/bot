@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=122">
+<link rel="stylesheet" href="style.css?v=123">
 </head>
 <body>
 
@@ -295,6 +295,32 @@
         </div>
       </details>
 
+      <details class="settings-group" id="settings-phone">
+        <summary>
+          <span class="sg-title">Use Cassie in other apps</span>
+          <span class="sg-sub">Highlight on your phone or tablet</span>
+        </summary>
+        <div class="phone-help">
+          <p><b>Android</b></p>
+          <ol>
+            <li>Add Cassie to your home screen: Chrome menu ⋮ → <b>Add to Home screen</b> (or <b>Install app</b>).</li>
+            <li>In any app (Chrome, Google Docs, a PDF, Messenger), select the words.</li>
+            <li>Tap <b>Share</b> → <b>Cassie</b>. Pick <b>Explain</b>, <b>Answer</b>, <b>Summarize</b> or <b>Quiz me</b>.</li>
+          </ol>
+          <p>Screenshots and files work too: Share them to Cassie.</p>
+          <p><b>iPhone and iPad</b>: make a one-time Shortcut</p>
+          <ol>
+            <li>Open the <b>Shortcuts</b> app → <b>+</b>. Name it <b>Ask Cassie</b>.</li>
+            <li>Tap the <b>ⓘ</b> → turn on <b>Show in Share Sheet</b>.</li>
+            <li>Add the action <b>URL Encode</b> (it encodes the Shortcut Input).</li>
+            <li>Add <b>Text</b> with <code class="share-link"></code> then tap the variable button and pick <b>URL Encoded Text</b> at the end.</li>
+            <li>Add <b>Open URLs</b>. Done.</li>
+          </ol>
+          <p>Now select words anywhere → <b>Share</b> → <b>Ask Cassie</b>. For photos of your notes, use the 📎 in Cassie.</p>
+          <p class="muted">Quickest anywhere: copy the words, open Cassie, and paste.</p>
+        </div>
+      </details>
+
       <details class="settings-group">
         <summary>
           <span class="sg-title">Appearance</span>
@@ -352,13 +378,13 @@
 
 </div>
 
-<script src="memory.js?v=122"></script>
-<script src="board.js?v=122"></script>
-<script src="export.js?v=122"></script>
-<script src="sketch.js?v=122"></script>
-<script src="config.js?v=122"></script>
-<script src="cassie-bot.js?v=122"></script>
-<script src="app.js?v=122"></script>
+<script src="memory.js?v=123"></script>
+<script src="board.js?v=123"></script>
+<script src="export.js?v=123"></script>
+<script src="sketch.js?v=123"></script>
+<script src="config.js?v=123"></script>
+<script src="cassie-bot.js?v=123"></script>
+<script src="app.js?v=123"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -373,7 +399,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=122';
+      s.src = 'mascot3d/cassie-3d.js?v=123';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
