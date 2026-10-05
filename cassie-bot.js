@@ -216,8 +216,10 @@
     let accent = opts.accent || '#d8343c';
     let stateName = '', st = STATES.idle, stateAt = 0, accessory = null;
     let lookX = 0, lookY = 0, wantX = 0, wantY = 0, pointerLook = null;
-    let blinkUntil = 0, nextBlink = performance.now() + 2200, glanceUntil = 0, glance = [0, 0];
-    let raf = 0, last = 0, t0 = performance.now(), alive = true, paused = false, pokeTimer = 0;
+    // opts.clock (ms) drives her from outside — e.g. a video rendered frame by frame; call api.render()
+    const clock = typeof opts.clock === 'function' ? opts.clock : () => performance.now();
+    let blinkUntil = 0, nextBlink = clock() + 2200, glanceUntil = 0, glance = [0, 0];
+    let raf = 0, last = 0, t0 = clock(), alive = true, paused = false, pokeTimer = 0;
     const shown = { eyes: '', mouth: '', badge: '', fx: '' };
 
     function paintAccent() {
@@ -270,7 +272,7 @@
     function setState(name) {
       if (!STATES[name]) name = 'idle';
       if (name === stateName && name !== 'done' && name !== 'surprised' && name !== 'proud') return;
-      stateName = name; st = STATES[name]; stateAt = performance.now();
+      stateName = name; st = STATES[name]; stateAt = clock();
       const c = st.color;
       const base = ['#ffffff', PAPER, '#e9e5dd'];
       parts.stops.forEach((n, i) => n.setAttribute('stop-color', c ? mix(base[i], c, [0.22, 0.4, 0.58][i]) : base[i]));
@@ -280,8 +282,8 @@
 
     function frame(now) {
       if (!alive) return;
-      raf = requestAnimationFrame(frame);
-      if (paused || document.hidden || now - last < 32) return; // ~30 fps is plenty, and nothing while hidden or paused
+      if (opts.clock) now = clock(); else raf = requestAnimationFrame(frame);
+      if (!opts.clock && (paused || document.hidden || now - last < 32)) return; // ~30 fps is plenty, and nothing while hidden or paused
       last = now;
       const t = (now - t0) / 1000, ts = (now - stateAt) / 1000;
       const calm = reduced();
@@ -363,7 +365,7 @@
     setState(opts.state || 'idle');
     paintAccent();
     setAccessoryNow(opts.accessory || null);
-    frame(performance.now() + 100);
+    frame(clock() + 100);
 
     const api = {
       el: svg,
@@ -373,6 +375,7 @@
       get accessory() { return accessory; },
       setAccent(hex) { if (/^#[0-9a-f]{3,8}$/i.test(hex || '')) { accent = hex; paintAccent(); shown.fx = ''; setFx(st.effect || ''); } },
       pause(on = true) { paused = !!on; },
+      render() { frame(clock()); }, // with opts.clock: draw her at that moment
       poke() { const back = stateName === 'poke' ? 'idle' : stateName; setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => setState(back), 950); },
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
       destroy() { alive = false; cancelAnimationFrame(raf); svg.remove(); },

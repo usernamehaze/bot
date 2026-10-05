@@ -45,6 +45,10 @@
   if ('IntersectionObserver' in window && !reduce) {
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
     $$('.rv').forEach((el, i) => { el.style.transitionDelay = (el.closest('.hero') ? i * 0.08 : 0) + 's'; io.observe(el); });
+    // fail-safe: after a jump (a nav link, a fast fling) show everything at or above the screen
+    let settle = 0;
+    const catchUp = () => { clearTimeout(settle); settle = setTimeout(() => $$('.rv:not(.in)').forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) { el.classList.add('in'); io.unobserve(el); } }), 180); };
+    addEventListener('scroll', catchUp, { passive: true }); addEventListener('hashchange', catchUp); catchUp();
   } else $$('.rv').forEach((el) => el.classList.add('in'));
 
   /* ---------- feature videos: load + play only while on screen ---------- */
@@ -63,7 +67,7 @@
   /* ---------- pricing ---------- */
   const PRICES = {
     php: { sym: '₱', free: 0, plus: { month: 149, year: 1490 }, pro: { month: 499, year: 4990 } },
-    usd: { sym: '$', free: 0, plus: { month: 4.99, year: 49.9 }, pro: { month: 12.99, year: 129.9 } },
+    usd: { sym: '$', free: 0, plus: { month: 9.99, year: 99 }, pro: { month: 24.99, year: 249 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
