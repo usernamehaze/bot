@@ -116,6 +116,14 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.waitForSelector('.auth-page');
   expect(await page.locator('.auth-title').textContent() === 'Create your Cassie account', 'should open on sign up');
   await page.fill('.auth-form input[name=email]', email);
+  await page.fill('.auth-form input[name=age]', '11');
+  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+  await page.click('.auth-go');
+  expect(/13 and up/.test(await page.locator('.auth-err').textContent()), 'under-13 account not refused');
+  const signupStatus = (body) => page.evaluate(async ([srv, b]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, [SERVER, body]);
+  expect(await signupStatus({ email: 'kid@example.com', password: 'secret-pass-1', age: 11 }) === 400, 'server let an 11-year-old sign up');
+  expect(await signupStatus({ email: 'x@mailinator.com', password: 'secret-pass-1', age: 20 }) === 400, 'throwaway email allowed');
+  await page.fill('.auth-form input[name=age]', '16');
   await page.fill('.auth-form input[name=password]', 'short');
   await page.click('.auth-go');
   expect(/8 characters/.test(await page.locator('.auth-err').textContent()), 'short password not caught');

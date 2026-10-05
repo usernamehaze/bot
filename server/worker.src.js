@@ -313,6 +313,8 @@ async function authAllowed(request, env) {
       ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('auth:' + ip, hour).first();
   return !r || r.n <= 30;
 }
+// Throwaway inboxes, used to make account after account for more free questions.
+const DISPOSABLE_RE = /@(mailinator|guerrillamail|guerrillamailblock|sharklasers|grr|10minutemail|10minemail|tempmail|temp-mail|tempmailo|tempail|yopmail|trashmail|getnada|nada|dispostable|maildrop|throwawaymail|mintemail|mohmal|emailondeck|fakeinbox|spamgourmet|moakt|tmpmail|tmail|burnermail|inboxkitten|mailnesia|mytemp|emailfake|fakemail|discard|mailcatch|spambox|33mail)\./i;
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 async function verifyGoogle(credential, env) {
   if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in isn’t set up on this server yet.');
@@ -355,6 +357,8 @@ async function auth(request, env, path) {
     const password = String(body.password || '');
     if (!EMAIL_RE.test(email)) return fail('Please type a valid email address.');
     if (path === '/auth/signup') {
+      if (!(+body.age >= 13)) return fail('Cassie accounts are for ages 13 and up.');
+      if (DISPOSABLE_RE.test(email)) return fail('Please use your real email address — throwaway emails can’t make accounts.');
       if (password.length < 8) return fail('Use at least 8 characters for your password.');
       if (password.length > 200) return fail('That password is too long.');
       const exists = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first();

@@ -1241,7 +1241,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
 .auth-google { display: flex; justify-content: center; min-height: 44px; }
 .auth-gbtn { width: 100%; display: flex; justify-content: center; }
-.auth-google[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden] { display: none; }
+.auth-google[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden], .auth-age[hidden], .pf-check[hidden] { display: none; }
 .auth-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
 .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .auth-field { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 600; }

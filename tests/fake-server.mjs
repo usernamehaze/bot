@@ -50,7 +50,8 @@ export async function startFakeServer(port = 4630) {
     } },
   };
   const ctx = { waitUntil() {} };
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer((req, res) => handle(req, res).catch(() => { try { res.writeHead(500); res.end(); } catch (e) { /* the browser already left */ } }));
+  async function handle(req, res) { // a browser may cancel a request halfway — that must not crash the server
     const chunks = []; for await (const c of req) chunks.push(c);
     const body = Buffer.concat(chunks);
     if (req.url === '/__mode') {
@@ -62,7 +63,7 @@ export async function startFakeServer(port = 4630) {
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);
     res.writeHead(r.status, Object.fromEntries(r.headers));
     res.end(Buffer.from(await r.arrayBuffer()));
-  });
+  }
   await new Promise((ok) => server.listen(port, ok));
   return { mode, close: () => new Promise((ok) => server.close(ok)), port };
 }
