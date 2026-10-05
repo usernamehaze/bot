@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=126">
+<link rel="stylesheet" href="style.css?v=127">
 </head>
 <body>
 
@@ -329,15 +329,16 @@
           </ol>
           <p><b>iPhone and iPad: other apps and websites</b></p>
           <p>Easiest: select the words → <b>Copy</b> → open Cassie → tap <b>Paste &amp; ask</b>.</p>
-          <p>Or make a one-time Shortcut so Cassie is in the Share menu:</p>
+          <p>Or make a one-time Shortcut. Cassie's answer then pops up right over the app you're in (no new tab):</p>
           <ol>
             <li>Open <b>Shortcuts</b> → tap <b>+</b>. Tap the name at the top (⌄) → <b>Rename</b> → <b>Ask Cassie</b>.</li>
             <li>Tap <b>Search Actions</b>, type <b>URL Encode</b> and tap it. Tap its blue <b>Text</b> → choose <b>Shortcut Input</b>.</li>
-            <li>At the top, a line appears: “Receive <b>Any</b> input from <b>Nowhere</b>”. Tap <b>Nowhere</b> → <b>Share Sheet</b>. (No line? Swipe the actions panel down, tap <b>ⓘ</b> → turn on <b>Show in Share Sheet</b>.)</li>
+            <li>At the top it says “Receive … input from <b>Nowhere</b>”. Tap <b>Nowhere</b> → <b>Share Sheet</b>. (No line? Swipe the actions panel down, tap <b>ⓘ</b> → turn on <b>Show in Share Sheet</b>.)</li>
             <li>Search <b>Text</b> and tap it. In its box, type <code class="share-link"></code> then tap <b>URL Encoded Text</b> just above the keyboard.</li>
-            <li>Search <b>Open URLs</b> and tap it. Tap <b>Done</b>.</li>
+            <li>Search <b>Get Contents of URL</b> and tap it.</li>
+            <li>Search <b>Show Result</b> and tap it. Tap <b>Done</b>.</li>
           </ol>
-          <p>Now select words in Safari, Notes or a PDF → <b>Share</b> → <b>Ask Cassie</b>.</p>
+          <p>Now select words in Safari, Notes or a PDF → <b>Share</b> → <b>Ask Cassie</b>. To have it at the top of the Share menu: Share → scroll to the bottom → <b>Edit Actions…</b> → tap the green <b>+</b> next to Ask Cassie → drag it to the top → <b>Done</b>.</p>
           <p class="muted">Quickest anywhere: copy the words, open Cassie, and paste.</p>
         </div>
       </details>
@@ -399,13 +400,13 @@
 
 </div>
 
-<script src="memory.js?v=126"></script>
-<script src="board.js?v=126"></script>
-<script src="export.js?v=126"></script>
-<script src="sketch.js?v=126"></script>
-<script src="config.js?v=126"></script>
-<script src="cassie-bot.js?v=126"></script>
-<script src="app.js?v=126"></script>
+<script src="memory.js?v=127"></script>
+<script src="board.js?v=127"></script>
+<script src="export.js?v=127"></script>
+<script src="sketch.js?v=127"></script>
+<script src="config.js?v=127"></script>
+<script src="cassie-bot.js?v=127"></script>
+<script src="app.js?v=127"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -420,7 +421,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=126';
+      s.src = 'mascot3d/cassie-3d.js?v=127';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

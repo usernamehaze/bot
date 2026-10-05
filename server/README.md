@@ -117,6 +117,14 @@ a photo question costs a little more. Check current prices at
 anthropic.com/pricing. Watch the Claude row on your dashboard and the spending
 page in the Anthropic console.
 
+## The iPhone "Ask Cassie" Shortcut
+
+`GET /ask?text=…` returns a short plain-text answer. The iPhone Shortcut (steps in
+Cassie → Settings → Use Cassie in other apps) shows it in a pop-up over the app the
+student is in, so no new browser tab opens. Each network gets 40 of these a day;
+change that with a `ASK_LIMIT` variable. They show on the dashboard as
+**iPhone Shortcut**.
+
 ## Fair use and cost
 
 - Each person can ask **150 questions a day** through your key, and at most 12

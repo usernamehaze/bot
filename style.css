@@ -1333,3 +1333,5 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .reader-page p { margin: 0 0 10px; line-height: 1.6; font-size: 1.02rem; -webkit-user-select: text; user-select: text; }
 body.reader-open #mascot { display: none; }
 .reader-open-btn { display: inline-block; margin-top: 10px; }
+.share-tip { margin-top: 12px; font-size: .8rem; color: var(--muted); line-height: 1.45; }
+.share-tip[hidden] { display: none; }
