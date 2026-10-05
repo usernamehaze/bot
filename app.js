@@ -4111,6 +4111,7 @@ let trackQ = [], wordQ = [], trackTimer = null;
 function track(event, name = '') {
   const an = state.analytics;
   if (!ANALYTICS_URL || !an || an.usage === false || !installId()) return;
+  if (state.profile && state.profile.age < 13) return; // nothing at all is counted for under-13s
   trackQ.push({ e: event, n: String(name || '').slice(0, 40), t: Date.now() });
   clearTimeout(trackTimer); trackTimer = setTimeout(flushTrack, 5000);
   if (trackQ.length >= 20) flushTrack();
@@ -4173,7 +4174,7 @@ function openProfile(first) {
     <label class="pf-field pf-student"><span>Grade level</span><select name="grade"><option value="">Choose your grade…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
     <label class="pf-field pf-pro"><span>What do you do?</span><input name="field" maxlength="60" list="pf-fields" placeholder="e.g. nurse, accountant, teacher"><datalist id="pf-fields"><option>Teacher</option><option>Nurse</option><option>Engineer</option><option>Accountant</option><option>Software developer</option><option>Marketing</option><option>Customer service</option><option>Business owner</option><option>Researcher</option></datalist></label>
     <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="5" max="100" placeholder="e.g. 16"></label>
-    <label class="pf-check"><input type="checkbox" name="usage"> <span>Help improve Cassie: share <b>anonymous</b> usage — which features you use and how often. No names, no messages.</span></label>
+    <label class="pf-check pf-usage"><input type="checkbox" name="usage"> <span>Help improve Cassie: share <b>anonymous</b> usage — which features you use and how often. No names, no messages.</span></label>
     <label class="pf-check pf-topics"><input type="checkbox" name="topics"> <span>Also share the <b>topics</b> I ask about (single keywords only, never my messages).</span></label>
     <p class="pf-err" hidden></p>
     <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save'}</button>
@@ -4189,8 +4190,11 @@ function openProfile(first) {
     f.querySelector('.pf-student').hidden = role !== 'student';
     f.querySelector('.pf-pro').hidden = role !== 'pro';
     const minor = +f.age.value > 0 && +f.age.value < 18;
+    const child = +f.age.value > 0 && +f.age.value < 13;
     f.querySelector('.pf-topics').hidden = minor; // no topic sharing for under-18s
     if (minor) f.topics.checked = false;
+    f.querySelector('.pf-usage').hidden = child; // and no usage counts at all for under-13s
+    if (child) f.usage.checked = false;
   }
   f.querySelectorAll('[data-role]').forEach((b) => b.addEventListener('click', () => { role = b.dataset.role; sync(); }));
   f.age.addEventListener('input', sync);
@@ -4214,6 +4218,11 @@ function openProfile(first) {
     if (typeof renderAudience === 'function') renderAudience();
     dressCassie();
     wrap.remove();
+    if (age < 13 && typeof authToken === 'function' && authToken()) {
+      // accounts are for 13 and up (e.g. a younger child who used Continue with Google)
+      authCall('/auth/delete', {}).catch(() => {}).finally(signedOutLocally);
+      setTimeout(() => mascotSay('Cassie accounts are for ages 13 and up, so I’ll keep your things on this device instead.', 5000), 400);
+    }
     if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
     try { mascotSay(first ? `Nice to meet you, ${name}! 👋` : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
     renderProfileSummary();
@@ -4310,13 +4319,14 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
         <div class="auth-google" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><div class="auth-gbtn"></div></div>
         <div class="auth-or" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><span>or</span></div>
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="5" max="100" placeholder="e.g. 16"></label>
         <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-go"></button>
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
         <button type="button" class="auth-skip">Continue without an account</button>
-        <p class="auth-legal">Your chats stay on your device. An account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+        <p class="auth-legal">Accounts are for ages 13 and up. Your chats stay on your device; an account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
       </form>
     </div>
     <div class="auth-right" aria-hidden="true">
@@ -4338,6 +4348,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     f.querySelector('.auth-title').textContent = m === 'signup' ? 'Create your Cassie account' : 'Sign in to Cassie';
     f.querySelector('.auth-sub').textContent = m === 'signup' ? 'Free. Keeps your profile and progress on every device.' : 'Welcome back! Pick up right where you left off.';
     go.textContent = m === 'signup' ? 'Create account' : 'Sign in';
+    f.querySelector('.auth-age').hidden = m !== 'signup';
     f.password.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
     f.password.placeholder = m === 'signup' ? 'At least 8 characters' : '';
     f.querySelector('.auth-switch').innerHTML = m === 'signup'
@@ -4366,10 +4377,15 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     e.preventDefault();
     const email = f.email.value.trim(), password = f.password.value;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return showErr('Please type your email address.');
+    const age = Math.round(+f.age.value);
+    if (mode === 'signup' && !(age >= 5 && age <= 100)) return showErr('Please enter your age.');
+    if (mode === 'signup' && age < 13) {
+      return showErr('Cassie accounts are for ages 13 and up. You can still use Cassie on this device — tap “Continue without an account”, ideally with a parent or teacher.');
+    }
     if (mode === 'signup' && password.length < 8) return showErr('Use at least 8 characters for your password.');
     if (!password) return showErr('Please type your password.');
     go.disabled = true; go.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
-    try { done(await authCall(mode === 'signup' ? '/auth/signup' : '/auth/login', { email, password })); }
+    try { done(await authCall(mode === 'signup' ? '/auth/signup' : '/auth/login', mode === 'signup' ? { email, password, age } : { email, password })); }
     catch (e2) { setMode(mode); showErr(e2.message); go.disabled = false; }
   });
   f.querySelector('.auth-skip').addEventListener('click', () => {
