@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '105';
+const APP_VERSION = '106';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -403,20 +403,16 @@ function set3D(name) {
   if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
 /* ---------- Cursor Cassie (cassie-bot.js): the 2D mascot ----------
-   Shown in Lite mode, without WebGL, or when chosen in Settings → Appearance.
+   Cassie's default look. The 3D felt Cassie can be picked in Settings → Appearance.
    She mirrors the 3D Cassie's moods and adds her own: reading, searching,
    highlighting, drawing, busy (hourglass), oops (⊘). */
 let bot2d = null, bot2dTimer = null;
 const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
 const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
+// Cursor Cassie is everyone's Cassie now; the 3D felt Cassie is an option in Settings.
 function wantsCursorCassie() {
-  const look = state.look || 'auto';
-  if (look === 'cursor') return true;
-  if (look === 'felt') return false;
-  let gl = false;
-  try { const c = document.createElement('canvas'); gl = !!(c.getContext('webgl') || c.getContext('experimental-webgl')); } catch (e) { /* no WebGL */ }
-  return !!window.CASSIE_LITE || !gl;
+  return (state.look || 'auto') !== 'felt';
 }
 // Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
 function botMood(name, ms) {
@@ -1039,6 +1035,7 @@ if (mascotBtn && mascot) {
   setTimeout(() => {
     if (mascotAsleep || mascotDragging || mascot.classList.contains('thinking') || mascot.classList.contains('happy')) return; // already busy with a question
     set3D('encouraging');
+    botMood('greeting'); // Cursor Cassie waves hello
     mascotSay('Hi, I’m Cassie! 👋', 2600);
     setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2400);
   }, 1400);
@@ -4608,7 +4605,7 @@ if (!SERVER) { const rb = document.getElementById('report-row'); if (rb) rb.hidd
 
 const lookSelect = document.getElementById('look-select');
 if (lookSelect) {
-  lookSelect.value = state.look || 'auto';
+  lookSelect.value = state.look === 'felt' ? 'felt' : 'auto';
   lookSelect.addEventListener('change', () => { state.look = lookSelect.value; save(); setTimeout(() => location.reload(), 300); });
 }
 const liteSelect = document.getElementById('lite-select');
@@ -4632,12 +4629,10 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
-  'Graphs now draw on the board — try “graph y = x² − 4”.',
-  'Pictures look real now — just say “make me a picture of…”.',
-  'Paste a screenshot on the board with Ctrl+V and draw on it.',
-  'Something not working? Tap Settings → Report a problem.',
-  'Lite mode keeps Cassie fast on slow phones (Settings → Appearance).',
-  'Quiz me now saves the ones you missed — tap “Review my mistakes” to practise them.',
+  'Meet the new Cassie: a little cursor who changes colour with her mood. Tap her to poke her!',
+  'While she works, a pill at the top shows what she’s doing — “Reading pages 3–8…”, then “Done”.',
+  'Miss the 3D felt Cassie? Pick her in Settings → Appearance → Cassie’s look.',
+  'Quiz me saves the ones you missed — tap “Review my mistakes” to practise them.',
 ];
 function showWhatsNew() {
   if (state.seenVersion === APP_VERSION) return;
