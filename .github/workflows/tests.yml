@@ -15,6 +15,11 @@ jobs:
         working-directory: tests
     steps:
       - uses: actions/checkout@v4
+      - name: No file over 25 MB (Cloudflare Pages refuses them and the website stops updating)
+        working-directory: .
+        run: |
+          big=$(git ls-files -z | xargs -0 du -b | awk '$1 > 25*1024*1024 {print $2}')
+          if [ -n "$big" ]; then echo "Too big for Cloudflare Pages: $big"; exit 1; fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
