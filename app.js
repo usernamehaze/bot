@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '109';
+const APP_VERSION = '110';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -2250,6 +2250,7 @@ let attachReading = null; // the file still being read, if any
 function clearAttach() {
   pendingImage = null;
   pendingDoc = null;
+  if (attachRead) attachRead.hidden = true;
   attachPreview.hidden = true;
   attachThumb.removeAttribute('src');
   attachThumb.hidden = false;
@@ -2769,6 +2770,7 @@ async function handleSend(text, opts = {}) {
   touchChat();
   save();
   if (doc) activeDoc = { chatId: state.currentId, doc };
+  if (attachRead) attachRead.hidden = true;
   const userBubble = renderMessage('user', displayContent);
   if (image && image.dataUrl) addImageToBubble(userBubble, image.dataUrl);
   clearAttach();
@@ -2823,6 +2825,12 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
+    if (doc && doc.text) { // open the file itself to read it and highlight any part
+      const rb = document.createElement('button');
+      rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `📖 Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
+      rb.addEventListener('click', () => openReader(doc));
+      bubble.appendChild(rb);
+    }
     showFollowups();
     setCursorMode('idle');
     mascotCelebrate();
@@ -3425,6 +3433,7 @@ async function attachFile(file) {
       }
       pendingDoc = doc;
       attachName.textContent = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
+      if (attachRead) attachRead.hidden = !doc.text;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
       islandShow('done', `Got it · ${doc.label}`, 2200); botMood('done', 2200);
       return true;
@@ -4284,7 +4293,7 @@ function trySelectionPopover() {
   const el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
   if (!el) return;
   if (el.closest('input, textarea')) return;         // ignore typed text
-  if (!el.closest('#chat-log')) return;              // only within answers/messages
+  if (!el.closest('#chat-log, #reader-body')) return; // answers, messages, and files open in the reader
   // if this exact selection is already open (e.g. showing an answer), leave it
   if (!highlightPopover.hidden && text === lastPopoverText) return;
   const rect = range.getBoundingClientRect();
@@ -4310,6 +4319,7 @@ document.addEventListener('touchend', (e) => {
 document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
 
 chatLog.addEventListener('scroll', hideHighlightPopover);
+document.getElementById('reader-body')?.addEventListener('scroll', hideHighlightPopover);
 window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- anonymous usage stats (optional, opt-out in Settings → You) ---------- */
@@ -4734,6 +4744,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Read & highlight: attach a PDF, Word or PowerPoint and tap “📖 Read & highlight” to read it here and highlight any part (great on phones).',
   'Highlight on your phone: select words in any app → Share → Cassie (Android). iPhone/iPad: Settings → Use Cassie in other apps.',
   'Cassie can draw on your board now: open the board and type “graph y = x² − 4”, or “graph the answer” on a snip.',
   'Photo questions don’t stop when Google is busy: another picture reader takes over.',
@@ -4756,6 +4767,38 @@ function showWhatsNew() {
   wrap.querySelector('.pf-go').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
 }
+
+
+/* ---------- Read & highlight: a file opened inside Cassie (phones and tablets) ----------
+   Phone browsers don't run extensions, so students read their PDF / Word / PowerPoint here,
+   page by page, and highlight any part of it: the same popup as in the chat appears. */
+const attachRead = document.getElementById('attach-read');
+const readerEl = document.getElementById('reader');
+function openReader(doc) {
+  if (!readerEl || !doc || !doc.text) return;
+  document.getElementById('reader-name').textContent = doc.name;
+  const body = document.getElementById('reader-body');
+  body.innerHTML = '';
+  // the text comes with [Page N] / [Slide N] markers; each becomes a labelled page
+  const parts = String(doc.text).split(/\[(Page|Slide) (\d+)\]\n?/);
+  const addPage = (label, text) => {
+    if (!text.trim()) return;
+    const sec = document.createElement('section'); sec.className = 'reader-page';
+    if (label) { const h = document.createElement('div'); h.className = 'reader-label'; h.textContent = label; sec.appendChild(h); }
+    text.trim().split(/\n{2,}|\n(?=[A-Z0-9•\-–(])/).forEach((para) => { const p = document.createElement('p'); p.textContent = para.replace(/\s*\n\s*/g, ' ').trim(); if (p.textContent) sec.appendChild(p); });
+    body.appendChild(sec);
+  };
+  addPage('', parts[0] || '');
+  for (let i = 1; i + 2 < parts.length + 1; i += 3) addPage(`${parts[i]} ${parts[i + 1]}`, parts[i + 2] || '');
+  readerEl.hidden = false;
+  document.body.classList.add('reader-open');
+  body.scrollTop = 0;
+  track('feature', 'reader');
+  islandShow('reading', 'Select any words to ask me', 2600);
+}
+function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); }
+if (attachRead) attachRead.addEventListener('click', () => openReader(pendingDoc));
+document.getElementById('reader-close')?.addEventListener('click', closeReader);
 
 /* ---------- text and files shared from other apps (phones and tablets) ----------
    Android: select text in any app → Share → Cassie (the manifest's share_target; sw.js keeps
