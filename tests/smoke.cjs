@@ -683,9 +683,14 @@ test('extension: highlights, snips and pastes show up as chats in the Cassie app
     args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   try {
-    const isCassie = (w) => /\/background\.js$/.test(w.url());
-    let sw = ctx.serviceWorkers().find(isCassie);
-    if (!sw) sw = await ctx.waitForEvent('serviceworker', { predicate: isCassie, timeout: 20000 });
+    // Cassie's own worker (full Chromium has built-in extensions with a background.js too)
+    const isCassie = async (w) => /\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof logAnswer === 'function').catch(() => false);
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (await isCassie(w)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
     const saved = await sw.evaluate(async (png) => {
       logAnswer({ kind: 'highlight', q: 'Explain: photosynthesis' }, 'Plants make food from light.', null, { tab: { url: 'https://example.com/bio', title: 'Biology notes' } });
       logAnswer({ kind: 'snip', q: 'Explain my snip' }, '{"headline":"A parabola","steps":["It opens up","Vertex at 0"]}', 'data:image/png;base64,' + png, { tab: { url: 'https://example.com/bio', title: 'Biology notes' } });
