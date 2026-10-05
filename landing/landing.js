@@ -67,7 +67,7 @@
   /* ---------- pricing ---------- */
   const PRICES = {
     php: { sym: '₱', free: 0, plus: { month: 149, year: 1490 }, pro: { month: 499, year: 4990 } },
-    usd: { sym: '$', free: 0, plus: { month: 9.99, year: 99 }, pro: { month: 24.99, year: 249 } },
+    usd: { sym: '$', free: 0, plus: { month: 7.99, year: 79.9 }, pro: { month: 20, year: 200 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
