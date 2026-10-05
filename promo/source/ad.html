@@ -147,6 +147,11 @@
   .tb.a { background: #23222d; border: 1px solid rgba(255,255,255,.1); border-bottom-left-radius: 10px; margin-top: 24px; }
   .typing { position: absolute; left: 0; top: 0; display: flex; gap: 10px; padding: 30px 34px; opacity: 0; }
   .typing i { width: 14px; height: 14px; border-radius: 50%; background: #8d8a82; display: block; }
+  .cbot .cassie-bot { width: 100%; height: 100%; display: block; overflow: visible; }
+  .isl { position: absolute; z-index: 5; left: 50%; top: 80px; width: 440px; margin-left: -220px; height: 56px; border-radius: 999px; background: #131317; color: #fff; display: flex; align-items: center; gap: 12px; padding: 0 24px 0 10px; box-shadow: 0 12px 30px rgba(0,0,0,.25); opacity: 0; font-size: 21px; font-weight: 700; }
+  .isl .ib { width: 40px; height: 40px; flex: none; }
+  .isl .itx { position: relative; flex: 1; height: 30px; }
+  .isl .itx span { position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; }
   .botbig { position: absolute; width: 420px; height: 420px; left: 1120px; top: 560px; opacity: 0; }
 
   /* ---------- scene 9/10 ---------- */
@@ -184,7 +189,7 @@
       <span class="t1">Cassie</span><span class="sel">Cassie</span>
     </div>
     <div class="center" id="tag2" style="top:700px;font-size:58px;font-weight:600;color:#cfcabe;letter-spacing:-.02em">Your free AI study buddy.</div>
-    <img id="bot2" src="assets/bot-encouraging.png" style="position:absolute;left:1450px;top:430px;width:460px;opacity:0">
+    <div id="bot2" class="cbot" style="position:absolute;left:1440px;top:420px;width:400px;height:400px;opacity:0"></div>
   </div>
 
   <!-- S3 · highlight -->
@@ -228,11 +233,12 @@
     <div class="win" id="w5"><div class="bar"><i></i><i></i><i></i><div class="url">askcassie.pages.dev</div></div>
       <div class="wbody appbody">
         <div class="topbar"><span class="l"></span>Cassie</div>
-        <div class="chat" id="chat5">
+        <div class="chat" id="chat5" style="padding-top:96px">
           <div class="bub u" id="u5">Make a reviewer<div style="font-size:16px;opacity:.7;margin-top:4px">(attached: Module 6 – Social Media.pdf)</div></div>
           <div class="bub a" id="a5" style="width:720px;max-width:92%"><div class="status" id="st5"><span>Reading all 24 pages…</span><span>Looking at the diagrams…</span><span>Writing your reviewer…</span></div>
             <div id="rev5" style="position:absolute;opacity:0;left:22px;right:22px;top:16px"></div></div>
         </div>
+        <div class="isl" id="isl5"><span class="ib" id="ib5"></span><span class="itx"><span>Opening Module 6.pdf…</span><span>Reading all 24 pages…</span><span>Looking at the diagrams…</span><span>Writing your reviewer…</span><span>Done</span></span></div>
         <div class="tile" id="tile5"><div class="pdfico">PDF</div>Module 6 – Social Media.pdf</div>
         <div class="comp" id="comp5"><div class="ph" id="ph5">Ask Cassie a question…</div><div class="typed" id="typed5"></div>
           <div class="chip" id="chip5"><div class="pdfico" style="width:20px;height:26px;font-size:7px">PDF</div>Module 6 – Social Media.pdf</div>
@@ -288,7 +294,7 @@
       <div style="position:relative;min-height:220px"><div class="typing" id="tdots"><i></i><i></i><i></i></div>
         <div class="tb a" id="ta"></div></div>
     </div>
-    <img class="botbig" id="bot8" src="assets/bot-encouraging.png">
+    <div class="botbig cbot" id="bot8"></div>
   </div>
 
   <!-- S9 · free / private / yours -->
@@ -296,14 +302,14 @@
     <div class="huge" id="g1" style="top:120px">Free.</div>
     <div class="huge" id="g2" style="top:340px">Private.</div>
     <div class="huge" id="g3" style="top:560px">Yours.</div>
-    <div class="center" id="g4" style="top:850px;font-size:36px;font-weight:500;color:#b4b0a6">Bring your own free key. Everything stays on your device.</div>
+    <div class="center" id="g4" style="top:850px;font-size:36px;font-weight:500;color:#b4b0a6">No key, no card needed. Your notes stay on your device.</div>
     <div class="center" id="g5" style="top:930px"><span class="pill">Phone</span><span class="pill">Web</span><span class="pill">Chrome extension</span></div>
     <div class="center" id="g6" style="top:1020px;font-size:20px;font-weight:500;color:#6f6c65">Made for studying and homework help — not for use during tests or quizzes.</div>
   </div>
 
   <!-- S10 · end card -->
   <div class="scene" id="s10">
-    <img id="botEnd" src="assets/bot-celebratory.png" style="position:absolute;left:50%;margin-left:-280px;top:-20px;width:560px;opacity:0">
+    <div id="botEnd" class="cbot" style="position:absolute;left:50%;margin-left:-220px;top:20px;width:440px;height:440px;opacity:0"></div>
     <div class="wordwrap" id="word10" style="top:460px;font-size:250px"><span class="t1">Cassie</span><span class="sel">Cassie</span></div>
     <div class="center" id="url10" style="top:760px;font-size:66px;font-weight:700;letter-spacing:-.02em">askcassie.pages.dev</div>
     <div class="center" id="sub10" style="top:860px;font-size:36px;font-weight:500;color:#b4b0a6">Study smarter. For free.</div>
@@ -497,6 +503,32 @@ let GR4;
   track('#tl5', [[a + 6.95, { opacity: 0 }], [a + 7.25, { opacity: 1 }]], 'linear');
   track('#fpdf', [[a + 7.55, { scale: 1 }], [a + 7.6, { scale: .92 }], [a + 7.8, { scale: 1 }]], 'ease-out');
   track('#toast5', [[a + 7.75, { opacity: 0, translate: '0 20px' }], [a + 8.1, { opacity: 1, translate: '0 0' }]]);
+})();
+</script>
+<script src="../../cassie-bot.js"></script>
+<script>
+/* Cursor Cassie in the ad: drawn at the video's own clock so every frame is exact. */
+(() => {
+  let VT = 0; // video time in ms
+  const make = (sel, timeline, extra = {}) => ({ bot: CassieBot.create($(sel), { glow: true, clock: () => VT, ...extra }), timeline });
+  const isl = (t) => { const a = S.s5[0]; return t < a + 4.3 ? 'upload' : t < a + 5.5 ? 'reading' : t < a + 6.05 ? 'writing' : 'done'; };
+  const BOTS = [
+    make('#bot2', () => 'greeting'),
+    make('#bot8', (t) => (t < 50.3 ? 'encourage' : 'love')),
+    make('#botEnd', (t) => (t < 58 ? 'proud' : 'dance')),
+    make('#ib5', isl),
+  ];
+  // the pill's words, one after another
+  const a = S.s5[0], words = [...document.querySelectorAll('#isl5 .itx span')];
+  const spans = [[a + 2.3, a + 4.3], [a + 4.3, a + 5.0], [a + 5.0, a + 5.5], [a + 5.5, a + 6.05], [a + 6.05, a + 7.4]];
+  words.forEach((w, i) => { const [p, q] = spans[i]; track(w, [[p, { opacity: 0, translate: '0 8px' }], [p + 0.15, { opacity: 1, translate: '0 0' }], [q - 0.1, { opacity: 1, translate: '0 0' }], [q, { opacity: 0, translate: '0 -6px' }]]); });
+  track('#isl5', [[a + 2.1, { opacity: 0, scale: .6, translate: '0 -16px' }], [a + 2.5, { opacity: 1, scale: 1, translate: '0 0' }], [a + 7.3, { opacity: 1, scale: 1, translate: '0 0' }], [a + 7.6, { opacity: 0, scale: .7, translate: '0 -12px' }]], 'cubic-bezier(.3,1.4,.45,1)');
+  const seekScenes = window.seek;
+  window.seek = (t) => {
+    seekScenes(t);
+    VT = t * 1000;
+    for (const b of BOTS) { const st = b.timeline(t); if (b.bot.state !== st) b.bot.setState(st); b.bot.render(); }
+  };
 })();
 </script>
 <script src="ad2.js"></script>

@@ -2,9 +2,10 @@
 
 `cassie-ad-60s.mp4` — 1920×1080, 30 fps, with a synthesised soundtrack (no voice-over, no licensed music).
 
-Story: hook → *Meet Cassie* (the loading-screen cursor highlights the word and clicks) → highlight popup →
-snip + side board → PDF to reviewer (save as PDF) → real graphs → focus timer + memory → real talk →
-Free / Private / Yours → end card. The footnote "not for use during tests or quizzes" is in the ad on purpose.
+Story: hook → *Meet Cassie* (Cursor Cassie waves; the cursor highlights the word and clicks) → highlight popup →
+snip + side board → PDF to reviewer (the status pill: Opening → Reading → Done; save as PDF) → real graphs →
+focus timer + memory → real talk → Free / Private / Yours → end card. Cursor Cassie is the real
+`cassie-bot.js`, driven by the video's clock so every frame is exact. The footnote "not for use during tests or quizzes" is in the ad on purpose.
 
 ## Rebuild it
 
