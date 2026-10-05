@@ -623,6 +623,27 @@ test('attach a PDF and Cassie reads it', async (b) => {
   await ctx.close();
 });
 
+test('phones: open a PDF in Read & highlight, select words → Explain', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Condensation is when water vapour cools into droplets.' }) });
+  const pdf = await page.evaluate(async () => {
+    const blob = await window.CassieExport.toPdf('# Water cycle\n\nEvaporation, condensation and precipitation move water around the Earth.', 'Water cycle');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'water.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  await page.waitForSelector('#attach-read:not([hidden])', { timeout: 10000 });
+  await page.click('#attach-read');
+  await page.waitForSelector('#reader:not([hidden]) .reader-page', { timeout: 5000 });
+  expect(/Page 1/i.test(await page.locator('#reader .reader-label').first().textContent()), 'pages are labelled');
+  const para = page.locator('#reader-body p', { hasText: 'condensation' }).first();
+  await para.selectText(); await page.mouse.up();
+  await page.waitForSelector('#highlight-popover:not([hidden]) [data-mode=explain]', { timeout: 5000 });
+  await page.click('#highlight-popover [data-mode=explain]');
+  await page.waitForSelector('#highlight-popover >> text=water vapour cools', { timeout: 10000 });
+  await page.click('#reader-close');
+  expect(await page.locator('#reader').isHidden(), 'the reader closes');
+  await ctx.close();
+});
+
 test('no key: a photo is read through the server', async (b) => {
   await serverMode({ groq: 'ok', reply: 'I can see a red square in your photo.' });
   const { ctx, page } = await open(b);

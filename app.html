@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=123">
+<link rel="stylesheet" href="style.css?v=124">
 </head>
 <body>
 
@@ -111,6 +111,14 @@
     </div>
   </main>
 
+  <div id="reader" class="reader" hidden role="dialog" aria-label="Read and highlight">
+    <div class="reader-head">
+      <div class="reader-title"><b id="reader-name"></b><span>Select any words and Cassie explains them</span></div>
+      <button type="button" id="reader-close" class="icon-btn" aria-label="Close the reader">&times;</button>
+    </div>
+    <div id="reader-body" class="reader-body"></div>
+  </div>
+
   <div id="highlight-popover" class="highlight-popover" hidden>
     <div class="highlight-popover-header">
       <span>Cassie</span>
@@ -122,6 +130,7 @@
   <div id="attach-preview" class="attach-preview" hidden>
     <img id="attach-thumb" alt="attached image">
     <span id="attach-name" hidden></span>
+    <button type="button" id="attach-read" class="attach-read" hidden title="Read the file here and highlight any part of it">📖 Read &amp; highlight</button>
     <button type="button" id="attach-remove" title="Remove attachment" aria-label="Remove attachment">&times;</button>
   </div>
 
@@ -308,15 +317,21 @@
             <li>Tap <b>Share</b> → <b>Cassie</b>. Pick <b>Explain</b>, <b>Answer</b>, <b>Summarize</b> or <b>Quiz me</b>.</li>
           </ol>
           <p>Screenshots and files work too: Share them to Cassie.</p>
-          <p><b>iPhone and iPad</b>: make a one-time Shortcut</p>
+          <p><b>PDFs, Word and PowerPoint (any phone)</b></p>
           <ol>
-            <li>Open the <b>Shortcuts</b> app → <b>+</b>. Name it <b>Ask Cassie</b>.</li>
-            <li>Tap the <b>ⓘ</b> → turn on <b>Show in Share Sheet</b>.</li>
-            <li>Add the action <b>URL Encode</b> (it encodes the Shortcut Input).</li>
-            <li>Add <b>Text</b> with <code class="share-link"></code> then tap the variable button and pick <b>URL Encoded Text</b> at the end.</li>
-            <li>Add <b>Open URLs</b>. Done.</li>
+            <li>In Cassie, tap 📎 and pick the file (on iPhone it's in <b>Files</b>; on Android you can also Share the file to Cassie).</li>
+            <li>Tap <b>📖 Read &amp; highlight</b>. The file opens page by page.</li>
+            <li>Select any words. Cassie explains, answers or writes code about them.</li>
           </ol>
-          <p>Now select words anywhere → <b>Share</b> → <b>Ask Cassie</b>. For photos of your notes, use the 📎 in Cassie.</p>
+          <p><b>iPhone and iPad: other apps and websites</b> (one-time Shortcut)</p>
+          <ol>
+            <li>Open <b>Shortcuts</b> → tap <b>+</b>. Tap the name at the top (⌄) → <b>Rename</b> → <b>Ask Cassie</b>.</li>
+            <li>Tap the name (⌄) again → <b>Details</b> → turn on <b>Show in Share Sheet</b> → <b>Done</b>.</li>
+            <li>Tap <b>Search Actions</b>, type <b>URL Encode</b> and tap it.</li>
+            <li>Search <b>Text</b> and tap it. In its box, type <code class="share-link"></code> then tap <b>URL Encoded Text</b> just above the keyboard.</li>
+            <li>Search <b>Open URLs</b> and tap it. Tap <b>Done</b>.</li>
+          </ol>
+          <p>Now select words in Safari, Notes or a PDF → <b>Share</b> → <b>Ask Cassie</b>.</p>
           <p class="muted">Quickest anywhere: copy the words, open Cassie, and paste.</p>
         </div>
       </details>
@@ -378,13 +393,13 @@
 
 </div>
 
-<script src="memory.js?v=123"></script>
-<script src="board.js?v=123"></script>
-<script src="export.js?v=123"></script>
-<script src="sketch.js?v=123"></script>
-<script src="config.js?v=123"></script>
-<script src="cassie-bot.js?v=123"></script>
-<script src="app.js?v=123"></script>
+<script src="memory.js?v=124"></script>
+<script src="board.js?v=124"></script>
+<script src="export.js?v=124"></script>
+<script src="sketch.js?v=124"></script>
+<script src="config.js?v=124"></script>
+<script src="cassie-bot.js?v=124"></script>
+<script src="app.js?v=124"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -399,7 +414,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=123';
+      s.src = 'mascot3d/cassie-3d.js?v=124';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
