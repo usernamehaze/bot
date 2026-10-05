@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=124">
+<link rel="stylesheet" href="style.css?v=125">
 </head>
 <body>
 
@@ -326,8 +326,8 @@
           <p><b>iPhone and iPad: other apps and websites</b> (one-time Shortcut)</p>
           <ol>
             <li>Open <b>Shortcuts</b> → tap <b>+</b>. Tap the name at the top (⌄) → <b>Rename</b> → <b>Ask Cassie</b>.</li>
-            <li>Tap the name (⌄) again → <b>Details</b> → turn on <b>Show in Share Sheet</b> → <b>Done</b>.</li>
-            <li>Tap <b>Search Actions</b>, type <b>URL Encode</b> and tap it.</li>
+            <li>Tap <b>Search Actions</b>, type <b>URL Encode</b> and tap it. Tap its blue <b>Text</b> → choose <b>Shortcut Input</b>.</li>
+            <li>At the top, a line appears: “Receive <b>Any</b> input from <b>Nowhere</b>”. Tap <b>Nowhere</b> → <b>Share Sheet</b>. (No line? Swipe the actions panel down, tap <b>ⓘ</b> → turn on <b>Show in Share Sheet</b>.)</li>
             <li>Search <b>Text</b> and tap it. In its box, type <code class="share-link"></code> then tap <b>URL Encoded Text</b> just above the keyboard.</li>
             <li>Search <b>Open URLs</b> and tap it. Tap <b>Done</b>.</li>
           </ol>
@@ -393,13 +393,13 @@
 
 </div>
 
-<script src="memory.js?v=124"></script>
-<script src="board.js?v=124"></script>
-<script src="export.js?v=124"></script>
-<script src="sketch.js?v=124"></script>
-<script src="config.js?v=124"></script>
-<script src="cassie-bot.js?v=124"></script>
-<script src="app.js?v=124"></script>
+<script src="memory.js?v=125"></script>
+<script src="board.js?v=125"></script>
+<script src="export.js?v=125"></script>
+<script src="sketch.js?v=125"></script>
+<script src="config.js?v=125"></script>
+<script src="cassie-bot.js?v=125"></script>
+<script src="app.js?v=125"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -414,7 +414,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=124';
+      s.src = 'mascot3d/cassie-3d.js?v=125';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
