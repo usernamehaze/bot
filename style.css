@@ -480,7 +480,12 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 /* emoji shown only when WebGL / the 3D bundle isn't available */
 .mascot-fallback { display: flex; align-items: center; justify-content: center; width: 58px; height: 68px; font-size: 38px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.28)); }
 #mascot.has3d .mascot-fallback { display: none; }
-@media (max-width: 480px) { .mascot-3d { width: 124px; height: 124px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
+/* Cursor Cassie (2D, cassie-bot.js) */
+.mascot-2d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%); width: 104px; height: 116px; display: none; pointer-events: none; }
+.mascot-2d svg { width: 100%; height: 100%; display: block; }
+#mascot.has2d .mascot-2d { display: block; }
+#mascot.has2d .mascot-fallback { display: none; }
+@media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } .mascot-3d { width: 124px; height: 124px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 .mascot-face { width: 58px; height: 68px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); animation: mascotFloat 4.5s ease-in-out infinite; }
 /* cute glossy white robot */
