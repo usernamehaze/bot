@@ -483,7 +483,7 @@ test('board: paste a screenshot with Ctrl+V', async (b) => {
   await ctx.close();
 });
 
-test('an iPhone (reports 2 cores) still gets the 3D Cassie', async (b) => {
+test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
   const ctx = await b.newContext({ ...devices['iPhone 13'], serviceWorkers: 'block' });
   await ctx.addInitScript((v) => {
     window.CASSIE_SERVER = '';
@@ -496,8 +496,16 @@ test('an iPhone (reports 2 cores) still gets the 3D Cassie', async (b) => {
   await ctx.close();
 });
 
-test('Cursor Cassie: chosen in Settings, she reacts to the app', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'cursor' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
+test('the 3D felt Cassie can still be chosen in Settings', async (b) => {
+  const { ctx, page } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'felt' } });
+  await page.waitForTimeout(600);
+  expect(await page.locator('#mascot.has2d').count() === 0, 'Cursor Cassie should not show when the 3D Cassie is chosen');
+  expect(await page.locator('#cassie-3d-root').count() === 1, 'the 3D Cassie should load');
+  await ctx.close();
+});
+
+test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
   await page.waitForSelector('#mascot.has2d svg.cassie-bot', { timeout: 5000 });
   expect(await page.locator('#cassie-3d-root').count() === 0, 'the 3D bot should not load with Cursor Cassie');
   await page.fill('#prompt-input', 'What is a cell?');

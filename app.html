@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=117">
+<link rel="stylesheet" href="style.css?v=118">
 </head>
 <body>
 
@@ -309,9 +309,8 @@
           <label class="field">
             <span>Cassie's look</span>
             <select id="look-select">
-              <option value="auto">Auto (3D felt Cassie; Cursor Cassie in Lite mode)</option>
-              <option value="felt">3D felt Cassie</option>
-              <option value="cursor">Cursor Cassie — light, drawn in code</option>
+              <option value="auto">Cursor Cassie (light and quick)</option>
+              <option value="felt">3D felt Cassie (heavier)</option>
             </select>
           </label>
           <label class="field">
@@ -353,13 +352,13 @@
 
 </div>
 
-<script src="memory.js?v=117"></script>
-<script src="board.js?v=117"></script>
-<script src="export.js?v=117"></script>
-<script src="sketch.js?v=117"></script>
-<script src="config.js?v=117"></script>
-<script src="cassie-bot.js?v=117"></script>
-<script src="app.js?v=117"></script>
+<script src="memory.js?v=118"></script>
+<script src="board.js?v=118"></script>
+<script src="export.js?v=118"></script>
+<script src="sketch.js?v=118"></script>
+<script src="config.js?v=118"></script>
+<script src="cassie-bot.js?v=118"></script>
+<script src="app.js?v=118"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -374,7 +373,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=117';
+      s.src = 'mascot3d/cassie-3d.js?v=118';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
