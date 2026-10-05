@@ -507,7 +507,8 @@ test('Cursor Cassie: chosen in Settings, she reacts to the app', async (b) => {
   await page.waitForTimeout(250);
   expect(await page.evaluate(() => bot2d.state) === 'thinking', 'should think while waiting');
   await page.waitForSelector('text=An answer.', { timeout: 10000 });
-  expect(await page.evaluate(() => bot2d.state) === 'proud', 'should be proud when the answer arrives');
+  const proud = await page.waitForFunction(() => bot2d.state === 'proud', null, { timeout: 3000 }).then(() => true, () => false);
+  expect(proud, 'should be proud when the answer arrives (was ' + await page.evaluate(() => bot2d.state) + ')');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

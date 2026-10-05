@@ -399,6 +399,7 @@ function set3D(name) {
   try {
     if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
   } catch (e) { /* ignore */ }
+  if (name === 'walk') return; // walking over to an answer keeps her mood (e.g. proud)
   if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
 /* ---------- Cursor Cassie (cassie-bot.js): the 2D mascot ----------
@@ -1036,7 +1037,7 @@ if (mascotBtn && mascot) {
   scheduleAntic();  // occasional walk / play / peek-a-boo
   resetIdle();      // start the 5-minute idle → sleep countdown
   setTimeout(() => {
-    if (mascotAsleep || mascotDragging) return;
+    if (mascotAsleep || mascotDragging || mascot.classList.contains('thinking') || mascot.classList.contains('happy')) return; // already busy with a question
     set3D('encouraging');
     mascotSay('Hi, I’m Cassie! 👋', 2600);
     setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2400);
