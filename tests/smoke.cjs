@@ -755,6 +755,32 @@ test('phones: a ?text= link (iPhone Shortcut) asks what to do, then answers abou
   await ctx.close();
 });
 
+test('iPhone Shortcut: /ask answers in plain text (for a pop-up, no new tab)', async () => {
+  await serverMode({ groq: 'ok', reply: '**Answer:** x = 3\n\n# Steps\n- Subtract 2\n- Divide by 2' });
+  try {
+    const r = await fetch(SERVER + '/ask?text=' + encodeURIComponent('Solve 2x + 2 = 8'));
+    const t = await r.text();
+    expect(r.ok && /text\/plain/.test(r.headers.get('content-type')), 'plain text back');
+    expect(/Answer: x = 3/.test(t) && !/\*\*|^#/m.test(t) && /• Subtract 2/.test(t), 'markdown is turned into plain text: ' + t);
+    const m = await (await fetch(SERVER + '/__mode')).json();
+    expect(m.calls > 0, 'it asked the AI');
+    const empty = await (await fetch(SERVER + '/ask')).text();
+    expect(/Select some words/.test(empty), 'no text → a friendly hint');
+  } finally { await serverMode({ reply: '' }); }
+});
+
+test('phones: maths copied from a PDF is cleaned and rebuilt before solving', async (b) => {
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'I read this as: x² + 5x + 6 = 0, so x = −2 or x = −3.' }) });
+  await page.goto(APP + '?text=' + encodeURIComponent('Solve 𝑥2 + 5𝑥 + 6 = 0'));
+  await page.waitForSelector('.share-card');
+  expect(/Solve x2 \+ 5x \+ 6 = 0/.test(await page.locator('.share-quote').textContent()), 'PDF math letters become normal letters: ' + await page.locator('.share-quote').textContent());
+  expect(await page.locator('.share-tip').isVisible(), 'a screenshot tip shows for equations');
+  await page.click('.share-card .chip:has-text("Answer")');
+  await page.waitForSelector('text=I read this as', { timeout: 10000 });
+  expect(/x2.*usually means x²/.test(JSON.stringify(groqCalls.at(-1).messages.at(-1))), 'Cassie is told how to rebuild flattened maths');
+  await ctx.close();
+});
+
 test('iPhone: copy words, then Paste & ask', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Inertia means objects keep doing what they are doing.' }) });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(APP).origin });

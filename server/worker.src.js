@@ -1,6 +1,8 @@
 /* Cassie server — one Cloudflare Worker (free tier) that does three jobs:
  *
  *   GET  /config     tells the app what this server can do (for example, whether Claude is on)
+ *   GET  /ask?text=  a quick plain-text answer for the iPhone "Ask Cassie" Shortcut (shown in a
+ *                    pop-up over the app the student is in, with no new browser tab)
  *   POST /chat       answers questions for people who haven't added their own Groq key,
  *                    using YOUR Groq key (kept secret here), with Cloudflare Workers AI as
  *                    an automatic backup when Groq is busy or out of free questions
@@ -28,6 +30,7 @@
  *   CLAUDE_MODEL     which Claude model to use (default: Anthropic's newest Opus, looked up
  *                    automatically from the Models API)
  *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
+ *   ASK_LIMIT        Shortcut answers per network per day (default 40)
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
@@ -219,6 +222,41 @@ async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   return json({ claude: !!env.ANTHROPIC_KEY }, 200, { ...h, 'cache-control': 'max-age=300' });
+}
+
+/* ---------------------------------------------------------------- the iPhone Shortcut
+   GET /ask?text=…  → plain text. Shortcuts shows it in a pop-up over Safari / a PDF, so no new
+   browser tab opens. Shortcuts sends no Origin header, so this route has its own small daily
+   cap per network instead of the site check. */
+const MATH_NOTE = 'The text was copied on a phone, so maths may be flattened: "x2" usually means x², "x3" means x³, a number on the line under another number is often a fraction, and symbols like √, π, ∫ or exponents may be missing or split across lines. Rebuild the intended expression first and say it in one line ("I read this as: …"), then solve it carefully and double-check the result.';
+const ASK_SYSTEM = `You are Cassie, a warm, sharp study buddy. A student selected some text on their phone (from a PDF, a document or a web page) and wants help with it. Do what it needs: if it is a question or a problem, solve it, giving the answer first and then the key steps; otherwise explain it simply, with a short example. Keep it under 180 words. Plain text only: no markdown symbols (no **, #, tables) and no LaTeX; write maths with ordinary symbols (x², √, ½, ≤, π). ${MATH_NOTE}`;
+const plainText = (t) => String(t).replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/```[\s\S]*?```/g, '').replace(/\*\*|__|`/g, '').replace(/^#{1,6}\s*/gm, '').replace(/^\s*[-*]\s+/gm, '• ').replace(/\n{3,}/g, '\n\n').trim();
+async function ask(request, env, ctx) {
+  const url = new URL(request.url);
+  const out = (t, status = 200) => new Response(t, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } });
+  const text = (url.searchParams.get('text') || '').trim().slice(0, 4000);
+  if (!text) return out('Select some words first, then Share → Ask Cassie.');
+  const now = Date.now(), today = dayOf(now), ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  await ensureSchema(env.DB);
+  const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('a:' + ip, today).first();
+  const limit = +env.ASK_LIMIT || 40;
+  if ((row && row.n || 0) > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
+  const messages = [{ role: 'system', content: ASK_SYSTEM }, { role: 'user', content: text }];
+  let reply = null, src = 'shortcut';
+  if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
+  for (const model of env.GROQ_KEY && !reply ? CHAT_MODELS : []) {
+    try {
+      const r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify({ model, messages, max_tokens: 2500, temperature: 0.4 }) });
+      if (r.ok) { reply = (await r.json()).choices?.[0]?.message?.content || null; if (reply) break; }
+    } catch (e) { /* next model */ }
+  }
+  if (!reply && env.AI) {
+    try { const o = await env.AI.run(BACKUP_MODEL, { messages, max_tokens: 1200, temperature: 0.4 }); reply = (o && (o.response ?? o.result?.response)) || null; } catch (e) { reply = null; }
+  }
+  if (!reply) return out('Cassie is very busy right now. Try again in a minute.', 503);
+  ctx.waitUntil(countChat(env, today, src));
+  return out(`${plainText(reply)}\n\n— Cassie · askcassie.pages.dev`);
 }
 
 async function chat(request, env, ctx) {
@@ -531,6 +569,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
+      if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);

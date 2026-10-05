@@ -2720,7 +2720,7 @@ async function handleSend(text, opts = {}) {
   }
   // a question typed under a share card is about what was shared
   if (sharedText && chatLog.querySelector('.share-card') && text.trim() && !text.includes(sharedText.slice(0, 40))) {
-    text = `${text.trim()}\n\n"${sharedText}"`;
+    text = withNote(sharedText, text.trim());
     chatLog.querySelector('.share-card').remove();
   }
   sharedText = chatLog.querySelector('.share-card') ? sharedText : '';
@@ -4815,19 +4815,31 @@ document.getElementById('paste-btn')?.addEventListener('click', async () => {
    Android: select text in any app → Share → Cassie (the manifest's share_target; sw.js keeps
    what was shared). iPhone / iPad, or any link: app.html?text=… (an iOS Shortcut can send it).
    Cassie then asks what to do with it. */
+// Text copied on a phone loses its maths: PDF "math letters" (𝑥, 𝒚), x² → x2, fractions split
+// over lines. Turn the special letters back into normal ones, and tell Cassie to rebuild the rest.
+function cleanShared(t) {
+  return String(t || '')
+    .replace(/[\u{1D400}-\u{1D7FF}]/gu, (c) => c.normalize('NFKC')) // 𝑥 𝑦 𝟐 → x y 2
+    .replace(/[\u2212\u2013]/g, '-').replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+const looksMathy = (t) => /[=^√∫∑π≤≥÷×]|\b\d+\s*[a-z]\b|\b[a-z]\d\b|\([^)]*[a-z][^)]*\)\s*\d|\bsolve\b|\bf\(x\)/i.test(t);
+const MATH_NOTE = 'It was copied on a phone, so the maths may be flattened: "x2" usually means x², "x3" means x³, a number on the line under another is often a fraction, and symbols like √, π or exponents may be missing. First rebuild the intended expression and write it in one line ("I read this as: …"), then work it out carefully and double-check.';
+const withNote = (t, ask) => `${ask}\n\n"${t}"${looksMathy(t) ? `\n\n(${MATH_NOTE})` : ''}`;
 const SHARE_ACTIONS = [
-  ['Explain', (t) => `Explain this step by step, simply:\n\n"${t}"`],
-  ['Answer', (t) => `Answer this. Give the answer first, then a short explanation of why:\n\n"${t}"`],
-  ['Summarize', (t) => `Summarize this in a few short bullet points with the key terms in bold:\n\n"${t}"`],
-  ['Quiz me', (t) => `Quiz me on this, one question at a time:\n\n"${t}"`],
+  ['Explain', (t) => withNote(t, 'Explain this step by step, simply:')],
+  ['Answer', (t) => withNote(t, 'Answer this. Give the answer first, then a short explanation of why:')],
+  ['Summarize', (t) => withNote(t, 'Summarize this in a few short bullet points with the key terms in bold:')],
+  ['Quiz me', (t) => withNote(t, 'Quiz me on this, one question at a time:')],
 ];
 function showShareCard(text, source) {
-  const t = String(text || '').trim().slice(0, 6000);
+  const t = cleanShared(text).slice(0, 6000);
   if (!t) return;
   if (state.messages.length) createNewChat();
   const card = document.createElement('div');
   card.className = 'share-card';
-  card.innerHTML = '<div class="share-head">What should I do with this?</div><blockquote class="share-quote"></blockquote><div class="share-from"></div><div class="share-row"></div>';
+  card.innerHTML = '<div class="share-head">What should I do with this?</div><blockquote class="share-quote"></blockquote><div class="share-from"></div><div class="share-row"></div><div class="share-tip" hidden>Equations copied from a PDF can lose their formatting. If my answer looks off, send a <b>screenshot</b> instead (📎): I read pictures exactly.</div>';
+  card.querySelector('.share-tip').hidden = !looksMathy(t);
   card.querySelector('.share-quote').textContent = t.length > 600 ? t.slice(0, 600) + '…' : t;
   if (source) card.querySelector('.share-from').textContent = 'From ' + source;
   const row = card.querySelector('.share-row');
@@ -4845,7 +4857,7 @@ function showShareCard(text, source) {
 }
 let sharedText = ''; // a typed question about shared text includes the text
 // the link an iOS Shortcut opens (this site's own address)
-document.querySelectorAll('.share-link').forEach((el) => { el.textContent = new URL('app.html?text=', location.href).href; });
+document.querySelectorAll('.share-link').forEach((el) => { el.textContent = SERVER ? SERVER + '/ask?text=' : new URL('app.html?text=', location.href).href; });
 async function receiveShare() {
   const params = new URLSearchParams(location.search);
   const clean = () => { try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } };
