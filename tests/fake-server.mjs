@@ -1,5 +1,5 @@
 // Runs server/worker.js locally, the way Cloudflare would: D1 is node:sqlite in memory,
-// Groq and Workers AI are fakes you can switch with POST /__mode {"groq": "ok" | "busy" | "down"}.
+// Groq, Claude and Workers AI are fakes you can switch with POST /__mode {"groq": "ok" | "busy" | "down", "claude": "off" | "ok" | "down" | "refuse"}.
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -23,7 +23,7 @@ export async function startFakeServer(port = 4630) {
       return out;
     },
   };
-  const mode = { groq: 'ok', ai: 'ok', calls: [] };
+  const mode = { groq: 'ok', ai: 'ok', claude: 'off', calls: [], claudeCalls: [] };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
@@ -32,6 +32,14 @@ export async function startFakeServer(port = 4630) {
       const m = /^good-(\w+)-(.+)$/.exec(cred);
       if (!m) return Response.json({ error: 'invalid_token' }, { status: 400 });
       return Response.json({ aud: 'test-client-id', iss: 'https://accounts.google.com', exp: String(Math.floor(Date.now() / 1000) + 600), sub: m[1], email: m[2], email_verified: 'true', given_name: 'Gia' });
+    }
+    if (u.startsWith('https://api.anthropic.com/')) { // fake Claude: mode.claude 'ok' | 'down' | 'refuse'
+      if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
+      const body = JSON.parse(init.body);
+      mode.claudeCalls.push({ model: body.model, system: body.system, messages: body.messages, effort: body.output_config && body.output_config.effort, fallbacks: body.fallbacks, beta: init.headers['anthropic-beta'], key: init.headers['x-api-key'] });
+      if (mode.claude === 'down') return Response.json({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }, { status: 529 });
+      if (mode.claude === 'refuse') return Response.json({ content: [], stop_reason: 'refusal' });
+      return Response.json({ content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: mode.claudeReply || 'Claude here: plants turn light into food.' }], stop_reason: 'end_turn' });
     }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
     if (u.endsWith('/models')) return Response.json({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] });
@@ -42,7 +50,8 @@ export async function startFakeServer(port = 4630) {
     return Response.json({ choices: [{ message: { role: 'assistant', content: mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
   };
   const env = {
-    DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id',
+    DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
+    get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     AI: { async run(model, input) {
       if (mode.ai !== 'ok') throw new Error('AI down');
       if (/flux/.test(model)) { mode.lastImagePrompt = input.prompt; return { image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }; }
@@ -57,7 +66,7 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/__mode') {
       if (req.method === 'POST') Object.assign(mode, JSON.parse(body.toString() || '{}'));
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length }));
+      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, claudeCalls: mode.claudeCalls.slice(-5) }));
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);

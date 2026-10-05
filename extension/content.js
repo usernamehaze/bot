@@ -1383,6 +1383,16 @@
     return r.reply;
   }
 
+  const DRAW_HINT = '\n\nIf they ask you to draw, graph, plot or sketch something, ALSO add one fenced code block tagged cassie-board holding minified JSON. It gets drawn right on their board. Graph: {"type":"graph","title":"y = x^2 - 4","fn":"x^2 - 4","xrange":[-4,4],"points":[{"x":-2,"y":0,"label":"x=-2"},{"x":2,"y":0,"label":"x=2"}]} (fn uses * for multiply and ^ for powers, e.g. x^2*(x+6)^3*(x-4)). Shape: {"type":"shape","shape":"rectangle","w":8,"h":5}. Steps: {"type":"steps","title":"...","steps":["..."]}.';
+  // Split Cassie's reply into words + something to draw on the board.
+  const withDrawing = (q, reply) => {
+    const B = window.CassieBoard;
+    if (!B || typeof reply !== 'string') return reply;
+    const { clean, boards } = B.extract(reply);
+    let draw = boards[0];
+    if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
+    return draw ? { reply: clean, draw } : clean;
+  };
   const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 
   // The words inside the snipped box, sent along with the picture: if a model
@@ -1400,6 +1410,8 @@
       const data = parseBoardJSON(raw);
       if (sess) { sess.setTitle('Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
     } catch (e) {
+      // keep the snip anyway: it shows up in the Cassie app, where they can ask again
+      try { chrome.runtime.sendMessage({ type: 'CASSIE_LOG', log: { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' }, reply: `I couldn't read this one just then (${errorText(e)}). Ask me about it here and I'll try again.`, image }); } catch (x) { /* extension reloaded */ }
       const text = ctx && ctx.length > 40 ? ctx : '';
       if (text && (e.message === 'no-vision' || /unavailable|empty/i.test(e.message))) explainFromText(sess, text, 'To read the picture itself, add a free Google (Gemini) key in the Cassie toolbar popup.');
       else say({ reply: errorText(e) });
@@ -1601,10 +1613,10 @@
       extra: [{ label: 'New snip', title: 'Snip something else from the page', onClick: () => { const cur = window.CassieSketch; cur.close(); setTimeout(enterPointMode, 50); } }],
       onAsk: async (png, q, board) => {
         try {
-          return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.`, boxText), null, 600, board, { kind: 'board', q });
+          return withDrawing(q, await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, possibly with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}Their request: "${q}". Do exactly that. Answer clearly and kindly like a tutor, in under 150 words, plain text. If they ask you to check their work, say what is right, what is wrong and why, and give a hint for the next step.${DRAW_HINT}`, boxText), null, 1200, board, { kind: 'board', q }));
         } catch (e) { return errorText(e); }
       },
-      askPlaceholder: 'Ask Cassie about this snip…',
+      askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph the answer”)',
       onCheck: async (png, board) => {
         try {
           return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500, board, { kind: 'board', q: 'Check my work' });

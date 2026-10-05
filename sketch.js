@@ -17,7 +17,11 @@
  *     dock,        // 'full' (default) or 'side' (docked right, page stays visible)
  *     onCheck,     // optional async (pngDataUrl) => string|void   ("Check my work")
  *     checkLabel,  // label for that button
+ *     onAsk,       // optional async (png, question, parts) => string | { reply, draw }
+ *                  //   draw = a board spec ({type:'graph', fn, xrange…} / shape / steps):
+ *                  //   Cassie draws it ON the board, as one stroke the student can undo or erase
  *   })
+ *   The returned session also has draw(spec) — Cassie draws on the board directly.
  */
 (function () {
   'use strict';
@@ -208,7 +212,13 @@
       $('[data-act="grid"]').classList.toggle('on', grid);
     }
     function paint(ctx, s) {
+      if (s.tool === 'group') { (s.items || []).forEach((it) => paint(ctx, it)); return; }
       ctx.save();
+      if (s.tool === 'rect') {
+        ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(s.x, s.y, s.w, s.h, s.r || 0) : ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke();
+        ctx.restore(); return;
+      }
       if (s.tool === 'text') {
         ctx.fillStyle = s.color; ctx.font = `600 ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
         s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
@@ -451,11 +461,93 @@
         if (!q || btn.disabled) return;
         btn.disabled = true; btn.textContent = '…';
         showNote({ reply: 'Cassie is thinking…' });
-        try { const reply = await opts.onAsk(snapshot(), q, parts()); showNote({ reply: reply || '(no reply)' }); input.value = ''; }
+        try {
+          const out = await opts.onAsk(snapshot(), q, parts());
+          const reply = out && typeof out === 'object' ? out.reply : out;
+          if (out && typeof out === 'object' && out.draw) draw(out.draw);
+          showNote({ reply: reply || (out && out.draw ? 'Drawn on your board ✏️' : '(no reply)') }); input.value = '';
+        }
         catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' }); }
         finally { btn.disabled = false; btn.textContent = 'Ask'; }
       });
       askForm.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    // ---- Cassie draws on the board: a graph, a shape or worked steps, in her own blue ----
+    const CASSIE_INK = '#2563eb';
+    function draw(spec) {
+      if (!spec || typeof spec !== 'object') return false;
+      const B = window.CassieBoard;
+      const items = [];
+      const k = W / 1600, fs = Math.round(30 * k);
+      // with a picture underneath, she draws on a card beside it; on a blank page, across it
+      const box = bgImage ? { x: W * 0.5, y: H * 0.05, w: W * 0.47, h: H * 0.9 } : { x: W * 0.06, y: H * 0.06, w: W * 0.88, h: H * 0.88 };
+      if (bgImage) items.push({ tool: 'rect', x: box.x, y: box.y, w: box.w, h: box.h, r: 18 * k, fill: dark ? 'rgba(29,29,32,.96)' : 'rgba(255,255,255,.96)', color: 'rgba(37,99,235,.35)', size: 3 * k });
+      const ink = dark ? '#e5e7eb' : '#374151', soft = dark ? '#9ca3af' : '#6b7280';
+      const text = (t, x, y, size = fs, color = ink) => items.push({ tool: 'text', color, size, x, y, text: String(t) });
+      const pen = (pts, color = CASSIE_INK, size = 5 * k) => { if (pts.length) items.push({ tool: 'pen', color, size, points: pts }); };
+      const pretty = (t) => String(t).replace(/\*/g, '·').replace(/\^2/g, '²').replace(/\^3/g, '³');
+      let top = box.y + 20 * k;
+      if (spec.title) { text(pretty(spec.title), box.x + 24 * k, top, Math.round(fs * 1.15), CASSIE_INK); top += fs * 1.9; }
+      if (spec.type === 'graph' || spec.fn) {
+        if (!B || !B.compile) return false;
+        let f; try { f = B.compile(spec.fn); } catch (e) { return false; }
+        const [x0, x1] = spec.xrange && spec.xrange.length === 2 ? spec.xrange : (B.autoRange ? B.autoRange(spec.fn) : [-6, 6]);
+        const N = 600, xs = [], ys = [];
+        for (let i = 0; i <= N; i++) { const x = x0 + (x1 - x0) * i / N; xs.push(x); ys.push(f(x)); }
+        let y0, y1;
+        if (spec.yrange && spec.yrange.length === 2) [y0, y1] = spec.yrange;
+        else {
+          const ok = ys.filter((y) => isFinite(y)).sort((a, b) => a - b);
+          y0 = ok[Math.floor(ok.length * 0.02)] || -5; y1 = ok[Math.floor(ok.length * 0.98)] || 5;
+          (spec.points || []).forEach((p) => { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); });
+          y0 = Math.min(y0, 0); y1 = Math.max(y1, 0);
+          const pad = (y1 - y0) * 0.12 || 1; y0 -= pad; y1 += pad;
+        }
+        const pl = { x: box.x + 60 * k, y: top + 10 * k, w: box.w - 100 * k, h: box.y + box.h - top - 70 * k };
+        const X = (x) => pl.x + (x - x0) / (x1 - x0) * pl.w, Y = (y) => pl.y + (1 - (y - y0) / (y1 - y0)) * pl.h;
+        // axes, ticks and numbers
+        const ax = y0 <= 0 && y1 >= 0 ? Y(0) : pl.y + pl.h, ay = x0 <= 0 && x1 >= 0 ? X(0) : pl.x;
+        pen([[pl.x, ax], [pl.x + pl.w, ax]], soft, 3 * k); pen([[ay, pl.y], [ay, pl.y + pl.h]], soft, 3 * k);
+        const nice = (span) => { const raw = span / 8, p = Math.pow(10, Math.floor(Math.log10(raw))); return [1, 2, 5, 10].map((m) => m * p).find((v) => v >= raw) || raw; };
+        const sx = nice(x1 - x0), sy = nice(y1 - y0), small = Math.round(fs * 0.7);
+        for (let x = Math.ceil(x0 / sx) * sx; x <= x1 + 1e-9; x += sx) { if (Math.abs(x) < 1e-9) continue; pen([[X(x), ax - 8 * k], [X(x), ax + 8 * k]], soft, 2 * k); text(+x.toFixed(4), X(x) - small * 0.4, ax + 12 * k, small, soft); }
+        for (let y = Math.ceil(y0 / sy) * sy; y <= y1 + 1e-9; y += sy) { if (Math.abs(y) < 1e-9) continue; pen([[ay - 8 * k, Y(y)], [ay + 8 * k, Y(y)]], soft, 2 * k); text(+y.toFixed(4), ay + 12 * k, Y(y) - small * 0.5, small, soft); }
+        // the curve, in pieces wherever it leaves the picture or breaks
+        let seg = [];
+        for (let i = 0; i <= N; i++) {
+          const y = ys[i];
+          if (!isFinite(y) || y < y0 - (y1 - y0) * 0.05 || y > y1 + (y1 - y0) * 0.05) { if (seg.length > 1) pen(seg); seg = []; continue; }
+          seg.push([X(xs[i]), Y(y)]);
+        }
+        if (seg.length > 1) pen(seg);
+        // marked points (zeros, vertex…)
+        const marks = [...(spec.points || []), ...(spec.vertex ? [{ ...spec.vertex, label: spec.vertex.label || 'vertex' }] : [])];
+        marks.forEach((p) => { if (!isFinite(p.x) || !isFinite(p.y)) return; pen([[X(p.x), Y(p.y)]], '#dc2626', 18 * k); if (p.label) text(p.label, X(p.x) + 14 * k, Y(p.y) - fs * 1.1, Math.round(fs * 0.75), '#dc2626'); });
+        if (spec.caption) text(spec.caption, box.x + 24 * k, box.y + box.h - fs * 1.4, Math.round(fs * 0.8), soft);
+      } else if (spec.type === 'shape') {
+        const cx = box.x + box.w / 2, cy = top + (box.y + box.h - top) / 2, R = Math.min(box.w, box.y + box.h - top) * 0.32;
+        const sh = String(spec.shape || '').toLowerCase();
+        if (sh === 'circle') {
+          const pts = []; for (let a = 0; a <= 72; a++) pts.push([cx + R * Math.cos(a / 72 * Math.PI * 2), cy + R * Math.sin(a / 72 * Math.PI * 2)]);
+          pen(pts); pen([[cx, cy], [cx + R, cy]], soft, 3 * k); text(`r = ${spec.r ?? ''}`, cx + R * 0.25, cy - fs * 1.2);
+        } else if (sh === 'triangle') {
+          pen([[cx - R, cy + R * 0.7], [cx + R, cy + R * 0.7], [cx, cy - R * 0.8], [cx - R, cy + R * 0.7]]);
+          if (spec.base != null) text(`base = ${spec.base}`, cx - fs * 2, cy + R * 0.7 + 12 * k);
+          if (spec.height != null) { pen([[cx, cy - R * 0.8], [cx, cy + R * 0.7]], soft, 3 * k); text(`h = ${spec.height}`, cx + 10 * k, cy); }
+        } else {
+          const w = sh === 'square' ? spec.side || 1 : spec.w || 2, h = sh === 'square' ? spec.side || 1 : spec.h || 1;
+          const s2 = R * 1.6 / Math.max(w, h), hw = w * s2 / 2, hh = h * s2 / 2;
+          pen([[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh], [cx - hw, cy - hh]]);
+          text(w, cx - fs * 0.3, cy + hh + 12 * k); text(h, cx + hw + 14 * k, cy - fs * 0.5);
+        }
+      } else if (Array.isArray(spec.steps)) {
+        let y = top;
+        spec.steps.slice(0, 12).forEach((st, i) => { text(`${i + 1}.  ${pretty(st)}`, box.x + 30 * k, y, fs, i === spec.steps.length - 1 ? CASSIE_INK : ink); y += fs * 1.7; });
+      } else return false;
+      strokes.push({ tool: 'group', by: 'cassie', items });
+      redo.length = 0;
+      redraw();
+      return true;
     }
     function setTitle(t) { $('.csk-title').textContent = t || 'Board'; }
     // The board as plain data (original picture + strokes). Reading pixels back from
@@ -503,9 +595,9 @@
     }
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
-    current = { wrap, close, snapshot, showNote, setTitle, setImage: (u) => useImageSource(u, { ask: false }) };
+    current = { wrap, close, snapshot, showNote, setTitle, draw, drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
     return current;
   }
 
-  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close() };
+  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current };
 })();

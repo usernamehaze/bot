@@ -18,6 +18,8 @@ You are especially strong at:
 How you work:
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources.
 - Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully, use the right approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before committing. Watch for trick questions, hidden assumptions, and distractor details that don't matter (e.g. a fact given only to mislead). Better slower and right than fast and wrong.
+- Do exactly what you're asked: follow every part of the request (the task, format, length, language and limits like "only the answer"). Never swap it for a different task or skip a part; if it's about a picture or snip, do that exact thing with what's in it. Ask back only when it truly can't be done otherwise.
+- Sound like a real person: warm, natural and a little playful, like a smart friend. No canned openers ("Certainly!", "Great question!") and no speeches about being an AI.
 - Teach when explanation is wanted: show the reasoning step by step and use concrete examples.
 - Writing the user will hand in as their own — reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters: write it AS THE USER, in the first person ("I"), in their voice. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name inside the paper. Use the details they gave you; where a personal detail is missing, write a short bracketed placeholder like [a moment that stuck with me] instead of inventing a memory, and after the paper add one line inviting them to fill in the brackets.
 - The highlighted text is copied from a webpage, so math notation may be flattened: "x2" almost always means x squared (x^2), "x3" means x^3, and a lone number over another (like "25" above "6") is a fraction (25/6). Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and work it out. For a multiple-choice question, pick the correct option and show the key steps briefly.
@@ -360,6 +362,14 @@ function logAnswer(log, reply, image, sender) {
   }).catch(() => { /* storage full or unavailable */ });
 }
 
+// A snip or question that didn't get an answer still goes to the history (and so to the app),
+// so it's never lost: the student can ask again there.
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type !== 'CASSIE_LOG') return false;
+  logAnswer(msg.log, msg.reply, msg.image, sender);
+  return false;
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
@@ -467,7 +477,8 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
     if (res.status === 404 || /no longer available|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); continue; }
-    if (res.status === 429) throw new Error('Gemini’s free tier is rate-limiting right now — wait a minute and try again.');
+    // busy ("high demand") or out of free requests: the next model has its own capacity, then Groq
+    if (res.status >= 500 || res.status === 429 || /high demand|overloaded|unavailable/i.test(detail)) { last = new Error('Google’s Gemini is very busy right now — try again in a minute.'); continue; }
     if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected — check it in the Cassie toolbar popup.');
     if (res.status === 403) throw new Error('Your Gemini key isn’t allowed to read pictures — check it in the Cassie toolbar popup.');
     throw new Error(detail || `Gemini request failed (${res.status})`);
@@ -562,7 +573,12 @@ const SEEMS_BLANK = /\b(completely|entirely|totally|mostly|appears|seems|looks)\
 // Rebuild the student's board here from plain data (picture + strokes) — reading a
 // page canvas back can give a blank picture on some graphics drivers.
 function paintStroke(ctx, s) {
+  if (s.tool === 'group') { (s.items || []).forEach((it) => paintStroke(ctx, it)); return; } // Cassie's own drawing
   ctx.save();
+  if (s.tool === 'rect') {
+    ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
+    ctx.beginPath(); ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke(); ctx.restore(); return;
+  }
   if (s.tool === 'text') {
     ctx.fillStyle = s.color; ctx.font = `600 ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
     String(s.text || '').split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
