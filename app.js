@@ -4800,6 +4800,17 @@ function closeReader() { if (readerEl) readerEl.hidden = true; document.body.cla
 if (attachRead) attachRead.addEventListener('click', () => openReader(pendingDoc));
 document.getElementById('reader-close')?.addEventListener('click', closeReader);
 
+/* "Paste & ask": copy words in any app, open Cassie, tap once (the easiest way on iPhone). */
+document.getElementById('paste-btn')?.addEventListener('click', async () => {
+  let text = '';
+  try { text = (await navigator.clipboard.readText()) || ''; } catch (e) { text = ''; }
+  track('feature', 'paste-ask');
+  if (text.trim()) { showShareCard(text, 'what you copied'); return; }
+  // no clipboard access (or nothing copied): let them paste by hand
+  promptInput.focus();
+  islandShow('busy', 'Copy some words first, or long-press here → Paste', 3200);
+});
+
 /* ---------- text and files shared from other apps (phones and tablets) ----------
    Android: select text in any app → Share → Cassie (the manifest's share_target; sw.js keeps
    what was shared). iPhone / iPad, or any link: app.html?text=… (an iOS Shortcut can send it).

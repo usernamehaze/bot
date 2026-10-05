@@ -755,6 +755,19 @@ test('phones: a ?text= link (iPhone Shortcut) asks what to do, then answers abou
   await ctx.close();
 });
 
+test('iPhone: copy words, then Paste & ask', async (b) => {
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Inertia means objects keep doing what they are doing.' }) });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(APP).origin });
+  await page.evaluate(() => navigator.clipboard.writeText('Newton’s first law is the law of inertia.'));
+  await page.click('#paste-btn');
+  await page.waitForSelector('.share-card', { timeout: 5000 });
+  expect(/law of inertia/.test(await page.locator('.share-quote').textContent()), 'the copied words show in the card');
+  await page.click('.share-card .chip:has-text("Explain")');
+  await page.waitForSelector('text=Inertia means', { timeout: 10000 });
+  expect(/law of inertia/.test(JSON.stringify(groqCalls.at(-1).messages.at(-1))), 'the copied words are sent');
+  await ctx.close();
+});
+
 test('Android: Share → Cassie (text and a screenshot) opens the app with it', async (b) => {
   const ctx = await b.newContext({ ...devices['Pixel 7'] }); // the service worker receives the share
   await ctx.addInitScript(() => { window.CASSIE_SERVER = ''; });
