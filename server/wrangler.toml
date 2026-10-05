@@ -1,0 +1,16 @@
+# Lets Cloudflare update the Cassie server straight from GitHub (optional).
+# Worker → Settings → Builds → Connect → this repo, branch claude/brave-tesla-ofygom,
+# Root directory: server, Deploy command: npx wrangler deploy
+# Secrets (ADMIN_TOKEN, GROQ_KEY) stay as you set them in the dashboard.
+name = "cassie"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+keep_vars = true
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cassie"
+database_id = "e19e7176-8954-492b-90d7-5f49b7b1b05b"

@@ -43,7 +43,11 @@ export async function startFakeServer(port = 4630) {
   };
   const env = {
     DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id',
-    AI: { async run(model, input) { if (mode.ai !== 'ok') throw new Error('AI down'); return { response: 'Backup brain answer: plants use sunlight.' }; } },
+    AI: { async run(model, input) {
+      if (mode.ai !== 'ok') throw new Error('AI down');
+      if (/flux/.test(model)) { mode.lastImagePrompt = input.prompt; return { image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }; }
+      return { response: 'Backup brain answer: plants use sunlight.' };
+    } },
   };
   const ctx = { waitUntil() {} };
   const server = http.createServer(async (req, res) => {
