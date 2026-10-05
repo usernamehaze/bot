@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cursor Cassie</title>
+<meta name="description" content="Cursor Cassie — a cursor that came alive. Cassie's mascot, designed and animated in code.">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="landing/fonts.css">
+<style>
+  :root {
+    --bg: #0d0c11; --panel: #15141b; --line: #2a2833; --grid: rgba(255,255,255,.045);
+    --text: #f4f1ea; --muted: #9a96a3; --ink: #16131c; --hl: #d8343c; --blue: #7aa7ff;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; overflow-x: hidden;
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 40px 40px; }
+  a { color: inherit; }
+  .wrap { width: min(1080px, 100%); margin: 0 auto; padding: 0 16px; }
+  header.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { display: flex; gap: 8px; align-items: center; font-weight: 750; letter-spacing: -.01em; text-decoration: none; }
+  .brand svg { width: 18px; height: 21px; }
+  .top a.btn { font-size: .9rem; text-decoration: none; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; }
+
+  /* hero */
+  .hero { display: grid; place-items: center; text-align: center; padding: 30px 0 70px; }
+  .stage { position: relative; width: min(340px, 78vw); aspect-ratio: 400 / 450; }
+  .stage::before { content: ""; position: absolute; inset: -18% -30%; background: radial-gradient(closest-side, rgba(216, 52, 60, .22), transparent 70%); filter: blur(10px); }
+  .stage .bot { position: relative; width: 100%; height: 100%; }
+  .stage svg { width: 100%; height: 100%; }
+  .hero h1 { font-family: "Inter Tight", Inter, sans-serif; font-size: clamp(2.2rem, 7vw, 3.6rem); letter-spacing: -.04em; margin: 18px 0 6px; }
+  .hero p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+  .now { margin-top: 14px; font: 600 .82rem ui-monospace, Menlo, monospace; color: var(--blue); }
+
+  /* section heads: a big number with a highlighter stripe through it */
+  .sec { padding: 64px 0 20px; }
+  .num { font-family: "Inter Tight", Inter, sans-serif; font-weight: 800; font-size: clamp(4.5rem, 16vw, 8rem); line-height: .9; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 2px var(--text);
+    position: relative; display: inline-block; }
+  .num::after { content: ""; position: absolute; left: -6%; right: -6%; top: 46%; height: 26%; background: var(--hl); opacity: .55; transform: skew(-12deg); z-index: -1; }
+  .sec h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: -.03em; margin: 10px 0 6px; }
+  .sec .lead { color: var(--muted); max-width: 620px; line-height: 1.55; margin: 0 0 26px; }
+
+  /* 01 construction */
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 18px; overflow: hidden; }
+  .sheet svg { width: 100%; height: auto; display: block; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .variants { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .var { background: #f1efe9; color: #16131c; border: 1px solid #f1efe9; border-radius: 18px; padding: 12px 8px; text-align: center; }
+  .var.pick { border-color: #3d6fe0; box-shadow: 0 0 0 2px #3d6fe0 inset; }
+  .var svg { width: 100%; height: auto; }
+  .var b { display: block; font: 600 .78rem ui-monospace, Menlo, monospace; margin-top: 6px; }
+  .var span { color: #6f6a76; font-size: .76rem; }
+
+  /* grids of live bots */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .cell { background: #f1efe9; color: #16131c; border: 1px solid #f1efe9; border-radius: 18px; padding: 10px 6px 10px; text-align: center; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .cell:hover, .cell.on { border-color: #3d6fe0; box-shadow: 0 0 0 2px #3d6fe0 inset; transform: translateY(-2px); }
+  .cell .bot { height: 96px; }
+  .cell .bot svg { width: 100%; height: 100%; }
+  .cell b { display: block; font: 600 .74rem ui-monospace, Menlo, monospace; margin-top: 4px; }
+  .cell span { display: block; color: #6f6a76; font-size: .7rem; margin-top: 2px; line-height: 1.3; }
+
+  /* 04 states */
+  .flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .row { display: flex; align-items: center; gap: 12px; background: #f1efe9; color: #16131c; border: 1px solid #f1efe9; border-radius: 16px; padding: 10px 12px; cursor: pointer; }
+  .row:hover { border-color: #3d6fe0; box-shadow: 0 0 0 2px #3d6fe0 inset; }
+  .row .bot { width: 54px; height: 60px; flex-shrink: 0; }
+  .row .bot svg { width: 100%; height: 100%; }
+  .row b { display: block; font-size: .92rem; }
+  .row span { color: #6f6a76; font: .76rem ui-monospace, Menlo, monospace; }
+  footer { color: var(--muted); font-size: .85rem; padding: 60px 0 40px; text-align: center; line-height: 1.6; }
+  @media (max-width: 560px) { .variants { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cell .bot { height: 78px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#000" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg>Cassie</a>
+    <a class="btn" href="start.html">Open Cassie</a>
+  </header>
+
+  <section class="hero">
+    <div class="stage"><div class="bot" id="hero"></div></div>
+    <h1>Cursor Cassie</h1>
+    <p>A cursor that came alive. Designed &amp; animated in code.</p>
+    <div class="now mono" id="now">state: idle</div>
+  </section>
+
+  <section class="sec">
+    <div class="num">01</div>
+    <h2>Construction</h2>
+    <p class="lead">She starts as the Cassie pointer — the 7-point arrow from the logo. Every corner gets its own radius: big and soft outside, small fillets in the two notches. Her tail is cut out and hinged, so it can wag. Her eyes are text carets.</p>
+    <div class="sheet"><svg id="construct" viewBox="0 0 1000 590" role="img" aria-label="Cursor Cassie construction drawing"></svg></div>
+    <div class="variants" id="variants"></div>
+  </section>
+
+  <section class="sec">
+    <div class="num">02</div>
+    <h2>Expressions</h2>
+    <p class="lead">Her moods borrow from the cursor's own vocabulary: an I-beam while you type, an hourglass when she's busy, ⊘ when something goes wrong, a highlighter stripe and marching ants when she highlights and snips. Tap any to play it big.</p>
+    <div class="grid" id="moods"></div>
+  </section>
+
+  <section class="sec">
+    <div class="num">03</div>
+    <h2>Accessories</h2>
+    <p class="lead">Hats sit on her tip at −28°, glasses on her caret eyes. Some are just for here: a salakot for Independence Day, a sampaguita, and a Santa hat for the long Philippine "ber months" Christmas.</p>
+    <div class="grid" id="accs"></div>
+  </section>
+
+  <section class="sec">
+    <div class="num">04</div>
+    <h2>State machine</h2>
+    <p class="lead">In the app, every moment maps to a state. She changes on her own — tap a row to see it.</p>
+    <div class="flow" id="flow"></div>
+  </section>
+
+  <footer>Cursor Cassie is Cassie's own character — the Cassie pointer, caret eyes and cursor-state moods were made for Cassie.<br><a href="index.html">askcassie.pages.dev</a></footer>
+</div>
+
+<script src="cassie-bot.js"></script>
+<script>
+(function () {
+  const B = window.CassieBot, C = B.construction;
+  const ACCENT = '#d8343c';
+  const hero = B.create(document.getElementById('hero'), { accent: ACCENT });
+  const nowEl = document.getElementById('now');
+  let auto = true;
+  const play = (state, acc) => {
+    if (state) hero.setState(state);
+    if (acc !== undefined) hero.setAccessory(acc);
+    nowEl.textContent = `state: ${hero.state}${hero.accessory ? ' · ' + hero.accessory : ''}`;
+  };
+  // the hero looks at your pointer
+  addEventListener('pointermove', (e) => {
+    const r = document.getElementById('hero').getBoundingClientRect();
+    hero.look((e.clientX - (r.left + r.width / 2)) / 300, (e.clientY - (r.top + r.height / 2)) / 300);
+  });
+
+  // --- 01 construction drawing ---
+  const svg = document.getElementById('construct');
+  const P = C.POINTER;
+  const sx = (x) => 170 + (x - 80) * 1.25, sy = (y) => 76 + (y - 60) * 1.25; // drawing space
+  const poly = P.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ');
+  const scaled = C.roundedPath(P.map(([x, y, r]) => [sx(x), sy(y), r * 1.25]));
+  const labels = ['tip r 44', 'wing r 40', 'notch r 16', 'tail r 26', 'tail r 26', 'notch r 16', 'heel r 48'];
+  const lblPos = [[26, -4], [24, -10], [22, 18], [24, 14], [-118, 34], [-60, 82], [-138, 26]];
+  const eye = (x, y) => `<rect x="${sx(x) - 8}" y="${sy(y) - 28}" width="16" height="56" rx="8" fill="#16131c"/>`;
+  svg.innerHTML = `
+    <defs><pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="rgba(255,255,255,.05)"/></pattern></defs>
+    <rect width="1000" height="590" fill="url(#g)"/>
+    <text x="24" y="40" class="mono" fill="#f4f1ea" font-size="19">corner(v) = cubic( v − t·û₁, v + t·û₂ ), t = min(r, |e|/2), k = 0.55</text>
+    <text x="24" y="66" class="mono" fill="#9a96a3" font-size="14">the Cassie pointer, 7 points, each with its own radius</text>
+    <polygon points="${poly}" fill="none" stroke="#7aa7ff" stroke-width="1.5" stroke-dasharray="6 6"/>
+    <path d="${scaled}" fill="#fbfaf7" stroke="#16131c" stroke-width="10" stroke-linejoin="round"/>
+    <path d="${scaled}" fill="none" stroke="rgba(122,167,255,.45)" stroke-width="1.5"/>
+    ${eye(C.EYES.l[0], C.EYES.l[1])}${eye(C.EYES.r[0], C.EYES.r[1])}
+    ${P.map(([x, y], i) => `<line x1="${sx(x)}" y1="${sy(y)}" x2="${sx(x) + lblPos[i][0] + (lblPos[i][0] < 0 ? 96 : -4)}" y2="${sy(y) + lblPos[i][1] - 5}" stroke="rgba(122,167,255,.4)"/><circle cx="${sx(x)}" cy="${sy(y)}" r="4.5" fill="#7aa7ff"/><text x="${sx(x) + lblPos[i][0]}" y="${sy(y) + lblPos[i][1]}" class="mono" fill="#cfd9ff" font-size="14">${labels[i]}</text>`).join('')}
+    <circle cx="${sx(C.TAIL_PIVOT[0])}" cy="${sy(C.TAIL_PIVOT[1])}" r="7" fill="none" stroke="#ffb3bd" stroke-width="2.5"/><path d="M${sx(C.TAIL_PIVOT[0]) - 10} ${sy(C.TAIL_PIVOT[1])}h20M${sx(C.TAIL_PIVOT[0])} ${sy(C.TAIL_PIVOT[1]) - 10}v20" stroke="#ffb3bd" stroke-width="2"/>
+    <path d="M${sx(350)} ${sy(420)} A 110 110 0 0 0 ${sx(286)} ${sy(436)}" fill="none" stroke="#ffb3bd" stroke-width="2" stroke-dasharray="4 5"/>
+    <text x="${sx(300)}" y="${sy(462)}" class="mono" fill="#ffb3bd" font-size="14">tail pivot · wags ±16°</text>
+    <line x1="${sx(C.HAT.x) - 70}" y1="${sy(C.HAT.y) + 37}" x2="${sx(C.HAT.x) + 40}" y2="${sy(C.HAT.y) - 22}" stroke="#e8b84a" stroke-width="2" stroke-dasharray="5 5"/>
+    <text x="${sx(C.HAT.x) - 250}" y="${sy(C.HAT.y) + 50}" class="mono" fill="#e8b84a" font-size="14">hats sit on the tip · −28°</text>
+    <line x1="${sx(C.EYES.r[0]) + 14}" y1="${sy(C.EYES.r[1])}" x2="720" y2="${sy(C.EYES.r[1]) - 40}" stroke="#9a96a3"/>
+    <text x="728" y="${sy(C.EYES.r[1]) - 52}" class="mono" fill="#f4f1ea" font-size="15">caret eyes</text>
+    <text x="728" y="${sy(C.EYES.r[1]) - 32}" class="mono" fill="#9a96a3" font-size="13">12 × 42 · blink ${C.CARET_BLINK} ms</text>
+    <text x="728" y="${sy(C.EYES.r[1]) - 14}" class="mono" fill="#9a96a3" font-size="13">(a real text cursor's rhythm)</text>
+    <text x="728" y="${sy(330)}" class="mono" fill="#f4f1ea" font-size="15">ink outline 9 · paper fill</text>
+    <text x="728" y="${sy(330) + 20}" class="mono" fill="#9a96a3" font-size="13">the logo's white-and-black</text>
+    <text x="728" y="${sy(400)}" class="mono" fill="#ff8fa0" font-size="15">blush &amp; highlighter</text>
+    <text x="728" y="${sy(400) + 20}" class="mono" fill="#9a96a3" font-size="13">= your Cassie colour</text>`;
+
+  // variants: how round should a cursor be?
+  const vbox = document.getElementById('variants');
+  [[0, 'r × 0', 'too sharp'], [0.45, 'r × 0.45', 'too stiff'], [1, 'r × 1', 'Cassie', true], [2.4, 'r × 2.4', 'too blobby']].forEach(([k, b, t, pick]) => {
+    const d = C.roundedPath(P.map(([x, y, r]) => [x, y, r * k]));
+    vbox.insertAdjacentHTML('beforeend', `<div class="var${pick ? ' pick' : ''}"><svg viewBox="80 60 340 370"><path d="${d}" fill="#fbfaf7" stroke="#16131c" stroke-width="10" stroke-linejoin="round"/><rect x="172" y="211" width="12" height="42" rx="6" fill="#16131c"/><rect x="248" y="211" width="12" height="42" rx="6" fill="#16131c"/></svg><b>${b}</b><span>${t}${pick ? ' ✓' : ''}</span></div>`);
+  });
+
+  // live mini bots — paused when off screen
+  const io = new IntersectionObserver((es) => es.forEach((e) => e.target._bot && e.target._bot.pause(!e.isIntersecting)), { rootMargin: '100px' });
+  function mini(host, state, acc) { const b = B.create(host, { accent: ACCENT, state, accessory: acc }); host._bot = b; io.observe(host); return b; }
+
+  const MOODS = {
+    idle: 'caret eyes blink', greeting: 'hello!', listening: 'I-beam eyes', thinking: '… on her wing', writing: 'typing lines', reading: 'eyes scan a page',
+    searching: 'lens sweep', highlighting: 'highlighter stripe', snipping: 'marching ants', drawing: 'pencil scribble', done: 'click-bounce ✓', proud: 'star eyes',
+    encourage: 'you got this', oops: 'cursor ⊘', busy: 'hourglass', sleeping: 'zz', love: 'heart eyes', surprised: 'whoa', wink: '😉', dizzy: 'spiral eyes', sad: 'aww', talking: 'reads aloud',
+  };
+  const moods = document.getElementById('moods');
+  B.STATES.forEach((s) => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = `<div class="bot"></div><b>${s}</b><span>${MOODS[s] || ''}</span>`;
+    moods.appendChild(c); mini(c.querySelector('.bot'), s);
+    c.onclick = () => { auto = false; play(s); document.querySelectorAll('#moods .cell').forEach((x) => x.classList.toggle('on', x === c)); scrollTo({ top: 0, behavior: 'smooth' }); };
+  });
+  const ACCS = { gradcap: 'Research & Web', glasses: 'Professional', sunglasses: 'summer', headphones: 'focus timer', beanie: 'rainy days', salakot: 'June 12', party: 'New Year', santa: 'ber months', witch: 'Halloween', crown: 'top streak', bow: 'Talk mode', sampaguita: 'national flower', pencil: 'Quiz me', scarf: 'cold weather' };
+  const accs = document.getElementById('accs');
+  B.ACCESSORIES.forEach((a) => {
+    const c = document.createElement('div'); c.className = 'cell';
+    c.innerHTML = `<div class="bot"></div><b>${a}</b><span>${ACCS[a] || ''}</span>`;
+    accs.appendChild(c); mini(c.querySelector('.bot'), 'idle', a);
+    c.onclick = () => { auto = false; play(null, hero.accessory === a ? null : a); scrollTo({ top: 0, behavior: 'smooth' }); };
+  });
+  const FLOW = [
+    ['You type a question', 'listening'], ['Cassie works on it', 'thinking'], ['The answer arrives', 'proud'], ['You attach a file', 'reading'],
+    ['Research or Web', 'searching'], ['You highlight text', 'highlighting'], ['Board or a picture', 'drawing'], ['Free-plan wait', 'busy'],
+    ['Something went wrong', 'oops'], ['Quiz: right answer', 'proud'], ['Quiz: missed one', 'encourage'], ['Read aloud', 'talking'], ['Quiet for a while', 'sleeping'],
+  ];
+  const flow = document.getElementById('flow');
+  FLOW.forEach(([what, s]) => {
+    const r = document.createElement('div'); r.className = 'row';
+    r.innerHTML = `<div class="bot"></div><div><b>${what}</b><span>→ ${s}</span></div>`;
+    flow.appendChild(r); mini(r.querySelector('.bot'), s);
+    r.onclick = () => { auto = false; play(s); scrollTo({ top: 0, behavior: 'smooth' }); };
+  });
+
+  // the hero cycles through a little day in her life until you pick something
+  const tour = ['greeting', 'listening', 'thinking', 'reading', 'highlighting', 'proud', 'snipping', 'searching', 'busy', 'oops', 'encourage', 'love', 'dizzy', 'sleeping', 'idle'];
+  let i = 0;
+  setInterval(() => { if (auto) { play(tour[i % tour.length]); i++; } }, 2600);
+  play('greeting');
+})();
+</script>
+</body>
+</html>

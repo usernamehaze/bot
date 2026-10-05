@@ -496,6 +496,22 @@ test('an iPhone (reports 2 cores) still gets the 3D Cassie', async (b) => {
   await ctx.close();
 });
 
+test('Cursor Cassie: chosen in Settings, she reacts to the app', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'cursor' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
+  await page.waitForSelector('#mascot.has2d svg.cassie-bot', { timeout: 5000 });
+  expect(await page.locator('#cassie-3d-root').count() === 0, 'the 3D bot should not load with Cursor Cassie');
+  await page.fill('#prompt-input', 'What is a cell?');
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => bot2d.state) === 'listening', 'should listen while typing');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => bot2d.state) === 'thinking', 'should think while waiting');
+  await page.waitForSelector('text=An answer.', { timeout: 10000 });
+  expect(await page.evaluate(() => bot2d.state) === 'proud', 'should be proud when the answer arrives');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Lite mode skips the 3D Cassie', async (b) => {
   const { ctx, page } = await open(b, { lite: 'on' });
   await page.waitForTimeout(1500);

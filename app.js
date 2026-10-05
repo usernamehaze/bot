@@ -399,7 +399,54 @@ function set3D(name) {
   try {
     if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
   } catch (e) { /* ignore */ }
+  if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
+/* ---------- Cursor Cassie (cassie-bot.js): the 2D mascot ----------
+   Shown in Lite mode, without WebGL, or when chosen in Settings → Appearance.
+   She mirrors the 3D Cassie's moods and adds her own: reading, searching,
+   highlighting, drawing, busy (hourglass), oops (⊘). */
+let bot2d = null, bot2dTimer = null;
+const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
+const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
+const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
+function wantsCursorCassie() {
+  const look = state.look || 'auto';
+  if (look === 'cursor') return true;
+  if (look === 'felt') return false;
+  let gl = false;
+  try { const c = document.createElement('canvas'); gl = !!(c.getContext('webgl') || c.getContext('experimental-webgl')); } catch (e) { /* no WebGL */ }
+  return !!window.CASSIE_LITE || !gl;
+}
+// Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
+function botMood(name, ms) {
+  if (!bot2d || !name) return;
+  clearTimeout(bot2dTimer);
+  bot2d.setState(name);
+  if (ms) bot2dTimer = setTimeout(() => bot2d && bot2d.setState(mascot && mascot.classList.contains('thinking') ? 'thinking' : 'idle'), ms);
+}
+(function startCursorCassie() {
+  const root = document.getElementById('cassie-2d-root');
+  if (!root || !window.CassieBot || !wantsCursorCassie()) return;
+  document.getElementById('cassie-3d-root')?.remove(); // the 3D bundle still paints the background, but no 3D bot
+  bot2d = window.CassieBot.create(root, { accent: state.accent || '#d8343c', accessory: window.CassieBot.seasonal() });
+  if (mascot) mascot.classList.add('has2d');
+  // her eyes follow your finger / mouse
+  const follow = (x, y) => {
+    if (!bot2d || !mascot) return;
+    const r = mascot.getBoundingClientRect();
+    bot2d.look((x - (r.left + r.width / 2)) / 260, (y - (r.top + r.height / 2)) / 260);
+  };
+  window.addEventListener('mousemove', (e) => follow(e.clientX, e.clientY));
+  window.addEventListener('touchstart', (e) => e.touches[0] && follow(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  // she listens while you type
+  let typingTimer = null;
+  promptInput.addEventListener('input', () => {
+    if (!bot2d || (mascot && mascot.classList.contains('thinking'))) return;
+    setTimeout(() => { if (bot2d && !(mascot && mascot.classList.contains('thinking'))) bot2d.setState('listening'); }, 30); // after the typing reactions
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => { if (bot2d.state === 'listening') botMood('idle'); }, 2200);
+  });
+})();
 // which way the 3D Cassie turns while she walks (-1 left, 1 right)
 function face3D(dir) {
   try { if (window.CassieMascot && window.CassieMascot.setFacing) window.CassieMascot.setFacing(dir); } catch (e) { /* ignore */ }
@@ -413,6 +460,7 @@ function dressCassie() {
   const base = state.audience === 'pro' ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
   try { if (window.CassieMascot && window.CassieMascot.setOutfit) window.CassieMascot.setOutfit(outfit); } catch (e) { /* ignore */ }
+  if (typeof bot2d !== 'undefined' && bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
 }
 window.addEventListener('cassie3d-ready', () => dressCassie());
 
@@ -480,6 +528,7 @@ function mascotEmote(name, hold) {
   clearEmote();
   mascot.classList.add(name);
   set3D(EMOTE_TO_3D[name] || 'neutral');
+  if (bot2d && EMOTE_TO_2D[name]) bot2d.setState(EMOTE_TO_2D[name]);
   clearTimeout(mascotEmoteClearTimer);
   const dur = hold || (name === 'emote-love' ? 2200 : 1600);
   mascotEmoteClearTimer = setTimeout(clearEmote, dur);
@@ -2507,6 +2556,7 @@ function errorText(err, prefix = 'Something went wrong') {
   return `${prefix}. Please try again — if it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
 }
 function renderError(err, retry, prefix) {
+  botMood(/limit|busy|wait/i.test(errorText(err, prefix)) ? 'busy' : 'oops', 3000);
   const b = renderMessage('assistant', errorText(err, prefix));
   b.classList.add('error');
   if (retry) {
@@ -2545,6 +2595,7 @@ function captureQuizMarks(reply) {
       const m = i >= 0 ? state.mistakes[i] : null;
       if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
       else state.mistakes.unshift({ q: q.slice(0, 400), a: (a || '').slice(0, 300), at: Date.now(), due: Date.now() + DAY_MS, misses: 1 });
+      setTimeout(() => botMood('encourage', 3200), 50); // a missed question: kind, not sad
     } else if (i >= 0) {
       const m = state.mistakes[i];
       m.right = (m.right || 0) + 1;
@@ -2645,9 +2696,10 @@ async function handleSend(text, opts = {}) {
   } catch (e) { /* ignore */ }
 
   setCursorMode('thinking');
+  if (doc) botMood('reading');
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
-  const onWait = (secs) => setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`);
+  const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`); botMood('busy'); };
 
   try {
     let reply = doc
@@ -2833,6 +2885,7 @@ async function handleImageRequest(text, subject) {
   }
   mascotReact('image');
   setCursorMode('thinking');
+  botMood('drawing');
   const typingBubble = renderTyping();
   await pictureReply(subject, typingBubble);
 }
@@ -2918,6 +2971,7 @@ async function runResearch(topic) {
   autoGrow();
 
   setCursorMode('thinking');
+  botMood('searching');
   let typing = renderTyping();
   let papers;
   try {
@@ -3032,6 +3086,7 @@ async function runWebCheck(text) {
   autoGrow();
 
   setCursorMode('thinking');
+  botMood('searching');
   const typing = renderTyping();
   try {
     const { text: answer, sources } = await askGeminiGrounded(text);
@@ -3155,7 +3210,7 @@ if (window.CassieBoard) {
   };
 }
 const boardBtn = document.getElementById('board-btn');
-if (boardBtn) boardBtn.addEventListener('click', () => { track('feature', 'board'); openSketch(); });
+if (boardBtn) boardBtn.addEventListener('click', () => { track('feature', 'board'); botMood('drawing', 4000); openSketch(); });
 
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
@@ -3395,6 +3450,7 @@ function syncAccentSwatches() {
 }
 function setAccent(color) {
   state.accent = color || '';
+  if (bot2d) bot2d.setAccent(color || '#d8343c');
   track('feature', 'colour');
   save();
   applyAccent();
@@ -3877,6 +3933,8 @@ function speak(text) {
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 1.02;
+  utter.onstart = () => botMood('talking');
+  utter.onend = utter.onerror = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
   window.speechSynthesis.speak(utter);
 }
 
@@ -3979,6 +4037,7 @@ async function runExplainOrAnswer(text, rect, mode) {
   }
 
   setCursorMode('thinking');
+  botMood('highlighting');
   const depth = popoverComplexity === 'eli5'
     ? ' Explain it like I\'m 5: super simple, everyday words, a short friendly analogy, and no jargon.'
     : popoverComplexity === 'advanced'
@@ -4487,6 +4546,11 @@ function openReport() {
 document.getElementById('report-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openReport(); });
 if (!SERVER) { const rb = document.getElementById('report-row'); if (rb) rb.hidden = true; }
 
+const lookSelect = document.getElementById('look-select');
+if (lookSelect) {
+  lookSelect.value = state.look || 'auto';
+  lookSelect.addEventListener('change', () => { state.look = lookSelect.value; save(); setTimeout(() => location.reload(), 300); });
+}
 const liteSelect = document.getElementById('lite-select');
 function renderLiteHint() {
   const h = document.getElementById('lite-hint');
