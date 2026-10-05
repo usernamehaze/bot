@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '107';
+const APP_VERSION = '108';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -130,6 +130,8 @@ You are especially strong at:
 - Reviewers, study guides, and summaries: when the user gives you material — pasted text or an attached document/PDF — and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word — just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
 
 How you work:
+- Do exactly what you're asked. Read the request carefully and follow every part of it: the task, the format, the length, the language and any limits ("only the answer", "in 3 bullets", "in Filipino", "graph it", "make it shorter"). Never swap their request for a different one, never skip a part, and never refuse something you can do. If they ask you to do something with a picture or a snip (graph it, solve it, explain it, check it), do that exact thing with what's in the picture. Ask a question back only when the request truly can't be done without the answer; otherwise make a sensible assumption, say it in one short line, and do it.
+- Sound like a real person: warm, natural and a little playful, like a smart friend sitting next to them, not a robot or a textbook. Use plain words and contractions, and react to what they actually said. No canned openers ("Certainly!", "Great question!"), no repeating their question back, and no speeches about being an AI.
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
 - Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
@@ -178,7 +180,8 @@ Supported specs:
 - Worked steps: {"type":"steps","title":"Solve x^2 - 5x + 6 = 0","steps":["Factor: (x-2)(x-3)=0","So x=2 or x=3"]}
 
 Keep numbers real and correct — the board draws exactly what you give it.
-When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board — never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.`;
+When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board — never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.
+This includes problems in a picture or snip: read the function (or the answer you picked from the choices) out of the picture and graph THAT on the board, with its zeros as points and an xrange that shows them all. Write factored forms with explicit multiplication, e.g. x^2*(x+6)^3*(x-4).`;
 
 // What the app does around her answers, so she never claims she can't.
 const ABILITIES_INSTRUCTION = `What this app can do with your answers:
@@ -1648,7 +1651,7 @@ function friendlyError(msg) { const e = new Error(msg); e.friendly = true; retur
 
 /* Cassie's own server (server/worker.js): the same chat call, but with the owner's
    key, a fair daily allowance per person, and Workers AI as a backup brain. */
-async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false } = {}) {
+async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain } = {}) {
   let waits = 0;
   while (true) {
     let res;
@@ -1656,7 +1659,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       res = await fetch(SERVER + '/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined }),
+        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain }),
       });
     } catch (e) {
       throw friendlyError("I couldn't connect — check your internet connection and try again.");
@@ -1743,16 +1746,19 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GE
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
     if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); continue; }
-    if (isRateLimited(res.status, detail)) {
-      const e = new Error("Gemini's free tier is rate-limiting right now — wait a minute and try again.");
-      e.friendly = true; e.rateLimited = true; throw e;
+    // busy ("high demand", overloaded) or out of free requests: the next Gemini model has its own capacity
+    if (res.status >= 500 || isRateLimited(res.status, detail) || /high demand|overloaded|unavailable/i.test(detail)) {
+      lastErr = friendlyError('Google’s Gemini is very busy right now — try again in a minute.');
+      lastErr.busy = true; lastErr.rateLimited = isRateLimited(res.status, detail);
+      continue;
     }
     if (/api key/i.test(detail)) {
       const e = new Error('Your Gemini key was rejected — check it in Settings (gear icon). It should start with "AIza".');
-      e.friendly = true; throw e;
+      e.friendly = true; e.keyRejected = true; throw e;
     }
     throw new Error(detail || `Request failed (${res.status})`);
   }
+  if (lastErr && lastErr.busy) throw lastErr;
   const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon — meanwhile text questions still work.");
   e.friendly = true; e.cause = lastErr;
   throw e;
@@ -1772,7 +1778,7 @@ function geminiFromChat(messages, { maxTokens = 4096 } = {}) {
 }
 
 /* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
-async function askGeminiVision(msgs, image) {
+async function askGeminiVision(msgs, image, opts = {}) {
   const contents = trimHistory(msgs, 3000).map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
@@ -1780,7 +1786,7 @@ async function askGeminiVision(msgs, image) {
   if (contents.length) {
     contents[contents.length - 1].parts.unshift({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
   }
-  return geminiGenerate({ contents, system: buildSystemPrompt() });
+  return geminiGenerate({ contents, system: buildSystemPrompt(opts) });
 }
 
 /* Image reading with only a Groq key: Groq's vision model (up to 5 pictures). */
@@ -1805,13 +1811,43 @@ async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } 
   return text || '(no response)';
 }
 
-/* Router: text goes to Groq; pictures go to Gemini (or Groq vision without a Gemini key). */
-async function askCassie(msgs, image, opts = {}) {
-  if (image) {
-    if (state.geminiKey) return askGeminiVision(msgs, image);
-    if (canChat()) return askGroqVision(msgs, [image], { onWait: opts.onWait });
-    throw new Error('Add your Google (Gemini) API key in Settings to use images.');
+/* Claude through Cassie's server: when the owner turned it on (ANTHROPIC_KEY on the server),
+   the main chat and photos go to Claude first. Anything that fails falls back below. */
+let serverClaude = false;
+try { serverClaude = sessionStorage.getItem('cassie.claude') === '1'; } catch (e) { /* storage blocked */ }
+if (SERVER) {
+  fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
+    serverClaude = !!(c && c.claude);
+    try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); } catch (e) { /* storage blocked */ }
+  }).catch(() => { /* offline: the usual brains answer */ });
+}
+async function askClaudeViaServer(msgs, images, opts = {}) {
+  const hist = trimHistory(msgs, 12000).slice(-30).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
+  const last = hist[hist.length - 1];
+  if (images.length && last) last.content = [{ type: 'text', text: last.content || 'Please look at this and help me with it.' }, ...images.map((img) => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } }))];
+  return serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist], { brain: 'claude', maxTokens: 4000, onWait: opts.onWait });
+}
+
+/* Pictures: Gemini first (with your key), then Groq's picture reader (your key or the server).
+   A busy Gemini never ends the answer. */
+async function askPicture(msgs, image, opts = {}) {
+  let firstErr = null;
+  if (state.geminiKey) {
+    try { return await askGeminiVision(msgs, image, opts); } catch (e) { firstErr = e; }
   }
+  if ((state.groqKey || SERVER) && !geminiOnly()) {
+    try { return await askGroqVision(msgs, [image], { system: buildSystemPrompt(opts), onWait: opts.onWait }); } catch (e) { firstErr = firstErr || e; }
+  }
+  if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now — please try again in a minute.') : firstErr;
+  throw new Error('Add your Google (Gemini) API key in Settings to use images.');
+}
+
+/* Router: Claude (if the server has it) → text to Groq, pictures to Gemini / Groq vision. */
+async function askCassie(msgs, image, opts = {}) {
+  if (SERVER && serverClaude) {
+    try { return await askClaudeViaServer(msgs, image ? [image] : [], opts); } catch (e) { /* the usual brains take over */ }
+  }
+  if (image) return askPicture(msgs, image, opts);
   if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
   return askGroq(msgs, opts);
 }
@@ -3274,7 +3310,23 @@ function openSketch(opts = {}) {
       attachDataUrl(png, 'Check my work on this board — what did I get right, and what should I fix?');
       return '';
     },
+    askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
+    onAsk: (png, q, parts) => askBoard(png, q, parts),
   });
+}
+// The board's "Ask": Cassie answers about the board, and draws on it when asked (or when a
+// graph says it best). A blank board isn't sent as a picture.
+async function askBoard(png, q, parts) {
+  const B = window.CassieBoard;
+  const blank = parts && !parts.image && !(parts.strokes || []).length;
+  const prompt = `${blank ? '' : 'This is my board (maybe a picture, maybe my own writing on it). '}${q}\n\nIf I asked you to draw, graph, plot, sketch or show something, or the answer is best shown as a graph, shape or numbered steps, include exactly one cassie-board block: it gets drawn right on my board. Keep your words short (under 120 words).`;
+  const image = blank ? null : { mimeType: 'image/png', base64: String(png).split(',')[1] || '' };
+  const reply = await askCassie([{ role: 'user', content: prompt }], image, { tutor: true });
+  const { clean, boards } = B ? B.extract(reply) : { clean: reply, boards: [] };
+  let draw = boards[0];
+  if (!draw && B && GRAPH_ASK_RE.test(q)) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
+  track('feature', draw ? 'board-draw' : 'board-ask');
+  return { reply: clean, draw };
 }
 
 // Turn one of Cassie's chat boards (graph canvas or shape drawing) into a picture.
@@ -4676,6 +4728,9 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Cassie can draw on your board now: open the board and type “graph y = x² − 4”, or “graph the answer” on a snip.',
+  'Photo questions don’t stop when Google is busy: another picture reader takes over.',
+  'She follows your instructions more exactly, and sounds more like a friend than a robot.',
   'Meet the new Cassie: a little cursor who changes colour with her mood. Tap her to poke her!',
   'While she works, a pill at the top shows what she’s doing — “Reading pages 3–8…”, then “Done”.',
   'Using the Chrome extension? What you highlight, snip or paste there now shows up in your chats here (“From Chrome”).',

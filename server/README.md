@@ -1,6 +1,6 @@
 # Cassie server (one Cloudflare Worker)
 
-One small server that does four jobs:
+One small server that does four jobs (five with Claude):
 
 1. **No keys needed.** People can use Cassie without making a Groq account. The
    server answers with *your* Groq key, which stays secret here.
@@ -84,6 +84,38 @@ To add **Continue with Google**:
 There's no "reset password" email yet. People who forget their password can
 use Continue with Google with the same email, which signs them into the same
 account.
+
+## Make Claude Cassie's brain (optional, costs money)
+
+With this on, the main chat and photos are answered by Claude, Anthropic's AI. Groq
+and Workers AI stay as the backup, so Cassie still answers if Claude is busy or a
+person runs out of Claude answers for the day.
+
+1. Go to **console.anthropic.com**, sign up, and add a payment method under
+   **Billing**. Claude has no free tier.
+2. Still in the console: **Limits** → set a **monthly spend limit** you're
+   comfortable with, so you can never get a surprise bill.
+3. **API keys** → **Create key**. Copy it (it starts with `sk-ant-`).
+4. In this Worker → **Settings** → **Variables and Secrets** → **Add** → type
+   **Secret**, name `ANTHROPIC_KEY`, paste the key → **Deploy**.
+
+That's all. The app notices within a few minutes. Your dashboard's "Questions
+answered through your server" card then shows a **Claude** row.
+
+Optional variables (type **Text**):
+
+- `CLAUDE_DAILY_LIMIT`: Claude answers per person per day (default 40). After
+  that, Groq answers. This is your main cost control.
+- `CLAUDE_MODEL`: which Claude model to use. By default Cassie picks Anthropic's
+  newest Opus model (its most capable everyday model) automatically. To use a
+  cheaper one, put its model ID here (listed at docs.anthropic.com → Models).
+- `CLAUDE_EFFORT`: `low`, `medium` (default) or `high`, how long Claude thinks
+  before answering. `low` is faster and cheaper; `high` is best for hard maths.
+
+**Rough cost:** a typical question with Opus is around one to three US cents;
+a photo question costs a little more. Check current prices at
+anthropic.com/pricing. Watch the Claude row on your dashboard and the spending
+page in the Anthropic console.
 
 ## Fair use and cost
 

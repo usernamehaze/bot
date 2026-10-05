@@ -159,6 +159,16 @@ function parseBoardJSON(text) {
   const lines = t.split('\n').map((s) => s.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
   return { headline: lines[0] || 'Here’s how to read this', steps: lines.slice(1, 6) };
 }
+const DRAW_HINT = '\n\nIf they ask you to draw, graph, plot or sketch something, ALSO add one fenced code block tagged cassie-board holding minified JSON. It gets drawn right on their board. Graph: {"type":"graph","title":"y = x^2 - 4","fn":"x^2 - 4","xrange":[-4,4],"points":[{"x":-2,"y":0,"label":"x=-2"},{"x":2,"y":0,"label":"x=2"}]} (fn uses * for multiply and ^ for powers, e.g. x^2*(x+6)^3*(x-4)). Shape: {"type":"shape","shape":"rectangle","w":8,"h":5}. Steps: {"type":"steps","title":"...","steps":["..."]}.';
+// Split Cassie's reply into words + something to draw on the board.
+const withDrawing = (q, reply) => {
+  const B = window.CassieBoard;
+  if (!B || typeof reply !== 'string') return reply;
+  const { clean, boards } = B.extract(reply);
+  let draw = boards[0];
+  if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
+  return draw ? { reply: clean, draw } : clean;
+};
 async function vision(image, prompt, maxTokens = 800, board, log) {
   const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board, log });
   if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — try again.');
@@ -180,8 +190,8 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
     title, note,
     onImage: (url) => { if (url) explainOnBoard(sess, url, '', 'paste'); },
     extra: [{ label: 'New snip', title: 'Snip the tab again', onClick: () => { window.CassieSketch.close(); snip(); } }],
-    askPlaceholder: 'Ask Cassie about this…',
-    onAsk: async (png, q, board) => { try { return await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their question: "${q}". Answer it clearly and kindly like a tutor, in under 150 words, plain text.`, 600, board, { kind: 'board', q }); } catch (e) { return errorText(e); } },
+    askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph the answer”)',
+    onAsk: async (png, q, board) => { try { return withDrawing(q, await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their request: "${q}". Do exactly that. Answer clearly and kindly like a tutor, in under 150 words, plain text.${DRAW_HINT}`, 1200, board, { kind: 'board', q })); } catch (e) { return errorText(e); } },
     checkLabel: 'Check my work',
     onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board, { kind: 'board', q: 'Check my work' }); } catch (e) { return errorText(e); } },
   });

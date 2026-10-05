@@ -635,6 +635,64 @@ test('no key: a photo is read through the server', async (b) => {
   await ctx.close();
 });
 
+test('a busy Gemini never ends a photo answer: Groq reads it instead, and can graph it', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test', geminiKey: 'AIza_test' }, fakeGroq: (body) => ({ text: 'The graph matches C.\n\n```cassie-board\n{"type":"graph","title":"y = x^2(x+6)^3(x-4)","fn":"x^2*(x+6)^3*(x-4)","xrange":[-7,5]}\n```' }) });
+  let geminiCalls = 0;
+  await ctx.route(/generativelanguage\.googleapis\.com/, (route) => { geminiCalls += 1; return route.fulfill({ status: 503, json: { error: { code: 503, message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', status: 'UNAVAILABLE' } } }); });
+  const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+  await page.setInputFiles('#file-input', { name: 'graph.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
+  await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+  const a = await ask(page, 'which function is this? graph the answer');
+  const txt = await a.textContent();
+  expect(!/high demand/i.test(txt) && /matches C/.test(txt), 'expected the Groq answer, got: ' + txt.slice(0, 200));
+  expect(geminiCalls >= 2, 'every Gemini model should be tried first (' + geminiCalls + ')');
+  expect(await a.locator('.cassie-board').count() === 1, 'the answer should draw the graph on a board');
+  await ctx.close();
+});
+
+test('Claude on the server: the main chat and photos use Claude, Groq covers when it fails', async (b) => {
+  await serverMode({ claude: 'ok', claudeReply: 'Claude here: plants turn light into food.', claudeCalls: [] });
+  try {
+    const { ctx, page } = await open(b, { state: { groqKey: 'gsk_own' } }); // even with their own key, Claude answers
+    await page.waitForFunction(() => serverClaude === true, null, { timeout: 5000 });
+    const a = await ask(page, 'What is photosynthesis?');
+    expect(/Claude here/.test(await a.textContent()), 'Claude should answer: ' + await a.textContent());
+    let m = await (await fetch(SERVER + '/__mode')).json();
+    const call = m.claudeCalls.at(-1);
+    expect(call && call.model === 'test-opus-newest', 'should pick the newest Opus: ' + (call && call.model));
+    expect(call.effort === 'medium' && call.fallbacks === 'default' && call.beta === 'server-side-fallback-2026-07-01', 'effort + refusal fallback: ' + JSON.stringify(call).slice(0, 200));
+    expect(/You are Cassie/.test(call.system) && call.messages[0].role === 'user', 'system prompt goes on its own, chat starts with the user');
+    // a photo goes to Claude as an image block
+    const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+    await page.setInputFiles('#file-input', { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
+    await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+    await ask(page, 'What is in this photo?');
+    m = await (await fetch(SERVER + '/__mode')).json();
+    const blocks = m.claudeCalls.at(-1).messages.at(-1).content;
+    expect(blocks.some((x) => x.type === 'image' && x.source.type === 'base64' && /^image\//.test(x.source.media_type)), 'photo should be an image block');
+    // Claude down → the answer still comes (Groq on the server)
+    await serverMode({ claude: 'down', reply: 'Groq covered for Claude.' });
+    const c = await ask(page, 'And respiration?');
+    expect(/Groq covered/.test(await c.textContent()), 'Groq should cover: ' + await c.textContent());
+    await ctx.close();
+  } finally { await serverMode({ claude: 'off', reply: '' }); }
+});
+
+test('board: Cassie draws on it when asked', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Here it is — a parabola crossing at ±2.\n\n```cassie-board\n{"type":"graph","title":"y = x^2 - 4","fn":"x^2 - 4","xrange":[-4,4],"points":[{"x":-2,"y":0,"label":"x=-2"},{"x":2,"y":0,"label":"x=2"}]}\n```' }) });
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask input');
+  await page.fill('.csk-ask input', 'graph y = x^2 - 4');
+  await page.press('.csk-ask input', 'Enter');
+  await page.waitForFunction(() => window.CassieSketch.session() && window.CassieSketch.session().drawn() === 1, null, { timeout: 10000 });
+  const note = await page.locator('.csk-note').textContent();
+  expect(/parabola/.test(note) && !/cassie-board|"fn"/.test(note), 'the note shows words only: ' + note);
+  // undo takes Cassie's whole drawing away in one step
+  await page.click('[data-act="undo"]');
+  expect(await page.evaluate(() => window.CassieSketch.session().drawn()) === 0, 'undo should remove her drawing');
+  await ctx.close();
+});
+
 test('highlight text in an answer → Explain', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body, n) => ({ text: n === 1 ? 'Osmosis is the movement of water across a membrane.' : 'Simply put: water moves to where there is less water.' }) });
   const a = await ask(page, 'What is osmosis?');

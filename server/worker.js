@@ -1,5 +1,6 @@
 /* Cassie server — one Cloudflare Worker (free tier) that does three jobs:
  *
+ *   GET  /config     tells the app what this server can do (for example, whether Claude is on)
  *   POST /chat       answers questions for people who haven't added their own Groq key,
  *                    using YOUR Groq key (kept secret here), with Cloudflare Workers AI as
  *                    an automatic backup when Groq is busy or out of free questions
@@ -17,10 +18,16 @@
  *   GROQ_KEY     secret — your Groq API key (console.groq.com/keys)
  *   AI           Workers AI binding — the backup brain (optional but recommended)
  *   GOOGLE_CLIENT_ID  (optional) turns on "Continue with Google" — see server/README.md
+ *   ANTHROPIC_KEY     (optional) secret — makes Claude Cassie's brain for the main chat and
+ *                     photos (console.anthropic.com → API keys). Groq and Workers AI stay as backup.
  * Optional variables:
  *   DAILY_LIMIT      questions per person per day through your key (default 150)
  *   MINUTE_LIMIT     questions per person per minute (default 12)
  *   IMAGE_LIMIT      backup pictures per person per day (default 20)
+ *   CLAUDE_DAILY_LIMIT  Claude answers per person per day (default 40); after that, Groq answers
+ *   CLAUDE_MODEL     which Claude model to use (default: Anthropic's newest Opus, looked up
+ *                    automatically from the Models API)
+ *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
@@ -147,6 +154,73 @@ async function countChat(env, day, src) {
   try { await env.DB.prepare('INSERT INTO chats (day, src, n) VALUES (?, ?, 1) ON CONFLICT(day, src) DO UPDATE SET n = n + 1').bind(day, src).run(); } catch (e) { /* stats only */ }
 }
 
+/* ------------------------------------------------------------------ Claude
+   With an ANTHROPIC_KEY secret, questions from the app's main chat (body.brain === 'claude')
+   go to Claude first. Raw HTTP to Anthropic's Messages API: a Worker pasted into the
+   dashboard can't load npm packages. Groq and Workers AI stay as the backup. */
+const ANTHROPIC = 'https://api.anthropic.com/v1';
+let claudePick = { id: '', at: 0 };
+const anthropicHeaders = (env) => ({ 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' });
+// Anthropic's newest Opus (the Models API lists newest first), unless CLAUDE_MODEL picks one.
+async function claudeModel(env) {
+  if (env.CLAUDE_MODEL) return env.CLAUDE_MODEL;
+  if (claudePick.id && Date.now() - claudePick.at < 6 * 3600e3) return claudePick.id;
+  try {
+    const r = await fetch(`${ANTHROPIC}/models?limit=100`, { headers: anthropicHeaders(env) });
+    const ids = ((await r.json()).data || []).map((m) => m.id);
+    const id = ids.find((x) => /opus/i.test(x)) || ids[0] || '';
+    if (id) claudePick = { id, at: Date.now() };
+  } catch (e) { /* keep the old pick */ }
+  return claudePick.id;
+}
+// Groq-style messages → Claude: the system prompt goes on its own, pictures become image blocks,
+// and turns alternate user / assistant starting with the user.
+function toClaude(messages) {
+  const system = messages.filter((m) => m.role === 'system').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+  const out = [];
+  for (const m of messages) {
+    if (m.role === 'system') continue;
+    const blocks = typeof m.content === 'string'
+      ? [{ type: 'text', text: m.content }]
+      : m.content.map((p) => {
+        const d = p.type === 'image_url' && /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(p.image_url.url);
+        return d ? { type: 'image', source: { type: 'base64', media_type: d[1], data: d[2] } } : { type: 'text', text: p.text || '' };
+      });
+    const content = blocks.filter((b) => b.type !== 'text' || b.text.trim());
+    if (!content.length) continue;
+    const last = out[out.length - 1];
+    if (last && last.role === m.role) last.content.push(...content);
+    else out.push({ role: m.role, content });
+  }
+  while (out.length && out[0].role !== 'user') out.shift();
+  return { system, messages: out };
+}
+async function askClaude(env, cleaned) {
+  const model = await claudeModel(env);
+  if (!model) return null;
+  const { system, messages } = toClaude(cleaned.messages);
+  if (!messages.length) return null;
+  const base = { model, max_tokens: 16000, messages, ...(system ? { system } : {}) };
+  const effort = ['low', 'medium', 'high'].includes(env.CLAUDE_EFFORT) ? env.CLAUDE_EFFORT : 'medium';
+  // effort, plus a server-side fallback model if a safety check declines a harmless study question
+  let r = await fetch(`${ANTHROPIC}/messages`, {
+    method: 'POST', headers: { ...anthropicHeaders(env), 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: JSON.stringify({ ...base, output_config: { effort }, fallbacks: 'default' }),
+  });
+  // a model picked in CLAUDE_MODEL may not take those options: ask it plainly
+  if (r.status === 400) r = await fetch(`${ANTHROPIC}/messages`, { method: 'POST', headers: anthropicHeaders(env), body: JSON.stringify(base) });
+  if (!r.ok) return null;
+  const data = await r.json();
+  if (data.stop_reason === 'refusal') return null; // let the backup brain try
+  const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+  return text || null;
+}
+async function config(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  return json({ claude: !!env.ANTHROPIC_KEY }, 200, { ...h, 'cache-control': 'max-age=300' });
+}
+
 async function chat(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -178,6 +252,21 @@ async function chat(request, env, ctx) {
     return chatError(`You've used today's ${perDay} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
   }
   const left = { 'x-cassie-left': String(Math.max(0, perDay - usedU)) };
+
+  // Claude first for the main chat, within its own daily allowance per person
+  if (env.ANTHROPIC_KEY && body.brain === 'claude') {
+    const perDayClaude = +env.CLAUDE_DAILY_LIMIT || 40;
+    let usedC = 0;
+    try { usedC = (await bump('c:' + uid).first())?.n || 0; } catch (e) { usedC = 0; }
+    if (uid !== 'anon' && usedC <= perDayClaude) {
+      let reply = null;
+      try { reply = await askClaude(env, cleaned); } catch (e) { reply = null; }
+      if (reply) {
+        ctx.waitUntil(countChat(env, today, 'claude'));
+        return json({ choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'claude' });
+      }
+    }
+  }
 
   const maxTokens = Math.min(Math.max(+body.max_tokens || 2048, 64), 4000);
   const temperature = typeof body.temperature === 'number' ? Math.min(Math.max(body.temperature, 0), 1.2) : 0.6;
@@ -441,6 +530,7 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
+      if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
@@ -683,7 +773,7 @@ const DASHBOARD = `<!doctype html>
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ claude: 'Claude', groq: 'Groq', backup: 'Workers AI (backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           \${(d.reports || []).length ? \`<div class="reports">\${d.reports.map((r) => \`<div class="rep"><div class="meta">\${esc(new Date(r.ts).toLocaleString())} · \${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}\${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">\${esc(r.text)}</div></div>\`).join('')}</div>\` : '<div class="empty">No reports yet</div>'}</div>
       </div>
