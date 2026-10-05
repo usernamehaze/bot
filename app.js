@@ -2774,9 +2774,19 @@ function imageStyle(prompt) {
   if (/\b(diagram|labell?ed|parts of|cross[- ]section|infographic|chart|cycle|anatomy|structure)\b/i.test(prompt)) return 'clean educational diagram, accurate, clearly labelled parts, white background, high detail';
   return 'photorealistic, natural lighting, sharp focus, realistic textures, high detail, 4k photo';
 }
-function freeImageUrl(prompt, seed) {
-  const p = `${prompt}, ${imageStyle(prompt)}`.slice(0, 700);
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=1024&height=768&seed=${seed}&model=flux&enhance=true&nologo=true&safe=true`;
+// First try: full detail with the service's prompt helper. Second try: a shorter
+// prompt without the helper — long, detailed prompts are what usually time out.
+function freeImageUrl(prompt, seed, simple = false) {
+  const p = simple ? `${prompt.slice(0, 220)}, ${imageStyle(prompt)}` : `${prompt}, ${imageStyle(prompt)}`.slice(0, 600);
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=${simple ? 896 : 1024}&height=${simple ? 672 : 768}&seed=${seed}&model=flux${simple ? '' : '&enhance=true'}&nologo=true&safe=true`;
+}
+// Backup: Cassie's own server makes the picture (Workers AI).
+async function serverImage(prompt) {
+  const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: `${prompt}, ${imageStyle(prompt)}` }) });
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* ignore */ }
+  if (!res.ok || !data.image) throw friendlyError((data.error && data.error.message) || 'The picture makers are busy right now — give it a minute and ask again.');
+  return `data:${data.mimeType || 'image/jpeg'};base64,${data.image}`;
 }
 function loadImageUrl(url, ms = 90000) {
   return new Promise((resolve, reject) => {
@@ -2792,12 +2802,11 @@ async function generateImage(prompt) {
     try { return { src: await geminiImage(prompt), keep: false }; } catch (e) { /* fall back to the free service */ }
   }
   for (let attempt = 0; attempt < 2; attempt++) {
-    const url = freeImageUrl(prompt, Math.floor(Math.random() * 1e9));
-    try { return { src: await loadImageUrl(url), keep: true }; } catch (e) { if (attempt === 0) await sleep(4000); }
+    const url = freeImageUrl(prompt, Math.floor(Math.random() * 1e9), attempt > 0);
+    try { return { src: await loadImageUrl(url, attempt ? 60000 : 50000), keep: true }; } catch (e) { if (attempt === 0) await sleep(2500); }
   }
-  const e = new Error("The free picture maker is busy right now — give it a minute and ask again. (Everything else still works.)");
-  e.friendly = true;
-  throw e;
+  if (SERVER) return { src: await serverImage(prompt), keep: false };
+  throw friendlyError("The free picture maker is busy right now — give it a minute and ask again, or describe it more simply. (Everything else still works.)");
 }
 function imageFileName(subject) {
   return (subject || 'cassie-image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'cassie-image';

@@ -267,6 +267,18 @@ test('picture request makes a real picture, not ASCII art', async (b) => {
   await ctx.close();
 });
 
+test('picture: when the free service fails, the server makes it', async (b) => {
+  await serverMode({ ai: 'ok' });
+  const { ctx, page } = await open(b);
+  await ctx.route(/pollinations\.ai/, (route) => route.abort()); // the free service is down
+  await page.fill('#prompt-input', 'generate a detailed picture of a futuristic city at night with flying cars and neon signs');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('#chat-log img[src^="data:image"]', { timeout: 30000 });
+  const m = await serverMode({});
+  expect(/futuristic city/.test(m.lastImagePrompt || ''), 'server did not get the prompt: ' + m.lastImagePrompt);
+  await ctx.close();
+});
+
 test('quiz saves missed questions for Review my mistakes', async (b) => {
   const replies = [
     'Question 1: What is the powerhouse of the cell?',

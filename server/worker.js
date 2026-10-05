@@ -4,6 +4,7 @@
  *                    using YOUR Groq key (kept secret here), with Cloudflare Workers AI as
  *                    an automatic backup when Groq is busy or out of free questions
  *   POST /e          anonymous usage counts (no login, no names, no messages)
+ *   POST /image      makes a picture with Workers AI when the free picture service is busy
  *   POST /f          "Report a problem" notes
  *   POST /auth/...   Cassie accounts: sign up, sign in (email + password, or Google),
  *                    and the profile / saved mistakes that follow a person to every device
@@ -19,6 +20,7 @@
  * Optional variables:
  *   DAILY_LIMIT      questions per person per day through your key (default 150)
  *   MINUTE_LIMIT     questions per person per minute (default 12)
+ *   IMAGE_LIMIT      backup pictures per person per day (default 20)
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
@@ -219,6 +221,38 @@ async function chat(request, env, ctx) {
   return chatError(lastStatus === 429 ? 'Cassie is very busy right now — try again in a minute.' : 'Cassie can’t reach her brain right now — try again in a moment.', lastStatus === 429 ? 429 : 503, h, { 'retry-after': '20' });
 }
 
+/* ------------------------------------------------------------------ pictures */
+const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell'; // Workers AI, fast and free-tier friendly
+async function image(request, env, ctx) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  if (!env.AI) return chatError('Pictures aren’t set up on this server.', 503, h);
+  let body; try { body = JSON.parse(await request.text()); } catch (e) { return chatError('Bad request.', 400, h); }
+  const prompt = String(body.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+  if (prompt.length < 2) return chatError('What should the picture show?', 400, h);
+  await ensureSchema(env.DB);
+  const today = dayOf(Date.now());
+  const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : 'anon';
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const perDay = +env.IMAGE_LIMIT || 20;
+  const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
+  const [u, i] = await env.DB.batch([bump('img:u:' + uid), bump('img:i:' + ip)]);
+  if ((uid !== 'anon' && (u.results?.[0]?.n || 0) > perDay) || (i.results?.[0]?.n || 0) > perDay * 25) {
+    return chatError(`You've made today's ${perDay} pictures. More tomorrow — or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
+  }
+  try {
+    const out = await env.AI.run(IMAGE_MODEL, { prompt, steps: 6 });
+    const b64 = out && (out.image || out.result?.image);
+    if (!b64) throw new Error('empty');
+    ctx.waitUntil(countChat(env, today, 'image'));
+    return json({ image: b64, mimeType: 'image/jpeg' }, 200, h);
+  } catch (e) {
+    ctx.waitUntil(env.DB.batch(['img:u:' + uid, 'img:i:' + ip].map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k))));
+    return chatError('Couldn’t make that picture right now — try again in a minute, or describe it more simply.', 503, h);
+  }
+}
+
 /* ------------------------------------------------------------------ feedback */
 const FEEDBACK = new Set(['up', 'down', 'report']);
 async function feedback(request, env) {
@@ -404,6 +438,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
+      if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
@@ -644,7 +679,7 @@ const DASHBOARD = `<!doctype html>
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ groq: 'Groq (main)', backup: 'Workers AI (backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           \${(d.reports || []).length ? \`<div class="reports">\${d.reports.map((r) => \`<div class="rep"><div class="meta">\${esc(new Date(r.ts).toLocaleString())} · \${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}\${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">\${esc(r.text)}</div></div>\`).join('')}</div>\` : '<div class="empty">No reports yet</div>'}</div>
       </div>
