@@ -44,7 +44,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on' 
   const ctx = await browser.newContext({ ...devices['Pixel 7'], acceptDownloads: true });
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, ...state };
   await ctx.addInitScript(([srv, seedJson]) => {
-    if (srv) window.CASSIE_SERVER = srv;
+    window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); sessionStorage.setItem('seeded', '1'); }
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
   await ctx.route(/cdnjs\.cloudflare\.com/, (route) => {
@@ -53,6 +53,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on' 
   });
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+  await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
     const req = route.request();
@@ -465,6 +466,7 @@ test('board: paste a screenshot with Ctrl+V', async (b) => {
 test('an iPhone (reports 2 cores) still gets the 3D Cassie', async (b) => {
   const ctx = await b.newContext({ ...devices['iPhone 13'], serviceWorkers: 'block' });
   await ctx.addInitScript((v) => {
+    window.CASSIE_SERVER = '';
     Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 });
     localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 9', age: 14 }, seenVersion: v }));
   }, APP_VERSION);
@@ -567,6 +569,7 @@ test('Talk mode and Hint answer', async (b) => {
 test('works offline after the first visit (app opens)', async (b) => {
   // no network fakes here: Playwright's fakes and service workers don't mix
   const ctx = await b.newContext({ ...devices['Pixel 7'] });
+  await ctx.addInitScript(() => { window.CASSIE_SERVER = ''; });
   await ctx.addInitScript((v) => { if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', JSON.stringify({ profile: { name: 'T', role: 'student', grade: 'Grade 9', age: 14 }, seenVersion: v, lite: 'on' })); }, APP_VERSION);
   const page = await ctx.newPage();
   await page.goto(APP);
