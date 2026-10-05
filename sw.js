@@ -1,9 +1,10 @@
-const CACHE_NAME = 'cassie-v116';
+const CACHE_NAME = 'cassie-v117';
 const ASSETS = [
   './',
   'index.html',
   'start.html',
   'landing/landing.js',
+  'landing/play.js',
   'app.html',
   'style.css',
   'config.js',

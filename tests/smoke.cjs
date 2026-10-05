@@ -512,6 +512,43 @@ test('Cursor Cassie: chosen in Settings, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
+test('Cassie Island: the top bar shows what she is doing, then says Done', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 900)); return { text: 'Island answer.' }; } });
+  const island = page.locator('#island');
+  expect(!(await island.evaluate((n) => n.classList.contains('live'))), 'island should be tucked away at first');
+  await page.fill('#prompt-input', 'What is a cell?');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('#island.live svg.cassie-bot', { timeout: 3000 });
+  expect(/Thinking/.test(await island.innerText()), 'island should say Thinking: ' + await island.innerText());
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/island-thinking.png', clip: { x: 0, y: 0, width: 412, height: 130 } });
+  await page.waitForSelector('text=Island answer.', { timeout: 10000 });
+  await page.waitForTimeout(100);
+  expect(await island.getAttribute('data-mood') === 'done' && /Done/.test(await island.innerText()), 'island should say Done');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/island-done.png', clip: { x: 0, y: 0, width: 412, height: 130 } });
+  await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 4000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('landing: Meet Cassie mood buttons change her mood', async (b) => {
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(APP.replace('app.html', 'index.html'));
+  await page.locator('#meet').scrollIntoViewIfNeeded();
+  await page.waitForSelector('#play-stage svg.cassie-bot');
+  await page.waitForSelector('#meet .play.in'); await page.waitForTimeout(900); // let it finish sliding in
+  expect(await page.locator('#moods button').count() >= 12, 'mood buttons missing');
+  await page.click('#moods button[data-m="dance"]');
+  expect(await page.locator('#moods button.on').getAttribute('data-m') === 'dance', 'Dance should be selected');
+  expect(/Study break/.test(await page.locator('#play-say').innerText()), 'caption should change');
+  await page.click('#moods button[data-m="oops"]');
+  expect(await page.locator('#moods button.on').getAttribute('data-m') === 'oops', 'Oops should be selected');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Lite mode skips the 3D Cassie', async (b) => {
   const { ctx, page } = await open(b, { lite: 'on' });
   await page.waitForTimeout(1500);
@@ -674,7 +711,7 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
   for (const t of tests) {
     if (only && !t.name.includes(only)) continue;
     try { await t.fn(browser); console.log('PASS', t.name); }
-    catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (e && e.message || e).toString().split('\n')[0]); }
+    catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (e && e.message || e).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
   }
   await browser.close(); await server.close(); app.close();
   console.log(failed ? `\n${failed} failed` : '\nAll passed');
