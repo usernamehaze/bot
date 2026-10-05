@@ -419,6 +419,7 @@ function wantsCursorCassie() {
 }
 // Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
 function botMood(name, ms) {
+  if (name && islandBusy && ['reading', 'searching', 'drawing', 'busy', 'highlighting'].includes(name)) islandShow(name);
   if (!bot2d || !name) return;
   clearTimeout(bot2dTimer);
   bot2d.setState(name);
@@ -447,6 +448,52 @@ function botMood(name, ms) {
     typingTimer = setTimeout(() => { if (bot2d.state === 'listening') botMood('idle'); }, 2200);
   });
 })();
+/* ---------- Cassie Island: the top-bar pill that shows what she's doing ----------
+   While she works, a dark pill drops from the top bar with a tiny Cursor Cassie
+   and a status line ("Reading pages 3–8…"), says "Done", then tucks itself away.
+   It works with the 3D Cassie and with Cursor Cassie. */
+const islandEl = document.getElementById('island');
+let islandBot = null, islandTimer = null, islandBusy = false, islandErrUntil = 0;
+const ISLAND_SAY = { thinking: 'Thinking…', reading: 'Reading your file…', searching: 'Searching…', drawing: 'Drawing…', busy: 'Lots of students — hang on…', highlighting: 'Looking at your highlight…', upload: 'Got your file!', done: 'Done', oops: 'That didn’t work' };
+function islandFit() {
+  if (!islandEl) return;
+  const inner = islandEl.querySelector('.island-in');
+  if (inner && islandEl.classList.contains('live')) islandEl.style.width = Math.ceil(inner.scrollWidth) + 'px';
+}
+function islandShow(mood, text, ms) {
+  if (!islandEl || !window.CassieBot) return;
+  if (!islandBot) islandBot = window.CassieBot.create(islandEl.querySelector('.island-bot'), { glow: true, accent: state.accent || '#d8343c' });
+  clearTimeout(islandTimer);
+  islandBot.pause(false);
+  islandBot.setState(mood);
+  islandEl.style.setProperty('--mood', (window.CassieBot.COLORS || {})[mood] || '#ffffff');
+  islandEl.dataset.mood = mood;
+  const label = islandEl.querySelector('.island-text'), say = text || ISLAND_SAY[mood] || 'Cassie';
+  if (label.textContent !== say) { label.textContent = say; label.classList.remove('swap'); void label.offsetWidth; label.classList.add('swap'); }
+  islandEl.classList.add('live');
+  islandFit();
+  if (ms) islandTimer = setTimeout(islandRest, ms);
+}
+function islandRest() {
+  if (!islandEl) return;
+  clearTimeout(islandTimer);
+  islandEl.classList.remove('live');
+  islandEl.style.width = '';
+  delete islandEl.dataset.mood;
+  setTimeout(() => { if (islandBot && !islandEl.classList.contains('live')) islandBot.pause(true); }, 500);
+}
+// Guess her mood from a status line like "Reading pages 3–8 of 49…".
+function islandMoodFor(text) {
+  if (/limit|wait|busy|continuing in/i.test(text)) return 'busy';
+  if (/search|web|looking up/i.test(text)) return 'searching';
+  if (/picture|draw|graph|sketch/i.test(text)) return 'drawing';
+  if (/read|page|slide|notes?\b|file|chapter/i.test(text)) return 'reading';
+  return 'thinking';
+}
+if (islandEl) {
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(islandFit);
+  window.addEventListener('resize', islandFit);
+}
 // which way the 3D Cassie turns while she walks (-1 left, 1 right)
 function face3D(dir) {
   try { if (window.CassieMascot && window.CassieMascot.setFacing) window.CassieMascot.setFacing(dir); } catch (e) { /* ignore */ }
@@ -495,6 +542,8 @@ function setCursorMode(mode) {
   cursorEl.classList.toggle('thinking', mode === 'thinking');
   if (mascot) mascot.classList.toggle('thinking', mode === 'thinking');
   set3D(mode === 'thinking' ? 'thinking' : 'neutral');
+  if (mode === 'thinking') { islandBusy = true; islandShow('thinking'); }
+  else if (islandBusy) { islandBusy = false; if (Date.now() > islandErrUntil) islandShow('done', 'Done', 1600); }
 }
 
 function mascotCelebrate() {
@@ -2544,6 +2593,7 @@ function setTypingStatus(bubble, text) {
   let el = bubble.querySelector('.typing-status');
   if (!el) { el = document.createElement('span'); el.className = 'typing-status'; bubble.appendChild(el); }
   el.textContent = text;
+  if (islandBusy) islandShow(islandMoodFor(text), text);
   scrollToBottom();
 }
 
@@ -2556,7 +2606,10 @@ function errorText(err, prefix = 'Something went wrong') {
   return `${prefix}. Please try again — if it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
 }
 function renderError(err, retry, prefix) {
-  botMood(/limit|busy|wait/i.test(errorText(err, prefix)) ? 'busy' : 'oops', 3000);
+  const busyErr = /limit|busy|wait/i.test(errorText(err, prefix));
+  botMood(busyErr ? 'busy' : 'oops', 3000);
+  islandErrUntil = Date.now() + 3000;
+  islandShow(busyErr ? 'busy' : 'oops', busyErr ? 'Very busy — try again soon' : 'That didn’t work', 3000);
   const b = renderMessage('assistant', errorText(err, prefix));
   b.classList.add('error');
   if (retry) {
@@ -3233,6 +3286,7 @@ async function attachFile(file) {
       attachThumb.hidden = false;
       attachName.hidden = true;
       attachPreview.hidden = false;
+      islandShow('upload', 'Got your photo!', 2200); botMood('upload', 2200);
       return true;
     } catch (e) {
       // iPhone HEIC photos can't be drawn by most browsers — Gemini can still read them as-is.
@@ -3255,6 +3309,7 @@ async function attachFile(file) {
   if (kind === 'pdf' || kind === 'docx' || kind === 'pptx' || kind === 'txt') {
     pendingImage = null;
     showName(`Reading ${file.name}…`);
+    islandShow('upload', `Opening ${file.name}…`); botMood('upload');
     const reading = readDocument(file, kind);
     attachReading = reading.catch(() => null); // Send waits for this, so the file is never left behind
     try {
@@ -3262,15 +3317,18 @@ async function attachFile(file) {
       if (!doc.text && !doc.hasVisuals) {
         pendingDoc = null;
         attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
+        islandShow('oops', 'Nothing readable in that file', 2600); botMood('oops', 2600);
         return false;
       }
       pendingDoc = doc;
       attachName.textContent = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
+      islandShow('done', `Got it · ${doc.label}`, 2200); botMood('done', 2200);
       return true;
     } catch (e) {
       pendingDoc = null;
       attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, PowerPoint (.pptx), Word (.docx) or a photo.`;
+      islandShow('oops', 'Couldn’t read that file', 2600); botMood('oops', 2600);
       return false;
     }
   }
@@ -3451,6 +3509,7 @@ function syncAccentSwatches() {
 function setAccent(color) {
   state.accent = color || '';
   if (bot2d) bot2d.setAccent(color || '#d8343c');
+  if (islandBot) islandBot.setAccent(color || '#d8343c');
   track('feature', 'colour');
   save();
   applyAccent();

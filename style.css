@@ -1286,3 +1286,21 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 }
 .acct-btns { display: flex; gap: 8px; margin: 2px 0 12px; }
 .acct-btns .new-chat-btn { flex: 1; }
+
+/* ---------- Cassie Island: a pill that drops from the top bar while she works ---------- */
+.topbar { position: relative; z-index: 8; } /* the island floats over the chat */
+.island {
+  --mood: #ffffff; position: absolute; left: 50%; top: calc(100% + 8px); height: 38px; width: 38px; border-radius: 999px; overflow: hidden;
+  background: #131317; color: #fff; font-size: .88rem; font-weight: 600; pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22), 0 0 20px color-mix(in srgb, var(--mood) 40%, transparent);
+  opacity: 0; transform: translate(-50%, -14px) scale(.6); transform-origin: 50% 0;
+  transition: width .5s cubic-bezier(.3, 1.3, .45, 1), opacity .22s, transform .45s cubic-bezier(.3, 1.4, .45, 1), box-shadow .4s;
+}
+.island.live { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.island-in { display: inline-flex; align-items: center; height: 100%; padding: 0 16px 0 7px; white-space: nowrap; }
+.island-bot { width: 28px; height: 28px; margin-right: 8px; flex-shrink: 0; }
+.island-bot .cassie-bot { width: 28px; height: 28px; display: block; }
+.island-text { display: block; overflow: hidden; text-overflow: ellipsis; max-width: min(62vw, 420px); }
+.island-text.swap { animation: islandIn .32s ease-out; }
+@keyframes islandIn { from { opacity: .2; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .island { transition: opacity .2s; } .island-text.swap { animation: none; } }
