@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=125">
+<link rel="stylesheet" href="style.css?v=126">
 </head>
 <body>
 
@@ -154,6 +154,10 @@
     <button type="button" id="talk-btn" class="chip" title="Talk to Cassie — vent, get real advice, a heart-to-heart">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.716-4.35-9.302-8.213C1.128 10.44 1.62 7.343 4 6.02a4.3 4.3 0 0 1 5.02.86L12 9.86l2.98-2.98A4.3 4.3 0 0 1 20 6.02c2.38 1.323 2.872 4.42 1.302 6.767C18.716 16.65 12 21 12 21z"/></svg>
       <span class="chip-label">Talk</span>
+    </button>
+    <button type="button" id="paste-btn" class="chip" title="Copied some words in another app? Paste them here and ask Cassie">
+      <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h-1.2a3 3 0 0 0-5.6 0H8a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-4-.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zM15 18H9v-1.6h6V18zm0-3.4H9V13h6v1.6zm0-3.4H9V9.6h6v1.6z"/></svg>
+      <span class="chip-label">Paste &amp; ask</span>
     </button>
   </div>
 
@@ -323,7 +327,9 @@
             <li>Tap <b>📖 Read &amp; highlight</b>. The file opens page by page.</li>
             <li>Select any words. Cassie explains, answers or writes code about them.</li>
           </ol>
-          <p><b>iPhone and iPad: other apps and websites</b> (one-time Shortcut)</p>
+          <p><b>iPhone and iPad: other apps and websites</b></p>
+          <p>Easiest: select the words → <b>Copy</b> → open Cassie → tap <b>Paste &amp; ask</b>.</p>
+          <p>Or make a one-time Shortcut so Cassie is in the Share menu:</p>
           <ol>
             <li>Open <b>Shortcuts</b> → tap <b>+</b>. Tap the name at the top (⌄) → <b>Rename</b> → <b>Ask Cassie</b>.</li>
             <li>Tap <b>Search Actions</b>, type <b>URL Encode</b> and tap it. Tap its blue <b>Text</b> → choose <b>Shortcut Input</b>.</li>
@@ -393,13 +399,13 @@
 
 </div>
 
-<script src="memory.js?v=125"></script>
-<script src="board.js?v=125"></script>
-<script src="export.js?v=125"></script>
-<script src="sketch.js?v=125"></script>
-<script src="config.js?v=125"></script>
-<script src="cassie-bot.js?v=125"></script>
-<script src="app.js?v=125"></script>
+<script src="memory.js?v=126"></script>
+<script src="board.js?v=126"></script>
+<script src="export.js?v=126"></script>
+<script src="sketch.js?v=126"></script>
+<script src="config.js?v=126"></script>
+<script src="cassie-bot.js?v=126"></script>
+<script src="app.js?v=126"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -414,7 +420,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=125';
+      s.src = 'mascot3d/cassie-3d.js?v=126';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
