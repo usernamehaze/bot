@@ -181,7 +181,7 @@
       if (data.streak.count > 1) parts.push(`Study streak: ${data.streak.count} days`);
       if (!parts.length) return '';
       return (
-        '\n\n[Memory of this student — use it to personalize your help; weave it in naturally and do NOT recite this list back verbatim]\n- ' +
+        '\n\n[Memory of this student — use it to personalize your help; weave it in naturally and do NOT recite this list back verbatim. Never put these details into a paper or essay written for them unless they ask.]\n- ' +
         parts.join('\n- ')
       );
     },

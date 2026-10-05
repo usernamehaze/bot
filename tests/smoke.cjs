@@ -558,6 +558,16 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   await ctx.close();
 });
 
+test('a reflection paper is written as the student, not as Cassie', async (b) => {
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'My reflection.' }) });
+  await ask(page, 'Make me a reflection paper about our field trip to the museum');
+  const sys = (groqCalls[groqCalls.length - 1].messages || []).find((m) => m.role === 'system').content;
+  expect(/write it AS THE USER, in the first person/.test(sys), 'the system prompt should tell Cassie to write as the student');
+  expect(/never give Cassie's own feelings, opinions or experiences/.test(sys), 'no Cassie opinions in their paper');
+  expect(/never inside a paper, essay or anything they will hand in/.test(sys), 'their name must stay out of the paper');
+  await ctx.close();
+});
+
 test('Lite mode skips the 3D Cassie', async (b) => {
   const { ctx, page } = await open(b, { lite: 'on' });
   await page.waitForTimeout(1500);
@@ -663,6 +673,46 @@ test('works offline after the first visit (app opens)', async (b) => {
   await page.reload({ timeout: 10000 });
   await page.waitForSelector('#prompt-input', { timeout: 5000 });
   await ctx.close();
+});
+
+test('extension: highlights, snips and pastes show up as chats in the Cassie app', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    const isCassie = (w) => /\/background\.js$/.test(w.url());
+    let sw = ctx.serviceWorkers().find(isCassie);
+    if (!sw) sw = await ctx.waitForEvent('serviceworker', { predicate: isCassie, timeout: 20000 });
+    const saved = await sw.evaluate(async (png) => {
+      logAnswer({ kind: 'highlight', q: 'Explain: photosynthesis' }, 'Plants make food from light.', null, { tab: { url: 'https://example.com/bio', title: 'Biology notes' } });
+      logAnswer({ kind: 'snip', q: 'Explain my snip' }, '{"headline":"A parabola","steps":["It opens up","Vertex at 0"]}', 'data:image/png;base64,' + png, { tab: { url: 'https://example.com/bio', title: 'Biology notes' } });
+      logAnswer({ kind: 'paste', q: 'Explain the picture I pasted' }, 'A cell diagram.', null, { tab: { url: 'https://other.org/x', title: 'Other page' } });
+      await logChain;
+      return (await chrome.storage.local.get('cassieHistory')).cassieHistory;
+    }, PNG.toString('base64'));
+    expect(saved.length === 3 && saved[1].a.startsWith('**A parabola**') && saved[1].image, 'history should hold 3 items with the snip as steps + a picture: ' + JSON.stringify(saved).slice(0, 300));
+    // the real site address, served from this repo, so the extension's bridge runs on it
+    await ctx.route(/askcassie\.pages\.dev/, async (route) => {
+      const u = new URL(route.request().url());
+      return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
+    });
+    await ctx.route(/cdnjs\.cloudflare\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.addInitScript((seed) => { window.CASSIE_SERVER = ''; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on' }));
+    const page = await ctx.newPage();
+    await page.goto('https://askcassie.pages.dev/app.html');
+    await page.waitForFunction(() => state.chats.filter((c) => c.extKey).length === 2, null, { timeout: 10000 });
+    const chats = await page.evaluate(() => state.chats.filter((c) => c.extKey).map((c) => ({ title: c.title, n: c.messages.length, img: !!c.messages.find((m) => m.image) })));
+    const bio = chats.find((c) => /Biology notes/.test(c.title));
+    expect(bio && bio.n === 4 && bio.img, 'the Biology page chat should have the highlight and the snip with its picture: ' + JSON.stringify(chats));
+    expect(chats.some((c) => /From Chrome · Other page/.test(c.title)), 'the pasted picture should be in its own page chat');
+    // a reload doesn't add them twice
+    await page.reload();
+    await page.waitForTimeout(1500);
+    expect(await page.evaluate(() => state.chats.filter((c) => c.extKey).reduce((n, c) => n + c.messages.length, 0)) === 6, 'items were imported twice');
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
 test('extension: a Gemini key alone answers (and streams), and covers for a busy Groq', async () => {

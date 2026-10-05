@@ -1,5 +1,20 @@
-// "Meet Cassie": tap a mood and Cursor Cassie acts it out.
+// Cursor Cassie on the landing page: the hero, and "Meet Cassie" (tap a mood and she acts it out).
 (() => {
+  // Hero: she acts out the cards floating around her — highlight, read a PDF, reviewer ready.
+  const heroHost = document.getElementById('hero-bot');
+  if (heroHost && window.CassieBot) {
+    const hero = CassieBot.create(heroHost, { state: 'greeting', glow: true, pokeable: true, accessory: CassieBot.seasonal() });
+    const loop = ['greeting', 'highlighting', 'thinking', 'reading', 'done', 'proud'];
+    let k = 0, timer = 0;
+    const run = () => { clearInterval(timer); timer = setInterval(() => hero.setState(loop[++k % loop.length]), 3000); };
+    addEventListener('mousemove', (e) => {
+      const r = heroHost.getBoundingClientRect();
+      hero.look((e.clientX - (r.left + r.width / 2)) / 400, (e.clientY - (r.top + r.height / 2)) / 400);
+    }, { passive: true });
+    if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { hero.pause(!e.isIntersecting); if (e.isIntersecting) run(); else clearInterval(timer); }).observe(heroHost);
+    else run();
+  }
+
   const stage = document.getElementById('play-stage');
   if (!stage || !window.CassieBot) return;
   const MOODS = [
