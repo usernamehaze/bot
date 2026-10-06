@@ -23,7 +23,7 @@ export async function startFakeServer(port = 4630) {
       return out;
     },
   };
-  const mode = { groq: 'ok', ai: 'ok', claude: 'off', gemini: 'off', groqVision: 'ok', calls: [], claudeCalls: [], geminiCalls: [] };
+  const mode = { groq: 'ok', ai: 'ok', aiVision: 'ok', claude: 'off', gemini: 'off', groqVision: 'ok', calls: [], claudeCalls: [], geminiCalls: [] };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
@@ -77,6 +77,11 @@ export async function startFakeServer(port = 4630) {
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     AI: { async run(model, input) {
       if (mode.ai !== 'ok') throw new Error('AI down');
+      if (/scout|gemma-3/.test(model)) { // Workers AI picture readers (mode.aiVision)
+        if (mode.aiVision !== 'ok') throw new Error('AiError: 5007: No such model');
+        const last = input.messages.at(-1), text = Array.isArray(last.content) ? last.content.map((p) => p.text || '').join(' ') : last.content;
+        return { response: /sum in this picture/.test(text) ? '56' : 'Workers AI read the picture.' };
+      }
       if (/flux/.test(model)) { mode.lastImagePrompt = input.prompt; return { image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }; }
       return { response: /17 × 23/.test(JSON.stringify(input.messages)) ? '391' : 'Backup brain answer: plants use sunlight.' };
     } },
