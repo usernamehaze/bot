@@ -116,7 +116,7 @@ const GROQ = 'https://api.groq.com/openai/v1';
 const CHAT_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
 const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
-let vision = { ids: [], at: 0 };
+let vision = { ids: [], at: 0, all: [] };
 
 function allowedOrigin(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -138,7 +138,7 @@ async function visionModels(env, fresh = false) {
     const ids = ((await r.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
     const score = (id) => (/llama-4-scout/i.test(id) ? 0 : /llama-4-maverick/i.test(id) ? 1 : /vision|llava|pixtral|(^|[-/])vl([-/]|$)|-vl-|multimodal|llama-4|gemma-?3/i.test(id) ? 2 : 9);
     const list = ids.filter((id) => !/whisper|tts|guard|playai|orpheus|embed/i.test(id) && score(id) < 9).sort((a, b) => score(a) - score(b));
-    vision = { ids: list, at: Date.now() };
+    vision = { ids: list, at: Date.now(), all: ids };
   } catch (e) { /* keep the old list */ }
   return vision.ids;
 }
@@ -167,11 +167,28 @@ async function askGemini(env, messages, maxTokens = 2048) {
         const parts = (await r.json()).candidates?.[0]?.content?.parts || [];
         const reply = parts.filter((x) => !x.thought).map((x) => x.text || '').join('').trim();
         if (reply) return { reply, detail: '' };
-        detail = `Gemini ${model}: empty answer`;
-      } else { let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ } detail = `Gemini ${model}: ${r.status} ${m}`.slice(0, 300); }
-    } catch (e) { detail = `Gemini ${model}: ${e.message}`; }
+        detail += `${model}: empty answer · `;
+      } else { let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ } detail += `${model}: ${r.status} ${m.slice(0, 90)} · `; }
+    } catch (e) { detail += `${model}: ${e.message} · `; }
   }
-  return { reply: null, detail };
+  return { reply: null, detail: detail ? 'Gemini ' + detail.replace(/ · $/, '') : '' };
+}
+
+/* Cloudflare Workers AI picture readers (the AI binding): the last backup for photos, with
+   none of Groq's or Google's free-tier limits. */
+const AI_VISION = ['@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/google/gemma-3-12b-it'];
+async function aiVision(env, messages, maxTokens = 1500) {
+  if (!env.AI) return { reply: null, detail: '' };
+  let detail = '';
+  for (const model of env.AI_VISION_MODEL ? [env.AI_VISION_MODEL, ...AI_VISION] : AI_VISION) {
+    try {
+      const o = await env.AI.run(model, { messages, max_tokens: Math.min(maxTokens, 2048), temperature: 0.4 });
+      const reply = String((o && (o.response ?? o.result?.response)) || '').trim();
+      if (reply) return { reply, detail: '' };
+      detail += `${model}: empty answer · `;
+    } catch (e) { detail += `${model}: ${String(e.message || e).slice(0, 90)} · `; }
+  }
+  return { reply: null, detail: 'Workers AI ' + detail.replace(/ · $/, '') };
 }
 
 /* Problems the server hit, for the dashboard (a few hundred a day at most, no messages). */
@@ -395,6 +412,14 @@ async function chat(request, env, ctx) {
       return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
     }
     problems.push(g.detail);
+  }
+  if (env.AI && cleaned.image) {
+    const v = await aiVision(env, cleaned.messages, maxTokens);
+    if (v.reply) {
+      ctx.waitUntil(countChat(env, today, 'backup-picture'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: v.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'backup-picture' });
+    }
+    problems.push(v.detail);
   }
   if (env.AI && !cleaned.image) {
     try {
@@ -623,7 +648,7 @@ async function runHealth(env) {
     await run('Groq: graph on the board', () => groqAsk(env, CHAT_MODELS[0], graphQ), graphOk);
     await run('Groq: read a picture', async () => {
       const models = await visionModels(env, true);
-      if (!models.length) throw new Error('no picture-reading model on this Groq key');
+      if (!models.length) throw new Error(`no picture-reading model on this Groq key. Groq has: ${(vision.all || []).join(', ') || 'nothing (key problem?)'}`);
       let last;
       for (const m of models.slice(0, 3)) { try { return `${m}: ${await groqAsk(env, m, picQ, 300)}`; } catch (e) { last = e; } }
       throw last;
@@ -637,6 +662,7 @@ async function runHealth(env) {
     await run('Claude: text maths', () => askClaude(env, { messages: textQ }), (t) => /\b391\b/.test(t));
     await run('Claude: read a picture', () => askClaude(env, { messages: picQ }), (t) => /\b56\b/.test(t));
   }
+  if (env.AI) await run('Workers AI (backup): read a picture', async () => { const v = await aiVision(env, picQ, 300); if (!v.reply) throw new Error(v.detail); return v.reply; }, (t) => /\b56\b/.test(t));
   if (env.AI) await run('Workers AI (backup): text maths', async () => { const o = await env.AI.run(BACKUP_MODEL, { messages: textQ, max_tokens: 200 }); return (o && (o.response ?? o.result?.response)) || ''; }, (t) => /\b391\b/.test(t));
   const canPictures = checks.some((c) => c.ok && /picture/.test(c.name));
   const canText = checks.some((c) => c.ok && /text maths/.test(c.name));

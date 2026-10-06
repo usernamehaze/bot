@@ -820,8 +820,18 @@ test('server pictures: no Groq picture model at all → the owner’s Gemini rea
   } finally { await serverMode({ groqVision: 'ok', gemini: 'off', geminiReply: '' }); }
 });
 
+test('server pictures: Groq has none and Gemini is over its free limit → Workers AI reads it', async (b) => {
+  await serverMode({ groqVision: 'retired', gemini: 'down', aiVision: 'ok' });
+  try {
+    const { ctx, page } = await open(b);
+    const a = await sendPhoto(page, 'What is in this picture?');
+    expect(/Workers AI read the picture/.test(await a.textContent()), 'got: ' + await a.textContent());
+    await ctx.close();
+  } finally { await serverMode({ groqVision: 'ok', gemini: 'off' }); }
+});
+
 test('server pictures: when nothing can read it, the problem shows on the dashboard', async (b) => {
-  await serverMode({ groqVision: 'retired', gemini: 'off' });
+  await serverMode({ groqVision: 'retired', gemini: 'off', aiVision: 'down' });
   try {
     const { ctx, page } = await open(b);
     const a = await sendPhoto(page, 'What is this?');
@@ -833,7 +843,7 @@ test('server pictures: when nothing can read it, the problem shows on the dashbo
     const st2 = await serverStats();
     expect((st2.reports || []).some((r) => r.kind === 'auto' && /chat/.test(r.feature)), 'the app reports its own error (no question text)');
     await ctx.close();
-  } finally { await serverMode({ groqVision: 'ok' }); }
+  } finally { await serverMode({ groqVision: 'ok', aiVision: 'ok' }); }
 });
 
 test('graph it: a bare equation is graphed even when no AI answers', async (b) => {
@@ -876,14 +886,15 @@ test('brain check: real questions with known answers, saved for the dashboard', 
   try {
     const r = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
     const by = Object.fromEntries(r.checks.map((c) => [c.name, c.ok]));
-    expect(by['Groq: text maths'] && by['Groq: graph on the board'] && by['Groq: read a picture'] && by['Gemini: read a picture'], 'all checks should pass: ' + JSON.stringify(r.checks));
+    expect(by['Groq: text maths'] && by['Groq: graph on the board'] && by['Groq: read a picture'] && by['Gemini: read a picture'] && by['Workers AI (backup): read a picture'], 'all checks should pass: ' + JSON.stringify(r.checks));
     expect(r.ok && r.canText && r.canPictures, 'overall ok');
     expect((await serverStats()).health.ts === r.ts, 'the dashboard gets the latest result');
-    await serverMode({ groqVision: 'retired', gemini: 'off' });
+    await serverMode({ groqVision: 'retired', gemini: 'off', aiVision: 'down' });
     const bad = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
     expect(!bad.ok && !bad.canPictures && bad.canText, 'a broken picture reader is caught: ' + JSON.stringify(bad.checks));
+    expect(/Groq has: openai\/gpt-oss-120b/.test(bad.checks.find((c) => c.name === 'Groq: read a picture').detail), 'it lists the models Groq has');
     expect((await fetch(SERVER + '/health')).status === 401, 'needs the admin token');
-  } finally { await serverMode({ gemini: 'off', groqVision: 'ok' }); }
+  } finally { await serverMode({ gemini: 'off', groqVision: 'ok', aiVision: 'ok' }); }
 });
 
 test('iPhone: copy words, then Paste & ask', async (b) => {
