@@ -210,7 +210,7 @@ async function geminiText(key, turns, onDelta) {
   while (contents.length && contents[0].role !== 'user') contents.shift();
   const stream = typeof onDelta === 'function';
   let last = null;
-  for (const model of GEMINI_VISION_MODELS) {
+  for (const model of await geminiModelsFor(key)) {
     let res;
     try {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`, {
@@ -250,7 +250,7 @@ async function geminiText(key, turns, onDelta) {
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (res.status === 404 || /no longer available|not found|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); continue; }
+    if (res.status === 404 || /no longer available|not found|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); forgetGeminiModels(); continue; }
     if (res.status === 429 || /quota|exhausted/i.test(detail)) throw new Error(GEMINI_RATE);
     if ((res.status === 400 && /api key/i.test(detail)) || res.status === 401 || res.status === 403) throw new Error('Your Gemini key was rejected — click the Cassie icon in the toolbar and paste it again (it starts with AIza). Get one free at aistudio.google.com/apikey.');
     if (res.status === 503 || /overloaded|unavailable/i.test(detail)) { last = new Error('Gemini is busy right now — try again in a moment.'); continue; }
@@ -483,13 +483,41 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ---- Snip & see: capture the visible tab, and read pictures (Gemini or Groq vision) ----
 // Every failure comes back as a plain-English sentence (never a bare "couldn't reach").
-const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+// Google retires Gemini model names often (gemini-2.5-flash is closed to new keys), so ask which
+// models this key can use and pick the newest Flash ones. Remembered for a day, per key.
+function rankGemini(models) {
+  const ids = models.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((id) => /^gemini-/.test(id) && !/image|tts|audio|live|embed|thinking|computer|robotics|native|aqa|learnlm|banana/i.test(id));
+  const ver = (id) => parseFloat((/gemini-(\d+(?:\.\d+)?)/.exec(id) || [0, 0])[1]) || 0;
+  const rank = (id) => (/flash-lite/.test(id) ? 2 : /flash/.test(id) ? 0 : /pro/.test(id) ? 4 : 6) + (/preview|exp/.test(id) ? 1 : 0);
+  return ids.sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a) || a.length - b.length);
+}
+let geminiPicked = null;
+async function geminiModelsFor(key) {
+  const tag = String(key || '').slice(-6);
+  const fresh = (c) => c && c.tag === tag && Date.now() - c.at < 864e5 && Array.isArray(c.ids) && c.ids.length;
+  if (fresh(geminiPicked)) return geminiPicked.ids;
+  try { const { cassieGeminiModels: c } = await chrome.storage.local.get('cassieGeminiModels'); if (fresh(c)) { geminiPicked = c; return c.ids; } } catch (e) { /* ignore */ }
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(8000) });
+    const ids = r.ok ? rankGemini((await r.json()).models || []).slice(0, 4) : [];
+    if (ids.length) {
+      geminiPicked = { tag, at: Date.now(), ids };
+      chrome.storage.local.set({ cassieGeminiModels: geminiPicked }).catch(() => {});
+      return ids;
+    }
+  } catch (e) { /* use the names we know */ }
+  return GEMINI_VISION_MODELS;
+}
+function forgetGeminiModels() { geminiPicked = null; chrome.storage.local.remove('cassieGeminiModels').catch(() => {}); }
 
 async function visionViaGemini(key, { image, images, prompt, system, maxTokens }) {
   const pics = (images || [image]).map((u) => String(u).match(/^data:([^;]+);base64,(.*)$/));
   if (!pics.length || pics.some((m) => !m)) throw new Error('That picture couldn’t be read.');
   let last = null;
-  for (const model of GEMINI_VISION_MODELS) {
+  for (const model of await geminiModelsFor(key)) {
     let res;
     try {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -511,7 +539,7 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); continue; }
+    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); forgetGeminiModels(); continue; }
     // busy ("high demand") or out of free requests: the next model has its own capacity, then Groq
     if (res.status >= 500 || res.status === 429 || /high demand|overloaded|unavailable/i.test(detail)) { last = new Error('Google’s Gemini is very busy right now — try again in a minute.'); continue; }
     if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected — check it in the Cassie toolbar popup.');

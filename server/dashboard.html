@@ -61,6 +61,7 @@
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { color: var(--text-secondary); font-weight: 600; }
   .scroll { overflow-x: auto; }
+  td.detail { white-space: normal; word-break: break-word; min-width: 260px; } /* the whole message, wrapped */
   details summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; margin-top: 10px; }
   #tip { position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.18); display: none; z-index: 9; }
   #tip b { display: block; margin-bottom: 2px; }
@@ -194,7 +195,7 @@
   // The brain check: real questions with known answers through every AI the server uses.
   function brainCard(d) {
     const h = d.health;
-    const rows = h ? h.checks.map((c) => `<tr><td>${c.ok ? '✅' : '❌'}</td><td>${esc(c.name)}</td><td>${(c.ms / 1000).toFixed(1)}s</td><td class="muted">${esc(c.detail || '')}</td></tr>`).join('') : '';
+    const rows = h ? h.checks.map((c) => `<tr><td>${c.ok ? '✅' : '❌'}</td><td>${esc(c.name)}</td><td>${(c.ms / 1000).toFixed(1)}s</td><td class="muted detail">${esc(c.detail || '')}</td></tr>`).join('') : '';
     const status = !h ? 'Not run yet.' : h.ok ? '✅ Text and pictures both work.' : `⚠️ ${!h.canText ? 'Text answers are failing. ' : ''}${!h.canPictures ? 'Pictures (photos, snips, board) are failing. ' : ''}See the ❌ rows.`;
     const probs = (d.problems || []).length ? `<p class="muted" style="margin:12px 0 4px">Problems Cassie hit (last ${d.days} days)</p>${bars(d.problems, (r) => r.k, (r) => r.n, (r) => `${fmt(r.n)} · last ${esc(new Date(r.last).toLocaleString())}`)}` : '<p class="muted" style="margin-top:10px">No problems logged.</p>';
     return `<div class="card" style="margin-bottom:14px"><h2>Brain check</h2><p class="sub">Asks every AI real questions with known answers (17 × 23, a picture of 7 × 8, a graph). ${h ? 'Last run ' + esc(new Date(h.ts).toLocaleString()) : ''}</p>
@@ -248,7 +249,7 @@
     document.getElementById('range').onchange = (e) => { days = +e.target.value; load(); };
     document.getElementById('refresh').onclick = load;
     document.getElementById('brain').onclick = async () => {
-      const m = document.getElementById('brain-msg'); m.textContent = 'Checking every AI… (up to a minute)';
+      const m = document.getElementById('brain-msg'); m.textContent = 'Checking every AI… (about 10–45 seconds)';
       try { const r = await fetch('health', { headers: { authorization: 'Bearer ' + token } }); if (!r.ok) throw new Error('HTTP ' + r.status); load(); }
       catch (e) { m.textContent = 'Could not run it: ' + e.message; }
     };
