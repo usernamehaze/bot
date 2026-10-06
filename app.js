@@ -2049,8 +2049,40 @@ async function askGroq(msgs, opts = {}) {
 }
 
 /* Gemini generateContent with model fallback (newest first). */
-async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GEMINI_VISION_MODEL, ...GEMINI_DOC_MODELS] }) {
-  const list = [...new Set(models)];
+// Google retires Gemini model names often (gemini-2.5-flash is closed to new keys), so ask which
+// models this key can use and pick the newest Flash ones. Remembered for a day, per key.
+const GEMINI_FALLBACK = [GEMINI_VISION_MODEL, ...GEMINI_DOC_MODELS, 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+function rankGemini(models) {
+  const ids = models.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter((id) => /^gemini-/.test(id) && !/image|tts|audio|live|embed|thinking|computer|robotics|native|aqa|learnlm|banana/i.test(id));
+  const ver = (id) => parseFloat((/gemini-(\d+(?:\.\d+)?)/.exec(id) || [0, 0])[1]) || 0;
+  const rank = (id) => (/flash-lite/.test(id) ? 2 : /flash/.test(id) ? 0 : /pro/.test(id) ? 4 : 6) + (/preview|exp/.test(id) ? 1 : 0);
+  return ids.sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a) || a.length - b.length);
+}
+let geminiPicked = null;
+function forgetGeminiModels() { geminiPicked = null; try { localStorage.removeItem('cassie.geminiModels'); } catch (e) { /* ignore */ } }
+async function geminiModels() {
+  const tag = String(state.geminiKey || '').slice(-6);
+  const fresh = (c) => c && c.tag === tag && Date.now() - c.at < 864e5 && Array.isArray(c.ids) && c.ids.length;
+  if (fresh(geminiPicked)) return geminiPicked.ids;
+  try { const c = JSON.parse(localStorage.getItem('cassie.geminiModels') || 'null'); if (fresh(c)) { geminiPicked = c; return c.ids; } } catch (e) { /* ignore */ }
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': state.geminiKey }, signal: ctl.signal });
+    clearTimeout(t);
+    const ids = r.ok ? rankGemini((await r.json()).models || []).slice(0, 4) : [];
+    if (ids.length) {
+      geminiPicked = { tag, at: Date.now(), ids };
+      try { localStorage.setItem('cassie.geminiModels', JSON.stringify(geminiPicked)); } catch (e) { /* ignore */ }
+      return ids;
+    }
+  } catch (e) { /* use the names we know */ }
+  return GEMINI_FALLBACK;
+}
+
+async function geminiGenerate({ contents, system, maxTokens = 2048, models = null }) {
+  const list = [...new Set(models || await geminiModels())];
   let lastErr;
   for (const model of list) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -2071,7 +2103,7 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GE
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); continue; }
+    if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); forgetGeminiModels(); continue; }
     // busy ("high demand", overloaded) or out of free requests: the next Gemini model has its own capacity
     if (res.status >= 500 || isRateLimited(res.status, detail) || /high demand|overloaded|unavailable/i.test(detail)) {
       lastErr = friendlyError('Google’s Gemini is very busy right now — try again in a minute.');
@@ -2106,7 +2138,7 @@ function geminiFromChat(messages, { maxTokens = 4096 } = {}) {
   const contents = messages.filter((m) => m.role !== 'system')
     .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: toParts(m.content) }));
   while (contents.length && contents[0].role !== 'user') contents.shift();
-  return geminiGenerate({ contents, system, maxTokens, models: [GEMINI_VISION_MODEL, ...GEMINI_DOC_MODELS] });
+  return geminiGenerate({ contents, system, maxTokens });
 }
 
 /* Image reading (vision) → Gemini. `image` = { mimeType, base64 }. */
@@ -2345,7 +2377,7 @@ async function geminiDocument(doc, request, history, onStatus) {
   contents.push({ role: 'user', parts });
   onStatus('Writing it up…');
   const whole = WHOLE_FILE_RE.test(request) || wantsStudyFile(request);
-  return geminiGenerate({ contents, system: buildSystemPrompt({ tutor: false }) + '\n\n' + DOC_INSTRUCTION, maxTokens: whole ? 32768 : 8192, models: GEMINI_DOC_MODELS });
+  return geminiGenerate({ contents, system: buildSystemPrompt({ tutor: false }) + '\n\n' + DOC_INSTRUCTION, maxTokens: whole ? 32768 : 8192 });
 }
 
 /* With only a Groq key: read the file part by part (the free tier has a small
@@ -3496,7 +3528,7 @@ async function runResearch(topic) {
 
 // Ask Gemini with Google Search grounding — returns { text, sources }.
 async function askGeminiGrounded(q) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VISION_MODEL}:generateContent`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${(await geminiModels())[0]}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },

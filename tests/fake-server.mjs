@@ -51,7 +51,17 @@ export async function startFakeServer(port = 4630) {
       return null;
     };
     if (u.startsWith('https://generativelanguage.googleapis.com/')) { // the server's own Gemini (mode.gemini)
+      if (!init.body) { // the list of models this key can use; gemini-2.5-flash is retired, like on real keys now
+        mode.geminiListed = (mode.geminiListed || 0) + 1;
+        const gen = ['generateContent', 'countTokens'];
+        return Response.json({ models: [
+          { name: 'models/gemini-2.5-flash', supportedGenerationMethods: gen }, { name: 'models/gemini-9.0-flash-image', supportedGenerationMethods: gen },
+          { name: 'models/gemini-9.0-flash', supportedGenerationMethods: gen }, { name: 'models/gemini-9.0-flash-lite', supportedGenerationMethods: gen },
+          { name: 'models/gemini-9.0-pro-preview', supportedGenerationMethods: gen }, { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+        ] });
+      }
       const body = JSON.parse(init.body);
+      if (/gemini-2\.5-flash:/.test(u)) return Response.json({ error: { code: 404, message: 'This model models/gemini-2.5-flash is no longer available to new users.' } }, { status: 404 });
       mode.geminiCalls.push(u.match(/models\/([^:]+)/)[1]);
       if (mode.gemini !== 'ok') return Response.json({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }, { status: 503 });
       const parts = body.contents.at(-1).parts;
@@ -60,7 +70,7 @@ export async function startFakeServer(port = 4630) {
     }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
     if (u.endsWith('/models')) { // mode.groqVision: 'ok' | 'second' (first picture model broken) | 'retired' (none left)
-      const vision = mode.groqVision === 'retired' ? [] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
+      const vision = mode.groqVision === 'retired' ? [] : mode.groqVision === 'renamed' ? [{ id: 'meta-llama/llama-guard-4-12b' }, { id: 'acme/new-eyes-9b' }] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
       return Response.json({ data: [...vision, { id: 'openai/gpt-oss-120b' }, { id: 'whisper-large-v3' }] });
     }
     const body = JSON.parse(init.body);
@@ -68,6 +78,9 @@ export async function startFakeServer(port = 4630) {
     if (mode.groq === 'busy') return Response.json({ error: { message: 'Rate limit reached' } }, { status: 429, headers: { 'retry-after': '40' } });
     if (mode.groq === 'down') return Response.json({ error: { message: 'Service unavailable' } }, { status: 503 });
     if (mode.groqVision === 'retired' && /scout|-vl-/.test(body.model)) return Response.json({ error: { message: `The model \`${body.model}\` does not exist or you do not have access to it.` } }, { status: 404 });
+    // like Groq: a picture sent to a model that can't read pictures is refused
+    const hasPic = typeof body.messages.at(-1).content !== 'string' && body.messages.at(-1).content.some((p) => p.type === 'image_url');
+    if (hasPic && !/scout|-vl-|new-eyes/.test(body.model)) return Response.json({ error: { message: "'messages.0' : for 'role:user' the following must be satisfied[('messages.0.content' : value must be a string)]" } }, { status: 400 });
     if (mode.groqVision === 'second' && /llama-4-scout/.test(body.model)) return Response.json({ error: { message: 'The model `meta-llama/llama-4-scout-17b-16e-instruct` has been decommissioned.' } }, { status: 400 });
     return Response.json({ choices: [{ message: { role: 'assistant', content: smart(body.messages) || mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
   };

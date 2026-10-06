@@ -101,6 +101,12 @@ server uses real questions with known answers: 17 × 23, a picture of 7 × 8, an
 "graph y = x² − 4". Each row shows ✅ or ❌ with the reason. If anything is ❌,
 students would hit it too.
 
+It takes about 10–45 seconds: every AI is asked at the same time, and any that
+doesn't answer within 45 seconds is marked ❌ "too slow" instead of holding up the
+rest. You don't need to keep model names up to date. The server asks Google
+which Gemini models your key can use, and if no Groq model name looks like a
+picture reader, it shows each one a tiny picture to find the one that can read.
+
 To run it by itself every day: Worker → **Settings** → **Triggers** → **Cron
 Triggers** → **Add** → `0 22 * * *` (6 a.m. in the Philippines) → **Add**. The
 dashboard then always shows this morning's result.

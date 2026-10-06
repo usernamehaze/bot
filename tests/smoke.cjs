@@ -780,6 +780,29 @@ test('no key: a photo is read through the server', async (b) => {
   await ctx.close();
 });
 
+test('own Gemini key: Cassie asks Google which models the key has, so retired names never stop her', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { geminiKey: 'AIza_test' } });
+  const used = [];
+  let listed = 0;
+  await ctx.route(/generativelanguage\.googleapis\.com/, (route) => {
+    const u = route.request().url();
+    if (route.request().method() === 'GET') { listed += 1; return route.fulfill({ json: { models: [
+      { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-9.0-flash-image', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-9.0-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] } ] } }); }
+    const model = u.match(/models\/([^:]+)/)[1];
+    used.push(model);
+    if (/gemini-(2\.5|3\.6)-flash$/.test(model)) return route.fulfill({ status: 404, json: { error: { code: 404, message: `This model models/${model} is no longer available to new users.` } } });
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: 'Osmosis is water moving through a membrane.' }] } }] } });
+  });
+  const a = await ask(page, 'What is osmosis?');
+  expect(/water moving through a membrane/.test(await a.textContent()), 'answer: ' + await a.textContent());
+  expect(listed === 1 && used[0] === 'gemini-9.0-flash', 'the newest listed Flash model should be asked first: ' + JSON.stringify(used));
+  await ask(page, 'And diffusion?');
+  expect(listed === 1, 'the list is remembered, not fetched every time');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('a busy Gemini never ends a photo answer: Groq reads it instead, and can graph it', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test', geminiKey: 'AIza_test' }, fakeGroq: (body) => ({ text: 'The graph matches C.\n\n```cassie-board\n{"type":"graph","title":"y = x^2(x+6)^3(x-4)","fn":"x^2*(x+6)^3*(x-4)","xrange":[-7,5]}\n```' }) });
   let geminiCalls = 0;
@@ -1013,6 +1036,15 @@ test('brain check: real questions with known answers, saved for the dashboard', 
     expect(by['Groq: text maths'] && by['Groq: graph on the board'] && by['Groq: read a picture'] && by['Gemini: read a picture'] && by['Workers AI (backup): read a picture'], 'all checks should pass: ' + JSON.stringify(r.checks));
     expect(r.ok && r.canText && r.canPictures, 'overall ok');
     expect((await serverStats()).health.ts === r.ts, 'the dashboard gets the latest result');
+    // Gemini: the server asks Google which models this key has, so a retired name (gemini-2.5-flash) never stalls it
+    const m1 = await serverMode({});
+    expect(m1.geminiListed >= 1 && m1.geminiCalls.includes('gemini-9.0-flash') && !m1.geminiCalls.some((x) => /image|embedding/.test(x)), 'Gemini should use the models Google lists: ' + JSON.stringify(m1.geminiCalls));
+    // Groq renamed its picture model to a name Cassie doesn't know: she finds it by showing each model a picture
+    await serverMode({ groqVision: 'renamed' });
+    const renamed = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const pic = renamed.checks.find((c) => c.name === 'Groq: read a picture');
+    expect(pic.ok && /acme\/new-eyes-9b/.test(pic.detail), 'the renamed picture model should be found: ' + JSON.stringify(pic));
+    expect(renamed.checks.every((c) => c.ms < 45000), 'every check has a time limit');
     await serverMode({ groqVision: 'retired', gemini: 'off', aiVision: 'down' });
     const bad = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
     expect(!bad.ok && !bad.canPictures && bad.canText, 'a broken picture reader is caught: ' + JSON.stringify(bad.checks));
