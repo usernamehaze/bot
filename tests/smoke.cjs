@@ -708,6 +708,80 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await ctx.close();
 });
 
+// A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
+const FAKE_VOICE = (opts) => {
+  window.__spoken = []; window.__recs = [];
+  const synth = { speaking: false, cancelled: 0, getVoices: () => [{ name: 'Test Voice (Natural)', lang: 'en-US' }], addEventListener() {},
+    cancel() { this.cancelled++; }, speak(u) { window.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 30); } };
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  if (opts.noRecognizer) {
+    delete window.SpeechRecognition; delete window.webkitSpeechRecognition;
+    Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true });
+    navigator.mediaDevices.getUserMedia = async () => new MediaStream();
+    window.MediaRecorder = class { constructor() { this.state = 'inactive'; this.mimeType = 'audio/webm'; } static isTypeSupported() { return true; }
+      start() { this.state = 'recording'; } stop() { if (this.state === 'inactive') return; this.state = 'inactive'; this.ondataavailable && this.ondataavailable({ data: new Blob(['fake sound'], { type: 'audio/webm' }) }); setTimeout(() => this.onstop && this.onstop(), 10); } };
+    return;
+  }
+  window.SpeechRecognition = class extends EventTarget { constructor() { super(); window.__recs.push(this); this.live = false; } start() { this.live = true; } stop() { this.live = false; setTimeout(() => this.onend && this.onend(), 5); } abort() { this.live = false; } };
+  window.__say = (text) => { const r = window.__recs.filter((x) => x.live).at(-1); const res = [{ transcript: text }]; res.isFinal = true; r.onresult({ resultIndex: 0, results: [res] }); };
+};
+
+test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  const phase = () => page.evaluate(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase);
+  await page.click('#voice-btn');
+  await page.waitForFunction(() => document.querySelector('.vc') && !document.querySelector('.vc').hidden && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  expect((await page.evaluate(() => window.__spoken))[0] === 'Hi! I’m listening. Ask me anything.', 'Cassie greets you out loud');
+  await page.evaluate(() => window.__say('What is x if 2x equals 8?'));
+  await page.waitForFunction(() => window.__spoken.some((t) => /x equals 4/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 15000 });
+  const sys = groqCalls.at(-1).messages[0].content;
+  expect(/read aloud/.test(sys) && !/You have a drawing board/.test(sys), 'a spoken reply is asked for, with no drawing board');
+  // Teach Cassie
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-chat.png' });
+  await page.click('.vc-modes [data-vmode="teach"]');
+  await page.waitForFunction(() => window.__spoken.some((t) => /your student today/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  await page.evaluate(() => window.__say('Photosynthesis is how plants make food from sunlight'));
+  await page.waitForFunction(() => window.__spoken.some((t) => /Why do they need water/.test(t)), null, { timeout: 15000 });
+  const said = await page.evaluate(() => window.__spoken.at(-1));
+  expect(!/\*/.test(said), 'markdown is never read aloud: ' + said);
+  expect(/teaching YOU/.test(groqCalls.at(-1).messages[0].content), 'Teach mode tells Cassie to be the curious classmate');
+  expect(await page.locator('#chat-log .bubble-user', { hasText: 'Photosynthesis is how plants make food' }).count() === 1, 'what you said is saved in the chat');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-teach.png' });
+  // the mic pauses and resumes
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  await page.click('.vc-mic');
+  expect(await phase() === 'paused', 'the mic pauses listening');
+  await page.click('.vc-mic');
+  expect(await phase() === 'listening', 'and starts again');
+  // Quiz me turns the quiz on, ending puts it back
+  await page.click('.vc-modes [data-vmode="quiz"]');
+  expect(await page.evaluate(() => document.getElementById('quiz-btn').classList.contains('active')), 'Quiz me out loud turns the quiz on');
+  await page.click('.vc-x');
+  expect(await page.locator('.vc').isHidden() && !(await page.evaluate(() => document.getElementById('quiz-btn').classList.contains('active'))), 'ending the call closes it and the quiz');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Talk with Cassie without a built-in speech recognizer: Cassie’s server writes down what you said', async (b) => {
+  await serverMode({ groq: 'ok', heard: 'What is osmosis?', heardCalls: 0, reply: 'Osmosis is water moving through a membrane.' });
+  const { ctx, page, errors } = await open(b, {});
+  await ctx.addInitScript(FAKE_VOICE, { noRecognizer: true });
+  await page.reload();
+  await page.click('#voice-btn');
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  expect(/tap the mic to send/i.test(await page.locator('.vc-status').innerText()), 'it says to tap the mic when done: ' + await page.locator('.vc-status').innerText());
+  await page.click('.vc-mic'); // done talking
+  await page.waitForFunction(() => window.__spoken.some((t) => /water moving through a membrane/.test(t)), null, { timeout: 15000 });
+  expect(/What is osmosis/.test(await page.locator('.vc-you').innerText()), 'what you said shows on screen');
+  expect((await serverMode({})).heardCalls === 1, 'the recording went to the server once');
+  await page.click('.vc-x');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await serverMode({ reply: '', heard: '' });
+  await ctx.close();
+});
+
 test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
