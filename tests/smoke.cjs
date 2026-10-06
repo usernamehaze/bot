@@ -790,6 +790,102 @@ test('server: the Chrome / Edge extension may use it, other sites may not', asyn
   expect(no.status === 403, 'other sites stay blocked: ' + no.status);
 });
 
+// ---- what went wrong for real users: providers retiring or refusing their picture models ----
+const redPng = (page) => page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+async function sendPhoto(page, q) {
+  await page.setInputFiles('#file-input', { name: 'eq.png', mimeType: 'image/png', buffer: Buffer.from(await redPng(page), 'base64') });
+  await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+  return ask(page, q);
+}
+
+test('server pictures: a retired Groq picture model → the next one', async (b) => {
+  await serverMode({ groqVision: 'second', reply: 'The second picture model read it.' });
+  try {
+    const { ctx, page } = await open(b);
+    const a = await sendPhoto(page, 'What is in this picture?');
+    expect(/second picture model/.test(await a.textContent()), 'got: ' + await a.textContent());
+    const m = await (await fetch(SERVER + '/__mode')).json();
+    expect(m.lastCalls.includes('meta-llama/llama-4-scout-17b-16e-instruct') && m.lastCalls.includes('qwen/qwen3-vl-32b'), 'both picture models should be tried: ' + m.lastCalls);
+    await ctx.close();
+  } finally { await serverMode({ groqVision: 'ok', reply: '' }); }
+});
+
+test('server pictures: no Groq picture model at all → the owner’s Gemini reads it', async (b) => {
+  await serverMode({ groqVision: 'retired', gemini: 'ok', geminiReply: 'Gemini on the server read the equation.', geminiCalls: [] });
+  try {
+    const { ctx, page } = await open(b);
+    const a = await sendPhoto(page, 'Solve this and graph it');
+    expect(/Gemini on the server read/.test(await a.textContent()), 'got: ' + await a.textContent());
+    await ctx.close();
+  } finally { await serverMode({ groqVision: 'ok', gemini: 'off', geminiReply: '' }); }
+});
+
+test('server pictures: when nothing can read it, the problem shows on the dashboard', async (b) => {
+  await serverMode({ groqVision: 'retired', gemini: 'off' });
+  try {
+    const { ctx, page } = await open(b);
+    const a = await sendPhoto(page, 'What is this?');
+    expect(/try again|busy|reach/i.test(await a.textContent()), 'a friendly error: ' + await a.textContent());
+    const st = await serverStats();
+    const prob = (st.problems || []).find((p) => p.k === 'chat: picture');
+    expect(prob && prob.n >= 1, 'the dashboard should list the picture problem: ' + JSON.stringify(st.problems));
+    await page.waitForTimeout(400);
+    const st2 = await serverStats();
+    expect((st2.reports || []).some((r) => r.kind === 'auto' && /chat/.test(r.feature)), 'the app reports its own error (no question text)');
+    await ctx.close();
+  } finally { await serverMode({ groqVision: 'ok' }); }
+});
+
+test('graph it: a bare equation is graphed even when no AI answers', async (b) => {
+  await serverMode({ groq: 'down', ai: 'down' });
+  try {
+    const { ctx, page } = await open(b);
+    const a = await ask(page, 'x^2(x+6)^3(x-4) graph it');
+    expect(await a.locator('.cassie-board').count() === 1, 'the graph should still be drawn: ' + await a.textContent());
+    expect(/couldn’t reach my brain/.test(await a.textContent()), 'and say why there is no explanation');
+    await ctx.close();
+  } finally { await serverMode({ groq: 'ok', ai: 'ok' }); }
+});
+
+test('graph it: a bare equation gets a board even if the AI forgets to draw one', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The zeros are at 0, −6 and 4.' }) });
+  const a = await ask(page, '2x^3 - 8x graph it please');
+  expect(await a.locator('.cassie-board').count() === 1, 'a board should be added');
+  await ctx.close();
+});
+
+test('board: an equation typed on the board is sent as text (no picture to misread)', async (b) => {
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Here it is.\n\n```cassie-board\n{"type":"graph","title":"y = x^2 - 1","fn":"x^2 - 1","xrange":[-3,3]}\n```' }) });
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask input');
+  await page.click('[data-tool="text"]');
+  const box = await page.locator('.csk-live').boundingBox();
+  await page.mouse.click(box.x + 80, box.y + 80);
+  await page.keyboard.type('y = x^2 - 1');
+  await page.click('.csk-ask input'); // the text box commits when it loses focus
+  await page.fill('.csk-ask input', 'graph it');
+  await page.press('.csk-ask input', 'Enter');
+  await page.waitForFunction(() => window.CassieSketch.session().drawn() === 1, null, { timeout: 10000 });
+  const last = groqCalls.at(-1).messages.at(-1);
+  expect(typeof last.content === 'string' && /y = x\^2 - 1/.test(last.content), 'the typed equation goes as text: ' + JSON.stringify(last).slice(0, 200));
+  await ctx.close();
+});
+
+test('brain check: real questions with known answers, saved for the dashboard', async () => {
+  await serverMode({ gemini: 'ok', groqVision: 'ok', reply: '', geminiReply: '' });
+  try {
+    const r = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const by = Object.fromEntries(r.checks.map((c) => [c.name, c.ok]));
+    expect(by['Groq: text maths'] && by['Groq: graph on the board'] && by['Groq: read a picture'] && by['Gemini: read a picture'], 'all checks should pass: ' + JSON.stringify(r.checks));
+    expect(r.ok && r.canText && r.canPictures, 'overall ok');
+    expect((await serverStats()).health.ts === r.ts, 'the dashboard gets the latest result');
+    await serverMode({ groqVision: 'retired', gemini: 'off' });
+    const bad = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    expect(!bad.ok && !bad.canPictures && bad.canText, 'a broken picture reader is caught: ' + JSON.stringify(bad.checks));
+    expect((await fetch(SERVER + '/health')).status === 401, 'needs the admin token');
+  } finally { await serverMode({ gemini: 'off', groqVision: 'ok' }); }
+});
+
 test('iPhone: copy words, then Paste & ask', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Inertia means objects keep doing what they are doing.' }) });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(APP).origin });

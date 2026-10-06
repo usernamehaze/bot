@@ -1535,7 +1535,7 @@ async function discoverGroqTextModels() {
 // A Groq model that can see pictures (used for photos when there's no Gemini key).
 async function discoverGroqVisionModel() {
   const ids = await discoverGroqModels();
-  return ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '';
+  return ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick|llava|pixtral|(^|[-/])vl([-/]|$)|-vl-|multimodal|gemma-?3/i.test(id)) || '';
 }
 async function nextGroqModel(tried) {
   return GROQ_MODELS.find((m) => !tried.has(m)) || (await discoverGroqTextModels()).find((m) => !tried.has(m)) || '';
@@ -1841,8 +1841,16 @@ async function askPicture(msgs, image, opts = {}) {
   if (state.geminiKey) {
     try { return await askGeminiVision(msgs, image, opts); } catch (e) { firstErr = e; }
   }
-  if ((state.groqKey || SERVER) && !geminiOnly()) {
+  if (state.groqKey) {
     try { return await askGroqVision(msgs, [image], { system: buildSystemPrompt(opts), onWait: opts.onWait }); } catch (e) { firstErr = firstErr || e; }
+  }
+  if (SERVER) { // the server tries every picture reader it has (Groq's, then the owner's Gemini)
+    try {
+      const hist = trimHistory(msgs, 2000).slice(-12).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
+      const last = hist.pop() || { role: 'user', content: '' };
+      const content = [{ type: 'text', text: last.content || 'Please look at this picture and help me with it.' }, { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.base64}` } }];
+      return await serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist, { role: 'user', content }], { model: 'vision', maxTokens: 2048, onWait: opts.onWait });
+    } catch (e) { firstErr = firstErr || e; }
   }
   if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now — please try again in a minute.') : firstErr;
   throw new Error('Add your Google (Gemini) API key in Settings to use images.');
@@ -2606,8 +2614,8 @@ const GRAPH_ASK_RE = /\b(graph|plot|sketch|draw|chart|visuali[sz]e)\b/i;
 function ensureGraph(bubble, question, reply) {
   const B = window.CassieBoard;
   if (!B || !B.findEquation || !GRAPH_ASK_RE.test(question || '') || bubble.querySelector('.cassie-board')) return;
-  let eq = B.findEquation(question) || B.findEquation(reply);
-  for (let i = state.messages.length - 1; !eq && i >= 0 && i >= state.messages.length - 8; i--) eq = B.findEquation(state.messages[i].display || state.messages[i].content);
+  let eq = equationIn(question) || B.findEquation(reply);
+  for (let i = state.messages.length - 1; !eq && i >= 0 && i >= state.messages.length - 8; i--) eq = equationIn(state.messages[i].display || state.messages[i].content);
   if (!eq) return;
   // hide an ASCII-art "graph" if the model drew one
   bubble.querySelectorAll('pre').forEach((pre) => { if (/[|_\-+*.]{3,}/.test(pre.textContent) && !/[;{}=()]\s*$/m.test(pre.textContent.split('\n')[0] || '')) pre.remove(); });
@@ -2647,7 +2655,13 @@ function errorText(err, prefix = 'Something went wrong') {
   if (/timeout|timed out|aborted/i.test(m)) return 'That took too long — please try again.';
   return `${prefix}. Please try again — if it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
 }
+let autoReports = 0;
+function reportAuto(where, message) {
+  if (autoReports++ >= 5) return; // a handful per visit at most
+  try { sendFeedback('auto', where, String(message || '').slice(0, 300)); } catch (e) { /* best effort */ }
+}
 function renderError(err, retry, prefix) {
+  reportAuto('chat', errorText(err, prefix));
   const busyErr = /limit|busy|wait/i.test(errorText(err, prefix));
   botMood(busyErr ? 'busy' : 'oops', 3000);
   islandErrUntil = Date.now() + 3000;
@@ -2846,6 +2860,14 @@ async function handleSend(text, opts = {}) {
     speak(reply);
   } catch (err) {
     typingBubble.remove();
+    const offline = !image && !doc && graphWithoutBrain(sendText);
+    if (offline) { // the graph still comes, drawn here without the AI
+      renderMessage('assistant', offline);
+      state.messages.push({ role: 'assistant', content: offline });
+      touchChat(); save(); setCursorMode('idle');
+      reportAuto('chat: graph without AI', errorText(err));
+      return;
+    }
     const again = !image && text.trim() ? () => handleSend(takeBackLastQuestion(text), opts) : null;
     renderError(err, again);
     setCursorMode('idle');
@@ -3334,17 +3356,51 @@ function openSketch(opts = {}) {
     onAsk: (png, q, parts) => askBoard(png, q, parts),
   });
 }
+// Find the function to graph in what the student wrote: "y = …", "f(x) = …", or a bare
+// expression like "x^2(x+6)^3(x-4) graph it".
+function equationIn(text) {
+  const B = window.CassieBoard;
+  if (!B) return '';
+  const t = String(text || '');
+  const eq = B.findEquation(t);
+  if (eq) return eq;
+  const runs = t.match(/[-+−–0-9xX.^*/×÷()\s√π²³]{3,}/g) || [];
+  const cands = runs.map((r) => r.trim()).filter((r) => /x/i.test(r) && /[\d^(²³]/.test(r)).sort((a, b) => b.length - a.length);
+  for (const c of cands) {
+    try { const n = B.normalize(c); const f = B.compile(n); if ([1.3, 2.7, -1.1].some((v) => isFinite(f(v)))) return n; } catch (e) { /* not maths */ }
+  }
+  return '';
+}
+// No AI answered, but the equation is right there: draw the graph anyway.
+function graphWithoutBrain(text) {
+  const eq = GRAPH_ASK_RE.test(text || '') && equationIn(text);
+  if (!eq || !window.CassieBoard) return '';
+  const spec = window.CassieBoard.graphSpec(eq);
+  return 'I couldn’t reach my brain just now, so here’s the graph on its own. Ask me again in a minute and I’ll explain it.\n\n```cassie-board\n' + JSON.stringify(spec) + '\n```';
+}
+
 // The board's "Ask": Cassie answers about the board, and draws on it when asked (or when a
 // graph says it best). A blank board isn't sent as a picture.
 async function askBoard(png, q, parts) {
   const B = window.CassieBoard;
-  const blank = parts && !parts.image && !(parts.strokes || []).length;
-  const prompt = `${blank ? '' : 'This is my board (maybe a picture, maybe my own writing on it). '}${q}\n\nIf I asked you to draw, graph, plot, sketch or show something, or the answer is best shown as a graph, shape or numbered steps, include exactly one cassie-board block: it gets drawn right on my board. Keep your words short (under 120 words).`;
-  const image = blank ? null : { mimeType: 'image/png', base64: String(png).split(',')[1] || '' };
-  const reply = await askCassie([{ role: 'user', content: prompt }], image, { tutor: true });
+  const strokes = (parts && parts.strokes) || [];
+  const typed = strokes.filter((x) => x.tool === 'text').map((x) => x.text).join('\n').trim();
+  // only typed text on the board: send it as text, no picture needed (exact, and works with any brain)
+  const needsPicture = !!(parts && parts.image) || strokes.some((x) => x.tool !== 'text' && x.by !== 'cassie');
+  const wrote = typed ? 'On my board I wrote:\n"' + typed + '"\n' : '';
+  const prompt = `${needsPicture ? 'This is my board (maybe a picture, maybe my own writing on it). ' : ''}${wrote}${q}\n\nIf I asked you to draw, graph, plot, sketch or show something, or the answer is best shown as a graph, shape or numbered steps, include exactly one cassie-board block: it gets drawn right on my board. Keep your words short (under 120 words).`;
+  const image = needsPicture ? { mimeType: 'image/png', base64: String(png).split(',')[1] || '' } : null;
+  let reply;
+  try { reply = await askCassie([{ role: 'user', content: prompt }], image, { tutor: true }); }
+  catch (e) {
+    const eq = GRAPH_ASK_RE.test(q) && equationIn(q + '\n' + typed);
+    if (eq && B) return { reply: 'I couldn’t reach my brain just now, so I drew the graph on its own. Ask again in a minute for the explanation.', draw: B.graphSpec(eq) };
+    reportAuto('board', errorText(e));
+    throw e;
+  }
   const { clean, boards } = B ? B.extract(reply) : { clean: reply, boards: [] };
   let draw = boards[0];
-  if (!draw && B && GRAPH_ASK_RE.test(q)) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
+  if (!draw && B && GRAPH_ASK_RE.test(q)) { const eq = equationIn(q + '\n' + typed) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
   track('feature', draw ? 'board-draw' : 'board-ask');
   return { reply: clean, draw };
 }

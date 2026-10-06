@@ -23,7 +23,7 @@ export async function startFakeServer(port = 4630) {
       return out;
     },
   };
-  const mode = { groq: 'ok', ai: 'ok', claude: 'off', calls: [], claudeCalls: [] };
+  const mode = { groq: 'ok', ai: 'ok', claude: 'off', gemini: 'off', groqVision: 'ok', calls: [], claudeCalls: [], geminiCalls: [] };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
@@ -41,21 +41,44 @@ export async function startFakeServer(port = 4630) {
       if (mode.claude === 'refuse') return Response.json({ content: [], stop_reason: 'refusal' });
       return Response.json({ content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: mode.claudeReply || 'Claude here: plants turn light into food.' }], stop_reason: 'end_turn' });
     }
+    // A question's "known answer", for the brain check and realistic replies
+    const smart = (msgs) => {
+      const last = msgs.at(-1), text = typeof last.content === 'string' ? last.content : last.content.filter((p) => p.type === 'text').map((p) => p.text || '').join(' ');
+      const pic = typeof last.content !== 'string' && last.content.some((p) => p.type === 'image_url' || p.inlineData);
+      if (/17 × 23/.test(text)) return '391';
+      if (/graph y = x\^2 - 4/.test(text)) return '```cassie-board\n{"type":"graph","title":"y = x^2 - 4","fn":"x^2 - 4","xrange":[-4,4]}\n```';
+      if (pic && /sum in this picture/.test(text)) return '56';
+      return null;
+    };
+    if (u.startsWith('https://generativelanguage.googleapis.com/')) { // the server's own Gemini (mode.gemini)
+      const body = JSON.parse(init.body);
+      mode.geminiCalls.push(u.match(/models\/([^:]+)/)[1]);
+      if (mode.gemini !== 'ok') return Response.json({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }, { status: 503 });
+      const parts = body.contents.at(-1).parts;
+      const asMsgs = [{ role: 'user', content: parts.map((p) => (p.inlineData ? { type: 'image_url' } : { type: 'text', text: p.text })) }];
+      return Response.json({ candidates: [{ content: { parts: [{ text: smart(asMsgs) || mode.geminiReply || 'Gemini on the server read it.' }] } }] });
+    }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
-    if (u.endsWith('/models')) return Response.json({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] });
+    if (u.endsWith('/models')) { // mode.groqVision: 'ok' | 'second' (first picture model broken) | 'retired' (none left)
+      const vision = mode.groqVision === 'retired' ? [] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
+      return Response.json({ data: [...vision, { id: 'openai/gpt-oss-120b' }, { id: 'whisper-large-v3' }] });
+    }
     const body = JSON.parse(init.body);
     mode.calls.push({ model: body.model, auth: init.headers.authorization, last: body.messages.at(-1) });
     if (mode.groq === 'busy') return Response.json({ error: { message: 'Rate limit reached' } }, { status: 429, headers: { 'retry-after': '40' } });
     if (mode.groq === 'down') return Response.json({ error: { message: 'Service unavailable' } }, { status: 503 });
-    return Response.json({ choices: [{ message: { role: 'assistant', content: mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
+    if (mode.groqVision === 'retired' && /scout|-vl-/.test(body.model)) return Response.json({ error: { message: `The model \`${body.model}\` does not exist or you do not have access to it.` } }, { status: 404 });
+    if (mode.groqVision === 'second' && /llama-4-scout/.test(body.model)) return Response.json({ error: { message: 'The model `meta-llama/llama-4-scout-17b-16e-instruct` has been decommissioned.' } }, { status: 400 });
+    return Response.json({ choices: [{ message: { role: 'assistant', content: smart(body.messages) || mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
   };
   const env = {
     DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
+    get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     AI: { async run(model, input) {
       if (mode.ai !== 'ok') throw new Error('AI down');
       if (/flux/.test(model)) { mode.lastImagePrompt = input.prompt; return { image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }; }
-      return { response: 'Backup brain answer: plants use sunlight.' };
+      return { response: /17 × 23/.test(JSON.stringify(input.messages)) ? '391' : 'Backup brain answer: plants use sunlight.' };
     } },
   };
   const ctx = { waitUntil() {} };
@@ -66,7 +89,7 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/__mode') {
       if (req.method === 'POST') Object.assign(mode, JSON.parse(body.toString() || '{}'));
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, claudeCalls: mode.claudeCalls.slice(-5) }));
+      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, lastCalls: mode.calls.slice(-6).map((c) => c.model), claudeCalls: mode.claudeCalls.slice(-5), geminiCalls: mode.geminiCalls.slice(-6) }));
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);
