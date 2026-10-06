@@ -1541,3 +1541,73 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .vc button:focus-visible, .vc select:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 @media (max-width: 480px) { .vc-stage { width: 170px; height: 170px; } .vc-voice { max-width: 110px; } .vc-modes button { padding: 8px 6px; font-size: .8rem; } }
 @media (prefers-reduced-motion: reduce) { .vc-ring { animation: none !important; } }
+
+/* ---------- a clean chat canvas ----------
+   The starters live in the "Ideas" panel on the right; the chips under the chat stay
+   on one line and scroll sideways instead of stacking up on phones. */
+.home-ideas {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; padding: 9px 15px; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; font-size: .9rem; cursor: pointer;
+}
+.home-ideas svg { width: 16px; height: 16px; fill: currentColor; }
+.home-ideas:hover { border-color: var(--text); }
+.ideas-shade { position: fixed; inset: 0; z-index: 140; background: rgba(0, 0, 0, .25); opacity: 0; transition: opacity .25s; }
+.ideas-shade.open { opacity: 1; }
+.ideas-shade[hidden], .ideas-panel[hidden] { display: none; }
+.ideas-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 141; width: min(340px, 88vw); overflow-y: auto;
+  padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom)); background: var(--bg);
+  border-left: 1px solid var(--border); box-shadow: -18px 0 40px rgba(0, 0, 0, .14);
+  transform: translateX(104%); transition: transform .28s cubic-bezier(.3, .9, .4, 1);
+}
+.ideas-panel.open { transform: none; }
+.ideas-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.ideas-head h2 { margin: 0; font-size: 1.15rem; }
+.ideas-x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.ideas-list { display: flex; flex-direction: column; gap: 10px; }
+.ideas-list .home-example { width: 100%; justify-content: flex-start; }
+@media (prefers-reduced-motion: reduce) { .ideas-panel, .ideas-shade { transition: none; } }
+.quick-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.quick-actions::-webkit-scrollbar { display: none; }
+.quick-actions .chip { flex-shrink: 0; }
+/* phones: the top bar holds the menu, Cassie, the switch and four icons */
+@media (max-width: 430px) {
+  .topbar { padding-left: 10px; padding-right: 8px; column-gap: 4px; }
+  .topbar-actions { gap: 0; }
+  .topbar-actions .icon-btn { width: 34px; height: 34px; padding: 0; }
+  .topbar-actions .icon-btn svg { width: 20px; height: 20px; }
+  .topbar-actions .aud-switch { margin-right: 2px; }
+  .topbar-actions .aud-switch button { padding: 6px 8px; }
+}
+@media (max-width: 380px) { .topbar .brand > span { display: none; } } /* the Cassie dot stays */
+/* Explore 3D — the human body */
+.x3d-find { position: absolute; left: 16px; right: 16px; top: calc(62px + var(--safe-top, 0px)); max-width: 420px; }
+.x3d-find[hidden] { display: none; }
+.x3d-search {
+  width: 100%; font: inherit; font-size: .9rem; padding: 9px 14px; border-radius: 99px; color: #f2f2f4;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); outline: none;
+}
+.x3d-search::placeholder { color: rgba(255, 255, 255, .5); }
+.x3d-search:focus { border-color: rgba(255, 255, 255, .55); }
+.x3d-results { margin-top: 6px; border-radius: 16px; overflow: hidden; background: rgba(16, 17, 22, .94); border: 1px solid rgba(255, 255, 255, .14); }
+.x3d-results[hidden] { display: none; }
+.x3d-results button { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: transparent; color: #f2f2f4; font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
+.x3d-results button:hover, .x3d-results button:focus-visible { background: rgba(255, 255, 255, .08); }
+.x3d-results span { color: rgba(255, 255, 255, .55); font-size: .8rem; white-space: nowrap; }
+.x3d-showall { margin-top: 8px; }
+.x3d-showall[hidden] { display: none; }
+.x3d-sys .x3d-tick { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid rgba(255, 255, 255, .6); flex-shrink: 0; }
+.x3d-sys[aria-pressed="true"] { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
+.x3d-sys[aria-pressed="true"] .x3d-tick { border-color: #111; background: #111 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; }
+.x3d-path { margin: 6px 0 0; font-size: .8rem; color: rgba(255, 255, 255, .62); }
+.x3d-path[hidden], .x3d-credit[hidden] { display: none; }
+.x3d-credit { margin: 10px 0 0; font-size: .72rem; color: rgba(255, 255, 255, .45); }
+.x3d-credit a { color: inherit; }
+.x3d-act[hidden], .x3d-btn[hidden] { display: none; }
+@media (max-width: 560px) { .x3d-find { top: calc(108px + var(--safe-top, 0px)); } }
+.x3d-up { border: 0; background: none; padding: 0; font: inherit; color: #f2f2f4; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.vc-gender { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
+.vc-gender button { border: 0; background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 600; padding: 7px 11px; border-radius: 99px; cursor: pointer; }
+.vc-gender button[aria-checked="true"] { background: var(--primary); color: #fff; }
+@media (max-width: 480px) { .vc-top { justify-content: space-between; } .vc-modes { order: 3; flex-basis: 100%; } }
+.home-intro .review-mistakes { margin-top: 12px; }

@@ -266,6 +266,8 @@ const groqKeyInput = document.getElementById('groq-key-input');
 const groqModelSelect = document.getElementById('groq-model-select');
 const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
+const voiceGenderSelect = document.getElementById('voice-gender-select');
+const hearingSelect = document.getElementById('hearing-select');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
@@ -1678,7 +1680,40 @@ const HOME_EXAMPLES = [
   { label: 'Solve step by step', icon: 'M3 5h2v2H3zM7 5h14v2H7zM3 11h2v2H3zM7 11h14v2H7zM3 17h2v2H3zM7 17h14v2H7z', text: 'Solve step by step: 3x + 7 = 22', send: true },
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
+  { label: 'Explore the body in 3D', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openExplore('body') },
+  { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
+
+// The "Ideas" panel: starters that used to sit on the home screen, tucked away on the right
+// so the chat stays a clean canvas. Open it from "Ideas to get started".
+const ideasPanel = (() => {
+  const el = document.createElement('aside');
+  el.className = 'ideas-panel';
+  el.hidden = true;
+  el.setAttribute('aria-label', 'Ideas to get started');
+  el.innerHTML = '<div class="ideas-head"><h2>Ideas</h2><button type="button" class="ideas-x" aria-label="Close">×</button></div><div class="ideas-list"></div>';
+  const shade = document.createElement('div');
+  shade.className = 'ideas-shade';
+  shade.hidden = true;
+  document.body.append(shade, el);
+  shade.addEventListener('click', () => closeIdeas());
+  el.querySelector('.ideas-x').addEventListener('click', () => closeIdeas());
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeIdeas(); });
+  return { el, shade, list: el.querySelector('.ideas-list') };
+})();
+function fillIdeas(bar) {
+  ideasPanel.list.replaceChildren(...bar.children);
+}
+function openIdeas() {
+  ideasPanel.el.hidden = false; ideasPanel.shade.hidden = false;
+  requestAnimationFrame(() => { ideasPanel.el.classList.add('open'); ideasPanel.shade.classList.add('open'); });
+  setTimeout(() => { const b = ideasPanel.list.querySelector('button'); if (b) b.focus(); }, 80);
+}
+function closeIdeas() {
+  if (ideasPanel.el.hidden) return;
+  ideasPanel.el.classList.remove('open'); ideasPanel.shade.classList.remove('open');
+  setTimeout(() => { ideasPanel.el.hidden = true; ideasPanel.shade.hidden = true; }, 250);
+}
 
 function renderHome() {
   const wrap = document.createElement('div');
@@ -1688,9 +1723,10 @@ function renderHome() {
   intro.innerHTML = `
     <div class="home-badge"><span class="brand-dot"></span></div>
     <h2 class="home-title">Hi, I'm Cassie <svg class="home-spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg></h2>
-    <p class="home-sub">Your study buddy. Ask me anything, or start with one of these:</p>
-    <p class="home-tip">Tip: highlight text anywhere in an answer, or use Hint, Research, and Web below.</p>
+    <p class="home-sub">Your study buddy. Ask me anything.</p>
+    <button type="button" class="home-ideas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg>Ideas to get started</button>
   `;
+  intro.querySelector('.home-ideas').addEventListener('click', () => openIdeas());
   const bar = document.createElement('div');
   bar.className = 'home-bar';
   HOME_EXAMPLES.forEach((ex) => {
@@ -1702,6 +1738,8 @@ function renderHome() {
     lbl.textContent = ex.label;
     btn.appendChild(lbl);
     btn.addEventListener('click', () => {
+      closeIdeas();
+      if (ex.run) { ex.run(); return; }
       if (ex.send) {
         handleSend(ex.text);
       } else {
@@ -1721,11 +1759,11 @@ function renderHome() {
     const lbl = document.createElement('span');
     lbl.textContent = due ? `Review my mistakes (${due})` : `Review my mistakes (${saved} saved)`;
     btn.appendChild(lbl);
-    btn.addEventListener('click', () => reviewMistakes(!due));
-    bar.prepend(btn);
+    btn.addEventListener('click', () => { closeIdeas(); reviewMistakes(!due); });
+    intro.appendChild(btn); // personal and timely: it stays on the home screen
   }
   wrap.appendChild(intro);
-  wrap.appendChild(bar);
+  fillIdeas(bar);
   chatLog.appendChild(wrap);
   if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
@@ -3950,7 +3988,7 @@ async function openExplore(cell) {
       return;
     }
     const view = exploreMod.open({
-      cell: cell === 'plant' ? 'plant' : cell === 'animal' ? 'animal' : undefined,
+      cell: ['plant', 'animal', 'body'].includes(cell) ? cell : undefined,
       onAsk: (q) => { view.close(); handleSend(q); },
       onQuiz: (topic) => { view.close(); startQuizOn(topic); },
       onClose: () => { try { exploreBtn && exploreBtn.focus(); } catch (e) { /* ignore */ } },
@@ -4025,6 +4063,8 @@ function openSettings() {
   groqModelSelect.value = state.groqModel;
   geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
+  if (voiceGenderSelect) voiceGenderSelect.value = state.voiceGender === 'man' ? 'man' : 'woman';
+  if (hearingSelect) hearingSelect.value = state.hearing === 'fast' ? 'fast' : 'accurate';
   if (levelSelect) levelSelect.value = state.level || 'auto';
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
@@ -4123,6 +4163,8 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
+  if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
+  if (hearingSelect) state.hearing = hearingSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
   if (levelSelect) state.level = levelSelect.value;
   if (citationSelect) state.citationStyle = citationSelect.value;
@@ -4582,7 +4624,10 @@ if (SpeechRecognitionCtor) {
 function speak(text) {
   if (!state.voiceOut || !('speechSynthesis' in window) || voiceChat) return; // the voice screen speaks for itself
   window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
+  const utter = new SpeechSynthesisUtterance(cleanForSpeech(text));
+  const v = pickVoice();
+  if (v) { try { utter.voice = v; } catch (e) { /* ignore */ } utter.lang = v.lang; }
+  utter.pitch = voicePitch(v);
   utter.rate = 1.02;
   utter.onstart = () => botMood('talking');
   utter.onend = utter.onerror = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
@@ -4638,14 +4683,27 @@ function cassieVoices() {
   if (!canTalk()) return [];
   return window.speechSynthesis.getVoices().filter((v) => /^(en|fil|tl)([-_]|$)/i.test(v.lang));
 }
+// Cassie's voice can be a woman's or a man's (Settings, or the switch on the voice screen).
+const WOMAN_VOICE = /female|woman|aria|jenny|samantha|zira|google us english|google uk english female|karen|moira|tessa|serena|ava|allison|susan|libby|sonia|natasha|emma|michelle|joanna|salli|kendra|ivy|kimberly|nicky|victoria|fiona|veena|heera|catherine|hazel|clara|rosa|blessica|angelo/i;
+const MAN_VOICE = /\bmale\b|\bman\b|david|mark|guy|daniel|alex\b|fred|ryan|andrew|brian|christopher|eric|roger|steffan|aaron|arthur|thomas|tom\b|lee\b|rishi|james|george|oliver|william|liam|matthew|justin|joey|google uk english male|prabhat|ravi|william|connor/i;
+const voiceGender = () => (state.voiceGender === 'man' ? 'man' : 'woman');
 function pickVoice() {
   const vs = cassieVoices();
   if (!vs.length) return null;
-  if (state.voiceName) { const v = vs.find((x) => x.name === state.voiceName); if (v) return v; }
+  const want = voiceGender();
+  const isWoman = (v) => WOMAN_VOICE.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, ''));
+  const isMan = (v) => MAN_VOICE.test(v.name) && !/female/i.test(v.name);
   const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 4 : 0)
-    + (/female|aria|jenny|samantha|zira|google us english|karen|moira|tessa|serena|ava|allison|susan|libby|sonia|natasha|emma|michelle|joanna|salli|kendra/i.test(v.name) ? 2 : 0)
+    + ((want === 'woman' ? isWoman(v) : isMan(v)) ? 3 : 0) - ((want === 'woman' ? isMan(v) : isWoman(v)) ? 6 : 0)
     + (/^en[-_]US/i.test(v.lang) ? 1 : /^en[-_](PH|GB|AU)/i.test(v.lang) ? 0.6 : 0);
   return vs.slice().sort((a, b) => score(b) - score(a))[0];
+}
+// When a device has no man's (or woman's) voice, Cassie changes the pitch instead.
+function voicePitch(v) {
+  const want = voiceGender();
+  const fits = v && (want === 'woman' ? WOMAN_VOICE.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, '')) : MAN_VOICE.test(v.name) && !/female/i.test(v.name));
+  if (want === 'man') return fits ? 1 : 0.72;
+  return fits ? 1.06 : 1.18;
 }
 
 function buildVoiceUI() {
@@ -4660,7 +4718,7 @@ function buildVoiceUI() {
       <div class="vc-modes" role="tablist" aria-label="How to talk">
         ${Object.entries(VOICE_MODES).map(([k, m]) => `<button type="button" role="tab" data-vmode="${k}">${m.label}</button>`).join('')}
       </div>
-      <label class="vc-voice-pick"><span class="sr-only">Cassie's voice</span><select class="vc-voice" aria-label="Cassie's voice"></select></label>
+      <div class="vc-gender" role="radiogroup" aria-label="Cassie's voice"><button type="button" role="radio" data-gender="woman">Woman</button><button type="button" role="radio" data-gender="man">Man</button></div>
     </div>
     <button type="button" class="vc-stage" aria-label="Cassie — tap to stop her talking"><span class="vc-ring"></span><span class="vc-bot"></span></button>
     <p class="vc-status" aria-live="polite"></p>
@@ -4672,7 +4730,7 @@ function buildVoiceUI() {
     <p class="vc-tip"></p>`;
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
-  const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), mic: q('.vc-mic'), tip: q('.vc-tip'), voiceSel: q('.vc-voice'), stage: q('.vc-stage'), bot: null };
+  const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), mic: q('.vc-mic'), tip: q('.vc-tip'), gender: q('.vc-gender'), stage: q('.vc-stage'), bot: null };
   if (window.CassieBot) ui.bot = window.CassieBot.create(q('.vc-bot'), { glow: true, accent: state.accent || '#d8343c' });
   q('.vc-x').addEventListener('click', closeVoice);
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVoice(); });
@@ -4685,18 +4743,16 @@ function buildVoiceUI() {
     else if (v.phase === 'paused') listenVoice();
   });
   ui.stage.addEventListener('click', () => { if (voiceChat && voiceChat.phase === 'speaking' && voiceChat.stopSpeaking) voiceChat.stopSpeaking(); });
-  const fillVoices = () => {
-    const vs = cassieVoices(), cur = pickVoice();
-    ui.voiceSel.innerHTML = vs.map((v) => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name.replace(/^(Microsoft|Google)\s+/, '').replace(/\s*\(.*\)$/, '').slice(0, 28))}</option>`).join('');
-    if (cur) ui.voiceSel.value = cur.name;
-    ui.voiceSel.parentElement.hidden = vs.length < 2;
-  };
-  fillVoices();
-  if (canTalk()) window.speechSynthesis.addEventListener('voiceschanged', fillVoices);
-  ui.voiceSel.addEventListener('change', () => {
-    state.voiceName = ui.voiceSel.value; save();
+  const markGender = () => ui.gender.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === voiceGender())));
+  markGender();
+  ui.gender.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-gender]');
+    if (!b) return;
+    state.voiceGender = b.dataset.gender; save(); markGender();
+    const sel = document.getElementById('voice-gender-select'); if (sel) sel.value = voiceGender();
     if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); sayThenListen('Hi! This is my voice now.'); }
   });
+  ui.markGender = markGender;
   return ui;
 }
 
@@ -4752,7 +4808,7 @@ function sayThenListen(text) {
       const u = new SpeechSynthesisUtterance(chunks[i++]);
       const voice = pickVoice();
       if (voice) { try { u.voice = voice; } catch (e) { /* not a voice this browser knows */ } u.lang = voice.lang; }
-      u.rate = 1; u.pitch = 1.08;
+      u.rate = 1; u.pitch = voicePitch(voice);
       u.onend = next; u.onerror = next;
       try { synth.speak(u); } catch (e) { finish(); return; } // never get stuck "talking"
       // some browsers never say they've finished: move on after a fair time
@@ -4769,6 +4825,11 @@ function listenVoice() {
   v.heardSomething = false; // what you said last stays on screen until you speak again
   setVoicePhase('listening');
   if (SpeechRecognitionCtor && !v.useRecorder) listenWithBrowser(v); else listenWithRecorder(v);
+}
+// Whisper (Groq, through Cassie's server or your own key) hears better than the browser —
+// accents, Taglish and science words — so Cassie uses it when she can.
+function accurateHearing() {
+  return (SERVER || state.groqKey) && navigator.mediaDevices && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext) && state.hearing !== 'fast';
 }
 function heard(text) {
   const v = voiceChat;
@@ -4864,15 +4925,27 @@ async function listenWithRecorder(v) {
     try {
       const text = await transcribeAudio(new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' }));
       if (voiceChat !== v) return;
-      if (text) heard(text); else sayThenListen('Sorry, I didn’t catch that. Can you say it again?');
-    } catch (e) { if (voiceChat === v) sayThenListen(e.message || 'Sorry, I couldn’t hear that. Try again?'); }
+      v.hearFails = 0;
+      if (text && !/^(thank you\.?|thanks for watching!?|you)$/i.test(text)) heard(text); else sayThenListen('Sorry, I didn’t catch that. Can you say it again?');
+    } catch (e) {
+      if (voiceChat !== v) return;
+      v.hearFails = (v.hearFails || 0) + 1;
+      if (v.hearFails >= 2 && SpeechRecognitionCtor) v.useRecorder = false; // the browser listens instead
+      sayThenListen(e.message || 'Sorry, I couldn’t hear that. Try again?');
+    }
   };
   v.recorder = recorder;
   recorder.start(250);
 }
+// A hint for Whisper: the words of what you're talking about, so "mitochondria" isn't heard as "my toe kondria".
+function hearingHint() {
+  const recent = state.messages.slice(-4).map((m) => (typeof m.content === 'string' ? m.content : '')).join(' ');
+  return cleanForSpeech(recent).slice(-400);
+}
 async function transcribeAudio(blob) {
   const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
-  const form = (extra) => { const fd = new FormData(); fd.append('file', blob, 'speech.' + ext); Object.entries(extra).forEach(([k, val]) => fd.append(k, val)); return fd; };
+  const hint = hearingHint();
+  const form = (extra) => { const fd = new FormData(); fd.append('file', blob, 'speech.' + ext); if (hint) fd.append('prompt', hint); Object.entries(extra).forEach(([k, val]) => fd.append(k, val)); return fd; };
   if (state.groqKey) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { authorization: 'Bearer ' + state.groqKey }, body: form({ model: 'whisper-large-v3-turbo', response_format: 'json' }) });
@@ -4881,6 +4954,7 @@ async function transcribeAudio(blob) {
   }
   if (SERVER) {
     const r = await fetch(SERVER + '/transcribe', { method: 'POST', body: form({ uid: installId() }) });
+    if (r.status === 404 && SpeechRecognitionCtor && voiceChat) { voiceChat.useRecorder = false; throw new Error('Sorry, can you say that again?'); } // an older server: the browser listens instead
     if (r.ok) return String((await r.json()).text || '').trim();
     let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
     throw new Error(m || 'Sorry, I couldn’t hear that. Try again?');
@@ -4923,7 +4997,7 @@ function openVoice(mode = 'chat') {
   if (!canHear()) { renderMessage('assistant', 'This browser can’t use the microphone. Try Chrome, Edge or Safari.'); return; }
   if (!voiceUI) voiceUI = buildVoiceUI();
   if (voiceChat) closeVoice();
-  voiceChat = { mode, phase: 'paused', quizBefore: quizMode, useRecorder: !SpeechRecognitionCtor };
+  voiceChat = { mode, phase: 'paused', quizBefore: quizMode, useRecorder: !SpeechRecognitionCtor || !!accurateHearing() };
   voiceUI.el.hidden = false;
   document.documentElement.classList.add('vc-open');
   if (voiceUI.bot) voiceUI.bot.pause(false);
@@ -5588,8 +5662,9 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',
   'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
-  'Explore 3D: turn an animal or plant cell in 3D, zoom in and tap any part to see what it does — then ask Cassie about it or take a quiz. Works on phones too.',
+  'Explore 3D (the cube at the top): a real 3D human body — skeleton, organs, heart and blood vessels, brain and nerves, muscles. Tap any part or search it by name, then ask Cassie about it. Animal and plant cells too.',
   'Drop on Cassie: drag a PDF, Word, PowerPoint, photo or some words onto Cassie and her pill opens — tap Summarize, Quiz me or Ask about it, and the answer shows right there.',
   'Pop Cassie out (Chrome or Edge on a computer): tap the little window button at the top and she floats on top of Word, PDFs and your other apps. Drop files on her or ask anything.',
   'Read & highlight: attach a PDF, Word or PowerPoint and tap “📖 Read & highlight” to read it here and highlight any part (great on phones).',

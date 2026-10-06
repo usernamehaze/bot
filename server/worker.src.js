@@ -354,6 +354,7 @@ async function transcribe(request, env, ctx) {
   minuteHits.set(mk, { m: minute, n });
   if (n > (+env.TRANSCRIBE_MINUTE_LIMIT || 20)) return chatError('Lots of talking! Give me a few seconds.', 429, h, { 'retry-after': '20' });
   const lang = /^[a-z]{2}$/.test(String(form.get('language') || '')) ? String(form.get('language')) : '';
+  const hint = String(form.get('prompt') || '').slice(0, 600); // words from the conversation, so Whisper spells them right
   const problems = [];
   if (env.GROQ_KEY) {
     for (const model of WHISPER) {
@@ -362,6 +363,7 @@ async function transcribe(request, env, ctx) {
       fd.append('model', model);
       fd.append('response_format', 'json');
       if (lang) fd.append('language', lang);
+      if (hint) fd.append('prompt', hint);
       try {
         const r = await fetch(`${GROQ}/audio/transcriptions`, { method: 'POST', headers: { authorization: `Bearer ${env.GROQ_KEY}` }, body: fd, signal: AbortSignal.timeout(30000) });
         if (r.ok) { const text = String((await r.json()).text || '').trim(); ctx.waitUntil(countChat(env, dayOf(now), 'voice')); return json({ text }, 200, h); }
@@ -374,7 +376,7 @@ async function transcribe(request, env, ctx) {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-      const o = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: btoa(bin), ...(lang ? { language: lang } : {}) });
+      const o = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: btoa(bin), ...(lang ? { language: lang } : {}), ...(hint ? { initial_prompt: hint } : {}) });
       const text = String((o && (o.text ?? o.result?.text)) || '').trim();
       ctx.waitUntil(countChat(env, dayOf(now), 'voice-backup'));
       return json({ text }, 200, h);

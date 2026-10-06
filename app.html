@@ -93,6 +93,9 @@
     <button id="popout-btn" class="icon-btn" title="Pop Cassie out — she floats on top of your other apps. Drop a file or ask her anything." aria-label="Pop Cassie out into a floating window" aria-pressed="false" hidden>
       <svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v12h14V6H5z"/><rect x="11" y="11" width="6" height="5" rx="1"/></svg>
     </button>
+    <button id="explore-btn" class="icon-btn" title="Explore 3D — the human body, an animal cell and a plant cell" aria-label="Explore 3D">
+      <svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z"/></svg>
+    </button>
     <button id="board-btn" class="icon-btn" title="Board — draw, sketch, or work on a graph" aria-label="Open the drawing board">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>
     </button>
@@ -145,10 +148,6 @@
     <button type="button" id="quiz-btn" class="chip" title="Start a practice quiz">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
       <span class="chip-label">Quiz me</span>
-    </button>
-    <button type="button" id="explore-btn" class="chip" title="Explore a 3D animal or plant cell — turn it, zoom in and tap any part">
-      <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z"/></svg>
-      <span class="chip-label">Explore 3D</span>
     </button>
     <button type="button" id="research-btn" class="chip" title="Find real academic papers for a thesis / RRL">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z"/></svg>
@@ -315,6 +314,20 @@
           <label class="field row">
             <span>Read answers aloud</span>
             <input type="checkbox" id="voice-out-toggle">
+          </label>
+          <label class="field">
+            <span>Cassie's voice</span>
+            <select id="voice-gender-select">
+              <option value="woman">Woman</option>
+              <option value="man">Man</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>When you talk to Cassie</span>
+            <select id="hearing-select">
+              <option value="accurate">Most accurate (recommended)</option>
+              <option value="fast">Fastest (the browser listens)</option>
+            </select>
           </label>
         </div>
       </details>
