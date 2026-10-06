@@ -217,7 +217,9 @@
     let stateName = '', st = STATES.idle, stateAt = 0, accessory = null;
     let lookX = 0, lookY = 0, wantX = 0, wantY = 0, pointerLook = null;
     // opts.clock (ms) drives her from outside — e.g. a video rendered frame by frame; call api.render()
-    const clock = typeof opts.clock === 'function' ? opts.clock : () => performance.now();
+    // opts.win: the window she lives in (the pop-out Cassie window keeps animating while the main tab is hidden)
+    const W = opts.win || window;
+    const clock = typeof opts.clock === 'function' ? opts.clock : () => W.performance.now();
     let blinkUntil = 0, nextBlink = clock() + 2200, glanceUntil = 0, glance = [0, 0];
     let raf = 0, last = 0, t0 = clock(), alive = true, paused = false, pokeTimer = 0;
     const shown = { eyes: '', mouth: '', badge: '', fx: '' };
@@ -282,8 +284,8 @@
 
     function frame(now) {
       if (!alive) return;
-      if (opts.clock) now = clock(); else raf = requestAnimationFrame(frame);
-      if (!opts.clock && (paused || document.hidden || now - last < 32)) return; // ~30 fps is plenty, and nothing while hidden or paused
+      if (opts.clock) now = clock(); else raf = W.requestAnimationFrame(frame);
+      if (!opts.clock && (paused || W.document.hidden || now - last < 32)) return; // ~30 fps is plenty, and nothing while hidden or paused
       last = now;
       const t = (now - t0) / 1000, ts = (now - stateAt) / 1000;
       const calm = reduced();
@@ -378,7 +380,7 @@
       render() { frame(clock()); }, // with opts.clock: draw her at that moment
       poke() { const back = stateName === 'poke' ? 'idle' : stateName; setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => setState(back), 950); },
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
-      destroy() { alive = false; cancelAnimationFrame(raf); svg.remove(); },
+      destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); },
     };
     return api;
   }

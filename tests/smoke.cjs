@@ -539,6 +539,130 @@ test('Cassie Island: the top bar shows what she is doing, then says Done', async
   await ctx.close();
 });
 
+// Drag something over the page (like from the desktop): dragenter + dragover, then drop.
+const dragIn = (page, payload, target = '#chat-log') => page.evaluate(([p, sel]) => {
+  const dt = new DataTransfer();
+  if (p.text) dt.setData('text/plain', p.text);
+  if (p.b64) { const bin = atob(p.b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); dt.items.add(new File([u], p.name, { type: p.type })); }
+  window.__dt = dt;
+  const t = document.querySelector(sel);
+  t.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  t.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+}, [payload, target]);
+const dropOn = (page, sel = '.isle-card') => page.evaluate((s) => {
+  const t = document.querySelector(s);
+  t.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: window.__dt }));
+  return t.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: window.__dt }));
+}, sel);
+const isleStep = (page) => page.evaluate(() => document.querySelector('.isle-card').dataset.step || '');
+
+test('Island drop: drop a PDF on Cassie → Summarize → the answer shows in the Island', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Summary: water evaporates, condenses and falls as rain.' }) });
+  const pdf = await page.evaluate(async () => {
+    const blob = await window.CassieExport.toPdf('# Water cycle\n\nEvaporation, condensation and precipitation move water around the Earth.', 'Water cycle');
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let s = ''; for (const x of buf) s += String.fromCharCode(x);
+    return btoa(s);
+  });
+  await dragIn(page, { b64: pdf, name: 'water.pdf', type: 'application/pdf' });
+  expect(await isleStep(page) === 'drop', 'dragging a file over the app should open the drop zone: ' + await isleStep(page));
+  expect(/Drop it here/.test(await page.locator('.isle-card').innerText()), 'the drop zone should say Drop it here');
+  expect(await page.evaluate(() => document.getElementById('island').classList.contains('carded')), 'the pill should give way to the card');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/isle-drop.png', clip: { x: 0, y: 0, width: 412, height: 260 } });
+  const prevented = !(await dropOn(page));
+  expect(prevented, 'the drop should be handled by Cassie, not the browser');
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 15000 });
+  const card = page.locator('.isle-card');
+  expect(/water\.pdf is ready/.test(await card.innerText()) && /What should I do with it/.test(await card.innerText()), 'ready card: ' + await card.innerText());
+  for (const label of ['Ask about it', 'Summarize', 'Make a reviewer', 'Quiz me']) expect(await card.getByRole('button', { name: label }).count() === 1, 'missing action ' + label);
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/isle-ready.png', clip: { x: 0, y: 0, width: 412, height: 300 } });
+  await card.getByRole('button', { name: 'Summarize' }).click();
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
+  expect(/water evaporates/.test(await page.locator('.isle-ans-body').innerText()), 'the answer should show in the Island');
+  expect(/condensation/i.test(JSON.stringify(groqCalls)), 'the PDF text should reach the AI');
+  expect(await page.locator('#chat-log .bubble-assistant', { hasText: 'water evaporates' }).count() === 1, 'the answer should be in the chat too');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/isle-answer.png', clip: { x: 0, y: 0, width: 412, height: 420 } });
+  await card.getByRole('button', { name: 'Open in chat' }).click();
+  await page.waitForFunction(() => !document.querySelector('.isle-card').classList.contains('open'), null, { timeout: 3000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Island drop: highlighted words and a photo dropped on Cassie, with Ask about it', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: JSON.stringify(body).includes('image_url') ? 'The picture is a red square.' : 'x = 4, because 2x = 8.' }) });
+  // words dragged from another window
+  await dragIn(page, { text: 'Solve 2x + 3 = 11' });
+  await dropOn(page);
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 5000 });
+  const card = page.locator('.isle-card');
+  expect(/Got your words/.test(await card.innerText()) && /2x \+ 3 = 11/.test(await page.locator('.isle-peek').innerText()), 'the words should show: ' + await card.innerText());
+  await card.getByRole('button', { name: 'Answer it' }).click();
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
+  expect(/x = 4/.test(await page.locator('.isle-ans-body').innerText()), 'answer about the words');
+  expect(JSON.stringify(groqCalls[groqCalls.length - 1]).includes('2x + 3 = 11'), 'the dropped words should be in the question');
+  // a photo, then Ask about it with my own question
+  await dragIn(page, { b64: await redPng(page), name: 'shape.png', type: 'image/png' });
+  expect(await isleStep(page) === 'drop', 'a new drag opens the drop zone again');
+  await dropOn(page);
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 8000 });
+  expect(await page.locator('.isle-thumb').isVisible(), 'the photo should show in the card');
+  await card.getByRole('button', { name: 'Ask about it' }).click();
+  expect(await isleStep(page) === 'ask', 'Ask about it should open the question box');
+  await page.fill('.isle-input', 'What colour is this shape?');
+  await page.press('.isle-input', 'Enter');
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
+  expect(/red square/.test(await page.locator('.isle-ans-body').innerText()), 'answer about the photo: ' + await page.locator('.isle-ans-body').innerText());
+  const last = JSON.stringify(groqCalls[groqCalls.length - 1]);
+  expect(last.includes('image_url') && last.includes('What colour is this shape?'), 'the photo and my question should both be sent');
+  // a drag that leaves without dropping tidies itself away
+  await card.locator('.isle-x').click();
+  await dragIn(page, { text: 'never dropped' });
+  expect(await isleStep(page) === 'drop', 'drop zone opens');
+  await page.waitForFunction(() => !document.querySelector('.isle-card').classList.contains('open'), null, { timeout: 4000 });
+  // a file nobody can read says so
+  await dragIn(page, { b64: Buffer.from('just bytes').toString('base64'), name: 'thing.xyz', type: 'application/octet-stream' });
+  await dropOn(page);
+  await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'err', null, { timeout: 5000 });
+  expect(/can’t open thing\.xyz/.test(await card.innerText()), 'unreadable file message: ' + await card.innerText());
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a file', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Mitosis makes two identical cells.' }) });
+  const btn = page.locator('#popout-btn');
+  expect(await btn.isVisible(), 'the pop-out button should show in Chrome / Edge');
+  await btn.click();
+  await page.waitForFunction(() => typeof pip !== 'undefined' && pip && pip.win.document.querySelector('.isle-card'), null, { timeout: 5000 });
+  const inPip = (fn, arg) => page.evaluate(([f, a]) => new Function('d', 'a', f)(pip.win.document, a), [fn, arg]);
+  expect(await inPip("return d.querySelector('.isle-card').dataset.step") === 'home', 'the pop-out starts ready to ask');
+  expect(await inPip("return !!d.querySelector('.isle-card svg.cassie-bot')"), 'Cassie should be in the pop-out');
+  expect(await inPip("return d.styleSheets.length") > 0, 'the pop-out should have Cassie’s styles');
+  expect(await btn.getAttribute('aria-pressed') === 'true', 'the button shows it is popped out');
+  // ask a question in the floating window
+  await inPip("const i = d.querySelector('.isle-input'); i.value = 'What is mitosis?'; d.querySelector('.isle-ask').requestSubmit();");
+  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
+  expect(/two identical cells/.test(await inPip("return d.querySelector('.isle-ans-body').innerText")), 'the answer should show in the pop-out');
+  expect(await page.locator('#chat-log .bubble-assistant', { hasText: 'two identical cells' }).count() === 1, 'and in the chat');
+  // drop a Word-free text file onto the floating window
+  await inPip(`const dt = new DataTransfer(); dt.items.add(new File(['Photosynthesis turns light into sugar.'], 'notes.txt', { type: 'text/plain' }));
+    d.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    d.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));`);
+  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 8000 });
+  expect(/Photosynthesis/.test(await inPip("return d.querySelector('.isle-peek').innerText")), 'the dropped notes should show');
+  await inPip("[...d.querySelectorAll('.isle-chip')].find((b) => b.textContent === 'Explain').click()");
+  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
+  expect(JSON.stringify(groqCalls[groqCalls.length - 1]).includes('Photosynthesis turns light into sugar'), 'the notes should be in the question');
+  // × goes back to the start, then closes the window
+  await inPip("d.querySelector('.isle-x').click()");
+  expect(await inPip("return d.querySelector('.isle-card').dataset.step") === 'home', '× should go back to the start first');
+  await page.evaluate(() => pip.win.close());
+  await page.waitForFunction(() => pip === null, null, { timeout: 5000 });
+  expect(await btn.getAttribute('aria-pressed') === 'false', 'closing the window resets the button');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
@@ -1083,6 +1207,110 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
     expect(out.groq === 'Groq answer.', 'Groq should answer first when it has a key');
     expect(out.covered === 'Gemini answer.' || /Gemini/.test(out.covered), 'Gemini should cover a busy Groq: ' + out.covered);
     expect(out.noKey === 'no-key', 'no keys should say no-key');
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('extension: drop a PDF, words or a photo on Cassie’s Island on any page', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    const groqCalls = [];
+    await ctx.route(/api\.groq\.com/, (route) => {
+      if (route.request().url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'openai/gpt-oss-120b' }] } });
+      groqCalls.push(route.request().postData() || '');
+      return route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: 'Summary: water evaporates, condenses and falls as rain.' } }] } });
+    });
+    await ctx.route(/askcassie\.pages\.dev/, async (route) => {
+      const u = new URL(route.request().url());
+      return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
+    });
+    await ctx.route(/cdnjs\.cloudflare\.com/, (route) => {
+      const file = CDN[route.request().url().split('/').pop()];
+      return file ? route.fulfill({ path: file, contentType: 'text/javascript' }) : route.abort();
+    });
+    await ctx.route(/workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.route(/example\.com/, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>Biology notes</title></head><body style="height:2000px"><h1>Biology notes</h1><p id="p">Cells divide by mitosis.</p></body></html>' }));
+    await ctx.addInitScript((seed) => { if (!/askcassie/.test(location.host)) return; window.CASSIE_SERVER = ''; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on', groqKey: 'gsk_test' }));
+
+    // a real PDF, made by the Cassie app
+    const maker = await ctx.newPage();
+    await maker.goto('https://askcassie.pages.dev/app.html');
+    const pdf = await maker.evaluate(async () => {
+      const blob = await window.CassieExport.toPdf('# Water cycle\n\nEvaporation, condensation and precipitation move water around the Earth.', 'Water cycle');
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let s = ''; for (const x of buf) s += String.fromCharCode(x);
+      return btoa(s);
+    });
+    await maker.close();
+
+    const page = await ctx.newPage();
+    await page.goto('https://example.com/bio');
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
+    const isle = page.locator('.cx-isle');
+    // drag from the desktop: dragenter + dragover on the page → the Island drops in
+    const dragIn = (p) => page.evaluate((x) => {
+      const dt = new DataTransfer();
+      if (x.text) dt.setData('text/plain', x.text);
+      if (x.b64) { const bin = atob(x.b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); dt.items.add(new File([u], x.name, { type: x.type })); }
+      window.__dt = dt;
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    }, p);
+    const dropOnIsle = () => page.evaluate(() => {
+      const el = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle');
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+      return !el.dispatchEvent(new DragEvent('drop', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+    });
+
+    // 1. a PDF → "water.pdf is ready" → Summarize → the Cassie app reads it and answers
+    await dragIn({ b64: pdf, name: 'water.pdf', type: 'application/pdf' });
+    await page.waitForFunction(() => { const i = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle'); return i && !i.hidden && i.classList.contains('open'); }, null, { timeout: 3000 });
+    expect(/Drop it here/.test(await isle.innerText()), 'the Island should say Drop it here: ' + await isle.innerText());
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/ext-isle-drop.png', clip: { x: 0, y: 0, width: 1280, height: 200 } });
+    expect(await dropOnIsle(), 'Cassie should take the drop');
+    await page.waitForFunction(() => /water\.pdf is ready/.test(document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').innerText), null, { timeout: 5000 });
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/ext-isle-ready.png', clip: { x: 0, y: 0, width: 1280, height: 240 } });
+    const appOpened = ctx.waitForEvent('page', { timeout: 10000 });
+    await page.locator('.cx-isle-chip', { hasText: 'Summarize' }).click();
+    const app = await appOpened;
+    // the tab the extension opens starts loading before the test can serve it: load it again (the file waits for this tab)
+    if (!/askcassie/.test(app.url()) || !(await app.locator('#chat-log').count())) await app.goto('https://askcassie.pages.dev/app.html');
+    try { await app.waitForSelector('#chat-log .bubble-assistant >> text=water evaporates', { timeout: 20000 }); } catch (e) { throw new Error('app url ' + app.url() + ' pages ' + ctx.pages().map((x) => x.url()).join(',') + ' app chat: ' + (await app.locator('#chat-log').innerText({ timeout: 2000 }).catch(() => '-')).slice(0, 600) + ' | url ' + app.url() + ' | calls ' + groqCalls.length + ' | attach ' + await app.locator('#attach-name').innerText().catch(() => '?')); }
+    expect(groqCalls.some((b) => /condensation/i.test(b) && /Summarize this file/.test(b)), 'the app should read the dropped PDF and summarize it');
+    await page.bringToFront();
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 5000 });
+
+    // 2. words dragged from another app → Explain / Answer, like a highlight
+    await dragIn({ text: 'What is 7 x 8?' });
+    expect(await dropOnIsle(), 'Cassie should take dropped words');
+    await page.waitForFunction(() => /What should I do with this/.test(document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.popover').innerText), null, { timeout: 3000 });
+
+    // 3. a photo → read on Cassie's board
+    const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+    await dragIn({ b64: red, name: 'cell.png', type: 'image/png' });
+    expect(await dropOnIsle(), 'Cassie should take a dropped photo');
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.csk-wrap'), null, { timeout: 5000 });
+
+    // 4. dragging the page's own words does not bring the Island; a drop elsewhere is the page's
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 3000 });
+    await page.evaluate(() => { const p = document.getElementById('p'); p.dispatchEvent(new DragEvent('dragstart', { bubbles: true })); const dt = new DataTransfer(); dt.setData('text/plain', 'Cells'); document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt })); });
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden), 'a drag inside the page should not open the Island');
+    await page.evaluate(() => document.getElementById('p').dispatchEvent(new DragEvent('dragend', { bubbles: true })));
+    const pageGot = await page.evaluate(() => {
+      let got = false;
+      document.addEventListener('drop', (e) => { got = !e.defaultPrevented; }, { once: true });
+      const dt = new DataTransfer(); dt.items.add(new File(['x'], 'upload.pdf', { type: 'application/pdf' }));
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      return got;
+    });
+    expect(pageGot, 'a file dropped on the page (not on Cassie) should be left for the page');
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 3000 });
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
