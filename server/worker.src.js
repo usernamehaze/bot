@@ -31,6 +31,7 @@
  *                    automatically from the Models API)
  *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
+ *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
@@ -65,7 +66,8 @@ const clean = (v, n = 40) => String(v == null ? '' : v).replace(/[\u0000-\u001f]
 
 function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
-  const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)));
+  const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)))
+    || (env.ALLOW_EXTENSION !== 'off' && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)); // the Cassie extension (Chrome and Edge)
   return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...extra } });

@@ -781,6 +781,15 @@ test('phones: maths copied from a PDF is cleaned and rebuilt before solving', as
   await ctx.close();
 });
 
+test('server: the Chrome / Edge extension may use it, other sites may not', async () => {
+  await fetch(SERVER + '/__reset');
+  const body = JSON.stringify({ uid: 'ext-test-uid-123', messages: [{ role: 'user', content: 'hi' }] });
+  const ok = await fetch(SERVER + '/chat', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' }, body });
+  expect(ok.status === 200, 'the extension should be allowed: ' + ok.status);
+  const no = await fetch(SERVER + '/chat', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example.com' }, body });
+  expect(no.status === 403, 'other sites stay blocked: ' + no.status);
+});
+
 test('iPhone: copy words, then Paste & ask', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Inertia means objects keep doing what they are doing.' }) });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(APP).origin });
@@ -881,6 +890,48 @@ test('extension: highlights, snips and pastes show up as chats in the Cassie app
     await page.reload();
     await page.waitForTimeout(1500);
     expect(await page.evaluate(() => state.chats.filter((c) => c.extKey).reduce((n, c) => n + c.messages.length, 0)) === 6, 'items were imported twice');
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('extension: a refused Gemini model tries the next one, then Cassie’s server (no keys needed)', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    const isCassie = async (w) => /\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false);
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) { for (const w of ctx.serviceWorkers()) if (await isCassie(w)) { sw = w; break; } if (!sw) await new Promise((r) => setTimeout(r, 250)); }
+    expect(sw, 'the Cassie extension did not start');
+    const out = await sw.evaluate(async (png) => {
+      const realFetch = fetch, seen = [];
+      let refuseAll = false;
+      globalThis.fetch = async (url, init) => {
+        const u = String(url);
+        if (u.includes('generativelanguage')) {
+          seen.push(u.match(/models\/([^:]+)/)[1]);
+          if (refuseAll || u.includes('gemini-3.6')) return Response.json({ error: { code: 403, message: 'Permission denied for this model.' } }, { status: 403 });
+          return Response.json({ candidates: [{ content: { parts: [{ text: 'Gemini 2.5 read it.' }] } }] });
+        }
+        if (u.includes('workers.dev/chat')) { const b = JSON.parse(init.body); return Response.json({ choices: [{ message: { content: Array.isArray(b.messages.at(-1).content) ? 'Server read the picture.' : 'Server answered the text.' } }] }); }
+        return realFetch(url, init);
+      };
+      const img = 'data:image/png;base64,' + png;
+      const r = {};
+      r.next = await readPicture({ geminiKey: 'AIza_x' }, { image: img, prompt: 'What is this?' });
+      r.tried = seen.slice();
+      refuseAll = true;
+      r.server = await readPicture({ geminiKey: 'AIza_x' }, { image: img, prompt: 'What is this?' });
+      r.noKeyPic = await readPicture({}, { image: img, prompt: 'What is this?' });
+      r.noKeyText = await answerAny('What is osmosis?', {});
+      globalThis.fetch = realFetch;
+      return r;
+    }, PNG.toString('base64'));
+    expect(out.next === 'Gemini 2.5 read it.' && out.tried[0].startsWith('gemini-3.6') && out.tried[1] === 'gemini-2.5-flash', 'a refused model should move on to the next: ' + JSON.stringify(out));
+    expect(out.server === 'Server read the picture.', 'all Gemini models refused → the server reads it: ' + out.server);
+    expect(out.noKeyPic === 'Server read the picture.' && out.noKeyText === 'Server answered the text.', 'no keys at all → the server answers');
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
