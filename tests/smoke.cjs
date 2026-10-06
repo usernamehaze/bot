@@ -496,11 +496,13 @@ test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
   await ctx.close();
 });
 
-test('the 3D felt Cassie can still be chosen in Settings', async (b) => {
-  const { ctx, page } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'felt' } });
+test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cassie', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'felt' } });
   await page.waitForTimeout(600);
-  expect(await page.locator('#mascot.has2d').count() === 0, 'Cursor Cassie should not show when the 3D Cassie is chosen');
-  expect(await page.locator('#cassie-3d-root').count() === 1, 'the 3D Cassie should load');
+  expect(await page.locator('#look-select').count() === 0 && !/3D felt/.test(await page.content()), 'the 3D option should be gone from Appearance');
+  expect(await page.locator('#mascot.has2d').count() === 1, 'Cursor Cassie should show even for someone who had picked the 3D Cassie');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).look === undefined), 'the old choice is forgotten');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
