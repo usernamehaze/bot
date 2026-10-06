@@ -190,6 +190,16 @@
   function showTip(e, html) { tip.innerHTML = html; tip.style.display = 'block'; const x = Math.min(window.innerWidth - tip.offsetWidth - 8, e.clientX + 14); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
   function hideTip() { tip.style.display = 'none'; }
 
+  // The brain check: real questions with known answers through every AI the server uses.
+  function brainCard(d) {
+    const h = d.health;
+    const rows = h ? h.checks.map((c) => `<tr><td>${c.ok ? '✅' : '❌'}</td><td>${esc(c.name)}</td><td>${(c.ms / 1000).toFixed(1)}s</td><td class="muted">${esc(c.detail || '')}</td></tr>`).join('') : '';
+    const status = !h ? 'Not run yet.' : h.ok ? '✅ Text and pictures both work.' : `⚠️ ${!h.canText ? 'Text answers are failing. ' : ''}${!h.canPictures ? 'Pictures (photos, snips, board) are failing. ' : ''}See the ❌ rows.`;
+    const probs = (d.problems || []).length ? `<p class="muted" style="margin:12px 0 4px">Problems Cassie hit (last ${d.days} days)</p>${bars(d.problems, (r) => r.k, (r) => r.n, (r) => `${fmt(r.n)} · last ${esc(new Date(r.last).toLocaleString())}`)}` : '<p class="muted" style="margin-top:10px">No problems logged.</p>';
+    return `<div class="card" style="margin-bottom:14px"><h2>Brain check</h2><p class="sub">Asks every AI real questions with known answers (17 × 23, a picture of 7 × 8, a graph). ${h ? 'Last run ' + esc(new Date(h.ts).toLocaleString()) : ''}</p>
+      <p><b>${status}</b></p>${rows ? `<div class="scroll"><table>${rows}</table></div>` : ''}
+      <button id="brain">Run brain check now</button> <span id="brain-msg" class="muted"></span>${probs}</div>`;
+  }
   function render(d) {
     const rows = series(d);
     const t = d.totals || {};
@@ -206,6 +216,7 @@
         ${tile('Opens per user', avg.toFixed(1), 'average, all time')}
         ${tile('Features used', fmt(d.range && d.range.uses), `last ${d.days} days`)}
       </div>
+      ${brainCard(d)}
       <div class="card" style="margin-bottom:14px"><h2>Active users and opens per day</h2><p class="sub">How many people used Cassie each day, and how many times the app was opened</p>
         <div class="legend"><span><i style="background:var(--series-1)"></i>Active users</span><span><i style="background:var(--series-2)"></i>Opens</span></div>
         ${lineChart(rows)}
@@ -225,9 +236,9 @@
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []), (r) => ({ claude: 'Claude', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
-          ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
+          ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : r.kind === 'error' ? '⚠️ ' + esc(r.feature || 'Server problem') : r.kind === 'auto' ? '⚠️ App error · ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
       </div>
       <div class="card"><h2>Most active users</h2><p class="sub">Anonymous — a random id per device, never a name</p><div class="scroll"><table>
         <tr><th>User</th><th>Opens</th><th>Features used</th><th>First seen</th><th>Last seen</th><th>Who</th></tr>
@@ -235,6 +246,11 @@
       </table></div></div>`;
     document.getElementById('range').onchange = (e) => { days = +e.target.value; load(); };
     document.getElementById('refresh').onclick = load;
+    document.getElementById('brain').onclick = async () => {
+      const m = document.getElementById('brain-msg'); m.textContent = 'Checking every AI… (up to a minute)';
+      try { const r = await fetch('health', { headers: { authorization: 'Bearer ' + token } }); if (!r.ok) throw new Error('HTTP ' + r.status); load(); }
+      catch (e) { m.textContent = 'Could not run it: ' + e.message; }
+    };
     document.getElementById('logout').onclick = () => { try { localStorage.removeItem('cassie.stats.token'); } catch (e) {} token = ''; gate(''); };
     wireLine(rows);
     app.querySelectorAll('[data-tip]').forEach((n) => {

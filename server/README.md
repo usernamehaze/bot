@@ -85,6 +85,30 @@ There's no "reset password" email yet. People who forget their password can
 use Continue with Google with the same email, which signs them into the same
 account.
 
+## Make pictures reliable: add your Gemini key (free, recommended)
+
+Photos, snips and the board need an AI that can read pictures. Groq's picture
+models come and go, so give the server a second one:
+
+1. Go to **aistudio.google.com/apikey** → **Create API key**, and copy it.
+2. In this Worker → **Settings** → **Variables and Secrets** → **Add** → type
+   **Secret**, name `GEMINI_KEY`, paste the key → **Deploy**.
+
+## The brain check (do this before you launch)
+
+Your dashboard has a **Brain check** card. **Run brain check now** asks every AI the
+server uses real questions with known answers: 17 × 23, a picture of 7 × 8, and
+"graph y = x² − 4". Each row shows ✅ or ❌ with the reason. If anything is ❌,
+students would hit it too.
+
+To run it by itself every day: Worker → **Settings** → **Triggers** → **Cron
+Triggers** → **Add** → `0 22 * * *` (6 a.m. in the Philippines) → **Add**. The
+dashboard then always shows this morning's result.
+
+The same card lists **Problems Cassie hit**: every time the server couldn't
+answer, and errors the app ran into (only the error message, never what the
+student asked).
+
 ## Make Claude Cassie's brain (optional, costs money)
 
 With this on, the main chat and photos are answered by Claude, Anthropic's AI. Groq

@@ -13,6 +13,8 @@
  *                    and the profile / saved mistakes that follow a person to every device
  *   GET  /           your dashboard (asks for your ADMIN_TOKEN)
  *   GET  /stats      the numbers behind the dashboard (needs the token)
+ *   GET  /health     the "brain check": asks every AI real questions with known answers (needs
+ *                    the token). Also runs once a day with a Cron Trigger (see server/README.md)
  *
  * Bindings (Worker → Settings → Bindings / Variables and Secrets):
  *   DB           a D1 database (tables are created automatically)
@@ -20,6 +22,8 @@
  *   GROQ_KEY     secret — your Groq API key (console.groq.com/keys)
  *   AI           Workers AI binding — the backup brain (optional but recommended)
  *   GOOGLE_CLIENT_ID  (optional) turns on "Continue with Google" — see server/README.md
+ *   GEMINI_KEY        (optional) secret — your Google AI Studio key: a second brain for photos and
+ *                     text when Groq can't (aistudio.google.com/apikey)
  *   ANTHROPIC_KEY     (optional) secret — makes Claude Cassie's brain for the main chat and
  *                     photos (console.anthropic.com → API keys). Groq and Workers AI stay as backup.
  * Optional variables:
@@ -53,6 +57,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS chats (day TEXT, src TEXT, n INTEGER, PRIMARY KEY (day, src))`,
   `CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, email TEXT UNIQUE, pass TEXT, salt TEXT, google TEXT UNIQUE, name TEXT, data TEXT, created INTEGER, updated INTEGER)`,
   `CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, account TEXT, created INTEGER, seen INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS health (k TEXT PRIMARY KEY, ts INTEGER, data TEXT)`,
 ];
 let schemaReady = false;
 async function ensureSchema(db) {
@@ -111,7 +116,7 @@ const GROQ = 'https://api.groq.com/openai/v1';
 const CHAT_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
 const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
-let vision = { id: '', at: 0 };
+let vision = { ids: [], at: 0 };
 
 function allowedOrigin(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -125,15 +130,61 @@ function msUntilMidnightPH(now) {
 function chatError(message, status, h, extra = {}) {
   return json({ error: { message } }, status, { ...h, ...extra });
 }
-// Groq's picture-reading model changes over time — ask Groq which one it has now.
-async function visionModel(env) {
-  if (vision.id && Date.now() - vision.at < 6 * 3600e3) return vision.id;
+// Groq's picture-reading models change over time — ask Groq which ones it has now, best first.
+async function visionModels(env, fresh = false) {
+  if (!fresh && vision.ids.length && Date.now() - vision.at < 3600e3) return vision.ids;
   try {
     const r = await fetch(`${GROQ}/models`, { headers: { authorization: `Bearer ${env.GROQ_KEY}` } });
     const ids = ((await r.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
-    vision = { id: ids.find((id) => /llama-4-scout/i.test(id)) || ids.find((id) => /llama-4|vision|maverick/i.test(id)) || '', at: Date.now() };
-  } catch (e) { /* keep the old one */ }
-  return vision.id;
+    const score = (id) => (/llama-4-scout/i.test(id) ? 0 : /llama-4-maverick/i.test(id) ? 1 : /vision|llava|pixtral|(^|[-/])vl([-/]|$)|-vl-|multimodal|llama-4|gemma-?3/i.test(id) ? 2 : 9);
+    const list = ids.filter((id) => !/whisper|tts|guard|playai|orpheus|embed/i.test(id) && score(id) < 9).sort((a, b) => score(a) - score(b));
+    vision = { ids: list, at: Date.now() };
+  } catch (e) { /* keep the old list */ }
+  return vision.ids;
+}
+
+/* Gemini (the owner's optional GEMINI_KEY): a second brain for photos and text. */
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.6-flash'];
+async function askGemini(env, messages, maxTokens = 2048) {
+  if (!env.GEMINI_KEY) return { reply: null, detail: '' };
+  const system = messages.filter((m) => m.role === 'system').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+  const contents = messages.filter((m) => m.role !== 'system').map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: (typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content).map((p) => {
+      const d = p.type === 'image_url' && /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(p.image_url.url);
+      return d ? { inlineData: { mimeType: d[1], data: d[2] } } : { text: p.text || '' };
+    }),
+  }));
+  while (contents.length && contents[0].role !== 'user') contents.shift();
+  let detail = '';
+  for (const model of env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...GEMINI_MODELS] : GEMINI_MODELS) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY },
+        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, generationConfig: { maxOutputTokens: Math.max(4096, maxTokens * 2), temperature: 0.5 } }),
+      });
+      if (r.ok) {
+        const parts = (await r.json()).candidates?.[0]?.content?.parts || [];
+        const reply = parts.filter((x) => !x.thought).map((x) => x.text || '').join('').trim();
+        if (reply) return { reply, detail: '' };
+        detail = `Gemini ${model}: empty answer`;
+      } else { let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ } detail = `Gemini ${model}: ${r.status} ${m}`.slice(0, 300); }
+    } catch (e) { detail = `Gemini ${model}: ${e.message}`; }
+  }
+  return { reply: null, detail };
+}
+
+/* Problems the server hit, for the dashboard (a few hundred a day at most, no messages). */
+let problemDay = '', problemCount = 0;
+async function logProblem(env, where, detail) {
+  try {
+    const day = dayOf(Date.now());
+    if (day !== problemDay) { problemDay = day; problemCount = 0; }
+    if (++problemCount > 300) return;
+    await ensureSchema(env.DB);
+    await env.DB.prepare('INSERT INTO feedback (ts, day, uid, kind, feature, text, ctx) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(Date.now(), day, 'server', 'error', String(where).slice(0, 40), String(detail || '').slice(0, 600), 'server').run();
+  } catch (e) { /* the dashboard is best-effort */ }
 }
 function cleanMessages(list) {
   if (!Array.isArray(list) || !list.length || list.length > 40) return null;
@@ -253,10 +304,11 @@ async function ask(request, env, ctx) {
       if (r.ok) { reply = (await r.json()).choices?.[0]?.message?.content || null; if (reply) break; }
     } catch (e) { /* next model */ }
   }
+  if (!reply && env.GEMINI_KEY) { const g = await askGemini(env, messages, 1500); reply = g.reply; if (reply) src = 'shortcut-gemini'; }
   if (!reply && env.AI) {
     try { const o = await env.AI.run(BACKUP_MODEL, { messages, max_tokens: 1200, temperature: 0.4 }); reply = (o && (o.response ?? o.result?.response)) || null; } catch (e) { reply = null; }
   }
-  if (!reply) return out('Cassie is very busy right now. Try again in a minute.', 503);
+  if (!reply) { ctx.waitUntil(logProblem(env, 'iPhone Shortcut', 'no AI answered')); return out('Cassie is very busy right now. Try again in a minute.', 503); }
   ctx.waitUntil(countChat(env, today, src));
   return out(`${plainText(reply)}\n\n— Cassie · askcassie.pages.dev`);
 }
@@ -311,9 +363,10 @@ async function chat(request, env, ctx) {
   const maxTokens = Math.min(Math.max(+body.max_tokens || 2048, 64), 4000);
   const temperature = typeof body.temperature === 'number' ? Math.min(Math.max(body.temperature, 0), 1.2) : 0.6;
   let lastStatus = 503, lastDetail = '';
+  const problems = [];
   if (env.GROQ_KEY) {
     let models;
-    if (cleaned.image || body.model === 'vision') { const v = await visionModel(env); models = v ? [v] : []; }
+    if (cleaned.image || body.model === 'vision') { models = (await visionModels(env)).slice(0, 4); if (!models.length) problems.push('Groq: no picture-reading model on this key'); }
     else models = [CHAT_MODELS.includes(body.model) ? body.model : CHAT_MODELS[0], ...CHAT_MODELS].filter((m, k, a) => a.indexOf(m) === k);
     for (const model of models) {
       const payload = { model, messages: cleaned.messages, max_tokens: maxTokens, temperature };
@@ -321,17 +374,27 @@ async function chat(request, env, ctx) {
       let r;
       try {
         r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify(payload) });
-      } catch (e) { lastStatus = 503; continue; }
+      } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.message}`); continue; }
       if (r.ok) {
         ctx.waitUntil(countChat(env, today, 'groq'));
         return new Response(r.body, { status: 200, headers: { 'content-type': 'application/json', ...h, ...left, 'x-cassie-source': 'groq' } });
       }
       lastStatus = r.status;
       try { lastDetail = (await r.json()).error?.message || ''; } catch (e) { lastDetail = ''; }
-      // too long / bad request: the app trims the chat and retries, so hand it back
-      if (r.status === 400 || r.status === 413) return chatError(lastDetail || 'Too long.', r.status, h);
-      // 429 / 5xx / retired model: try the next model, then the backup
+      problems.push(`Groq ${model}: ${r.status} ${lastDetail}`.slice(0, 300));
+      // too long: the app trims the chat and retries, so hand it back (a picture the model can't take tries the next one)
+      if (r.status === 413 || (r.status === 400 && !cleaned.image && !/model|decommission|not found|does not exist|vision|image/i.test(lastDetail))) return chatError(lastDetail || 'Too long.', r.status, h);
+      // 429 / 5xx / retired model / picture refused: try the next model, then the backups
     }
+  }
+  // Gemini (your GEMINI_KEY): reads pictures and answers text when Groq couldn't
+  if (env.GEMINI_KEY) {
+    const g = await askGemini(env, cleaned.messages, maxTokens);
+    if (g.reply) {
+      ctx.waitUntil(countChat(env, today, 'gemini'));
+      return json({ choices: [{ index: 0, message: { role: 'assistant', content: g.reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'gemini' });
+    }
+    problems.push(g.detail);
   }
   if (env.AI && !cleaned.image) {
     try {
@@ -341,13 +404,17 @@ async function chat(request, env, ctx) {
         ctx.waitUntil(countChat(env, today, 'backup'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: String(reply) }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'backup' });
       }
-    } catch (e) { lastDetail = lastDetail || String(e && e.message || e); }
+    } catch (e) { lastDetail = lastDetail || String(e && e.message || e); problems.push(`Workers AI: ${e.message || e}`); }
   }
   ctx.waitUntil(countChat(env, today, 'failed'));
+  ctx.waitUntil(logProblem(env, cleaned.image ? 'chat: picture' : 'chat: text', problems.filter(Boolean).join(' | ') || `status ${lastStatus}`));
   // an unanswered question shouldn't use up the person's daily allowance
   ctx.waitUntil(env.DB.batch(['u:' + uid, 'i:' + ip].map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k))));
-  if (cleaned.image && !env.GROQ_KEY) return chatError('Reading photos needs a Groq or Gemini key — add one in Settings.', 503, h);
-  return chatError(lastStatus === 429 ? 'Cassie is very busy right now — try again in a minute.' : 'Cassie can’t reach her brain right now — try again in a moment.', lastStatus === 429 ? 429 : 503, h, { 'retry-after': '20' });
+  if (cleaned.image && !env.GROQ_KEY && !env.GEMINI_KEY) return chatError('Reading photos needs a Groq or Gemini key — add one in Settings.', 503, h);
+  if (cleaned.image) vision.at = 0; // look again for picture readers next time
+  return lastStatus === 429
+    ? chatError('Cassie is very busy right now — try again in a minute.', 429, h, { 'retry-after': '20' })
+    : chatError(cleaned.image ? 'I couldn’t read that picture just now — try again in a minute, or type the question instead.' : 'Cassie can’t reach her brain right now — try again in a moment.', 503, h);
 }
 
 /* ------------------------------------------------------------------ pictures */
@@ -383,7 +450,7 @@ async function image(request, env, ctx) {
 }
 
 /* ------------------------------------------------------------------ feedback */
-const FEEDBACK = new Set(['up', 'down', 'report']);
+const FEEDBACK = new Set(['up', 'down', 'report', 'auto']); // auto: an error the app hit (the message only)
 async function feedback(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -531,6 +598,62 @@ async function auth(request, env, path) {
   return fail('Not found.', 404);
 }
 
+/* ------------------------------------------------------------------ brain check
+   Real questions with known answers, through every AI the server can use. Run it from the
+   dashboard ("Run brain check") or daily with a Cron Trigger; the latest result is kept. */
+const CHECK_PNG = 'data:image/png;base64,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';
+async function groqAsk(env, model, messages, maxTokens = 1500) {
+  const r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.2 }) });
+  if (!r.ok) { let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ } throw new Error(`${r.status} ${m}`.slice(0, 200)); }
+  return ((await r.json()).choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '');
+}
+async function runHealth(env) {
+  const textQ = [{ role: 'user', content: 'What is 17 × 23? Reply with only the number.' }];
+  const picQ = [{ role: 'user', content: [{ type: 'text', text: 'Read the sum in this picture and work it out. Reply with only the number.' }, { type: 'image_url', image_url: { url: CHECK_PNG } }] }];
+  const graphQ = [{ role: 'system', content: 'When asked to graph, reply with exactly one fenced code block tagged cassie-board holding minified JSON like {"type":"graph","title":"…","fn":"…","xrange":[a,b]}. fn uses * and ^.' }, { role: 'user', content: 'graph y = x^2 - 4' }];
+  const graphOk = (t) => { const m = /```cassie-board\s*([\s\S]*?)```/.exec(t || ''); try { const o = JSON.parse(m[1]); return o.type === 'graph' && /x/.test(o.fn); } catch (e) { return false; } };
+  const checks = [];
+  const run = async (name, fn, ok) => {
+    const t0 = Date.now();
+    try { const out = await fn(); checks.push({ name, ok: !!ok(out), ms: Date.now() - t0, detail: String(out || '').replace(/\s+/g, ' ').slice(0, 120) }); }
+    catch (e) { checks.push({ name, ok: false, ms: Date.now() - t0, detail: String(e.message || e).slice(0, 200) }); }
+  };
+  if (env.GROQ_KEY) {
+    await run('Groq: text maths', () => groqAsk(env, CHAT_MODELS[0], textQ), (t) => /\b391\b/.test(t));
+    await run('Groq: graph on the board', () => groqAsk(env, CHAT_MODELS[0], graphQ), graphOk);
+    await run('Groq: read a picture', async () => {
+      const models = await visionModels(env, true);
+      if (!models.length) throw new Error('no picture-reading model on this Groq key');
+      let last;
+      for (const m of models.slice(0, 3)) { try { return `${m}: ${await groqAsk(env, m, picQ, 300)}`; } catch (e) { last = e; } }
+      throw last;
+    }, (t) => /\b56\b/.test(t));
+  } else checks.push({ name: 'Groq', ok: false, ms: 0, detail: 'GROQ_KEY is not set' });
+  if (env.GEMINI_KEY) {
+    await run('Gemini: text maths', async () => { const g = await askGemini(env, textQ, 300); if (!g.reply) throw new Error(g.detail); return g.reply; }, (t) => /\b391\b/.test(t));
+    await run('Gemini: read a picture', async () => { const g = await askGemini(env, picQ, 300); if (!g.reply) throw new Error(g.detail); return g.reply; }, (t) => /\b56\b/.test(t));
+  }
+  if (env.ANTHROPIC_KEY) {
+    await run('Claude: text maths', () => askClaude(env, { messages: textQ }), (t) => /\b391\b/.test(t));
+    await run('Claude: read a picture', () => askClaude(env, { messages: picQ }), (t) => /\b56\b/.test(t));
+  }
+  if (env.AI) await run('Workers AI (backup): text maths', async () => { const o = await env.AI.run(BACKUP_MODEL, { messages: textQ, max_tokens: 200 }); return (o && (o.response ?? o.result?.response)) || ''; }, (t) => /\b391\b/.test(t));
+  const canPictures = checks.some((c) => c.ok && /picture/.test(c.name));
+  const canText = checks.some((c) => c.ok && /text maths/.test(c.name));
+  const result = { ts: Date.now(), ok: canText && canPictures, canText, canPictures, checks };
+  try {
+    await ensureSchema(env.DB);
+    await env.DB.prepare('INSERT INTO health (k, ts, data) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET ts = ?2, data = ?3').bind('last', result.ts, JSON.stringify(result)).run();
+    if (!result.ok) await logProblem(env, 'brain check', checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`).join(' | '));
+  } catch (e) { /* still return it */ }
+  return result;
+}
+async function health(request, env) {
+  const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!env.ADMIN_TOKEN || auth !== env.ADMIN_TOKEN) return json({ error: 'wrong token' }, 401);
+  return json(await runHealth(env));
+}
+
 async function stats(request, env) {
   const url = new URL(request.url);
   const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -562,10 +685,17 @@ async function stats(request, env) {
     all(`SELECT src, SUM(n) AS n FROM chats WHERE day >= ? GROUP BY src ORDER BY n DESC`, since),
     one(`SELECT COUNT(*) AS n, SUM(google IS NOT NULL) AS google FROM accounts`),
   ]);
-  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow });
+  const [healthRow, problems] = await Promise.all([
+    one(`SELECT data FROM health WHERE k = 'last'`),
+    all(`SELECT feature AS k, COUNT(*) AS n, MAX(ts) AS last FROM feedback WHERE day >= ? AND kind = 'error' GROUP BY feature ORDER BY n DESC LIMIT 12`, since),
+  ]);
+  let healthData = null; try { healthData = healthRow ? JSON.parse(healthRow.data) : null; } catch (e) { healthData = null; }
+  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow, health: healthData, problems });
 }
 
 export default {
+  // Cron Trigger (Worker → Settings → Triggers): the daily brain check
+  async scheduled(event, env, ctx) { ctx.waitUntil(runHealth(env)); },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
@@ -578,6 +708,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
+      if (request.method === 'GET' && url.pathname === '/health') return await health(request, env);
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
       return new Response('not found', { status: 404 });
     } catch (e) {
