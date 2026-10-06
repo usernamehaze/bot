@@ -77,6 +77,8 @@ export async function startFakeServer(port = 4630) {
     mode.calls.push({ model: body.model, auth: init.headers.authorization, last: body.messages.at(-1) });
     if (mode.groq === 'busy') return Response.json({ error: { message: 'Rate limit reached' } }, { status: 429, headers: { 'retry-after': '40' } });
     if (mode.groq === 'down') return Response.json({ error: { message: 'Service unavailable' } }, { status: 503 });
+    // 'limit2': like Groq's free plan in a rush — only the first 2 questions this minute get through
+    if (mode.groq === 'limit2' && (mode.groqCount = (mode.groqCount || 0) + 1) > 2) return Response.json({ error: { message: `Rate limit reached for model \`${body.model}\` on tokens per minute (TPM). Please try again in 7.5s.` } }, { status: 429, headers: { 'retry-after': '8' } });
     if (mode.groqVision === 'retired' && /scout|-vl-/.test(body.model)) return Response.json({ error: { message: `The model \`${body.model}\` does not exist or you do not have access to it.` } }, { status: 404 });
     // like Groq: a picture sent to a model that can't read pictures is refused
     const hasPic = typeof body.messages.at(-1).content !== 'string' && body.messages.at(-1).content.some((p) => p.type === 'image_url');

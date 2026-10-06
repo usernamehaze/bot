@@ -429,8 +429,8 @@ async function chat(request, env, ctx) {
       if (/gpt-oss/.test(model) && ['low', 'medium', 'high'].includes(body.reasoning_effort)) payload.reasoning_effort = body.reasoning_effort;
       let r;
       try {
-        r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify(payload) });
-      } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.message}`); continue; }
+        r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) });
+      } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : e.message}`); continue; }
       if (r.ok) {
         ctx.waitUntil(countChat(env, today, 'groq'));
         return new Response(r.body, { status: 200, headers: { 'content-type': 'application/json', ...h, ...left, 'x-cassie-source': 'groq' } });
