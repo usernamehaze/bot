@@ -633,7 +633,9 @@ test('Island drop: highlighted words and a photo dropped on Cassie, with Ask abo
 test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a file', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Mitosis makes two identical cells.' }) });
   const btn = page.locator('#popout-btn');
-  expect(await btn.isVisible(), 'the pop-out button should show in Chrome / Edge');
+  expect(!(await btn.isVisible()), 'phones don’t get the pop-out button (it’s for computers)');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  expect(await btn.isVisible(), 'the pop-out button should show in Chrome / Edge on a computer');
   await btn.click();
   await page.waitForFunction(() => typeof pip !== 'undefined' && pip && pip.win.document.querySelector('.isle-card'), null, { timeout: 5000 });
   const inPip = (fn, arg) => page.evaluate(([f, a]) => new Function('d', 'a', f)(pip.win.document, a), [fn, arg]);

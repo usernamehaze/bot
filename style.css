@@ -1376,6 +1376,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .isle-input:focus { outline: none; border-color: rgba(255, 255, 255, .55); }
 .isle-send { width: 38px; height: 38px; border: 0; border-radius: 50%; background: #fff; color: #131317; font-size: 1.1rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
 #popout-btn[hidden] { display: none; }
+@media (max-width: 560px) { #popout-btn { display: none; } } /* a floating window is for computers */
 #popout-btn[aria-pressed="true"] { opacity: .55; }
 /* the pop-out Cassie window: the whole window is her card */
 html:has(body.isle-pip), body.isle-pip { height: 100%; margin: 0; background: #131317; overflow: hidden; }
