@@ -407,16 +407,18 @@ function set3D(name) {
   if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
 /* ---------- Cursor Cassie (cassie-bot.js): the 2D mascot ----------
-   Cassie's default look. The 3D felt Cassie can be picked in Settings → Appearance.
+   Cassie's only look.
    She mirrors the 3D Cassie's moods and adds her own: reading, searching,
    highlighting, drawing, busy (hourglass), oops (⊘). */
 let bot2d = null, bot2dTimer = null;
 const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
 const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
-// Cursor Cassie is everyone's Cassie now; the 3D felt Cassie is an option in Settings.
+// Cursor Cassie is everyone's Cassie. (The 3D felt Cassie was removed from Settings; an old
+// saved choice of her is forgotten.)
+if (state.look) { delete state.look; save(); }
 function wantsCursorCassie() {
-  return (state.look || 'auto') !== 'felt';
+  return true;
 }
 // Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
 function botMood(name, ms) {
@@ -5138,11 +5140,6 @@ function openReport() {
 document.getElementById('report-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openReport(); });
 if (!SERVER) { const rb = document.getElementById('report-row'); if (rb) rb.hidden = true; }
 
-const lookSelect = document.getElementById('look-select');
-if (lookSelect) {
-  lookSelect.value = state.look === 'felt' ? 'felt' : 'auto';
-  lookSelect.addEventListener('change', () => { state.look = lookSelect.value; save(); setTimeout(() => location.reload(), 300); });
-}
 const liteSelect = document.getElementById('lite-select');
 function renderLiteHint() {
   const h = document.getElementById('lite-hint');
