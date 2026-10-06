@@ -1756,4 +1756,165 @@
     showChoice(text, rect);
   });
 
+  /* ---------- Drop on Cassie: her Island at the top of any page ----------
+     Drag a file (PDF, Word, PowerPoint, photo, text) or some words from anywhere —
+     the desktop, another app, another tab — over a page, and Cassie's Island drops
+     in at the top. Drop it on her: a photo is read on her board, words get Explain /
+     Answer, and a document opens in the Cassie app, which reads the whole file.
+     Dropped anywhere else, it goes to the page as usual. */
+  if (window.top === window) {
+    const isleCss = document.createElement('style');
+    isleCss.textContent = `
+      .cx-isle { position: fixed; top: 10px; left: 50%; z-index: 2147483647; width: 300px; max-width: calc(100vw - 24px);
+        background: #131317; color: #fff; border-radius: 22px; box-shadow: 0 16px 44px rgba(0,0,0,.35);
+        font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        opacity: 0; transform: translate(-50%, -16px) scale(.7); transform-origin: 50% 0;
+        transition: opacity .2s, transform .4s cubic-bezier(.3, 1.4, .45, 1), width .35s; }
+      .cx-isle[hidden] { display: none; }
+      .cx-isle.open { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      .cx-isle[data-mode="card"] { width: 340px; }
+      .cx-isle * { box-sizing: border-box; font: inherit; }
+      .cx-isle-head { display: flex; align-items: center; gap: 9px; padding: 8px 8px 8px 10px; font-weight: 600; }
+      .cx-isle-face { width: 28px; height: 28px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex-shrink: 0; }
+      .cx-isle-face svg { width: 17px; height: 17px; fill: #131317; }
+      .cx-isle-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .cx-isle-x { width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: #fff; font-size: 17px; line-height: 1; cursor: pointer; }
+      .cx-isle-body { padding: 0 12px 12px; }
+      .cx-isle-body:empty { display: none; }
+      .cx-isle-drop { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 10px; border: 1.5px dashed rgba(255,255,255,.32); border-radius: 15px; transition: background .2s, border-color .2s; }
+      .cx-isle.hot .cx-isle-drop { border-color: #fff; background: rgba(255,255,255,.08); }
+      .cx-isle-drop b { font-weight: 700; }
+      .cx-isle-drop span { color: rgba(255,255,255,.6); font-size: 12px; }
+      .cx-isle p { margin: 0 0 10px; color: rgba(255,255,255,.78); }
+      .cx-isle-acts { display: flex; flex-wrap: wrap; gap: 7px; }
+      .cx-isle-chip { border: 1px solid rgba(255,255,255,.24); background: transparent; color: #fff; border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .cx-isle-chip:hover { background: rgba(255,255,255,.1); }
+      .cx-isle-chip.main { background: #fff; color: #131317; border-color: #fff; }
+      .cx-isle-ask { display: flex; gap: 7px; margin-top: 9px; }
+      .cx-isle-ask[hidden] { display: none; }
+      .cx-isle-ask input { flex: 1; min-width: 0; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff; border-radius: 99px; padding: 7px 12px; outline: none; }
+      .cx-isle-ask button { border: 0; border-radius: 99px; background: #fff; color: #131317; font-weight: 700; padding: 0 13px; cursor: pointer; }
+      @media (prefers-reduced-motion: reduce) { .cx-isle { transition: opacity .2s; } }`;
+    shadow.appendChild(isleCss);
+    const isle = document.createElement('div');
+    isle.className = 'cx-isle';
+    isle.hidden = true;
+    isle.setAttribute('role', 'dialog');
+    isle.setAttribute('aria-label', 'Drop on Cassie');
+    isle.innerHTML = '<div class="cx-isle-head"><span class="cx-isle-face"><svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg></span><span class="cx-isle-title"></span><button type="button" class="cx-isle-x" aria-label="Close">×</button></div><div class="cx-isle-body"></div>';
+    shadow.appendChild(isle);
+    const isleTitle = isle.querySelector('.cx-isle-title'), isleBody = isle.querySelector('.cx-isle-body');
+    let innerDrag = false, lastOver = 0, watch = 0, isleMode = '';
+    const isleShow = (mode, text) => {
+      isleMode = mode; isle.dataset.mode = mode; isleTitle.textContent = text;
+      isle.hidden = false;
+      requestAnimationFrame(() => isle.classList.add('open'));
+    };
+    const isleHide = () => {
+      isleMode = ''; clearInterval(watch);
+      isle.classList.remove('open', 'hot');
+      setTimeout(() => { if (!isleMode) { isle.hidden = true; isleBody.innerHTML = ''; } }, 260);
+    };
+    const wanted = (e) => !innerDrag && e.dataTransfer && [...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/plain');
+    const onIsle = (e) => e.composedPath && e.composedPath().includes(isle);
+    // drags that start on this page (moving words or pictures around it) are the page's business
+    document.addEventListener('dragstart', () => { innerDrag = true; }, true);
+    document.addEventListener('dragend', () => { innerDrag = false; }, true);
+    document.addEventListener('drop', (e) => { innerDrag = false; if (!onIsle(e) && isleMode === 'drop') isleHide(); }, true);
+    window.addEventListener('dragenter', (e) => {
+      if (!wanted(e) || isleMode === 'card') return;
+      lastOver = Date.now();
+      if (isleMode === 'drop') return;
+      isleBody.innerHTML = '<div class="cx-isle-drop"><b>Drop it here</b><span>PDF · Word · PowerPoint · Photos · Text</span></div>';
+      isleShow('drop', 'Drop on Cassie');
+      clearInterval(watch); // a drag that leaves the window, or drops elsewhere, sends nothing: tidy up when the drag-overs stop
+      watch = setInterval(() => { if (isleMode === 'drop' && Date.now() - lastOver > 1200) isleHide(); }, 400);
+    }, true);
+    window.addEventListener('dragover', (e) => { if (wanted(e)) lastOver = Date.now(); }, true);
+    isle.addEventListener('dragover', (e) => {
+      if (!wanted(e) || isleMode !== 'drop') return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      isle.classList.add('hot');
+    });
+    isle.addEventListener('dragleave', () => isle.classList.remove('hot'));
+    isle.addEventListener('drop', (e) => {
+      if (isleMode !== 'drop') return;
+      e.preventDefault();
+      e.stopPropagation();
+      isle.classList.remove('hot');
+      clearInterval(watch);
+      isleTake(e.dataTransfer).catch(() => isleCard('That didn’t work', '<p>I couldn’t open that. Try again, or attach it in the Cassie app.</p>'));
+    });
+    isle.querySelector('.cx-isle-x').addEventListener('click', isleHide);
+    isle.addEventListener('keydown', (e) => { if (e.key === 'Escape') isleHide(); });
+
+    const isleCard = (text, html) => { isleBody.innerHTML = html; isleShow('card', text); };
+    const underIsle = () => { const w = Math.min(300, innerWidth - 24); return { left: innerWidth / 2 - w / 2, top: 64, right: innerWidth / 2 + w / 2, bottom: 64, width: w, height: 0 }; };
+    const askAbout = (text) => { isleHide(); lastAutoText = text; manualOpen = true; popover.hidden = false; showChoice(text, underIsle()); };
+    const smallPicture = (file) => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('picture')); };
+      img.src = url;
+    });
+
+    async function isleTake(dt) {
+      const file = dt.files && dt.files[0];
+      if (!file) { const text = (dt.getData('text/plain') || '').trim(); if (text) askAbout(text.slice(0, 6000)); else isleHide(); return; }
+      const name = file.name || 'your file';
+      if (/^image\//.test(file.type) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(name)) {
+        const url = await smallPicture(file);
+        isleHide();
+        if (!window.CassieSketch) return;
+        const sess = await openSnipBoard(url, { headline: 'Your picture', steps: [] }, { loading: true });
+        explainPicture(sess, url, 'A picture the student dropped on Cassie: ' + name, '', 'paste');
+        return;
+      }
+      if (/^text\//.test(file.type) || /\.(txt|md|csv)$/i.test(name)) {
+        const text = (await file.text()).trim();
+        if (text) { askAbout(text.slice(0, 6000)); return; }
+      }
+      const kind = file.type === 'application/pdf' || /\.pdf$/i.test(name) ? 'PDF' : /\.docx$/i.test(name) ? 'Word file' : /\.pptx$/i.test(name) ? 'PowerPoint' : '';
+      if (!kind) { isleCard(`I can’t open ${name}`, '<p>I read PDFs, Word (.docx), PowerPoint (.pptx), photos and text files.</p>'); return; }
+      if (file.size > 30 * 1024 * 1024) { isleCard(`${name} is too big`, '<p>That file is over 30 MB. Attach it in the Cassie app instead.</p>'); return; }
+      isleCard(`${name} is ready`, `<p>What should I do with it? Cassie opens in a new tab and reads the whole ${kind}.</p>
+        <div class="cx-isle-acts">
+          <button type="button" class="cx-isle-chip main" data-ask="1">Ask about it</button>
+          <button type="button" class="cx-isle-chip" data-p="Summarize this file in short, clear points.">Summarize</button>
+          <button type="button" class="cx-isle-chip" data-p="Read this whole file and make me a complete reviewer of it.">Make a reviewer</button>
+          <button type="button" class="cx-isle-chip" data-p="Quiz me on this file: 5 questions, one at a time. Wait for my answer before the next one.">Quiz me</button>
+        </div>
+        <form class="cx-isle-ask" hidden><input type="text" placeholder="Ask about ${escapeHtml(name)}…" aria-label="Your question"><button type="submit">Ask</button></form>`);
+      const form = isleBody.querySelector('.cx-isle-ask'), input = form.querySelector('input');
+      const send = async (prompt) => {
+        isleCard('Opening in Cassie…', '');
+        let bin = '';
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        let r;
+        try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_OPEN_IN_APP', name, mime: file.type || 'application/pdf', base64: btoa(bin), prompt }); }
+        catch (e) { r = { error: 'reload' }; }
+        if (r && r.error) { isleCard('That didn’t work', `<p>${escapeHtml(errorText(new Error(r.error)))}</p>`); return; }
+        isleCard('Opened in Cassie ✓', '');
+        setTimeout(isleHide, 1800);
+      };
+      isleBody.querySelector('.cx-isle-acts').addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.ask) { form.hidden = false; input.focus(); return; }
+        send(b.dataset.p);
+      });
+      form.addEventListener('submit', (e) => { e.preventDefault(); const q = input.value.trim(); if (q) send(q); });
+    }
+  }
+
 })();

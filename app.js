@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '110';
+const APP_VERSION = '111';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -473,6 +473,7 @@ function islandShow(mood, text, ms) {
   if (label.textContent !== say) { label.textContent = say; label.classList.remove('swap'); void label.offsetWidth; label.classList.add('swap'); }
   islandEl.classList.add('live');
   islandFit();
+  try { isleStatus(mood, say); } catch (e) { /* the drop card isn't set up yet */ }
   if (ms) islandTimer = setTimeout(islandRest, ms);
 }
 function islandRest() {
@@ -494,6 +495,331 @@ function islandMoodFor(text) {
 if (islandEl) {
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(islandFit);
   window.addEventListener('resize', islandFit);
+}
+
+/* ---------- Drop on Cassie Island ----------
+   Drag a file (PDF, Word, PowerPoint, photo, text file) or some highlighted words
+   over Cassie and her Island opens into a drop zone. Drop it: she reads it, asks
+   what to do (Ask about it · Summarize · Quiz me …), and the answer shows right in
+   the Island, with "Open in chat" for the whole thing. The pop-out Cassie window
+   (below) is the same card, floating on top of every other app. */
+const ISLE_FORMATS = 'PDF · Word · PowerPoint · Photos · Text';
+const ISLE_ACTIONS = {
+  doc: [
+    { label: 'Ask about it', ask: true },
+    { label: 'Summarize', prompt: 'Summarize this file in short, clear points.' },
+    { label: 'Make a reviewer', prompt: 'Read this whole file and make me a complete reviewer of it.' },
+    { label: 'Quiz me', prompt: 'Quiz me on this file: 5 questions, one at a time. Wait for my answer before the next one.' },
+  ],
+  image: [
+    { label: 'Ask about it', ask: true },
+    { label: 'Solve it', prompt: 'Read this picture carefully. If it has questions or problems, solve them step by step and give the answers.' },
+    { label: 'Explain it', prompt: 'Explain what this picture shows, simply, like a tutor.' },
+  ],
+  text: [
+    { label: 'Ask about it', ask: true },
+    { label: 'Explain', prompt: (t) => withNote(t, 'Explain this step by step, simply:') },
+    { label: 'Answer it', prompt: (t) => withNote(t, 'Work this out carefully and give the answer, with a short why:') },
+    { label: 'Summarize', prompt: (t) => withNote(t, 'Summarize this in short, clear points:') },
+  ],
+};
+const isleCards = new Set();
+let isleBusy = false; // one question at a time, whichever card asked it
+
+function makeIsleCard(doc, opts = {}) {
+  const win = doc.defaultView || window;
+  const card = doc.createElement('div');
+  card.className = 'isle-card' + (opts.pip ? ' isle-pip-card' : '');
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', 'Cassie');
+  card.innerHTML = `
+    <div class="isle-head">
+      <span class="isle-bot" aria-hidden="true"></span>
+      <span class="isle-title" aria-live="polite"></span>
+      <button type="button" class="isle-x" aria-label="Close">×</button>
+    </div>
+    <div class="isle-body">
+      <div class="isle-step isle-drop">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <b>Drop it here</b><span>${ISLE_FORMATS}</span>
+      </div>
+      <div class="isle-step isle-home"><p>Drop a file here, paste a picture (Ctrl+V), or ask me anything.</p></div>
+      <div class="isle-step isle-load"><div class="isle-file"><span class="isle-fname"></span><span class="isle-fsize"></span></div><div class="isle-bar"><i></i></div></div>
+      <div class="isle-step isle-ready"><img class="isle-thumb" alt="" hidden><p class="isle-peek" hidden></p><p class="isle-q">What should I do with it?</p><div class="isle-acts"></div></div>
+      <div class="isle-step isle-think"><div class="isle-bar isle-bar-wait"><i></i></div></div>
+      <div class="isle-step isle-ans"><div class="isle-ans-body"></div><div class="isle-ans-acts"><button type="button" class="isle-chip" data-act="open">${opts.pip ? 'Open in Cassie' : 'Open in chat'}</button><button type="button" class="isle-chip" data-act="more">Ask more</button></div></div>
+      <div class="isle-step isle-err"><p class="isle-msg"></p><div class="isle-ans-acts"><button type="button" class="isle-chip" data-act="again">Try another</button></div></div>
+      <form class="isle-ask" autocomplete="off">
+        <input type="text" class="isle-input" placeholder="Ask Cassie…" aria-label="Ask Cassie">
+        <button type="submit" class="isle-send" aria-label="Ask">↑</button>
+      </form>
+    </div>`;
+  const $ = (s) => card.querySelector(s);
+  const title = $('.isle-title'), input = $('.isle-input');
+  let bot = null, item = null, answerBubble = null;
+  const later = (fn, ms) => win.setTimeout(fn, ms); // the pop-out's own clock keeps running while the main tab is hidden
+  if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: state.accent || '#d8343c', win });
+
+  const api = {
+    el: card, doc, pip: !!opts.pip,
+    get step() { return card.dataset.step || ''; },
+    mood(m, text) {
+      if (bot) bot.setState(m);
+      card.style.setProperty('--mood', (window.CassieBot && window.CassieBot.COLORS || {})[m] || '#ffffff');
+      if (text != null && title.textContent !== text) { title.textContent = text; title.classList.remove('swap'); void title.offsetWidth; title.classList.add('swap'); }
+    },
+    go(step, text, mood) {
+      card.dataset.step = step;
+      const asking = step === 'home' || step === 'ask';
+      $('.isle-ask').hidden = !asking;
+      const say = { drop: 'Drop your file', home: 'Hi! I’m right here', think: 'Thinking…' };
+      api.mood(mood || ({ drop: 'surprised', load: 'upload', ready: 'greeting', think: 'thinking', ans: 'proud', err: 'oops', ask: 'listening' })[step] || 'idle', text || say[step] || title.textContent);
+      card.classList.add('open');
+      if (asking) later(() => { try { input.focus(); } catch (e) { /* ignore */ } }, 30);
+      if (opts.onStep) opts.onStep(step);
+    },
+    loading(name, size) {
+      $('.isle-fname').textContent = name;
+      $('.isle-fsize').textContent = size ? fileSizeText(size) : '';
+      const bar = $('.isle-load .isle-bar i');
+      bar.style.transition = 'none'; bar.style.width = '4%'; void bar.offsetWidth;
+      bar.style.transition = ''; bar.style.width = '88%';
+      api.go('load', `Reading ${name}…`);
+    },
+    ready(it) {
+      item = it;
+      $('.isle-load .isle-bar i').style.width = '100%';
+      const thumb = $('.isle-thumb'), peek = $('.isle-peek');
+      thumb.hidden = !(it.kind === 'image' && it.dataUrl);
+      if (!thumb.hidden) thumb.src = it.dataUrl;
+      peek.hidden = it.kind !== 'text';
+      if (!peek.hidden) peek.textContent = it.text.length > 160 ? it.text.slice(0, 160) + '…' : it.text;
+      const acts = $('.isle-acts');
+      acts.innerHTML = '';
+      ISLE_ACTIONS[it.kind].forEach((a, i) => {
+        const b = doc.createElement('button');
+        b.type = 'button'; b.className = 'isle-chip' + (i === 0 ? ' isle-chip-main' : ''); b.textContent = a.label;
+        b.addEventListener('click', () => {
+          if (a.ask) { api.go('ask', it.kind === 'text' ? 'Ask about your words' : `Ask about ${it.name || 'it'}`); return; }
+          isleRun(api, typeof a.prompt === 'function' ? a.prompt(it.text) : a.prompt);
+        });
+        acts.appendChild(b);
+      });
+      const what = it.kind === 'text' ? 'Got your words' : it.kind === 'image' ? 'Got your picture' : `${it.name} is ready`;
+      later(() => api.go('ready', what), it.kind === 'text' ? 0 : 280);
+    },
+    answer(bubble) {
+      answerBubble = bubble;
+      const body = $('.isle-ans-body');
+      body.innerHTML = '';
+      if (bubble) {
+        const copy = bubble.cloneNode(true);
+        copy.querySelectorAll('button, .msg-actions, .followups, .bubble-tools, audio, video').forEach((n) => n.remove());
+        copy.querySelectorAll('canvas').forEach((c) => { const p = doc.createElement('p'); p.className = 'isle-note'; p.textContent = 'Open in chat to see the drawing.'; c.replaceWith(p); });
+        copy.className = 'isle-ans-copy';
+        body.appendChild(doc.importNode(copy, true));
+      }
+      body.scrollTop = 0;
+      const failed = bubble && bubble.classList.contains('bubble-error');
+      api.go('ans', failed ? 'That didn’t work' : 'Here you go', failed ? 'oops' : 'proud');
+    },
+    error(msg) { $('.isle-msg').textContent = msg; api.go('err', 'Hmm, I can’t open that'); },
+    close() {
+      if (opts.pip) { if (card.dataset.step === 'home') win.close(); else { item = null; api.go('home'); } return; } // × in the pop-out: back to the start, then close
+      card.classList.remove('open');
+      delete card.dataset.step;
+      item = null;
+      if (opts.onClose) opts.onClose();
+    },
+    destroy() { isleCards.delete(api); if (bot) bot.destroy(); card.remove(); },
+    get item() { return item; },
+  };
+
+  $('.isle-x').addEventListener('click', () => api.close());
+  card.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !opts.pip) api.close(); });
+  $('.isle-ask').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = '';
+    const it = card.dataset.step === 'ask' ? item : null;
+    isleRun(api, it && it.kind === 'text' ? withNote(it.text, q) : q);
+  });
+  card.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'open') {
+      if (opts.pip) { try { window.focus(); } catch (err) { /* ignore */ } }
+      if (answerBubble) answerBubble.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      if (!opts.pip) api.close();
+    } else if (b.dataset.act === 'more') { item = null; api.go('ask', 'Ask me more'); }
+    else if (b.dataset.act === 'again') { item = null; opts.pip ? api.go('home') : api.go('drop'); }
+  });
+  isleCards.add(api);
+  return api;
+}
+
+function fileSizeText(n) {
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+}
+
+// What came in with a drop or a paste: the first file, or the words.
+function isleFromTransfer(dt) {
+  if (!dt) return null;
+  const files = [...(dt.files || [])];
+  if (files.length) return { file: files[0], more: files.length - 1 };
+  const text = (dt.getData('text/plain') || '').trim();
+  return text ? { text } : null;
+}
+
+// Read what was dropped, then show what Cassie can do with it.
+async function isleTake(card, got) {
+  if (!got) return;
+  if (isleBusy) { card.error('I’m still answering — drop it again in a moment.'); return; }
+  if (got.text) {
+    clearAttach();
+    card.ready({ kind: 'text', text: got.text.slice(0, 12000) });
+    return;
+  }
+  const file = got.file;
+  card.loading(file.name || 'your file', file.size);
+  const kind = await sniffKind(file);
+  if ((kind === 'txt' || /^text\//.test(file.type)) && file.size < 8000) { // a short text file: its words are the question
+    try { const text = (await file.text()).trim(); if (text) { clearAttach(); card.ready({ kind: 'text', text: text.slice(0, 12000), name: file.name }); return; } } catch (e) { /* fall through */ }
+  }
+  const ok = await attachFile(file);
+  if (!ok) { card.error(attachName.textContent || `I can’t open ${file.name}.`); clearAttach(); return; }
+  if (pendingImage) card.ready({ kind: 'image', name: file.name, dataUrl: pendingImage.dataUrl });
+  else card.ready({ kind: 'doc', name: file.name });
+}
+
+// Ask, and show the answer in the card (the chat gets it too, as always).
+async function isleRun(card, prompt) {
+  if (isleBusy) return;
+  isleBusy = true;
+  card.go('think');
+  const before = chatLog.querySelectorAll('.bubble-assistant').length;
+  try { await handleSend(prompt); } catch (e) { /* handleSend shows its own errors */ }
+  isleBusy = false;
+  const all = chatLog.querySelectorAll('.bubble-assistant');
+  const bubble = all.length > before ? all[all.length - 1] : null;
+  if (!bubble) { card.pip ? card.go('home') : card.close(); return; }
+  card.answer(bubble);
+}
+
+// Her status lines ("Reading pages 3–8…") also show on a card that's waiting.
+function isleStatus(mood, text) {
+  isleCards.forEach((c) => { if (c.step === 'think') c.mood(mood === 'done' ? 'thinking' : mood, mood === 'done' ? 'Thinking…' : text); });
+}
+
+// The card in the app hangs under the top bar, where the Island drops down.
+const isleMain = islandEl ? makeIsleCard(document, {
+  onStep: () => islandEl.classList.add('carded'),
+  onClose: () => islandEl.classList.remove('carded'),
+}) : null;
+if (isleMain) islandEl.after(isleMain.el);
+
+(function islandDropZone() {
+  if (!isleMain) return;
+  let innerDrag = false, depth = 0;
+  const editable = (t) => t && t.closest && t.closest('input, textarea, [contenteditable="true"], .isle-card input');
+  const boardOpen = () => !!(window.CassieSketch && window.CassieSketch.isOpen && window.CassieSketch.isOpen());
+  const outside = (e) => !innerDrag && !boardOpen() && e.dataTransfer && [...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/plain');
+  document.addEventListener('dragstart', () => { innerDrag = true; });
+  document.addEventListener('dragend', () => { innerDrag = false; });
+  const hasFiles = (e) => [...e.dataTransfer.types].includes('Files');
+  let lastOver = 0, watch = 0;
+  const cancel = () => { depth = 0; clearInterval(watch); isleMain.el.classList.remove('hot'); if (isleMain.step === 'drop') isleMain.close(); };
+  window.addEventListener('dragenter', (e) => {
+    if (!outside(e)) return;
+    depth++;
+    lastOver = Date.now();
+    if (isleMain.step !== 'drop' && !isleBusy) {
+      isleMain.go('drop');
+      clearInterval(watch); // a drag that ends outside the window sends nothing: tidy up when the drag-overs stop
+      watch = setInterval(() => { if (Date.now() - lastOver > 1200) cancel(); }, 400);
+    }
+  });
+  window.addEventListener('dragover', (e) => {
+    if (!outside(e)) return;
+    lastOver = Date.now();
+    if (editable(e.target) && !hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    isleMain.el.classList.toggle('hot', isleMain.el.contains(e.target));
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!outside(e)) return;
+    depth = Math.max(0, depth - 1);
+    if (!e.relatedTarget && depth === 0) cancel();
+  });
+  window.addEventListener('drop', (e) => {
+    if (!outside(e)) { innerDrag = false; return; }
+    if (editable(e.target) && !hasFiles(e)) { cancel(); return; } // words dropped in the question box land there, as usual
+    e.preventDefault();
+    depth = 0;
+    clearInterval(watch);
+    isleMain.el.classList.remove('hot');
+    track('feature', 'island-drop');
+    isleTake(isleMain, isleFromTransfer(e.dataTransfer));
+  });
+})();
+
+/* ---------- Pop-out Cassie ----------
+   Chrome and Edge can open a small window that stays on top of every other app
+   (Word, a PDF reader, the desktop). Cassie's Island lives in it: drop a file,
+   paste a picture, or ask — the answers also land in the chat here. */
+const popBtn = document.getElementById('popout-btn');
+let pip = null; // { win, card }
+async function popOut() {
+  if (pip) { try { pip.win.focus(); } catch (e) { /* ignore */ } return; }
+  let win;
+  try { win = await window.documentPictureInPicture.requestWindow({ width: 380, height: 340 }); }
+  catch (e) { islandShow('oops', 'Your browser didn’t let Cassie pop out', 3000); return; }
+  const d = win.document;
+  d.title = 'Cassie';
+  [...document.styleSheets].forEach((ss) => {
+    try {
+      const st = d.createElement('style');
+      st.textContent = [...ss.cssRules].map((r) => r.cssText).join('\n');
+      d.head.appendChild(st);
+    } catch (e) { // a stylesheet from another site (fonts): link it instead
+      if (!ss.href) return;
+      const l = d.createElement('link'); l.rel = 'stylesheet'; l.href = ss.href; d.head.appendChild(l);
+    }
+  });
+  for (const a of document.documentElement.attributes) if (a.name.startsWith('data-') || a.name === 'class') d.documentElement.setAttribute(a.name, a.value);
+  d.body.className = 'isle-pip';
+  const card = makeIsleCard(d, { pip: true });
+  d.body.appendChild(card.el);
+  card.go('home');
+  pip = { win, card };
+  track('feature', 'popout');
+  if (popBtn) popBtn.setAttribute('aria-pressed', 'true');
+
+  d.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (card.step !== 'drop' && !isleBusy) card.go('drop'); });
+  d.addEventListener('dragleave', (e) => { if (!e.relatedTarget && card.step === 'drop') card.go('home'); });
+  d.addEventListener('drop', (e) => {
+    const got = isleFromTransfer(e.dataTransfer);
+    if (got && got.text && e.target.closest && e.target.closest('input')) { if (card.step === 'drop') card.go('ask'); return; } // words dropped in the box land there
+    e.preventDefault();
+    isleTake(card, got);
+  });
+  d.addEventListener('paste', (e) => {
+    const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+    if (!files.length) return; // plain words paste into the box as usual
+    e.preventDefault();
+    isleTake(card, { file: files[0] });
+  });
+  win.addEventListener('pagehide', () => {
+    card.destroy();
+    pip = null;
+    if (popBtn) popBtn.setAttribute('aria-pressed', 'false');
+  });
+}
+if (popBtn && 'documentPictureInPicture' in window) {
+  popBtn.hidden = false;
+  popBtn.addEventListener('click', popOut);
 }
 // which way the 3D Cassie turns while she walks (-1 left, 1 right)
 function face3D(dir) {
@@ -4806,6 +5132,8 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Drop on Cassie: drag a PDF, Word, PowerPoint, photo or some words onto Cassie and her pill opens — tap Summarize, Quiz me or Ask about it, and the answer shows right there.',
+  'Pop Cassie out (Chrome or Edge on a computer): tap the little window button at the top and she floats on top of Word, PDFs and your other apps. Drop files on her or ask anything.',
   'Read & highlight: attach a PDF, Word or PowerPoint and tap “📖 Read & highlight” to read it here and highlight any part (great on phones).',
   'Highlight on your phone: select words in any app → Share → Cassie (Android). iPhone/iPad: Settings → Use Cassie in other apps.',
   'Cassie can draw on your board now: open the board and type “graph y = x² − 4”, or “graph the answer” on a snip.',
@@ -4815,8 +5143,6 @@ const WHATS_NEW = [
   'While she works, a pill at the top shows what she’s doing — “Reading pages 3–8…”, then “Done”.',
   'Using the Chrome extension? What you highlight, snip or paste there now shows up in your chats here (“From Chrome”).',
   'Reflection papers and personal essays are now written in your voice — with [brackets] for your own moments to fill in.',
-  'Miss the 3D felt Cassie? Pick her in Settings → Appearance → Cassie’s look.',
-  'Quiz me saves the ones you missed — tap “Review my mistakes” to practise them.',
 ];
 function showWhatsNew() {
   if (state.seenVersion === APP_VERSION) return;

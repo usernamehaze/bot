@@ -1304,6 +1304,91 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .island-text.swap { animation: islandIn .32s ease-out; }
 @keyframes islandIn { from { opacity: .2; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .island { transition: opacity .2s; } .island-text.swap { animation: none; } }
+/* ---------- Drop on Cassie Island: the pill opens into a card ----------
+   Drag a file or words over Cassie → "Drop it here" → she reads it → what should
+   I do? → the answer, right in the card. The pop-out Cassie window is this card. */
+.island.carded { opacity: 0 !important; }
+.isle-card {
+  --mood: #ffffff; position: absolute; left: 50%; top: calc(100% + 8px); z-index: 9;
+  width: min(400px, calc(100vw - 32px)); border-radius: 24px; background: #131317; color: #fff;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .32), 0 0 26px color-mix(in srgb, var(--mood) 34%, transparent);
+  opacity: 0; transform: translate(-50%, -14px) scale(.6); transform-origin: 50% 0; pointer-events: none;
+  transition: opacity .22s, transform .45s cubic-bezier(.3, 1.4, .45, 1), box-shadow .4s;
+  font-size: .92rem; overflow: hidden;
+}
+.isle-card.open { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+.topbar:has(.isle-card.open) { z-index: 28; } /* over Cursor Cassie while the card is open */
+.isle-head { display: flex; align-items: center; gap: 9px; padding: 8px 8px 8px 9px; font-weight: 600; }
+.isle-bot { width: 32px; height: 32px; flex-shrink: 0; }
+.isle-bot .cassie-bot { width: 32px; height: 32px; display: block; }
+.isle-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.isle-title.swap { animation: islandIn .32s ease-out; }
+.isle-x { width: 30px; height: 30px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); color: #fff; font-size: 1.15rem; line-height: 1; cursor: pointer; flex-shrink: 0; }
+.isle-x:hover { background: rgba(255, 255, 255, .16); }
+.isle-body { padding: 0 14px 14px; }
+.isle-step { display: none; }
+.isle-card[data-step="drop"] .isle-drop, .isle-card[data-step="home"] .isle-home, .isle-card[data-step="load"] .isle-load,
+.isle-card[data-step="ready"] .isle-ready, .isle-card[data-step="think"] .isle-think, .isle-card[data-step="ans"] .isle-ans,
+.isle-card[data-step="err"] .isle-err { display: block; }
+.isle-drop {
+  text-align: center; padding: 18px 12px 16px; border: 1.5px dashed rgba(255, 255, 255, .3); border-radius: 16px;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.isle-card[data-step="drop"] .isle-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.isle-drop svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 4px; }
+.isle-drop b { font-size: 1rem; }
+.isle-drop span { color: rgba(255, 255, 255, .6); font-size: .8rem; }
+.isle-card.hot .isle-drop { border-color: #fff; background: rgba(255, 255, 255, .07); transform: scale(1.02); }
+.isle-home p, .isle-q, .isle-msg { margin: 0 0 10px; color: rgba(255, 255, 255, .75); }
+.isle-file { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: .85rem; }
+.isle-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.isle-fsize { color: rgba(255, 255, 255, .55); flex-shrink: 0; }
+.isle-bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.isle-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: #fff; transition: width 3.2s cubic-bezier(.1, .7, .3, 1); }
+.isle-bar-wait i { width: 38%; animation: isleWait 1.3s ease-in-out infinite; transition: none; }
+@keyframes isleWait { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
+.isle-thumb { display: block; max-width: 100%; max-height: 120px; border-radius: 12px; margin: 0 0 10px; }
+.isle-thumb[hidden], .isle-peek[hidden], .isle-ask[hidden] { display: none; }
+.isle-peek { margin: 0 0 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .07); color: rgba(255, 255, 255, .85); font-size: .85rem; max-height: 4.6em; overflow: hidden; }
+.isle-acts, .isle-ans-acts { display: flex; flex-wrap: wrap; gap: 7px; }
+.isle-ans-acts { margin-top: 10px; }
+.isle-chip {
+  border: 1px solid rgba(255, 255, 255, .22); background: transparent; color: #fff; border-radius: 99px;
+  padding: 7px 13px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.isle-chip:hover { background: rgba(255, 255, 255, .1); }
+.isle-chip-main { background: #fff; color: #131317; border-color: #fff; }
+.isle-chip-main:hover { background: #e9e7e3; }
+.isle-chip:focus-visible, .isle-x:focus-visible, .isle-send:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.isle-ans-body { max-height: min(46vh, 380px); overflow: auto; border-radius: 14px; }
+.isle-ans-copy { white-space: pre-wrap; word-wrap: break-word; line-height: 1.45; padding: 2px 2px 4px; }
+.isle-ans-copy p { margin: 0 0 8px; }
+.isle-ans-copy p:last-child { margin-bottom: 0; }
+.isle-ans-copy a { color: #fff; }
+.isle-ans-copy pre, .isle-ans-copy .table-wrap { color: var(--text); }
+.isle-note { color: rgba(255, 255, 255, .6); font-size: .85rem; }
+.isle-ask { display: flex; gap: 7px; margin-top: 2px; }
+.isle-input {
+  flex: 1; min-width: 0; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .07); color: #fff;
+  border-radius: 99px; padding: 9px 14px; font: inherit; font-size: .9rem;
+}
+.isle-input::placeholder { color: rgba(255, 255, 255, .5); }
+.isle-input:focus { outline: none; border-color: rgba(255, 255, 255, .55); }
+.isle-send { width: 38px; height: 38px; border: 0; border-radius: 50%; background: #fff; color: #131317; font-size: 1.1rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+#popout-btn[hidden] { display: none; }
+#popout-btn[aria-pressed="true"] { opacity: .55; }
+/* the pop-out Cassie window: the whole window is her card */
+html:has(body.isle-pip), body.isle-pip { height: 100%; margin: 0; background: #131317; overflow: hidden; }
+.isle-pip .isle-card {
+  position: static; width: 100%; height: 100%; border-radius: 0; transform: none; opacity: 1; pointer-events: auto;
+  display: flex; flex-direction: column; box-shadow: inset 0 0 40px color-mix(in srgb, var(--mood) 14%, transparent);
+}
+.isle-pip .isle-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.isle-pip .isle-ans-body { max-height: none; flex: 1; }
+.isle-pip .isle-card[data-step="ans"] .isle-ans { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.isle-pip .isle-card[data-step="drop"] .isle-drop { flex: 1; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .isle-card { transition: opacity .2s; } .isle-title.swap { animation: none; } .isle-bar-wait i { animation: none; width: 100%; opacity: .5; } }
+
 
 /* ---------- shared from another app: "What should I do with this?" ---------- */
 .share-card { margin: 64px auto 0; max-width: 620px; width: 100%; padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.08); }
