@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '111';
+const APP_VERSION = '112';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -3906,6 +3906,46 @@ if (hintBtn) {
     handleSend(text, { mode: 'hint' });
   });
 }
+/* ---------- Explore 3D: cells you can turn, zoom and tap ----------
+   The viewer (explore/cell3d.js, with three.js) only loads when it's opened, so the app
+   stays light. Tapping "Ask Cassie" or "Quiz me" in it brings the question back here. */
+const exploreBtn = document.getElementById('explore-btn');
+let exploreMod = null;
+function startQuizOn(topic) {
+  if (!canChat()) { openSettings(); return; }
+  quizMode = true;
+  if (quizBtn) quizBtn.classList.add('active');
+  setQuizLabel('Stop quiz');
+  dressCassie();
+  handleSend(`Quiz me on: ${topic}. Ask the first question.`, {});
+}
+async function openExplore(cell) {
+  track('feature', 'explore');
+  try {
+    if (!exploreMod) {
+      islandShow('reading', 'Opening the 3D cell…');
+      exploreMod = await import('./explore/cell3d.js');
+      islandRest();
+    }
+    if (!exploreMod.supported()) {
+      renderMessage('assistant', 'This browser can’t show 3D right now (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.');
+      return;
+    }
+    const view = exploreMod.open({
+      cell: cell === 'plant' ? 'plant' : cell === 'animal' ? 'animal' : undefined,
+      onAsk: (q) => { view.close(); handleSend(q); },
+      onQuiz: (topic) => { view.close(); startQuizOn(topic); },
+      onClose: () => { try { exploreBtn && exploreBtn.focus(); } catch (e) { /* ignore */ } },
+    });
+  } catch (e) {
+    islandShow('oops', 'Couldn’t open 3D', 2600);
+    renderMessage('assistant', 'I couldn’t open the 3D cell just now — check your internet connection and try again.');
+  }
+}
+if (exploreBtn) exploreBtn.addEventListener('click', () => openExplore());
+// a link like app.html?explore=plant opens it straight away
+{ const ex = new URLSearchParams(location.search).get('explore'); if (ex) setTimeout(() => openExplore(ex), 300); }
+
 if (quizBtn) {
   quizBtn.addEventListener('click', () => {
     if (!canChat()) {
@@ -5161,6 +5201,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Explore 3D: turn an animal or plant cell in 3D, zoom in and tap any part to see what it does — then ask Cassie about it or take a quiz. Works on phones too.',
   'Drop on Cassie: drag a PDF, Word, PowerPoint, photo or some words onto Cassie and her pill opens — tap Summarize, Quiz me or Ask about it, and the answer shows right there.',
   'Pop Cassie out (Chrome or Edge on a computer): tap the little window button at the top and she floats on top of Word, PDFs and your other apps. Drop files on her or ask anything.',
   'Read & highlight: attach a PDF, Word or PowerPoint and tap “📖 Read & highlight” to read it here and highlight any part (great on phones).',

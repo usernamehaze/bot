@@ -665,6 +665,49 @@ test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a
   await ctx.close();
 });
 
+test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
+  await page.click('#explore-btn');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip', { timeout: 20000 });
+  const chips = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
+  for (const id of ['membrane', 'nucleus', 'nucleolus', 'rer', 'ser', 'golgi', 'mito', 'ribosome', 'lysosome', 'centrioles']) expect(chips.includes(id), 'animal cell is missing ' + id + ': ' + chips);
+  expect(!chips.includes('chloroplast') && !chips.includes('wall'), 'an animal cell has no chloroplasts or wall');
+  // tapping the 3D picture picks the part under the finger
+  await page.waitForTimeout(800);
+  const at = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
+  await page.click('.x3d-tools [data-tool="reset"]');
+  await page.waitForTimeout(300);
+  const at2 = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
+  await page.mouse.click(at2.x, at2.y);
+  await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 3000 });
+  expect(/Nucleolus|Nucleus|Nuclear envelope/.test(await page.locator('.x3d-sheet h3').innerText()), 'tapping the nucleus area picks it: ' + await page.locator('.x3d-sheet h3').innerText() + JSON.stringify(at));
+  // pick from the list, read about it, ask Cassie
+  await page.click('.x3d-chip[data-part="golgi"]');
+  expect(/Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()) && /post office/.test(await page.locator('.x3d-sheet').innerText()), 'the Golgi card should show');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/explore-golgi.png' });
+  await page.click('.x3d-act[data-act="ask"]');
+  await page.waitForSelector('#chat-log .bubble-assistant >> text=post office', { timeout: 15000 });
+  expect(await page.locator('.x3d').isHidden(), 'the viewer closes so the answer shows');
+  expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
+  // plant cell → quiz
+  await page.click('#explore-btn');
+  await page.click('.x3d-switch [data-cell="plant"]');
+  await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 10000 });
+  const plant = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
+  for (const id of ['wall', 'vacuole', 'chloroplast', 'plasmodesmata', 'nucleus', 'mito']) expect(plant.includes(id), 'plant cell is missing ' + id);
+  expect(!plant.includes('centrioles'), 'a plant cell shows no centrioles');
+  await page.click('.x3d-chip[data-part="chloroplast"]');
+  expect(/photosynthesis/.test(await page.locator('.x3d-sheet').innerText()) && /Only in plant cells/.test(await page.locator('.x3d-sheet').innerText()), 'the chloroplast card');
+  await page.click('.x3d-act[data-act="quiz"]');
+  await page.waitForFunction(() => document.getElementById('quiz-btn').classList.contains('active'), null, { timeout: 5000 });
+  expect(/Quiz me on: the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell');
+  // a link opens it straight away
+  await page.goto(APP + '?explore=plant');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="wall"]', { timeout: 20000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
