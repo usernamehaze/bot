@@ -10,6 +10,7 @@ import { OrbitControls } from './OrbitControls.js';
 import { RoomEnvironment } from './RoomEnvironment.js';
 import { RoundedBoxGeometry } from './RoundedBoxGeometry.js';
 import { PARTS, CELLS } from './cells.js';
+import { createBody, SYSTEMS } from './body3d.js';
 
 let view = null; // kept after closing, so opening again is instant
 
@@ -340,12 +341,14 @@ function createView() {
   root.hidden = true;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-label', 'Explore 3D');
+  root.setAttribute('tabindex', '-1');
   root.innerHTML = `
     <canvas class="x3d-canvas" aria-label="3D cell — drag to turn, pinch or scroll to zoom, tap a part"></canvas>
     <div class="x3d-labels" aria-hidden="true"></div>
     <div class="x3d-top">
       <button type="button" class="x3d-btn x3d-close" aria-label="Close">×</button>
-      <div class="x3d-switch" role="tablist" aria-label="Which cell">
+      <div class="x3d-switch" role="tablist" aria-label="What to explore">
+        <button type="button" role="tab" data-cell="body">Human body</button>
         <button type="button" role="tab" data-cell="animal">Animal cell</button>
         <button type="button" role="tab" data-cell="plant">Plant cell</button>
       </div>
@@ -356,17 +359,25 @@ function createView() {
       </div>
     </div>
     <p class="x3d-hint"></p>
+    <div class="x3d-find" hidden>
+      <input type="search" class="x3d-search" placeholder="Find a part: heart, femur, biceps…" aria-label="Find a part of the body" autocomplete="off">
+      <div class="x3d-results" role="listbox" hidden></div>
+      <button type="button" class="x3d-btn x3d-showall" hidden>Show hidden parts</button>
+    </div>
     <div class="x3d-loading">Building the cell…</div>
     <section class="x3d-sheet" hidden aria-live="polite">
       <button type="button" class="x3d-sheet-x" aria-label="Close">×</button>
       <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3></div>
+      <p class="x3d-path" hidden></p>
       <p class="x3d-like"></p>
       <p class="x3d-does"></p>
       <p class="x3d-only"></p>
       <div class="x3d-acts">
         <button type="button" class="x3d-act x3d-act-main" data-act="ask">Ask Cassie about it</button>
         <button type="button" class="x3d-act" data-act="quiz">Quiz me on this cell</button>
+        <button type="button" class="x3d-act" data-act="hide" hidden>Hide it</button>
       </div>
+      <p class="x3d-credit" hidden>Body: Z-Anatomy, based on BodyParts3D © DBCLS · CC BY-SA 4.0 · <a href="explore/body/ATTRIBUTION.md" target="_blank" rel="noopener">sources</a></p>
     </section>
     <nav class="x3d-parts" aria-label="Parts of the cell"></nav>`;
   document.body.appendChild(root);
@@ -392,7 +403,18 @@ function createView() {
   controls.addEventListener('start', () => { controls.autoRotate = false; flyTo = null; });
 
   const cells = {};
-  let current = null, kind = 'animal', selected = null, opts = {}, raf = 0, cut = true, flyTo = null;
+  let current = null, kind = 'animal', selected = null, opts = {}, raf = 0, cut = true, flyTo = null, inBody = false, bodyPart = null;
+  const findEl = $('.x3d-find'), searchEl = $('.x3d-search'), resultsEl = $('.x3d-results'), showAllEl = $('.x3d-showall');
+  const base = new URL('./', import.meta.url).href;
+  let dirty = true; // draw again only when something changed (saves the battery)
+  const invalidate = () => { dirty = true; };
+  controls.addEventListener('change', invalidate);
+  const body = createBody({
+    scene, camera, controls, base, invalidate,
+    setLoading: (text) => { const l = $('.x3d-loading'); l.hidden = !text; if (text) l.textContent = text; },
+    showPart: (info) => showBodyPart(info),
+    onSystems: () => renderParts(),
+  });
   let showLabels = Math.min(window.innerWidth, window.innerHeight) >= 560; // phones: the parts list below names everything
   $('[data-tool="labels"]').setAttribute('aria-pressed', String(showLabels));
   const labelEls = new Map();
@@ -403,7 +425,25 @@ function createView() {
   }
   function showCell(k) {
     kind = k;
-    $('.x3d-loading').hidden = false;
+    inBody = k === 'body';
+    root.classList.toggle('x3d-body-mode', inBody);
+    findEl.hidden = !inBody; hint.hidden = inBody;
+    $('[data-tool="labels"]').hidden = inBody; $('[data-tool="cut"]').hidden = inBody;
+    camera.near = inBody ? 0.01 : 0.1; camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, inBody ? 1.5 : 2)); // the body has a lot to draw
+    invalidate();
+    controls.minDistance = inBody ? 0.25 : 3; controls.maxDistance = inBody ? 6 : 30;
+    if (inBody) {
+      Object.values(cells).forEach((c) => { c.group.visible = false; });
+      current = null; selected = null; sheet.hidden = true;
+      root.querySelectorAll('[data-cell]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.cell === k)));
+      labelsEl.replaceChildren(body.label); labelEls.clear();
+      resetView(); renderParts();
+      body.enter().then(() => renderParts()).catch(() => {});
+      return;
+    }
+    body.leave(); bodyPart = null;
+    $('.x3d-loading').hidden = false; $('.x3d-loading').textContent = 'Building the cell…';
     // let the "Building…" note paint before the work starts
     requestAnimationFrame(() => setTimeout(() => {
       Object.entries(cells).forEach(([name, c]) => { c.group.visible = name === k; });
@@ -417,21 +457,26 @@ function createView() {
       renderParts();
       renderLabels();
       $('.x3d-loading').hidden = true;
+      invalidate();
     }, 30));
   }
   function resetView() {
-    if (!current) return;
-    // far enough back that the whole cell fits, wide screen or tall phone
+    const v = inBody ? body : current;
+    if (!v) return;
+    // far enough back that the whole cell (or body) fits, wide screen or tall phone
     const half = THREE.MathUtils.degToRad(camera.fov / 2);
-    const dist = current.fit / Math.tan(half) / Math.min(1, camera.aspect) ** 0.8 * 1.08;
-    camera.position.copy(current.camera).setLength(dist);
-    controls.target.set(0, 0, 0);
-    controls.autoRotate = true;
+    const dist = v.fit / Math.tan(half) / Math.min(1, camera.aspect) ** 0.8 * 1.08;
+    const target = inBody ? body.target : new THREE.Vector3();
+    camera.position.copy(target).add(v.camera.clone().sub(target).setLength(dist));
+    controls.target.copy(target);
+    controls.autoRotate = !inBody; // the body stays still until you turn it
+    invalidate();
     flyTo = null;
     controls.update();
   }
   function setCut(on) {
     cut = on;
+    invalidate();
     $('[data-tool="cut"]').setAttribute('aria-pressed', String(on));
     Object.values(cells).forEach((c) => c.parts.forEach((p) => p.materials.forEach((m) => {
       if (!m.userData.clip) return;
@@ -440,6 +485,18 @@ function createView() {
   }
   function renderParts() {
     partsEl.innerHTML = '';
+    if (inBody) { // the body: switch whole systems on and off
+      partsEl.setAttribute('aria-label', 'Body systems');
+      SYSTEMS.forEach((sys) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'x3d-chip x3d-sys'; b.dataset.sys = sys.id;
+        b.setAttribute('aria-pressed', String(body.isOn(sys.id)));
+        b.innerHTML = `<span class="x3d-tick" aria-hidden="true"></span>${sys.name}`;
+        partsEl.appendChild(b);
+      });
+      return;
+    }
+    partsEl.setAttribute('aria-label', 'Parts of the cell');
     CELLS[kind].parts.forEach((id) => {
       if (!current.parts.has(id)) return;
       const b = document.createElement('button');
@@ -458,8 +515,32 @@ function createView() {
       labelsEl.appendChild(el); labelEls.set(id, el);
     });
   }
+  function showBodyPart(info) {
+    bodyPart = info;
+    const acts = sheet.querySelector('.x3d-acts');
+    if (!info) { sheet.hidden = true; return; }
+    sheet.querySelector('h3').textContent = info.name;
+    sheet.querySelector('.x3d-sheet-head .x3d-dot').style.background = info.color;
+    const path = sheet.querySelector('.x3d-path');
+    path.hidden = false;
+    path.innerHTML = [`<span>${info.system}</span>`, ...info.path.map((g) => `<button type="button" class="x3d-up" data-si="${g.index}" title="Show the whole ${g.name.replace(/"/g, '')}">${g.name.replace(/[<&>]/g, '')}</button>`)].join(' › ');
+    sheet.querySelector('.x3d-like').textContent = info.latin ? `Latin: ${info.latin}` : '';
+    sheet.querySelector('.x3d-does').textContent = 'Tap “Ask Cassie” to learn what it does, where it is and how it works.';
+    sheet.querySelector('.x3d-only').hidden = true;
+    acts.querySelector('[data-act="quiz"]').textContent = `Quiz me on the ${info.system.toLowerCase()}`;
+    acts.querySelector('[data-act="hide"]').hidden = false;
+    sheet.querySelector('.x3d-credit').hidden = false;
+    sheet.hidden = false;
+    if (info.focus) flyTo = info.focus;
+    controls.autoRotate = false;
+  }
   function select(id) {
     selected = id;
+    invalidate();
+    sheet.querySelector('.x3d-path').hidden = true;
+    sheet.querySelector('[data-act="hide"]').hidden = true;
+    sheet.querySelector('.x3d-credit').hidden = true;
+    sheet.querySelector('[data-act="quiz"]').textContent = 'Quiz me on this cell';
     if (current) current.parts.forEach((p, pid) => p.materials.forEach((m) => {
       const on = !id || pid === id;
       m.opacity = on ? Math.max(m.userData.base, id ? Math.min(1, m.userData.base + 0.25) : m.userData.base) : m.userData.base * 0.18;
@@ -494,9 +575,10 @@ function createView() {
   let down = null;
   canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
   canvas.addEventListener('pointerup', (e) => {
-    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 7 || !current) return;
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 7 || (!current && !inBody)) return;
     const r = canvas.getBoundingClientRect();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+    if (inBody) { body.select(body.pick(ray)); return; }
     const hits = ray.intersectObjects(current.group.children, true);
     for (const h of hits) {
       let o = h.object, id = null;
@@ -511,25 +593,59 @@ function createView() {
     select(null);
   });
 
-  partsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-part]'); if (b) select(b.dataset.part === selected ? null : b.dataset.part); });
+  partsEl.addEventListener('click', (e) => {
+    const s = e.target.closest('[data-sys]');
+    if (s) { const on = !body.isOn(s.dataset.sys); s.setAttribute('aria-pressed', String(on)); body.setSystem(s.dataset.sys, on).catch(() => {}); return; }
+    const b = e.target.closest('[data-part]'); if (b) select(b.dataset.part === selected ? null : b.dataset.part);
+  });
+  // find a part of the body by name
+  let findTimer = 0;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(findTimer);
+    findTimer = setTimeout(() => {
+      const res = body.search(searchEl.value.trim());
+      resultsEl.innerHTML = res.map((r) => `<button type="button" role="option" data-si="${r.index}"><b>${r.name.replace(/[<&>]/g, '')}</b><span>${r.system}</span></button>`).join('');
+      resultsEl.hidden = !res.length;
+    }, 120);
+  });
+  resultsEl.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-si]');
+    if (!b) return;
+    resultsEl.hidden = true; searchEl.value = ''; searchEl.blur();
+    body.goTo(+b.dataset.si).then(() => renderParts()).catch(() => {});
+  });
+  showAllEl.addEventListener('click', () => { body.showAll(); showAllEl.hidden = true; });
   root.querySelector('.x3d-switch').addEventListener('click', (e) => { const b = e.target.closest('[data-cell]'); if (b && b.dataset.cell !== kind) showCell(b.dataset.cell); });
   root.querySelector('.x3d-tools').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tool]');
     if (!b) return;
-    if (b.dataset.tool === 'labels') { showLabels = !showLabels; b.setAttribute('aria-pressed', String(showLabels)); }
+    if (b.dataset.tool === 'labels') { showLabels = !showLabels; b.setAttribute('aria-pressed', String(showLabels)); invalidate(); }
     if (b.dataset.tool === 'cut') setCut(!cut);
-    if (b.dataset.tool === 'reset') { select(null); resetView(); }
+    if (b.dataset.tool === 'reset') { if (inBody) body.select(-1); else select(null); resetView(); }
   });
-  sheet.querySelector('.x3d-sheet-x').addEventListener('click', () => select(null));
+  sheet.querySelector('.x3d-sheet-x').addEventListener('click', () => (inBody ? body.select(-1) : select(null)));
   sheet.addEventListener('click', (e) => {
+    const up = e.target.closest('.x3d-up');
+    if (up) { body.select(+up.dataset.si); return; }
     const b = e.target.closest('[data-act]');
+    if (b && inBody && bodyPart) {
+      const p = bodyPart;
+      if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${p.name}${p.latin ? ` (${p.latin})` : ''} — part of the ${p.system.toLowerCase()}${p.path.length ? `, in the ${p.path[p.path.length - 1].name.toLowerCase()}` : ''} — simply: where it is in the body, what it does, and one fact that helps me remember it. Then ask me one quick question to check I understood.`, { part: p.name, cell: 'body' });
+      if (b.dataset.act === 'quiz' && opts.onQuiz) opts.onQuiz(`the ${p.system.toLowerCase()} of the human body (its main parts, where they are and what they do)`, { cell: 'body' });
+      if (b.dataset.act === 'hide') { body.hide(p.index); showAllEl.hidden = false; }
+      return;
+    }
     if (!b || !selected) return;
     const name = PARTS[selected].name, cellName = kind === 'animal' ? 'an animal cell' : 'a plant cell';
     if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${name.toLowerCase()} of ${cellName} simply: what it does, how it works, and an everyday example. Then ask me one quick question to check I understood.`, { part: selected, cell: kind });
     if (b.dataset.act === 'quiz' && opts.onQuiz) opts.onQuiz(`the parts of ${cellName} and what each one does`, { cell: kind });
   });
   $('.x3d-close').addEventListener('click', () => close());
-  root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (selected) select(null); else close(); } });
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (e.target === searchEl && searchEl.value) { searchEl.value = ''; resultsEl.hidden = true; return; }
+    if (inBody && bodyPart) body.select(-1); else if (selected) select(null); else close();
+  });
 
   function resize() {
     const w = root.clientWidth || window.innerWidth, h = root.clientHeight || window.innerHeight;
@@ -538,11 +654,13 @@ function createView() {
     // phones in portrait: step back so the whole cell fits the width
     camera.fov = w < h ? 52 : 42;
     camera.updateProjectionMatrix();
+    invalidate();
   }
   new ResizeObserver(resize).observe(root);
 
   const tmp = new THREE.Vector3(), toCam = new THREE.Vector3();
   function placeLabels() {
+    if (inBody) { body.placeLabel(camera, canvas.clientWidth, canvas.clientHeight); return; }
     if (!current) return;
     const w = canvas.clientWidth, h = canvas.clientHeight;
     const camDist = camera.position.distanceTo(controls.target);
@@ -558,15 +676,18 @@ function createView() {
   }
   function frame() {
     raf = requestAnimationFrame(frame);
-    if (flyTo) {
-      controls.target.lerp(flyTo.target, 0.08);
-      toCam.copy(camera.position).sub(controls.target);
-      const d = toCam.length();
-      toCam.setLength(d + (flyTo.dist - d) * 0.08);
-      camera.position.copy(controls.target).add(toCam);
-      if (controls.target.distanceTo(flyTo.target) < 0.02 && Math.abs(d - flyTo.dist) < 0.05) flyTo = null;
+    if (flyTo) { // glide to the picked part in a fixed time, however slow the device draws
+      if (!flyTo.t0) { flyTo.t0 = performance.now(); flyTo.from = controls.target.clone(); flyTo.fromDist = camera.position.distanceTo(controls.target); }
+      const k = Math.min(1, (performance.now() - flyTo.t0) / 650), e = 1 - Math.pow(1 - k, 3);
+      toCam.copy(camera.position).sub(controls.target).normalize();
+      controls.target.copy(flyTo.from).lerp(flyTo.target, e);
+      camera.position.copy(controls.target).addScaledVector(toCam, flyTo.fromDist + (flyTo.dist - flyTo.fromDist) * e);
+      if (k >= 1) flyTo = null;
+      dirty = true;
     }
-    controls.update();
+    const moved = controls.update();
+    if (!(moved || dirty || flyTo || controls.autoRotate)) return;
+    dirty = false;
     renderer.render(scene, camera);
     placeLabels();
   }
@@ -577,8 +698,8 @@ function createView() {
     document.documentElement.classList.add('x3d-open');
     resize();
     if (!raf) frame();
-    const want = o.cell || kind;
-    if (!current || want !== kind) showCell(want);
+    const want = o.cell || (inBody || !current ? 'body' : kind);
+    if ((!current && !inBody) || want !== kind) showCell(want);
     setTimeout(() => $('.x3d-close').focus(), 50);
   }
   function close() {
@@ -587,5 +708,5 @@ function createView() {
     cancelAnimationFrame(raf); raf = 0;
     if (opts.onClose) opts.onClose();
   }
-  return { open, close, select, get kind() { return kind; }, get selected() { return selected; }, root };
+  return { open, close, select, body, get kind() { return kind; }, get selected() { return selected; }, root };
 }

@@ -73,7 +73,7 @@ export async function startFakeServer(port = 4630) {
       const vision = mode.groqVision === 'retired' ? [] : mode.groqVision === 'renamed' ? [{ id: 'meta-llama/llama-guard-4-12b' }, { id: 'acme/new-eyes-9b' }] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
       return Response.json({ data: [...vision, { id: 'openai/gpt-oss-120b' }, { id: 'whisper-large-v3' }] });
     }
-    if (u.endsWith('/audio/transcriptions')) { mode.heardCalls = (mode.heardCalls || 0) + 1; return Response.json({ text: mode.heard || 'What is osmosis?' }); }
+    if (u.endsWith('/audio/transcriptions')) { mode.heardCalls = (mode.heardCalls || 0) + 1; mode.heardPrompt = init.body && init.body.get ? init.body.get('prompt') : ''; return Response.json({ text: mode.heard || 'What is osmosis?' }); }
     const body = JSON.parse(init.body);
     mode.calls.push({ model: body.model, auth: init.headers.authorization, last: body.messages.at(-1) });
     if (mode.groq === 'busy') return Response.json({ error: { message: 'Rate limit reached' } }, { status: 429, headers: { 'retry-after': '40' } });

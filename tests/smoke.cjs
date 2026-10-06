@@ -670,7 +670,9 @@ test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a
 test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
   await page.click('#explore-btn');
-  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip', { timeout: 20000 });
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 20000 });
+  await page.click('.x3d-switch [data-cell="animal"]');
+  await page.waitForSelector('.x3d-chip[data-part="nucleus"]', { timeout: 20000 });
   const chips = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
   for (const id of ['membrane', 'nucleus', 'nucleolus', 'rer', 'ser', 'golgi', 'mito', 'ribosome', 'lysosome', 'centrioles']) expect(chips.includes(id), 'animal cell is missing ' + id + ': ' + chips);
   expect(!chips.includes('chloroplast') && !chips.includes('wall'), 'an animal cell has no chloroplasts or wall');
@@ -678,10 +680,14 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.waitForTimeout(800);
   const at = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
   await page.click('.x3d-tools [data-tool="reset"]');
-  await page.waitForTimeout(300);
+  // a small drag stops the slow spin (like a finger would), so the nucleus stays where we measure it
+  const cb = await page.locator('.x3d-canvas').boundingBox();
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height * 0.8);
+  await page.mouse.down(); await page.mouse.move(cb.x + cb.width / 2 + 12, cb.y + cb.height * 0.8, { steps: 3 }); await page.mouse.up();
+  await page.waitForTimeout(1500);
   const at2 = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
   await page.mouse.click(at2.x, at2.y);
-  await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 3000 });
+  await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 10000 });
   expect(/Nucleolus|Nucleus|Nuclear envelope/.test(await page.locator('.x3d-sheet h3').innerText()), 'tapping the nucleus area picks it: ' + await page.locator('.x3d-sheet h3').innerText() + JSON.stringify(at));
   // pick from the list, read about it, ask Cassie
   await page.click('.x3d-chip[data-part="golgi"]');
@@ -714,14 +720,14 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
 const FAKE_VOICE = (opts) => {
   window.__spoken = []; window.__recs = [];
   const synth = { speaking: false, cancelled: 0, getVoices: () => [{ name: 'Test Voice (Natural)', lang: 'en-US' }], addEventListener() {},
-    cancel() { this.cancelled++; }, speak(u) { window.__spoken.push(u.text); setTimeout(() => u.onend && u.onend(), 30); } };
+    cancel() { this.cancelled++; }, speak(u) { window.__spoken.push(u.text); window.__pitch = u.pitch; setTimeout(() => u.onend && u.onend(), 30); } };
   Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  navigator.mediaDevices.getUserMedia = async () => new MediaStream();
+  window.MediaRecorder = class { constructor() { this.state = 'inactive'; this.mimeType = 'audio/webm'; } static isTypeSupported() { return true; }
+    start() { this.state = 'recording'; } stop() { if (this.state === 'inactive') return; this.state = 'inactive'; this.ondataavailable && this.ondataavailable({ data: new Blob(['fake sound'], { type: 'audio/webm' }) }); setTimeout(() => this.onstop && this.onstop(), 10); } };
   if (opts.noRecognizer) {
     delete window.SpeechRecognition; delete window.webkitSpeechRecognition;
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true });
-    navigator.mediaDevices.getUserMedia = async () => new MediaStream();
-    window.MediaRecorder = class { constructor() { this.state = 'inactive'; this.mimeType = 'audio/webm'; } static isTypeSupported() { return true; }
-      start() { this.state = 'recording'; } stop() { if (this.state === 'inactive') return; this.state = 'inactive'; this.ondataavailable && this.ondataavailable({ data: new Blob(['fake sound'], { type: 'audio/webm' }) }); setTimeout(() => this.onstop && this.onstop(), 10); } };
     return;
   }
   window.SpeechRecognition = class extends EventTarget { constructor() { super(); window.__recs.push(this); this.live = false; } start() { this.live = true; } stop() { this.live = false; setTimeout(() => this.onend && this.onend(), 5); } abort() { this.live = false; } };
@@ -729,7 +735,7 @@ const FAKE_VOICE = (opts) => {
 };
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
   await ctx.addInitScript(FAKE_VOICE, {});
   await page.reload();
   const phase = () => page.evaluate(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase);
@@ -757,6 +763,12 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
   expect(await phase() === 'paused', 'the mic pauses listening');
   await page.click('.vc-mic');
   expect(await phase() === 'listening', 'and starts again');
+  // a man's voice: no man's voice on this device, so Cassie lowers the pitch
+  await page.click('.vc-gender [data-gender="man"]');
+  await page.waitForFunction(() => window.__spoken.at(-1) === 'Hi! This is my voice now.', null, { timeout: 5000 });
+  expect(await page.evaluate(() => window.__pitch) < 0.9 && await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).voiceGender) === 'man', 'the man’s voice is used and remembered');
+  await page.click('.vc-gender [data-gender="woman"]');
+  await page.waitForFunction(() => window.__pitch > 1, null, { timeout: 5000 });
   // Quiz me turns the quiz on, ending puts it back
   await page.click('.vc-modes [data-vmode="quiz"]');
   expect(await page.evaluate(() => document.getElementById('quiz-btn').classList.contains('active')), 'Quiz me out loud turns the quiz on');
@@ -778,9 +790,77 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   await page.waitForFunction(() => window.__spoken.some((t) => /water moving through a membrane/.test(t)), null, { timeout: 15000 });
   expect(/What is osmosis/.test(await page.locator('.vc-you').innerText()), 'what you said shows on screen');
   expect((await serverMode({})).heardCalls === 1, 'the recording went to the server once');
+  // the next thing you say goes with words from the conversation, so Whisper spells them right
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  await page.click('.vc-mic');
+  await page.waitForFunction(() => window.__spoken.filter((t) => /water moving through a membrane/.test(t)).length >= 2, null, { timeout: 15000 });
+  expect(/membrane/.test((await serverMode({})).heardPrompt || ''), 'the hint carries words from the conversation');
   await page.click('.vc-x');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await serverMode({ reply: '', heard: '' });
+  await ctx.close();
+});
+
+test('Talk with Cassie hears with Whisper by default (most accurate), even where the browser could listen', async (b) => {
+  await serverMode({ groq: 'ok', heard: 'Explain mitochondria', heardCalls: 0, reply: 'Mitochondria make energy for the cell.' });
+  const { ctx, page, errors } = await open(b, {});
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await page.click('#voice-btn');
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  expect(!(await page.evaluate(() => window.__recs.some((r) => r.live))), 'the browser’s own recognizer is not used');
+  await page.click('.vc-mic');
+  await page.waitForFunction(() => window.__spoken.some((t) => /make energy for the cell/.test(t)), null, { timeout: 15000 });
+  expect((await serverMode({})).heardCalls === 1, 'Whisper on the server wrote it down');
+  await page.click('.vc-x');
+  // "Fastest" in Settings switches back to the browser listening
+  expect(await page.locator('#hearing-select').count() === 1 && await page.locator('#voice-gender-select').count() === 1, 'Settings has the voice and hearing choices');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await serverMode({ reply: '', heard: '' });
+  await ctx.close();
+});
+
+test('Explore 3D: the human body — real anatomy, systems on and off, tap or find a part, ask Cassie', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The femur is the thigh bone, the longest bone in the body.' }) });
+  await page.click('#explore-btn');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
+  expect(await page.locator('.x3d-switch [data-cell="body"]').getAttribute('aria-selected') === 'true', 'the 3D button opens the human body');
+  await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
+  const on = await page.$$eval('.x3d-sys', (c) => c.filter((x) => x.getAttribute('aria-pressed') === 'true').map((x) => x.dataset.sys));
+  expect(on.join() === 'regions,skeletal,visceral', 'skin, skeleton and organs start on: ' + on);
+  // tap the middle of the chest → a real, named part (stop the slow turn first, like a finger would)
+  await page.waitForTimeout(1500);
+  const box = await page.locator('.x3d-canvas').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.42);
+  await page.waitForFunction(() => !document.querySelector('.x3d-sheet').hidden && document.querySelector('.x3d-sheet h3').textContent, null, { timeout: 8000 })
+    .catch(async (e) => { throw new Error('nothing picked: ' + JSON.stringify(await page.evaluate(() => ({ sheet: document.querySelector('.x3d-sheet').hidden, h3: document.querySelector('.x3d-sheet h3').textContent, loading: document.querySelector('.x3d-loading').textContent })))); });
+  const tapped = await page.locator('.x3d-sheet h3').innerText();
+  expect(tapped.length > 2 && /Skeleton|Organs/.test(await page.locator('.x3d-path').innerText()), 'a tapped part is named with its system: ' + tapped);
+  // find the femur by name, with its Latin name
+  await page.fill('.x3d-search', 'femur');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 }).catch(async () => { throw new Error('no results: ' + JSON.stringify(await page.evaluate(() => ({ v: document.querySelector('.x3d-search').value, r: document.querySelector('.x3d-results').outerHTML.slice(0, 200), direct: exploreMod.open({}).body.search('femur').length, rr: document.querySelector('.x3d-results').getBoundingClientRect().toJSON(), fr: document.querySelector('.x3d-find').getBoundingClientRect().toJSON(), disp: getComputedStyle(document.querySelector('.x3d-results')).display, fh: document.querySelector('.x3d-find').hidden })))); });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
+  expect(/Os femoris/.test(await page.locator('.x3d-like').innerText()), 'the Latin name shows');
+  // a group: the whole heart turns the heart & blood vessels on
+  await page.fill('.x3d-search', 'heart');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  expect(/^Heart/.test(await page.locator('.x3d-results button >> nth=0').innerText()), 'the whole heart is the first result');
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => document.querySelector('.x3d-sheet h3').textContent === 'Heart' && document.querySelector('.x3d-sys[data-sys="cardiovascular"]').getAttribute('aria-pressed') === 'true', null, { timeout: 20000 });
+  // hide it, then show it again
+  await page.click('.x3d-act[data-act="hide"]');
+  expect(await page.locator('.x3d-showall').isVisible(), 'hidden parts can be shown again');
+  await page.click('.x3d-showall');
+  // ask Cassie about the femur
+  await page.fill('.x3d-search', 'femur');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
+  await page.click('.x3d-act[data-act="ask"]');
+  await page.waitForSelector('#chat-log .bubble-assistant >> text=thigh bone', { timeout: 15000 });
+  expect(/Explain the Femur.*Os femoris.*skeleton/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
