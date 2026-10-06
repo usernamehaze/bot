@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=132">
+<link rel="stylesheet" href="style.css?v=133">
 </head>
 <body>
 
@@ -145,6 +145,10 @@
     <button type="button" id="quiz-btn" class="chip" title="Start a practice quiz">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
       <span class="chip-label">Quiz me</span>
+    </button>
+    <button type="button" id="explore-btn" class="chip" title="Explore a 3D animal or plant cell — turn it, zoom in and tap any part">
+      <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z"/></svg>
+      <span class="chip-label">Explore 3D</span>
     </button>
     <button type="button" id="research-btn" class="chip" title="Find real academic papers for a thesis / RRL">
       <svg class="chip-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z"/></svg>
@@ -397,13 +401,13 @@
 
 </div>
 
-<script src="memory.js?v=132"></script>
-<script src="board.js?v=132"></script>
-<script src="export.js?v=132"></script>
-<script src="sketch.js?v=132"></script>
-<script src="config.js?v=132"></script>
-<script src="cassie-bot.js?v=132"></script>
-<script src="app.js?v=132"></script>
+<script src="memory.js?v=133"></script>
+<script src="board.js?v=133"></script>
+<script src="export.js?v=133"></script>
+<script src="sketch.js?v=133"></script>
+<script src="config.js?v=133"></script>
+<script src="cassie-bot.js?v=133"></script>
+<script src="app.js?v=133"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -418,7 +422,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=132';
+      s.src = 'mascot3d/cassie-3d.js?v=133';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

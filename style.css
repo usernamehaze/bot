@@ -1420,3 +1420,80 @@ body.reader-open #mascot { display: none; }
 .reader-open-btn { display: inline-block; margin-top: 10px; }
 .share-tip { margin-top: 12px; font-size: .8rem; color: var(--muted); line-height: 1.45; }
 .share-tip[hidden] { display: none; }
+
+/* ---------- Explore 3D: the cell you can turn, zoom and tap ----------
+   Always dark, like a lab viewer, so the organelles' colours stand out. The buttons
+   stay marble monochrome; colour lives only in the cell itself. */
+html.x3d-open, html.x3d-open body { overflow: hidden; }
+.x3d {
+  position: fixed; inset: 0; z-index: 230; color: #f2f2f4; overflow: hidden; touch-action: none;
+  background: radial-gradient(ellipse at 50% 42%, #23262f 0%, #14161c 55%, #0b0c10 100%);
+  font-family: inherit;
+}
+.x3d[hidden] { display: none; }
+.x3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.x3d-labels { position: absolute; inset: 0; pointer-events: none; }
+.x3d-labels[hidden] { display: none; }
+.x3d-label {
+  position: absolute; left: 0; top: 0; white-space: nowrap; font-size: .72rem; font-weight: 600; letter-spacing: .01em;
+  padding: 3px 8px 3px 14px; margin: -11px 0 0 -4px; border-radius: 99px; color: #fff;
+  background: rgba(12, 13, 17, .62); border: 1px solid rgba(255, 255, 255, .14);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity .2s;
+}
+.x3d-label::before { content: ''; position: absolute; left: 5px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: #fff; }
+.x3d-label.far { opacity: .22; }
+.x3d-label[hidden] { display: none; }
+.x3d-label.on { background: #fff; color: #111; }
+.x3d-label.on::before { background: #111; }
+.x3d-top {
+  position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: calc(12px + var(--safe-top, 0px)) 16px 8px;
+}
+.x3d-btn, .x3d-switch button, .x3d-chip, .x3d-act, .x3d-sheet-x {
+  font: inherit; color: #f2f2f4; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 99px; cursor: pointer; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.x3d-btn { padding: 7px 12px; font-size: .82rem; font-weight: 600; }
+.x3d-btn[aria-pressed="true"] { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
+.x3d-close { width: 38px; height: 38px; padding: 0; font-size: 1.35rem; line-height: 1; }
+.x3d-switch { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); }
+.x3d-switch button { border: 0; background: transparent; padding: 7px 14px; font-size: .85rem; font-weight: 600; }
+.x3d-switch button[aria-selected="true"] { background: #f2f2f4; color: #111; }
+.x3d-tools { display: flex; gap: 6px; margin-left: auto; }
+.x3d-hint { position: absolute; left: 16px; right: 16px; top: calc(64px + var(--safe-top, 0px)); margin: 0; font-size: .78rem; color: rgba(255, 255, 255, .62); pointer-events: none; }
+.x3d-loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 600; color: rgba(255, 255, 255, .8); pointer-events: none; }
+.x3d-loading[hidden] { display: none; }
+.x3d-parts {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none;
+  padding: 10px 16px calc(12px + var(--safe-bottom, 0px)); background: linear-gradient(to top, rgba(8, 9, 12, .85), transparent);
+}
+.x3d-parts::-webkit-scrollbar { display: none; }
+.x3d-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; font-size: .84rem; font-weight: 600; white-space: nowrap; }
+.x3d-chip.on { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
+.x3d-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(255, 255, 255, .18); }
+.x3d-sheet {
+  position: absolute; left: 50%; bottom: calc(64px + var(--safe-bottom, 0px)); transform: translateX(-50%);
+  width: min(440px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; padding: 16px 16px 14px; border-radius: 20px;
+  background: rgba(16, 17, 22, .9); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: x3dUp .28s ease-out;
+}
+.x3d-sheet[hidden] { display: none; }
+@keyframes x3dUp { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.x3d-sheet-x { position: absolute; right: 10px; top: 10px; width: 30px; height: 30px; padding: 0; font-size: 1.1rem; line-height: 1; }
+.x3d-sheet-head { display: flex; align-items: center; gap: 9px; padding-right: 36px; }
+.x3d-sheet h3 { margin: 0; font-size: 1.1rem; }
+.x3d-like { margin: 6px 0 0; color: rgba(255, 255, 255, .62); font-size: .85rem; font-style: italic; }
+.x3d-does { margin: 8px 0 0; line-height: 1.5; font-size: .92rem; }
+.x3d-only { margin: 8px 0 0; font-size: .8rem; font-weight: 600; color: rgba(255, 255, 255, .75); }
+.x3d-only[hidden] { display: none; }
+.x3d-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.x3d-act { padding: 8px 14px; font-size: .85rem; font-weight: 600; }
+.x3d-act-main { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
+.x3d button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (max-width: 560px) {
+  .x3d-tools { margin-left: 0; width: 100%; order: 3; }
+  .x3d-switch { flex: 1; }
+  .x3d-switch button { flex: 1; padding: 7px 8px; }
+  .x3d-hint { top: calc(108px + var(--safe-top, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .x3d-sheet { animation: none; } }
