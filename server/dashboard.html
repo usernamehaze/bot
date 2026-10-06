@@ -88,7 +88,7 @@
     'mode:pro': 'Switch to Professional', 'mode:student': 'Switch to Student',
     'highlight:explain': 'Highlight → Explain', 'highlight:answer': 'Highlight → Answer', 'highlight:code': 'Highlight → Code',
     'save:docx': 'Save as Word', 'save:pdf': 'Save as PDF', 'save:png': 'Save as image', 'save:txt': 'Save as text',
-    'island-drop': 'Drop on Cassie', popout: 'Pop Cassie out',
+    'island-drop': 'Drop on Cassie', popout: 'Pop Cassie out', explore: 'Explore 3D', voice: 'Talk with Cassie (voice)',
     'file:pdf': 'Read a PDF', 'file:pptx': 'Read PowerPoint', 'file:docx': 'Read a Word file', 'file:text': 'Read a text file', 'file:image': 'Read an image file',
   };
   const fname = (n) => FEATURE_NAMES[n] || n;
@@ -238,7 +238,7 @@
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : r.kind === 'error' ? '⚠️ ' + esc(r.feature || 'Server problem') : r.kind === 'auto' ? '⚠️ App error · ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
       </div>

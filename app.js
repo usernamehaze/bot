@@ -195,6 +195,7 @@ const PRO_INSTRUCTION = `The user is a working professional, not a student. Act 
 
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
+let voiceChat = null; // the open "Talk with Cassie" voice conversation, if any
 
 // Cassie as a genuine companion / counselor — empathetic but honest, with a
 // real personality, and clear safety boundaries.
@@ -212,6 +213,20 @@ Boundaries and safety (important):
 - You are a caring companion, not a licensed therapist — you don't diagnose or replace real help; say so plainly if things sound serious.
 - If they mention self-harm, suicide, abuse, or being in danger: take it seriously and stay warm and human. Acknowledge the pain, encourage them to reach out right now to someone they trust or a professional / local crisis line, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic — just be present and point them to real help.`;
 
+// Talking out loud (the voice screen): replies are read aloud, so no formatting at all.
+const VOICE_INSTRUCTION = `RIGHT NOW you are talking out loud with the student, like on a call. Your reply is read aloud by a speech voice, so:
+- Plain spoken sentences only: no markdown, no bullet points, no numbered lists, no headings, no tables, no code blocks, no emojis, no LaTeX, and never a cassie-board drawing.
+- Say maths in words ("x squared plus three x equals ten", "one half").
+- Keep it short: usually one to three sentences, about 60 words at most, unless they ask you to explain something fully.
+- Sound like a warm, natural friend on a call — contractions, everyday words. Ask a question back only when it helps the conversation.`;
+// "Teach Cassie": the student learns by explaining (the Feynman technique), Cassie is the curious classmate.
+const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud — they learn best by explaining it to someone. You play a curious, friendly classmate who wants to understand the topic. Don't lecture and don't take over.
+- React to what they just said in your own words, then ask exactly ONE follow-up question that makes them think deeper: why, how does that work, what would happen if, can you give an example — or the question a confused classmate would ask about a step they skipped.
+- If something they said is wrong or unclear, don't correct it straight away: ask about it so they notice ("Wait — I thought…?"). Only explain it yourself if they're stuck or ask you to.
+- Every four or five turns, sum up in one sentence what they've taught you so far.
+- When they say they're done (or "that's all"), give a short spoken report: what they explained well, what was missing or wrong (with the right idea), and one thing to review next.
+- If they haven't picked a topic yet, ask what they're going to teach you.`;
+
 // Build the system prompt with the chosen level and (for chat) any active
 // tutor mode. Highlight-popover calls pass tutor:false.
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
@@ -227,11 +242,14 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
-  // Cassie's drawing board is available in the main chat (not the quick popover).
-  if (tutor && mode !== 'hint') sp += `\n\n${BOARD_INSTRUCTION}`;
+  const spoken = tutor && (mode === 'voice' || mode === 'teach');
+  if (tutor && mode === 'teach') sp += `\n\n${TEACH_INSTRUCTION}`;
+  // Cassie's drawing board is available in the main chat (not the quick popover, not out loud).
+  if (tutor && mode !== 'hint' && !spoken) sp += `\n\n${BOARD_INSTRUCTION}`;
   if (tutor) sp += `\n\n${ABILITIES_INSTRUCTION}`;
   // personalize with what Cassie remembers about this student (on-device only)
   try { if (window.CassieMemory) sp += window.CassieMemory.summaryForPrompt(); } catch (e) { /* ignore */ }
+  if (spoken) sp += `\n\n${VOICE_INSTRUCTION}`; // last, so it wins over any formatting advice above
   return sp;
 }
 
@@ -4562,7 +4580,7 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 function speak(text) {
-  if (!state.voiceOut || !('speechSynthesis' in window)) return;
+  if (!state.voiceOut || !('speechSynthesis' in window) || voiceChat) return; // the voice screen speaks for itself
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 1.02;
@@ -4570,6 +4588,375 @@ function speak(text) {
   utter.onend = utter.onerror = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
   window.speechSynthesis.speak(utter);
 }
+
+/* ---------- Talk with Cassie: a real voice conversation ----------
+   The sound-wave button opens a screen where you just talk. Three ways to use it:
+     Chat         — ask anything out loud
+     Teach Cassie — explain a topic; she plays the curious classmate and asks questions
+                    (you learn by teaching), then tells you what you missed
+     Quiz me      — she quizzes you out loud and tells you if you got it right
+   Hearing you: the browser's own speech recognition (Chrome, Edge, Safari). Where there
+   isn't one, the app records and the Cassie server (or your own Groq key) writes it down.
+   Talking: the device's own voices (pick one on the screen). Everything is saved in the chat. */
+const VOICE_MODES = {
+  chat: { label: 'Chat', hello: 'Hi! I’m listening. Ask me anything.', tip: 'Ask anything out loud. Tap Cassie to stop her talking.' },
+  teach: { label: 'Teach Cassie', hello: 'Okay, I’m your student today! What are you going to teach me?', tip: 'Explain a topic like you’re teaching a friend. Cassie asks questions and catches what you missed. Say “I’m done” for your report.' },
+  quiz: { label: 'Quiz me', hello: 'Quiz time! What topic should I quiz you on?', tip: 'Answer out loud. Cassie tells you if you’re right and why.' },
+};
+const voiceBtn = document.getElementById('voice-btn');
+const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
+const canTalk = () => 'speechSynthesis' in window;
+let voiceUI = null;
+
+// Turn an answer into something that sounds right read aloud.
+function cleanForSpeech(t) {
+  return String(t || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\[\[[^\]]*\]\]/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1 over $2')
+    .replace(/\\sqrt\{([^}]*)\}/g, 'the square root of $1')
+    .replace(/\\times|×/g, ' times ').replace(/\\div|÷/g, ' divided by ').replace(/\\cdot|·/g, ' times ')
+    .replace(/\^2\b/g, ' squared').replace(/\^3\b/g, ' cubed').replace(/\^\{?(-?\w+)\}?/g, ' to the power of $1')
+    .replace(/≠/g, ' is not equal to ').replace(/≤/g, ' is at most ').replace(/≥/g, ' is at least ').replace(/→/g, ' to ')
+    .replace(/\s=\s/g, ' equals ')
+    .replace(/\\[a-zA-Z]+/g, ' ').replace(/[$\\{}]/g, '')
+    .replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*#+\s*/gm, '').replace(/[*_#>|]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+function speechChunks(t) {
+  const parts = t.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) || [t];
+  const out = [];
+  for (const p of parts.map((x) => x.trim()).filter(Boolean)) {
+    if (out.length && (out[out.length - 1] + ' ' + p).length < 180) out[out.length - 1] += ' ' + p; else out.push(p);
+  }
+  return out;
+}
+function cassieVoices() {
+  if (!canTalk()) return [];
+  return window.speechSynthesis.getVoices().filter((v) => /^(en|fil|tl)([-_]|$)/i.test(v.lang));
+}
+function pickVoice() {
+  const vs = cassieVoices();
+  if (!vs.length) return null;
+  if (state.voiceName) { const v = vs.find((x) => x.name === state.voiceName); if (v) return v; }
+  const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 4 : 0)
+    + (/female|aria|jenny|samantha|zira|google us english|karen|moira|tessa|serena|ava|allison|susan|libby|sonia|natasha|emma|michelle|joanna|salli|kendra/i.test(v.name) ? 2 : 0)
+    + (/^en[-_]US/i.test(v.lang) ? 1 : /^en[-_](PH|GB|AU)/i.test(v.lang) ? 0.6 : 0);
+  return vs.slice().sort((a, b) => score(b) - score(a))[0];
+}
+
+function buildVoiceUI() {
+  const el = document.createElement('div');
+  el.className = 'vc';
+  el.hidden = true;
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Talk with Cassie');
+  el.innerHTML = `
+    <div class="vc-top">
+      <button type="button" class="vc-x" aria-label="End the conversation">×</button>
+      <div class="vc-modes" role="tablist" aria-label="How to talk">
+        ${Object.entries(VOICE_MODES).map(([k, m]) => `<button type="button" role="tab" data-vmode="${k}">${m.label}</button>`).join('')}
+      </div>
+      <label class="vc-voice-pick"><span class="sr-only">Cassie's voice</span><select class="vc-voice" aria-label="Cassie's voice"></select></label>
+    </div>
+    <button type="button" class="vc-stage" aria-label="Cassie — tap to stop her talking"><span class="vc-ring"></span><span class="vc-bot"></span></button>
+    <p class="vc-status" aria-live="polite"></p>
+    <p class="vc-you"></p>
+    <p class="vc-cassie" aria-live="polite"></p>
+    <div class="vc-bar">
+      <button type="button" class="vc-mic" aria-label="Pause listening"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg></button>
+    </div>
+    <p class="vc-tip"></p>`;
+  document.body.appendChild(el);
+  const q = (s) => el.querySelector(s);
+  const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), mic: q('.vc-mic'), tip: q('.vc-tip'), voiceSel: q('.vc-voice'), stage: q('.vc-stage'), bot: null };
+  if (window.CassieBot) ui.bot = window.CassieBot.create(q('.vc-bot'), { glow: true, accent: state.accent || '#d8343c' });
+  q('.vc-x').addEventListener('click', closeVoice);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVoice(); });
+  q('.vc-modes').addEventListener('click', (e) => { const b = e.target.closest('[data-vmode]'); if (b && voiceChat && b.dataset.vmode !== voiceChat.mode) startVoiceMode(b.dataset.vmode); });
+  ui.mic.addEventListener('click', () => {
+    const v = voiceChat;
+    if (!v) return;
+    if (v.phase === 'listening') { if (v.heardSomething && v.finish) v.finish(); else pauseVoice(); }
+    else if (v.phase === 'speaking') { v.stopSpeaking && v.stopSpeaking(); }
+    else if (v.phase === 'paused') listenVoice();
+  });
+  ui.stage.addEventListener('click', () => { if (voiceChat && voiceChat.phase === 'speaking' && voiceChat.stopSpeaking) voiceChat.stopSpeaking(); });
+  const fillVoices = () => {
+    const vs = cassieVoices(), cur = pickVoice();
+    ui.voiceSel.innerHTML = vs.map((v) => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name.replace(/^(Microsoft|Google)\s+/, '').replace(/\s*\(.*\)$/, '').slice(0, 28))}</option>`).join('');
+    if (cur) ui.voiceSel.value = cur.name;
+    ui.voiceSel.parentElement.hidden = vs.length < 2;
+  };
+  fillVoices();
+  if (canTalk()) window.speechSynthesis.addEventListener('voiceschanged', fillVoices);
+  ui.voiceSel.addEventListener('change', () => {
+    state.voiceName = ui.voiceSel.value; save();
+    if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); sayThenListen('Hi! This is my voice now.'); }
+  });
+  return ui;
+}
+
+function setVoicePhase(phase, text) {
+  const v = voiceChat, ui = voiceUI;
+  if (!v || !ui) return;
+  v.phase = phase;
+  ui.el.dataset.phase = phase;
+  const say = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Cassie is talking — tap her to cut in', paused: 'Paused — tap the mic to talk' }[phase];
+  ui.status.textContent = text || say || '';
+  const mood = { listening: 'listening', thinking: 'thinking', speaking: 'talking', paused: 'idle' }[phase] || 'idle';
+  if (ui.bot) ui.bot.setState(mood);
+  ui.mic.setAttribute('aria-label', phase === 'listening' ? (v.heardSomething ? 'Send now' : 'Pause listening') : phase === 'speaking' ? 'Stop Cassie talking' : 'Start talking');
+  ui.mic.classList.toggle('live', phase === 'listening');
+}
+
+function stopHearing() {
+  const v = voiceChat;
+  if (!v) return;
+  if (v.rec) { try { v.rec.onend = null; v.rec.abort ? v.rec.abort() : v.rec.stop(); } catch (e) { /* ignore */ } v.rec = null; }
+  if (v.recorder) { try { v.recorder.onstop = null; if (v.recorder.state !== 'inactive') v.recorder.stop(); } catch (e) { /* ignore */ } v.recorder = null; }
+  clearInterval(v.vadTimer);
+  v.finish = null;
+}
+function pauseVoice() { stopHearing(); setVoicePhase('paused'); }
+
+// Cassie says something, then listens again.
+function sayThenListen(text) {
+  const v = voiceChat;
+  if (!v) return Promise.resolve();
+  const clean = cleanForSpeech(text);
+  voiceUI.cassie.textContent = clean;
+  setVoicePhase('speaking');
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      clearTimeout(v.speakTimer);
+      v.stopSpeaking = null;
+      resolve();
+      if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
+    };
+    if (!canTalk() || !clean) { finish(); return; }
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const chunks = speechChunks(clean);
+    let i = 0;
+    v.stopSpeaking = () => { synth.cancel(); finish(); };
+    const next = () => {
+      clearTimeout(v.speakTimer);
+      if (done || voiceChat !== v) return;
+      if (i >= chunks.length) { finish(); return; }
+      const u = new SpeechSynthesisUtterance(chunks[i++]);
+      const voice = pickVoice();
+      if (voice) { try { u.voice = voice; } catch (e) { /* not a voice this browser knows */ } u.lang = voice.lang; }
+      u.rate = 1; u.pitch = 1.08;
+      u.onend = next; u.onerror = next;
+      try { synth.speak(u); } catch (e) { finish(); return; } // never get stuck "talking"
+      // some browsers never say they've finished: move on after a fair time
+      v.speakTimer = setTimeout(next, Math.max(3500, u.text.length * 95));
+    };
+    next();
+  });
+}
+
+function listenVoice() {
+  const v = voiceChat;
+  if (!v) return;
+  stopHearing();
+  v.heardSomething = false; // what you said last stays on screen until you speak again
+  setVoicePhase('listening');
+  if (SpeechRecognitionCtor && !v.useRecorder) listenWithBrowser(v); else listenWithRecorder(v);
+}
+function heard(text) {
+  const v = voiceChat;
+  if (!v) return;
+  stopHearing();
+  voiceUI.you.textContent = text;
+  askOutLoud(text);
+}
+function listenWithBrowser(v) {
+  const rec = new SpeechRecognitionCtor();
+  rec.lang = navigator.language || 'en-US';
+  rec.continuous = true;
+  rec.interimResults = true;
+  let finalText = '', interim = '', timer = 0, sent = false, restarts = 0;
+  const send = () => {
+    if (sent) return; sent = true; clearTimeout(timer);
+    const t = (finalText + ' ' + interim).replace(/\s+/g, ' ').trim();
+    if (t) heard(t); else listenVoice();
+  };
+  rec.onresult = (e) => {
+    interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript + ' '; else interim += r[0].transcript;
+    }
+    const t = (finalText + interim).trim();
+    v.heardSomething = !!t;
+    voiceUI.you.textContent = t;
+    if (t) setVoicePhase('listening', 'Listening… tap the mic to send now');
+    clearTimeout(timer);
+    timer = setTimeout(send, interim ? 2000 : 1200); // a short pause means they've finished
+  };
+  rec.onerror = (e) => {
+    if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) {
+      sent = true;
+      if (e.error === 'service-not-allowed' && navigator.mediaDevices && window.MediaRecorder) { v.useRecorder = true; listenVoice(); return; }
+      setVoicePhase('paused', 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.');
+    }
+  };
+  rec.onend = () => {
+    if (sent || voiceChat !== v || v.phase !== 'listening') return;
+    if ((finalText + interim).trim()) { send(); return; }
+    if (++restarts > 8) { sent = true; setVoicePhase('paused', 'Still there? Tap the mic when you’re ready.'); return; }
+    try { rec.start(); } catch (e) { sent = true; setTimeout(listenVoice, 300); }
+  };
+  v.rec = rec;
+  v.finish = send;
+  try { rec.start(); } catch (e) { setTimeout(() => { if (voiceChat === v && v.phase === 'listening') listenVoice(); }, 400); }
+}
+async function listenWithRecorder(v) {
+  try {
+    if (!v.stream) v.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) { setVoicePhase('paused', 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.'); return; }
+  if (voiceChat !== v || v.phase !== 'listening') return;
+  const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  const recorder = new MediaRecorder(v.stream, type ? { mimeType: type } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  // hear when they start and stop talking
+  let an = null, buf = null, src = null;
+  try {
+    v.actx = v.actx || new (window.AudioContext || window.webkitAudioContext)();
+    src = v.actx.createMediaStreamSource(v.stream);
+    an = v.actx.createAnalyser(); an.fftSize = 1024; src.connect(an);
+    buf = new Float32Array(an.fftSize);
+  } catch (e) { an = null; }
+  // without a loudness meter Cassie can't tell when you stop: the mic button sends
+  if (!an) { v.heardSomething = true; setVoicePhase('listening', 'Talk, then tap the mic to send'); }
+  let spoke = false, lastLoud = 0;
+  const t0 = Date.now();
+  const stop = () => { clearInterval(v.vadTimer); try { if (recorder.state !== 'inactive') recorder.stop(); } catch (e) { /* ignore */ } try { src && src.disconnect(); } catch (e) { /* ignore */ } };
+  v.finish = () => { spoke = true; stop(); };
+  v.vadTimer = setInterval(() => {
+    if (voiceChat !== v || v.phase !== 'listening') { stop(); return; }
+    const now = Date.now();
+    if (an) {
+      an.getFloatTimeDomainData(buf);
+      let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      if (Math.sqrt(sum / buf.length) > 0.02) {
+        spoke = true; lastLoud = now;
+        if (!v.heardSomething) { v.heardSomething = true; setVoicePhase('listening', 'Listening… tap the mic to send now'); }
+      }
+    }
+    if (spoke && an && now - lastLoud > 1300) stop();
+    else if (!spoke && now - t0 > 15000) stop();
+    else if (now - t0 > 45000) stop();
+  }, 100);
+  recorder.onstop = async () => {
+    v.recorder = null;
+    if (voiceChat !== v) return;
+    if (!spoke) { setVoicePhase('paused', 'Still there? Tap the mic when you’re ready.'); return; }
+    setVoicePhase('thinking', 'Writing down what you said…');
+    try {
+      const text = await transcribeAudio(new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' }));
+      if (voiceChat !== v) return;
+      if (text) heard(text); else sayThenListen('Sorry, I didn’t catch that. Can you say it again?');
+    } catch (e) { if (voiceChat === v) sayThenListen(e.message || 'Sorry, I couldn’t hear that. Try again?'); }
+  };
+  v.recorder = recorder;
+  recorder.start(250);
+}
+async function transcribeAudio(blob) {
+  const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+  const form = (extra) => { const fd = new FormData(); fd.append('file', blob, 'speech.' + ext); Object.entries(extra).forEach(([k, val]) => fd.append(k, val)); return fd; };
+  if (state.groqKey) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { authorization: 'Bearer ' + state.groqKey }, body: form({ model: 'whisper-large-v3-turbo', response_format: 'json' }) });
+      if (r.ok) return String((await r.json()).text || '').trim();
+    } catch (e) { /* the server can still do it */ }
+  }
+  if (SERVER) {
+    const r = await fetch(SERVER + '/transcribe', { method: 'POST', body: form({ uid: installId() }) });
+    if (r.ok) return String((await r.json()).text || '').trim();
+    let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+    throw new Error(m || 'Sorry, I couldn’t hear that. Try again?');
+  }
+  throw new Error('To talk with me here, use Chrome, Edge or Safari — or add a free Groq key in Settings.');
+}
+
+async function askOutLoud(text) {
+  const v = voiceChat;
+  if (!v) return;
+  setVoicePhase('thinking');
+  voiceUI.cassie.textContent = '';
+  const before = state.messages.length;
+  try { await handleSend(text, { mode: v.mode === 'teach' ? 'teach' : 'voice' }); } catch (e) { /* handleSend shows its own errors */ }
+  if (voiceChat !== v) return;
+  const last = state.messages[state.messages.length - 1];
+  const reply = state.messages.length > before && last && last.role === 'assistant' ? last.content : '';
+  track('feature', 'voice');
+  sayThenListen(reply || 'Sorry, I couldn’t answer that just now. Can you say it again?');
+}
+
+function startVoiceMode(mode) {
+  const v = voiceChat;
+  if (!v) return;
+  v.stopSpeaking && v.stopSpeaking();
+  stopHearing();
+  v.mode = VOICE_MODES[mode] ? mode : 'chat';
+  voiceUI.el.querySelectorAll('[data-vmode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.vmode === v.mode)));
+  voiceUI.tip.textContent = VOICE_MODES[v.mode].tip;
+  voiceUI.you.textContent = '';
+  quizMode = v.mode === 'quiz';
+  if (quizBtn) quizBtn.classList.toggle('active', quizMode);
+  setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
+  dressCassie();
+  sayThenListen(VOICE_MODES[v.mode].hello);
+}
+
+function openVoice(mode = 'chat') {
+  if (!canChat()) { openSettings(); return; }
+  if (!canHear()) { renderMessage('assistant', 'This browser can’t use the microphone. Try Chrome, Edge or Safari.'); return; }
+  if (!voiceUI) voiceUI = buildVoiceUI();
+  if (voiceChat) closeVoice();
+  voiceChat = { mode, phase: 'paused', quizBefore: quizMode, useRecorder: !SpeechRecognitionCtor };
+  voiceUI.el.hidden = false;
+  document.documentElement.classList.add('vc-open');
+  if (voiceUI.bot) voiceUI.bot.pause(false);
+  track('feature', 'voice:' + mode);
+  startVoiceMode(mode); // speaks right away, inside the tap, so phones allow the sound
+  setTimeout(() => { try { voiceUI.mic.focus(); } catch (e) { /* ignore */ } }, 60);
+}
+function closeVoice() {
+  const v = voiceChat;
+  if (!v) return;
+  v.stopSpeaking && v.stopSpeaking();
+  voiceChat = null;
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+  if (v.rec) { try { v.rec.onend = null; v.rec.abort(); } catch (e) { /* ignore */ } }
+  if (v.recorder) { try { v.recorder.onstop = null; v.recorder.stop(); } catch (e) { /* ignore */ } }
+  clearInterval(v.vadTimer); clearTimeout(v.speakTimer);
+  if (v.stream) v.stream.getTracks().forEach((t) => t.stop());
+  if (v.actx) { try { v.actx.close(); } catch (e) { /* ignore */ } }
+  quizMode = v.quizBefore;
+  if (quizBtn) quizBtn.classList.toggle('active', quizMode);
+  setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
+  dressCassie();
+  voiceUI.el.hidden = true;
+  document.documentElement.classList.remove('vc-open');
+  if (voiceUI.bot) voiceUI.bot.pause(true);
+  try { voiceBtn && voiceBtn.focus(); } catch (e) { /* ignore */ }
+}
+if (voiceBtn) {
+  voiceBtn.hidden = !canHear();
+  voiceBtn.addEventListener('click', () => openVoice('chat'));
+}
+// a link like app.html?talk=teach opens it (the first sound still needs a tap on phones)
+{ const t = new URLSearchParams(location.search).get('talk'); if (t && voiceBtn && !voiceBtn.hidden) setTimeout(() => openVoice(VOICE_MODES[t] ? t : 'chat'), 400); }
 
 /* ---------- highlight-to-ask (right-click a selection) ---------- */
 /* Select any text in the app, right-click, and pick Explain / Answer /
@@ -5201,6 +5588,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
   'Explore 3D: turn an animal or plant cell in 3D, zoom in and tap any part to see what it does — then ask Cassie about it or take a quiz. Works on phones too.',
   'Drop on Cassie: drag a PDF, Word, PowerPoint, photo or some words onto Cassie and her pill opens — tap Summarize, Quiz me or Ask about it, and the answer shows right there.',
   'Pop Cassie out (Chrome or Edge on a computer): tap the little window button at the top and she floats on top of Word, PDFs and your other apps. Drop files on her or ask anything.',

@@ -333,6 +333,57 @@ async function config(request, env) {
   return json({ claude: !!env.ANTHROPIC_KEY }, 200, { ...h, 'cache-control': 'max-age=300' });
 }
 
+/* ---------------------------------------------------------------- talking with Cassie
+   Voice chat on phones whose browser can't turn speech into text by itself (and on
+   Firefox): the app records what the student says and sends it here. Groq's Whisper
+   writes it down; Cloudflare's own Whisper is the backup. Nothing is kept. */
+const WHISPER = ['whisper-large-v3-turbo', 'whisper-large-v3'];
+async function transcribe(request, env, ctx) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  let form;
+  try { form = await request.formData(); } catch (e) { return chatError('Send the recording as a form.', 400, h); }
+  const file = form.get('file');
+  if (!file || typeof file === 'string' || !file.size) return chatError('No recording.', 400, h);
+  if (file.size > 8 * 1024 * 1024) return chatError('That recording is too long — talk in shorter bits.', 413, h);
+  const uid = /^[\w-]{8,64}$/.test(String(form.get('uid') || '')) ? String(form.get('uid')) : 'anon';
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const now = Date.now(), minute = Math.floor(now / 60e3), mk = `t|${uid}|${ip}`;
+  const hit = minuteHits.get(mk);
+  const n = hit && hit.m === minute ? hit.n + 1 : 1;
+  minuteHits.set(mk, { m: minute, n });
+  if (n > (+env.TRANSCRIBE_MINUTE_LIMIT || 20)) return chatError('Lots of talking! Give me a few seconds.', 429, h, { 'retry-after': '20' });
+  const lang = /^[a-z]{2}$/.test(String(form.get('language') || '')) ? String(form.get('language')) : '';
+  const problems = [];
+  if (env.GROQ_KEY) {
+    for (const model of WHISPER) {
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'speech.webm');
+      fd.append('model', model);
+      fd.append('response_format', 'json');
+      if (lang) fd.append('language', lang);
+      try {
+        const r = await fetch(`${GROQ}/audio/transcriptions`, { method: 'POST', headers: { authorization: `Bearer ${env.GROQ_KEY}` }, body: fd, signal: AbortSignal.timeout(30000) });
+        if (r.ok) { const text = String((await r.json()).text || '').trim(); ctx.waitUntil(countChat(env, dayOf(now), 'voice')); return json({ text }, 200, h); }
+        let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+        problems.push(`Groq ${model}: ${r.status} ${m}`.slice(0, 200));
+      } catch (e) { problems.push(`Groq ${model}: ${e.message}`); }
+    }
+  }
+  if (env.AI) {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const o = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: btoa(bin), ...(lang ? { language: lang } : {}) });
+      const text = String((o && (o.text ?? o.result?.text)) || '').trim();
+      ctx.waitUntil(countChat(env, dayOf(now), 'voice-backup'));
+      return json({ text }, 200, h);
+    } catch (e) { problems.push(`Workers AI whisper: ${e.message || e}`); }
+  }
+  ctx.waitUntil(logProblem(env, 'voice: transcribe', problems.join(' | ') || 'no speech-to-text set up'));
+  return chatError('I couldn’t hear that clearly — try again, or type it.', 503, h);
+}
+
 /* ---------------------------------------------------------------- the iPhone Shortcut
    GET /ask?text=…  → plain text. Shortcuts shows it in a pop-up over Safari / a PDF, so no new
    browser tab opens. Shortcuts sends no Origin header, so this route has its own small daily
@@ -774,6 +825,7 @@ export default {
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);
+      if (request.method === 'POST' && url.pathname === '/transcribe') return await transcribe(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);

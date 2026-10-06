@@ -1497,3 +1497,46 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
   .x3d-hint { top: calc(108px + var(--safe-top, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { .x3d-sheet { animation: none; } }
+
+/* ---------- Talk with Cassie: the voice conversation screen ----------
+   Marble monochrome like the rest of the app; Cassie in the middle is the only colour.
+   A soft ring breathes while she listens and pulses while she talks. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+html.vc-open, html.vc-open body { overflow: hidden; }
+.vc {
+  position: fixed; inset: 0; z-index: 225; display: flex; flex-direction: column; align-items: center;
+  padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom)); background: var(--bg); color: var(--text); overflow-y: auto;
+}
+.vc[hidden] { display: none; }
+.vc-top { width: 100%; max-width: 640px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vc-x { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.35rem; line-height: 1; cursor: pointer; flex-shrink: 0; }
+.vc-modes { display: inline-flex; flex: 1; min-width: 0; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
+.vc-modes button { flex: 1; border: 0; background: transparent; color: var(--text); font: inherit; font-size: .86rem; font-weight: 600; padding: 8px 10px; border-radius: 99px; cursor: pointer; white-space: nowrap; }
+.vc-modes button[aria-selected="true"] { background: var(--primary); color: #fff; }
+.vc-voice-pick[hidden] { display: none; }
+.vc-voice { max-width: 150px; font: inherit; font-size: .82rem; padding: 8px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.vc-stage { position: relative; width: 210px; height: 210px; margin: clamp(18px, 7vh, 64px) 0 10px; border: 0; padding: 0; background: transparent; cursor: default; flex-shrink: 0; }
+.vc[data-phase="speaking"] .vc-stage { cursor: pointer; }
+.vc-ring { position: absolute; inset: 12px; border-radius: 50%; border: 2px solid var(--border); transition: transform .4s, border-color .3s; }
+.vc[data-phase="listening"] .vc-ring { border-color: var(--text); animation: vcBreathe 1.8s ease-in-out infinite; }
+.vc[data-phase="speaking"] .vc-ring { border-color: var(--muted); animation: vcPulse .9s ease-in-out infinite; }
+.vc[data-phase="thinking"] .vc-ring { border-style: dashed; animation: vcSpin 3s linear infinite; }
+@keyframes vcBreathe { 50% { transform: scale(1.06); } }
+@keyframes vcPulse { 50% { transform: scale(1.1); opacity: .6; } }
+@keyframes vcSpin { to { transform: rotate(360deg); } }
+.vc-bot { position: absolute; inset: 30px; }
+.vc-bot .cassie-bot { width: 100%; height: 100%; display: block; }
+.vc-status { margin: 4px 0 0; font-weight: 700; font-size: 1.02rem; text-align: center; }
+.vc-you { margin: 10px 0 0; max-width: 560px; min-height: 1.4em; text-align: center; color: var(--muted); font-style: italic; }
+.vc-you:not(:empty)::before { content: 'You: '; font-style: normal; font-weight: 600; }
+.vc-cassie { margin: 10px 0 0; max-width: 560px; min-height: 1.4em; text-align: center; font-size: 1.05rem; line-height: 1.5; max-height: 30vh; overflow-y: auto; }
+.vc-bar { margin-top: auto; padding-top: 18px; display: flex; justify-content: center; }
+.vc-mic { width: 74px; height: 74px; border-radius: 50%; border: 0; background: var(--primary); color: #fff; cursor: pointer; display: grid; place-items: center; box-shadow: 0 10px 28px rgba(0, 0, 0, .22); transition: transform .15s; }
+.vc-mic svg { width: 32px; height: 32px; fill: currentColor; }
+.vc-mic:active { transform: scale(.95); }
+.vc-mic.live { box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 18%, transparent), 0 10px 28px rgba(0, 0, 0, .22); }
+.vc[data-phase="paused"] .vc-mic { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.vc-tip { margin: 12px 0 0; max-width: 460px; text-align: center; font-size: .82rem; color: var(--muted); }
+.vc button:focus-visible, .vc select:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 480px) { .vc-stage { width: 170px; height: 170px; } .vc-voice { max-width: 110px; } .vc-modes button { padding: 8px 6px; font-size: .8rem; } }
+@media (prefers-reduced-motion: reduce) { .vc-ring { animation: none !important; } }
