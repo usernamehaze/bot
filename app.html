@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=131">
+<link rel="stylesheet" href="style.css?v=132">
 </head>
 <body>
 
@@ -231,7 +231,8 @@
             <li>Copy it and paste above.</li>
           </ol>
           <p class="field-hint">
-            Optional — leave blank if you don't need photos or web search. Note:
+            Optional — photos, files and graphs already work without it. Add it to turn
+            on Web answers with sources. Note:
             Google turns <em>image generation</em> off on the free tier, so making
             pictures may need billing enabled on your Google account.
           </p>
@@ -403,13 +404,13 @@
 
 </div>
 
-<script src="memory.js?v=131"></script>
-<script src="board.js?v=131"></script>
-<script src="export.js?v=131"></script>
-<script src="sketch.js?v=131"></script>
-<script src="config.js?v=131"></script>
-<script src="cassie-bot.js?v=131"></script>
-<script src="app.js?v=131"></script>
+<script src="memory.js?v=132"></script>
+<script src="board.js?v=132"></script>
+<script src="export.js?v=132"></script>
+<script src="sketch.js?v=132"></script>
+<script src="config.js?v=132"></script>
+<script src="cassie-bot.js?v=132"></script>
+<script src="app.js?v=132"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -424,7 +425,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=131';
+      s.src = 'mascot3d/cassie-3d.js?v=132';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
