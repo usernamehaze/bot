@@ -27,7 +27,7 @@ function loadState() {
 // Smartest first — it's also the default and the head of the fallback chain.
 const GROQ_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 // Gemini models for reading whole files (PDF pages, slides, pictures). Newest first.
-const GEMINI_DOC_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+const GEMINI_DOC_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
 const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
@@ -1756,9 +1756,15 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = [GE
       const e = new Error('Your Gemini key was rejected — check it in Settings (gear icon). It should start with "AIza".');
       e.friendly = true; e.keyRejected = true; throw e;
     }
+    // refused for this model (newer models can be off for some keys): try the next one
+    if (res.status === 403) {
+      lastErr = friendlyError(`Google refused your Gemini key for this${detail ? ` (“${detail.slice(0, 140)}”)` : ''}. Make a new key at aistudio.google.com/apikey and paste it in Settings.`);
+      lastErr.keyRejected = true;
+      continue;
+    }
     throw new Error(detail || `Request failed (${res.status})`);
   }
-  if (lastErr && lastErr.busy) throw lastErr;
+  if (lastErr && (lastErr.busy || lastErr.keyRejected)) throw lastErr;
   const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon — meanwhile text questions still work.");
   e.friendly = true; e.cause = lastErr;
   throw e;

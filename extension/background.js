@@ -140,6 +140,46 @@ async function discoverGroqModels(groqKey) {
 function tidyKey(k) {
   return String(k || '').trim().replace(/^bearer\s+/i, '').replace(/^["'`]+|["'`]+$/g, '').replace(/\s+/g, '');
 }
+// Cassie's own server: answers with no keys at all, and covers when a key fails (the same
+// server the Cassie website uses — Claude or Groq there, with a fair daily allowance).
+const CASSIE_SERVER = 'https://cassie.failanzahazel.workers.dev';
+async function cassieUid() {
+  const { cassieUid } = await chrome.storage.local.get('cassieUid');
+  if (cassieUid) return cassieUid;
+  const id = crypto.randomUUID();
+  await chrome.storage.local.set({ cassieUid: id });
+  return id;
+}
+async function viaServer(messages, maxTokens = 2048) {
+  let res;
+  try {
+    res = await fetch(CASSIE_SERVER + '/chat', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(4000, maxTokens), temperature: 0.5, brain: 'claude' }),
+    });
+  } catch (e) { throw new Error('Couldn’t connect to Cassie — check your internet connection.'); }
+  if (!res.ok) {
+    let d = ''; try { d = (await res.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+    throw new Error(res.status === 403 ? 'SERVER_OFF' : (d || 'Cassie is very busy right now — try again in a minute.'));
+  }
+  const reply = ((await res.json()).choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+  if (!reply) throw new Error('Cassie went blank on that one — try again.');
+  return reply;
+}
+// Text through the server, from a prompt or a [{role, content}] history.
+function serverText(input) {
+  const turns = Array.isArray(input) ? input.filter((m) => m && (m.role === 'user' || m.role === 'assistant')).slice(-20) : [{ role: 'user', content: String(input) }];
+  return viaServer([{ role: 'system', content: SYSTEM_PROMPT }, ...turns], 3000);
+}
+// Your keys first; the server when there are none or they fail.
+async function answerAny(input, keys, onDelta) {
+  if (!keys.groqKey && !keys.geminiKey) {
+    try { return await serverText(input); } catch (e) { throw new Error(e.message === 'SERVER_OFF' ? 'no-key' : e.message); }
+  }
+  try { return await answerText(input, keys, onDelta); }
+  catch (err) { try { return await serverText(input); } catch (e) { throw err; } }
+}
+
 async function getKeys() {
   const o = await chrome.storage.local.get(['groqKey', 'geminiKey', 'groqModel']);
   let groqKey = tidyKey(o.groqKey), geminiKey = tidyKey(o.geminiKey);
@@ -375,12 +415,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   (async () => {
     const keys = await getKeys();
-    if (!keys.groqKey && !keys.geminiKey) {
-      sendResponse({ error: 'no-key' });
-      return;
-    }
     try {
-      const reply = await answerText(msg.text, keys);
+      const reply = await answerAny(msg.text, keys);
       sendResponse({ reply });
     } catch (err) {
       sendResponse({ error: err.message });
@@ -433,10 +469,9 @@ chrome.runtime.onConnect.addListener((port) => {
     if (msg?.type !== 'CASSIE_ASK') return;
     (async () => {
       const keys = await getKeys();
-      if (!keys.groqKey && !keys.geminiKey) { post({ error: 'no-key' }); return; }
       try {
         const input = Array.isArray(msg.messages) ? msg.messages : msg.text;
-        const reply = await answerText(input, keys, (delta) => post({ delta }));
+        const reply = await answerAny(input, keys, (delta) => post({ delta }));
         post({ done: true, reply });
         logAnswer(msg.log, reply, null, port.sender);
       } catch (err) {
@@ -448,7 +483,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ---- Snip & see: capture the visible tab, and read pictures (Gemini or Groq vision) ----
 // Every failure comes back as a plain-English sentence (never a bare "couldn't reach").
-const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+const GEMINI_VISION_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
 async function visionViaGemini(key, { image, images, prompt, system, maxTokens }) {
   const pics = (images || [image]).map((u) => String(u).match(/^data:([^;]+);base64,(.*)$/));
@@ -480,7 +515,8 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
     // busy ("high demand") or out of free requests: the next model has its own capacity, then Groq
     if (res.status >= 500 || res.status === 429 || /high demand|overloaded|unavailable/i.test(detail)) { last = new Error('Google’s Gemini is very busy right now — try again in a minute.'); continue; }
     if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected — check it in the Cassie toolbar popup.');
-    if (res.status === 403) throw new Error('Your Gemini key isn’t allowed to read pictures — check it in the Cassie toolbar popup.');
+    // refused for this model (newer models can be off for some keys): try the next one
+    if (res.status === 403) { last = new Error(`Google refused your Gemini key for pictures${detail ? ` (“${detail.slice(0, 140)}”)` : ''}. Make a new key at aistudio.google.com/apikey and paste it in the Cassie toolbar popup.`); continue; }
     throw new Error(detail || `Gemini request failed (${res.status})`);
   }
   throw last || new Error('Gemini isn’t available right now.');
@@ -623,15 +659,19 @@ async function readPicture(keys, msg) {
   }
   const prep = await prepareVision(msg.image);
   const ask = async (images, prompt) => {
-    let geminiErr = null;
+    let firstErr = null;
     if (keys.geminiKey) {
-      try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); }
-      catch (e) { geminiErr = e; if (!keys.groqKey) throw e; }
+      try { return await visionViaGemini(keys.geminiKey, { ...msg, images, prompt }); } catch (e) { firstErr = e; }
     }
-    try { return await visionViaGroq(keys.groqKey, { ...msg, images, prompt }); }
-    catch (e) {
-      if (e.message === 'NO_VISION') throw new Error(geminiErr ? geminiErr.message : 'no-vision');
-      throw geminiErr && e.message === BAD_GROQ_KEY ? geminiErr : e;
+    if (keys.groqKey) {
+      try { return await visionViaGroq(keys.groqKey, { ...msg, images, prompt }); } catch (e) { if (e.message !== 'NO_VISION') firstErr = firstErr || e; }
+    }
+    // last: Cassie's server reads it (no keys needed)
+    try {
+      return await viaServer([...(msg.system ? [{ role: 'system', content: msg.system }] : []), { role: 'user', content: [{ type: 'text', text: prompt }, ...images.map((u) => ({ type: 'image_url', image_url: { url: u } }))] }], (msg.maxTokens || 900) * 2);
+    } catch (e) {
+      if (firstErr) throw firstErr;
+      throw new Error(e.message === 'SERVER_OFF' ? 'no-vision' : e.message);
     }
   };
   let reply = await ask(prep.light ? [prep.original, prep.light] : [prep.original], msg.prompt + (prep.light ? DARK_NOTE : ''));
@@ -691,7 +731,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'CASSIE_VISION') {
     (async () => {
       const keys = await getKeys();
-      if (!keys.groqKey && !keys.geminiKey) { sendResponse({ error: 'no-key' }); return; }
       try { const reply = await readPicture(keys, msg); sendResponse({ reply }); logAnswer(msg.log, reply, msg.image, sender); }
       catch (e) { sendResponse({ error: e.message }); }
     })().catch((e) => sendResponse({ error: e.message || 'Something went wrong reading the picture.' }));
