@@ -1116,6 +1116,8 @@ test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece a
   await page.waitForTimeout(1200);
   const apart = await page.evaluate(() => { const bd = exploreMod.open({}).body; const s = bd.spreadBox(); return { w: s.max.x - s.min.x, h: s.max.y - s.min.y }; });
   expect(apart.w > 1, 'every piece lies apart in rows: ' + JSON.stringify(apart));
+  const trays = await page.$$eval('.x3d-trays span:not([hidden])', (s) => s.map((x) => x.textContent));
+  expect(trays.some((t) => /^Bones · \d+/.test(t)) && trays.some((t) => /^Digestive/.test(t)), 'the pieces are sorted into named trays: ' + trays);
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-100.png' });
   // a piece can still be tapped while apart (the femur is one of the biggest: top rows)
   await page.fill('.x3d-search', 'femur');
@@ -1147,6 +1149,16 @@ test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece a
   await page.waitForTimeout(900);
   expect(await page.locator('.x3d-seg [data-look="back"]').getAttribute('aria-pressed') === 'true', 'P looks from the back');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-back.png' });
+  // the skin can be tapped: with only the skin on, a tap on the belly names a region of the skin
+  for (const sys of ['respiratory', 'digestive', 'endocrine', 'urinary', 'reproductive']) await page.click(`.x3d-sys[data-sys="${sys}"]`);
+  await page.click('.x3d-view-x');
+  await page.click('.x3d-gizmo [data-face="A"]').catch(() => page.click('.x3d-tools [data-tool="reset"]'));
+  await page.waitForTimeout(1000);
+  const cb = await page.locator('.x3d-canvas').boundingBox();
+  await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height * 0.5);
+  await page.waitForFunction(() => !document.querySelector('.x3d-sheet').hidden, null, { timeout: 10000 });
+  expect(/Integumentary/.test(await page.locator('.x3d-path').innerText()), 'a tap on the skin names a part of the skin: ' + await page.locator('.x3d-sheet h3').innerText());
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-skin.png' });
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
