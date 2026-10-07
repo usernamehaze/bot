@@ -66,8 +66,9 @@
 
   /* ---------- pricing ---------- */
   const PRICES = {
-    php: { sym: '₱', free: 0, plus: { month: 149, year: 1490 }, pro: { month: 499, year: 4990 } },
-    usd: { sym: '$', free: 0, plus: { month: 7.99, year: 79.9 }, pro: { month: 20, year: 200 } },
+    // sem = a Semester pass: one payment for 5 months (about 20% off)
+    php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } },
+    usd: { sym: '$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
@@ -84,8 +85,9 @@
     ['plus', 'pro'].forEach((k) => {
       const v = p[k][bill];
       $(`[data-price="${k}"]`).textContent = fmt(cur, v);
-      const per = $(`[data-price="${k}"]`).nextElementSibling; per.textContent = bill === 'month' ? '/ month' : '/ year';
-      $(`[data-bill-note="${k}"]`).textContent = bill === 'month' ? 'billed monthly · cancel anytime' : `that’s ${fmt(cur, v / 12)} a month · billed yearly`;
+      const per = $(`[data-price="${k}"]`).nextElementSibling; per.textContent = { month: '/ month', sem: '/ semester', year: '/ year' }[bill];
+      $(`[data-bill-note="${k}"]`).textContent = bill === 'month' ? 'billed monthly · cancel anytime'
+        : bill === 'sem' ? `5 months · that’s ${fmt(cur, v / 5)} a month · one payment` : `that’s ${fmt(cur, v / 12)} a month · billed yearly`;
     });
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));

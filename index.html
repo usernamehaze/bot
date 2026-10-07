@@ -199,6 +199,7 @@
   .plan.pop ul { border-color: rgba(255,255,255,.18); }
   .badge { position: absolute; top: 9px; right: 14px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; background: var(--pearl); color: var(--ink); }
   .fine { margin-top: 22px; color: var(--mute); font-size: 14.5px; }
+  .refer { margin-top: 26px; padding: 14px 18px; border-radius: 14px; border: 1px dashed rgba(18,17,23,.22); font-size: 15.5px; text-align: center; }
 
   /* ---------- faq ---------- */
   .faq { display: grid; gap: 10px; max-width: 860px; }
@@ -347,7 +348,7 @@
       <div class="head rv"><div class="kicker">Pricing</div><h2>Student prices. <em class="s">Seriously.</em></h2><p class="sub">Free forever, no card needed. Upgrade when Cassie becomes part of how you study.</p></div>
       <div class="toggles rv">
         <div class="seg" role="group" aria-label="Currency"><button type="button" data-cur="php">₱ Philippines</button><button type="button" data-cur="usd">$ Worldwide</button></div>
-        <div class="seg" role="group" aria-label="Billing"><button type="button" data-bill="month" class="on">Monthly</button><button type="button" data-bill="year">Yearly<small>2 months free</small></button></div>
+        <div class="seg" role="group" aria-label="Billing"><button type="button" data-bill="month" class="on">Monthly</button><button type="button" data-bill="sem">Semester<small>save 20%</small></button><button type="button" data-bill="year">Yearly<small>2 months free</small></button></div>
       </div>
       <div class="plans">
         <div class="plan rv">
@@ -358,11 +359,16 @@
             <div class="bill">No card needed</div>
             <a class="btn line" href="start.html">Start free</a>
             <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>20 questions a day — chat, quiz &amp; highlight</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>3 file reviewers a month (PDF, slides, Word)</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>10 pictures a month</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Board, graphs, focus timer, memory &amp; sync</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unlimited with your own free API key</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>20 questions a day</b> — chat, quiz &amp; highlight</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>5 file reviewers</b> a month (PDF, slides, Word)</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>10 pictures a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Explore 3D:</b> the human body (all 10 systems, boy &amp; girl) and cells</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Talk with Cassie</b> in Bella’s voice — 30 minutes of listening a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Quiz me, Review my mistakes &amp; Teach Cassie</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Board, graphs, focus timer, memory &amp; sync</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Chrome extension: highlight, snip &amp; ask about any page</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>2 research runs a month — real papers &amp; citations</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Unlimited with your own free API key</span></li>
             </ul>
           </div>
         </div>
@@ -375,11 +381,14 @@
             <div class="bill" data-bill-note="plus">billed monthly · cancel anytime</div>
             <a class="btn pearl" href="#" data-plan="plus">Join the waitlist</a>
             <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unlimited questions*</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>30 file reviewers a month</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>100 pictures a month</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Reads photos, diagrams &amp; handwriting</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Save as Word, PDF or image</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Everything in Free</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited questions*</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>30 file reviewers</b> a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>100 pictures a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited voice chat*</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Reads photos, diagrams &amp; handwriting</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Save as Word, PDF or image</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>10 research runs a month</span></li>
             </ul>
           </div>
         </div>
@@ -391,16 +400,18 @@
             <div class="bill" data-bill-note="pro">billed monthly · cancel anytime</div>
             <a class="btn ink" href="#" data-plan="pro">Join the waitlist</a>
             <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Everything in Plus</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unlimited questions*</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unlimited file reviewers*, including whole books</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Unlimited pictures*</li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Smartest models first</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Everything in Plus</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited file reviewers*</b>, including whole books</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited pictures*</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited research*:</b> real papers, organized sources &amp; citations</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Smartest models first</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Priority when Cassie is busy</span></li>
             </ul>
           </div>
         </div>
       </div>
-      <p class="fine rv">*Unlimited means normal studying by one person, not shared accounts or automated use. Paid plans are launching soon — everything on Free works today.</p>
+      <p class="refer rv"><b>Refer a classmate:</b> when they join, you both get a week of Plus free.</p>
+      <p class="fine rv">*Unlimited means normal studying by one person, not shared accounts or automated use. A Semester pass is one payment for 5 months — nothing is charged over the break. Paid plans are launching soon — everything on Free works today.</p>
     </div>
   </section>
 
@@ -408,7 +419,7 @@
     <div class="wrap">
       <div class="head rv"><div class="kicker">FAQ</div><h2>Questions, <em class="s">answered.</em></h2></div>
       <div class="faq">
-        <details class="rv"><summary>Is Cassie really free?</summary><p>Yes, forever, with no card needed: 20 questions a day, 3 file reviewers and 10 pictures a month. If you add your own free Groq or Gemini key, you can use Cassie as much as you like.</p></details>
+        <details class="rv"><summary>Is Cassie really free?</summary><p>Yes, forever, with no card needed: 20 questions a day, 5 file reviewers and 10 pictures a month, plus Explore 3D and talking with Cassie. If you add your own free Groq or Gemini key, you can use Cassie as much as you like.</p></details>
         <details class="rv"><summary>What can she read?</summary><p>Any website you highlight or snip, PDFs, PowerPoint and Google Slides, Word files and Google Docs, and photos or screenshots of your notes — including the diagrams and graphs in them.</p></details>
         <details class="rv"><summary>Does it work on my phone or tablet?</summary><p>Yes. Open Cassie in your browser and add it to your home screen. For PDFs, Word and PowerPoint, attach the file and tap <b>📖 Read &amp; highlight</b>: read it inside Cassie and highlight any part. In other apps: on <b>Android</b>, select the words → <b>Share</b> → <b>Cassie</b>. On <b>iPhone and iPad</b>, set up the one-time “Ask Cassie” Shortcut (steps in Cassie → Settings → Use Cassie in other apps). Screenshots and photos of your notes work too. The on-page popup and snipping on a computer come with the Chrome extension.</p></details>
         <details class="rv"><summary>How do I add Cassie to Chrome?</summary><p><a href="cassie-extension.zip" download>Download the Cassie extension</a>, then unzip it. Open <b>chrome://extensions</b>, turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and pick the <b>cassie-extension</b> folder. Pin Cassie from the puzzle-piece menu and you’re done — no key needed. Works in Chrome and Edge on a computer.</p></details>
