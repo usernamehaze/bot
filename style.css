@@ -1623,6 +1623,60 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-credit a { color: inherit; }
 .x3d-act[hidden], .x3d-btn[hidden] { display: none; }
 @media (max-width: 560px) { .x3d-find { top: calc(108px + var(--safe-top, 0px)); } }
+/* body: atlas-style view controls, pulled-apart view, orientation letters */
+.x3d-count { flex-basis: 100%; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: rgba(255, 255, 255, .62); pointer-events: none; }
+.x3d-count b { color: #f2f2f4; font-weight: 600; font-variant-numeric: tabular-nums; }
+.x3d-count-dot { width: 6px; height: 6px; border-radius: 50%; background: #f2f2f4; box-shadow: 0 0 0 3px rgba(255, 255, 255, .12); }
+.x3d-view {
+  position: absolute; left: 50%; bottom: calc(64px + var(--safe-bottom, 0px)); transform: translateX(-50%);
+  width: min(460px, calc(100vw - 32px)); padding: 12px 16px 12px; border-radius: 20px;
+  background: rgba(16, 17, 22, .9); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: x3dUp .28s ease-out;
+}
+.x3d-view[hidden] { display: none; }
+/* a computer: the view controls sit at the side, so the pulled-apart pieces get the whole middle; a tablet: a wider panel */
+@media (min-width: 1100px) {
+  .x3d-view { left: 16px; transform: none; bottom: calc(70px + var(--safe-bottom, 0px)); width: 380px; animation-name: x3dUpL; }
+  .x3d-spread-head label, .x3d-reassemble { white-space: nowrap; }
+  .x3d-view .x3d-seg button { font-size: .76rem; }
+}
+@media (min-width: 700px) and (max-width: 1099px) { .x3d-view { width: min(540px, calc(100vw - 32px)); } }
+@keyframes x3dUpL { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.x3d-view-head { display: flex; align-items: center; justify-content: space-between; }
+.x3d-view-head h3 { margin: 0; font-size: .95rem; }
+.x3d-view .x3d-view-x { position: static; }
+.x3d-seg { display: flex; gap: 2px; margin-top: 10px; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+.x3d-seg button { flex: 1; min-width: 0; border: 0; background: transparent; color: #f2f2f4; font: inherit; font-size: .8rem; font-weight: 600; padding: 8px 4px; border-radius: 9px; cursor: pointer; }
+.x3d-seg button[aria-pressed="true"] { background: rgba(255, 255, 255, .16); }
+.x3d-spread-head { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.x3d-spread-head label { margin-right: auto; font-size: .84rem; font-weight: 600; }
+.x3d-reassemble { padding: 5px 10px; font-size: .76rem; }
+.x3d-reassemble:disabled { opacity: .4; cursor: default; }
+.x3d-spread-pc { min-width: 44px; padding: 5px 8px; border-radius: 8px; background: rgba(255, 255, 255, .1); font-size: .76rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.x3d-spread { --fill: 0%; -webkit-appearance: none; appearance: none; width: 100%; height: 34px; margin: 6px 0 0; background: transparent; cursor: pointer; touch-action: pan-x; }
+.x3d-spread::-webkit-slider-runnable-track { height: 10px; border-radius: 99px; background: linear-gradient(to right, #f2f2f4 var(--fill), rgba(255, 255, 255, .12) var(--fill)); }
+.x3d-spread::-moz-range-track { height: 10px; border-radius: 99px; background: linear-gradient(to right, #f2f2f4 var(--fill), rgba(255, 255, 255, .12) var(--fill)); }
+.x3d-spread::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; margin-top: -10px; border-radius: 50%; background: #16171c; border: 3px solid #f2f2f4; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.x3d-spread::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #16171c; border: 3px solid #f2f2f4; }
+.x3d-spread:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 99px; }
+.x3d-spread-ends { display: flex; justify-content: space-between; font-size: .72rem; color: rgba(255, 255, 255, .55); }
+.x3d-gizmo { position: absolute; right: 22px; bottom: calc(96px + var(--safe-bottom, 0px)); width: 76px; height: 76px; border-radius: 50%; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); }
+.x3d-gizmo[hidden] { display: none; }
+.x3d-gizmo button { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .22); background: rgba(16, 17, 22, .85); color: #f2f2f4; font: inherit; font-size: .64rem; font-weight: 700; cursor: pointer; }
+.x3d-gizmo button[data-face="A"], .x3d-gizmo button[data-face="S"] { background: #f2f2f4; color: #111; }
+@media (max-width: 560px) { .x3d-gizmo { right: 14px; top: calc(170px + var(--safe-top, 0px)); bottom: auto; transform: scale(.85); transform-origin: top right; } }
+/* the picked part: a callout beside it, with a line to the spot */
+.x3d-body-mode .x3d-label.on { margin-left: 46px; padding-left: 10px; background: rgba(16, 17, 22, .9); color: #f2f2f4; border-color: rgba(255, 255, 255, .4); border-radius: 8px; }
+.x3d-body-mode .x3d-label.on::before { left: -44px; width: 7px; height: 7px; margin-top: -3.5px; background: #fff; box-shadow: 0 0 0 3px rgba(0, 0, 0, .35); }
+.x3d-body-mode .x3d-label.on::after { content: ''; position: absolute; right: 100%; top: 50%; width: 38px; height: 1px; background: rgba(255, 255, 255, .7); }
+/* the details card, small: just the name and "Selection details" */
+.x3d-sheet-sub { display: none; }
+.x3d-sheet-min { right: 46px; }
+.x3d-sheet.mini { max-height: none; padding: 12px 16px; cursor: pointer; }
+.x3d-sheet.mini > :not(.x3d-sheet-head):not(.x3d-sheet-x) { display: none; }
+.x3d-sheet.mini .x3d-sheet-head { flex-wrap: wrap; row-gap: 0; padding-right: 76px; }
+.x3d-sheet.mini .x3d-sheet-head h3 { font-size: .98rem; }
+.x3d-sheet.mini .x3d-sheet-sub { display: block; flex-basis: 100%; padding-left: 19px; font-size: .74rem; color: rgba(255, 255, 255, .55); }
 .x3d-up { border: 0; background: none; padding: 0; font: inherit; color: #f2f2f4; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .hv-set { margin: -2px 0 12px; }
 .hv-set[hidden] { display: none; }

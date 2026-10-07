@@ -110,6 +110,7 @@ export function createBody(ctx) {
   let maleParts = new Set(), femaleParts = new Set(), femaleColor = new Map();
   const femaleBuilt = new Set(); // layers whose female parts are made
   let selected = -1, highlight = null;
+  const shownParts = new Set(), shownSkin = new Set(); // the structures on screen now
   const label = document.createElement('span');
   label.className = 'x3d-label on';
   label.hidden = true;
@@ -242,16 +243,22 @@ export function createBody(ctx) {
   // draw only the wanted triangles (a part hidden, a system off, a boy's or girl's part)
   function applyFilter(p = plan()) {
     redraw();
+    shownParts.clear(); shownSkin.clear();
     layers.forEach((L, id) => {
-      const want = p.has(id), allowed = p.get(id);
+      // pulled apart, the see-through skin would only be in the way
+      const want = p.has(id) && !(spread > 0 && id === 'regions'), allowed = p.get(id);
       L.scenes.forEach((sc) => { sc.visible = want; });
       if (!want) return;
       L.meshes.forEach((o) => {
         const g = o.geometry, full = g.userData.fullIndex, ids = g.attributes._id;
-        const keep = [];
+        const keep = [], seen = id === 'regions' ? shownSkin : shownParts;
+        let last = -2;
         for (let t = 0; t < full.length; t += 3) {
           const si = index.mesh[ids.getX(full[t])];
-          if (!blocked(si) && (allowed == null || allowed.has(si))) keep.push(full[t], full[t + 1], full[t + 2]);
+          if (!blocked(si) && (allowed == null || allowed.has(si))) {
+            keep.push(full[t], full[t + 1], full[t + 2]);
+            if (si !== last && si >= 0) { seen.add(si); last = si; } // (a part's triangles come together)
+          }
         }
         if (keep.length === full.length) { if (g.index.array.length !== full.length) g.setIndex(new THREE.BufferAttribute(full.slice(), 1)); }
         else g.setIndex(new THREE.BufferAttribute(new full.constructor(keep), 1));
@@ -259,6 +266,9 @@ export function createBody(ctx) {
       });
     });
     if (selected >= 0 && !isShown(selected)) select(-1);
+    if (spread > 0) layoutSpread();
+    else if (layout) { applySpread(); layout = null; }
+    ctx.onFilter && ctx.onFilter();
   }
   function isShown(si) {
     const p = plan(), layer = layerOf(si);
@@ -289,9 +299,9 @@ export function createBody(ctx) {
     const toLocal = group.matrixWorld.clone().invert();
     layers.forEach((L) => L.meshes.forEach((o) => {
       if (o.userData.female) return;
-      const g = o.geometry, ids = g.attributes._id, pos = g.attributes.position;
+      const g = o.geometry, ids = g.attributes._id, pos = g.attributes.position, base = o.userData.base; // (where it is when the body is whole)
       const m = o.matrixWorld.clone().premultiply(toLocal);
-      for (let i = 0; i < ids.count; i++) if (want.has(index.mesh[ids.getX(i)])) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(m));
+      for (let i = 0; i < ids.count; i++) if (want.has(index.mesh[ids.getX(i)])) box.expandByPoint((base ? v.fromArray(base, i * 3) : v.fromBufferAttribute(pos, i)).applyMatrix4(m));
     }));
     return box.isEmpty() ? null : box;
   }
@@ -412,6 +422,152 @@ export function createBody(ctx) {
     L.scenes.push(root);
     root.visible = L.scenes[0] ? L.scenes[0].visible : false;
     applyFilter();
+  }
+
+  /* ---------- pull the parts apart (an exploded view) ---------- */
+  // 0 = the body as it is; up to 0.5 every part flies out from the middle; from there on they
+  // settle into rows, biggest first, so at 1 every piece lies on its own like a museum tray.
+  let spread = 0, layout = null, settleTimer = 0;
+  const partBox = new Map(); // structure -> its box in the body (put together)
+  const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  // remember where every point of a mesh is when the body is whole, and which parts it holds
+  function measure(o) {
+    if (o.userData.base) return;
+    const g = o.geometry, pos = g.attributes.position, ids = g.attributes._id, n = pos.count;
+    const base = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { base[i * 3] = pos.getX(i); base[i * 3 + 1] = pos.getY(i); base[i * 3 + 2] = pos.getZ(i); }
+    // (packed, small-number positions can't move freely, so they become plain numbers)
+    g.setAttribute('position', new THREE.BufferAttribute(base.slice(), 3));
+    group.updateWorldMatrix(true, true);
+    const m = o.matrixWorld.clone().premultiply(group.matrixWorld.clone().invert());
+    const v = new THREE.Vector3(), mis = new Set();
+    for (let i = 0; i < n; i++) {
+      const mi = ids.getX(i), si = index.mesh[mi];
+      mis.add(mi);
+      if (si < 0) continue;
+      let b = partBox.get(si);
+      if (!b) partBox.set(si, (b = new THREE.Box3()));
+      b.expandByPoint(v.set(base[i * 3], base[i * 3 + 1], base[i * 3 + 2]).applyMatrix4(m));
+    }
+    o.userData.base = base;
+    o.userData.mis = [...mis];
+    o.userData.toLocal = new THREE.Matrix3().setFromMatrix4(m).invert(); // body-space moves -> the mesh's own space
+  }
+  function hash(si, k) { const x = Math.sin(si * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x) - 0.5; }
+  // where each piece goes: out from the middle (d), and its place in the tray (g)
+  function layoutSpread() {
+    layers.forEach((L) => L.meshes.forEach(measure));
+    const parts = [...shownParts].filter((si) => partBox.has(si));
+    const all = new THREE.Box3();
+    parts.forEach((si) => all.union(partBox.get(si)));
+    if (all.isEmpty()) { layout = null; return; }
+    const mid = all.getCenter(new THREE.Vector3()), height = all.getSize(new THREE.Vector3()).y;
+    const items = parts.map((si) => {
+      const b = partBox.get(si), c = b.getCenter(new THREE.Vector3()), size = b.getSize(new THREE.Vector3());
+      return { si, c, w: Math.max(size.x, 0.006), h: Math.max(size.y, 0.006) };
+    }).sort((a, b) => (b.h * b.w) - (a.h * a.w) || a.si - b.si);
+    // rows as wide as the screen is shaped, so the tray fits it
+    const gap = (it) => 0.01 + Math.max(it.w, it.h) * 0.18;
+    const area = items.reduce((n, it) => n + (it.w + gap(it)) * (it.h + gap(it)), 0);
+    const aspect = Math.min(2.6, Math.max(0.62, (ctx.trayAspect ? ctx.trayAspect() : ctx.camera.aspect) || 1));
+    const pack = (rowW) => {
+      const rows = [];
+      let row = null;
+      for (const it of items) {
+        const w = it.w + gap(it);
+        if (!row || row.w + w > rowW) rows.push((row = { items: [], w: 0, h: 0 }));
+        it.x = row.w + w / 2; row.w += w; row.h = Math.max(row.h, it.h + gap(it));
+        row.items.push(it);
+      }
+      return rows;
+    };
+    // rows leave gaps, so the tray comes out taller than planned: widen the rows till its shape fits the screen
+    let rowW = Math.max(Math.sqrt(area * aspect), items[0].w + gap(items[0])), rows = pack(rowW);
+    for (let k = 0; k < 6; k++) {
+      const w = Math.max(...rows.map((r) => r.w)), h = rows.reduce((n, r) => n + r.h, 0), now = w / h;
+      if (Math.abs(now / aspect - 1) < 0.08) break;
+      rowW = Math.max(items[0].w + gap(items[0]), rowW * Math.sqrt(aspect / now));
+      rows = pack(rowW);
+    }
+    // (pack() wrote each piece's x for the last packing)
+    const total = rows.reduce((n, r) => n + r.h, 0);
+    let y = mid.y + total / 2;
+    layout = new Map();
+    const tray = new THREE.Box3();
+    for (const r of rows) {
+      const cy = y - r.h / 2;
+      for (const it of r.items) {
+        const at = new THREE.Vector3(mid.x - r.w / 2 + it.x, cy, mid.z);
+        tray.expandByPoint(at.clone().add(new THREE.Vector3(it.w / 2, it.h / 2, 0))).expandByPoint(at.clone().sub(new THREE.Vector3(it.w / 2, it.h / 2, 0)));
+        // flying out: away from the middle, a bit further for the pieces near it, with a little scatter
+        const d = it.c.clone().sub(mid).multiplyScalar(0.9).add(new THREE.Vector3(hash(it.si, 1), hash(it.si, 2), hash(it.si, 3)).multiplyScalar(height * 0.28));
+        layout.set(it.si, { d, g: at.sub(it.c) });
+      }
+      y -= r.h;
+    }
+    layout.tray = tray; layout.body = all;
+    applySpread();
+  }
+  const offX = new Map();
+  function applySpread() {
+    redraw();
+    const t = spread, out = Math.min(1, t / 0.5), settle = smooth((t - 0.35) / 0.65);
+    const v = new THREE.Vector3();
+    layers.forEach((L) => L.meshes.forEach((o) => {
+      const base = o.userData.base;
+      if (!base) return;
+      const shown = o.visible && o.parent.visible;
+      if (!(shown || (t <= 0 && o.userData.moved))) return; // hidden pieces move when they come back
+      const g = o.geometry, arr = g.attributes.position.array, ids = g.attributes._id;
+      o.userData.moved = t > 0 && !!layout;
+      if (!o.userData.moved) { arr.set(base); }
+      else {
+        offX.clear();
+        for (const mi of o.userData.mis) {
+          const p = layout.get(index.mesh[mi]);
+          if (!p) { offX.set(mi, [0, 0, 0]); continue; }
+          v.copy(p.d).multiplyScalar(out * (1 - settle)).addScaledVector(p.g, settle).applyMatrix3(o.userData.toLocal);
+          offX.set(mi, [v.x, v.y, v.z]);
+        }
+        let last = -1, ox = 0, oy = 0, oz = 0;
+        for (let i = 0, n = ids.count; i < n; i++) {
+          const mi = ids.getX(i);
+          if (mi !== last) { const q = offX.get(mi); ox = q[0]; oy = q[1]; oz = q[2]; last = mi; }
+          arr[i * 3] = base[i * 3] + ox; arr[i * 3 + 1] = base[i * 3 + 1] + oy; arr[i * 3 + 2] = base[i * 3 + 2] + oz;
+        }
+      }
+      g.attributes.position.needsUpdate = true;
+      o.frustumCulled = false; // the sizes are worked out again once the slider rests
+    }));
+    if (highlight) highlight.visible = false;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(settled, 160);
+  }
+  // the slider rests: taps find the moved parts again, and the picked part's outline follows it
+  function settled() {
+    layers.forEach((L) => L.meshes.forEach((o) => { if (o.userData.base) { o.geometry.computeBoundingSphere(); o.geometry.computeBoundingBox(); o.frustumCulled = spread === 0; } }));
+    if (selected >= 0) {
+      const sphere = makeHighlight(selected);
+      label.userData = sphere ? sphere.center.clone() : null;
+    }
+    redraw();
+  }
+  function setSpread(t) {
+    t = Math.min(1, Math.max(0, +t || 0));
+    const was = spread;
+    spread = t;
+    if ((was > 0) !== (t > 0)) applyFilter(); // the skin goes (or comes back), and the pieces are counted
+    else if (t > 0 && !layout) layoutSpread();
+    else applySpread();
+  }
+  // the box everything takes up now (to fit the camera to the tray)
+  function spreadBox() {
+    if (!layout || spread <= 0) return null;
+    const k = smooth((spread - 0.35) / 0.65);
+    const b = new THREE.Box3();
+    b.min.lerpVectors(layout.body.min, layout.tray.min, k); b.max.lerpVectors(layout.body.max, layout.tray.max, k);
+    if (spread < 0.6) b.expandByScalar(layout.body.getSize(new THREE.Vector3()).y * 0.35 * (1 - k));
+    return b;
   }
 
   // the picked part, drawn again on top in a bright outline colour
@@ -541,8 +697,9 @@ export function createBody(ctx) {
     label.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px)`;
   }
   return {
-    group, label, enter, leave, setSystem, setMuscles, setSex, isOn, pick, select, search, goTo, hide, showAll, placeLabel,
-    get muscles() { return muscles; }, get sex() { return sex; },
+    group, label, enter, leave, setSystem, setMuscles, setSex, isOn, pick, select, search, goTo, hide, showAll, placeLabel, setSpread, spreadBox,
+    get muscles() { return muscles; }, get sex() { return sex; }, get spread() { return spread; },
+    get visibleCount() { return shownParts.size + (spread > 0 ? 0 : shownSkin.size); },
     boxOf: (id) => (index && index.byId.has(id) ? boxOf(index.byId.get(id)) : null),
     get hiddenCount() { return hidden.size; }, get selected() { return selected; },
     camera: new THREE.Vector3(0.55, 1.35, 2.6), target: new THREE.Vector3(0, 0.95, 0.03), fit: 0.95,
