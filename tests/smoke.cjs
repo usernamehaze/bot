@@ -1163,6 +1163,105 @@ test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece a
   await ctx.close();
 });
 
+test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sends what is on screen', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7', fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
+  const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
+  await page.click('#labs-btn');
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  const ids = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  for (const id of ['function', 'fractions', 'chance', 'units', 'interest', 'square-proof', 'hanoi', 'projectile', 'pendulum', 'waves', 'refraction', 'balance', 'ph', 'atom', 'punnett', 'body3d']) expect(ids.includes(id), 'the shelf has ' + id + ': ' + ids);
+  expect(await page.locator('.labs-feature').count() === 1, 'today’s lab is featured');
+  await shot('labs-shelf');
+  // subject chips and search
+  await page.click('.labs-chips [data-subject="chemistry"]');
+  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom', 'Chemistry shows the chemistry labs');
+  await page.click('.labs-chips [data-subject="all"]');
+  await page.fill('.labs-search', 'pendul');
+  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'pendulum', 'search finds the pendulum');
+  await page.fill('.labs-search', '');
+  // every lab opens, draws and closes without an error
+  for (const id of ids.filter((x) => !/3d$/.test(x))) {
+    await page.click(`.labs-grid [data-lab="${id}"]`);
+    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 5000 });
+    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units').count() >= 1, id + ' draws something');
+    await page.waitForTimeout(250);
+    expect(errors.length === 0, `${id}: page errors: ` + errors.join('; '));
+    await page.click('.lab-back');
+  }
+  // the function lab: x^2 − 4, tap the middle → slope 0 → the first goal ticks
+  await page.click('[data-lab="function"]');
+  await page.fill('.lab-input', 'x^2 - 4');
+  const st = page.locator('.lab-stage');
+  const sb = await st.boundingBox();
+  await page.mouse.click(sb.x + sb.width / 2, sb.y + sb.height / 2);
+  await page.waitForSelector('.lab-tries li.done', { timeout: 3000 });
+  expect(/slope f′\(x\)\s*0/.test(await page.locator('.lab-stats').innerText()), 'the slope at x = 0 is 0: ' + await page.locator('.lab-stats').innerText());
+  await page.fill('.lab-input', 'sin(');
+  expect(await page.locator('.lab-err').isVisible(), 'a formula that can’t be read says why');
+  await page.fill('.lab-input', 'sin(x)');
+  await shot('lab-function');
+  await page.click('.lab-back');
+  // balancing water yourself: 2 H2 + O2 → 2 H2O
+  await page.click('[data-lab="balance"]');
+  await page.click('.lab-coef [data-j="0"][data-d="1"]');
+  expect(!(await page.locator('.lab-verdict.ok').count()), 'not balanced half way');
+  await page.click('.lab-coef [data-j="2"][data-d="1"]');
+  await page.waitForSelector('.lab-verdict.ok');
+  expect(await page.locator('.lab-tries li').first().getAttribute('class') === 'done' || /done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'balancing water ticks the goal');
+  await page.click('.lab-chips >> text=Tricky one');
+  await page.click('text=Show Cassie’s answer');
+  expect(/2KMnO4 \+ 16HCl → 2KCl \+ 2MnCl2 \+ 8H2O \+ 5Cl2/.test(await page.locator('.lab-stats').innerText()), 'Cassie balances the tricky one: ' + await page.locator('.lab-stats').innerText());
+  await shot('lab-balance');
+  await page.click('.lab-back');
+  // Punnett: Yy × Yy is 3 : 1 right away; two genes → 9 : 3 : 3 : 1
+  await page.click('[data-lab="punnett"]');
+  expect(/3 : 1/.test(await page.locator('.lab-stats').innerText()), 'Yy × Yy gives 3 : 1');
+  await page.click('.lab-seg button:has-text("Two genes")');
+  expect(/9 : 3 : 3 : 1/.test(await page.locator('.lab-stats').innerText()), 'YyRr × YyRr gives 9 : 3 : 3 : 1');
+  await page.click('text=Grow 100 offspring');
+  expect(/100 grown/.test(await page.locator('.lab-stats').innerText()), 'a hundred offspring are grown');
+  await shot('lab-punnett');
+  await page.click('.lab-back');
+  // pH: 10 mL acid then 10 mL base = neutral
+  await page.click('[data-lab="ph"]');
+  await page.locator('.lab-group:has-text("Acid") button:has-text("+ 10 mL")').click();
+  expect(/acidic/.test(await page.locator('.lab-stats').innerText()), 'acid makes it acidic');
+  await page.locator('.lab-group:has-text("Base") button:has-text("+ 10 mL")').click();
+  expect(/pH\s*7\.00/.test(await page.locator('.lab-stats').innerText()) && /done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'equal acid and base is neutral: ' + await page.locator('.lab-stats').innerText());
+  await shot('lab-ph');
+  await page.click('.lab-back');
+  // the atom: carbon-12 is built at the start
+  await page.click('[data-lab="atom"]');
+  expect(/Carbon \(C\)/.test(await page.locator('.lab-stats').innerText()) && /carbon-12/.test(await page.locator('.lab-stats').innerText()), 'six of each is carbon-12');
+  await page.click('.lab-chips >> text=Chloride Cl⁻');
+  expect(/negative ion/.test(await page.locator('.lab-stats').innerText()), 'chloride is a negative ion');
+  await shot('lab-atom');
+  await page.click('.lab-back');
+  // launch: 45° from the ground, then Ask Cassie — she gets the numbers on the screen
+  await page.click('[data-lab="projectile"]');
+  await page.locator('.lab-sl:has-text("Angle") input').fill('45');
+  await page.click('.lab-btn.main:has-text("Launch")');
+  await page.waitForFunction(() => /Landed|Hit/.test(document.querySelector('.lab-note').textContent), null, { timeout: 8000 });
+  expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), '45° from the ground ticks the farthest-angle goal');
+  await shot('lab-projectile');
+  await page.click('.lab-ask');
+  await page.waitForSelector('#chat-log .bubble-assistant >> text=45 degrees', { timeout: 15000 });
+  expect(await page.locator('.labs').isHidden(), 'Labs closes so the answer shows');
+  const asked = JSON.stringify(groqCalls.at(-1));
+  expect(/Launch lab/.test(asked) && /45°/.test(asked) && /m\/s/.test(asked) && /flies/.test(asked), 'Cassie is told what is on the screen: ' + asked.slice(0, 400));
+  // goals are remembered on the shelf
+  await page.click('#labs-btn');
+  await page.waitForSelector('.labs:not([hidden]) .labs-card');
+  expect(/[1-3]\/3 tried/i.test(await page.locator('.labs-grid [data-lab="projectile"]').innerText()), 'the shelf remembers tried goals: ' + await page.locator('.labs-grid [data-lab="projectile"]').innerText());
+  // a link opens a lab straight away
+  await page.goto(APP + '?lab=pendulum');
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"]', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  await shot('lab-pendulum');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
