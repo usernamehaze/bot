@@ -1801,6 +1801,7 @@ function renderHistory() {
   state.messages.forEach((m) => {
     const b = renderMessage(m.role, m.display || m.content);
     if (m.image && b) addImageToBubble(b, m.image, { download: true });
+    if (m.papers && b && window.CassieCite) b.appendChild(window.CassieCite.bar(m.papers, { track }));
   });
 }
 
@@ -3536,6 +3537,10 @@ async function searchOpenAlex(query, n = 8) {
     url: w.doi || (w.open_access && w.open_access.oa_url) || (w.primary_location && w.primary_location.landing_page_url) || w.id || '',
     cited: w.cited_by_count || 0,
     abstract: reconstructAbstract(w.abstract_inverted_index).slice(0, 700),
+    // for the citation export (cite.js): the paper's own details
+    doi: w.doi || '', type: w.type || '',
+    volume: (w.biblio && w.biblio.volume) || '', issue: (w.biblio && w.biblio.issue) || '',
+    firstPage: (w.biblio && w.biblio.first_page) || '', lastPage: (w.biblio && w.biblio.last_page) || '',
   }));
 }
 
@@ -3594,9 +3599,11 @@ async function runResearch(topic) {
     if (p.url) listMd += ` [link](${p.url})`;
     listMd += '\n';
   });
-  state.messages.push({ role: 'assistant', content: listMd });
+  const citeList = papers.map(({ abstract, cited, ...p }) => p); // the details a citation needs
+  state.messages.push({ role: 'assistant', content: listMd, papers: citeList });
   save();
-  renderMessage('assistant', listMd);
+  const listBubble = renderMessage('assistant', listMd);
+  if (listBubble && window.CassieCite) listBubble.appendChild(window.CassieCite.bar(citeList, { track }));
 
   // Grounded RRL synthesis — model may use ONLY these sources.
   const sources = papers.map((p, i) =>
@@ -5782,6 +5789,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Research: under the papers Cassie finds, copy the references in APA or MLA, or download them for Zotero, Mendeley or EndNote (BibTeX / RIS).',
   'Flashcards: tap “＋ Flashcards” under any answer and Cassie makes cards from it. Study them with spaced repetition (cards come back right before you’d forget), turn quiz mistakes into cards, and export to Anki or Quizlet.',
   'Talking with Cassie is quicker: she answers right away (her words show while her voice downloads the first time), she starts speaking sooner, and her voice is always Bella — no more robot voice.',
   'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',

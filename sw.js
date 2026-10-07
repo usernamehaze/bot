@@ -15,6 +15,7 @@ const ASSETS = [
   'export.js',
   'sketch.js',
   'cards.js',
+  'cite.js',
   'voice.js',
   'manifest.json',
   'patterns/student.svg',
