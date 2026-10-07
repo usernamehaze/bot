@@ -15,6 +15,7 @@
   let turn = 0, seq = 0;
   let slowCount = 0;
   let lastError = '';
+  let info = { isolated: false, cores: 1 };
   const waiting = new Map();
   const listeners = new Set();
   const emit = () => listeners.forEach((f) => { try { f({ status, progress }); } catch (e) { /* ignore */ } });
@@ -70,7 +71,7 @@
         const m = e.data || {};
         if (status === 'loading') { if (m.type === 'ready' || m.type === 'failed') clearTimeout(watchdog); else quiet(); }
         if (m.type === 'progress') { progress = m.total ? Math.min(1, m.loaded / m.total) : 0; emit(); }
-        else if (m.type === 'ready') { status = 'ready'; progress = 1; try { localStorage.setItem(FLAG, 'got'); } catch (err) { /* ignore */ } emit(); resolve(); }
+        else if (m.type === 'ready') { info = { isolated: !!m.isolated, cores: m.cores || 1 }; status = 'ready'; progress = 1; try { localStorage.setItem(FLAG, 'got'); } catch (err) { /* ignore */ } emit(); resolve(); }
         else if (m.type === 'failed') { lastError = m.error || ''; reject(fail(new Error(m.error || 'The voice did not load.'))); }
         else if (m.type === 'audio') { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); w.resolve(m); } }
       };
@@ -148,5 +149,6 @@
     say,
     unlock,
     error: () => lastError,
+    info: () => info,
   };
 })();
