@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '118';
+const APP_VERSION = '119';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1682,6 +1682,7 @@ const HOME_EXAMPLES = [
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
   { label: 'Explore the body in 3D', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openExplore('body') },
+  { label: 'Labs: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
   { label: 'Draw together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
@@ -4165,6 +4166,35 @@ if (exploreBtn) exploreBtn.addEventListener('click', () => openExplore());
 // a link like app.html?explore=plant opens it straight away
 { const ex = new URLSearchParams(location.search).get('explore'); if (ex) setTimeout(() => openExplore(ex), 300); }
 
+/* ---------- Labs: simulations to play with, then ask Cassie why ----------
+   labs/ loads only when opened. "Ask Cassie" in a lab sends what's on its screen right now. */
+const labsBtn = document.getElementById('labs-btn');
+let labsMod = null;
+async function openLabs(lab) {
+  track('feature', 'labs');
+  try {
+    if (!labsMod) {
+      islandShow('reading', 'Opening Labs…');
+      labsMod = await import('./labs/labs.js');
+      islandRest();
+    }
+    labsMod.open({
+      lab,
+      onAsk: (q) => handleSend(q),
+      onQuiz: (topic) => startQuizOn(topic),
+      openExplore: (cell) => openExplore(cell),
+      onOpen: (id) => track('feature', 'lab-' + id),
+      onClose: () => { try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ } },
+    });
+  } catch (e) {
+    islandShow('oops', 'Couldn’t open Labs', 2600);
+    renderMessage('assistant', 'I couldn’t open Labs just now — check your internet connection and try again.');
+  }
+}
+if (labsBtn) labsBtn.addEventListener('click', () => openLabs());
+// app.html?lab=pendulum opens that lab
+{ const lab = new URLSearchParams(location.search).get('lab'); if (lab) setTimeout(() => openLabs(lab), 300); }
+
 if (quizBtn) {
   quizBtn.addEventListener('click', () => {
     if (!canChat()) {
@@ -5897,6 +5927,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs (the flask at the top): 15 simulations to play with — launch a ball, swing a pendulum, bend light, balance equations, mix acid and base, build an atom, cross pea plants, graph any function and more. Tap “Ask Cassie” in any lab and she explains what’s on your screen, using your numbers. Each lab has small goals to tick off.',
   'Explore 3D body: “Look around” turns it to the Front, Back or Side, and “Pull it apart” lifts every bone and organ out and sorts them into labelled trays (Bones, Digestive, Respiratory…) — “Put back” rebuilds the body. The S/I/R/L/A/P letters show which way you face (tap one to turn), and the skin can be tapped too.',
   'Draw together: open the board and tap “Draw together” (or Ideas → Draw together) to start a study room. Share the code or link and up to 12 classmates draw on the same board, live.',
   'Research: under the papers Cassie finds, copy the references in APA or MLA, or download them for Zotero, Mendeley or EndNote (BibTeX / RIS).',
