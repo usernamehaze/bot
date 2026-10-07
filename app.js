@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '112';
+const APP_VERSION = '113';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -5032,8 +5032,8 @@ if (voiceBtn) {
 // a link like app.html?talk=teach opens it (the first sound still needs a tap on phones)
 { const t = new URLSearchParams(location.search).get('talk'); if (t && voiceBtn && !voiceBtn.hidden) setTimeout(() => openVoice(VOICE_MODES[t] ? t : 'chat'), 400); }
 
-/* ---------- highlight-to-ask (right-click a selection) ---------- */
-/* Select any text in the app, right-click, and pick Explain / Answer /
+/* ---------- highlight-to-ask (the Ask Cassie button by a selection) ---------- */
+/* Select any text in an answer, tap Ask Cassie, and pick Explain / Answer /
    Code it — the result shows in a small popover right there, without
    touching the main chat. It's a separate, throwaway lookup. */
 let highlightGen = 0;
@@ -5181,57 +5181,77 @@ document.addEventListener('mousedown', (e) => {
   if (!highlightPopover.contains(e.target)) hideHighlightPopover();
 });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && askChip && !askChip.hidden) hideAskChip();
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
 
-/* Right-click (or two-finger tap on a trackpad) on selected text shows the
-   Explain / Answer buttons at the pointer, instead of the browser menu.
-   Only hijacks when there IS a selection; plain inputs keep their native menu. */
-document.addEventListener('contextmenu', (e) => {
-  const el = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
-  if (el && el.closest('input, textarea')) return; // keep native menu in edit fields
-  const sel = window.getSelection();
-  const text = sel ? sel.toString().trim() : '';
-  if (!text || text.length < 2) return; // nothing selected -> normal menu
-  e.preventDefault();
-  const rect = { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY, width: 0, height: 0 };
-  highlightPopover.hidden = false;
-  setPopoverChoice(text, rect);
-});
+/* Right-click on selected text keeps the browser's own menu, so Copy works as usual.
+   Cassie is asked with the small "Ask Cassie" button instead (below). */
 
-/* Highlight-to-ask on ANY device: when the user selects text inside an answer,
-   show the Explain / Answer / Code popover near the selection. This is what
-   makes it work on phones (which have no right-click). Debounced so it waits
-   for the selection to settle (mobile selection-handle dragging fires many
-   selectionchange events). */
+/* Highlight-to-ask on ANY device: selecting text inside an answer (or a file in
+   the reader) shows a small "Ask Cassie" button by it. Highlighting alone is often
+   just copying, so the Explain / Answer / Code popover opens only when the button
+   is tapped. Debounced so it waits for the selection to settle (mobile
+   selection-handle dragging fires many selectionchange events). */
 let selPopoverTimer = null;
+const askChip = document.getElementById('ask-chip');
+let chipText = '';
+let chipRect = null;
+function hideAskChip() { if (!askChip) return; askChip.hidden = true; askChip.classList.remove('on'); chipText = ''; }
+function showAskChip(text, range) {
+  chipText = text;
+  chipRect = range.getBoundingClientRect();
+  const rects = range.getClientRects();
+  const last = rects.length ? rects[rects.length - 1] : chipRect;
+  askChip.hidden = false;
+  const w = askChip.offsetWidth || 110, h = askChip.offsetHeight || 30;
+  // beside the end of the highlight, on its last line; below it when there's no room
+  // (phones show their own Copy bar above the words, so it never goes there)
+  let left = last.right + 10, top = last.top + last.height / 2 - h / 2;
+  if (left + w > window.innerWidth - 8) { left = Math.max(8, Math.min(last.right - w, window.innerWidth - w - 8)); top = last.bottom + 10; }
+  if (top + h > window.innerHeight - 8) top = Math.max(8, chipRect.top - h - 8);
+  askChip.style.left = `${left}px`;
+  askChip.style.top = `${top}px`;
+  requestAnimationFrame(() => askChip.classList.add('on'));
+}
+if (askChip) {
+  askChip.addEventListener('mousedown', (e) => e.preventDefault()); // keep the highlight
+  askChip.addEventListener('click', () => {
+    const text = chipText, rect = chipRect;
+    hideAskChip();
+    if (!text) return;
+    track('feature', 'ask-chip');
+    highlightPopover.hidden = false;
+    setPopoverChoice(text, rect);
+  });
+}
 function trySelectionPopover() {
-  if (!highlightPopover) return;
+  if (!highlightPopover || !askChip) return;
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hideAskChip(); return; }
   const text = sel.toString().trim();
-  if (text.length < 2) return;
+  if (text.length < 2) { hideAskChip(); return; }
   const range = sel.getRangeAt(0);
   const anchor = range.commonAncestorContainer;
   const el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
   if (!el) return;
-  if (el.closest('input, textarea')) return;         // ignore typed text
-  if (!el.closest('#chat-log, #reader-body')) return; // answers, messages, and files open in the reader
+  if (el.closest('.highlight-popover')) return;      // words inside Cassie's own popover
+  if (el.closest('input, textarea') || !el.closest('#chat-log, #reader-body')) { hideAskChip(); return; } // answers, messages, and files open in the reader
   // if this exact selection is already open (e.g. showing an answer), leave it
   if (!highlightPopover.hidden && text === lastPopoverText) return;
+  if (text === chipText && !askChip.hidden) return;
   const rect = range.getBoundingClientRect();
   if (!rect || (rect.width === 0 && rect.height === 0)) return;
-  highlightPopover.hidden = false;
-  setPopoverChoice(text, rect);
+  showAskChip(text, range);
 }
 function scheduleSelectionPopover(delay) {
   clearTimeout(selPopoverTimer);
   selPopoverTimer = setTimeout(trySelectionPopover, delay);
 }
-// Highlight-to-ask on every device: selecting text in an answer opens the
-// popover; picking a choice shows the answer; clicking away hides it; and
-// selecting new text opens it again. Clicks inside the popover never re-trigger.
-function fromPopover(e) { return e.target && e.target.closest && e.target.closest('.highlight-popover'); }
+// Highlight-to-ask on every device: selecting text in an answer shows the Ask
+// Cassie button; tapping it opens the popover; picking a choice shows the answer;
+// clicking away hides it. Clicks inside the popover or on the button never re-trigger.
+function fromPopover(e) { return e.target && e.target.closest && e.target.closest('.highlight-popover, .ask-chip'); }
 document.addEventListener('mouseup', (e) => { if (!fromPopover(e)) scheduleSelectionPopover(10); });
 document.addEventListener('touchend', (e) => {
   lastTouchEndAt = Date.now();
@@ -5239,11 +5259,17 @@ document.addEventListener('touchend', (e) => {
   // handler doesn't immediately hide the popover we're about to show
   if (!fromPopover(e)) scheduleSelectionPopover(380);
 }, { passive: true });
-document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (askChip && !askChip.hidden && (!sel || sel.isCollapsed)) hideAskChip();
+  scheduleSelectionPopover(450);
+});
+// copying, scrolling or resizing: the button steps aside
+['copy', 'cut'].forEach((ev) => document.addEventListener(ev, hideAskChip, true));
 
-chatLog.addEventListener('scroll', hideHighlightPopover);
-document.getElementById('reader-body')?.addEventListener('scroll', hideHighlightPopover);
-window.addEventListener('resize', hideHighlightPopover);
+chatLog.addEventListener('scroll', () => { hideHighlightPopover(); hideAskChip(); });
+document.getElementById('reader-body')?.addEventListener('scroll', () => { hideHighlightPopover(); hideAskChip(); });
+window.addEventListener('resize', () => { hideHighlightPopover(); hideAskChip(); });
 
 /* ---------- anonymous usage stats (optional, opt-out in Settings → You) ---------- */
 // Usage counts go to Cassie's server (config.js). No server = nothing is sent.
@@ -5662,6 +5688,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Copy and paste like normal: highlighting words no longer pops Cassie open. A small “Ask Cassie” button shows by the words — tap it when you want her.',
   'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',
   'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
   'Explore 3D (the cube at the top): a real 3D human body — skeleton, organs, heart and blood vessels, brain and nerves, muscles. Tap any part or search it by name, then ask Cassie about it. Animal and plant cells too.',
@@ -5692,7 +5719,7 @@ function showWhatsNew() {
 
 /* ---------- Read & highlight: a file opened inside Cassie (phones and tablets) ----------
    Phone browsers don't run extensions, so students read their PDF / Word / PowerPoint here,
-   page by page, and highlight any part of it: the same popup as in the chat appears. */
+   page by page, and highlight any part of it: the same Ask Cassie button as in the chat shows. */
 const attachRead = document.getElementById('attach-read');
 const readerEl = document.getElementById('reader');
 function openReader(doc) {
@@ -5717,7 +5744,7 @@ function openReader(doc) {
   track('feature', 'reader');
   islandShow('reading', 'Select any words to ask me', 2600);
 }
-function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); }
+function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); hideAskChip(); }
 if (attachRead) attachRead.addEventListener('click', () => openReader(pendingDoc));
 document.getElementById('reader-close')?.addEventListener('click', closeReader);
 

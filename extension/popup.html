@@ -93,7 +93,15 @@
 </head>
 <body>
   <h1>Cassie</h1>
-  <p class="subtitle">Highlight text on any page to get an explanation or answer.</p>
+  <p class="subtitle">Highlight text on any page, then ask Cassie to explain or answer it.</p>
+
+  <label for="hl-mode">When I highlight text</label>
+  <select id="hl-mode">
+    <option value="button">Show a small “Ask Cassie” button</option>
+    <option value="off">Nothing — I’ll double-tap Ctrl or right-click</option>
+    <option value="auto">Open Cassie right away</option>
+  </select>
+  <p class="hint">Highlight to copy and paste like normal. Cassie only opens when you ask: click <b>Ask Cassie</b>, double-tap <b>Ctrl</b>, or right-click → <b>Explain with Cassie</b>.</p>
 
   <p class="hint" style="margin-top:0"><b>No key needed</b> — Cassie answers right away. Adding your own free key below is optional: it's a little faster and you never run out of questions.</p>
 
