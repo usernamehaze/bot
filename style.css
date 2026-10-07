@@ -1618,6 +1618,14 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-act[hidden], .x3d-btn[hidden] { display: none; }
 @media (max-width: 560px) { .x3d-find { top: calc(108px + var(--safe-top, 0px)); } }
 .x3d-up { border: 0; background: none; padding: 0; font: inherit; color: #f2f2f4; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.vc-hv { max-width: 420px; margin: 4px auto 0; padding: 11px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: .84rem; line-height: 1.4; text-align: left; }
+.vc-hv[hidden] { display: none; }
+.vc-hv small { display: block; color: var(--muted); margin-top: 4px; }
+.vc-hv-bar { display: block; height: 5px; margin-top: 8px; border-radius: 9px; background: var(--border); overflow: hidden; }
+.vc-hv-bar i { display: block; height: 100%; background: var(--primary); border-radius: 9px; transition: width .3s ease; }
+.vc-hv-row { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+.vc-hv button { border: 0; border-radius: 99px; padding: 8px 14px; font: inherit; font-weight: 600; font-size: .82rem; cursor: pointer; background: var(--primary); color: #fff; }
+.vc-hv button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .vc-gender { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
 .vc-gender button { border: 0; background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 600; padding: 7px 11px; border-radius: 99px; cursor: pointer; }
 .vc-gender button[aria-checked="true"] { background: var(--primary); color: #fff; }

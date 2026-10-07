@@ -26,7 +26,7 @@ const CDN = {
   'mammoth.browser.min.js': path.join(NM, 'mammoth/mammoth.browser.min.js'),
 };
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
 function staticServer() {
   return http.createServer((req, res) => {
     let p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
@@ -40,8 +40,8 @@ function staticServer() {
 /* ---------- helpers ---------- */
 const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on' } = {}) {
-  const ctx = await browser.newContext({ ...devices['Pixel 7'], acceptDownloads: true });
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7' } = {}) {
+  const ctx = await browser.newContext({ ...devices[device], acceptDownloads: true });
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, ...state };
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
@@ -54,6 +54,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on' 
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
+  await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
     const req = route.request();
@@ -763,12 +764,11 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
   expect(await phase() === 'paused', 'the mic pauses listening');
   await page.click('.vc-mic');
   expect(await phase() === 'listening', 'and starts again');
-  // a man's voice: no man's voice on this device, so Cassie lowers the pitch
+  // a man's voice is remembered; the device's voice is never bent (a lowered pitch sounded scary)
   await page.click('.vc-gender [data-gender="man"]');
   await page.waitForFunction(() => window.__spoken.at(-1) === 'Hi! This is my voice now.', null, { timeout: 5000 });
-  expect(await page.evaluate(() => window.__pitch) < 0.9 && await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).voiceGender) === 'man', 'the man’s voice is used and remembered');
+  expect(await page.evaluate(() => window.__pitch) === 1 && await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).voiceGender) === 'man', 'the man’s voice is remembered and the pitch is natural');
   await page.click('.vc-gender [data-gender="woman"]');
-  await page.waitForFunction(() => window.__pitch > 1, null, { timeout: 5000 });
   // Quiz me turns the quiz on, ending puts it back
   await page.click('.vc-modes [data-vmode="quiz"]');
   expect(await page.evaluate(() => document.getElementById('quiz-btn').classList.contains('active')), 'Quiz me out loud turns the quiz on');
@@ -799,6 +799,75 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await serverMode({ reply: '', heard: '' });
   await ctx.close();
+});
+
+// The voice model's files, served in place of Hugging Face: a tiny stand-in model (a tone, not speech)
+// that runs through the real kokoro-js and ONNX runtime, with the real voice styles.
+const KOKORO_FIXTURE = path.join(__dirname, 'fixtures', 'kokoro');
+const serveKokoro = (ctx) => ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\//, (route) => {
+  const rel = new URL(route.request().url()).pathname.split('/resolve/main/')[1];
+  const file = path.join(KOKORO_FIXTURE, rel);
+  if (!rel || rel.includes('..') || !fs.existsSync(file)) return route.fulfill({ status: 404, body: 'not found' });
+  return route.fulfill({ path: file, contentType: rel.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
+});
+const WATCH_VOICE_WORKER = () => {
+  window.__said = []; window.__played = 0;
+  const post = Worker.prototype.postMessage;
+  Worker.prototype.postMessage = function (m, ...rest) { if (m && m.type === 'say') window.__said.push({ text: m.text, voice: m.voice }); return post.call(this, m, ...rest); };
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
+};
+
+test('Cassie’s human voice: a woman’s or a man’s, made on the device — and the device’s voice if it can’t load', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
+  await serveKokoro(ctx);
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await ctx.addInitScript(WATCH_VOICE_WORKER);
+  await page.reload();
+  await page.click('#voice-btn');
+  // on a computer it gets the voice by itself, showing how far along it is
+  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Getting Cassie’s human voice ready', { timeout: 5000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-human-loading.png' });
+  await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 15000 });
+  expect(await page.locator('.vc-hv').isHidden(), 'the download note goes away when she is ready');
+  expect(await page.evaluate(() => localStorage.getItem('cassie.humanVoice')) === 'got', 'the app remembers the voice is on this device');
+  // the greeting came while it loaded (the device's voice), the answer comes in the human voice
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  const deviceBefore = await page.evaluate(() => window.__spoken.length);
+  await page.evaluate(() => window.__say('What do mitochondria do?'));
+  await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
+  const said = await page.evaluate(() => window.__said);
+  expect(said.every((x) => x.voice === 'af_heart'), 'the woman’s voice is Heart: ' + JSON.stringify(said.map((x) => x.voice)));
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
+  expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'the robot voice was not used once the human voice was ready');
+  expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
+  // the man's voice
+  await page.click('.vc-gender [data-gender="man"]');
+  await page.waitForFunction(() => window.__said.some((x) => x.voice === 'am_michael' && /my voice now/.test(x.text)), null, { timeout: 8000 });
+  await page.click('.vc-x');
+  // reading answers aloud uses it too
+  await page.evaluate(() => { state.voiceOut = true; });
+  await page.fill('#prompt-input', 'And ribosomes?');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForFunction(() => window.__said.filter((x) => /powerhouse/.test(x.text)).length >= 2, null, { timeout: 15000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // a phone on mobile data is asked first; when the voice can't load she keeps talking with the device's voice
+  const c2 = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Sure.' }) });
+  await c2.ctx.addInitScript(FAKE_VOICE, {});
+  await c2.page.reload();
+  await c2.page.click('#voice-btn');
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Make Cassie sound like a real person?', { timeout: 5000 });
+  expect(await c2.page.evaluate(() => window.CassieVoice.status()) === 'off', 'nothing downloads on a phone until asked');
+  if (process.env.SHOTS) await c2.page.screenshot({ path: process.env.SHOTS + '/voice-human-ask.png' });
+  await c2.page.click('.vc-hv [data-hv="get"]');
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Couldn’t get the human voice', { timeout: 20000 });
+  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
+  await c2.page.evaluate(() => window.__say('Hello'));
+  await c2.page.waitForFunction(() => window.__spoken.includes('Sure.'), null, { timeout: 10000 });
+  expect(await c2.page.evaluate(() => window.__pitch) === 1, 'the device voice keeps its natural pitch');
+  await c2.ctx.close();
 });
 
 test('Talk with Cassie hears with Whisper by default (most accurate), even where the browser could listen', async (b) => {

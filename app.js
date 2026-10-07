@@ -268,6 +268,7 @@ const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const voiceGenderSelect = document.getElementById('voice-gender-select');
 const hearingSelect = document.getElementById('hearing-select');
+const voiceEngineSelect = document.getElementById('voice-engine-select');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
@@ -4065,6 +4066,7 @@ function openSettings() {
   voiceOutToggle.checked = state.voiceOut;
   if (voiceGenderSelect) voiceGenderSelect.value = state.voiceGender === 'man' ? 'man' : 'woman';
   if (hearingSelect) hearingSelect.value = state.hearing === 'fast' ? 'fast' : 'accurate';
+  if (voiceEngineSelect) voiceEngineSelect.value = state.voiceEngine === 'device' ? 'device' : 'human';
   if (levelSelect) levelSelect.value = state.level || 'auto';
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
@@ -4165,6 +4167,7 @@ function closeSettings() {
   state.voiceOut = voiceOutToggle.checked;
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
+  if (voiceEngineSelect) state.voiceEngine = voiceEngineSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
   if (levelSelect) state.level = levelSelect.value;
   if (citationSelect) state.citationStyle = citationSelect.value;
@@ -4621,17 +4624,34 @@ if (SpeechRecognitionCtor) {
 }
 
 /* ---------- voice output ---------- */
+let readAloud = null; // the answer being read aloud right now
 function speak(text) {
-  if (!state.voiceOut || !('speechSynthesis' in window) || voiceChat) return; // the voice screen speaks for itself
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(cleanForSpeech(text));
-  const v = pickVoice();
-  if (v) { try { utter.voice = v; } catch (e) { /* ignore */ } utter.lang = v.lang; }
-  utter.pitch = voicePitch(v);
-  utter.rate = 1.02;
-  utter.onstart = () => botMood('talking');
-  utter.onend = utter.onerror = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
-  window.speechSynthesis.speak(utter);
+  if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
+  if (readAloud) { readAloud.stop(); readAloud = null; }
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+  const chunks = speechChunks(cleanForSpeech(text));
+  if (!chunks.length) return;
+  const idle = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
+  const device = (from) => {
+    if (!canTalk() || from >= chunks.length) { idle(); return; }
+    const utter = new SpeechSynthesisUtterance(chunks.slice(from).join(' '));
+    const v = pickVoice();
+    if (v) { try { utter.voice = v; } catch (e) { /* ignore */ } utter.lang = v.lang; }
+    utter.rate = 1;
+    utter.onstart = () => botMood('talking');
+    utter.onend = utter.onerror = idle;
+    window.speechSynthesis.speak(utter);
+  };
+  // Cassie's human voice once it's on this device (downloaded before); otherwise the device's own
+  if (humanVoiceWanted() && window.CassieVoice.got()) {
+    window.CassieVoice.prepare().then(() => {
+      const h = window.CassieVoice.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
+      readAloud = h;
+      h.done.then((r) => { if (readAloud === h) readAloud = null; if (r.status === 'error') device(r.at); else idle(); });
+    }, () => device(0));
+    return;
+  }
+  device(0);
 }
 
 /* ---------- Talk with Cassie: a real voice conversation ----------
@@ -4651,6 +4671,10 @@ const VOICE_MODES = {
 const voiceBtn = document.getElementById('voice-btn');
 const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
 const canTalk = () => 'speechSynthesis' in window;
+// Cassie's human voice (voice.js): made on the device by a small AI voice model, so she
+// sounds like a person, not a robot. 'device' in Settings = the phone's own voices instead.
+const humanVoiceWanted = () => state.voiceEngine !== 'device' && !!window.CassieVoice && window.CassieVoice.supported();
+const humanVoiceReady = () => humanVoiceWanted() && window.CassieVoice.status() === 'ready';
 let voiceUI = null;
 
 // Turn an answer into something that sounds right read aloud.
@@ -4698,14 +4722,6 @@ function pickVoice() {
     + (/^en[-_]US/i.test(v.lang) ? 1 : /^en[-_](PH|GB|AU)/i.test(v.lang) ? 0.6 : 0);
   return vs.slice().sort((a, b) => score(b) - score(a))[0];
 }
-// When a device has no man's (or woman's) voice, Cassie changes the pitch instead.
-function voicePitch(v) {
-  const want = voiceGender();
-  const fits = v && (want === 'woman' ? WOMAN_VOICE.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, '')) : MAN_VOICE.test(v.name) && !/female/i.test(v.name));
-  if (want === 'man') return fits ? 1 : 0.72;
-  return fits ? 1.06 : 1.18;
-}
-
 function buildVoiceUI() {
   const el = document.createElement('div');
   el.className = 'vc';
@@ -4727,6 +4743,7 @@ function buildVoiceUI() {
     <div class="vc-bar">
       <button type="button" class="vc-mic" aria-label="Pause listening"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg></button>
     </div>
+    <div class="vc-hv" hidden aria-live="polite"></div>
     <p class="vc-tip"></p>`;
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
@@ -4753,7 +4770,58 @@ function buildVoiceUI() {
     if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); sayThenListen('Hi! This is my voice now.'); }
   });
   ui.markGender = markGender;
+  ui.hv = q('.vc-hv');
+  ui.hv.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hv]');
+    if (!b) return;
+    if (b.dataset.hv === 'get') { track('feature', 'human-voice'); getHumanVoice(); }
+    else { try { sessionStorage.setItem('cassie.hvLater', '1'); } catch (err) { /* ignore */ } showHumanVoice(); }
+  });
+  if (window.CassieVoice) window.CassieVoice.onChange(() => showHumanVoice());
   return ui;
+}
+
+/* The human voice on the voice screen: get it (once), show the download, or say why not. */
+function humanVoiceAutoOK() {
+  // on Wi-Fi or a computer it just downloads; on mobile data Cassie asks first
+  const c = navigator.connection;
+  if (c && c.saveData) return false;
+  if (c && c.type) return c.type === 'wifi' || c.type === 'ethernet';
+  return !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+function getHumanVoice() {
+  if (!humanVoiceWanted()) return;
+  window.CassieVoice.prepare().catch(() => {});
+  showHumanVoice();
+}
+function startHumanVoice() {
+  if (!humanVoiceWanted()) { showHumanVoice(); return; }
+  if (window.CassieVoice.got() || humanVoiceAutoOK()) getHumanVoice(); else showHumanVoice();
+}
+function showHumanVoice() {
+  const box = voiceUI && voiceUI.hv;
+  if (!box) return;
+  if (!humanVoiceWanted()) { box.hidden = true; return; }
+  const CV = window.CassieVoice, st = CV.status();
+  let later = false;
+  try { later = sessionStorage.getItem('cassie.hvLater') === '1'; } catch (e) { /* ignore */ }
+  box.dataset.st = st;
+  if (st === 'ready') {
+    box.hidden = !CV.slow();
+    box.innerHTML = 'This device is a little slow for the human voice. If she pauses a lot, pick “This device’s voice” in Settings → Voice.';
+  } else if (st === 'loading') {
+    box.hidden = false;
+    const pct = Math.round(CV.progress() * 100);
+    box.innerHTML = `<b>Getting Cassie’s human voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Until then she uses this device’s voice.</small>`;
+  } else if (st === 'failed') {
+    box.hidden = false;
+    box.innerHTML = 'Couldn’t get the human voice (check the internet). Cassie is using this device’s voice. <button type="button" data-hv="get">Try again</button>';
+  } else if (later) {
+    box.hidden = true;
+  } else {
+    box.hidden = false;
+    box.innerHTML = '<b>Make Cassie sound like a real person?</b> A one-time download, about 90 MB (Wi-Fi is best). After that it works offline. <span class="vc-hv-row"><button type="button" data-hv="get">Get her human voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
+  }
 }
 
 function setVoicePhase(phase, text) {
@@ -4795,10 +4863,21 @@ function sayThenListen(text) {
       resolve();
       if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
-    if (!canTalk() || !clean) { finish(); return; }
+    const chunks = speechChunks(clean);
+    if (!clean || (!canTalk() && !humanVoiceReady())) { finish(); return; }
+    if (humanVoiceReady()) {
+      const h = window.CassieVoice.say(chunks, { gender: voiceGender() });
+      v.stopSpeaking = () => { h.stop(); finish(); };
+      h.done.then((r) => {
+        if (done || voiceChat !== v) return;
+        if (r.status === 'error' && canTalk()) deviceSay(chunks.slice(r.at)); else finish();
+      });
+      return;
+    }
+    deviceSay(chunks);
+    function deviceSay(chunks) {
     const synth = window.speechSynthesis;
     synth.cancel();
-    const chunks = speechChunks(clean);
     let i = 0;
     v.stopSpeaking = () => { synth.cancel(); finish(); };
     const next = () => {
@@ -4808,13 +4887,14 @@ function sayThenListen(text) {
       const u = new SpeechSynthesisUtterance(chunks[i++]);
       const voice = pickVoice();
       if (voice) { try { u.voice = voice; } catch (e) { /* not a voice this browser knows */ } u.lang = voice.lang; }
-      u.rate = 1; u.pitch = voicePitch(voice);
+      u.rate = 1; // never bend the pitch: that's what made the old voices sound scary
       u.onend = next; u.onerror = next;
       try { synth.speak(u); } catch (e) { finish(); return; } // never get stuck "talking"
       // some browsers never say they've finished: move on after a fair time
       v.speakTimer = setTimeout(next, Math.max(3500, u.text.length * 95));
     };
     next();
+    }
   });
 }
 
@@ -5002,6 +5082,7 @@ function openVoice(mode = 'chat') {
   document.documentElement.classList.add('vc-open');
   if (voiceUI.bot) voiceUI.bot.pause(false);
   track('feature', 'voice:' + mode);
+  startHumanVoice();
   startVoiceMode(mode); // speaks right away, inside the tap, so phones allow the sound
   setTimeout(() => { try { voiceUI.mic.focus(); } catch (e) { /* ignore */ } }, 60);
 }
@@ -5688,6 +5769,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Cassie sounds like a real person now — a woman’s or a man’s voice, made right on your device (a one-time download, then it works offline). No more robot voice.',
   'Copy and paste like normal: highlighting words no longer pops Cassie open. A small “Ask Cassie” button shows by the words — tap it when you want her.',
   'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',
   'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
