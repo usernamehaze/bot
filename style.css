@@ -185,6 +185,18 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 /* the home screen spans the full column so its options can sit far right */
 #chat-log > .home { max-width: none; width: 100%; }
 
+/* the small "Ask Cassie" button by a highlight — highlighting alone is for copying */
+.ask-chip {
+  position: fixed; z-index: 27; display: flex; align-items: center; gap: 5px; height: 30px;
+  padding: 0 12px 0 10px; border: none; border-radius: 15px; background: var(--primary); color: #fff;
+  font-weight: 600; font-size: .8rem; line-height: 1; font-family: inherit; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  opacity: 0; transform: translateY(3px) scale(.96); transition: opacity .12s ease, transform .12s ease;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.ask-chip.on { opacity: .95; transform: none; }
+.ask-chip[hidden] { display: none; }
+.ask-chip svg { width: 13px; height: 13px; }
+
 /* ---------- highlight-to-ask popover ---------- */
 .highlight-popover {
   position: fixed;

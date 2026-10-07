@@ -46,6 +46,13 @@ saveBtn.addEventListener('click', () => {
   checkKeys({ groqKey: groqKeyInput.value, geminiKey: geminiKeyInput.value });
 });
 
+/* ---------- what highlighting does ---------- */
+const hlMode = document.getElementById('hl-mode');
+if (hlMode) {
+  chrome.storage.local.get(['cassieHighlight'], ({ cassieHighlight }) => { hlMode.value = cassieHighlight || 'button'; });
+  hlMode.addEventListener('change', () => chrome.storage.local.set({ cassieHighlight: hlMode.value }));
+}
+
 /* ---------- side buttons hidden on some sites ("Hide here") ---------- */
 const dockNote = document.getElementById('dock-note');
 function refreshDockNote() {
