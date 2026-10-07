@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '116';
+const APP_VERSION = '117';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1682,6 +1682,7 @@ const HOME_EXAMPLES = [
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
   { label: 'Explore the body in 3D', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openExplore('body') },
+  { label: 'Draw together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
@@ -3823,8 +3824,115 @@ function openSketch(opts = {}) {
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    extra: SERVER && !opts.noRoom ? [{ label: 'Draw together', title: 'Start a study room: classmates join with a code and draw on the same board', onClick: () => openRoomChooser() }] : [],
   });
 }
+
+/* ---------- Study rooms: one board, drawn on together ----------
+   Someone starts a room and gets a 6-letter code (and a link). Classmates join with it and
+   everyone's drawing shows on everyone's board, about a second later. Each student can still
+   ask Cassie about the board. Rooms last a day; only drawings are shared. */
+let roomLive = null;
+const roomName = () => ((state.profile && state.profile.name) || 'Classmate').split(/\s+/)[0].slice(0, 30);
+async function roomCall(path, body) {
+  const r = await fetch(SERVER + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), name: roomName(), ...body }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(d.error || 'The study room isn’t available right now — try again in a moment.'), { gone: !!d.gone, full: !!d.full });
+  return d;
+}
+function openRoomChooser(prefill = '') {
+  if (!SERVER) { renderMessage('assistant', 'Study rooms need Cassie’s server, which isn’t set up on this copy of Cassie.'); return; }
+  document.querySelector('.room-dlg')?.remove();
+  const el = document.createElement('div');
+  el.className = 'room-dlg';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Study room');
+  el.innerHTML = `<div class="room-card">
+      <button type="button" class="room-x" aria-label="Close">×</button>
+      <h2>Draw together</h2>
+      <p>Start a study room and share the code — up to 12 classmates draw on the same board, live.</p>
+      <button type="button" class="room-go main" data-room="new">Start a room</button>
+      <form class="room-join"><input name="code" maxlength="6" placeholder="Have a code? e.g. K7M2QX" autocomplete="off" autocapitalize="characters" value="${escapeHtml(prefill)}"><button type="submit" class="room-go">Join</button></form>
+      <p class="room-err" hidden></p>
+      <p class="room-fine">Rooms last a day. Only drawings are shared — be kind, it’s a study room.</p>
+    </div>`;
+  document.body.appendChild(el);
+  const err = el.querySelector('.room-err');
+  const fail = (e) => { err.hidden = false; err.textContent = e.message; el.querySelectorAll('button').forEach((b) => { b.disabled = false; }); };
+  el.querySelector('.room-x').addEventListener('click', () => el.remove());
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  el.querySelector('[data-room="new"]').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try { const d = await roomCall('/room/create', { title: `${roomName()}’s study room` }); el.remove(); track('feature', 'room:create'); startRoom(d.code, d.title); } catch (x) { fail(x); }
+  });
+  el.querySelector('.room-join').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = String(new FormData(e.target).get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 6) { fail(new Error('A room code is 6 letters and numbers.')); return; }
+    try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { fail(x); }
+  });
+  setTimeout(() => el.querySelector(prefill ? '.room-join input' : '[data-room="new"]').focus(), 30);
+}
+async function startRoom(code, title) {
+  if (!window.CassieSketch) return;
+  if (roomLive) roomLive.stop();
+  const me = installId();
+  const R = { code, title, since: 0, queue: [], timer: 0, stopped: false, fails: 0, members: [] };
+  roomLive = R;
+  R.stop = () => { R.stopped = true; clearTimeout(R.timer); if (roomLive === R) roomLive = null; };
+  const link = `${location.origin}${location.pathname}?room=${code}`;
+  await window.CassieSketch.open({
+    title: `${title} · ${code}`,
+    dark: false, // everyone sees the same page
+    checkLabel: 'Send to Cassie',
+    onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board — what did we get right, and what should we fix?'); return ''; },
+    askPlaceholder: 'Ask Cassie about the board (only you see her answer)',
+    onAsk: (png, q, parts) => askBoard(png, q, parts),
+    room: { me, send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); } },
+    onClose: () => R.stop(),
+  });
+  const session = window.CassieSketch.session();
+  if (!session) { R.stop(); return; }
+  const banner = (note = '') => {
+    const who = R.members.map((m) => `<span>${escapeHtml(m.uid === me ? `${m.name} (you)` : m.name)}</span>`).join('');
+    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button>${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const btn = el.querySelector('[data-room-act="copy"]');
+    btn.onclick = () => {
+      const txt = `Join my Cassie study room: ${link} (code ${code})`;
+      const done = () => { btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = 'Copy invite link'; }, 1600); };
+      try { if (navigator.share && matchMedia('(pointer: coarse)').matches) navigator.share({ title: 'Cassie study room', text: txt, url: link }).catch(() => {}); else navigator.clipboard.writeText(txt).then(done, done); } catch (e) { done(); }
+    };
+  };
+  banner('Connecting…');
+  async function tick() {
+    if (R.stopped) return;
+    clearTimeout(R.timer);
+    try {
+      if (R.queue.length) {
+        const ops = R.queue.splice(0, 40);
+        try { await roomCall('/room/ops', { code, ops }); }
+        catch (e) { if (e.full) { banner(e.message); } else { R.queue.unshift(...ops); throw e; } }
+      }
+      const r = await fetch(`${SERVER}/room/poll?code=${code}&uid=${encodeURIComponent(me)}&since=${R.since}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(d.error || 'Lost the room'), { gone: !!d.gone });
+      if (d.ops && d.ops.length) { R.since = d.ops[d.ops.length - 1].id; session.remote(d.ops); }
+      const names = JSON.stringify(d.members || []);
+      if (names !== JSON.stringify(R.members) || R.fails) { R.members = d.members || []; R.fails = 0; banner(); }
+      R.timer = setTimeout(tick, d.more ? 50 : document.hidden ? 4000 : 1000);
+    } catch (e) {
+      if (e.gone) { banner('This room has ended. Save your board with the picture button.'); R.stop(); return; }
+      R.fails++;
+      banner(R.fails > 2 ? 'Reconnecting…' : '');
+      R.timer = setTimeout(tick, Math.min(15000, 1000 * 2 ** Math.min(R.fails, 4)));
+    }
+  }
+  tick();
+}
+// a link like app.html?room=K7M2QX joins that room
+{ const rc = new URLSearchParams(location.search).get('room'); if (rc && /^[A-Za-z0-9]{6}$/.test(rc)) setTimeout(() => {
+  roomCall('/room/join', { code: rc.toUpperCase() }).then((d) => { track('feature', 'room:join'); startRoom(d.code, d.title); }).catch(() => openRoomChooser(rc.toUpperCase()));
+}, 400); }
 // Find the function to graph in what the student wrote: "y = …", "f(x) = …", or a bare
 // expression like "x^2(x+6)^3(x-4) graph it".
 function equationIn(text) {
@@ -5789,6 +5897,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Draw together: open the board and tap “Draw together” (or Ideas → Draw together) to start a study room. Share the code or link and up to 12 classmates draw on the same board, live.',
   'Research: under the papers Cassie finds, copy the references in APA or MLA, or download them for Zotero, Mendeley or EndNote (BibTeX / RIS).',
   'Flashcards: tap “＋ Flashcards” under any answer and Cassie makes cards from it. Study them with spaced repetition (cards come back right before you’d forget), turn quiz mistakes into cards, and export to Anki or Quizlet.',
   'Talking with Cassie is quicker: she answers right away (her words show while her voice downloads the first time), she starts speaking sooner, and her voice is always Bella — no more robot voice.',

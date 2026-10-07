@@ -335,6 +335,59 @@ test('flashcards: Cassie makes cards from an answer, spaced-repetition study, mi
   await ctx.close();
 });
 
+test('study room: two students draw on the same board, live (code, link, undo only your own)', async (b) => {
+  const A = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Ana Reyes' } } });
+  const B = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Ben Cruz' } } });
+  const draw = async (page, x0, y0) => {
+    const box = await page.locator('.csk-live').boundingBox();
+    await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0); await page.mouse.down();
+    await page.mouse.move(box.x + box.width * (x0 + 0.2), box.y + box.height * (y0 + 0.1), { steps: 6 }); await page.mouse.up();
+  };
+  const count = (page) => page.evaluate(() => window.CassieSketch.session().strokeCount());
+  try {
+    // Ana opens the board and starts a room
+    await A.page.click('#board-btn');
+    await A.page.click('.csk-btn:has-text("Draw together")');
+    await A.page.click('[data-room="new"]');
+    await A.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    const code = await A.page.locator('.csk-room b').innerText();
+    expect(/^[A-Z0-9]{6}$/.test(code), 'a 6-letter room code: ' + code);
+    // Ben opens the invite link
+    await B.page.goto(APP + '?room=' + code);
+    await B.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    await A.page.waitForFunction(() => /Ben/.test(document.querySelector('.csk-who').textContent) && /Ana \(you\)/.test(document.querySelector('.csk-who').textContent), null, { timeout: 10000 });
+    // Ana draws → Ben sees it
+    await draw(A.page, 0.2, 0.3);
+    await B.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 8000 });
+    // Ben draws → Ana sees both
+    await draw(B.page, 0.5, 0.6);
+    await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 2, null, { timeout: 8000 });
+    if (process.env.SHOTS) await A.page.screenshot({ path: process.env.SHOTS + '/study-room.png' });
+    // Ben's undo takes away only Ben's stroke, for everyone
+    await B.page.click('[data-act="undo"]');
+    await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 8000 });
+    expect(await count(B.page) === 1, 'Ana’s stroke stays on Ben’s board');
+    // clear only clears your own
+    B.page.once('dialog', (d) => d.accept());
+    await draw(B.page, 0.6, 0.2);
+    await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 2, null, { timeout: 8000 });
+    await B.page.click('[data-act="clear"]');
+    await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 8000 });
+    // someone who joins later gets the whole board
+    const C = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Cara' } } });
+    await C.page.goto(APP + '?room=' + code);
+    await C.page.waitForFunction(() => window.CassieSketch && window.CassieSketch.session() && window.CassieSketch.session().strokeCount() === 1, null, { timeout: 10000 });
+    await C.ctx.close();
+    // a wrong code is explained
+    await A.page.click('[data-act="close"]');
+    await A.page.evaluate(() => openRoomChooser());
+    await A.page.fill('.room-join input', 'ZZZZZZ');
+    await A.page.click('.room-join button');
+    await A.page.waitForSelector('.room-err:not([hidden]) >> text=No room with that code', { timeout: 5000 });
+    expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
+  } finally { await A.ctx.close(); await B.ctx.close(); }
+});
+
 test('quiz saves missed questions for Review my mistakes', async (b) => {
   const replies = [
     'Question 1: What is the powerhouse of the cell?',

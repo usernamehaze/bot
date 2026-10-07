@@ -55,6 +55,12 @@
   .csk-size { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(127,127,127,.3); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: inherit; }
   .csk-size i { display: block; border-radius: 50%; background: currentColor; }
   .csk-size.on { background: rgba(127,127,127,.18); }
+  .csk-room { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.2); font-size: 13px; }
+  .csk-room[hidden] { display: none; }
+  .csk-room b { font-size: 15px; letter-spacing: .12em; }
+  .csk-room .csk-btn { padding: 5px 10px; }
+  .csk-room .csk-who { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+  .csk-room .csk-who span { padding: 3px 9px; border-radius: 99px; background: rgba(127,127,127,.14); font-size: 12px; }
   .csk-note { padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.2); max-height: 26%; overflow: auto; font-size: 13px; }
   .csk-note b { display: block; margin-bottom: 4px; }
   .csk-note ol { margin: 0; padding-left: 20px; }
@@ -139,6 +145,7 @@
           ${opts.allowDock ? `<button class="csk-btn" data-act="dock" title="Dock to the side / full screen">${svg(opts.dock === 'side' ? 'full' : 'side')}</button>` : ''}
           <button class="csk-btn" data-act="close" title="Close board" aria-label="Close">${svg('close')}</button>
         </div>
+        <div class="csk-room" hidden aria-live="polite"></div>
         <div class="csk-note" hidden></div>
         <div class="csk-tools">
           <button class="csk-btn on" data-tool="pen" title="Pen">${svg('pen')}</button>
@@ -155,7 +162,7 @@
           <button class="csk-btn" data-act="redo" title="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="clear" title="Clear your drawing">${svg('trash')}</button>
           <button class="csk-btn" data-act="grid" title="Graph paper">${svg('grid')}</button>
-          <button class="csk-btn" data-act="pic" title="Draw on a picture — or paste one with Ctrl+V">${svg('image')}</button>
+          ${opts.room ? '' : `<button class="csk-btn" data-act="pic" title="Draw on a picture — or paste one with Ctrl+V">${svg('image')}</button>`}
           <input type="file" accept="image/*" class="csk-hidden">
         </div>
         ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie"><button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
@@ -178,9 +185,18 @@
     let tool = 'pen', color = dark ? '#ffffff' : '#1b1b1d', size = SIZES[0];
     const strokes = [], redo = [];
     let drawing = null;
+    // A live study room (opts.room = { me, send(op) }): every stroke has an id and an owner and is
+    // sent to classmates when it's finished; theirs arrive through session.remote(). Undo and
+    // clear only touch your own strokes, so nobody can wipe a classmate's work.
+    const room = opts.room || null;
+    const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    const pack = (st) => { const c = { ...st }; delete c.mine; if (c.points) c.points = c.points.map((q) => [Math.round(q[0]), Math.round(q[1])]); if (c.items) c.items = c.items.map(pack); return c; };
+    function share(st) { if (!room) return; st.id = st.id || rid(); st.mine = true; st.u = room.me; room.send({ t: 'add', s: pack(st) }); }
 
     function setSize() {
-      if (bgImage) {
+      if (room) { // everyone in a room draws on the same page
+        W = 1600; H = 1000;
+      } else if (bgImage) {
         const iw = bgImage.naturalWidth || bgImage.width, ih = bgImage.naturalHeight || bgImage.height;
         const s = Math.min(1, 1800 / Math.max(iw, ih));
         W = Math.max(200, Math.round(iw * s)); H = Math.max(150, Math.round(ih * s));
@@ -279,10 +295,12 @@
     });
     const end = () => {
       if (!drawing) return;
-      if (drawing.tool !== 'eraser') strokes.push(drawing);
+      const d = drawing;
+      if (d.tool !== 'eraser') strokes.push(d);
       drawing = null;
       live.getContext('2d').clearRect(0, 0, W, H);
       redraw();
+      share(d);
     };
     live.addEventListener('pointerup', end);
     live.addEventListener('click', (e) => { if (tool === 'text') placeText(e, toBoard(e)); });
@@ -302,8 +320,10 @@
         const text = ta.innerText.replace(/\n+$/, '');
         ta.remove();
         if (!text.trim()) return;
-        strokes.push({ tool: 'text', color, size: px * (W / r.width), x: pt[0], y: pt[1], text });
+        const st = { tool: 'text', color, size: px * (W / r.width), x: pt[0], y: pt[1], text };
+        strokes.push(st);
         redo.length = 0; redraw();
+        share(st);
       };
       ta.addEventListener('blur', commit, { once: true });
       ta.addEventListener('keydown', (k) => {
@@ -347,9 +367,21 @@
       if (t.dataset.size) { size = +t.dataset.size; sizesEl.querySelectorAll('.csk-size').forEach((b) => b.classList.toggle('on', b === t)); return; }
       const act = t.dataset.act;
       if (act === 'close') close();
-      else if (act === 'undo') { if (strokes.length) { redo.push(strokes.pop()); redraw(); } }
-      else if (act === 'redo') { if (redo.length) { strokes.push(redo.pop()); redraw(); } }
-      else if (act === 'clear') { if (strokes.length && confirm('Clear everything you drew?')) { strokes.length = 0; redo.length = 0; redraw(); } }
+      else if (act === 'undo') {
+        if (room) { // your own last stroke
+          for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].mine) { const [st] = strokes.splice(i, 1); redo.push(st); room.send({ t: 'del', ids: [st.id] }); redraw(); break; }
+        } else if (strokes.length) { redo.push(strokes.pop()); redraw(); }
+      }
+      else if (act === 'redo') { if (redo.length) { const st = redo.pop(); strokes.push(st); if (room) room.send({ t: 'add', s: pack(st) }); redraw(); } }
+      else if (act === 'clear') {
+        if (room) {
+          const mine = strokes.filter((x) => x.mine);
+          if (mine.length && confirm('Clear what you drew? Your classmates’ drawings stay.')) {
+            for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].mine) strokes.splice(i, 1);
+            redo.length = 0; redraw(); room.send({ t: 'del', ids: mine.map((x) => x.id) });
+          }
+        } else if (strokes.length && confirm('Clear everything you drew?')) { strokes.length = 0; redo.length = 0; redraw(); }
+      }
       else if (act === 'grid') { grid = !grid; drawBg(); }
       else if (act === 'pic') $('input[type=file]').click();
       else if (act === 'save') {
@@ -390,6 +422,7 @@
       if (f) useImageSource(await fileToUrl(f));
     });
     function onPaste(e) {
+      if (room) return; // a room shares drawings only
       if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.target.tagName || ''))) return;
       const items = (e.clipboardData && e.clipboardData.items) || [];
       for (const it of items) {
@@ -544,11 +577,29 @@
         let y = top;
         spec.steps.slice(0, 12).forEach((st, i) => { text(`${i + 1}.  ${pretty(st)}`, box.x + 30 * k, y, fs, i === spec.steps.length - 1 ? CASSIE_INK : ink); y += fs * 1.7; });
       } else return false;
-      strokes.push({ tool: 'group', by: 'cassie', items });
+      const g = { tool: 'group', by: 'cassie', items };
+      strokes.push(g);
       redo.length = 0;
       redraw();
+      share(g); // classmates in a room see what Cassie drew too
       return true;
     }
+    // classmates' drawing steps (a list of { op, uid }), in the order the server got them
+    function remote(list) {
+      let changed = false;
+      for (const { op } of list) {
+        if (!op) continue;
+        if (op.t === 'add' && op.s && op.s.id) {
+          if (strokes.some((x) => x.id === op.s.id)) continue; // already here (it's yours)
+          strokes.push({ ...op.s, mine: !!(room && op.s.u === room.me) }); changed = true;
+        } else if (op.t === 'del' && Array.isArray(op.ids)) {
+          const ids = new Set(op.ids);
+          for (let i = strokes.length - 1; i >= 0; i--) if (ids.has(strokes[i].id)) { strokes.splice(i, 1); changed = true; }
+        }
+      }
+      if (changed) redraw();
+    }
+    function setRoom(html) { const el = $('.csk-room'); el.hidden = !html; el.innerHTML = html || ''; return el; }
     function setTitle(t) { $('.csk-title').textContent = t || 'Board'; }
     // The board as plain data (original picture + strokes). Reading pixels back from
     // a page canvas comes out blank on some machines' graphics drivers, so callers
@@ -595,7 +646,7 @@
     }
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
-    current = { wrap, close, snapshot, showNote, setTitle, draw, drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
+    current = { wrap, close, snapshot, showNote, setTitle, draw, remote, setRoom, strokeCount: () => strokes.length, drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
     return current;
   }
 

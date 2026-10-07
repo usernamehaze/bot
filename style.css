@@ -1693,3 +1693,17 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .fc-big { font-size: 2.6rem; }
 .fc-row { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
 .bubble-tools .fc-make { font-weight: 600; }
+
+/* ---------- Study room: start or join ---------- */
+.room-dlg { position: fixed; inset: 0; z-index: 2147483601; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 10, 12, .45); }
+.room-card { position: relative; width: min(420px, 100%); padding: 22px 20px 18px; border-radius: 22px; background: var(--bg, #f4f2ee); color: var(--text); box-shadow: 0 24px 70px rgba(0, 0, 0, .35); }
+.room-card h2 { margin: 0 0 6px; font-size: 1.2rem; }
+.room-card p { margin: 0 0 14px; color: var(--muted); font-size: .9rem; line-height: 1.45; }
+.room-x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.2rem; cursor: pointer; }
+.room-go { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 99px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+.room-go.main { width: 100%; background: var(--primary); border-color: var(--primary); color: #fff; margin-bottom: 12px; }
+.room-join { display: flex; gap: 8px; margin-bottom: 10px; }
+.room-join input { flex: 1; min-width: 0; font: inherit; letter-spacing: .1em; text-transform: uppercase; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.room-err { color: #c0392b !important; }
+.room-err[hidden] { display: none; }
+.room-fine { font-size: .78rem !important; margin: 0 !important; }
