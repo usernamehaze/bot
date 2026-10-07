@@ -163,6 +163,16 @@
     .dock-grip { width: 26px; height: 10px; cursor: grab; touch-action: none; display: flex; align-items: center; justify-content: center; }
     .dock-grip::before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.45); }
     .dock-grip:hover::before { background: rgba(255,255,255,.8); }
+    /* the highlight switch: ON = highlighting shows Ask Cassie, OFF = highlight and copy like normal */
+    .dock-hl { width: 40px; border: none; border-radius: 12px; background: #34343e; color: #fff; cursor: pointer; padding: 6px 0 5px;
+      display: flex; flex-direction: column; align-items: center; gap: 3px; font: 700 9px/1 system-ui, sans-serif; letter-spacing: .04em; transition: background .15s; }
+    .dock-hl:hover { background: #4a4a56; }
+    .dock-hl svg { width: 19px; height: 19px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .dock-hl i { display: block; width: 24px; height: 12px; border-radius: 6px; background: rgba(255,255,255,.25); position: relative; transition: background .15s; }
+    .dock-hl i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .dock-hl[aria-pressed="true"] i { background: #4cc38a; }
+    .dock-hl[aria-pressed="true"] i::after { transform: translateX(12px); }
+    .dock-hl[aria-pressed="false"] svg { opacity: .55; }
     .dock-hide { background: none; border: none; color: rgba(255,255,255,.6); font: 600 10px/1.2 system-ui, sans-serif; cursor: pointer; padding: 2px 0 0; text-align: center; }
     .dock-hide:hover { color: #fff; }
     .page-input {
@@ -438,6 +448,30 @@
     annotateBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>';
     annotateBtn.addEventListener('click', () => { closeDock(); enterPointMode(); });
 
+    // Highlight on/off: off means highlighting is just highlighting (copy and paste like normal)
+    const hlBtn = document.createElement('button');
+    hlBtn.className = 'dock-hl';
+    hlBtn.type = 'button';
+    hlBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15 5l4 4-9 9H6v-4z"/><path d="M4 21h9"/></svg><i aria-hidden="true"></i><b>ON</b>';
+    const paintHl = (mode) => {
+      const on = (mode || 'button') !== 'off';
+      hlBtn.setAttribute('aria-pressed', String(on));
+      hlBtn.querySelector('b').textContent = on ? 'ON' : 'OFF';
+      hlBtn.title = on ? 'Highlight help is ON — highlighting shows an Ask Cassie button. Tap to turn it off.' : 'Highlight help is OFF — highlight and copy like normal. Tap to turn it on.';
+      hlBtn.setAttribute('aria-label', 'Highlight help ' + (on ? 'on' : 'off'));
+    };
+    try {
+      chrome.storage.local.get(['cassieHighlight'], (o) => paintHl(o && o.cassieHighlight));
+      chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.cassieHighlight) paintHl(ch.cassieHighlight.newValue); });
+    } catch (e) { paintHl('button'); }
+    hlBtn.addEventListener('click', () => {
+      chrome.storage.local.get(['cassieHighlight', 'cassieHighlightLast'], (o) => {
+        const cur = o.cassieHighlight || 'button';
+        if (cur === 'off') chrome.storage.local.set({ cassieHighlight: o.cassieHighlightLast || 'button' });
+        else chrome.storage.local.set({ cassieHighlight: 'off', cassieHighlightLast: cur });
+      });
+    });
+
     const hideBtn = document.createElement('button');
     hideBtn.className = 'dock-hide';
     hideBtn.type = 'button';
@@ -486,7 +520,7 @@
     const grip = document.createElement('div');
     grip.className = 'dock-grip';
     grip.title = 'Drag to move';
-    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, boardBtn, hideBtn);
+    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, hlBtn, boardBtn, hideBtn);
     shadow.appendChild(dock);
 
     const site = location.hostname || 'local';
@@ -1716,7 +1750,7 @@
   /* Highlighting is for copying too, so Cassie doesn't jump in on every selection.
      How she shows up is the student's choice (the extension popup):
        'button' (default) — a small "Ask Cassie" button by the highlight; the popover opens only when it's clicked
-       'off'              — nothing; double-tap Ctrl or right-click → "Explain with Cassie" when wanted
+       'off'              — nothing at all: highlight and copy like normal (the ON/OFF switch in the side buttons)
        'auto'             — the old way: the popover opens as soon as text is highlighted */
   let hlMode = 'button';
   try {

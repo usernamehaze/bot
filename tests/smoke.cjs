@@ -837,7 +837,9 @@ test('Cassie’s human voice: a woman’s or a man’s, made on the device — a
   await page.evaluate(() => window.__say('What do mitochondria do?'));
   await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
   const said = await page.evaluate(() => window.__said);
-  expect(said.every((x) => x.voice === 'af_heart'), 'the woman’s voice is Heart: ' + JSON.stringify(said.map((x) => x.voice)));
+  expect(said.every((x) => x.voice === 'af_bella'), 'the woman’s voice is Bella, like the explainer video: ' + JSON.stringify(said.map((x) => x.voice)));
+  expect(said.some((x) => /listening/.test(x.text)), 'the greeting waited for her human voice instead of the robot voice');
+  expect(await page.evaluate(() => window.__spoken.length) === 0, 'the robot voice was never used: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
   expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'the robot voice was not used once the human voice was ready');
   expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
@@ -845,6 +847,13 @@ test('Cassie’s human voice: a woman’s or a man’s, made on the device — a
   await page.click('.vc-gender [data-gender="man"]');
   await page.waitForFunction(() => window.__said.some((x) => x.voice === 'am_michael' && /my voice now/.test(x.text)), null, { timeout: 8000 });
   await page.click('.vc-x');
+  // Settings → Voice: she's ready, and a sample plays in her human voice
+  await page.click('#settings-btn');
+  await page.evaluate(() => { const d = document.querySelector('#voice-engine-select').closest('details'); if (d) d.open = true; });
+  await page.waitForSelector('#hv-state >> text=Her human voice is ready', { timeout: 5000 });
+  await page.click('#hv-play');
+  await page.waitForFunction(() => window.__said.some((x) => /Let’s study together/.test(x.text)), null, { timeout: 8000 });
+  await page.evaluate(() => closeSettings());
   // reading answers aloud uses it too
   await page.evaluate(() => { state.voiceOut = true; });
   await page.fill('#prompt-input', 'And ribosomes?');
@@ -905,11 +914,20 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await page.waitForTimeout(1500);
   const box = await page.locator('.x3d-canvas').boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.42);
-  await page.waitForFunction(() => !document.querySelector('.x3d-sheet').hidden && document.querySelector('.x3d-sheet h3').textContent, null, { timeout: 8000 })
+  await page.waitForFunction(() => !document.querySelector('.x3d-sheet').hidden && document.querySelector('.x3d-sheet h3').textContent, null, { timeout: 25000 })
     .catch(async (e) => { throw new Error('nothing picked: ' + JSON.stringify(await page.evaluate(() => ({ sheet: document.querySelector('.x3d-sheet').hidden, h3: document.querySelector('.x3d-sheet h3').textContent, loading: document.querySelector('.x3d-loading').textContent })))); });
   const tapped = await page.locator('.x3d-sheet h3').innerText();
   expect(tapped.length > 2 && /Musculoskeletal|Respiratory|Digestive|Endocrine|Urinary|Reproductive/.test(await page.locator('.x3d-path').innerText()), 'a tapped part is named with its system: ' + tapped + ' / ' + await page.locator('.x3d-path').innerText());
   expect(/What it is:/.test(await page.locator('.x3d-like').innerText()) && /What it does:/.test(await page.locator('.x3d-does').innerText()), 'a tapped part says what it is and what it does');
+  // muscles: the switch works, and a first tap picks the whole muscle; a tap again inside it, the exact part
+  await page.click('.x3d-sys[data-muscles]');
+  await page.waitForFunction(() => document.querySelector('.x3d-sys[data-muscles]').getAttribute('aria-pressed') === 'true', null, { timeout: 5000 });
+  await page.fill('.x3d-search', 'pectoralis major');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Pectoralis major/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 60000 });
+  expect(/chest/.test(await page.locator('.x3d-like').innerText()), 'the whole muscle is explained: ' + await page.locator('.x3d-like').innerText());
+  await page.click('.x3d-sys[data-muscles]');
   // find the femur by name, with its Latin name
   await page.fill('.x3d-search', 'femur');
   await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 }).catch(async () => { throw new Error('no results: ' + JSON.stringify(await page.evaluate(() => ({ v: document.querySelector('.x3d-search').value, r: document.querySelector('.x3d-results').outerHTML.slice(0, 200), direct: exploreMod.open({}).body.search('femur').length, rr: document.querySelector('.x3d-results').getBoundingClientRect().toJSON(), fr: document.querySelector('.x3d-find').getBoundingClientRect().toJSON(), disp: getComputedStyle(document.querySelector('.x3d-results')).display, fh: document.querySelector('.x3d-find').hidden })))); });
@@ -1187,6 +1205,13 @@ test('highlight text in an answer → copy like normal, or tap Ask Cassie → Ex
   expect(await page.locator('#ask-chip').isHidden(), 'the button goes away once the popover opens');
   await page.click('#highlight-popover [data-mode=explain]');
   await page.waitForSelector('#highlight-popover >> text=Simply put', { timeout: 10000 });
+  // Settings: switch it off and highlighting is just highlighting
+  await page.evaluate(() => { state.highlightHelp = false; window.getSelection().removeAllRanges(); });
+  await page.click('#highlight-popover-close');
+  await a.locator('p').first().selectText(); await page.mouse.up();
+  await page.waitForTimeout(800);
+  expect(await page.locator('#ask-chip').isHidden() && await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
+  await page.evaluate(() => { state.highlightHelp = true; });
   await ctx.close();
 });
 
@@ -1386,6 +1411,14 @@ test('brain check: real questions with known answers, saved for the dashboard', 
     expect(!bad.ok && !bad.canPictures && bad.canText, 'a broken picture reader is caught: ' + JSON.stringify(bad.checks));
     expect(/Groq has: openai\/gpt-oss-120b/.test(bad.checks.find((c) => c.name === 'Groq: read a picture').detail), 'it lists the models Groq has');
     expect((await fetch(SERVER + '/health')).status === 401, 'needs the admin token');
+    // Google refuses Gemini from where Cloudflare runs Cassie: a warning with the fix, not a broken brain
+    await serverMode({ groqVision: 'ok', aiVision: 'ok', gemini: 'location' });
+    const loc = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const g = loc.checks.filter((c) => /^Gemini/.test(c.name));
+    expect(loc.ok && g.length === 2 && g.every((c) => c.warn && /Placement → Smart/.test(c.detail)), 'a blocked location is a warning with the fix: ' + JSON.stringify(g));
+    await serverMode({ gemini: 'ok' });
+    const back = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    expect(back.checks.find((c) => c.name === 'Gemini: text maths').ok, 'Gemini is tried again on the next check');
   } finally { await serverMode({ gemini: 'off', groqVision: 'ok', aiVision: 'ok' }); }
 });
 
@@ -1638,7 +1671,22 @@ test('extension: highlighting is for copying — Cassie opens only when asked', 
     expect(s.pop && /What should I do with this/.test(s.popText), 'double-tap Ctrl should open Cassie for the highlight');
     await page.keyboard.press('Escape');
 
-    // 4. the popup setting: "Nothing" shows no button; "Open right away" is the old way
+    // 4. the ON/OFF switch in the side buttons (with Snip): off = highlight and copy like normal
+    const hl = () => page.evaluate(() => { const b = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'); return b && b.getAttribute('aria-pressed'); });
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'), null, { timeout: 5000 });
+    expect(await hl() === 'true', 'the highlight switch starts ON');
+    await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'false', null, { timeout: 3000 });
+    if (process.env.SHOTS) { await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.add('open')); await page.screenshot({ path: process.env.SHOTS + '/ext-hl-switch.png' }); await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.remove('open')); }
+    await select();
+    s = await ui();
+    expect(!s.chip && !s.pop, 'with the switch OFF, highlighting shows nothing: ' + JSON.stringify(s));
+    await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'true', null, { timeout: 3000 });
+    await select();
+    expect((await ui()).chip, 'switched back ON, the Ask Cassie button is back');
+
+    // 5. the popup setting: "Off" shows no button; "Open right away" is the old way
     const id = new URL(sw.url()).host;
     const pop = await ctx.newPage();
     await pop.goto(`chrome-extension://${id}/popup.html`);

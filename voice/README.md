@@ -12,4 +12,4 @@ model has downloaded (about 86 MB, once) she speaks offline too.
 
 The model weights and the voice styles are **not** in this folder. The browser downloads
 them from Hugging Face, [onnx-community/Kokoro-82M-v1.0-ONNX](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX)
-(Apache-2.0), and keeps them in its cache. Voices: `af_heart` (woman), `am_michael` (man).
+(Apache-2.0), and keeps them in its cache. Voices: `af_bella` (woman — the voice of Cassie’s explainer video), `am_michael` (man).

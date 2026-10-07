@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=134">
+<link rel="stylesheet" href="style.css?v=135">
 </head>
 <body>
 
@@ -314,6 +314,10 @@
             <input type="checkbox" id="easyread-toggle">
           </label>
           <label class="field row">
+            <span>Show “Ask Cassie” when I highlight words (off: highlight and copy like normal)</span>
+            <input type="checkbox" id="highlight-help-toggle">
+          </label>
+          <label class="field row">
             <span>Read answers aloud</span>
             <input type="checkbox" id="voice-out-toggle">
           </label>
@@ -331,6 +335,10 @@
               <option value="device">This device's own voice (no download)</option>
             </select>
           </label>
+          <div class="hv-set" id="hv-set">
+            <p class="hint" id="hv-state"></p>
+            <div class="hv-set-row"><button type="button" class="btn secondary" id="hv-play">▶ Play a sample</button></div>
+          </div>
           <label class="field">
             <span>When you talk to Cassie</span>
             <select id="hearing-select">
@@ -426,14 +434,14 @@
 
 </div>
 
-<script src="memory.js?v=134"></script>
-<script src="board.js?v=134"></script>
-<script src="export.js?v=134"></script>
-<script src="sketch.js?v=134"></script>
-<script src="config.js?v=134"></script>
-<script src="cassie-bot.js?v=134"></script>
-<script src="voice.js?v=134"></script>
-<script src="app.js?v=134"></script>
+<script src="memory.js?v=135"></script>
+<script src="board.js?v=135"></script>
+<script src="export.js?v=135"></script>
+<script src="sketch.js?v=135"></script>
+<script src="config.js?v=135"></script>
+<script src="cassie-bot.js?v=135"></script>
+<script src="voice.js?v=135"></script>
+<script src="app.js?v=135"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -448,7 +456,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=134';
+      s.src = 'mascot3d/cassie-3d.js?v=135';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

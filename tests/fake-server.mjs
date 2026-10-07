@@ -51,6 +51,7 @@ export async function startFakeServer(port = 4630) {
       return null;
     };
     if (u.startsWith('https://generativelanguage.googleapis.com/')) { // the server's own Gemini (mode.gemini)
+      if (mode.gemini === 'location') return Response.json({ error: { code: 400, message: 'User location is not supported for the API use.', status: 'FAILED_PRECONDITION' } }, { status: 400 });
       if (!init.body) { // the list of models this key can use; gemini-2.5-flash is retired, like on real keys now
         mode.geminiListed = (mode.geminiListed || 0) + 1;
         const gen = ['generateContent', 'countTokens'];

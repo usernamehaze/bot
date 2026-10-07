@@ -154,8 +154,14 @@ async function visionModels(env, fresh = false) {
 /* Gemini (the owner's optional GEMINI_KEY): a second brain for photos and text.
    Google retires model names often, so the server asks which models this key can use
    (once every 6 hours) and picks the newest Flash ones. GEMINI_MODEL still goes first. */
-const GEMINI_FALLBACK = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const GEMINI_FALLBACK = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
 let gemini = { ids: [], at: 0, all: [] };
+const geminiGone = new Set(); // names Google has retired ("no longer available"): never tried again
+// Google refuses its free Gemini API from some places (Cloudflare can run Cassie in Hong Kong,
+// for one). When it does, Cassie skips Gemini for a while instead of asking every model in turn.
+let geminiBlocked = { until: 0, where: '' };
+let lastColo = ''; // the Cloudflare data centre running this request (from request.cf)
+const LOCATION_BLOCKED = /location is not supported/i;
 function rankGemini(models) {
   const ids = models.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
     .map((m) => String(m.name || '').replace(/^models\//, ''))
@@ -171,7 +177,10 @@ async function geminiModels(env) {
     if (r.ok) {
       const models = (await r.json()).models || [];
       const ids = rankGemini(models);
-      if (ids.length) gemini = { ids: ids.slice(0, 4), at: Date.now(), all: models.map((m) => String(m.name || '').replace(/^models\//, '')) };
+      if (ids.length) gemini = { ids: ids.filter((id) => !geminiGone.has(id)).slice(0, 4), at: Date.now(), all: models.map((m) => String(m.name || '').replace(/^models\//, '')) };
+    } else {
+      let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+      if (LOCATION_BLOCKED.test(m)) geminiBlocked = { until: Date.now() + 10 * 60e3, where: lastColo };
     }
   } catch (e) { /* use the fallback names */ }
   return gemini.ids.length ? gemini.ids : GEMINI_FALLBACK;
@@ -187,9 +196,11 @@ async function askGemini(env, messages, maxTokens = 2048) {
     }),
   }));
   while (contents.length && contents[0].role !== 'user') contents.shift();
+  if (geminiBlocked.until > Date.now()) return { reply: null, detail: geminiBlockedText(), blocked: true };
   let detail = '';
   const list = await geminiModels(env);
-  for (const model of [...new Set(env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...list] : list)].slice(0, 4)) {
+  if (geminiBlocked.until > Date.now()) return { reply: null, detail: geminiBlockedText(), blocked: true };
+  for (const model of [...new Set(env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...list] : list)].filter((m) => !geminiGone.has(m)).slice(0, 4)) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY }, signal: AbortSignal.timeout(30000),
@@ -202,12 +213,17 @@ async function askGemini(env, messages, maxTokens = 2048) {
         detail += `${model}: empty answer · `;
       } else {
         let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
-        if (r.status === 404) gemini.at = 0; // a retired name: look the list up again next time
+        if (LOCATION_BLOCKED.test(m)) { geminiBlocked = { until: Date.now() + 10 * 60e3, where: lastColo }; return { reply: null, detail: geminiBlockedText(), blocked: true }; }
+        if (r.status === 404) { gemini.at = 0; if (/no longer available|not found/i.test(m)) geminiGone.add(model); } // a retired name: never again
         detail += `${model}: ${r.status} ${m.slice(0, 90)} · `;
       }
     } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : e.message} · `; }
   }
   return { reply: null, detail: detail ? 'Gemini ' + detail.replace(/ · $/, '') : '' };
+}
+
+function geminiBlockedText() {
+  return `Google doesn't allow its free Gemini API from where Cloudflare is running Cassie right now${geminiBlocked.where ? ` (data centre ${geminiBlocked.where})` : ''}. Groq and Workers AI answer instead. Fix: Cloudflare → Workers & Pages → cassie → Settings → Placement → Smart.`;
 }
 
 /* Cloudflare Workers AI picture readers (the AI binding): the last backup for photos, with
@@ -725,6 +741,7 @@ async function groqAsk(env, model, messages, maxTokens = 1500) {
   return ((await r.json()).choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '');
 }
 async function runHealth(env) {
+  geminiBlocked = { until: 0, where: '' }; // a check asks Google again, now
   const textQ = [{ role: 'user', content: 'What is 17 × 23? Reply with only the number.' }];
   const picQ = [{ role: 'user', content: [{ type: 'text', text: 'Read the sum in this picture and work it out. Reply with only the number.' }, { type: 'image_url', image_url: { url: CHECK_PNG } }] }];
   const graphQ = [{ role: 'system', content: 'When asked to graph, reply with exactly one fenced code block tagged cassie-board holding minified JSON like {"type":"graph","title":"…","fn":"…","xrange":[a,b]}. fn uses * and ^.' }, { role: 'user', content: 'graph y = x^2 - 4' }];
@@ -736,7 +753,7 @@ async function runHealth(env) {
     let timer;
     const late = new Promise((_, no) => { timer = setTimeout(() => no(new Error('no answer in 45 s (too slow)')), 45000); });
     try { const out = await Promise.race([fn(), late]); checks[i] = { name, ok: !!ok(out), ms: Date.now() - t0, detail: String(out || '').replace(/\s+/g, ' ').slice(0, 160) }; }
-    catch (e) { checks[i] = { name, ok: false, ms: Date.now() - t0, detail: String(e.message || e).slice(0, 600) }; }
+    catch (e) { checks[i] = { name, ok: false, warn: !!e.warn, ms: Date.now() - t0, detail: String(e.message || e).slice(0, 600) }; }
     finally { clearTimeout(timer); }
   })()); };
   if (env.GROQ_KEY) {
@@ -751,8 +768,10 @@ async function runHealth(env) {
     }, (t) => /\b56\b/.test(t));
   } else checks.push({ name: 'Groq', ok: false, ms: 0, detail: 'GROQ_KEY is not set' });
   if (env.GEMINI_KEY) {
-    run('Gemini: text maths', async () => { const g = await askGemini(env, textQ, 300); if (!g.reply) throw new Error(g.detail); return g.reply; }, (t) => /\b391\b/.test(t));
-    run('Gemini: read a picture', async () => { const g = await askGemini(env, picQ, 300); if (!g.reply) throw new Error(g.detail); return g.reply; }, (t) => /\b56\b/.test(t));
+    // a place Google blocks is shown as a warning with the fix, not as a broken brain
+    const gem = (q) => async () => { const g = await askGemini(env, q, 300); if (g.blocked) { const e = new Error(g.detail); e.warn = true; throw e; } if (!g.reply) throw new Error(g.detail); return g.reply; };
+    run('Gemini: text maths', gem(textQ), (t) => /\b391\b/.test(t));
+    run('Gemini: read a picture', gem(picQ), (t) => /\b56\b/.test(t));
   }
   if (env.ANTHROPIC_KEY) {
     run('Claude: text maths', () => askClaude(env, { messages: textQ }), (t) => /\b391\b/.test(t));
@@ -767,7 +786,7 @@ async function runHealth(env) {
   try {
     await ensureSchema(env.DB);
     await env.DB.prepare('INSERT INTO health (k, ts, data) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET ts = ?2, data = ?3').bind('last', result.ts, JSON.stringify(result)).run();
-    if (!result.ok) await logProblem(env, 'brain check', checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`).join(' | '));
+    if (!result.ok) await logProblem(env, 'brain check', checks.filter((c) => !c.ok && !c.warn).map((c) => `${c.name}: ${c.detail}`).join(' | '));
   } catch (e) { /* still return it */ }
   return result;
 }
@@ -821,6 +840,7 @@ export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runHealth(env)); },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (request.cf && request.cf.colo) lastColo = request.cf.colo;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
@@ -1039,7 +1059,7 @@ const DASHBOARD = `<!doctype html>
   // The brain check: real questions with known answers through every AI the server uses.
   function brainCard(d) {
     const h = d.health;
-    const rows = h ? h.checks.map((c) => \`<tr><td>\${c.ok ? '✅' : '❌'}</td><td>\${esc(c.name)}</td><td>\${(c.ms / 1000).toFixed(1)}s</td><td class="muted detail">\${esc(c.detail || '')}</td></tr>\`).join('') : '';
+    const rows = h ? h.checks.map((c) => \`<tr><td>\${c.ok ? '✅' : c.warn ? '⚠️' : '❌'}</td><td>\${esc(c.name)}</td><td>\${(c.ms / 1000).toFixed(1)}s</td><td class="muted detail">\${esc(c.detail || '')}</td></tr>\`).join('') : '';
     const status = !h ? 'Not run yet.' : h.ok ? '✅ Text and pictures both work.' : \`⚠️ \${!h.canText ? 'Text answers are failing. ' : ''}\${!h.canPictures ? 'Pictures (photos, snips, board) are failing. ' : ''}See the ❌ rows.\`;
     const probs = (d.problems || []).length ? \`<p class="muted" style="margin:12px 0 4px">Problems Cassie hit (last \${d.days} days)</p>\${bars(d.problems, (r) => r.k, (r) => r.n, (r) => \`\${fmt(r.n)} · last \${esc(new Date(r.last).toLocaleString())}\`)}\` : '<p class="muted" style="margin-top:10px">No problems logged.</p>';
     return \`<div class="card" style="margin-bottom:14px"><h2>Brain check</h2><p class="sub">Asks every AI real questions with known answers (17 × 23, a picture of 7 × 8, a graph). \${h ? 'Last run ' + esc(new Date(h.ts).toLocaleString()) : ''}</p>
