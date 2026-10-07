@@ -95,15 +95,14 @@ developer fee) — a good step once you're ready to share it more widely.
 
 ## Using it
 
-Highlight a sentence, question, or term on any page. Highlighting on its own
-is left for copy and paste: only a small **Ask Cassie** button shows beside the
-words. Click it (or double-tap **Ctrl**, or right-click → **Explain with
-Cassie**) and the "Cassie" popup opens with an **Explain / Answer / Code**
-choice. Click the **×** or press **Escape** to dismiss it.
+Highlight a sentence, question, or term on any page. After a brief moment,
+a small "Cassie" popup appears near your selection with an **Explain /
+Answer / Code** choice. Click the **×** or press **Escape** to dismiss it.
 
-The extension popup's **When I highlight text** setting changes this: the small
-button (default), nothing at all (double-tap Ctrl or right-click when you want
-her), or the old way, where the popup opens as soon as you highlight.
+**Highlight help ON / OFF:** the switch in Cassie's side buttons (right edge
+of the page, next to Snip), or **Highlight help** in the extension popup. When
+it's OFF, highlighting is just highlighting — copy and paste like normal. You
+can still double-tap **Ctrl**, or right-click → **Explain with Cassie**.
 
 This highlight → Explain/Answer/Code flow is the **core** of the extension
 and always works.

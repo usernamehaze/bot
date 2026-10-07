@@ -1073,9 +1073,6 @@ test('phones: open a PDF in Read & highlight, select words → Explain', async (
   expect(/Page 1/i.test(await page.locator('#reader .reader-label').first().textContent()), 'pages are labelled');
   const para = page.locator('#reader-body p', { hasText: 'condensation' }).first();
   await para.selectText(); await page.mouse.up();
-  await page.waitForSelector('#ask-chip.on:not([hidden])', { timeout: 5000 });
-  expect(await page.locator('#highlight-popover').isHidden(), 'highlighting alone should not open the popover');
-  await page.click('#ask-chip');
   await page.waitForSelector('#highlight-popover:not([hidden]) [data-mode=explain]', { timeout: 5000 });
   await page.click('#highlight-popover [data-mode=explain]');
   await page.waitForSelector('#highlight-popover >> text=water vapour cools', { timeout: 10000 });
@@ -1177,41 +1174,32 @@ test('board: Cassie draws on it when asked', async (b) => {
   await ctx.close();
 });
 
-test('highlight text in an answer → copy like normal, or tap Ask Cassie → Explain', async (b) => {
+test('highlight text in an answer → Explain; switched off, highlighting is just highlighting', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body, n) => ({ text: n === 1 ? 'Osmosis is the movement of water across a membrane.' : 'Simply put: water moves to where there is less water.' }) });
   const a = await ask(page, 'What is osmosis?');
-  await a.locator('p').first().selectText();
-  await page.mouse.up();
-  // highlighting is for copying too: only the small button shows, never the popover
-  await page.waitForSelector('#ask-chip.on:not([hidden])', { timeout: 5000 });
-  await page.waitForTimeout(700);
-  expect(await page.locator('#highlight-popover').isHidden(), 'highlighting alone should not open the popover');
   // right-click keeps the browser menu (Copy)
+  await a.locator('p').first().selectText();
   const box = await a.locator('p').first().boundingBox();
   const kept = await page.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y); const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }); return el.dispatchEvent(ev); }, [box.x + 10, box.y + 5]);
   expect(kept, 'right-click on a highlight should keep the browser menu');
-  expect(await page.locator('#highlight-popover').isHidden(), 'right-click should not open the popover');
-  // copying hides the button; highlighting again brings it back
-  await page.evaluate(() => document.dispatchEvent(new Event('copy', { bubbles: true })));
-  expect(await page.locator('#ask-chip').isHidden(), 'copying should hide the Ask Cassie button');
-  await page.evaluate(() => window.getSelection().removeAllRanges());
-  await a.locator('p').first().selectText();
+  // ON (the default): highlighting opens Explain / Answer / Code
   await page.mouse.up();
-  await page.waitForSelector('#ask-chip.on:not([hidden])', { timeout: 5000 });
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/ask-chip.png' });
-  await page.click('#ask-chip');
-  expect(await page.evaluate(() => window.getSelection().toString().length > 1), 'tapping the button keeps the highlight');
   await page.waitForSelector('#highlight-popover:not([hidden]) [data-mode=explain]', { timeout: 5000 });
-  expect(await page.locator('#ask-chip').isHidden(), 'the button goes away once the popover opens');
+  expect(await page.locator('#ask-chip').count() === 0, 'no separate Ask Cassie button any more');
   await page.click('#highlight-popover [data-mode=explain]');
   await page.waitForSelector('#highlight-popover >> text=Simply put', { timeout: 10000 });
-  // Settings: switch it off and highlighting is just highlighting
-  await page.evaluate(() => { state.highlightHelp = false; window.getSelection().removeAllRanges(); });
   await page.click('#highlight-popover-close');
+  // OFF, with the switch in the Ideas side panel: highlighting is just highlighting
+  await page.evaluate(() => openIdeas());
+  await page.waitForSelector('.ideas-panel.open .ideas-hl-toggle', { timeout: 3000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/app-hl-switch.png' });
+  await page.click('.ideas-hl');
+  expect(await page.evaluate(() => state.highlightHelp === false), 'the side panel switch turns highlight help off');
+  await page.evaluate(() => closeIdeas());
+  await page.waitForTimeout(300);
   await a.locator('p').first().selectText(); await page.mouse.up();
   await page.waitForTimeout(800);
-  expect(await page.locator('#ask-chip').isHidden() && await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
-  await page.evaluate(() => { state.highlightHelp = true; });
+  expect(await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
   await ctx.close();
 });
 
@@ -1611,7 +1599,7 @@ test('extension: a Gemini key alone answers (and streams), and covers for a busy
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
-test('extension: highlighting is for copying — Cassie opens only when asked', async () => {
+test('extension: highlight help ON or OFF (the switch next to Snip) — off, highlighting is just highlighting', async () => {
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
@@ -1631,7 +1619,8 @@ test('extension: highlighting is for copying — Cassie opens only when asked', 
     const page = await ctx.newPage();
     await page.goto('https://example.com/bio');
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
-    const ui = () => page.evaluate(() => { const r = document.getElementById('cassie-ext-host-92f1').shadowRoot; const c = r.querySelector('.ask-chip'); return { chip: !c.hidden, pop: !r.querySelector('.popover').hidden, popText: r.querySelector('.popover').innerText }; });
+    const ui = () => page.evaluate(() => { const r = document.getElementById('cassie-ext-host-92f1').shadowRoot; return { chip: !!r.querySelector('.ask-chip'), pop: !r.querySelector('.popover').hidden, popText: r.querySelector('.popover').innerText }; });
+    const closePop = () => page.evaluate(() => { const r = document.getElementById('cassie-ext-host-92f1').shadowRoot; const x = r.querySelector('.popover .header button'); if (x && !r.querySelector('.popover').hidden) x.click(); });
     const select = async () => {
       await page.evaluate(() => window.getSelection().removeAllRanges());
       const b = await page.locator('#p').boundingBox();
@@ -1640,38 +1629,16 @@ test('extension: highlighting is for copying — Cassie opens only when asked', 
       await page.waitForTimeout(650);
     };
 
-    // 1. default: a highlight shows only the small button
+    // 1. ON (the default): a highlight opens the Explain / Answer / Code choice — no extra button
     await select();
     let s = await ui();
-    expect(s.chip && !s.pop, 'a highlight should show only the Ask Cassie button: ' + JSON.stringify(s));
+    expect(s.pop && /What should I do with this/.test(s.popText) && !s.chip, 'a highlight opens Cassie: ' + JSON.stringify(s));
+    await closePop();
     // right-click keeps the browser's menu (with Copy)
     const kept = await page.evaluate(() => { const p = document.getElementById('p').getBoundingClientRect(); return document.getElementById('p').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: p.left + 5, clientY: p.top + 5 })); });
-    expect(kept && !(await ui()).pop, 'right-click should keep the browser menu');
-    // copying hides the button
-    await page.evaluate(() => document.dispatchEvent(new Event('copy', { bubbles: true })));
-    expect(!(await ui()).chip, 'copying should hide the button');
-    // clicking somewhere else clears the highlight and the button
-    await select();
-    await page.mouse.click(30, 30); await page.waitForTimeout(100);
-    expect(!(await ui()).chip, 'clearing the highlight should hide the button');
+    expect(kept, 'right-click should keep the browser menu');
 
-    // 2. click the button → the usual Explain / Answer / Code choice
-    await select();
-    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/ext-ask-chip.png', clip: { x: 0, y: 60, width: 640, height: 200 } });
-    await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.ask-chip').click());
-    s = await ui();
-    expect(s.pop && /What should I do with this/.test(s.popText) && !s.chip, 'the button should open the popover: ' + JSON.stringify(s));
-    await page.keyboard.press('Escape');
-
-    // 3. double-tap Ctrl still opens it for the highlight
-    await select();
-    await page.keyboard.press('Control'); await page.keyboard.press('Control');
-    await page.waitForTimeout(100);
-    s = await ui();
-    expect(s.pop && /What should I do with this/.test(s.popText), 'double-tap Ctrl should open Cassie for the highlight');
-    await page.keyboard.press('Escape');
-
-    // 4. the ON/OFF switch in the side buttons (with Snip): off = highlight and copy like normal
+    // 2. the ON/OFF switch in the side buttons (with Snip): off = highlight and copy like normal
     const hl = () => page.evaluate(() => { const b = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'); return b && b.getAttribute('aria-pressed'); });
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'), null, { timeout: 5000 });
     expect(await hl() === 'true', 'the highlight switch starts ON');
@@ -1680,27 +1647,29 @@ test('extension: highlighting is for copying — Cassie opens only when asked', 
     if (process.env.SHOTS) { await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.add('open')); await page.screenshot({ path: process.env.SHOTS + '/ext-hl-switch.png' }); await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.remove('open')); }
     await select();
     s = await ui();
-    expect(!s.chip && !s.pop, 'with the switch OFF, highlighting shows nothing: ' + JSON.stringify(s));
+    expect(!s.pop, 'with the switch OFF, highlighting shows nothing: ' + JSON.stringify(s));
+    // double-tap Ctrl still asks Cassie on purpose
+    await page.keyboard.press('Control'); await page.keyboard.press('Control');
+    await page.waitForTimeout(100);
+    s = await ui();
+    expect(s.pop && /What should I do with this/.test(s.popText), 'double-tap Ctrl still opens Cassie for the highlight');
+    await closePop();
     await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'true', null, { timeout: 3000 });
     await select();
-    expect((await ui()).chip, 'switched back ON, the Ask Cassie button is back');
+    expect((await ui()).pop, 'switched back ON, a highlight opens Cassie again');
+    await closePop();
 
-    // 5. the popup setting: "Off" shows no button; "Open right away" is the old way
+    // 3. the same On / Off in the extension's popup
     const id = new URL(sw.url()).host;
     const pop = await ctx.newPage();
     await pop.goto(`chrome-extension://${id}/popup.html`);
-    expect(await pop.locator('#hl-mode').inputValue() === 'button', 'the default should be the small button');
+    expect(await pop.locator('#hl-mode').inputValue() === 'on', 'highlight help is on');
     await pop.selectOption('#hl-mode', 'off');
     await page.bringToFront(); await page.waitForTimeout(200);
+    expect(await hl() === 'false', 'the side switch follows the popup');
     await select();
-    s = await ui();
-    expect(!s.chip && !s.pop, '"Nothing" should show nothing: ' + JSON.stringify(s));
-    await pop.selectOption('#hl-mode', 'auto');
-    await page.bringToFront(); await page.waitForTimeout(200);
-    await select();
-    s = await ui();
-    expect(s.pop && !s.chip, '"Open right away" should open Cassie on a highlight: ' + JSON.stringify(s));
+    expect(!(await ui()).pop, '"Off" shows nothing');
     await pop.close();
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
