@@ -6,3 +6,10 @@ cassie-screenshot-*.png
 # test dependencies
 tests/node_modules/
 _site/
+
+# never commit secrets (API keys belong in the Cloudflare Worker settings, not in files)
+.env
+.env.*
+.dev.vars
+*.pem
+*.key

@@ -587,14 +587,17 @@
     // classmates' drawing steps (a list of { op, uid }), in the order the server got them
     function remote(list) {
       let changed = false;
-      for (const { op } of list) {
+      for (const { op, uid } of list) {
         if (!op) continue;
+        // who drew a stroke is who the server got it from (not what the stroke claims), and
+        // a classmate can only erase their own strokes
         if (op.t === 'add' && op.s && op.s.id) {
           if (strokes.some((x) => x.id === op.s.id)) continue; // already here (it's yours)
-          strokes.push({ ...op.s, mine: !!(room && op.s.u === room.me) }); changed = true;
-        } else if (op.t === 'del' && Array.isArray(op.ids)) {
+          const u = uid || op.s.u;
+          strokes.push({ ...op.s, u, mine: !!(room && u === room.me) }); changed = true;
+        } else if (op.t === 'del' && Array.isArray(op.ids) && uid) {
           const ids = new Set(op.ids);
-          for (let i = strokes.length - 1; i >= 0; i--) if (ids.has(strokes[i].id)) { strokes.splice(i, 1); changed = true; }
+          for (let i = strokes.length - 1; i >= 0; i--) if (ids.has(strokes[i].id) && strokes[i].u === uid) { strokes.splice(i, 1); changed = true; }
         }
       }
       if (changed) redraw();

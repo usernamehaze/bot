@@ -7,8 +7,9 @@
 (function () {
   'use strict';
 
-  const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-  const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  // served from Cassie's own site (vendor/), pinned to patched versions
+  const JSZIP_URL = 'vendor/jszip.min.js';
+  const JSPDF_URL = 'vendor/jspdf.umd.min.js';
 
   const scripts = {};
   function loadScript(src) {

@@ -16,24 +16,34 @@ const APP = `http://localhost:${APP_PORT}/app.html`;
 const SERVER = `http://localhost:${SERVER_PORT}`;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-// The libraries Cassie loads from cdnjs, served from node_modules instead.
-const NM = path.join(__dirname, 'node_modules');
-const CDN = {
-  'jszip.min.js': path.join(NM, 'jszip/dist/jszip.min.js'),
-  'jspdf.umd.min.js': path.join(NM, 'jspdf/dist/jspdf.umd.min.js'),
-  'pdf.min.js': path.join(NM, 'pdfjs-dist/build/pdf.min.js'),
-  'pdf.worker.min.js': path.join(NM, 'pdfjs-dist/build/pdf.worker.min.js'),
-  'mammoth.browser.min.js': path.join(NM, 'mammoth/mammoth.browser.min.js'),
-};
-
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
+// The site's response headers, read from _headers. The security policy is the real one, except that
+// the page may talk to the fake Cassie server (instead of the real one) and stays on plain http.
+const SITE_HEADERS = (() => {
+  const out = {};
+  for (const line of fs.readFileSync(path.join(ROOT, '_headers'), 'utf8').split('\n')) {
+    const m = line.match(/^\s+([\w-]+):\s*(.+)$/);
+    if (m) out[m[1].toLowerCase()] = m[2].trim();
+  }
+  out['content-security-policy'] = out['content-security-policy']
+    .replace('https://cassie.failanzahazel.workers.dev', 'https://cassie.failanzahazel.workers.dev ' + SERVER)
+    .replace(/;\s*upgrade-insecure-requests/, '');
+  delete out['strict-transport-security'];
+  return out;
+})();
+// Anything the security policy blocks is a bug (a test fails on it), so it's caught before it ships.
+const cspViolations = [];
+function watchCsp(ctx) {
+  ctx.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy/i.test(m.text())) cspViolations.push(m.text().slice(0, 300)); });
+  return ctx;
+}
 function staticServer() {
   return http.createServer((req, res) => {
     let p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
     if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
     if (!p.startsWith(ROOT) || !fs.existsSync(p)) { res.writeHead(404); return res.end(); }
-    // the same headers as the real site (_headers): cross-origin isolated, so Bella's voice can use several cores
-    res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'credentialless' });
+    // the same headers as the real site (_headers): cross-origin isolated + the security policy
+    res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream', ...SITE_HEADERS });
     fs.createReadStream(p).pipe(res);
   }).listen(APP_PORT);
 }
@@ -48,10 +58,6 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); sessionStorage.setItem('seeded', '1'); }
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
-  await ctx.route(/cdnjs\.cloudflare\.com/, (route) => {
-    const file = CDN[route.request().url().split('/').pop()];
-    return file ? route.fulfill({ path: file, contentType: 'text/javascript' }) : route.abort();
-  });
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
@@ -87,7 +93,7 @@ async function serverMode(m) {
   return (await fetch(`${SERVER}/__mode`, { method: 'POST', body: JSON.stringify(m) })).json();
 }
 async function serverStats() {
-  return (await fetch(`${SERVER}/stats?days=7`, { headers: { authorization: 'Bearer test-token' } })).json();
+  return (await fetch(`${SERVER}/stats?days=7`, { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
 }
 function expect(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -488,7 +494,7 @@ test('a scanned PDF (pictures only) is read page by page', async (b) => {
     return { text: 'Reviewer: photosynthesis is how plants make food.' };
   } });
   const pdf = await page.evaluate(async () => {
-    await new Promise((r) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload = r; document.head.appendChild(sc); });
+    await new Promise((r) => { const sc = document.createElement('script'); sc.src = 'vendor/jspdf.umd.min.js'; sc.onload = r; document.head.appendChild(sc); });
     const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
     for (let i = 0; i < 6; i++) {
       if (i) doc.addPage();
@@ -1764,7 +1770,7 @@ test('board: an equation typed on the board is sent as text (no picture to misre
 test('brain check: real questions with known answers, saved for the dashboard', async () => {
   await serverMode({ gemini: 'ok', groqVision: 'ok', reply: '', geminiReply: '' });
   try {
-    const r = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const r = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
     const by = Object.fromEntries(r.checks.map((c) => [c.name, c.ok]));
     expect(by['Groq: text maths'] && by['Groq: graph on the board'] && by['Groq: read a picture'] && by['Gemini: read a picture'] && by['Workers AI (backup): read a picture'], 'all checks should pass: ' + JSON.stringify(r.checks));
     expect(r.ok && r.canText && r.canPictures, 'overall ok');
@@ -1774,22 +1780,22 @@ test('brain check: real questions with known answers, saved for the dashboard', 
     expect(m1.geminiListed >= 1 && m1.geminiCalls.includes('gemini-9.0-flash') && !m1.geminiCalls.some((x) => /image|embedding/.test(x)), 'Gemini should use the models Google lists: ' + JSON.stringify(m1.geminiCalls));
     // Groq renamed its picture model to a name Cassie doesn't know: she finds it by showing each model a picture
     await serverMode({ groqVision: 'renamed' });
-    const renamed = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const renamed = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
     const pic = renamed.checks.find((c) => c.name === 'Groq: read a picture');
     expect(pic.ok && /acme\/new-eyes-9b/.test(pic.detail), 'the renamed picture model should be found: ' + JSON.stringify(pic));
     expect(renamed.checks.every((c) => c.ms < 45000), 'every check has a time limit');
     await serverMode({ groqVision: 'retired', gemini: 'off', aiVision: 'down' });
-    const bad = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const bad = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
     expect(!bad.ok && !bad.canPictures && bad.canText, 'a broken picture reader is caught: ' + JSON.stringify(bad.checks));
     expect(/Groq has: openai\/gpt-oss-120b/.test(bad.checks.find((c) => c.name === 'Groq: read a picture').detail), 'it lists the models Groq has');
     expect((await fetch(SERVER + '/health')).status === 401, 'needs the admin token');
     // Google refuses Gemini from where Cloudflare runs Cassie: a warning with the fix, not a broken brain
     await serverMode({ groqVision: 'ok', aiVision: 'ok', gemini: 'location' });
-    const loc = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const loc = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
     const g = loc.checks.filter((c) => /^Gemini/.test(c.name));
     expect(loc.ok && g.length === 2 && g.every((c) => c.warn && /Placement → Smart/.test(c.detail)), 'a blocked location is a warning with the fix: ' + JSON.stringify(g));
     await serverMode({ gemini: 'ok' });
-    const back = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-token' } })).json();
+    const back = await (await fetch(SERVER + '/health', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
     expect(back.checks.find((c) => c.name === 'Gemini: text maths').ok, 'Gemini is tried again on the next check');
   } finally { await serverMode({ gemini: 'off', groqVision: 'ok', aiVision: 'ok' }); }
 });
@@ -1881,7 +1887,7 @@ test('extension: highlights, snips and pastes show up as chats in the Cassie app
       const u = new URL(route.request().url());
       return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
     });
-    await ctx.route(/cdnjs\.cloudflare\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.route(/workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
     await ctx.addInitScript((seed) => { window.CASSIE_SERVER = ''; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on' }));
     const page = await ctx.newPage();
     await page.goto('https://askcassie.pages.dev/app.html');
@@ -2076,10 +2082,6 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
       const u = new URL(route.request().url());
       return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
     });
-    await ctx.route(/cdnjs\.cloudflare\.com/, (route) => {
-      const file = CDN[route.request().url().split('/').pop()];
-      return file ? route.fulfill({ path: file, contentType: 'text/javascript' }) : route.abort();
-    });
     await ctx.route(/workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
     await ctx.route(/example\.com/, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>Biology notes</title></head><body style="height:2000px"><h1>Biology notes</h1><p id="p">Cells divide by mitosis.</p></body></html>' }));
     await ctx.addInitScript((seed) => { if (!/askcassie/.test(location.host)) return; window.CASSIE_SERVER = ''; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on', groqKey: 'gsk_test' }));
@@ -2168,11 +2170,18 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
   const app = staticServer();
   const server = await startFakeServer(SERVER_PORT);
   const browser = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...a) => watchCsp(await newContext(...a));
   const only = process.argv[2];
   let failed = 0;
   for (const t of tests) {
     if (only && !t.name.includes(only)) continue;
-    try { await t.fn(browser); console.log('PASS', t.name); }
+    try {
+      cspViolations.length = 0;
+      await t.fn(browser);
+      if (cspViolations.length) throw new Error('blocked by the security policy: ' + [...new Set(cspViolations)].join(' | '));
+      console.log('PASS', t.name);
+    }
     catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (e && e.message || e).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
   }
   await browser.close(); await server.close(); app.close();

@@ -35,7 +35,8 @@ Get a Groq key at [console.groq.com/keys](https://console.groq.com/keys). Use a
 6. **Secrets:** go to **Settings** → **Variables and Secrets** → **Add**, and add
    both of these as type **Secret**:
    - `GROQ_KEY`: your Groq key.
-   - `ADMIN_TOKEN`: a long password only you know. It opens the dashboard.
+   - `ADMIN_TOKEN`: a long password only you know (**at least 16 characters** — the dashboard
+     won't open with a shorter one). It opens the dashboard. 10 wrong tries locks that network out for an hour.
 7. Copy the Worker's URL. It looks like `https://cassie.<your-name>.workers.dev`.
 
 ## Connect Cassie to it

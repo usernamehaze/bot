@@ -18,7 +18,7 @@
  *
  * Bindings (Worker → Settings → Bindings / Variables and Secrets):
  *   DB           a D1 database (tables are created automatically)
- *   ADMIN_TOKEN  secret — a password you choose for the dashboard
+ *   ADMIN_TOKEN  secret — a password you choose for the dashboard (16+ characters)
  *   GROQ_KEY     secret — your Groq API key (console.groq.com/keys)
  *   AI           Workers AI binding — the backup brain (optional but recommended)
  *   GOOGLE_CLIENT_ID  (optional) turns on "Continue with Google" — see server/README.md
@@ -35,6 +35,7 @@
  *                    automatically from the Models API)
  *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
+ *   TRANSCRIBE_DAILY_LIMIT  voice recordings written down per network per day (default 3000)
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
@@ -75,6 +76,8 @@ async function ensureSchema(db) {
 
 const dayOf = (ms) => new Date(ms + TZ_OFFSET_H * 3600e3).toISOString().slice(0, 10);
 const clean = (v, n = 40) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, '').slice(0, n);
+// feature and event names are short labels like "quiz" or "labs: pendulum" — anything else is dropped
+const label = (v, n = 40) => { const t = clean(v, n); return /^[\w .:/+&()'’-]*$/u.test(t) ? t : ''; };
 
 function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
@@ -82,7 +85,18 @@ function cors(origin, env) {
     || (env.ALLOW_EXTENSION !== 'off' && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)); // the Cassie extension (Chrome and Edge)
   return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
 }
-const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...extra } });
+const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra } });
+// The dashboard page: only its own script may run (a fresh one-time code each visit), it can't be
+// put in another site's frame, and it can only talk to this server.
+function dashboard() {
+  const nonce = randomToken(16);
+  return new Response(DASHBOARD.replace('<script>', `<script nonce="${nonce}">`), { headers: {
+    'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store',
+    'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+    'strict-transport-security': 'max-age=31536000',
+  } });
+}
 
 async function ingest(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -97,7 +111,7 @@ async function ingest(request, env) {
   const now = Date.now(), today = dayOf(now);
   const events = (Array.isArray(body.events) ? body.events : []).slice(0, 50)
     .filter((e) => e && EVENTS.has(e.e))
-    .map((e) => ({ e: e.e, n: clean(e.n, 40), t: Math.min(now, Math.max(now - 7 * 864e5, +e.t || now)) }));
+    .map((e) => ({ e: e.e, n: label(e.n, 40), t: Math.min(now, Math.max(now - 7 * 864e5, +e.t || now)) }));
   const words = (Array.isArray(body.words) ? body.words : []).slice(0, 50)
     .map((w) => clean(w, 24).toLowerCase()).filter((w) => /^\p{L}{4,24}$/u.test(w));
   if (!events.length && !words.length) return new Response(null, { status: 204, headers: h });
@@ -123,6 +137,19 @@ const GROQ = 'https://api.groq.com/openai/v1';
 const CHAT_MODELS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'];
 const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
 const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
+// A per-network speed limit for everything that writes to the database, so nobody can flood it.
+// (Counted per Worker instance, so it's a guard rail, not an exact number.)
+const SPEED = { '/e': 400, '/f': 100, '/scores/': 200, '/room/create': 30, '/room': 3000, '/auth/': 200, '/transcribe': 300, '/image': 100 };
+function tooFast(request, path) {
+  const rule = Object.keys(SPEED).find((p) => (p.endsWith('/') ? path.startsWith(p) : path === p || path.startsWith(p + '/')));
+  if (!rule) return false;
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown', minute = Math.floor(Date.now() / 60e3), k = `s|${rule}|${ip}`;
+  const hit = minuteHits.get(k);
+  const n = hit && hit.m === minute ? hit.n + 1 : 1;
+  minuteHits.set(k, { m: minute, n });
+  if (minuteHits.size > 5000) minuteHits.clear();
+  return n > SPEED[rule];
+}
 let vision = { ids: [], at: 0, all: [] };
 
 function allowedOrigin(request, env) {
@@ -376,6 +403,12 @@ async function transcribe(request, env, ctx) {
   const n = hit && hit.m === minute ? hit.n + 1 : 1;
   minuteHits.set(mk, { m: minute, n });
   if (n > (+env.TRANSCRIBE_MINUTE_LIMIT || 20)) return chatError('Lots of talking! Give me a few seconds.', 429, h, { 'retry-after': '20' });
+  if (env.DB) {
+    await ensureSchema(env.DB);
+    const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('t:' + ip, dayOf(now)).first();
+    if (row && row.n > (+env.TRANSCRIBE_DAILY_LIMIT || 3000)) return chatError('That’s a lot of voice for today — type for now, and voice comes back tomorrow.', 429, h);
+  }
   const lang = /^[a-z]{2}$/.test(String(form.get('language') || '')) ? String(form.get('language')) : '';
   const hint = String(form.get('prompt') || '').slice(0, 600); // words from the conversation, so Whisper spells them right
   const problems = [];
@@ -463,15 +496,20 @@ async function chat(request, env, ctx) {
   const hit = minuteHits.get(mk);
   const n = hit && hit.m === minute ? hit.n + 1 : 1;
   minuteHits.set(mk, { m: minute, n });
+  // the whole network too (made-up ids can't get around the minute limit; a classroom shares one address)
+  const ipHit = minuteHits.get('ip|' + ip);
+  const nIp = ipHit && ipHit.m === minute ? ipHit.n + 1 : 1;
+  minuteHits.set('ip|' + ip, { m: minute, n: nIp });
   if (minuteHits.size > 5000) minuteHits.clear();
-  if (n > perMin) return chatError('Whoa, lots of questions! Give me a few seconds, then ask again.', 429, h, { 'retry-after': String(60 - Math.floor((now / 1000) % 60)) });
+  if (n > perMin || nIp > perMin * 10) return chatError('Whoa, lots of questions! Give me a few seconds, then ask again.', 429, h, { 'retry-after': String(60 - Math.floor((now / 1000) % 60)) });
   await ensureSchema(env.DB);
   const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
       ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
-  const [u, i] = await env.DB.batch([bump('u:' + uid), bump('i:' + ip)]);
+  // no id → the allowance is per network ("anon" is never one shared pool)
+  const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'an:' + ip : 'u:' + uid), bump('i:' + ip)]);
   const usedU = u.results?.[0]?.n || 0, usedI = i.results?.[0]?.n || 0;
   if (Math.random() < 0.01) ctx.waitUntil(env.DB.prepare('DELETE FROM quota WHERE day < ?').bind(today).run());
-  if ((uid !== 'anon' && usedU > perDay) || usedI > perDay * 25) {
+  if (usedU > perDay || usedI > perDay * 25) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000);
     return chatError(`You've used today's ${perDay} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
   }
@@ -481,8 +519,9 @@ async function chat(request, env, ctx) {
   if (env.ANTHROPIC_KEY && body.brain === 'claude') {
     const perDayClaude = +env.CLAUDE_DAILY_LIMIT || 40;
     let usedC = 0;
-    try { usedC = (await bump('c:' + uid).first())?.n || 0; } catch (e) { usedC = 0; }
-    if (uid !== 'anon' && usedC <= perDayClaude) {
+    let usedCi = 0;
+    try { [usedC, usedCi] = (await env.DB.batch([bump('c:' + uid), bump('ci:' + ip)])).map((r) => r.results?.[0]?.n || 0); } catch (e) { usedC = usedCi = Infinity; }
+    if (uid !== 'anon' && usedC <= perDayClaude && usedCi <= perDayClaude * 25) {
       let reply = null;
       try { reply = await askClaude(env, cleaned); } catch (e) { reply = null; }
       if (reply) {
@@ -573,8 +612,8 @@ async function image(request, env, ctx) {
   const perDay = +env.IMAGE_LIMIT || 20;
   const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
       ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
-  const [u, i] = await env.DB.batch([bump('img:u:' + uid), bump('img:i:' + ip)]);
-  if ((uid !== 'anon' && (u.results?.[0]?.n || 0) > perDay) || (i.results?.[0]?.n || 0) > perDay * 25) {
+  const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'img:an:' + ip : 'img:u:' + uid), bump('img:i:' + ip)]);
+  if ((u.results?.[0]?.n || 0) > perDay || (i.results?.[0]?.n || 0) > perDay * 25) {
     return chatError(`You've made today's ${perDay} pictures. More tomorrow — or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
   }
   try {
@@ -604,7 +643,7 @@ async function feedback(request, env) {
   await ensureSchema(env.DB);
   const now = Date.now();
   await env.DB.prepare('INSERT INTO feedback (ts, day, uid, kind, feature, text, ctx) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(now, dayOf(now), uid, b.kind, clean(b.feature, 40), String(b.text || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, 1500), ctxText).run();
+    .bind(now, dayOf(now), uid, b.kind, label(b.feature, 40), String(b.text || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, 1500), ctxText).run();
   return new Response(null, { status: 204, headers: h });
 }
 
@@ -779,13 +818,14 @@ async function accountFromRequest(request, env) {
   if (!row || Date.now() - row.s_created > SESSION_DAYS * 864e5) return null;
   return { ...row, sessionHash: hash };
 }
-// Slow down password guessing: at most 30 sign-in attempts per address per hour.
-async function authAllowed(request, env) {
+// Slow down password guessing: at most 15 password tries per account per hour (from anywhere),
+// and 100 sign-in attempts per address per hour (a whole class can share one school address).
+async function authAllowed(request, env, key, max = 100) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const hour = new Date().toISOString().slice(0, 13);
   const r = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('auth:' + ip, hour).first();
-  return !r || r.n <= 30;
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(key || 'auth:' + ip, hour).first();
+  return !r || r.n <= max;
 }
 // Throwaway inboxes, used to make account after account for more free questions.
 const DISPOSABLE_RE = /@(mailinator|guerrillamail|guerrillamailblock|sharklasers|grr|10minutemail|10minemail|tempmail|temp-mail|tempmailo|tempail|yopmail|trashmail|getnada|nada|dispostable|maildrop|throwawaymail|mintemail|mohmal|emailondeck|fakeinbox|spamgourmet|moakt|tmpmail|tmail|burnermail|inboxkitten|mailnesia|mytemp|emailfake|fakemail|discard|mailcatch|spambox|33mail)\./i;
@@ -819,7 +859,15 @@ async function auth(request, env, path) {
       let acc = await env.DB.prepare('SELECT * FROM accounts WHERE google = ?').bind(g.sub).first();
       if (!acc && g.verified && g.email) { // same email signed up with a password before → link them
         acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(g.email).first();
-        if (acc) { await env.DB.prepare('UPDATE accounts SET google = ?, updated = ? WHERE id = ?').bind(g.sub, now, acc.id).run(); acc.google = g.sub; }
+        if (acc) {
+          // Google has just proved this email is theirs. Whoever made the password account may not
+          // have been them (anyone can type any email), so that password and its sign-ins stop working.
+          await env.DB.batch([
+            env.DB.prepare('UPDATE accounts SET google = ?, pass = NULL, salt = NULL, updated = ? WHERE id = ?').bind(g.sub, now, acc.id),
+            env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id),
+          ]);
+          acc.google = g.sub; acc.pass = null;
+        }
       }
       if (!acc) {
         acc = { id: randomToken(12), email: g.verified ? g.email : null, google: g.sub, name: g.name, data: null };
@@ -843,8 +891,11 @@ async function auth(request, env, path) {
         .bind(acc.id, email, await hashPassword(password, salt), salt, acc.name, now, now).run();
       return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: true });
     }
+    if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('Too many tries for this account — please wait an hour and try again.', 429);
+    if (password.length > 200) return fail('That email and password don’t match. Check them and try again.', 401);
     const acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(email).first();
-    const good = acc && acc.pass && sameText(await hashPassword(password, acc.salt), acc.pass);
+    const tried = await hashPassword(password, (acc && acc.salt) || 'no-account-salt'); // always hash, so a wrong email takes as long as a wrong password
+    const good = !!(acc && acc.pass && sameText(tried, acc.pass));
     if (!good) {
       if (acc && !acc.pass && acc.google) return fail('This account uses Google — tap “Continue with Google”.', 401);
       return fail('That email and password don’t match. Check them and try again.', 401);
@@ -935,16 +986,30 @@ async function runHealth(env) {
   } catch (e) { /* still return it */ }
   return result;
 }
+// The dashboard's password (ADMIN_TOKEN). It must be at least 16 characters; wrong guesses are
+// limited to 10 an hour per network, so it can't be guessed by trying many.
+async function adminOk(request, env) {
+  const given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!env.ADMIN_TOKEN || String(env.ADMIN_TOKEN).length < 16) return { error: 'Set an ADMIN_TOKEN of at least 16 characters in the Worker settings first.', status: 503 };
+  await ensureSchema(env.DB);
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown', hour = new Date().toISOString().slice(0, 13);
+  const tries = await env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind('adm:' + ip, hour).first();
+  if (tries && tries.n >= 10) return { error: 'Too many wrong tries — wait an hour.', status: 429 };
+  if (given && sameText(given, String(env.ADMIN_TOKEN))) return null;
+  await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2`).bind('adm:' + ip, hour).run();
+  return { error: 'wrong token', status: 401 };
+}
 async function health(request, env) {
-  const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!env.ADMIN_TOKEN || auth !== env.ADMIN_TOKEN) return json({ error: 'wrong token' }, 401);
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
   return json(await runHealth(env));
 }
 
 async function stats(request, env) {
   const url = new URL(request.url);
-  const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!env.ADMIN_TOKEN || auth !== env.ADMIN_TOKEN) return json({ error: 'wrong token' }, 401);
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
   const days = Math.min(365, Math.max(1, +url.searchParams.get('days') || 30));
   const db = env.DB;
   await ensureSchema(db);
@@ -988,6 +1053,7 @@ export default {
     if (request.cf && request.cf.colo) lastColo = request.cf.colo;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
+      if (tooFast(request, url.pathname)) return json({ error: 'Too many requests — please wait a minute.' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
@@ -1000,10 +1066,11 @@ export default {
       if (url.pathname.startsWith('/scores/')) return await scores(request, env, url);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && url.pathname === '/health') return await health(request, env);
-      if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+      if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return dashboard();
       return new Response('not found', { status: 404 });
     } catch (e) {
-      return json({ error: String(e && e.message || e) }, 500);
+      ctx.waitUntil(logProblem(env, 'server: ' + url.pathname.slice(0, 30), String(e && e.stack || e).slice(0, 600)).catch(() => {}));
+      return json({ error: 'Something went wrong on Cassie’s server. Please try again.' }, 500, cors(request.headers.get('origin') || '', env));
     }
   },
 };
