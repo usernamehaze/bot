@@ -1641,3 +1641,55 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .vc-gender button[aria-checked="true"] { background: var(--primary); color: #fff; }
 @media (max-width: 480px) { .vc-top { justify-content: space-between; } .vc-modes { order: 3; flex-basis: 100%; } }
 .home-intro .review-mistakes { margin-top: 12px; }
+
+/* ---------- Flashcards (cards.js) ---------- */
+.fc { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 10, 12, .45); }
+.fc[hidden] { display: none; }
+.fc-panel { width: min(560px, 100%); max-height: min(760px, 100%); display: flex; flex-direction: column; background: var(--bg, #f4f2ee); color: var(--text); border-radius: 22px; box-shadow: 0 24px 70px rgba(0, 0, 0, .35); overflow: hidden; }
+.fc-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px 18px; }
+.fc-head h2 { flex: 1; margin: 0; font-size: 1.15rem; }
+.fc-x, .fc-back { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.fc-back[hidden] { display: none; }
+.fc-body { padding: 4px 18px 20px; overflow: auto; }
+.fc-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: .88rem; }
+.fc-empty, .fc-how { color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.fc-decks { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.fc-decks li { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+.fc-deck-name { flex: 1; min-width: 0; }
+.fc-deck-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-deck-name span { color: var(--muted); font-size: .8rem; }
+.fc-deck-name em { font-style: normal; color: var(--text); font-weight: 600; }
+.fc-deck-acts { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.fc-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 99px; padding: 8px 14px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; list-style: none; }
+.fc-btn.main { background: var(--primary); border-color: var(--primary); color: #fff; }
+.fc-more { position: relative; }
+.fc-more summary { list-style: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; font-weight: 700; }
+.fc-more summary::-webkit-details-marker, .fc-new summary::-webkit-details-marker { display: none; }
+.fc-more[open] > div { position: absolute; right: 0; top: 40px; z-index: 2; min-width: 190px; padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(0, 0, 0, .18); display: grid; }
+.fc-more button { text-align: left; border: 0; background: none; color: var(--text); font: inherit; font-size: .86rem; padding: 9px 10px; border-radius: 9px; cursor: pointer; }
+.fc-more button:hover { background: var(--border); }
+.fc-more button.danger { color: #c0392b; }
+.fc-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.fc-new { width: 100%; }
+.fc-new summary { display: inline-block; }
+.fc-form { display: grid; gap: 8px; margin-top: 10px; }
+.fc-form input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.fc-progress { margin: 0 0 10px; color: var(--muted); font-size: .82rem; text-align: center; }
+.fc-card { display: flex; flex-direction: column; justify-content: center; gap: 8px; width: 100%; min-height: 230px; padding: 24px 20px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: center; cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, .08); }
+.fc-card.flipped { cursor: default; }
+.fc-side { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.fc-text { font-size: 1.15rem; line-height: 1.45; font-weight: 600; }
+.fc-q { font-size: .9rem; color: var(--muted); margin-bottom: 6px; }
+.fc-tap { margin-top: 6px; font-size: .78rem; color: var(--muted); }
+.fc-grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+.fc-grades[hidden] { display: none; }
+.fc-grade { position: relative; display: grid; gap: 2px; padding: 10px 4px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.fc-grade b { font-size: .9rem; }
+.fc-grade small { color: var(--muted); font-size: .72rem; }
+.fc-grade kbd { position: absolute; top: 4px; right: 6px; font: 600 .62rem/1 inherit; font-family: inherit; color: var(--muted); }
+.fc-grade.again b { color: #c0392b; }
+.fc-grade.good { border-color: var(--primary); }
+.fc-done { text-align: center; padding: 20px 0; }
+.fc-big { font-size: 2.6rem; }
+.fc-row { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.bubble-tools .fc-make { font-weight: 600; }

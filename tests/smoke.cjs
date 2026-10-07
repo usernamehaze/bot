@@ -289,6 +289,52 @@ test('picture: when the free service fails, the server makes it', async (b) => {
   await ctx.close();
 });
 
+test('flashcards: Cassie makes cards from an answer, spaced-repetition study, mistakes → cards, Anki export', async (b) => {
+  const ANSWER = 'Photosynthesis is how plants make food. Chlorophyll in the chloroplasts captures sunlight. Water and carbon dioxide become glucose, and oxygen is released as a by-product of the light reactions.';
+  const CARDS = JSON.stringify([{ front: 'Where does photosynthesis happen?', back: 'In the chloroplasts.' }, { front: 'What does chlorophyll do?', back: 'It captures sunlight.' }, { front: 'What gas is released?', back: 'Oxygen.' }]);
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', mistakes: [{ q: 'What is the powerhouse of the cell?', a: 'mitochondria', at: 1, due: 1, misses: 1 }] },
+    fakeGroq: (body) => ({ text: /Make flashcards/.test(JSON.stringify(body)) ? 'Here you go:\n' + CARDS : ANSWER }) });
+  const a = await ask(page, 'Explain photosynthesis');
+  await a.locator('.fc-make').click();
+  await page.waitForFunction(() => /3 cards — Study/.test(document.querySelector('.fc-make').textContent), null, { timeout: 10000 });
+  expect(/Use only what the text says/.test(JSON.stringify(groqCalls.at(-1))) && /Chlorophyll/.test(JSON.stringify(groqCalls.at(-1))), 'Cassie makes the cards from that answer');
+  // study: the first card's front, flip, then grade
+  await a.locator('.fc-make').click();
+  await page.waitForSelector('.fc:not([hidden]) .fc-card', { timeout: 3000 });
+  expect(/Where does photosynthesis happen/.test(await page.locator('.fc-card').innerText()), 'the question shows first');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/flashcard-front.png' });
+  await page.click('.fc-card');
+  expect(/chloroplasts/.test(await page.locator('.fc-card').innerText()), 'tapping shows the answer');
+  expect(/1 d/.test(await page.locator('.fc-grade.good').innerText()), 'Good says when it comes back');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/flashcard-back.png' });
+  await page.click('.fc-grade.good');
+  await page.click('.fc-card'); await page.click('.fc-grade.again');   // missed: comes back this session
+  await page.click('.fc-card'); await page.keyboard.press('4');        // easy, with the keyboard
+  // the missed card is back
+  expect(/What does chlorophyll do/.test(await page.locator('.fc-card').innerText()), 'a card marked Again comes back in the same session');
+  await page.click('.fc-card'); await page.click('.fc-grade.good');
+  await page.waitForSelector('.fc-done', { timeout: 3000 });
+  const cards = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).cards);
+  expect(cards.length === 3 && cards.every((c) => c.due > Date.now()), 'every card is scheduled for later: ' + JSON.stringify(cards.map((c) => [c.box, c.due - Date.now()])));
+  // mistakes → cards, and the deck list
+  await page.click('.fc-back');
+  await page.click('[data-mistakes]');
+  await page.waitForSelector('.fc-note >> text=added to “My quiz mistakes”');
+  expect(await page.locator('.fc-decks li').count() === 2, 'two decks');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/flashcard-decks.png' });
+  // export for Anki: a tab-separated file with the deck in its header
+  await page.locator('.fc-decks li', { hasText: 'My quiz mistakes' }).locator('summary').click();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.fc-decks li', { hasText: 'My quiz mistakes' }).locator('[data-anki]').click()]);
+  const txt = fs.readFileSync(await dl.path(), 'utf8');
+  expect(/#separator:tab/.test(txt) && /#deck:My quiz mistakes/.test(txt) && /powerhouse of the cell\?\tmitochondria/.test(txt), 'Anki file: ' + txt);
+  // the home screen shows cards that are due
+  await page.click('.fc-x');
+  await page.evaluate(() => document.getElementById('new-chat-btn').click());
+  await page.waitForSelector('.study-cards >> text=Flashcards to review (1)', { timeout: 3000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('quiz saves missed questions for Review my mistakes', async (b) => {
   const replies = [
     'Question 1: What is the powerhouse of the cell?',
