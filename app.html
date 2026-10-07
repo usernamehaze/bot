@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=135">
+<link rel="stylesheet" href="style.css?v=136">
 </head>
 <body>
 
@@ -119,13 +119,12 @@
 
   <div id="reader" class="reader" hidden role="dialog" aria-label="Read and highlight">
     <div class="reader-head">
-      <div class="reader-title"><b id="reader-name"></b><span>Select any words, then tap Ask Cassie</span></div>
+      <div class="reader-title"><b id="reader-name"></b><span>Select any words and Cassie explains them</span></div>
       <button type="button" id="reader-close" class="icon-btn" aria-label="Close the reader">&times;</button>
     </div>
     <div id="reader-body" class="reader-body"></div>
   </div>
 
-  <button type="button" id="ask-chip" class="ask-chip" hidden title="Ask Cassie about the words you highlighted"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"/></svg><span>Ask Cassie</span></button>
 
   <div id="highlight-popover" class="highlight-popover" hidden>
     <div class="highlight-popover-header">
@@ -314,7 +313,7 @@
             <input type="checkbox" id="easyread-toggle">
           </label>
           <label class="field row">
-            <span>Show “Ask Cassie” when I highlight words (off: highlight and copy like normal)</span>
+            <span>Highlight help: Cassie pops up when I highlight words (off: highlight and copy like normal)</span>
             <input type="checkbox" id="highlight-help-toggle">
           </label>
           <label class="field row">
@@ -434,14 +433,14 @@
 
 </div>
 
-<script src="memory.js?v=135"></script>
-<script src="board.js?v=135"></script>
-<script src="export.js?v=135"></script>
-<script src="sketch.js?v=135"></script>
-<script src="config.js?v=135"></script>
-<script src="cassie-bot.js?v=135"></script>
-<script src="voice.js?v=135"></script>
-<script src="app.js?v=135"></script>
+<script src="memory.js?v=136"></script>
+<script src="board.js?v=136"></script>
+<script src="export.js?v=136"></script>
+<script src="sketch.js?v=136"></script>
+<script src="config.js?v=136"></script>
+<script src="cassie-bot.js?v=136"></script>
+<script src="voice.js?v=136"></script>
+<script src="app.js?v=136"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -456,7 +455,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=135';
+      s.src = 'mascot3d/cassie-3d.js?v=136';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

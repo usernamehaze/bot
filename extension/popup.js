@@ -49,7 +49,7 @@ saveBtn.addEventListener('click', () => {
 /* ---------- what highlighting does ---------- */
 const hlMode = document.getElementById('hl-mode');
 if (hlMode) {
-  chrome.storage.local.get(['cassieHighlight'], ({ cassieHighlight }) => { hlMode.value = cassieHighlight || 'button'; });
+  chrome.storage.local.get(['cassieHighlight'], ({ cassieHighlight }) => { hlMode.value = cassieHighlight === 'off' ? 'off' : 'on'; });
   hlMode.addEventListener('change', () => chrome.storage.local.set({ cassieHighlight: hlMode.value }));
 }
 

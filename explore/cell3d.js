@@ -432,10 +432,13 @@ function createView() {
     root.classList.toggle('x3d-body-mode', inBody);
     findEl.hidden = !inBody; hint.hidden = inBody;
     $('[data-tool="labels"]').hidden = inBody; $('[data-tool="cut"]').hidden = inBody;
-    camera.near = inBody ? 0.01 : 0.1; camera.updateProjectionMatrix();
+    camera.near = inBody ? 0.002 : 0.05; camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, inBody ? 1.5 : 2)); // the body has a lot to draw
     invalidate();
-    controls.minDistance = inBody ? 0.25 : 3; controls.maxDistance = inBody ? 6 : 30;
+    // zoom goes where the finger or mouse is, right up close to any part; drag with two fingers
+    // (or right-drag) to move around
+    controls.zoomToCursor = true; controls.enablePan = true; controls.screenSpacePanning = true;
+    controls.minDistance = inBody ? 0.03 : 0.8; controls.maxDistance = inBody ? 6 : 30;
     if (inBody) {
       Object.values(cells).forEach((c) => { c.group.visible = false; });
       current = null; selected = null; sheet.hidden = true;
@@ -637,6 +640,31 @@ function createView() {
       return;
     }
     select(null);
+  });
+  // double-tap or double-click: fly in close to that spot
+  let lastTap = { t: 0, x: 0, y: 0 };
+  function flyInAt(x, y) {
+    const r = canvas.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), camera);
+    const group = inBody ? body.group : current && current.group;
+    if (!group) return;
+    const hit = ray.intersectObjects(group.children, true).find((h) => {
+      if (!h.object.visible || (h.object.parent && !h.object.parent.visible)) return false;
+      const m = Array.isArray(h.object.material) ? h.object.material[0] : h.object.material;
+      return !m || m.opacity >= 0.1 || inBody;
+    });
+    if (!hit) return;
+    const dist = camera.position.distanceTo(controls.target);
+    controls.autoRotate = false;
+    flyTo = { target: hit.point.clone(), dist: Math.max(controls.minDistance * 1.6, dist * 0.42) };
+    invalidate();
+  }
+  canvas.addEventListener('dblclick', (e) => { e.preventDefault(); flyInAt(e.clientX, e.clientY); });
+  canvas.addEventListener('pointerup', (e) => { // phones have no dblclick: two quick taps in one spot
+    if (e.pointerType !== 'touch') return;
+    const now = performance.now();
+    if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) { lastTap.t = 0; flyInAt(e.clientX, e.clientY); }
+    else lastTap = { t: now, x: e.clientX, y: e.clientY };
   });
 
   partsEl.addEventListener('click', (e) => {

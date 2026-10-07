@@ -278,16 +278,6 @@
       font-family: inherit; font-size: 10px; background: rgba(127,127,127,.16);
       border: 1px solid rgba(127,127,127,.3); border-radius: 4px; padding: 1px 5px; margin: 0 1px;
     }
-    /* the small "Ask Cassie" button by a highlight — the popover opens only when it's clicked */
-    .ask-chip { position: fixed; z-index: 2147483647; display: flex; align-items: center; gap: 5px; height: 26px;
-      padding: 0 10px 0 8px; border: none; border-radius: 13px; background: #1c1c24; color: #fff; cursor: pointer;
-      font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      box-shadow: 0 4px 14px rgba(0,0,0,.25); opacity: 0; transform: translateY(3px) scale(.96);
-      transition: opacity .12s ease, transform .12s ease; user-select: none; -webkit-user-select: none; }
-    .ask-chip.on { opacity: .94; transform: none; }
-    .ask-chip:hover { opacity: 1; }
-    .ask-chip[hidden] { display: none; }
-    .ask-chip svg { width: 13px; height: 13px; }
   `;
   shadow.appendChild(style);
 
@@ -348,7 +338,6 @@
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
     const inOurs = sel && sel.rangeCount && host.contains(sel.getRangeAt(0).commonAncestorContainer);
-    hideAskChip();
     popover.hidden = false;
     setEmotion('curious');
     if (text && text.length > 1 && !inOurs) { lastAutoText = text; showChoice(text, cursorRect()); }
@@ -467,7 +456,7 @@
     hlBtn.addEventListener('click', () => {
       chrome.storage.local.get(['cassieHighlight', 'cassieHighlightLast'], (o) => {
         const cur = o.cassieHighlight || 'button';
-        if (cur === 'off') chrome.storage.local.set({ cassieHighlight: o.cassieHighlightLast || 'button' });
+        if (cur === 'off') chrome.storage.local.set({ cassieHighlight: 'on' });
         else chrome.storage.local.set({ cassieHighlight: 'off', cassieHighlightLast: cur });
       });
     });
@@ -1747,68 +1736,27 @@
     runConversation(rect);
   }
 
-  /* Highlighting is for copying too, so Cassie doesn't jump in on every selection.
-     How she shows up is the student's choice (the extension popup):
-       'button' (default) — a small "Ask Cassie" button by the highlight; the popover opens only when it's clicked
-       'off'              — nothing at all: highlight and copy like normal (the ON/OFF switch in the side buttons)
-       'auto'             — the old way: the popover opens as soon as text is highlighted */
-  let hlMode = 'button';
+  /* Highlight help is ON or OFF (the switch in the side buttons next to Snip, or the popup):
+       ON  — highlighting text opens Cassie's Explain / Answer / Code choice
+       OFF — highlighting is just highlighting: copy and paste like normal
+     (Older saved settings 'button' and 'auto' both mean ON.) */
+  let hlOn = true;
+  const hlIsOn = (v) => v !== 'off';
   try {
-    chrome.storage.local.get(['cassieHighlight'], (o) => { if (o && o.cassieHighlight) hlMode = o.cassieHighlight; });
-    chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.cassieHighlight) { hlMode = ch.cassieHighlight.newValue || 'button'; hideAskChip(); } });
+    chrome.storage.local.get(['cassieHighlight'], (o) => { hlOn = hlIsOn(o && o.cassieHighlight); });
+    chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.cassieHighlight) hlOn = hlIsOn(ch.cassieHighlight.newValue); });
   } catch (e) { /* ignore */ }
 
-  const askChip = document.createElement('button');
-  askChip.type = 'button';
-  askChip.className = 'ask-chip';
-  askChip.hidden = true;
-  askChip.title = 'Ask Cassie about this (or double-tap Ctrl)';
-  askChip.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7z"/></svg><span>Ask Cassie</span>';
-  shadow.appendChild(askChip);
-  let chipText = '';
-  let chipRect = null;
-  function hideAskChip() { askChip.hidden = true; askChip.classList.remove('on'); chipText = ''; }
-  function showAskChip(text, range) {
-    chipText = text;
-    chipRect = range.getBoundingClientRect();
-    const rects = range.getClientRects();
-    const last = rects.length ? rects[rects.length - 1] : chipRect;
-    askChip.hidden = false;
-    const w = askChip.offsetWidth || 100, h = askChip.offsetHeight || 26;
-    // beside the end of the highlight, on its last line; below it when there's no room
-    let left = last.right + 8, top = last.top + last.height / 2 - h / 2;
-    if (left + w > window.innerWidth - 8) { left = Math.max(8, Math.min(last.right - w, window.innerWidth - w - 8)); top = last.bottom + 8; }
-    if (top + h > window.innerHeight - 8) top = Math.max(8, chipRect.top - h - 6);
-    askChip.style.left = left + 'px';
-    askChip.style.top = top + 'px';
-    requestAnimationFrame(() => askChip.classList.add('on'));
-  }
-  // pressing it mustn't clear the highlight
-  askChip.addEventListener('mousedown', (e) => e.preventDefault());
-  askChip.addEventListener('click', () => {
-    const text = chipText, rect = chipRect;
-    hideAskChip();
-    if (!text) return;
-    lastAutoText = text;
-    popover.hidden = false;
-    showChoice(text, rect);
-  });
-
   function checkSelection() {
-    if (manualOpen) return; // a deliberately-summoned HUD isn't driven by the selection
+    if (manualOpen || !hlOn) return; // a deliberately-summoned HUD isn't driven by the selection
     const sel = window.getSelection();
     // No selection (e.g. the user clicked elsewhere and it collapsed) — leave the
     // popover exactly as it is. It only closes via × or Escape.
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideAskChip(); return; }
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return; // ignore selecting our own popover text
     const text = selectionText(sel);
-    if (!text || text.length < 2) { hideAskChip(); return; }
-    if (hlMode !== 'auto') {
-      if (hlMode === 'button' && text !== chipText && !(text === lastAutoText && !popover.hidden)) showAskChip(text, range);
-      return;
-    }
-    if (text === lastAutoText) return;
+    if (!text || text.length < 2 || text === lastAutoText) return;
     lastAutoText = text;
     popover.hidden = false;
     showChoice(text, range.getBoundingClientRect());
@@ -1823,42 +1771,22 @@
   });
 
   // Backup trigger: keyboard selection (shift+arrows) fires no mouseup, so
-  // still watch selectionchange, debounced. A cleared selection hides the button at once.
+  // still watch selectionchange, debounced.
   document.addEventListener('selectionchange', () => {
     clearTimeout(selTimer);
-    const sel = window.getSelection();
-    if (!askChip.hidden && (!sel || sel.isCollapsed)) hideAskChip();
     selTimer = setTimeout(checkSelection, 500);
   });
-  // Copying, scrolling or typing means the student is doing something else: the button steps aside.
-  ['copy', 'cut'].forEach((ev) => document.addEventListener(ev, hideAskChip, true));
-  window.addEventListener('scroll', () => { if (!askChip.hidden) hideAskChip(); }, true);
 
   // The popover stays open once shown; it only closes when the user clicks the
   // × (below) or presses Escape. Clicking or scrolling elsewhere leaves it up,
   // and highlighting new text replaces it with a fresh one.
   closeBtn.addEventListener('click', dismissPopover);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !askChip.hidden) hideAskChip();
     if (e.key === 'Escape' && !popover.hidden) dismissPopover();
   });
 
-  // Right-click on selected text keeps the browser's own menu (Copy works), which has
-  // "Explain with Cassie" / "Answer with Cassie". Only the 'auto' setting swaps it for
-  // the Explain / Answer buttons at the pointer. Edit fields always keep their native menu.
-  document.addEventListener('contextmenu', (e) => {
-    if (e.target === host) return;
-    if (hlMode !== 'auto') return;
-    if (e.target.closest && e.target.closest('input, textarea')) return;
-    const sel = window.getSelection();
-    const text = selectionText(sel);
-    if (!text || text.length < 2) return;
-    e.preventDefault();
-    lastAutoText = text;
-    const rect = { left: e.clientX, top: e.clientY, right: e.clientX, bottom: e.clientY, width: 0, height: 0 };
-    popover.hidden = false;
-    showChoice(text, rect);
-  });
+  // Right-click keeps the browser's own menu, so Copy is always there; for a highlight
+  // it has "Explain with Cassie" / "Answer with Cassie".
 
   /* ---------- Drop on Cassie: her Island at the top of any page ----------
      Drag a file (PDF, Word, PowerPoint, photo, text) or some words from anywhere —
@@ -1869,29 +1797,29 @@
   if (window.top === window) {
     const isleCss = document.createElement('style');
     isleCss.textContent = `
-      .cx-isle { position: fixed; top: 10px; left: 50%; z-index: 2147483647; width: 300px; max-width: calc(100vw - 24px);
-        background: #131317; color: #fff; border-radius: 22px; box-shadow: 0 16px 44px rgba(0,0,0,.35);
-        font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      .cx-isle { position: fixed; top: 10px; left: 50%; z-index: 2147483647; width: 380px; max-width: calc(100vw - 24px);
+        background: #131317; color: #fff; border-radius: 26px; box-shadow: 0 16px 44px rgba(0,0,0,.35);
+        font: 15.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         opacity: 0; transform: translate(-50%, -16px) scale(.7); transform-origin: 50% 0;
         transition: opacity .2s, transform .4s cubic-bezier(.3, 1.4, .45, 1), width .35s; }
       .cx-isle[hidden] { display: none; }
       .cx-isle.open { opacity: 1; transform: translate(-50%, 0) scale(1); }
-      .cx-isle[data-mode="card"] { width: 340px; }
+      .cx-isle[data-mode="card"] { width: 440px; }
       .cx-isle * { box-sizing: border-box; font: inherit; }
-      .cx-isle-head { display: flex; align-items: center; gap: 9px; padding: 8px 8px 8px 10px; font-weight: 600; }
-      .cx-isle-face { width: 28px; height: 28px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex-shrink: 0; }
-      .cx-isle-face svg { width: 17px; height: 17px; fill: #131317; }
+      .cx-isle-head { display: flex; align-items: center; gap: 11px; padding: 11px 11px 11px 13px; font-weight: 600; }
+      .cx-isle-face { width: 36px; height: 36px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex-shrink: 0; }
+      .cx-isle-face svg { width: 21px; height: 21px; fill: #131317; }
       .cx-isle-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .cx-isle-x { width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: #fff; font-size: 17px; line-height: 1; cursor: pointer; }
-      .cx-isle-body { padding: 0 12px 12px; }
+      .cx-isle-x { width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: #fff; font-size: 17px; line-height: 1; cursor: pointer; }
+      .cx-isle-body { padding: 0 15px 15px; }
       .cx-isle-body:empty { display: none; }
-      .cx-isle-drop { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 10px; border: 1.5px dashed rgba(255,255,255,.32); border-radius: 15px; transition: background .2s, border-color .2s; }
+      .cx-isle-drop { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 22px 12px; border: 1.5px dashed rgba(255,255,255,.32); border-radius: 15px; transition: background .2s, border-color .2s; }
       .cx-isle.hot .cx-isle-drop { border-color: #fff; background: rgba(255,255,255,.08); }
       .cx-isle-drop b { font-weight: 700; }
       .cx-isle-drop span { color: rgba(255,255,255,.6); font-size: 12px; }
       .cx-isle p { margin: 0 0 10px; color: rgba(255,255,255,.78); }
       .cx-isle-acts { display: flex; flex-wrap: wrap; gap: 7px; }
-      .cx-isle-chip { border: 1px solid rgba(255,255,255,.24); background: transparent; color: #fff; border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .cx-isle-chip { border: 1px solid rgba(255,255,255,.24); background: transparent; color: #fff; border-radius: 99px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
       .cx-isle-chip:hover { background: rgba(255,255,255,.1); }
       .cx-isle-chip.main { background: #fff; color: #131317; border-color: #fff; }
       .cx-isle-ask { display: flex; gap: 7px; margin-top: 9px; }

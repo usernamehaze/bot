@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '114';
+const APP_VERSION = '115';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1693,7 +1693,9 @@ const ideasPanel = (() => {
   el.className = 'ideas-panel';
   el.hidden = true;
   el.setAttribute('aria-label', 'Ideas to get started');
-  el.innerHTML = '<div class="ideas-head"><h2>Ideas</h2><button type="button" class="ideas-x" aria-label="Close">×</button></div><div class="ideas-list"></div>';
+  el.innerHTML = '<div class="ideas-head"><h2>Ideas</h2><button type="button" class="ideas-x" aria-label="Close">×</button></div>'
+    + '<label class="ideas-hl"><span><b>Highlight help</b><small>On: Cassie pops up when you highlight words. Off: highlight and copy like normal.</small></span><input type="checkbox" class="ideas-hl-toggle" role="switch"></label>'
+    + '<div class="ideas-list"></div>';
   const shade = document.createElement('div');
   shade.className = 'ideas-shade';
   shade.hidden = true;
@@ -1701,12 +1703,19 @@ const ideasPanel = (() => {
   shade.addEventListener('click', () => closeIdeas());
   el.querySelector('.ideas-x').addEventListener('click', () => closeIdeas());
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeIdeas(); });
+  // the highlight switch: the same one as in Settings
+  el.querySelector('.ideas-hl-toggle').addEventListener('change', (e) => {
+    state.highlightHelp = e.target.checked; save();
+    const t = document.getElementById('highlight-help-toggle'); if (t) t.checked = e.target.checked;
+    track('feature', 'highlight-' + (e.target.checked ? 'on' : 'off'));
+  });
   return { el, shade, list: el.querySelector('.ideas-list') };
 })();
 function fillIdeas(bar) {
   ideasPanel.list.replaceChildren(...bar.children);
 }
 function openIdeas() {
+  ideasPanel.el.querySelector('.ideas-hl-toggle').checked = state.highlightHelp !== false;
   ideasPanel.el.hidden = false; ideasPanel.shade.hidden = false;
   requestAnimationFrame(() => { ideasPanel.el.classList.add('open'); ideasPanel.shade.classList.add('open'); });
   setTimeout(() => { const b = ideasPanel.list.querySelector('button'); if (b) b.focus(); }, 80);
@@ -5315,74 +5324,43 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
 
-/* Right-click on selected text keeps the browser's own menu, so Copy works as usual.
-   Cassie is asked with the small "Ask Cassie" button instead (below). */
+/* Right-click on selected text keeps the browser's own menu, so Copy works as usual. */
 
-/* Highlight-to-ask on ANY device: selecting text inside an answer (or a file in
-   the reader) shows a small "Ask Cassie" button by it. Highlighting alone is often
-   just copying, so the Explain / Answer / Code popover opens only when the button
-   is tapped. Debounced so it waits for the selection to settle (mobile
-   selection-handle dragging fires many selectionchange events). */
+/* Highlight-to-ask on ANY device, with an on/off switch (Settings, and the switch on the
+   home screen's side panel): ON — selecting text inside an answer (or a file in the
+   reader) opens the Explain / Answer / Code popover; OFF — highlighting is just
+   highlighting, to copy and paste. Debounced so it waits for the selection to settle
+   (mobile selection-handle dragging fires many selectionchange events). */
 let selPopoverTimer = null;
-const askChip = document.getElementById('ask-chip');
-let chipText = '';
-let chipRect = null;
-function hideAskChip() { if (!askChip) return; askChip.hidden = true; askChip.classList.remove('on'); chipText = ''; }
-function showAskChip(text, range) {
-  chipText = text;
-  chipRect = range.getBoundingClientRect();
-  const rects = range.getClientRects();
-  const last = rects.length ? rects[rects.length - 1] : chipRect;
-  askChip.hidden = false;
-  const w = askChip.offsetWidth || 110, h = askChip.offsetHeight || 30;
-  // beside the end of the highlight, on its last line; below it when there's no room
-  // (phones show their own Copy bar above the words, so it never goes there)
-  let left = last.right + 10, top = last.top + last.height / 2 - h / 2;
-  if (left + w > window.innerWidth - 8) { left = Math.max(8, Math.min(last.right - w, window.innerWidth - w - 8)); top = last.bottom + 10; }
-  if (top + h > window.innerHeight - 8) top = Math.max(8, chipRect.top - h - 8);
-  askChip.style.left = `${left}px`;
-  askChip.style.top = `${top}px`;
-  requestAnimationFrame(() => askChip.classList.add('on'));
-}
-if (askChip) {
-  askChip.addEventListener('mousedown', (e) => e.preventDefault()); // keep the highlight
-  askChip.addEventListener('click', () => {
-    const text = chipText, rect = chipRect;
-    hideAskChip();
-    if (!text) return;
-    track('feature', 'ask-chip');
-    highlightPopover.hidden = false;
-    setPopoverChoice(text, rect);
-  });
-}
+function hideAskChip() { /* (the old "Ask Cassie" button is gone: highlighting is simply on or off) */ }
 function trySelectionPopover() {
-  if (!highlightPopover || !askChip) return;
-  if (state.highlightHelp === false) { hideAskChip(); return; } // switched off in Settings: just highlighting
+  if (!highlightPopover) return;
+  if (state.highlightHelp === false) return; // switched off: just highlighting
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hideAskChip(); return; }
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
   const text = sel.toString().trim();
-  if (text.length < 2) { hideAskChip(); return; }
+  if (text.length < 2) return;
   const range = sel.getRangeAt(0);
   const anchor = range.commonAncestorContainer;
   const el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
   if (!el) return;
-  if (el.closest('.highlight-popover')) return;      // words inside Cassie's own popover
-  if (el.closest('input, textarea') || !el.closest('#chat-log, #reader-body')) { hideAskChip(); return; } // answers, messages, and files open in the reader
+  if (el.closest('input, textarea')) return;         // ignore typed text
+  if (!el.closest('#chat-log, #reader-body')) return; // answers, messages, and files open in the reader
   // if this exact selection is already open (e.g. showing an answer), leave it
   if (!highlightPopover.hidden && text === lastPopoverText) return;
-  if (text === chipText && !askChip.hidden) return;
   const rect = range.getBoundingClientRect();
   if (!rect || (rect.width === 0 && rect.height === 0)) return;
-  showAskChip(text, range);
+  highlightPopover.hidden = false;
+  setPopoverChoice(text, rect);
 }
 function scheduleSelectionPopover(delay) {
   clearTimeout(selPopoverTimer);
   selPopoverTimer = setTimeout(trySelectionPopover, delay);
 }
-// Highlight-to-ask on every device: selecting text in an answer shows the Ask
-// Cassie button; tapping it opens the popover; picking a choice shows the answer;
-// clicking away hides it. Clicks inside the popover or on the button never re-trigger.
-function fromPopover(e) { return e.target && e.target.closest && e.target.closest('.highlight-popover, .ask-chip'); }
+// Highlight-to-ask on every device: selecting text in an answer opens the
+// popover; picking a choice shows the answer; clicking away hides it; and
+// selecting new text opens it again. Clicks inside the popover never re-trigger.
+function fromPopover(e) { return e.target && e.target.closest && e.target.closest('.highlight-popover'); }
 document.addEventListener('mouseup', (e) => { if (!fromPopover(e)) scheduleSelectionPopover(10); });
 document.addEventListener('touchend', (e) => {
   lastTouchEndAt = Date.now();
@@ -5390,17 +5368,11 @@ document.addEventListener('touchend', (e) => {
   // handler doesn't immediately hide the popover we're about to show
   if (!fromPopover(e)) scheduleSelectionPopover(380);
 }, { passive: true });
-document.addEventListener('selectionchange', () => {
-  const sel = window.getSelection();
-  if (askChip && !askChip.hidden && (!sel || sel.isCollapsed)) hideAskChip();
-  scheduleSelectionPopover(450);
-});
-// copying, scrolling or resizing: the button steps aside
-['copy', 'cut'].forEach((ev) => document.addEventListener(ev, hideAskChip, true));
+document.addEventListener('selectionchange', () => scheduleSelectionPopover(450));
 
-chatLog.addEventListener('scroll', () => { hideHighlightPopover(); hideAskChip(); });
-document.getElementById('reader-body')?.addEventListener('scroll', () => { hideHighlightPopover(); hideAskChip(); });
-window.addEventListener('resize', () => { hideHighlightPopover(); hideAskChip(); });
+chatLog.addEventListener('scroll', hideHighlightPopover);
+document.getElementById('reader-body')?.addEventListener('scroll', hideHighlightPopover);
+window.addEventListener('resize', hideHighlightPopover);
 
 /* ---------- anonymous usage stats (optional, opt-out in Settings → You) ---------- */
 // Usage counts go to Cassie's server (config.js). No server = nothing is sent.
@@ -5820,11 +5792,11 @@ if (liteSelect) {
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
   'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',
-  'Highlight help can be switched off (Settings, or the ON/OFF switch next to Snip in the Chrome extension): then highlighting is just highlighting.',
-  'Explore 3D: tap once for the whole organ (lung, heart, a muscle), tap again for the exact part. The muscles switch works now.',
+  'Highlight help ON / OFF: a switch in the Ideas side panel (and the ON/OFF switch next to Snip in the Chrome extension). Off, highlighting is just highlighting — copy and paste like normal.',
+  'Explore 3D: zoom in anywhere — scroll or pinch toward any part, double-tap to fly in close. Tap once for the whole organ, again for the exact part.',
+  'Cassie’s Island at the top is bigger and easier to read.',
   'Explore 3D body: all 10 body systems (circulatory, respiratory, nervous, digestive, musculoskeletal, endocrine, integumentary, urinary, lymphatic & immune, reproductive), a girl’s and a boy’s body, and every part you tap says what it is and what it does.',
   'Cassie sounds like a real person now — a woman’s or a man’s voice, made right on your device (a one-time download, then it works offline). No more robot voice.',
-  'Copy and paste like normal: highlighting words no longer pops Cassie open. A small “Ask Cassie” button shows by the words — tap it when you want her.',
   'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',
   'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
   'Explore 3D (the cube at the top): a real 3D human body — skeleton, organs, heart and blood vessels, brain and nerves, muscles. Tap any part or search it by name, then ask Cassie about it. Animal and plant cells too.',
