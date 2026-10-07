@@ -356,6 +356,7 @@ function createView() {
       <div class="x3d-tools">
         <button type="button" class="x3d-btn" data-tool="labels" aria-pressed="true" title="Show or hide the labels">Labels</button>
         <button type="button" class="x3d-btn" data-tool="cut" aria-pressed="true" title="Cut the cell open, or see it whole">Cut open</button>
+        <button type="button" class="x3d-btn" data-tool="view" aria-pressed="false" title="Turn the body to a side, or pull its parts apart" hidden>View</button>
         <button type="button" class="x3d-btn" data-tool="reset" title="Back to the start">Reset</button>
       </div>
     </div>
@@ -365,11 +366,31 @@ function createView() {
       <input type="search" class="x3d-search" placeholder="Find a part: heart, femur, biceps…" aria-label="Find a part of the body" autocomplete="off">
       <div class="x3d-results" role="listbox" hidden></div>
       <button type="button" class="x3d-btn x3d-showall" hidden>Show hidden parts</button>
+      <p class="x3d-count" aria-live="polite"><span class="x3d-count-dot"></span>Visible structures: <b>0</b></p>
+    </div>
+    <section class="x3d-view" hidden aria-label="View controls">
+      <div class="x3d-view-head"><h3>View controls</h3><button type="button" class="x3d-sheet-x x3d-view-x" aria-label="Close the view controls">×</button></div>
+      <div class="x3d-seg" role="group" aria-label="Look from">
+        <button type="button" data-look="front" aria-pressed="false">Front</button><button type="button" data-look="back" aria-pressed="false">Back</button><button type="button" data-look="side" aria-pressed="false">Side</button><button type="button" data-look="perspective" aria-pressed="true">Perspective</button>
+      </div>
+      <div class="x3d-spread-head">
+        <label for="x3d-spread">Spread structures apart</label>
+        <button type="button" class="x3d-btn x3d-reassemble" disabled><span aria-hidden="true">↺</span> Reassemble</button>
+        <output class="x3d-spread-pc" for="x3d-spread">0%</output>
+      </div>
+      <input type="range" id="x3d-spread" class="x3d-spread" min="0" max="100" step="1" value="0">
+      <div class="x3d-spread-ends" aria-hidden="true"><span>Assembled</span><span>Every piece</span></div>
+    </section>
+    <div class="x3d-gizmo" hidden role="group" aria-label="Turn to face a side">
+      <button type="button" data-face="S" title="From above (superior)">S</button><button type="button" data-face="I" title="From below (inferior)">I</button>
+      <button type="button" data-face="R" title="From the body's right">R</button><button type="button" data-face="L" title="From the body's left">L</button>
+      <button type="button" data-face="A" title="From the front (anterior)">A</button><button type="button" data-face="P" title="From the back (posterior)">P</button>
     </div>
     <div class="x3d-loading">Building the cell…</div>
     <section class="x3d-sheet" hidden aria-live="polite">
       <button type="button" class="x3d-sheet-x" aria-label="Close">×</button>
-      <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3></div>
+      <button type="button" class="x3d-sheet-x x3d-sheet-min" aria-label="Make the details small" aria-expanded="true" hidden>–</button>
+      <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3><span class="x3d-sheet-sub">Selection details</span></div>
       <p class="x3d-path" hidden></p>
       <p class="x3d-like"></p>
       <p class="x3d-does"></p>
@@ -417,6 +438,8 @@ function createView() {
     setLoading: (text) => { const l = $('.x3d-loading'); l.hidden = !text; if (text) l.textContent = text; },
     showPart: (info) => showBodyPart(info),
     onSystems: () => renderParts(),
+    onFilter: () => showCount(),
+    trayAspect: () => { const f = freeArea(); return camera.aspect * f.fracW / f.frac * 0.92; }, // rows shaped like the free screen
   });
   let showLabels = Math.min(window.innerWidth, window.innerHeight) >= 560; // phones: the parts list below names everything
   $('[data-tool="labels"]').setAttribute('aria-pressed', String(showLabels));
@@ -431,21 +454,24 @@ function createView() {
     inBody = k === 'body';
     root.classList.toggle('x3d-body-mode', inBody);
     findEl.hidden = !inBody; hint.hidden = inBody;
-    $('[data-tool="labels"]').hidden = inBody; $('[data-tool="cut"]').hidden = inBody;
+    $('[data-tool="labels"]').hidden = inBody; $('[data-tool="cut"]').hidden = inBody; $('[data-tool="view"]').hidden = !inBody;
+    $('.x3d-gizmo').hidden = !inBody;
+    if (!inBody) showViewPanel(false);
     camera.near = inBody ? 0.002 : 0.05; camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, inBody ? 1.5 : 2)); // the body has a lot to draw
     invalidate();
     // zoom goes where the finger or mouse is, right up close to any part; drag with two fingers
     // (or right-drag) to move around
     controls.zoomToCursor = true; controls.enablePan = true; controls.screenSpacePanning = true;
-    controls.minDistance = inBody ? 0.03 : 0.8; controls.maxDistance = inBody ? 6 : 30;
+    controls.minDistance = inBody ? 0.03 : 0.8; controls.maxDistance = inBody ? 12 : 30;
     if (inBody) {
       Object.values(cells).forEach((c) => { c.group.visible = false; });
       current = null; selected = null; sheet.hidden = true;
       root.querySelectorAll('[data-cell]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.cell === k)));
       labelsEl.replaceChildren(body.label); labelEls.clear();
       resetView(); renderParts();
-      body.enter().then(() => renderParts()).catch(() => {});
+      if (viewOpen === null) showViewPanel(true); // open the first time, like an atlas
+      body.enter().then(() => { renderParts(); showCount(); }).catch(() => {});
       return;
     }
     body.leave(); bodyPart = null;
@@ -532,7 +558,7 @@ function createView() {
   function showBodyPart(info) {
     bodyPart = info;
     const acts = sheet.querySelector('.x3d-acts');
-    if (!info) { sheet.hidden = true; return; }
+    if (!info) { sheet.hidden = true; $('.x3d-view').hidden = !viewOpen; return; }
     sheet.querySelector('h3').textContent = info.name;
     sheet.querySelector('.x3d-sheet-head .x3d-dot').style.background = info.color;
     const path = sheet.querySelector('.x3d-path');
@@ -553,8 +579,10 @@ function createView() {
     acts.querySelector('[data-act="quiz"]').textContent = `Quiz me on the ${info.system.toLowerCase()} system`;
     acts.querySelector('[data-act="hide"]').hidden = false;
     sheet.querySelector('.x3d-credit').hidden = false;
+    sheet.querySelector('.x3d-sheet-min').hidden = false;
     sheet.hidden = false;
-    if (info.focus) flyTo = info.focus;
+    $('.x3d-view').hidden = true; // one panel at a time at the bottom
+    if (info.focus) flyTo = body.spread > 0 ? { target: info.focus.target, dist: camera.position.distanceTo(controls.target) } : info.focus;
     controls.autoRotate = false;
   }
   // a short, specific explanation from Cassie (kept, so the same part is instant next time)
@@ -589,6 +617,7 @@ function createView() {
     sheet.querySelector('.x3d-path').hidden = true;
     sheet.querySelector('[data-act="hide"]').hidden = true;
     sheet.querySelector('.x3d-credit').hidden = true;
+    sheet.querySelector('.x3d-sheet-min').hidden = true; setSheetMini(false);
     sheet.querySelector('[data-act="quiz"]').textContent = 'Quiz me on this cell';
     if (current) current.parts.forEach((p, pid) => p.materials.forEach((m) => {
       const on = !id || pid === id;
@@ -704,7 +733,8 @@ function createView() {
     if (!b) return;
     if (b.dataset.tool === 'labels') { showLabels = !showLabels; b.setAttribute('aria-pressed', String(showLabels)); invalidate(); }
     if (b.dataset.tool === 'cut') setCut(!cut);
-    if (b.dataset.tool === 'reset') { if (inBody) body.select(-1); else select(null); resetView(); }
+    if (b.dataset.tool === 'reset') { if (inBody) { body.select(-1); spreadTo(0); markLook('perspective'); } else select(null); resetView(); }
+    if (b.dataset.tool === 'view') showViewPanel(!viewOpen);
   });
   sheet.querySelector('.x3d-sheet-x').addEventListener('click', () => (inBody ? body.select(-1) : select(null)));
   sheet.addEventListener('click', (e) => {
@@ -729,6 +759,131 @@ function createView() {
     if (e.target === searchEl && searchEl.value) { searchEl.value = ''; resultsEl.hidden = true; return; }
     if (inBody && bodyPart) body.select(-1); else if (selected) select(null); else close();
   });
+
+  /* ---------- the body: views, pulling it apart, and which way is which ---------- */
+  let viewOpen = null, spreadAnim = 0;
+  const viewEl = $('.x3d-view'), spreadEl = $('.x3d-spread'), pcEl = $('.x3d-spread-pc'), reEl = $('.x3d-reassemble');
+  function showViewPanel(on) {
+    viewOpen = !!on;
+    viewEl.hidden = !on || (inBody && !!bodyPart);
+    $('[data-tool="view"]').setAttribute('aria-pressed', String(!!on));
+  }
+  function showCount() {
+    if (!inBody) return;
+    $('.x3d-count b').textContent = body.visibleCount.toLocaleString();
+  }
+  // the part of the screen not covered by the bars and panels
+  // (a panel docked at the side, on a computer, takes its width instead of its height)
+  function freeArea() {
+    const r = canvas.getBoundingClientRect();
+    let top = r.top, bottom = r.bottom, left = r.left, right = r.right;
+    for (const el of [$('.x3d-top'), findEl]) if (!el.hidden) top = Math.max(top, el.getBoundingClientRect().bottom + 8);
+    for (const el of [viewEl, sheet, partsEl, $('.x3d-gizmo')]) {
+      if (el.hidden || !el.offsetParent) continue;
+      const b = el.getBoundingClientRect();
+      if (b.right < r.left + r.width * 0.4 && b.top < r.top + r.height * 0.75) left = Math.max(left, b.right + 12); // docked on the left
+      else if (b.left > r.left + r.width * 0.6 && b.top < r.top + r.height * 0.75) right = Math.min(right, b.left - 12); // on the right
+      else bottom = Math.min(bottom, b.top - 8);
+    }
+    if (bottom - top < r.height * 0.3) { top = r.top; bottom = r.bottom; }
+    if (right - left < r.width * 0.3) { left = r.left; right = r.right; }
+    return { frac: (bottom - top) / r.height, fracW: (right - left) / r.width, offset: (top + bottom) / 2 - (r.top + r.bottom) / 2, offsetX: (left + right) / 2 - (r.left + r.right) / 2, h: r.height };
+  }
+  // how much of the free space the pieces fill: most on a computer, a little less on a tablet,
+  // and on a phone a margin so thumbs don't cover them
+  const fillFor = () => { const w = root.clientWidth || window.innerWidth; return w >= 1100 ? 0.97 : w >= 700 ? 0.92 : 0.88; };
+  // where to stand so a box fills the free part of the screen, looking along dir
+  function fitView(box, dir) {
+    const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const size = box.getSize(new THREE.Vector3());
+    const across = Math.abs(dir.z) > 0.7 ? size.x : Math.abs(dir.x) > 0.7 ? size.z : Math.hypot(size.x, size.z);
+    const up = Math.abs(dir.y) > 0.7 ? Math.max(size.z, size.x) : size.y;
+    const free = freeArea();
+    const dist = Math.min(controls.maxDistance, Math.max(up / 2 / (half * free.frac), across / 2 / (half * camera.aspect * free.fracW)) / fillFor() + size.z * 0.5);
+    // the free area isn't in the middle: aim a little off so the box sits in it
+    const camUp = new THREE.Vector3(0, 1, 0).sub(dir.clone().multiplyScalar(dir.y)).normalize();
+    if (Math.abs(dir.y) > 0.7) camUp.set(0, 0, -Math.sign(dir.y));
+    const camRight = camUp.clone().cross(dir).normalize(), unit = 2 * dist * half / free.h;
+    const target = box.getCenter(new THREE.Vector3()).addScaledVector(camUp, free.offset * unit).addScaledVector(camRight, -free.offsetX * unit);
+    return { dist, target };
+  }
+  // body faces +z, its head is +y and its left hand +x
+  const LOOKS = { front: V(0, 0, 1), back: V(0, 0, -1), side: V(-1, 0, 0), perspective: null, A: V(0, 0, 1), P: V(0, 0, -1), R: V(-1, 0, 0), L: V(1, 0, 0), S: V(0, 1, 0.0001), I: V(0, -1, 0.0001) };
+  function markLook(name) { viewEl.querySelectorAll('[data-look]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.look === name))); }
+  function look(name) {
+    const dir = (LOOKS[name] || body.camera.clone().sub(body.target)).clone().normalize();
+    const box = body.spreadBox(); // pulled apart: frame every piece
+    const half = THREE.MathUtils.degToRad(camera.fov / 2);
+    const fit = box ? fitView(box, dir) : { target: body.target.clone(), dist: body.fit / Math.tan(half) / Math.min(1, camera.aspect) ** 0.8 * 1.08 };
+    controls.autoRotate = false;
+    flyTo = { target: fit.target, dist: fit.dist, dir };
+    markLook({ A: 'front', P: 'back', R: 'side' }[name] || name);
+    invalidate();
+  }
+  function showSpread(t) {
+    const pc = Math.round(t * 100);
+    spreadEl.value = String(pc);
+    pcEl.textContent = pc + '%';
+    spreadEl.style.setProperty('--fill', pc + '%');
+    reEl.disabled = pc === 0;
+  }
+  function setSpread(t) {
+    if (bodyPart && body.spread === 0 && t > 0) body.select(-1); // a picked part would hide the rest
+    body.setSpread(t);
+    showSpread(t);
+    showCount();
+    invalidate();
+  }
+  // after the slider is let go: step back so every piece is on screen
+  function fitSpread() {
+    const box = body.spreadBox();
+    if (!box) return;
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const fit = fitView(box, dir), now = camera.position.distanceTo(controls.target);
+    if (Math.abs(fit.dist - now) > now * 0.05 || fit.target.distanceTo(controls.target) > fit.dist * 0.2) flyTo = { target: fit.target, dist: body.spread >= 0.9 ? fit.dist : Math.max(fit.dist, now) };
+  }
+  // glide the pieces to t (Reassemble)
+  function spreadTo(t, then) {
+    cancelAnimationFrame(spreadAnim);
+    const from = body.spread, t0 = performance.now();
+    if (from === t) { if (then) then(); return; }
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / 700), e = 1 - Math.pow(1 - k, 3);
+      setSpread(from + (t - from) * e);
+      if (k < 1) spreadAnim = requestAnimationFrame(step); else if (then) then();
+    };
+    step();
+  }
+  spreadEl.addEventListener('input', () => { cancelAnimationFrame(spreadAnim); setSpread(+spreadEl.value / 100); });
+  spreadEl.addEventListener('change', () => fitSpread());
+  reEl.addEventListener('click', () => spreadTo(0, () => look(viewEl.querySelector('[data-look][aria-pressed="true"]')?.dataset.look || 'perspective')));
+  viewEl.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-look]');
+    if (b) { look(b.dataset.look); if (opts.onSelect) opts.onSelect('look:' + b.dataset.look); }
+  });
+  $('.x3d-view-x').addEventListener('click', () => showViewPanel(false));
+  const gizmoEl = $('.x3d-gizmo'), gz = new THREE.Vector3();
+  gizmoEl.addEventListener('click', (e) => { const b = e.target.closest('[data-face]'); if (b) look(b.dataset.face); });
+  // the letters turn with the body: S up top, A toward you when you face its front…
+  function placeGizmo() {
+    const q = camera.quaternion.clone().invert();
+    gizmoEl.querySelectorAll('[data-face]').forEach((b) => {
+      gz.copy(LOOKS[b.dataset.face]).normalize().applyQuaternion(q);
+      b.style.transform = `translate(${gz.x * 26}px, ${-gz.y * 26}px) scale(${0.8 + 0.25 * (gz.z + 1) / 2})`;
+      b.style.opacity = String(0.45 + 0.55 * (gz.z + 1) / 2);
+      b.style.zIndex = String(Math.round((gz.z + 1) * 10));
+    });
+  }
+  // the details card can shrink to a bar (name + "Selection details")
+  function setSheetMini(on) {
+    sheet.classList.toggle('mini', on);
+    const m = sheet.querySelector('.x3d-sheet-min');
+    m.textContent = on ? '+' : '–';
+    m.setAttribute('aria-expanded', String(!on));
+    m.setAttribute('aria-label', on ? 'Show the details' : 'Make the details small');
+  }
+  sheet.querySelector('.x3d-sheet-min').addEventListener('click', (e) => { e.stopPropagation(); setSheetMini(!sheet.classList.contains('mini')); });
+  sheet.querySelector('.x3d-sheet-head').addEventListener('click', () => { if (sheet.classList.contains('mini')) setSheetMini(false); });
 
   function resize() {
     const w = root.clientWidth || window.innerWidth, h = root.clientHeight || window.innerHeight;
@@ -763,6 +918,11 @@ function createView() {
       if (!flyTo.t0) { flyTo.t0 = performance.now(); flyTo.from = controls.target.clone(); flyTo.fromDist = camera.position.distanceTo(controls.target); }
       const k = Math.min(1, (performance.now() - flyTo.t0) / 650), e = 1 - Math.pow(1 - k, 3);
       toCam.copy(camera.position).sub(controls.target).normalize();
+      if (flyTo.dir) { // swing round to look from another side
+        if (!flyTo.s0) { flyTo.s0 = new THREE.Spherical().setFromVector3(toCam); flyTo.s1 = new THREE.Spherical().setFromVector3(flyTo.dir); let d = flyTo.s1.theta - flyTo.s0.theta; d = Math.atan2(Math.sin(d), Math.cos(d)); flyTo.s1.theta = flyTo.s0.theta + d; }
+        const sp = new THREE.Spherical(1, flyTo.s0.phi + (flyTo.s1.phi - flyTo.s0.phi) * e, flyTo.s0.theta + (flyTo.s1.theta - flyTo.s0.theta) * e);
+        toCam.setFromSpherical(sp);
+      }
       controls.target.copy(flyTo.from).lerp(flyTo.target, e);
       camera.position.copy(controls.target).addScaledVector(toCam, flyTo.fromDist + (flyTo.dist - flyTo.fromDist) * e);
       if (k >= 1) flyTo = null;
@@ -773,6 +933,7 @@ function createView() {
     dirty = false;
     renderer.render(scene, camera);
     placeLabels();
+    if (inBody) placeGizmo();
   }
 
   function open(o) {

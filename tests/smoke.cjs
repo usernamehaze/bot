@@ -1090,6 +1090,67 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await ctx.close();
 });
 
+test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece apart and back, structure count, which-way letters', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  await page.click('#explore-btn');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden && +document.querySelector('.x3d-count b').textContent.replace(/\D/g, '') > 50, null, { timeout: 40000 });
+  expect(await page.locator('.x3d-view').isVisible(), 'the view controls are open at the start');
+  const count0 = +(await page.locator('.x3d-count b').innerText()).replace(/\D/g, '');
+  // the body's left is +x: the liver (right side) is on -x, the heart leans to +x
+  const sides = await page.evaluate(() => { const bd = exploreMod.open({}).body; const l = bd.boxOf('liver'), s = bd.boxOf('stomach'); return { liver: l && l.getCenter(new l.min.constructor()).x, stomach: s && s.getCenter(new s.min.constructor()).x }; });
+  expect(sides.liver < 0 && sides.stomach > sides.liver, 'the R/L letters match the body: ' + JSON.stringify(sides));
+  // Front view: camera straight in front
+  await page.click('.x3d-seg [data-look="front"]');
+  await page.waitForTimeout(900);
+  expect(await page.locator('.x3d-seg [data-look="front"]').getAttribute('aria-pressed') === 'true', 'Front is marked');
+  expect(await page.locator('.x3d-gizmo [data-face="A"]').evaluate((e) => +getComputedStyle(e).opacity > 0.9), 'facing the front, A is the nearest letter');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-front.png' });
+  // spread structures apart
+  const slider = page.locator('.x3d-spread');
+  await slider.fill('58'); await slider.dispatchEvent('change');
+  await page.waitForTimeout(900);
+  expect(await page.locator('.x3d-spread-pc').innerText() === '58%' && await page.locator('.x3d-reassemble').isEnabled(), 'the slider shows 58% and Reassemble works');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-58.png' });
+  await slider.fill('100'); await slider.dispatchEvent('change');
+  await page.waitForTimeout(1200);
+  const apart = await page.evaluate(() => { const bd = exploreMod.open({}).body; const s = bd.spreadBox(); return { w: s.max.x - s.min.x, h: s.max.y - s.min.y }; });
+  expect(apart.w > 1, 'every piece lies apart in rows: ' + JSON.stringify(apart));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-100.png' });
+  // a piece can still be tapped while apart (the femur is one of the biggest: top rows)
+  await page.fill('.x3d-search', 'femur');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
+  expect(await page.locator('.x3d-label.on').isVisible(), 'the picked piece has a callout');
+  // the details card shrinks to a bar
+  await page.click('.x3d-sheet-min');
+  expect(await page.locator('.x3d-sheet-sub').isVisible() && !(await page.locator('.x3d-does').isVisible()), 'the small bar says Selection details');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-pick.png' });
+  await page.click('.x3d-sheet-head');
+  expect(await page.locator('.x3d-does').isVisible(), 'tapping the bar opens the details again');
+  await page.click('.x3d-sheet > .x3d-sheet-x:not(.x3d-sheet-min)');
+  // Reassemble: back together
+  await page.click('.x3d-reassemble');
+  await page.waitForFunction(() => document.querySelector('.x3d-spread-pc').textContent === '0%', null, { timeout: 5000 });
+  await page.waitForFunction(() => exploreMod.open({}).body.spreadBox() === null, null, { timeout: 5000 }); // back together
+  const count1 = +(await page.locator('.x3d-count b').innerText()).replace(/\D/g, '');
+  expect(count1 === count0, `the count comes back: ${count0} → ${count1}`);
+  // turning a system off lowers the count
+  await page.click('.x3d-sys[data-sys="musculoskeletal"]');
+  await page.waitForFunction((n) => +document.querySelector('.x3d-count b').textContent.replace(/\D/g, '') < n, count0, { timeout: 10000 });
+  // a letter turns the body: R = from its right side, then P = from the back
+  await page.click('.x3d-gizmo [data-face="R"]');
+  await page.waitForTimeout(900);
+  expect(await page.locator('.x3d-seg [data-look="side"]').getAttribute('aria-pressed') === 'true', 'R looks from the side');
+  await page.click('.x3d-gizmo [data-face="P"]');
+  await page.waitForTimeout(900);
+  expect(await page.locator('.x3d-seg [data-look="back"]').getAttribute('aria-pressed') === 'true', 'P looks from the back');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-back.png' });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();

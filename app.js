@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '117';
+const APP_VERSION = '118';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -5897,6 +5897,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Explore 3D body, atlas style: View → look from the Front, Back or Side, and “Spread structures apart” to pull every bone and organ out into rows (Reassemble puts it back). It counts the visible structures, the S/I/R/L/A/P letters show which way you face (tap one to turn), and a picked part gets a callout you can shrink to a small bar.',
   'Draw together: open the board and tap “Draw together” (or Ideas → Draw together) to start a study room. Share the code or link and up to 12 classmates draw on the same board, live.',
   'Research: under the papers Cassie finds, copy the references in APA or MLA, or download them for Zotero, Mendeley or EndNote (BibTeX / RIS).',
   'Flashcards: tap “＋ Flashcards” under any answer and Cassie makes cards from it. Study them with spaced repetition (cards come back right before you’d forget), turn quiz mistakes into cards, and export to Anki or Quizlet.',
