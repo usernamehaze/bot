@@ -1682,6 +1682,7 @@ const HOME_EXAMPLES = [
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
   { label: 'Explore the body in 3D', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openExplore('body') },
+  { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
 
@@ -1771,6 +1772,18 @@ function renderHome() {
     btn.appendChild(lbl);
     btn.addEventListener('click', () => { closeIdeas(); reviewMistakes(!due); });
     intro.appendChild(btn); // personal and timely: it stays on the home screen
+  }
+  const cardsDue = window.CassieCards ? window.CassieCards.dueCount() : 0;
+  if (cardsDue) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'home-example review-mistakes study-cards';
+    btn.innerHTML = '<svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z"/></svg>';
+    const lbl = document.createElement('span');
+    lbl.textContent = `Flashcards to review (${cardsDue})`;
+    btn.appendChild(lbl);
+    btn.addEventListener('click', () => { closeIdeas(); window.CassieCards.open(); });
+    intro.appendChild(btn);
   }
   wrap.appendChild(intro);
   fillIdeas(bar);
@@ -2942,6 +2955,29 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
     } catch (e) { /* clipboard blocked */ }
   });
   tools.appendChild(copyBtn);
+  // ＋ Flashcards: Cassie turns this answer into cards for spaced-repetition study
+  if (window.CassieCards && text.length > 120) {
+    const fcBtn = document.createElement('button');
+    fcBtn.type = 'button';
+    fcBtn.className = 'fc-make';
+    fcBtn.textContent = '＋ Flashcards';
+    fcBtn.addEventListener('click', async () => {
+      if (fcBtn.disabled) return;
+      if (fcBtn.dataset.deck) { window.CassieCards.open(fcBtn.dataset.deck); return; }
+      fcBtn.disabled = true; fcBtn.textContent = 'Making cards…';
+      try {
+        const chat = curChat();
+        const deck = (title || (chat && chat.title) || 'My cards').replace(/^(New chat|Chat)$/i, 'My cards').slice(0, 60);
+        const r = await window.CassieCards.fromText(text, deck);
+        fcBtn.dataset.deck = r.deck;
+        fcBtn.textContent = r.added ? `✓ ${r.added} cards — Study` : '✓ Already cards — Study';
+      } catch (e) {
+        fcBtn.textContent = 'Couldn’t make cards — try again';
+        setTimeout(() => { fcBtn.textContent = '＋ Flashcards'; }, 2600);
+      } finally { fcBtn.disabled = false; }
+    });
+    tools.appendChild(fcBtn);
+  }
   if (!window.CassieExport) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -4039,7 +4075,7 @@ if (quizBtn) {
     } else {
       const saved = (state.mistakes || []).length;
       renderMessage('assistant', saved
-        ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again — tap “Review my mistakes” on the home screen (New chat) any time.`
+        ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again — tap “Review my mistakes” on the home screen (New chat) any time, or turn them into flashcards (Ideas → Flashcards).`
         : 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
     }
   });
@@ -5475,7 +5511,7 @@ async function authCall(path, body, method = 'POST') {
   return data;
 }
 function accountData() {
-  return { profile: state.profile || null, mistakes: state.mistakes || [], audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics };
+  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -5491,6 +5527,11 @@ function syncAccount(now) {
 function applyAccountData(d) {
   if (!d) return;
   ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
+    const mine = new Map((state.cards || []).map((c) => [c.id, c]));
+    d.cards.forEach((c) => { if (!c || !c.id || !c.f) return; const m = mine.get(c.id); if (!m || (c.seen || 0) > (m.seen || 0)) mine.set(c.id, c); });
+    state.cards = [...mine.values()].slice(-2000);
+  }
   if (Array.isArray(d.mistakes)) { // keep both devices' saved mistakes
     const have = new Set((state.mistakes || []).map((m) => (m.q || '').toLowerCase()));
     state.mistakes = [...(state.mistakes || []), ...d.mistakes.filter((m) => m && m.q && !have.has(m.q.toLowerCase()))].slice(0, 200);
@@ -5728,8 +5769,20 @@ if (liteSelect) {
   });
 }
 
+/* ---------- Flashcards (cards.js): spaced-repetition study, on the device ---------- */
+if (window.CassieCards) {
+  window.CassieCards.init({
+    state: () => state,
+    save,
+    ask: (prompt) => askCassie([{ role: 'user', content: prompt }]),
+    track,
+    onChange: () => { if (!state.messages.length) renderHistory(); }, // the home screen shows what's due
+  });
+}
+
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Flashcards: tap “＋ Flashcards” under any answer and Cassie makes cards from it. Study them with spaced repetition (cards come back right before you’d forget), turn quiz mistakes into cards, and export to Anki or Quizlet.',
   'Talking with Cassie is quicker: she answers right away (her words show while her voice downloads the first time), she starts speaking sooner, and her voice is always Bella — no more robot voice.',
   'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',
   'Highlight help ON / OFF: a switch in the Ideas side panel (and the ON/OFF switch next to Snip in the Chrome extension). Off, highlighting is just highlighting — copy and paste like normal.',
