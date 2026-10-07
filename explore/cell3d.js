@@ -11,6 +11,7 @@ import { RoomEnvironment } from './RoomEnvironment.js';
 import { RoundedBoxGeometry } from './RoundedBoxGeometry.js';
 import { PARTS, CELLS } from './cells.js';
 import { createBody, SYSTEMS } from './body3d.js';
+import { factFor } from './body-facts.js';
 
 let view = null; // kept after closing, so opening again is instant
 
@@ -360,6 +361,7 @@ function createView() {
     </div>
     <p class="x3d-hint"></p>
     <div class="x3d-find" hidden>
+      <div class="x3d-sex" role="radiogroup" aria-label="Whose body"><button type="button" role="radio" data-sex="boy" aria-checked="true">Boy</button><button type="button" role="radio" data-sex="girl" aria-checked="false">Girl</button></div>
       <input type="search" class="x3d-search" placeholder="Find a part: heart, femur, biceps…" aria-label="Find a part of the body" autocomplete="off">
       <div class="x3d-results" role="listbox" hidden></div>
       <button type="button" class="x3d-btn x3d-showall" hidden>Show hidden parts</button>
@@ -372,6 +374,7 @@ function createView() {
       <p class="x3d-like"></p>
       <p class="x3d-does"></p>
       <p class="x3d-only"></p>
+      <p class="x3d-more" hidden></p>
       <div class="x3d-acts">
         <button type="button" class="x3d-act x3d-act-main" data-act="ask">Ask Cassie about it</button>
         <button type="button" class="x3d-act" data-act="quiz">Quiz me on this cell</button>
@@ -493,7 +496,15 @@ function createView() {
         b.setAttribute('aria-pressed', String(body.isOn(sys.id)));
         b.innerHTML = `<span class="x3d-tick" aria-hidden="true"></span>${sys.name}`;
         partsEl.appendChild(b);
+        if (sys.id === 'musculoskeletal' && body.isOn(sys.id)) { // bones show; the muscles cover everything, so they're a switch of their own
+          const m = document.createElement('button');
+          m.type = 'button'; m.className = 'x3d-chip x3d-sys x3d-sub'; m.dataset.muscles = '1';
+          m.setAttribute('aria-pressed', String(body.muscles));
+          m.innerHTML = '<span class="x3d-tick" aria-hidden="true"></span>+ Muscles';
+          partsEl.appendChild(m);
+        }
       });
+      root.querySelectorAll('.x3d-sex [data-sex]').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.sex === body.sex)));
       return;
     }
     partsEl.setAttribute('aria-label', 'Parts of the cell');
@@ -524,18 +535,48 @@ function createView() {
     const path = sheet.querySelector('.x3d-path');
     path.hidden = false;
     path.innerHTML = [`<span>${info.system}</span>`, ...info.path.map((g) => `<button type="button" class="x3d-up" data-si="${g.index}" title="Show the whole ${g.name.replace(/"/g, '')}">${g.name.replace(/[<&>]/g, '')}</button>`)].join(' › ');
-    sheet.querySelector('.x3d-like').textContent = info.latin ? `Latin: ${info.latin}` : '';
-    sheet.querySelector('.x3d-does').textContent = 'Tap “Ask Cassie” to learn what it does, where it is and how it works.';
+    // what it is and what it does, right away; Cassie adds the specifics for parts only known by kind
+    const fact = factFor(info);
+    const esc = (t) => String(t).replace(/[<&>]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[c]));
+    sheet.querySelector('.x3d-like').innerHTML = (fact ? `<b>What it is:</b> ${esc(fact.what)}` : '') + (info.latin ? `<span class="x3d-latin">Latin: ${esc(info.latin)}</span>` : '');
+    sheet.querySelector('.x3d-does').innerHTML = fact ? `<b>What it does:</b> ${esc(fact.does)}` : '';
     sheet.querySelector('.x3d-only').hidden = true;
-    acts.querySelector('[data-act="quiz"]').textContent = `Quiz me on the ${info.system.toLowerCase()}`;
+    explainMore(info, !fact || fact.general);
+    acts.querySelector('[data-act="quiz"]').textContent = `Quiz me on the ${info.system.toLowerCase()} system`;
     acts.querySelector('[data-act="hide"]').hidden = false;
     sheet.querySelector('.x3d-credit').hidden = false;
     sheet.hidden = false;
     if (info.focus) flyTo = info.focus;
     controls.autoRotate = false;
   }
+  // a short, specific explanation from Cassie (kept, so the same part is instant next time)
+  let moreFor = '';
+  function explainMore(info, want) {
+    const el = sheet.querySelector('.x3d-more');
+    moreFor = info.id + info.index;
+    el.hidden = true;
+    if (!want || !opts.explain) return;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('cassie.bodyMore') || '{}'); } catch (e) { /* ignore */ }
+    const key = info.id;
+    const show = (text) => { el.hidden = false; el.classList.remove('muted'); el.innerHTML = '<b>Cassie:</b> '; el.appendChild(document.createTextNode(text)); };
+    if (saved[key]) { show(saved[key]); return; }
+    const mine = moreFor;
+    el.hidden = false; el.classList.add('muted'); el.textContent = 'Cassie is looking it up…';
+    const where = info.path.length ? `, in the ${info.path[info.path.length - 1].name.toLowerCase()}` : '';
+    opts.explain(`In two short sentences for a high-school student, say exactly what the ${info.name}${info.latin ? ` (${info.latin})` : ''} of the human body is — it is part of the ${info.system.toLowerCase()} system${where} — and what it does. Plain sentences only: no lists, no headings, no formatting, no greeting.`)
+      .then((text) => {
+        text = String(text || '').replace(/[*_#`>]/g, '').replace(/\s+/g, ' ').trim();
+        if (!text) throw new Error('empty');
+        if (text.length > 420) text = text.slice(0, 417).replace(/\s+\S*$/, '') + '…';
+        try { saved[key] = text; const keys = Object.keys(saved); if (keys.length > 300) delete saved[keys[0]]; localStorage.setItem('cassie.bodyMore', JSON.stringify(saved)); } catch (e) { /* ignore */ }
+        if (moreFor === mine && bodyPart) show(text);
+      })
+      .catch(() => { if (moreFor === mine) el.hidden = true; });
+  }
   function select(id) {
     selected = id;
+    sheet.querySelector('.x3d-more').hidden = true;
     invalidate();
     sheet.querySelector('.x3d-path').hidden = true;
     sheet.querySelector('[data-act="hide"]').hidden = true;
@@ -595,7 +636,8 @@ function createView() {
 
   partsEl.addEventListener('click', (e) => {
     const s = e.target.closest('[data-sys]');
-    if (s) { const on = !body.isOn(s.dataset.sys); s.setAttribute('aria-pressed', String(on)); body.setSystem(s.dataset.sys, on).catch(() => {}); return; }
+    if (s && s.dataset.muscles) { const on = !body.muscles; s.setAttribute('aria-pressed', String(on)); body.setMuscles(on).catch(() => {}); return; }
+    if (s) { const on = !body.isOn(s.dataset.sys); s.setAttribute('aria-pressed', String(on)); body.setSystem(s.dataset.sys, on).catch(() => {}); if (s.dataset.sys === 'musculoskeletal') renderParts(); return; }
     const b = e.target.closest('[data-part]'); if (b) select(b.dataset.part === selected ? null : b.dataset.part);
   });
   // find a part of the body by name
@@ -615,6 +657,14 @@ function createView() {
     body.goTo(+b.dataset.si).then(() => renderParts()).catch(() => {});
   });
   showAllEl.addEventListener('click', () => { body.showAll(); showAllEl.hidden = true; });
+  // a boy's or a girl's body (the reproductive organs and the chest)
+  root.querySelector('.x3d-sex').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sex]');
+    if (!b || b.dataset.sex === body.sex) return;
+    root.querySelectorAll('.x3d-sex [data-sex]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    body.setSex(b.dataset.sex).catch(() => {});
+    if (opts.onSelect) opts.onSelect('sex:' + b.dataset.sex);
+  });
   root.querySelector('.x3d-switch').addEventListener('click', (e) => { const b = e.target.closest('[data-cell]'); if (b && b.dataset.cell !== kind) showCell(b.dataset.cell); });
   root.querySelector('.x3d-tools').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tool]');
@@ -630,8 +680,8 @@ function createView() {
     const b = e.target.closest('[data-act]');
     if (b && inBody && bodyPart) {
       const p = bodyPart;
-      if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${p.name}${p.latin ? ` (${p.latin})` : ''} — part of the ${p.system.toLowerCase()}${p.path.length ? `, in the ${p.path[p.path.length - 1].name.toLowerCase()}` : ''} — simply: where it is in the body, what it does, and one fact that helps me remember it. Then ask me one quick question to check I understood.`, { part: p.name, cell: 'body' });
-      if (b.dataset.act === 'quiz' && opts.onQuiz) opts.onQuiz(`the ${p.system.toLowerCase()} of the human body (its main parts, where they are and what they do)`, { cell: 'body' });
+      if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${p.name}${p.latin ? ` (${p.latin})` : ''} — part of the ${p.system.toLowerCase()} system${p.path.length ? `, in the ${p.path[p.path.length - 1].name.toLowerCase()}` : ''} — simply: where it is in the body, what it does, and one fact that helps me remember it. Then ask me one quick question to check I understood.`, { part: p.name, cell: 'body' });
+      if (b.dataset.act === 'quiz' && opts.onQuiz) opts.onQuiz(`the ${p.system.toLowerCase()} system of the human body (its main parts, where they are and what they do)`, { cell: 'body' });
       if (b.dataset.act === 'hide') { body.hide(p.index); showAllEl.hidden = false; }
       return;
     }

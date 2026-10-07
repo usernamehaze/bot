@@ -3992,6 +3992,8 @@ async function openExplore(cell) {
       cell: ['plant', 'animal', 'body'].includes(cell) ? cell : undefined,
       onAsk: (q) => { view.close(); handleSend(q); },
       onQuiz: (topic) => { view.close(); startQuizOn(topic); },
+      // a short explanation of a tapped part of the body, without leaving the 3D view
+      explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       onClose: () => { try { exploreBtn && exploreBtn.focus(); } catch (e) { /* ignore */ } },
     });
   } catch (e) {
@@ -5769,6 +5771,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Explore 3D body: all 10 body systems (circulatory, respiratory, nervous, digestive, musculoskeletal, endocrine, integumentary, urinary, lymphatic & immune, reproductive), a girl’s and a boy’s body, and every part you tap says what it is and what it does.',
   'Cassie sounds like a real person now — a woman’s or a man’s voice, made right on your device (a one-time download, then it works offline). No more robot voice.',
   'Copy and paste like normal: highlighting words no longer pops Cassie open. A small “Ask Cassie” button shows by the words — tap it when you want her.',
   'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',

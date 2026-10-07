@@ -889,14 +889,18 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
   await ctx.close();
 });
 
-test('Explore 3D: the human body — real anatomy, systems on and off, tap or find a part, ask Cassie', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The femur is the thigh bone, the longest bone in the body.' }) });
+test('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
   await page.click('#explore-btn');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   expect(await page.locator('.x3d-switch [data-cell="body"]').getAttribute('aria-selected') === 'true', 'the 3D button opens the human body');
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
   const on = await page.$$eval('.x3d-sys', (c) => c.filter((x) => x.getAttribute('aria-pressed') === 'true').map((x) => x.dataset.sys));
-  expect(on.join() === 'regions,skeletal,visceral', 'skin, skeleton and organs start on: ' + on);
+  const all = await page.$$eval('.x3d-sys[data-sys]', (c) => c.map((x) => x.textContent.trim()));
+  expect(['Circulatory', 'Respiratory', 'Nervous', 'Digestive', 'Musculoskeletal', 'Endocrine', 'Integumentary', 'Urinary', 'Lymphatic', 'Reproductive'].every((n) => all.some((t) => t.startsWith(n))), 'the 10 body systems are there: ' + all);
+  expect(on.join() === 'respiratory,digestive,musculoskeletal,endocrine,integumentary,urinary,reproductive', 'skin, bones and organs start on: ' + on);
+  expect(await page.locator('.x3d-sys[data-muscles]').count() === 1, 'muscles are a switch of their own under Musculoskeletal');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/body-systems.png' });
   // tap the middle of the chest → a real, named part (stop the slow turn first, like a finger would)
   await page.waitForTimeout(1500);
   const box = await page.locator('.x3d-canvas').boundingBox();
@@ -904,19 +908,40 @@ test('Explore 3D: the human body — real anatomy, systems on and off, tap or fi
   await page.waitForFunction(() => !document.querySelector('.x3d-sheet').hidden && document.querySelector('.x3d-sheet h3').textContent, null, { timeout: 8000 })
     .catch(async (e) => { throw new Error('nothing picked: ' + JSON.stringify(await page.evaluate(() => ({ sheet: document.querySelector('.x3d-sheet').hidden, h3: document.querySelector('.x3d-sheet h3').textContent, loading: document.querySelector('.x3d-loading').textContent })))); });
   const tapped = await page.locator('.x3d-sheet h3').innerText();
-  expect(tapped.length > 2 && /Skeleton|Organs/.test(await page.locator('.x3d-path').innerText()), 'a tapped part is named with its system: ' + tapped);
+  expect(tapped.length > 2 && /Musculoskeletal|Respiratory|Digestive|Endocrine|Urinary|Reproductive/.test(await page.locator('.x3d-path').innerText()), 'a tapped part is named with its system: ' + tapped + ' / ' + await page.locator('.x3d-path').innerText());
+  expect(/What it is:/.test(await page.locator('.x3d-like').innerText()) && /What it does:/.test(await page.locator('.x3d-does').innerText()), 'a tapped part says what it is and what it does');
   // find the femur by name, with its Latin name
   await page.fill('.x3d-search', 'femur');
   await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 }).catch(async () => { throw new Error('no results: ' + JSON.stringify(await page.evaluate(() => ({ v: document.querySelector('.x3d-search').value, r: document.querySelector('.x3d-results').outerHTML.slice(0, 200), direct: exploreMod.open({}).body.search('femur').length, rr: document.querySelector('.x3d-results').getBoundingClientRect().toJSON(), fr: document.querySelector('.x3d-find').getBoundingClientRect().toJSON(), disp: getComputedStyle(document.querySelector('.x3d-results')).display, fh: document.querySelector('.x3d-find').hidden })))); });
   await page.click('.x3d-results button >> nth=0');
   await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
   expect(/Os femoris/.test(await page.locator('.x3d-like').innerText()), 'the Latin name shows');
+  expect(/thigh bone/.test(await page.locator('.x3d-like').innerText()) && /weight/.test(await page.locator('.x3d-does').innerText()), 'the femur is explained: ' + await page.locator('.x3d-sheet').innerText());
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/body-femur.png' });
   // a group: the whole heart turns the heart & blood vessels on
   await page.fill('.x3d-search', 'heart');
   await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
   expect(/^Heart/.test(await page.locator('.x3d-results button >> nth=0').innerText()), 'the whole heart is the first result');
   await page.click('.x3d-results button >> nth=0');
-  await page.waitForFunction(() => document.querySelector('.x3d-sheet h3').textContent === 'Heart' && document.querySelector('.x3d-sys[data-sys="cardiovascular"]').getAttribute('aria-pressed') === 'true', null, { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.x3d-sheet h3').textContent === 'Heart' && document.querySelector('.x3d-sys[data-sys="circulatory"]').getAttribute('aria-pressed') === 'true', null, { timeout: 20000 });
+  // a part only known by its kind: Cassie says exactly what it is
+  await page.fill('.x3d-search', 'hepatic artery proper');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForSelector('.x3d-more:not([hidden]):not(.muted) >> text=brings oxygen-rich blood to the liver', { timeout: 15000 });
+  expect(!/\*/.test(await page.locator('.x3d-more').innerText()), 'no formatting marks in Cassie’s explanation');
+  // a girl's body: the female organs, and the male ones go away
+  await page.click('.x3d-sex [data-sex="girl"]');
+  await page.fill('.x3d-search', 'uterus');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Uterus/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 15000 });
+  expect(/womb/.test(await page.locator('.x3d-like').innerText()) && /Reproductive/.test(await page.locator('.x3d-path').innerText()), 'the uterus is explained, in the reproductive system');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/body-girl.png' });
+  await page.fill('.x3d-search', 'prostate');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /^Prostate/.test(document.querySelector('.x3d-sheet h3').textContent) && document.querySelector('.x3d-sex [data-sex="boy"]').getAttribute('aria-checked') === 'true', null, { timeout: 15000 });
   // hide it, then show it again
   await page.click('.x3d-act[data-act="hide"]');
   expect(await page.locator('.x3d-showall').isVisible(), 'hidden parts can be shown again');
@@ -928,7 +953,7 @@ test('Explore 3D: the human body — real anatomy, systems on and off, tap or fi
   await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
   await page.click('.x3d-act[data-act="ask"]');
   await page.waitForSelector('#chat-log .bubble-assistant >> text=thigh bone', { timeout: 15000 });
-  expect(/Explain the Femur.*Os femoris.*skeleton/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
+  expect(/Explain the Femur.*Os femoris.*musculoskeletal system/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
