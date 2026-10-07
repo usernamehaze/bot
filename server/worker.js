@@ -62,6 +62,8 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, created INTEGER, owner TEXT, title TEXT)`,
   `CREATE TABLE IF NOT EXISTS room_members (code TEXT, uid TEXT, name TEXT, seen INTEGER, PRIMARY KEY (code, uid))`,
   `CREATE TABLE IF NOT EXISTS room_ops (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, uid TEXT, ts INTEGER, op TEXT)`,
+  // daily puzzles: each student's first finish of each puzzle, each day (lower value = better)
+  `CREATE TABLE IF NOT EXISTS scores (day TEXT, game TEXT, uid TEXT, name TEXT, value REAL, shown TEXT, ts INTEGER, PRIMARY KEY (day, game, uid))`,
   `CREATE INDEX IF NOT EXISTS room_ops_code ON room_ops(code, id)`,
 ];
 let schemaReady = false;
@@ -692,6 +694,58 @@ async function room(request, env, url) {
   return new Response('not found', { status: 404, headers: h });
 }
 
+/* ------------------------------------------------------------------ daily puzzle score board */
+// Everyone gets the same puzzles each day (a "puzzle day" starts at midnight Philippine time).
+// A student's first finish of each puzzle counts; places earn points (1st 100, 2nd 80, 3rd 65,
+// then 50, 45, 40… down to 10 just for finishing). The board shows today's top three.
+const PUZZLES = { sudoku: 20, nonogram: 15, hashi: 15, pipes: 10, mirrors: 8, equation: 1, geography: 1 }; // fastest believable finish, in seconds (or points)
+const puzzleDay = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+const placePoints = (rank) => (rank === 1 ? 100 : rank === 2 ? 80 : rank === 3 ? 65 : Math.max(10, 50 - (rank - 4) * 5));
+async function scores(request, env, url) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  if (!env.DB) return json({ error: 'The score board needs the server database.' }, 503, h);
+  await ensureSchema(env.DB);
+  const db = env.DB, now = Date.now(), today = puzzleDay(now);
+  const okUid = (u) => /^[\w-]{8,64}$/.test(u);
+  let me = clean(url.searchParams.get('uid'), 64), day = clean(url.searchParams.get('day'), 10) || today;
+  if (request.method === 'POST' && url.pathname === '/scores/submit') {
+    const text = await request.text();
+    if (text.length > 2000) return json({ error: 'too big' }, 413, h);
+    let b; try { b = JSON.parse(text); } catch (e) { return json({ error: 'bad json' }, 400, h); }
+    const uid = clean(b.uid, 64), game = clean(b.game, 20), name = clean(b.name, 24).trim() || 'Student';
+    const value = Number(b.value);
+    if (!okUid(uid) || !(game in PUZZLES) || !Number.isFinite(value)) return json({ error: 'bad request' }, 400, h);
+    // only today's puzzle (a finish just after midnight still counts for the day it started)
+    if (b.day !== today && b.day !== puzzleDay(now - 10 * 60e3)) return json({ error: 'That was another day’s puzzle.' }, 409, h);
+    if (value < PUZZLES[game] || value > 86400 * 1000) return json({ error: 'That result doesn’t look right.' }, 422, h);
+    await db.prepare('INSERT OR IGNORE INTO scores (day, game, uid, name, value, shown, ts) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(b.day, game, uid, name, value, clean(b.shown, 40), now).run();
+    // old days go after two weeks
+    await db.prepare('DELETE FROM scores WHERE day < ?').bind(puzzleDay(now - 14 * 86400e3)).run();
+    me = uid; day = b.day;
+  } else if (!(request.method === 'GET' && url.pathname === '/scores/today')) return new Response('not found', { status: 404, headers: h });
+  if (!/^\d{4}-\d\d-\d\d$/.test(day)) return json({ error: 'bad day' }, 400, h);
+  const rows = (await db.prepare('SELECT game, uid, name, value, shown FROM scores WHERE day = ? ORDER BY game, value, ts LIMIT 20000').bind(day).all()).results || [];
+  const total = new Map(), names = new Map(), mine = {};
+  let lastGame = '', rank = 0;
+  for (const r of rows) {
+    if (r.game !== lastGame) { lastGame = r.game; rank = 0; }
+    rank++;
+    const p = placePoints(rank);
+    total.set(r.uid, (total.get(r.uid) || 0) + p);
+    names.set(r.uid, r.name);
+    if (r.uid === me) mine[r.game] = { rank, points: p, shown: r.shown };
+  }
+  const board = [...total.entries()].sort((a, b) => b[1] - a[1]);
+  const at = board.findIndex(([u]) => u === me);
+  return json({
+    day, players: board.length,
+    top: board.slice(0, 3).map(([u, points]) => ({ name: names.get(u), points, me: u === me })),
+    me: at >= 0 ? { rank: at + 1, points: board[at][1], games: mine } : null,
+  }, 200, h);
+}
+
 /* ------------------------------------------------------------------ accounts */
 // Passwords are never stored: only a salted PBKDF2 hash. Sessions are random
 // tokens; only their SHA-256 is stored, so a leaked database can't sign anyone in.
@@ -943,6 +997,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);
+      if (url.pathname.startsWith('/scores/')) return await scores(request, env, url);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && url.pathname === '/health') return await health(request, env);
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });

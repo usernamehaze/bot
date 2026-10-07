@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '119';
+const APP_VERSION = '120';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4183,6 +4183,10 @@ async function openLabs(lab) {
       onAsk: (q) => handleSend(q),
       onQuiz: (topic) => startQuizOn(topic),
       openExplore: (cell) => openExplore(cell),
+      // a short hint from Cassie inside the lab, without leaving it
+      explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
+      // the daily puzzles' score board (on Cassie's server)
+      scores: SERVER ? scoreCall : null,
       onOpen: (id) => track('feature', 'lab-' + id),
       onClose: () => { try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ } },
     });
@@ -4192,6 +4196,14 @@ async function openLabs(lab) {
   }
 }
 if (labsBtn) labsBtn.addEventListener('click', () => openLabs());
+async function scoreCall(kind, body = {}) {
+  const r = kind === 'today'
+    ? await fetch(`${SERVER}/scores/today?day=${encodeURIComponent(body.day || '')}&uid=${encodeURIComponent(installId())}`)
+    : await fetch(`${SERVER}/scores/submit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), name: roomName() === 'Classmate' ? 'Student' : roomName(), ...body }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'The score board isn’t available right now.');
+  return d;
+}
 // app.html?lab=pendulum opens that lab
 { const lab = new URLSearchParams(location.search).get('lab'); if (lab) setTimeout(() => openLabs(lab), 300); }
 
@@ -5927,6 +5939,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs, part 2: 12 more simulations — the solar system (planets where they really are today, Moon phases and the next eclipses), colour mixing, vectors, magnetic fields, lenses & mirrors, logic gates, ice to steam, metals in water, a rocket workshop, 3D shapes, recursion with Python, and build-a-cell. Plus 7 daily puzzles (Sudoku, Nonogram, Bridges, Pipes, Laser mirrors, Guess the equation, Geography) with a score board. “Try this” goals now open a hint, and Cassie can nudge you right inside the lab.',
   'Labs (the flask at the top): 15 simulations to play with — launch a ball, swing a pendulum, bend light, balance equations, mix acid and base, build an atom, cross pea plants, graph any function and more. Tap “Ask Cassie” in any lab and she explains what’s on your screen, using your numbers. Each lab has small goals to tick off.',
   'Explore 3D body: “Look around” turns it to the Front, Back or Side, and “Pull it apart” lifts every bone and organ out and sorts them into labelled trays (Bones, Digestive, Respiratory…) — “Put back” rebuilds the body. The S/I/R/L/A/P letters show which way you face (tap one to turn), and the skin can be tapped too.',
   'Draw together: open the board and tap “Draw together” (or Ideas → Draw together) to start a study room. Share the code or link and up to 12 classmates draw on the same board, live.',

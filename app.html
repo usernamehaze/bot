@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=140">
+<link rel="stylesheet" href="style.css?v=141">
 </head>
 <body>
 
@@ -429,16 +429,16 @@
 
 </div>
 
-<script src="memory.js?v=140"></script>
-<script src="board.js?v=140"></script>
-<script src="export.js?v=140"></script>
-<script src="sketch.js?v=140"></script>
-<script src="config.js?v=140"></script>
-<script src="cassie-bot.js?v=140"></script>
-<script src="cards.js?v=140"></script>
-<script src="cite.js?v=140"></script>
-<script src="voice.js?v=140"></script>
-<script src="app.js?v=140"></script>
+<script src="memory.js?v=141"></script>
+<script src="board.js?v=141"></script>
+<script src="export.js?v=141"></script>
+<script src="sketch.js?v=141"></script>
+<script src="config.js?v=141"></script>
+<script src="cassie-bot.js?v=141"></script>
+<script src="cards.js?v=141"></script>
+<script src="cite.js?v=141"></script>
+<script src="voice.js?v=141"></script>
+<script src="app.js?v=141"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -453,7 +453,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=140';
+      s.src = 'mascot3d/cassie-3d.js?v=141';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);
