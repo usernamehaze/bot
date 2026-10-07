@@ -1499,6 +1499,11 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
 .x3d-does { margin: 8px 0 0; line-height: 1.5; font-size: .92rem; }
 .x3d-only { margin: 8px 0 0; font-size: .8rem; font-weight: 600; color: rgba(255, 255, 255, .75); }
 .x3d-only[hidden] { display: none; }
+.x3d-body-mode .x3d-like { font-style: normal; color: #f2f2f4; line-height: 1.5; font-size: .92rem; }
+.x3d-latin { display: block; margin-top: 3px; font-style: italic; font-size: .78rem; color: rgba(255, 255, 255, .55); }
+.x3d-more { margin: 8px 0 0; line-height: 1.5; font-size: .9rem; }
+.x3d-more.muted { color: rgba(255, 255, 255, .55); font-style: italic; }
+.x3d-more[hidden] { display: none; }
 .x3d-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .x3d-act { padding: 8px 14px; font-size: .85rem; font-weight: 600; }
 .x3d-act-main { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
@@ -1593,7 +1598,13 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 }
 @media (max-width: 380px) { .topbar .brand > span { display: none; } } /* the Cassie dot stays */
 /* Explore 3D — the human body */
-.x3d-find { position: absolute; left: 16px; right: 16px; top: calc(62px + var(--safe-top, 0px)); max-width: 420px; }
+.x3d-find { position: absolute; left: 16px; right: 16px; top: calc(62px + var(--safe-top, 0px)); max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.x3d-find .x3d-search { flex: 1; min-width: 0; width: auto; }
+.x3d-find .x3d-results, .x3d-find .x3d-showall { flex-basis: 100%; margin-top: 0; }
+.x3d-sex { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); flex-shrink: 0; }
+.x3d-sex button { border: 0; background: transparent; color: #f2f2f4; font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+.x3d-sex button[aria-checked="true"] { background: #f2f2f4; color: #111; }
+.x3d-sub { font-size: .8rem; opacity: .95; }
 .x3d-find[hidden] { display: none; }
 .x3d-search {
   width: 100%; font: inherit; font-size: .9rem; padding: 9px 14px; border-radius: 99px; color: #f2f2f4;
@@ -1606,7 +1617,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-results button { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: transparent; color: #f2f2f4; font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
 .x3d-results button:hover, .x3d-results button:focus-visible { background: rgba(255, 255, 255, .08); }
 .x3d-results span { color: rgba(255, 255, 255, .55); font-size: .8rem; white-space: nowrap; }
-.x3d-showall { margin-top: 8px; }
+.x3d-showall { margin-top: 8px; justify-self: start; }
 .x3d-showall[hidden] { display: none; }
 .x3d-sys .x3d-tick { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid rgba(255, 255, 255, .6); flex-shrink: 0; }
 .x3d-sys[aria-pressed="true"] { background: #f2f2f4; color: #111; border-color: #f2f2f4; }
