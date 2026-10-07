@@ -58,6 +58,11 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, email TEXT UNIQUE, pass TEXT, salt TEXT, google TEXT UNIQUE, name TEXT, data TEXT, created INTEGER, updated INTEGER)`,
   `CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, account TEXT, created INTEGER, seen INTEGER)`,
   `CREATE TABLE IF NOT EXISTS health (k TEXT PRIMARY KEY, ts INTEGER, data TEXT)`,
+  // live board rooms: a code, who's in, and every drawing step in order (rooms last a day)
+  `CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, created INTEGER, owner TEXT, title TEXT)`,
+  `CREATE TABLE IF NOT EXISTS room_members (code TEXT, uid TEXT, name TEXT, seen INTEGER, PRIMARY KEY (code, uid))`,
+  `CREATE TABLE IF NOT EXISTS room_ops (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, uid TEXT, ts INTEGER, op TEXT)`,
+  `CREATE INDEX IF NOT EXISTS room_ops_code ON room_ops(code, id)`,
 ];
 let schemaReady = false;
 async function ensureSchema(db) {
@@ -601,6 +606,92 @@ async function feedback(request, env) {
   return new Response(null, { status: 204, headers: h });
 }
 
+/* ------------------------------------------------------------------ live board rooms */
+// A study room is a shared drawing board. Someone creates it and gets a 6-letter code; up
+// to ROOM_MAX classmates join with the code (or the link) and everyone's strokes appear on
+// everyone's board. Clients send their strokes and ask for new ones about once a second.
+// Rooms and their drawings are deleted after a day. Only drawings are shared — no chat.
+const ROOM_MAX = 12, ROOM_HOURS = 24, ROOM_OPS_MAX = 6000, ROOM_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+async function room(request, env, url) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  if (!env.DB) return json({ error: 'Rooms need the server database.' }, 503, h);
+  await ensureSchema(env.DB);
+  const db = env.DB, now = Date.now();
+  const okUid = (u) => /^[\w-]{8,64}$/.test(u);
+  const okCode = (c) => /^[A-Z0-9]{6}$/.test(c);
+  const live = async (code) => db.prepare('SELECT code, title, created FROM rooms WHERE code = ? AND created > ?').bind(code, now - ROOM_HOURS * 3600e3).first();
+  const members = async (code) => (await db.prepare('SELECT uid, name FROM room_members WHERE code = ? AND seen > ? ORDER BY name').bind(code, now - 25000).all()).results || [];
+
+  if (request.method === 'GET' && url.pathname === '/room/poll') {
+    const code = clean(url.searchParams.get('code'), 6).toUpperCase(), uid = clean(url.searchParams.get('uid'), 64);
+    const since = Math.max(0, parseInt(url.searchParams.get('since'), 10) || 0);
+    if (!okCode(code) || !okUid(uid)) return json({ error: 'bad request' }, 400, h);
+    if (!(await live(code))) return json({ error: 'This room has ended.', gone: true }, 404, h);
+    // "I'm still here" at most every 10 s (a write only when it's due)
+    await db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000).run();
+    const rows = (await db.prepare('SELECT id, uid, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since).all()).results || [];
+    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, op: JSON.parse(r.op) })), members: await members(code), more: rows.length === 400 }, 200, h);
+  }
+  if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
+  const text = await request.text();
+  if (text.length > 200000) return json({ error: 'Too much at once.' }, 413, h);
+  let b; try { b = JSON.parse(text); } catch (e) { return json({ error: 'bad json' }, 400, h); }
+  const uid = clean(b.uid, 64), name = clean(b.name, 30).trim() || 'Classmate';
+  if (!okUid(uid)) return json({ error: 'bad request' }, 400, h);
+
+  if (url.pathname === '/room/create') {
+    // tidy up: rooms older than a day go, with their drawings
+    const old = now - ROOM_HOURS * 3600e3;
+    await db.batch([
+      db.prepare('DELETE FROM room_ops WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
+      db.prepare('DELETE FROM room_members WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
+      db.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
+    ]);
+    const mine = await db.prepare('SELECT COUNT(*) AS n FROM rooms WHERE owner = ? AND created > ?').bind(uid, old).first();
+    if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today — use one of those, or try again tomorrow.' }, 429, h);
+    let code = '';
+    for (let i = 0; i < 5 && !code; i++) {
+      const c = Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => ROOM_LETTERS[x % ROOM_LETTERS.length]).join('');
+      if (!(await db.prepare('SELECT 1 FROM rooms WHERE code = ?').bind(c).first())) code = c;
+    }
+    if (!code) return json({ error: 'Try again.' }, 503, h);
+    await db.batch([
+      db.prepare('INSERT INTO rooms (code, created, owner, title) VALUES (?, ?, ?, ?)').bind(code, now, uid, clean(b.title, 60) || `${name}’s study room`),
+      db.prepare('INSERT INTO room_members (code, uid, name, seen) VALUES (?, ?, ?, ?)').bind(code, uid, name, now),
+    ]);
+    return json({ code, title: clean(b.title, 60) || `${name}’s study room` }, 200, h);
+  }
+  const code = clean(b.code, 6).toUpperCase();
+  if (!okCode(code)) return json({ error: 'That code isn’t right — it’s 6 letters and numbers.' }, 400, h);
+  const r = await live(code);
+  if (!r) return json({ error: 'No room with that code (rooms last a day).', gone: true }, 404, h);
+
+  if (url.pathname === '/room/join') {
+    const here = await members(code);
+    if (here.length >= ROOM_MAX && !here.some((m) => m.uid === uid)) return json({ error: `The room is full (${ROOM_MAX} people).` }, 409, h);
+    await db.prepare('INSERT INTO room_members (code, uid, name, seen) VALUES (?, ?, ?, ?) ON CONFLICT(code, uid) DO UPDATE SET name = excluded.name, seen = excluded.seen').bind(code, uid, name, now).run();
+    return json({ code, title: r.title, members: await members(code) }, 200, h);
+  }
+  if (url.pathname === '/room/ops') {
+    const ops = Array.isArray(b.ops) ? b.ops.slice(0, 40) : [];
+    if (!ops.length) return json({ ok: true }, 200, h);
+    if (!(await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) return json({ error: 'Join the room first.' }, 403, h);
+    const count = await db.prepare('SELECT COUNT(*) AS n FROM room_ops WHERE code = ?').bind(code).first();
+    if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full — save it and start a new room.', full: true }, 409, h);
+    const rows = [];
+    for (const op of ops) {
+      if (!op || !['add', 'del', 'clearmine'].includes(op.t)) continue;
+      const t = JSON.stringify(op);
+      if (t.length > 60000) continue; // one huge stroke is dropped, not the room
+      rows.push(db.prepare('INSERT INTO room_ops (code, uid, ts, op) VALUES (?, ?, ?, ?)').bind(code, uid, now, t));
+    }
+    if (rows.length) await db.batch(rows);
+    return json({ ok: true, n: rows.length }, 200, h);
+  }
+  return new Response('not found', { status: 404, headers: h });
+}
+
 /* ------------------------------------------------------------------ accounts */
 // Passwords are never stored: only a salted PBKDF2 hash. Sessions are random
 // tokens; only their SHA-256 is stored, so a leaked database can't sign anyone in.
@@ -851,6 +942,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
+      if (url.pathname.startsWith('/room')) return await room(request, env, url);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && url.pathname === '/health') return await health(request, env);
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return new Response(DASHBOARD, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
