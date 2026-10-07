@@ -356,7 +356,7 @@ function createView() {
       <div class="x3d-tools">
         <button type="button" class="x3d-btn" data-tool="labels" aria-pressed="true" title="Show or hide the labels">Labels</button>
         <button type="button" class="x3d-btn" data-tool="cut" aria-pressed="true" title="Cut the cell open, or see it whole">Cut open</button>
-        <button type="button" class="x3d-btn" data-tool="view" aria-pressed="false" title="Turn the body to a side, or pull its parts apart" hidden>View</button>
+        <button type="button" class="x3d-btn" data-tool="view" aria-pressed="false" title="Turn the body to a side, or pull its parts apart" hidden>Look around</button>
         <button type="button" class="x3d-btn" data-tool="reset" title="Back to the start">Reset</button>
       </div>
     </div>
@@ -366,20 +366,20 @@ function createView() {
       <input type="search" class="x3d-search" placeholder="Find a part: heart, femur, biceps…" aria-label="Find a part of the body" autocomplete="off">
       <div class="x3d-results" role="listbox" hidden></div>
       <button type="button" class="x3d-btn x3d-showall" hidden>Show hidden parts</button>
-      <p class="x3d-count" aria-live="polite"><span class="x3d-count-dot"></span>Visible structures: <b>0</b></p>
+      <p class="x3d-count" aria-live="polite"><span class="x3d-count-dot"></span><b>0</b> parts showing</p>
     </div>
-    <section class="x3d-view" hidden aria-label="View controls">
-      <div class="x3d-view-head"><h3>View controls</h3><button type="button" class="x3d-sheet-x x3d-view-x" aria-label="Close the view controls">×</button></div>
+    <section class="x3d-view" hidden aria-label="Look around">
+      <div class="x3d-view-head"><h3><svg class="x3d-cur" viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg>Look around</h3><button type="button" class="x3d-sheet-x x3d-view-x" aria-label="Close">×</button></div>
       <div class="x3d-seg" role="group" aria-label="Look from">
-        <button type="button" data-look="front" aria-pressed="false">Front</button><button type="button" data-look="back" aria-pressed="false">Back</button><button type="button" data-look="side" aria-pressed="false">Side</button><button type="button" data-look="perspective" aria-pressed="true">Perspective</button>
+        <button type="button" data-look="front" aria-pressed="false">Front</button><button type="button" data-look="back" aria-pressed="false">Back</button><button type="button" data-look="side" aria-pressed="false">Side</button><button type="button" data-look="perspective" aria-pressed="true">Angled</button>
       </div>
       <div class="x3d-spread-head">
-        <label for="x3d-spread">Spread structures apart</label>
-        <button type="button" class="x3d-btn x3d-reassemble" disabled><span aria-hidden="true">↺</span> Reassemble</button>
+        <label for="x3d-spread">Pull it apart</label>
+        <button type="button" class="x3d-btn x3d-reassemble" disabled title="Put every part back in the body"><span aria-hidden="true">↺</span> Put back</button>
         <output class="x3d-spread-pc" for="x3d-spread">0%</output>
       </div>
       <input type="range" id="x3d-spread" class="x3d-spread" min="0" max="100" step="1" value="0">
-      <div class="x3d-spread-ends" aria-hidden="true"><span>Assembled</span><span>Every piece</span></div>
+      <div class="x3d-spread-ends" aria-hidden="true"><span>Together</span><span>Every part, sorted</span></div>
     </section>
     <div class="x3d-gizmo" hidden role="group" aria-label="Turn to face a side">
       <button type="button" data-face="S" title="From above (superior)">S</button><button type="button" data-face="I" title="From below (inferior)">I</button>
@@ -390,7 +390,7 @@ function createView() {
     <section class="x3d-sheet" hidden aria-live="polite">
       <button type="button" class="x3d-sheet-x" aria-label="Close">×</button>
       <button type="button" class="x3d-sheet-x x3d-sheet-min" aria-label="Make the details small" aria-expanded="true" hidden>–</button>
-      <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3><span class="x3d-sheet-sub">Selection details</span></div>
+      <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3><span class="x3d-sheet-sub">Tap to read what it is and does</span></div>
       <p class="x3d-path" hidden></p>
       <p class="x3d-like"></p>
       <p class="x3d-does"></p>
@@ -468,7 +468,7 @@ function createView() {
       Object.values(cells).forEach((c) => { c.group.visible = false; });
       current = null; selected = null; sheet.hidden = true;
       root.querySelectorAll('[data-cell]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.cell === k)));
-      labelsEl.replaceChildren(body.label); labelEls.clear();
+      labelsEl.replaceChildren(body.trayLabels, body.label); labelEls.clear();
       resetView(); renderParts();
       if (viewOpen === null) showViewPanel(true); // open the first time, like an atlas
       body.enter().then(() => { renderParts(); showCount(); }).catch(() => {});

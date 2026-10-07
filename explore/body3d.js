@@ -114,6 +114,8 @@ export function createBody(ctx) {
   const label = document.createElement('span');
   label.className = 'x3d-label on';
   label.hidden = true;
+  const trayEl = document.createElement('div'); // the names of the trays, when the body is pulled apart
+  trayEl.className = 'x3d-trays';
 
   async function loadIndex() {
     if (!index) {
@@ -219,7 +221,7 @@ export function createBody(ctx) {
             transparent: skin, opacity: skin ? 0.16 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide,
           });
           o.userData.system = id;
-          o.userData.pickable = !skin;
+          o.userData.pickable = true; o.userData.skin = skin;
           o.renderOrder = skin ? 2 : 0;
           L.meshes.push(o);
         });
@@ -323,7 +325,7 @@ export function createBody(ctx) {
       vertexColors: true, roughness: skin ? 0.6 : 0.45, clearcoat: skin ? 0 : 0.35, clearcoatRoughness: 0.4,
       transparent: skin, opacity: skin ? 0.3 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide,
     }));
-    o.userData = { system: layer, pickable: !skin, female: true };
+    o.userData = { system: layer, pickable: true, skin, female: true };
     o.renderOrder = skin ? 2 : 0;
     return o;
   }
@@ -453,6 +455,19 @@ export function createBody(ctx) {
     o.userData.mis = [...mis];
     o.userData.toLocal = new THREE.Matrix3().setFromMatrix4(m).invert(); // body-space moves -> the mesh's own space
   }
+  // the trays, in the order a biology book goes
+  const TRAYS = ['Bones', 'Muscles', 'Heart & blood vessels', 'Respiratory', 'Digestive', 'Urinary', 'Reproductive', 'Endocrine glands', 'Brain & nerves', 'Lymph & immune', 'Skin', 'Other'];
+  function trayOf(si) {
+    const layer = layerOf(si);
+    if (layer === 'skeletal') return 'Bones';
+    if (layer === 'muscular') return 'Muscles';
+    if (layer === 'cardiovascular') return 'Heart & blood vessels';
+    if (layer === 'nervous') return 'Brain & nerves';
+    if (layer === 'regions') return 'Skin';
+    const sys = systemsOf(si), pickSys = sys.find((x) => on.has(x.id)) || sys[0];
+    if (!pickSys) return layer === 'lymphoid' ? 'Lymph & immune' : 'Other';
+    return { respiratory: 'Respiratory', digestive: 'Digestive', urinary: 'Urinary', reproductive: 'Reproductive', endocrine: 'Endocrine glands', lymphatic: 'Lymph & immune' }[pickSys.id] || 'Other';
+  }
   function hash(si, k) { const x = Math.sin(si * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x) - 0.5; }
   // where each piece goes: out from the middle (d), and its place in the tray (g)
   function layoutSpread() {
@@ -462,48 +477,60 @@ export function createBody(ctx) {
     parts.forEach((si) => all.union(partBox.get(si)));
     if (all.isEmpty()) { layout = null; return; }
     const mid = all.getCenter(new THREE.Vector3()), height = all.getSize(new THREE.Vector3()).y;
+    // Cassie sorts the pieces into labelled trays, one per kind (bones, muscles, each organ system),
+    // biggest first, like a study kit laid out on a desk
     const items = parts.map((si) => {
       const b = partBox.get(si), c = b.getCenter(new THREE.Vector3()), size = b.getSize(new THREE.Vector3());
-      return { si, c, w: Math.max(size.x, 0.006), h: Math.max(size.y, 0.006) };
-    }).sort((a, b) => (b.h * b.w) - (a.h * a.w) || a.si - b.si);
-    // rows as wide as the screen is shaped, so the tray fits it
+      return { si, c, w: Math.max(size.x, 0.006), h: Math.max(size.y, 0.006), tray: trayOf(si) };
+    });
+    const trays = TRAYS.map((name) => ({ name, items: items.filter((it) => it.tray === name).sort((a, b) => (b.h * b.w) - (a.h * a.w) || a.si - b.si) })).filter((t) => t.items.length);
     const gap = (it) => 0.01 + Math.max(it.w, it.h) * 0.18;
+    const labelH = height * 0.032, trayGap = height * 0.022;
     const area = items.reduce((n, it) => n + (it.w + gap(it)) * (it.h + gap(it)), 0);
     const aspect = Math.min(2.6, Math.max(0.62, (ctx.trayAspect ? ctx.trayAspect() : ctx.camera.aspect) || 1));
-    const pack = (rowW) => {
+    const widest = Math.max(...items.map((it) => it.w + gap(it)));
+    const pack = (rowW) => trays.map((t) => {
       const rows = [];
       let row = null;
-      for (const it of items) {
+      for (const it of t.items) {
         const w = it.w + gap(it);
         if (!row || row.w + w > rowW) rows.push((row = { items: [], w: 0, h: 0 }));
         it.x = row.w + w / 2; row.w += w; row.h = Math.max(row.h, it.h + gap(it));
         row.items.push(it);
       }
-      return rows;
-    };
-    // rows leave gaps, so the tray comes out taller than planned: widen the rows till its shape fits the screen
-    let rowW = Math.max(Math.sqrt(area * aspect), items[0].w + gap(items[0])), rows = pack(rowW);
-    for (let k = 0; k < 6; k++) {
-      const w = Math.max(...rows.map((r) => r.w)), h = rows.reduce((n, r) => n + r.h, 0), now = w / h;
+      return { name: t.name, n: t.items.length, rows, h: labelH + rows.reduce((n, r) => n + r.h, 0) };
+    });
+    const sizeOf = (packed) => ({ w: Math.max(...packed.flatMap((t) => t.rows.map((r) => r.w))), h: packed.reduce((n, t) => n + t.h, 0) + trayGap * (packed.length - 1) });
+    // rows leave gaps, so the trays come out taller than planned: widen them till the shape fits the screen
+    let rowW = Math.max(Math.sqrt(area * aspect), widest), packed = pack(rowW);
+    for (let k = 0; k < 8; k++) {
+      const sz = sizeOf(packed), now = sz.w / sz.h;
       if (Math.abs(now / aspect - 1) < 0.08) break;
-      rowW = Math.max(items[0].w + gap(items[0]), rowW * Math.sqrt(aspect / now));
-      rows = pack(rowW);
+      rowW = Math.max(widest, rowW * Math.sqrt(aspect / now));
+      packed = pack(rowW);
     }
     // (pack() wrote each piece's x for the last packing)
-    const total = rows.reduce((n, r) => n + r.h, 0);
-    let y = mid.y + total / 2;
+    const sz = sizeOf(packed), left = mid.x - sz.w / 2;
+    let y = mid.y + sz.h / 2;
     layout = new Map();
+    layout.labels = [];
     const tray = new THREE.Box3();
-    for (const r of rows) {
-      const cy = y - r.h / 2;
-      for (const it of r.items) {
-        const at = new THREE.Vector3(mid.x - r.w / 2 + it.x, cy, mid.z);
-        tray.expandByPoint(at.clone().add(new THREE.Vector3(it.w / 2, it.h / 2, 0))).expandByPoint(at.clone().sub(new THREE.Vector3(it.w / 2, it.h / 2, 0)));
-        // flying out: away from the middle, a bit further for the pieces near it, with a little scatter
-        const d = it.c.clone().sub(mid).multiplyScalar(0.9).add(new THREE.Vector3(hash(it.si, 1), hash(it.si, 2), hash(it.si, 3)).multiplyScalar(height * 0.28));
-        layout.set(it.si, { d, g: at.sub(it.c) });
+    for (const t of packed) {
+      layout.labels.push({ name: t.name, n: t.n, at: new THREE.Vector3(left, y - labelH * 0.45, mid.z) });
+      tray.expandByPoint(new THREE.Vector3(left, y, mid.z));
+      y -= labelH;
+      for (const r of t.rows) {
+        const cy = y - r.h / 2;
+        for (const it of r.items) {
+          const at = new THREE.Vector3(left + it.x, cy, mid.z);
+          tray.expandByPoint(at.clone().add(new THREE.Vector3(it.w / 2, it.h / 2, 0))).expandByPoint(at.clone().sub(new THREE.Vector3(it.w / 2, it.h / 2, 0)));
+          // flying out: away from the middle, with a little scatter
+          const d = it.c.clone().sub(mid).multiplyScalar(0.9).add(new THREE.Vector3(hash(it.si, 1), hash(it.si, 2), hash(it.si, 3)).multiplyScalar(height * 0.28));
+          layout.set(it.si, { d, g: at.sub(it.c) });
+        }
+        y -= r.h;
       }
-      y -= r.h;
+      y -= trayGap;
     }
     layout.tray = tray; layout.body = all;
     applySpread();
@@ -592,7 +619,8 @@ export function createBody(ctx) {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
-    highlight = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#ffd84a', emissive: '#ffb800', emissiveIntensity: 0.55, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }));
+    const skin = layerOf(si) === 'regions' && !femaleColor.has(si); // a patch of skin: tinted, so what's under it still shows
+    highlight = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#ffd84a', emissive: '#ffb800', emissiveIntensity: skin ? 0.3 : 0.55, roughness: 0.4, transparent: skin, opacity: skin ? 0.42 : 1, depthWrite: !skin, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }));
     highlight.renderOrder = 5;
     group.add(highlight);
     return geo.boundingSphere;
@@ -642,8 +670,10 @@ export function createBody(ctx) {
       for (const h of hits) { if (h.object === highlight) continue; const si = partAt(h); if (si >= 0 && inside.has(si)) return si; }
       return selected;
     }
-    for (const h of hits) {
-      if (h.object === highlight) continue;
+    // the skin is see-through: what's under the finger (a bone, an organ) comes first, and the
+    // skin answers where nothing is under it (ears, hair, the belly button) or when it's all that's on
+    for (const skin of [false, true]) for (const h of hits) {
+      if (h.object === highlight || !!h.object.userData.skin !== skin) continue;
       const si = partAt(h);
       if (si < 0) continue;
       return si === selected ? si : mainOf(si); // a first tap picks the whole organ
@@ -692,12 +722,27 @@ export function createBody(ctx) {
   }
   function leave() { group.visible = false; label.hidden = true; }
   function placeLabel(camera, w, h) {
+    const show = layout && layout.labels && spread >= 0.75 && group.visible;
+    trayEl.hidden = !show;
+    if (show) {
+      while (trayEl.children.length < layout.labels.length) trayEl.appendChild(document.createElement('span'));
+      [...trayEl.children].forEach((el, i) => {
+        const L = layout.labels[i];
+        el.hidden = !L;
+        if (!L) return;
+        const text = `${L.name} · ${L.n}`;
+        if (el.textContent !== text) el.textContent = text;
+        const p = group.localToWorld(L.at.clone()).project(camera);
+        el.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px)`;
+        el.style.opacity = String(smooth((spread - 0.75) / 0.2));
+      });
+    }
     if (label.hidden || !label.userData) return;
     const p = label.userData.clone().project(camera);
     label.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px)`;
   }
   return {
-    group, label, enter, leave, setSystem, setMuscles, setSex, isOn, pick, select, search, goTo, hide, showAll, placeLabel, setSpread, spreadBox,
+    group, label, trayLabels: trayEl, enter, leave, setSystem, setMuscles, setSex, isOn, pick, select, search, goTo, hide, showAll, placeLabel, setSpread, spreadBox,
     get muscles() { return muscles; }, get sex() { return sex; }, get spread() { return spread; },
     get visibleCount() { return shownParts.size + (spread > 0 ? 0 : shownSkin.size); },
     boxOf: (id) => (index && index.byId.has(id) ? boxOf(index.byId.get(id)) : null),
