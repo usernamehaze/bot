@@ -32,7 +32,8 @@ function staticServer() {
     let p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
     if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
     if (!p.startsWith(ROOT) || !fs.existsSync(p)) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream' });
+    // the same headers as the real site (_headers): cross-origin isolated, so Bella's voice can use several cores
+    res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'credentialless' });
     fs.createReadStream(p).pipe(res);
   }).listen(APP_PORT);
 }
@@ -719,7 +720,10 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
 
 // A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
 const FAKE_VOICE = (opts) => {
-  window.__spoken = []; window.__recs = [];
+  window.__spoken = []; window.__recs = []; window.__shown = [];
+  // what Cassie says on the voice screen (Bella speaks it, or it's shown while her voice downloads)
+  new MutationObserver(() => { const el = document.querySelector('.vc-cassie'); const t = el && el.textContent; if (t && t !== window.__lastShown) { window.__lastShown = t; window.__shown.push(t); } })
+    .observe(document, { subtree: true, childList: true, characterData: true });
   const synth = { speaking: false, cancelled: 0, getVoices: () => [{ name: 'Test Voice (Natural)', lang: 'en-US' }], addEventListener() {},
     cancel() { this.cancelled++; }, speak(u) { window.__spoken.push(u.text); window.__pitch = u.pitch; setTimeout(() => u.onend && u.onend(), 30); } };
   Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
@@ -742,18 +746,18 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
   const phase = () => page.evaluate(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase);
   await page.click('#voice-btn');
   await page.waitForFunction(() => document.querySelector('.vc') && !document.querySelector('.vc').hidden && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
-  expect((await page.evaluate(() => window.__spoken))[0] === 'Hi! I’m listening. Ask me anything.', 'Cassie greets you out loud');
+  expect((await page.evaluate(() => window.__shown))[0] === 'Hi! I’m listening. Ask me anything.', 'Cassie greets you out loud');
   await page.evaluate(() => window.__say('What is x if 2x equals 8?'));
-  await page.waitForFunction(() => window.__spoken.some((t) => /x equals 4/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__shown.some((t) => /x equals 4/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 15000 });
   const sys = groqCalls.at(-1).messages[0].content;
   expect(/read aloud/.test(sys) && !/You have a drawing board/.test(sys), 'a spoken reply is asked for, with no drawing board');
   // Teach Cassie
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-chat.png' });
   await page.click('.vc-modes [data-vmode="teach"]');
-  await page.waitForFunction(() => window.__spoken.some((t) => /your student today/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__shown.some((t) => /your student today/.test(t)) && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   await page.evaluate(() => window.__say('Photosynthesis is how plants make food from sunlight'));
-  await page.waitForFunction(() => window.__spoken.some((t) => /Why do they need water/.test(t)), null, { timeout: 15000 });
-  const said = await page.evaluate(() => window.__spoken.at(-1));
+  await page.waitForFunction(() => window.__shown.some((t) => /Why do they need water/.test(t)), null, { timeout: 15000 });
+  const said = await page.evaluate(() => window.__shown.at(-1));
   expect(!/\*/.test(said), 'markdown is never read aloud: ' + said);
   expect(/teaching YOU/.test(groqCalls.at(-1).messages[0].content), 'Teach mode tells Cassie to be the curious classmate');
   expect(await page.locator('#chat-log .bubble-user', { hasText: 'Photosynthesis is how plants make food' }).count() === 1, 'what you said is saved in the chat');
@@ -766,8 +770,8 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
   expect(await phase() === 'listening', 'and starts again');
   // a man's voice is remembered; the device's voice is never bent (a lowered pitch sounded scary)
   await page.click('.vc-gender [data-gender="man"]');
-  await page.waitForFunction(() => window.__spoken.at(-1) === 'Hi! This is my voice now.', null, { timeout: 5000 });
-  expect(await page.evaluate(() => window.__pitch) === 1 && await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).voiceGender) === 'man', 'the man’s voice is remembered and the pitch is natural');
+  await page.waitForFunction(() => window.__shown.at(-1) === 'Hi! This is my voice now.', null, { timeout: 5000 });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).voiceGender) === 'man', 'the man’s voice is remembered');
   await page.click('.vc-gender [data-gender="woman"]');
   // Quiz me turns the quiz on, ending puts it back
   await page.click('.vc-modes [data-vmode="quiz"]');
@@ -787,13 +791,14 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   expect(/tap the mic to send/i.test(await page.locator('.vc-status').innerText()), 'it says to tap the mic when done: ' + await page.locator('.vc-status').innerText());
   await page.click('.vc-mic'); // done talking
-  await page.waitForFunction(() => window.__spoken.some((t) => /water moving through a membrane/.test(t)), null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__shown.some((t) => /water moving through a membrane/.test(t)), null, { timeout: 15000 });
   expect(/What is osmosis/.test(await page.locator('.vc-you').innerText()), 'what you said shows on screen');
   expect((await serverMode({})).heardCalls === 1, 'the recording went to the server once');
   // the next thing you say goes with words from the conversation, so Whisper spells them right
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   await page.click('.vc-mic');
-  await page.waitForFunction(() => window.__spoken.filter((t) => /water moving through a membrane/.test(t)).length >= 2, null, { timeout: 15000 });
+  for (let i = 0; i < 60 && (await serverMode({})).heardCalls < 2; i++) await page.waitForTimeout(250);
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 15000 });
   expect(/membrane/.test((await serverMode({})).heardPrompt || ''), 'the hint carries words from the conversation');
   await page.click('.vc-x');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
@@ -818,39 +823,47 @@ const WATCH_VOICE_WORKER = () => {
   AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
 };
 
-test('Cassie’s human voice: a woman’s or a man’s, made on the device — and the device’s voice if it can’t load', async (b) => {
+test('Cassie’s voice is Bella (or Michael) — never a robot voice, and she never makes you wait for the download', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
+  // the voice model downloads slowly here, like on a slow connection
+  await ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\/onnx\//, async (route) => {
+    await new Promise((r) => setTimeout(r, 8000));
+    return route.fulfill({ path: path.join(KOKORO_FIXTURE, 'onnx', 'model_quantized.onnx'), contentType: 'application/octet-stream' });
+  });
   await serveKokoro(ctx);
   await ctx.addInitScript(FAKE_VOICE, {});
   await ctx.addInitScript(WATCH_VOICE_WORKER);
   await page.reload();
+  expect(await page.evaluate(() => window.crossOriginIsolated), 'the app is cross-origin isolated (her voice can use several cores)');
   await page.click('#voice-btn');
-  // on a computer it gets the voice by itself, showing how far along it is
-  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Getting Cassie’s human voice ready', { timeout: 5000 });
+  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Getting Cassie’s voice ready', { timeout: 5000 });
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-human-loading.png' });
-  await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 15000 });
+  // she doesn't wait for her voice: the greeting is on screen and she's listening already
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 3000 });
+  expect(await page.evaluate(() => window.CassieVoice.status()) === 'loading', 'she listens while her voice is still downloading');
+  expect(/listening/.test(await page.locator('.vc-cassie').innerText()), 'the greeting shows as text');
+  await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 30000 });
   expect(await page.locator('.vc-hv').isHidden(), 'the download note goes away when she is ready');
-  expect(await page.evaluate(() => localStorage.getItem('cassie.humanVoice')) === 'got', 'the app remembers the voice is on this device');
-  // the greeting came while it loaded (the device's voice), the answer comes in the human voice
+  expect(await page.evaluate(() => window.CassieVoice.info().isolated), 'her voice uses several cores');
+  // now she answers in Bella's voice
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
-  const deviceBefore = await page.evaluate(() => window.__spoken.length);
   await page.evaluate(() => window.__say('What do mitochondria do?'));
   await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
   const said = await page.evaluate(() => window.__said);
   expect(said.every((x) => x.voice === 'af_bella'), 'the woman’s voice is Bella, like the explainer video: ' + JSON.stringify(said.map((x) => x.voice)));
-  expect(said.some((x) => /listening/.test(x.text)), 'the greeting waited for her human voice instead of the robot voice');
-  expect(await page.evaluate(() => window.__spoken.length) === 0, 'the robot voice was never used: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
+  expect(said[0].text.length <= 95, 'her first piece is short, so she starts talking quickly: ' + said[0].text);
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'the robot voice was not used once the human voice was ready');
   expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
   // the man's voice
   await page.click('.vc-gender [data-gender="man"]');
   await page.waitForFunction(() => window.__said.some((x) => x.voice === 'am_michael' && /my voice now/.test(x.text)), null, { timeout: 8000 });
+  await page.click('.vc-gender [data-gender="woman"]');
   await page.click('.vc-x');
-  // Settings → Voice: she's ready, and a sample plays in her human voice
+  // Settings → Voice: she's ready, and a sample plays
   await page.click('#settings-btn');
-  await page.evaluate(() => { const d = document.querySelector('#voice-engine-select').closest('details'); if (d) d.open = true; });
-  await page.waitForSelector('#hv-state >> text=Her human voice is ready', { timeout: 5000 });
+  await page.evaluate(() => { const d = document.querySelector('#voice-gender-select').closest('details'); if (d) d.open = true; });
+  await page.waitForSelector('#hv-state >> text=Bella’s voice is ready', { timeout: 5000 });
+  expect(await page.locator('#voice-engine-select').count() === 0, 'no robot-voice option any more');
   await page.click('#hv-play');
   await page.waitForFunction(() => window.__said.some((x) => /Let’s study together/.test(x.text)), null, { timeout: 8000 });
   await page.evaluate(() => closeSettings());
@@ -859,23 +872,25 @@ test('Cassie’s human voice: a woman’s or a man’s, made on the device — a
   await page.fill('#prompt-input', 'And ribosomes?');
   await page.press('#prompt-input', 'Enter');
   await page.waitForFunction(() => window.__said.filter((x) => /powerhouse/.test(x.text)).length >= 2, null, { timeout: 15000 });
+  expect(await page.evaluate(() => window.__spoken.length) === 0, 'the robot voice was never used: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 
-  // a phone on mobile data is asked first; when the voice can't load she keeps talking with the device's voice
+  // a phone on mobile data is asked first; if her voice can't load, her answers show as text — still no robot voice
   const c2 = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Sure.' }) });
   await c2.ctx.addInitScript(FAKE_VOICE, {});
   await c2.page.reload();
   await c2.page.click('#voice-btn');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Make Cassie sound like a real person?', { timeout: 5000 });
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Get Cassie’s voice?', { timeout: 5000 });
   expect(await c2.page.evaluate(() => window.CassieVoice.status()) === 'off', 'nothing downloads on a phone until asked');
   if (process.env.SHOTS) await c2.page.screenshot({ path: process.env.SHOTS + '/voice-human-ask.png' });
   await c2.page.click('.vc-hv [data-hv="get"]');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Couldn’t get the human voice', { timeout: 20000 });
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Couldn’t get Cassie’s voice', { timeout: 20000 });
   await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
   await c2.page.evaluate(() => window.__say('Hello'));
-  await c2.page.waitForFunction(() => window.__spoken.includes('Sure.'), null, { timeout: 10000 });
-  expect(await c2.page.evaluate(() => window.__pitch) === 1, 'the device voice keeps its natural pitch');
+  await c2.page.waitForFunction(() => document.querySelector('.vc-cassie').textContent === 'Sure.', null, { timeout: 10000 });
+  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
+  expect(await c2.page.evaluate(() => window.__spoken.length) === 0, 'no robot voice, even when her voice can’t load');
   await c2.ctx.close();
 });
 
@@ -888,7 +903,7 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   expect(!(await page.evaluate(() => window.__recs.some((r) => r.live))), 'the browser’s own recognizer is not used');
   await page.click('.vc-mic');
-  await page.waitForFunction(() => window.__spoken.some((t) => /make energy for the cell/.test(t)), null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__shown.some((t) => /make energy for the cell/.test(t)), null, { timeout: 15000 });
   expect((await serverMode({})).heardCalls === 1, 'Whisper on the server wrote it down');
   await page.click('.vc-x');
   // "Fastest" in Settings switches back to the browser listening

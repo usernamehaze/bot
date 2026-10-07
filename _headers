@@ -1,0 +1,6 @@
+# Cassie's voice (Bella) is made on the student's device. These two headers let the browser
+# use several processor cores for it ("cross-origin isolation"), so she talks with less lag.
+# "credentialless" keeps fonts, pictures and scripts from other sites loading as before.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless

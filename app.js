@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '115';
+const APP_VERSION = '116';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -268,7 +268,6 @@ const geminiKeyInput = document.getElementById('gemini-key-input');
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const voiceGenderSelect = document.getElementById('voice-gender-select');
 const hearingSelect = document.getElementById('hearing-select');
-const voiceEngineSelect = document.getElementById('voice-engine-select');
 const highlightHelpToggle = document.getElementById('highlight-help-toggle');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
@@ -4079,7 +4078,6 @@ function openSettings() {
   if (highlightHelpToggle) highlightHelpToggle.checked = state.highlightHelp !== false;
   if (voiceGenderSelect) voiceGenderSelect.value = state.voiceGender === 'man' ? 'man' : 'woman';
   if (hearingSelect) hearingSelect.value = state.hearing === 'fast' ? 'fast' : 'accurate';
-  if (voiceEngineSelect) voiceEngineSelect.value = state.voiceEngine === 'device' ? 'device' : 'human';
   showHumanVoiceSetting();
   if (levelSelect) levelSelect.value = state.level || 'auto';
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
@@ -4182,7 +4180,6 @@ function closeSettings() {
   if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; if (!state.highlightHelp) hideAskChip(); }
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
-  if (voiceEngineSelect) state.voiceEngine = voiceEngineSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
   if (levelSelect) state.level = levelSelect.value;
   if (citationSelect) state.citationStyle = citationSelect.value;
@@ -4640,34 +4637,23 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
+// Read an answer aloud — always in Bella's voice (never the device's robot voice). If her voice
+// isn't on this device yet, the answer is just shown, and her voice downloads for next time.
 function speak(text) {
   if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
   if (readAloud) { readAloud.stop(); readAloud = null; }
-  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
-  const chunks = speechChunks(cleanForSpeech(text));
-  if (!chunks.length) return;
-  const idle = () => { if (bot2d && bot2d.state === 'talking') botMood('idle'); };
-  const device = (from) => {
-    if (!canTalk() || from >= chunks.length) { idle(); return; }
-    const utter = new SpeechSynthesisUtterance(chunks.slice(from).join(' '));
-    const v = pickVoice();
-    if (v) { try { utter.voice = v; } catch (e) { /* ignore */ } utter.lang = v.lang; }
-    utter.rate = 1;
-    utter.onstart = () => botMood('talking');
-    utter.onend = utter.onerror = idle;
-    window.speechSynthesis.speak(utter);
+  const chunks = bellaChunks(cleanForSpeech(text));
+  if (!chunks.length || !humanVoiceWanted()) return;
+  const CV = window.CassieVoice;
+  const go = () => {
+    const h = CV.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
+    readAloud = h;
+    h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
   };
-  // Cassie's human voice once it's on this device (downloaded before); otherwise the device's own
-  const hvs = humanVoiceWanted() ? window.CassieVoice.status() : 'off';
-  if (humanVoiceWanted() && hvs !== 'failed' && (window.CassieVoice.got() || hvs !== 'off' || humanVoiceAutoOK())) {
-    window.CassieVoice.prepare().then(() => {
-      const h = window.CassieVoice.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
-      readAloud = h;
-      h.done.then((r) => { if (readAloud === h) readAloud = null; if (r.status === 'error') device(r.at); else idle(); });
-    }, () => device(0));
-    return;
-  }
-  device(0);
+  if (CV.status() === 'ready') { go(); return; }
+  if (CV.status() === 'loading') return; // still downloading: this one is just read on screen
+  if (CV.got()) { CV.prepare().then(go, () => {}); return; } // on this device already: a few seconds to wake up
+  if (humanVoiceAutoOK()) CV.prepare().catch(() => {}); // get it now, for the next answers
 }
 
 /* ---------- Talk with Cassie: a real voice conversation ----------
@@ -4686,10 +4672,9 @@ const VOICE_MODES = {
 };
 const voiceBtn = document.getElementById('voice-btn');
 const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
-const canTalk = () => 'speechSynthesis' in window;
-// Cassie's human voice (voice.js): made on the device by a small AI voice model, so she
-// sounds like a person, not a robot. 'device' in Settings = the phone's own voices instead.
-const humanVoiceWanted = () => state.voiceEngine !== 'device' && !!window.CassieVoice && window.CassieVoice.supported();
+// Cassie's voice (voice.js): Bella, made on the device by a small AI voice model, so she
+// sounds like a person. There is no robot-voice fallback any more.
+const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
 const humanVoiceReady = () => humanVoiceWanted() && window.CassieVoice.status() === 'ready';
 let voiceUI = null;
 
@@ -4711,33 +4696,26 @@ function cleanForSpeech(t) {
     .replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*#+\s*/gm, '').replace(/[*_#>|]+/g, ' ')
     .replace(/\s+/g, ' ').trim();
 }
-function speechChunks(t) {
-  const parts = t.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) || [t];
+// Bella's pieces: a short first one (so she starts talking quickly), then about a sentence each
+// (made while the one before is playing).
+function bellaChunks(t) {
+  const sentences = (t.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) || [t]).map((x) => x.trim()).filter(Boolean);
   const out = [];
-  for (const p of parts.map((x) => x.trim()).filter(Boolean)) {
-    if (out.length && (out[out.length - 1] + ' ' + p).length < 180) out[out.length - 1] += ' ' + p; else out.push(p);
+  for (let s of sentences) {
+    // very long sentences are cut at a comma, so no single piece takes long to make
+    while (s.length > (out.length ? 220 : 90)) {
+      const lim = out.length ? 220 : 90;
+      const cut = Math.max(s.lastIndexOf(', ', lim), s.lastIndexOf('; ', lim), s.lastIndexOf(' — ', lim));
+      const at = cut > 25 ? cut + 1 : s.lastIndexOf(' ', lim);
+      if (at < 20) break;
+      out.push(s.slice(0, at).trim()); s = s.slice(at).trim();
+    }
+    if (out.length > 1 && (out[out.length - 1] + ' ' + s).length < 120) out[out.length - 1] += ' ' + s; else out.push(s);
   }
   return out;
 }
-function cassieVoices() {
-  if (!canTalk()) return [];
-  return window.speechSynthesis.getVoices().filter((v) => /^(en|fil|tl)([-_]|$)/i.test(v.lang));
-}
-// Cassie's voice can be a woman's or a man's (Settings, or the switch on the voice screen).
-const WOMAN_VOICE = /female|woman|aria|jenny|samantha|zira|google us english|google uk english female|karen|moira|tessa|serena|ava|allison|susan|libby|sonia|natasha|emma|michelle|joanna|salli|kendra|ivy|kimberly|nicky|victoria|fiona|veena|heera|catherine|hazel|clara|rosa|blessica|angelo/i;
-const MAN_VOICE = /\bmale\b|\bman\b|david|mark|guy|daniel|alex\b|fred|ryan|andrew|brian|christopher|eric|roger|steffan|aaron|arthur|thomas|tom\b|lee\b|rishi|james|george|oliver|william|liam|matthew|justin|joey|google uk english male|prabhat|ravi|william|connor/i;
+// Cassie's voice can be a woman's (Bella) or a man's (Michael): Settings, or the switch on the voice screen.
 const voiceGender = () => (state.voiceGender === 'man' ? 'man' : 'woman');
-function pickVoice() {
-  const vs = cassieVoices();
-  if (!vs.length) return null;
-  const want = voiceGender();
-  const isWoman = (v) => WOMAN_VOICE.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, ''));
-  const isMan = (v) => MAN_VOICE.test(v.name) && !/female/i.test(v.name);
-  const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 4 : 0)
-    + ((want === 'woman' ? isWoman(v) : isMan(v)) ? 3 : 0) - ((want === 'woman' ? isMan(v) : isWoman(v)) ? 6 : 0)
-    + (/^en[-_]US/i.test(v.lang) ? 1 : /^en[-_](PH|GB|AU)/i.test(v.lang) ? 0.6 : 0);
-  return vs.slice().sort((a, b) => score(b) - score(a))[0];
-}
 function buildVoiceUI() {
   const el = document.createElement('div');
   el.className = 'vc';
@@ -4802,30 +4780,26 @@ const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together — ask me anything,
 function showHumanVoiceSetting() {
   const box = document.getElementById('hv-state');
   if (!box) return;
-  const sel = document.getElementById('voice-engine-select');
-  const want = (sel ? sel.value : state.voiceEngine) !== 'device';
   const CV = window.CassieVoice;
-  document.getElementById('hv-set').hidden = !want;
-  if (!want) return;
   const st = CV && CV.supported() ? CV.status() : 'unsupported';
-  box.textContent = st === 'unsupported' ? 'This browser can’t make the human voice — Cassie uses the device’s voice. Try Chrome, Edge or Safari 16.4+.'
-    : st === 'ready' ? `✓ Her human voice is ready (${voiceGender() === 'man' ? 'Michael' : 'Bella'}).`
-      : st === 'loading' ? `Getting her human voice… ${Math.round(CV.progress() * 100)}% (only this once)`
-        : st === 'failed' ? `Couldn’t get the human voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
-          : CV.got() ? 'Her human voice is on this device. Tap Play a sample to hear it.' : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
+  const name = voiceGender() === 'man' ? 'Michael' : 'Bella';
+  box.textContent = st === 'unsupported' ? 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4+.'
+    : st === 'ready' ? `✓ ${name}’s voice is ready.`
+      : st === 'loading' ? `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once — her answers show as text until then)`
+        : st === 'failed' ? `Couldn’t get her voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
+          : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
 }
 function playHumanSample() {
   const CV = window.CassieVoice;
   if (!CV || !CV.supported()) { showHumanVoiceSetting(); return; }
   CV.unlock(); // inside the tap
   CV.prepare().then(() => {
-    const h = CV.say(speechChunks(HV_SAMPLE), { gender: voiceGender() });
+    const h = CV.say(bellaChunks(HV_SAMPLE), { gender: voiceGender() });
     h.done.then(showHumanVoiceSetting);
   }).catch(showHumanVoiceSetting);
   showHumanVoiceSetting();
 }
 document.getElementById('hv-play')?.addEventListener('click', playHumanSample);
-document.getElementById('voice-engine-select')?.addEventListener('change', showHumanVoiceSetting);
 document.getElementById('voice-gender-select')?.addEventListener('change', () => { state.voiceGender = document.getElementById('voice-gender-select').value; showHumanVoiceSetting(); });
 if (window.CassieVoice) window.CassieVoice.onChange(showHumanVoiceSetting);
 
@@ -4856,19 +4830,19 @@ function showHumanVoice() {
   box.dataset.st = st;
   if (st === 'ready') {
     box.hidden = !CV.slow();
-    box.innerHTML = 'This device is a little slow for the human voice. If she pauses a lot, pick “This device’s voice” in Settings → Voice.';
+    box.innerHTML = 'This device is a little slow at making her voice, so she may pause between sentences. Closing other tabs and apps helps.';
   } else if (st === 'loading') {
     box.hidden = false;
     const pct = Math.round(CV.progress() * 100);
-    box.innerHTML = `<b>Getting Cassie’s human voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Until then she uses this device’s voice.</small>`;
+    box.innerHTML = `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, her answers show here as text.</small>`;
   } else if (st === 'failed') {
     box.hidden = false;
-    box.innerHTML = 'Couldn’t get the human voice (check the internet). Cassie is using this device’s voice. <button type="button" data-hv="get">Try again</button>';
+    box.innerHTML = 'Couldn’t get Cassie’s voice (check the internet), so her answers show as text. <button type="button" data-hv="get">Try again</button>';
   } else if (later) {
     box.hidden = true;
   } else {
     box.hidden = false;
-    box.innerHTML = '<b>Make Cassie sound like a real person?</b> A one-time download, about 90 MB (Wi-Fi is best). After that it works offline. <span class="vc-hv-row"><button type="button" data-hv="get">Get her human voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
+    box.innerHTML = '<b>Get Cassie’s voice?</b> A one-time download, about 90 MB (Wi-Fi is best), then it works offline. Until then her answers show as text. <span class="vc-hv-row"><button type="button" data-hv="get">Get her voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
   }
 }
 
@@ -4911,47 +4885,12 @@ function sayThenListen(text) {
       resolve();
       if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
-    const chunks = speechChunks(clean);
-    // her human voice is on its way: wait for it (the words are on screen) rather than use the robot voice
-    if (clean && humanVoiceWanted() && window.CassieVoice.status() === 'loading') {
-      v.stopSpeaking = finish;
-      window.CassieVoice.prepare().catch(() => {}).then(() => { if (!done && voiceChat === v) speakNow(); });
-      return;
-    }
-    speakNow();
-    function speakNow() {
-    if (!clean || (!canTalk() && !humanVoiceReady())) { finish(); return; }
-    if (humanVoiceReady()) {
-      const h = window.CassieVoice.say(chunks, { gender: voiceGender() });
-      v.stopSpeaking = () => { h.stop(); finish(); };
-      h.done.then((r) => {
-        if (done || voiceChat !== v) return;
-        if (r.status === 'error' && canTalk()) deviceSay(chunks.slice(r.at)); else finish();
-      });
-      return;
-    }
-    deviceSay(chunks);
-    function deviceSay(chunks) {
-    const synth = window.speechSynthesis;
-    synth.cancel();
-    let i = 0;
-    v.stopSpeaking = () => { synth.cancel(); finish(); };
-    const next = () => {
-      clearTimeout(v.speakTimer);
-      if (done || voiceChat !== v) return;
-      if (i >= chunks.length) { finish(); return; }
-      const u = new SpeechSynthesisUtterance(chunks[i++]);
-      const voice = pickVoice();
-      if (voice) { try { u.voice = voice; } catch (e) { /* not a voice this browser knows */ } u.lang = voice.lang; }
-      u.rate = 1; // never bend the pitch: that's what made the old voices sound scary
-      u.onend = next; u.onerror = next;
-      try { synth.speak(u); } catch (e) { finish(); return; } // never get stuck "talking"
-      // some browsers never say they've finished: move on after a fair time
-      v.speakTimer = setTimeout(next, Math.max(3500, u.text.length * 95));
-    };
-    next();
-    }
-    }
+    // Bella speaks it. If her voice isn't ready yet (still downloading), the words are on screen
+    // and Cassie listens again straight away — she never waits, and never uses a robot voice.
+    if (!clean || !humanVoiceReady()) { setTimeout(finish, clean ? 600 : 0); return; }
+    const h = window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() });
+    v.stopSpeaking = () => { h.stop(); finish(); };
+    h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
 }
 
@@ -5791,6 +5730,7 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Talking with Cassie is quicker: she answers right away (her words show while her voice downloads the first time), she starts speaking sooner, and her voice is always Bella — no more robot voice.',
   'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',
   'Highlight help ON / OFF: a switch in the Ideas side panel (and the ON/OFF switch next to Snip in the Chrome extension). Off, highlighting is just highlighting — copy and paste like normal.',
   'Explore 3D: zoom in anywhere — scroll or pinch toward any part, double-tap to fly in close. Tap once for the whole organ, again for the exact part.',

@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=136">
+<link rel="stylesheet" href="style.css?v=137">
 </head>
 <body>
 
@@ -323,15 +323,8 @@
           <label class="field">
             <span>Cassie's voice</span>
             <select id="voice-gender-select">
-              <option value="woman">Woman</option>
-              <option value="man">Man</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>How Cassie's voice sounds</span>
-            <select id="voice-engine-select">
-              <option value="human">Like a real person (best) — one-time download, about 90 MB</option>
-              <option value="device">This device's own voice (no download)</option>
+              <option value="woman">Woman (Bella)</option>
+              <option value="man">Man (Michael)</option>
             </select>
           </label>
           <div class="hv-set" id="hv-set">
@@ -433,14 +426,14 @@
 
 </div>
 
-<script src="memory.js?v=136"></script>
-<script src="board.js?v=136"></script>
-<script src="export.js?v=136"></script>
-<script src="sketch.js?v=136"></script>
-<script src="config.js?v=136"></script>
-<script src="cassie-bot.js?v=136"></script>
-<script src="voice.js?v=136"></script>
-<script src="app.js?v=136"></script>
+<script src="memory.js?v=137"></script>
+<script src="board.js?v=137"></script>
+<script src="export.js?v=137"></script>
+<script src="sketch.js?v=137"></script>
+<script src="config.js?v=137"></script>
+<script src="cassie-bot.js?v=137"></script>
+<script src="voice.js?v=137"></script>
+<script src="app.js?v=137"></script>
 <script>
   // Lazy-load the 3D bundle (the felt Cassie + the living gradient) after the tutor
   // is interactive so it never blocks the app. Without WebGL the SVG mascot and
@@ -455,7 +448,7 @@
     function load3D() {
       if (window.CASSIE_LITE || !hasWebGL()) return; // Lite mode: keep the light SVG Cassie
       var s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js?v=136';
+      s.src = 'mascot3d/cassie-3d.js?v=137';
       s.async = true;
       s.onload = function () { window.dispatchEvent(new Event('cassie3d-loaded')); };
       document.body.appendChild(s);

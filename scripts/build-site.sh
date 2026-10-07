@@ -8,6 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 rm -rf _site && mkdir _site
 cp index.html app.html start.html privacy.html terms.html bot.html ./*.js style.css manifest.json _site/
+cp _headers _site/   # Cloudflare Pages response headers (lets Bella's voice use several cores)
 cp -r icons landing mascot3d patterns explore voice _site/
 [ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)
 mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/

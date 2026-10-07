@@ -35,7 +35,8 @@ let stopBefore = 0; // requests with a lower turn number are skipped
 self.onmessage = (e) => {
   const m = e.data || {};
   if (m.type === 'load') {
-    load().then(() => self.postMessage({ type: 'ready' }), (err) => self.postMessage({ type: 'failed', error: String((err && err.message) || err) }));
+    // isolated: the page lets the voice use several processor cores (much less lag)
+    load().then(() => self.postMessage({ type: 'ready', isolated: !!self.crossOriginIsolated, cores: navigator.hardwareConcurrency || 1 }), (err) => self.postMessage({ type: 'failed', error: String((err && err.message) || err) }));
   } else if (m.type === 'stop') {
     stopBefore = Math.max(stopBefore, m.turn || 0);
   } else if (m.type === 'say') {
