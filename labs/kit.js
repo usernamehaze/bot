@@ -23,6 +23,23 @@ export function num(v, digits = 3) {
   return String(+v.toPrecision(digits));
 }
 
+/* ---------- the puzzle day, and dice that roll the same for everyone ---------- */
+// a "puzzle day" starts at midnight Philippine time, the same moment for every student
+export const dayKey = (ms = Date.now()) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+export function seedOf(text) { let h = 2166136261; for (const ch of String(text)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+export function rng(seed) { // mulberry32: the same seed gives the same numbers
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+export function shuffle(list, rand) { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// buttons that sit on top of the picture itself (bigger targets, right where you look)
+export function overlay(stage, where = 'bl') {
+  const o = el('div', 'lab-overlay ' + where);
+  stage.appendChild(o);
+  return o;
+}
+export function fmtTime(s) { s = Math.round(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+
 /* ---------- a canvas that fills its box ---------- */
 export function canvas(host, draw) {
   const c = el('canvas', 'lab-canvas');

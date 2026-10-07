@@ -1169,25 +1169,38 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await page.click('#labs-btn');
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
   const ids = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
-  for (const id of ['function', 'fractions', 'chance', 'units', 'interest', 'square-proof', 'hanoi', 'projectile', 'pendulum', 'waves', 'refraction', 'balance', 'ph', 'atom', 'punnett', 'body3d']) expect(ids.includes(id), 'the shelf has ' + id + ': ' + ids);
+  for (const id of ['function', 'fractions', 'chance', 'units', 'interest', 'square-proof', 'hanoi', 'projectile', 'pendulum', 'waves', 'refraction', 'balance', 'ph', 'atom', 'punnett', 'body3d',
+    'solar', 'colour', 'vectors', 'magnets', 'optics', 'logic', 'ice-steam', 'metals', 'rocket', 'solids', 'recursion', 'build-cell', 'sudoku', 'nonogram', 'hashi', 'pipes', 'mirrors', 'equation', 'geography']) expect(ids.includes(id), 'the shelf has ' + id + ': ' + ids);
   expect(await page.locator('.labs-feature').count() === 1, 'today’s lab is featured');
   await shot('labs-shelf');
   // subject chips and search
   await page.click('.labs-chips [data-subject="chemistry"]');
-  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom', 'Chemistry shows the chemistry labs');
+  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs');
   await page.click('.labs-chips [data-subject="all"]');
   await page.fill('.labs-search', 'pendul');
   expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'pendulum', 'search finds the pendulum');
   await page.fill('.labs-search', '');
-  // every lab opens, draws and closes without an error
+  // every lab opens, draws, says how its model works, and closes without an error
   for (const id of ids.filter((x) => !/3d$/.test(x))) {
     await page.click(`.labs-grid [data-lab="${id}"]`);
-    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 5000 });
-    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units').count() >= 1, id + ' draws something');
+    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 8000 });
+    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq').count() >= 1, id + ' draws something');
+    expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
+    // tap the middle of the picture (nothing should break)
+    const sb0 = await page.locator('.lab-stage').boundingBox();
+    await page.mouse.click(sb0.x + sb0.width / 2, sb0.y + sb0.height / 2);
     await page.waitForTimeout(250);
     expect(errors.length === 0, `${id}: page errors: ` + errors.join('; '));
     await page.click('.lab-back');
   }
+  // “Try this” goals are buttons: a tap shows the hint
+  await page.click('.labs-grid [data-lab="pendulum"]');
+  await page.click('.lab-try >> nth=0');
+  expect(await page.locator('.lab-hint >> nth=0').isVisible() && /1 m/.test(await page.locator('.lab-hint >> nth=0').innerText()), 'tapping a goal shows its hint');
+  await page.click('.lab-nudge');
+  await page.waitForFunction(() => document.querySelector('.lab-nudge-text') && !document.querySelector('.lab-nudge-text').classList.contains('muted') && document.querySelector('.lab-nudge-text').textContent.length > 10, null, { timeout: 15000 });
+  expect(await page.locator('.labs').isVisible(), 'Cassie’s nudge appears inside the lab');
+  await page.click('.lab-back');
   // the function lab: x^2 − 4, tap the middle → slope 0 → the first goal ticks
   await page.click('[data-lab="function"]');
   await page.fill('.lab-input', 'x^2 - 4');
@@ -1237,10 +1250,13 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   expect(/negative ion/.test(await page.locator('.lab-stats').innerText()), 'chloride is a negative ion');
   await shot('lab-atom');
   await page.click('.lab-back');
-  // launch: 45° from the ground, then Ask Cassie — she gets the numbers on the screen
+  // launch: drag on the picture to aim, then 45° from the ground and the big Launch button on the picture
   await page.click('[data-lab="projectile"]');
+  const pb = await page.locator('.lab-stage').boundingBox();
+  await page.mouse.move(pb.x + pb.width * 0.4, pb.y + pb.height * 0.4); await page.mouse.down(); await page.mouse.move(pb.x + pb.width * 0.5, pb.y + pb.height * 0.3, { steps: 4 }); await page.mouse.up();
+  expect(await page.locator('.lab-sl:has-text("Angle") output').innerText() !== '40°', 'dragging on the picture aims the launcher');
   await page.locator('.lab-sl:has-text("Angle") input').fill('45');
-  await page.click('.lab-btn.main:has-text("Launch")');
+  await page.click('.lab-overlay .lab-btn:has-text("Launch")');
   await page.waitForFunction(() => /Landed|Hit/.test(document.querySelector('.lab-note').textContent), null, { timeout: 8000 });
   expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), '45° from the ground ticks the farthest-angle goal');
   await shot('lab-projectile');
@@ -1258,6 +1274,72 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"]', { timeout: 20000 });
   await page.waitForTimeout(600);
   await shot('lab-pendulum');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes on the score board, practice ones don’t', async (b) => {
+  const { ctx, page, errors } = await open(b, { state: { groqKey: 'gsk_test', profile: { name: 'Hazel' } }, device: process.env.DEVICE || 'Pixel 7' });
+  const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
+  await page.click('#labs-btn');
+  await page.waitForSelector('.labs:not([hidden]) .labs-board:not([hidden])', { timeout: 20000 });
+  expect(/Be the first today|playing today/.test(await page.locator('.labs-board').innerText()), 'the score board shows on the shelf');
+  // solve today's Laser mirrors puzzle by trying mirror turns (the real path exists)
+  await page.click('.labs-grid [data-lab="mirrors"]');
+  await page.waitForSelector('.puz-head');
+  await page.waitForFunction(() => document.querySelector('.lab-stage').dataset.geo);
+  // try every combination of mirror turns in Gray-code order (one tap per step) until the laser hits
+  const mirrors = (await page.locator('.lab-stage').getAttribute('data-mirrors')).split(',').map(Number);
+  const geo = JSON.parse(await page.locator('.lab-stage').getAttribute('data-geo'));
+  const box = await page.locator('.lab-stage canvas').boundingBox();
+  await page.waitForTimeout(9000); // a believable solving time (the server refuses impossibly fast finishes)
+  let done = false;
+  for (let i = 1; i < 2 ** mirrors.length && !done; i++) {
+    const bit = Math.log2(i & -i), m = mirrors[bit], r = Math.floor(m / 7), c = m % 7;
+    await page.mouse.click(box.x + geo.ox + c * geo.cell + geo.cell / 2, box.y + geo.oy + r * geo.cell + geo.cell / 2);
+    done = await page.locator('.puz-win:not([hidden])').count() > 0;
+  }
+  expect(done, 'the mirrors puzzle can be solved');
+  await page.waitForFunction(() => /#\d+ today/.test(document.querySelector('.puz-win').textContent), null, { timeout: 10000 }).catch(async () => { throw new Error('win text: ' + await page.locator('.puz-win').innerText() + ' / board ' + await page.evaluate(() => localStorage.getItem('cassie.puzzles'))); });
+  expect(/You’re #1 today with 100 points/.test(await page.locator('.puz-win').innerText()), 'the first finish is #1 on the score board: ' + await page.locator('.puz-win').innerText());
+  await shot('puzzle-mirrors');
+  await page.click('.lab-back');
+  await page.waitForSelector('.labs-board .pod.p1 b');
+  await page.waitForFunction(() => /Hazel/.test(document.querySelector('.labs-board').textContent), null, { timeout: 10000 });
+  expect(/100 points/.test(await page.locator('.labs-board .pod.p1').innerText()), 'the podium shows today’s leader');
+  expect(/Done today/i.test(await page.locator('.labs-grid [data-lab="mirrors"]').innerText()), 'the shelf marks the puzzle done today');
+  await shot('labs-board');
+  // the same puzzle for everyone today: another student gets the same Sudoku
+  await page.click('.labs-grid [data-lab="sudoku"]');
+  await page.waitForSelector('.sdk-grid .sdk-c');
+  const mine = await page.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(','));
+  const other = await ctx.browser().newContext({ serviceWorkers: 'block' });
+  const p2 = await other.newPage();
+  await p2.goto(page.url().split('?')[0] + '?lab=sudoku');
+  await p2.waitForSelector('.sdk-grid .sdk-c', { timeout: 20000 });
+  expect((await p2.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(','))) === mine, 'everyone gets the same Sudoku today');
+  await other.close();
+  // enter a number: tap a square, tap a number
+  const empty = await page.$$eval('.sdk-c', (c) => c.findIndex((x) => !x.classList.contains('given')));
+  await page.click(`.sdk-c[data-i="${empty}"]`);
+  await page.click('.sdk-pad [data-d="5"]');
+  expect((await page.locator(`.sdk-c[data-i="${empty}"]`).innerText()).trim() === '5', 'tapping a square then a number fills it');
+  await shot('puzzle-sudoku');
+  await page.click('.lab-back');
+  // equation: a false guess is refused with a reason
+  await page.click('.labs-grid [data-lab="equation"]');
+  for (const k of '1+1=3000'.split('')) await page.click(`.eq-keys [data-k="${k}"]`);
+  await page.click('.eq-keys [data-k="enter"]');
+  expect(/isn’t true|just a number|8 symbols/.test(await page.locator('.eq-warn').innerText()), 'a wrong equation is refused: ' + await page.locator('.eq-warn').innerText());
+  await shot('puzzle-equation');
+  await page.click('.lab-back');
+  // geography: the map loads and a round can be answered
+  await page.click('.labs-grid [data-lab="geography"]');
+  await page.waitForSelector('.geo-opts button');
+  await page.click('.geo-opts button >> nth=0');
+  await page.waitForSelector('.geo-next');
+  await page.waitForTimeout(500);
+  await shot('puzzle-geography');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

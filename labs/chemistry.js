@@ -1,6 +1,6 @@
 /* Chemistry labs: balance an equation yourself (Cassie checks every atom), mix acid and
    base and watch the pH, and build an atom from protons, neutrons and electrons. */
-import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, group, slider, seg, button, row, stats, stepper, line, dot, text, gcd } from './kit.js';
+import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, drag, group, slider, seg, button, row, stats, stepper, line, dot, text, arrow, gcd, overlay } from './kit.js';
 
 /* ---------------- Balancing equations ---------------- */
 // "Ca(OH)2" → { Ca: 1, O: 2, H: 2 }; also [ ], hydrates (CuSO4·5H2O) and leading numbers
@@ -91,6 +91,8 @@ const balanceLab = {
   words: 'balance chemical equation coefficients reaction atoms conservation stoichiometry',
   icon: '<path d="M24 8v32M10 40h28"/><path d="M8 14h32"/><path d="M8 14l-4 12h8zM40 14l-4 12h8z"/><circle cx="24" cy="8" r="2"/>',
   tries: ['Balance water (H₂ + O₂ → H₂O) yourself', 'Balance burning methane yourself', 'Balance photosynthesis yourself'],
+  hints: ['Count the O atoms: 2 on the left, 1 on the right. Make the right side 2 H₂O, then fix the H on the left.', 'Balance C first, then H, and leave O for last — O₂ is easy to adjust because it is on its own.', 'Glucose (C₆H₁₂O₆) has 6 carbons, so start with 6 CO₂. Then balance H with water, and O with O₂ last.'],
+  about: 'Atoms are never created or destroyed in a chemical reaction (the law of conservation of mass), so every element must appear the same number of times on both sides.\nYou may only change the coefficients — the big numbers in front. Changing the small subscripts would turn a substance into a different one (H₂O₂ is hydrogen peroxide, not water).\nCassie’s answer solves the atom counts as simultaneous equations and gives the smallest whole numbers.',
   mount({ stage, panel, api }) {
     let src = EXAMPLES[0][1], eq = null, coef = [], answer = null, peeked = false, err = '';
     const box = el('div', 'lab-balance');
@@ -150,7 +152,8 @@ const balanceLab = {
 };
 
 /* ---------------- pH ---------------- */
-const SCALE = [[0.5, 'Battery acid'], [2, 'Lemon juice'], [2.5, 'Vinegar'], [3.2, 'Cola'], [5, 'Black coffee'], [6.5, 'Milk'], [7, 'Pure water'], [7.4, 'Blood'], [8.3, 'Baking soda'], [10, 'Soap'], [11.5, 'Ammonia'], [13, 'Bleach']];
+// typical values (real samples vary a little)
+const SCALE = [[0.8, 'Battery acid'], [2.2, 'Lemon juice'], [2.6, 'Cola'], [3.0, 'Vinegar'], [5, 'Black coffee'], [6.7, 'Milk'], [7, 'Pure water'], [7.4, 'Blood'], [8.3, 'Baking soda'], [10, 'Soap'], [11.5, 'Ammonia'], [12.8, 'Bleach']];
 function universal(pH) {
   const stops = [[0, [220, 30, 40]], [3, [240, 110, 40]], [5, [245, 200, 50]], [7, [80, 170, 70]], [9, [40, 120, 200]], [11, [70, 60, 170]], [14, [110, 40, 130]]];
   for (let i = 1; i < stops.length; i++) if (pH <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], t = (pH - a) / (b - a); return `rgb(${ca.map((v, k) => Math.round(v + (cb[k] - v) * t)).join(',')})`; }
@@ -167,6 +170,8 @@ const phLab = {
   words: 'ph acid base alkali neutral neutralisation indicator titration litmus',
   icon: '<path d="M14 8h20M16 8v8l-8 22a3 3 0 0 0 3 4h26a3 3 0 0 0 3-4L32 16V8"/><path d="M12 30h24"/><circle cx="21" cy="35" r="1.5"/><circle cx="28" cy="33" r="1.5"/>',
   tries: ['Make it exactly neutral — pH 7.0 (±0.1) — using both acid and base', 'Turn phenolphthalein pink', 'Make it as acidic as lemon juice (pH 2)'],
+  hints: ['Add some acid, then the same amount of base. Equal volumes of the same strength cancel exactly. Near 7 the pH jumps fast, so use drops.', 'Choose Phenolphthalein as the indicator, then add base until the pH is above about 8.6.', 'Add acid a few mL at a time until the pH reads 2. Each step of 1 on the pH scale is 10 times more acidic.'],
+  about: 'Hydrochloric acid and sodium hydroxide are strong: they split up completely in water. Both are 0.1 mol/L.\nThe pH comes from pH = −log₁₀[H⁺], including water’s own ions (Kw = 1.0 × 10⁻¹⁴, true at 25 °C).\nIndicators: phenolphthalein is colourless below pH 8.2 and pink above it; litmus is red below about 4.5 and blue above about 8.3; universal-indicator colours vary a little between brands.\nThe everyday examples are typical values — real lemons, soaps and colas vary.',
   mount({ stage, panel, api }) {
     const V0 = 50, M = 0.1;
     let Va = 0, Vb = 0, ind = 'universal', hist = [[0, 7]], drop = null;
@@ -222,6 +227,10 @@ const phLab = {
     button(rb, '+ 1 drop', () => add(false, 0.05)); button(rb, '+ 1 mL', () => add(false, 1)); button(rb, '+ 10 mL', () => add(false, 10));
     seg(group(panel, 'Indicator'), { options: Object.entries(INDICATORS).map(([k, [n]]) => [k, n]), value: ind, onChange: (v) => { ind = v; report(); } });
     button(row(panel, 'lab-row-btns'), 'Fresh water', () => { Va = Vb = 0; hist = [[0, 7]]; report(); });
+    // drip straight into the beaker
+    const ov = overlay(stage, 'bl');
+    button(ov, 'Drip acid', () => add(true, 0.05));
+    button(ov, 'Drip base', () => add(false, 0.05));
     panel.appendChild(el('p', 'lab-note', 'The beaker starts with 50 mL of pure water. A drop is 0.05 mL.'));
     const st = stats(panel);
     report();
@@ -242,6 +251,8 @@ const atomLab = {
   words: 'atom proton neutron electron isotope ion element periodic table nucleus shell',
   icon: '<circle cx="24" cy="24" r="4"/><ellipse cx="24" cy="24" rx="19" ry="8"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(60 24 24)"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-60 24 24)"/>',
   tries: ['Build carbon-12', 'Make a negative ion (more electrons than protons)', 'Build oxygen-18, a heavy but stable oxygen'],
+  hints: ['Carbon has 6 protons. “Carbon-12” means protons + neutrons = 12. A neutral atom has as many electrons as protons.', 'Add one more electron than there are protons — the atom gets a negative charge.', 'Oxygen has 8 protons. Oxygen-18 needs 18 − 8 neutrons.'],
+  about: 'The number of protons decides the element. Protons + neutrons = the mass number (carbon-12, carbon-14…). Atoms of one element with different numbers of neutrons are isotopes.\nThis is the Bohr model: electrons are drawn in shells holding 2, 8, 8 and then 2 (correct for the first 20 elements, hydrogen to calcium). Real electrons are spread in clouds (orbitals), not neat circles.\n“Stable” means the isotope is not known to decay; calcium-48 does decay, but so slowly (half-life about 6 × 10¹⁹ years) that it is treated as stable. Real ions rarely have charges bigger than about ±3.',
   mount({ stage, panel, api }) {
     let Z = 6, N = 6, E = 6, spin = 0;
     const cv = canvas(stage, (ctx, w, h) => {
@@ -275,7 +286,7 @@ const atomLab = {
     function report() {
       const e = ELEMENTS[Z], q = Z - E;
       const stable = e ? e[3].includes(N) : false;
-      st.set(e ? [['Element', `${e[1]} (${e[0]})`], ['Mass number', `${Z + N} → ${e[1].toLowerCase()}-${Z + N}`], ['Charge', q === 0 ? '0 (a neutral atom)' : `${q > 0 ? '+' : '−'}${Math.abs(q)} — a ${q > 0 ? 'positive ion (cation)' : 'negative ion (anion)'}`], ['Nucleus', stable ? 'stable' : 'unstable — it would be radioactive'], ['Electron shells', shellsOf(E).join(', ') || 'none'], ['Most common isotope', `${e[1].toLowerCase()}-${Z + e[2]}`]]
+      st.set(e ? [['Element', `${e[1]} (${e[0]})`], ['Mass number', `${Z + N} → ${e[1].toLowerCase()}-${Z + N}`], ['Charge', q === 0 ? '0 (a neutral atom)' : `${q > 0 ? '+' : '−'}${Math.abs(q)} — a ${q > 0 ? 'positive ion (cation)' : 'negative ion (anion)'}${Math.abs(q) > 3 ? ' (very unlikely in nature)' : ''}`], ['Nucleus', stable ? 'stable' : 'unstable — it would be radioactive'], ['Electron shells', shellsOf(E).join(', ') || 'none'], ['Most common isotope', `${e[1].toLowerCase()}-${Z + e[2]}`]]
         : [['Element', 'none — the number of protons decides the element']]);
       if (Z === 6 && N === 6 && E === 6) api.check(0);
       if (Z > 0 && E > Z) api.check(1);
@@ -286,6 +297,10 @@ const atomLab = {
     const sp = stepper(g, { label: 'Protons', min: 0, max: 20, value: Z, onChange: (v) => { Z = v; report(); } });
     const sn = stepper(g, { label: 'Neutrons', min: 0, max: 30, value: N, onChange: (v) => { N = v; report(); } });
     const se = stepper(g, { label: 'Electrons', min: 0, max: 28, value: E, onChange: (v) => { E = v; report(); } });
+    // add particles right on the picture
+    const ov = overlay(stage, 'tl');
+    [['+ proton', () => { Z = Math.min(20, Z + 1); sp.set(Z); }], ['+ neutron', () => { N = Math.min(30, N + 1); sn.set(N); }], ['+ electron', () => { E = Math.min(28, E + 1); se.set(E); }], ['− electron', () => { E = Math.max(0, E - 1); se.set(E); }]]
+      .forEach(([t, f]) => button(ov, t, () => { f(); report(); }));
     const r1 = row(group(panel, 'Quick builds'), 'lab-chips');
     [['Hydrogen', 1, 0, 1], ['Helium-4', 2, 2, 2], ['Carbon-14', 6, 8, 6], ['Sodium ion Na⁺', 11, 12, 10], ['Chloride Cl⁻', 17, 18, 18], ['Calcium', 20, 20, 20]].forEach(([n, z, nn, e]) => button(r1, n, () => { Z = z; N = nn; E = e; sp.set(z); sn.set(nn); se.set(e); report(); }, 'chip'));
     panel.insertBefore(st.el, null);

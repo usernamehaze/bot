@@ -10,6 +10,8 @@ const fnLab = {
   words: 'graph graphing derivative tangent slope integral area calculus curve',
   icon: '<path d="M6 40h36M10 44V6"/><path d="M12 36c6-2 8-22 14-22s8 14 14 12"/><path d="M20 30l16-10" stroke-dasharray="3 3"/><circle cx="28" cy="25" r="2.5"/>',
   tries: ['Find a flat spot: slide until the slope is 0', 'Make the area from a to b exactly 0 (try sin(x) from −π to π)', 'Find an inflection point — where f″ (the bend) is 0'],
+  hints: ['Drag along the curve and watch the slope number. Flat spots are at the tops of hills and bottoms of valleys.', 'Turn on “Area ∫”. Area below the x-axis counts as negative, so equal parts above and below cancel out.', 'Turn on “Bend f″”. An inflection point is where the curve changes from bending up (like a cup) to bending down (like a cap). Try x^3 − 3x.'],
+  about: 'The slope is worked out as (f(x+h) − f(x−h)) ÷ 2h with a tiny h, and the bend (second derivative, concavity) in the same way — for smooth functions this matches the exact derivative to many decimal places.\nAreas use Simpson’s rule with 600 slices. Area below the x-axis counts as negative — that is what a definite integral means.\nWhere a function jumps or is undefined (like 1/x at 0, or sqrt(x) for x < 0) the graph leaves a gap and no area is given.\nlog means log base 10; ln is the natural log.',
   mount({ stage, panel, api }) {
     let src = 'sin(x) + x/3', f = formula(src), err = '';
     const view = { cx: 0, cy: 0, s: 50 };
@@ -127,7 +129,7 @@ const fnLab = {
     input.addEventListener('input', read);
     const g2 = group(panel, 'Show');
     const tg = row(g2, 'lab-toggles');
-    [['f', 'f(x)', C.gold], ['d1', 'Slope f′', C.blue], ['d2', 'Bend f″', C.red], ['area', 'Area ∫', C.blue]].forEach(([k, label, color]) => {
+    [['f', 'f(x)', C.gold], ['d1', 'Slope f′', C.blue], ['d2', 'Bend f″ (concavity)', C.red], ['area', 'Area ∫', C.blue]].forEach(([k, label, color]) => {
       const b2 = button(tg, '', () => { show[k] = !show[k]; b2.setAttribute('aria-pressed', String(show[k])); areaBox.hidden = !show.area; report(); }, 'toggle');
       b2.innerHTML = `<span class="lab-key" style="background:${color}"></span>${esc(label)}`;
       b2.setAttribute('aria-pressed', String(show[k]));
@@ -155,8 +157,11 @@ const fracLab = {
   words: 'fraction numerator denominator equivalent pie',
   icon: '<circle cx="18" cy="24" r="12"/><path d="M18 24V12M18 24l10 6"/><path d="M34 14h8M34 24h8M34 34h8"/><path d="M38 10v8M38 30v8" />',
   tries: ['Find two different fractions that are equal (like 1/2 and 2/4)', 'Add two fractions to make exactly 1 whole', 'Make a fraction bigger than 1 (an improper fraction)'],
+  hints: ['Make B’s top and bottom both twice A’s (or three times). The pies will cover exactly the same amount.', 'Choose “Add A + B”. Try 1/2 + 1/2 first, then something like 1/3 + 2/3.', 'Make the top number bigger than the bottom number. Tip: tap the slices of a pie to fill them.'],
+  about: 'A fraction is the top number divided by the bottom number.\nTo compare, add or subtract, both fractions are rewritten over the lowest common denominator (the least common multiple of the two bottoms).\nAnswers are simplified by dividing the top and bottom by their greatest common factor, and shown as a mixed number when they are bigger than 1.\nTap a slice of a pie to fill the pie up to that slice.',
   mount({ stage, panel, api }) {
     let p = [3, 4], q = [2, 6], op = 'compare';
+    const pieAt = []; // where the pies are drawn, to tap them
     const lcm = (x, y) => (x * y) / gcd(x, y);
     const result = () => {
       if (op === 'compare') return null;
@@ -166,10 +171,11 @@ const fracLab = {
     const simp = ([n, d]) => { const g = gcd(n, d); return [n / g, d / g]; };
     const fr = ([n, d]) => `${n}/${d}`;
     const mixed = ([n, d]) => { const s = simp([n, d]); if (Math.abs(s[0]) < s[1] || s[1] === 1) return s[1] === 1 ? String(s[0]) : fr(s); const w = Math.trunc(s[0] / s[1]); return `${w} ${Math.abs(s[0] % s[1])}/${s[1]}`; };
-    function pies(ctx, [n, d], x, y, r, color, label) {
-      const whole = Math.max(1, Math.ceil(n / d));
-      for (let k = 0; k < whole; k++) {
-        const cx = x + k * (r * 2 + 10), filled = Math.min(d, n - k * d);
+    function pies(ctx, [n, d], x, y, r, color, label, which) {
+      const whole = Math.max(1, Math.ceil(n / d)) + (n > 0 && n < 3 * d && n % d === 0 ? 1 : 0); // an empty pie to tap into next
+      for (let k = 0; k < Math.min(3, whole); k++) {
+        const cx = x + k * (r * 2 + 10), filled = Math.max(0, Math.min(d, n - k * d));
+        pieAt.push({ which, k, cx, cy: y, r, d });
         for (let i = 0; i < d; i++) {
           ctx.beginPath(); ctx.moveTo(cx, y);
           ctx.arc(cx, y, r, -Math.PI / 2 + (i / d) * Math.PI * 2, -Math.PI / 2 + ((i + 1) / d) * Math.PI * 2);
@@ -190,9 +196,10 @@ const fracLab = {
       }
     }
     const cv = canvas(stage, (ctx, w, h) => {
-      const r = Math.min(52, w / 11, h / 9);
-      pies(ctx, p, 24 + r, 30 + r, r, C.gold, `A = ${fr(p)}`);
-      pies(ctx, q, w / 2 + 12 + r, 30 + r, r, C.blue, `B = ${fr(q)}`);
+      const r = Math.min(52, w / 14, h / 9);
+      pieAt.length = 0;
+      pies(ctx, p, 24 + r, 30 + r, r, C.gold, `A = ${fr(p)}`, 0);
+      pies(ctx, q, w / 2 + 12 + r, 30 + r, r, C.blue, `B = ${fr(q)}`, 1);
       // bars on the same scale, one whole = unit wide
       const top = 60 + r * 2, unit = Math.min((w - 48) / 3, 260), bh = Math.max(16, h * 0.05);
       text(ctx, 'A', 12, top + bh * 0.75, DIM); bar(ctx, p, 28, top, unit, bh, C.gold);
@@ -232,7 +239,19 @@ const fracLab = {
       } });
       return top;
     };
-    mk('Fraction A', p); mk('Fraction B', q);
+    const tops = [mk('Fraction A', p), mk('Fraction B', q)];
+    // tap a slice: the pie fills up to it (tap the last filled slice again to empty it)
+    cv.c.addEventListener('click', (e) => {
+      const r0 = cv.c.getBoundingClientRect(), x = e.clientX - r0.left, y = e.clientY - r0.top;
+      const hit = pieAt.find((pp) => Math.hypot(x - pp.cx, y - pp.cy) <= pp.r);
+      if (!hit) return;
+      const frac = hit.which ? q : p;
+      let ang = Math.atan2(y - hit.cy, x - hit.cx) + Math.PI / 2; if (ang < 0) ang += Math.PI * 2;
+      const slice = Math.min(hit.d - 1, Math.floor((ang / (Math.PI * 2)) * hit.d)), n = hit.k * hit.d + slice + 1;
+      frac[0] = Math.min(frac[1] * 3, frac[0] === n ? n - 1 : n);
+      tops[hit.which].set(frac[0]);
+      report();
+    });
     const st = stats(panel);
     report();
     return {
@@ -255,6 +274,8 @@ const chanceLab = {
   words: 'probability coin dice spinner random statistics experiment',
   icon: '<rect x="6" y="14" width="20" height="20" rx="4"/><circle cx="12" cy="20" r="1.6"/><circle cx="20" cy="28" r="1.6"/><circle cx="16" cy="24" r="1.6"/><circle cx="35" cy="24" r="9"/><path d="M35 15v18M31 19l4-4 4 4"/>',
   tries: ['Flip 5 heads in a row', 'Roll two dice 1,000 times — which total comes up most?', 'After 500 flips, get heads within 2% of half'],
+  hints: ['Use the Coin and flip one at a time (tap the coin or “× 1”). Any run of 5 heads has a 1 in 32 chance, so keep going.', 'Pick “Two dice” and tap “× 1,000”. Count how many ways each total can be made: 7 can be made 6 ways (1+6, 2+5, 3+4, 4+3, 5+2, 6+1).', 'Choose Coin and flip at least 500 times. If you are not within 2% yet, flip more — big numbers of flips tend to land closer to half.'],
+  about: 'Every flip, roll and spin uses the browser’s random-number generator, so each outcome has exactly the theoretical probability shown. (Real coins and dice are very slightly imperfect; these are ideal ones.)\nThe dashed lines are the theoretical probabilities; the bars are what actually happened. The law of large numbers says the bars tend to get closer to the lines as the number of trials grows — but any single run can still wander.',
   mount({ stage, panel, api }) {
     let mode = 'coin', counts = [], n = 0, last = null, streak = 0, spin = 0;
     const reset = () => { counts = MODES[mode].out.map(() => 0); n = 0; last = null; streak = 0; };
@@ -280,7 +301,7 @@ const chanceLab = {
         const a = spin - Math.PI / 2;
         line(ctx, [[cx, cy], [cx + Math.cos(a) * s * 0.55, cy + Math.sin(a) * s * 0.55]], INK, 3); dot(ctx, cx, cy, 5, INK);
       }
-      text(ctx, n ? `${n.toLocaleString()} ${mode === 'coin' ? 'flips' : mode === 'spin' ? 'spins' : 'rolls'}` : 'Tap a button to start', cx, top + 4, DIM, 'center');
+      text(ctx, n ? `${n.toLocaleString()} ${mode === 'coin' ? 'flips' : mode === 'spin' ? 'spins' : 'rolls'}` : `Tap the ${mode === 'coin' ? 'coin' : mode === 'spin' ? 'spinner' : 'dice'} to start`, cx, top + 4, DIM, 'center');
       // the results, as bars, with the theory as a line
       const left = 36, bottom = h - 34, chartH = bottom - top - 30, k = M.out.length, bw = (w - left - 12) / k;
       const maxP = Math.max(...M.p, ...counts.map((c) => (n ? c / n : 0))) * 1.15;
@@ -326,6 +347,9 @@ const chanceLab = {
     button(r1, '× 100', () => run(100));
     button(r1, '× 1,000', () => run(1000));
     button(r1, 'Start over', () => { reset(); report(); });
+    // tap the coin, die or spinner itself
+    cv.c.addEventListener('click', (e) => { const r0 = cv.c.getBoundingClientRect(); if (e.clientY - r0.top < Math.min(150, r0.height * 0.34)) run(1); });
+    cv.c.style.cursor = 'pointer';
     const st = stats(panel);
     report();
     return {
@@ -354,6 +378,8 @@ const unitsLab = {
   words: 'convert conversion metric imperial km miles celsius fahrenheit',
   icon: '<rect x="4" y="16" width="16" height="16" rx="4"/><rect x="28" y="16" width="16" height="16" rx="4"/><path d="M21 24h6M24 21l3 3-3 3"/><path d="M9 24h6M33 24h6"/>',
   tries: ['Find body temperature, 37 °C, in °F', 'How many seconds are in one day?', 'Find how many km/h is 100 mph'],
+  hints: ['Kind: Temperature. Amount 37, from °C to °F. The formula is × 9 ÷ 5 + 32.', 'Kind: Time. Amount 1, from day to s. That is 24 × 60 × 60.', 'Kind: Speed. Amount 100, from mph to km/h. One mile is 1.609344 km.'],
+  about: 'Factors are the exact international definitions: 1 inch = 2.54 cm, 1 foot = 0.3048 m, 1 mile = 1609.344 m, 1 pound = 0.45359237 kg, 1 nautical mile = 1852 m.\nTemperatures need a formula, not just a factor, because the scales start at different zeros: °F = °C × 9/5 + 32, and K = °C + 273.15.\nA year here is 365.25 days (the average including leap years).\nkB = 1000 bytes, but KiB = 1024 bytes — computers often mix these up. Cups and gallons are US measures (UK ones are bigger).',
   mount({ stage, panel, api }) {
     let cat = 'Length', from = 'km', to = 'mi', value = 1;
     const card = el('div', 'lab-units');
@@ -420,6 +446,8 @@ const interestLab = {
   words: 'interest compound simple savings bank money exponential growth',
   icon: '<path d="M6 42h36"/><rect x="9" y="30" width="6" height="12"/><rect x="21" y="22" width="6" height="20"/><rect x="33" y="10" width="6" height="32"/><path d="M8 26l12-8 8 4 12-14"/>',
   tries: ['Find a rate that doubles your money in about 10 years', 'Make compound interest earn at least ₱10,000 more than simple', 'Compare yearly and daily compounding'],
+  hints: ['The rule of 72: 72 ÷ rate ≈ years to double. What rate gives 10?', 'Raise the years and the rate — compounding pulls ahead more the longer it runs.', 'Switch “Compound” between Yearly and Daily and watch the compound amount.'],
+  about: 'Simple interest pays the rate only on the money you put in. Compound interest also pays interest on the interest already earned, so it grows faster and faster.\nMonthly compounding adds rate ÷ 12 each month; daily adds rate ÷ 365 each day; yearly adds the full rate once a year. Money you add every month goes in at the end of the month.\nReal savings may be rounded, charged fees, or taxed (in the Philippines, bank interest has a 20% final tax), which this leaves out. Tap the chart to read any year.',
   mount({ stage, panel, api }) {
     let P = 10000, rate = 6, years = 20, add = 0, comp = 12;
     const seen = new Set();
@@ -456,11 +484,24 @@ const interestLab = {
       text(ctx, 'compound', X(years) - 4, Y(g.compound[years]) - 8, C.gold, 'right');
       text(ctx, 'simple', X(years) - 4, Y(g.simple[years]) + 16, C.blue, 'right');
       text(ctx, 'what you put in', L + 6, Y(g.putIn[Math.min(years, 3)]) - 6, DIM);
+      chart = { L, R, years };
+      // the year you tapped
+      if (pick != null && pick <= years) {
+        const x = X(pick);
+        line(ctx, [[x, T], [x, B]], INK, 1);
+        dot(ctx, x, Y(g.compound[pick]), 5, C.gold); dot(ctx, x, Y(g.simple[pick]), 5, C.blue);
+        const lines = [`Year ${pick}`, `compound ${money(g.compound[pick])}`, `simple ${money(g.simple[pick])}`], bw = 170, bx = Math.min(x + 10, R - bw);
+        ctx.fillStyle = 'rgba(16,17,22,.92)'; ctx.fillRect(bx, T + 4, bw, 58);
+        lines.forEach((t, i) => text(ctx, t, bx + 10, T + 22 + i * 17, i ? (i === 1 ? C.gold : C.blue) : INK));
+      }
     });
+    let chart = null, pick = null;
+    const choose = (p) => { if (!chart) return; pick = Math.round(Math.max(0, Math.min(1, (p.x - chart.L) / (chart.R - chart.L))) * chart.years); cv.redraw(); };
+    drag(cv.c, { down: choose, move: choose });
     function report() {
       const g = grow(), s = g.simple[years], c = g.compound[years];
       const dbl = Math.log(2) / (comp === 1 ? Math.log(1 + rate / 100) : comp === 12 ? 12 * Math.log(1 + rate / 1200) : 365 * Math.log(1 + rate / 36500));
-      st.set([['Simple', money(s)], ['Compound', money(c)], ['Compound earns more by', money(c - s)], ['You put in', money(g.putIn[years])], ['Doubles in', `${num(dbl)} years (rule of 72: ${num(72 / rate)})`]]);
+      st.set([['Simple', money(s)], ['Compound', money(c)], ['Compound earns more by', money(c - s)], ['You put in', money(g.putIn[years])], ['The deposit alone doubles in', `${num(dbl)} years (rule of 72: ${num(72 / rate)})`]]);
       if (Math.abs(dbl - 10) < 0.5) api.check(0);
       if (c - s >= 10000) api.check(1);
       seen.add(comp); if (seen.has(1) && seen.has(365)) api.check(2);
@@ -488,6 +529,8 @@ const squareLab = {
   words: 'algebra identity square expand factor difference of squares proof',
   icon: '<rect x="6" y="6" width="22" height="22"/><rect x="31" y="6" width="11" height="22"/><rect x="6" y="31" width="22" height="11"/><rect x="31" y="31" width="11" height="11"/>',
   tries: ['Pull (a + b)² all the way apart', 'Make 2ab exactly equal to a² + b²', 'Turn a² − b² into a rectangle'],
+  hints: ['Drag the “Together → apart” slider all the way — or drag across the picture from left to right.', 'Try making a and b the same number. (When they differ, 2ab is always smaller than a² + b².)', 'Switch the picture to a² − b², then pull it apart all the way.'],
+  about: 'The pictures are drawn to scale: each square’s and rectangle’s area is exactly the number written on it.\n(a + b)² = a² + 2ab + b² is true for every a and b, not just these whole numbers — the picture shows why: the big square is made of exactly those four pieces.\na² − b² = (a + b)(a − b): cutting b² from the corner of a² leaves an L-shape that rearranges into an (a + b) by (a − b) rectangle. This picture needs b smaller than a, so b is kept at most a − 1.\nDrag across the picture to pull it apart.',
   mount({ stage, panel, api }) {
     let mode = 'sum', a = 6, b = 3, t = 0;
     const ease = (x) => x * x * (3 - 2 * x);
@@ -540,7 +583,10 @@ const squareLab = {
     const g = group(panel, 'Sizes');
     slider(g, { label: 'a', min: 1, max: 10, value: a, onInput: (v) => { a = v; report(); } });
     slider(g, { label: 'b', min: 1, max: 9, value: b, onInput: (v) => { b = v; report(); } });
-    slider(group(panel, 'Pull it apart'), { label: 'Together → apart', min: 0, max: 1, step: 0.01, value: 0, fmt: (v) => Math.round(v * 100) + '%', onInput: (v) => { t = v; report(); } });
+    const tS = slider(group(panel, 'Pull it apart'), { label: 'Together → apart', min: 0, max: 1, step: 0.01, value: 0, fmt: (v) => Math.round(v * 100) + '%', onInput: (v) => { t = v; report(); } });
+    // drag across the picture to pull it apart (left = together, right = apart)
+    drag(cv.c, { down: pull, move: pull });
+    function pull(p) { t = Math.round(Math.max(0, Math.min(1, (p.x - cv.w * 0.15) / (cv.w * 0.7))) * 100) / 100; tS.set(t); report(); }
     const st = stats(panel);
     report();
     return {
@@ -557,6 +603,8 @@ const hanoiLab = {
   words: 'puzzle recursion hanoi tower disks game',
   icon: '<path d="M4 42h40M12 42V14M24 42V14M36 42V14"/><rect x="5" y="34" width="14" height="5" rx="2"/><rect x="7" y="28" width="10" height="5" rx="2"/><rect x="31" y="34" width="10" height="5" rx="2"/>',
   tries: ['Solve 3 disks in 7 moves', 'Solve 4 disks (the fewest is 15 moves)', 'Watch Cassie solve 6 disks — count the moves'],
+  hints: ['Move the smallest disk every other move, always round the pegs in the same direction (with 3 disks: A → C → B → A…).', 'To move 4 disks: move the top 3 to the middle peg, move the biggest to the end, then move the 3 on top of it.', 'Choose 6 disks and tap “Watch Cassie solve it”.'],
+  about: 'The fewest moves for n disks is 2ⁿ − 1. The reason is recursion: to move n disks, you must first move the n − 1 on top out of the way, then move the biggest, then move the n − 1 back on top — so each extra disk doubles the moves, plus one.\nCassie’s solution uses exactly that recursion, so it always takes the fewest moves.',
   mount({ stage, panel, api }) {
     let n = 3, pegs, pick = -1, moves = 0, msg = '', demo = null, won = false, byCassie = false;
     const reset = () => { pegs = [Array.from({ length: n }, (_, i) => n - i), [], []]; pick = -1; moves = 0; msg = ''; won = false; byCassie = false; stopDemo(); };

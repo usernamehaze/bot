@@ -1,6 +1,6 @@
 /* Physics labs: launching a ball, a pendulum (and a chaotic double one), waves on a string,
    and light bending as it crosses into water or glass. */
-import { INK, DIM, FAINT, GRID, C, el, num, canvas, drag, clock, group, slider, seg, button, row, stats, line, dot, text, arrow } from './kit.js';
+import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, slider, seg, button, row, stats, line, dot, text, arrow, overlay } from './kit.js';
 
 const GRAVITY = { earth: ['Earth', 9.81], moon: ['Moon', 1.62], mars: ['Mars', 3.71], jupiter: ['Jupiter', 24.79] };
 
@@ -11,9 +11,11 @@ const projectileLab = {
   words: 'projectile motion trajectory gravity launch cannon ball parabola kinematics',
   icon: '<path d="M6 40h36"/><path d="M8 38c8-28 24-28 32 0" stroke-dasharray="3 4"/><circle cx="24" cy="17" r="3"/><path d="M8 38l6-8"/>',
   tries: ['Find the angle that goes farthest (launching from the ground)', 'Hit the target', 'Launch on the Moon after Earth — how much farther?'],
+  hints: ['Keep the launch height at 0 m and try angles close to 45°. Compare 30°, 45° and 60°.', 'Watch where your ball lands compared with the red target, then change the speed a little at a time.', 'Launch on Earth first. Then switch “Where” to Moon and launch again with the same angle and speed.'],
+  about: 'No air resistance: in real air a ball goes less far, and the best angle is a little below 45°.\nGravity: Earth 9.81, Moon 1.62, Mars 3.71, Jupiter 24.79 m/s² (Jupiter has no solid surface — imagine a platform at its cloud tops).\nTime in the air comes from h + v·sinθ·t − ½gt² = 0; range = v·cosθ × time; highest point = h + (v·sinθ)² ÷ 2g.',
   mount({ stage, panel, api }) {
     let ang = 40, v = 22, h0 = 0, gk = 'earth', target = 30 + Math.round(Math.random() * 40);
-    let flight = null; const trails = [];
+    let flight = null, aiming = false; const trails = [];
     const planets = new Set();
     const g = () => GRAVITY[gk][1];
     function plan() {
@@ -21,15 +23,17 @@ const projectileLab = {
       const T = (vy + Math.sqrt(vy * vy + 2 * G * h0)) / G;
       return { vx, vy, T, range: vx * T, top: h0 + (vy > 0 ? (vy * vy) / (2 * G) : 0), hit: Math.hypot(vx, vy - G * T) };
     }
-    let view = { sx: 60, sy: 30 };
+    let view = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const P = plan();
-      // keep the target, the flights and this launch's path in view
-      const spanX = Math.max(target + 8, P.range * 1.05, ...trails.map((t) => t.range * 1.05), 20);
-      const spanY = Math.max(P.top * 1.15, h0 + 4, ...trails.map((t) => t.top * 1.15), 8);
-      const s = Math.min((w - 70) / spanX, (h - 70) / spanY);
-      const X = (x) => 40 + x * s, Y = (y) => h - 36 - y * s;
-      view = { s, X, Y };
+      // keep the target, the flights and this launch's path in view (and hold still while you aim)
+      if (!aiming || !view || view.w !== w || view.h !== h) {
+        const spanX = Math.max(target + 8, P.range * 1.05, ...trails.map((t) => t.range * 1.05), 20);
+        const spanY = Math.max(P.top * 1.15, h0 + 4, ...trails.map((t) => t.top * 1.15), 8);
+        const s = Math.min((w - 90) / spanX, (h - 80) / spanY);
+        view = { w, h, s, spanX, X: (x) => 64 + x * s, Y: (y) => h - 40 - y * s };
+      }
+      const { s, X, Y, spanX } = view;
       // ground, height marks
       ctx.fillStyle = 'rgba(255,255,255,.03)'; ctx.fillRect(0, Y(0), w, h - Y(0));
       line(ctx, [[0, Y(0)], [w, Y(0)]], DIM, 1.5);
@@ -43,17 +47,43 @@ const projectileLab = {
       if (h0 > 0) { ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(X(0) - 12, Y(h0), 12, h0 * s); }
       // earlier flights, faint
       trails.forEach((t, i) => line(ctx, t.pts.map(([x, y]) => [X(x), Y(y)]), `rgba(255,207,90,${0.12 + (0.25 * (i + 1)) / trails.length})`, 1.5));
-      // the launcher: an arrow as long as the speed
-      const a = (ang * Math.PI) / 180, L = 18 + v * 1.2;
-      arrow(ctx, X(0), Y(h0), X(0) + Math.cos(a) * L, Y(h0) - Math.sin(a) * L, INK, 2.5);
-      text(ctx, `${ang}°`, X(0) + 10, Y(h0) - 8, INK);
+      // the launcher: a barrel on a stand, turned to the angle, with the launch arrow (longer = faster)
+      const a = (ang * Math.PI) / 180, px = X(0), py = Y(h0), bl = 34;
+      ctx.save(); ctx.translate(px, py); ctx.rotate(-a);
+      ctx.fillStyle = '#c9c6bd'; ctx.beginPath(); ctx.roundRect(-8, -8, bl + 8, 16, 6); ctx.fill();
+      ctx.fillStyle = '#16171c'; ctx.fillRect(bl - 4, -5, 4, 10);
+      ctx.restore();
+      ctx.fillStyle = '#8f8c84'; ctx.beginPath(); ctx.arc(px, py, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5e5b55'; ctx.beginPath(); ctx.moveTo(px - 16, py + 10); ctx.lineTo(px + 16, py + 10); ctx.lineTo(px + 8, py - 2); ctx.lineTo(px - 8, py - 2); ctx.closePath(); ctx.fill();
+      const mx = px + Math.cos(a) * bl, my = py - Math.sin(a) * bl, L = 16 + v * 2.2;
+      ctx.setLineDash([5, 4]); arrow(ctx, mx, my, mx + Math.cos(a) * L, my - Math.sin(a) * L, C.gold, 2.5); ctx.setLineDash([]);
+      // the angle, drawn from the ground
+      ctx.strokeStyle = DIM; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px, py, 22, -a, 0); ctx.stroke();
+      text(ctx, `${ang}° · ${v} m/s`, mx + Math.cos(a) * L + 8, my - Math.sin(a) * L - 6, INK);
       if (flight) {
         line(ctx, flight.pts.map(([x, y]) => [X(x), Y(y)]), C.gold, 2.5);
         const [bx, by] = flight.pts[flight.pts.length - 1];
         dot(ctx, X(bx), Y(by), 7, C.gold);
       }
-      text(ctx, GRAVITY[gk][0] + ` · g = ${g()} m/s²`, w - 10, 20, DIM, 'right');
+      text(ctx, GRAVITY[gk][0] + ` · g = ${g()} m/s²`, 12, 20, DIM);
+      if (!trails.length && !flight) text(ctx, 'Drag anywhere to aim · tap Launch', w / 2, 44, DIM, 'center');
     });
+    // aim by dragging: the direction from the launcher sets the angle, the distance sets the speed
+    drag(cv.c, {
+      down(p) { if (flight) return false; aiming = true; aim(p); },
+      move: aim,
+      up() { aiming = false; report(); },
+    });
+    function aim(p) {
+      if (!view) return;
+      const dx = p.x - view.X(0), dy = view.Y(h0) - p.y;
+      ang = Math.round(Math.max(0, Math.min(90, (Math.atan2(dy, Math.max(0.001, dx)) * 180) / Math.PI)));
+      v = Math.round(Math.max(5, Math.min(50, (Math.hypot(dx, dy) - 30) / 4)));
+      angS.set(ang); vS.set(v);
+      report();
+    }
+    const ov = overlay(stage, 'br');
+    button(ov, '▶ Launch', () => launch(), 'main big');
     const tick = clock((dt) => {
       if (!flight) return false;
       const P = flight.P, speed = Math.max(1, P.T / 2.4); // long flights play faster
@@ -65,6 +95,7 @@ const projectileLab = {
       return true;
     });
     function launch() {
+      if (flight) return;
       const P = plan();
       flight = { P, t: 0, pts: [[0, h0]] };
       tick.start();
@@ -82,8 +113,8 @@ const projectileLab = {
       report();
     }
     const gg = group(panel, 'Launch');
-    slider(gg, { label: 'Angle', min: 0, max: 90, value: ang, fmt: (x) => x + '°', onInput: (x) => { ang = x; report(); } });
-    slider(gg, { label: 'Speed', min: 5, max: 50, value: v, fmt: (x) => x + ' m/s', onInput: (x) => { v = x; report(); } });
+    const angS = slider(gg, { label: 'Angle', min: 0, max: 90, value: ang, fmt: (x) => x + '°', onInput: (x) => { ang = x; report(); } });
+    const vS = slider(gg, { label: 'Speed', min: 5, max: 50, value: v, fmt: (x) => x + ' m/s', onInput: (x) => { v = x; report(); } });
     slider(gg, { label: 'Launch height', min: 0, max: 30, value: h0, fmt: (x) => x + ' m', onInput: (x) => { h0 = x; report(); } });
     seg(group(panel, 'Where'), { options: Object.entries(GRAVITY).map(([k, [n]]) => [k, n]), value: gk, onChange: (k) => { gk = k; report(); } });
     const r1 = row(panel, 'lab-row-btns');
@@ -112,6 +143,8 @@ const pendulumLab = {
   words: 'pendulum period oscillation energy kinetic potential chaos double harmonic',
   icon: '<path d="M24 6v0M14 6h20"/><path d="M24 6l-8 26"/><circle cx="16" cy="34" r="5"/><path d="M8 36c4 6 12 6 16 4" stroke-dasharray="2 3"/>',
   tries: ['Make the period exactly 2 seconds (a “seconds pendulum”)', 'Swing it on the Moon — slower or faster?', 'Double: watch two almost identical pendulums drift apart'],
+  hints: ['On Earth the length needs to be close to 1 m. Small swings keep closest to the formula — wide swings take a little longer.', 'Switch “Where” to Moon and wait for the measured period to appear.', 'Choose “Double (chaos)” and watch for at least 10 seconds.'],
+  about: 'The swing is worked out step by step (Runge–Kutta, 8 steps per frame) from the full equation θ″ = −(g/L)·sin θ, not the small-angle shortcut — so wide swings correctly take longer than 2π√(L/g).\nThe ball is a point mass on a light, stiff rod. “Damping” is a simple drag that slows it gradually.\nThe energy bars are per kilogram: height energy = g·L·(1 − cos θ), movement energy = ½(L·ω)².\nThe double pendulum has two equal masses on two equal arms, each half the length.',
   mount({ stage, panel, api }) {
     let mode = 'single', L = 1.2, gk = 'earth', damp = 0.02, start = 35;
     let th = (start * Math.PI) / 180, om = 0, t = 0, crossings = [], period = 0, dragging = false;
@@ -202,7 +235,7 @@ const pendulumLab = {
     const gg = group(panel, 'Set it up');
     slider(gg, { label: 'Length', min: 0.2, max: 3, step: 0.01, value: L, fmt: (x) => num(x) + ' m', onInput: (x) => { L = x; crossings = []; period = 0; trail = []; gtrail = []; report(); } });
     slider(gg, { label: 'Let go from', min: 5, max: 170, value: start, fmt: (x) => x + '°', onInput: (x) => { start = x; resetSingle(); report(); } });
-    slider(gg, { label: 'Air friction', min: 0, max: 0.5, step: 0.01, value: damp, onInput: (x) => { damp = x; } });
+    slider(gg, { label: 'Damping (air drag)', min: 0, max: 0.5, step: 0.01, value: damp, onInput: (x) => { damp = x; } });
     seg(group(panel, 'Where'), { options: Object.entries(GRAVITY).map(([k, [n]]) => [k, n]), value: gk, onChange: (k) => { gk = k; crossings = []; period = 0; report(); } });
     const r1 = row(panel, 'lab-row-btns');
     const playB = button(r1, 'Pause', () => { if (tick.running) { tick.stop(); playB.textContent = 'Play'; } else { tick.start(); playB.textContent = 'Pause'; } }, 'main');
@@ -216,7 +249,7 @@ const pendulumLab = {
       shown = now;
       const ideal = 2 * Math.PI * Math.sqrt(L / g());
       st.set(mode === 'single'
-        ? [['Period (measured)', period ? `${num(period)} s` : 'swinging…'], ['Small-swing formula 2π√(L/g)', `${num(ideal)} s`], ['Angle now', `${num((th * 180) / Math.PI)}°`]]
+        ? [['Period (measured)', period ? `${num(period)} s` : 'swinging…'], ['Small-swing formula 2π√(L/g)', `${num(ideal)} s (exact only for small swings)`], ['Angle now', `${num((th * 180) / Math.PI)}°`]]
         : [['Running', `${num(doubleTime)} s`], ['Gap between the two', `${num(Math.abs(dp[2] - ghost[2]))} rad`]]);
       cv.redraw();
     }
@@ -237,6 +270,8 @@ const wavesLab = {
   words: 'wave wavelength frequency amplitude reflection standing wave string',
   icon: '<path d="M4 24c4-10 8-10 12 0s8 10 12 0 8-10 12 0 4 6 4 6"/><path d="M4 14v20M44 18v12"/>',
   tries: ['Send a pulse at a fixed end — does it come back upside down?', 'Send a pulse at a loose end — what changes?', 'Make a standing wave (fixed end + steady wiggle)'],
+  hints: ['Set the far end to Fixed, tap “Send a pulse”, and watch it hit the end and come back.', 'Set the far end to Loose and send another pulse. Compare which way up it returns.', 'Keep wiggling with a Fixed end, then set the frequency to one of the standing-wave frequencies shown below the controls.'],
+  about: 'The string is 200 beads joined by springs, solved with the wave equation (a finite-difference model).\nThe wave speed depends on the tension (and the string’s mass per metre), not on the frequency — so a higher frequency gives a shorter wavelength: λ = v ÷ f.\nA fixed end flips a pulse upside down; a loose end reflects it the right way up; “Goes on” lets the wave leave without reflecting.\nStanding waves form when the string fits whole half-wavelengths: f = n·v ÷ 2L.',
   mount({ stage, panel, api }) {
     const N = 200, LEN = 10, STEP = 1 / 600;
     let y = new Float32Array(N), prev = new Float32Array(N), next = new Float32Array(N);
@@ -326,6 +361,8 @@ const lightLab = {
   words: 'light refraction snell law reflection total internal critical angle optics laser index',
   icon: '<path d="M4 26h40"/><path d="M8 6l16 20 8 18"/><path d="M24 26l16-20" stroke-dasharray="3 3"/>',
   tries: ['Shine straight down — does it bend?', 'Make total internal reflection happen', 'Find the critical angle from water into air'],
+  hints: ['Move the angle slider to 0° so the laser points straight down the dashed line.', 'Light has to go from a slower material (higher n) into a faster one. Put water or glass on top and air below, then aim wider.', 'Top: Water, bottom: Air. Raise the angle slowly until the light just stops getting out.'],
+  about: 'Uses Snell’s law, n₁ sin θ₁ = n₂ sin θ₂, with refractive indices for yellow light: air 1.00 (really 1.0003), water 1.33, glass 1.50 (typical window glass), diamond 2.42.\nHow much light reflects comes from the Fresnel equations for ordinary (unpolarised) light.\nAngles are measured from the normal — the dashed line at right angles to the surface. The critical angle is sin⁻¹(n₂ ÷ n₁).',
   mount({ stage, panel, api }) {
     let top = 'air', bottom = 'water', ang = 40;
     const n1 = () => MEDIA[top][1], n2 = () => MEDIA[bottom][1];
