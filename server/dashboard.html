@@ -195,7 +195,7 @@
   // The brain check: real questions with known answers through every AI the server uses.
   function brainCard(d) {
     const h = d.health;
-    const rows = h ? h.checks.map((c) => `<tr><td>${c.ok ? '✅' : '❌'}</td><td>${esc(c.name)}</td><td>${(c.ms / 1000).toFixed(1)}s</td><td class="muted detail">${esc(c.detail || '')}</td></tr>`).join('') : '';
+    const rows = h ? h.checks.map((c) => `<tr><td>${c.ok ? '✅' : c.warn ? '⚠️' : '❌'}</td><td>${esc(c.name)}</td><td>${(c.ms / 1000).toFixed(1)}s</td><td class="muted detail">${esc(c.detail || '')}</td></tr>`).join('') : '';
     const status = !h ? 'Not run yet.' : h.ok ? '✅ Text and pictures both work.' : `⚠️ ${!h.canText ? 'Text answers are failing. ' : ''}${!h.canPictures ? 'Pictures (photos, snips, board) are failing. ' : ''}See the ❌ rows.`;
     const probs = (d.problems || []).length ? `<p class="muted" style="margin:12px 0 4px">Problems Cassie hit (last ${d.days} days)</p>${bars(d.problems, (r) => r.k, (r) => r.n, (r) => `${fmt(r.n)} · last ${esc(new Date(r.last).toLocaleString())}`)}` : '<p class="muted" style="margin-top:10px">No problems logged.</p>';
     return `<div class="card" style="margin-bottom:14px"><h2>Brain check</h2><p class="sub">Asks every AI real questions with known answers (17 × 23, a picture of 7 × 8, a graph). ${h ? 'Last run ' + esc(new Date(h.ts).toLocaleString()) : ''}</p>

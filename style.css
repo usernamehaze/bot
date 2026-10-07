@@ -1629,6 +1629,10 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-act[hidden], .x3d-btn[hidden] { display: none; }
 @media (max-width: 560px) { .x3d-find { top: calc(108px + var(--safe-top, 0px)); } }
 .x3d-up { border: 0; background: none; padding: 0; font: inherit; color: #f2f2f4; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.hv-set { margin: -2px 0 12px; }
+.hv-set[hidden] { display: none; }
+.hv-set .hint { margin: 0 0 8px; }
+.hv-set-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .vc-hv { max-width: 420px; margin: 4px auto 0; padding: 11px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: .84rem; line-height: 1.4; text-align: left; }
 .vc-hv[hidden] { display: none; }
 .vc-hv small { display: block; color: var(--muted); margin-top: 4px; }

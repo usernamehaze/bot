@@ -4,7 +4,8 @@
    next one is being made. Nothing is sent anywhere; once downloaded it works offline.
    window.CassieVoice = { supported, got, prepare, status, progress, onChange, say, VOICES } */
 (function () {
-  const VOICES = { woman: 'af_heart', man: 'am_michael' }; // the most natural woman's and man's voices
+  // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); Michael for a man's voice
+  const VOICES = { woman: 'af_bella', man: 'am_michael' };
   const FLAG = 'cassie.humanVoice';
   let worker = null;
   let status = 'off'; // off | loading | ready | failed
@@ -13,6 +14,7 @@
   let ctx = null;
   let turn = 0, seq = 0;
   let slowCount = 0;
+  let lastError = '';
   const waiting = new Map();
   const listeners = new Set();
   const emit = () => listeners.forEach((f) => { try { f({ status, progress }); } catch (e) { /* ignore */ } });
@@ -24,8 +26,21 @@
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return ctx;
   }
-  // Phones only let sound start after a tap: wake the speaker on the first one.
-  ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { if (status !== 'off' || got()) audioCtx(); }, { capture: true, passive: true }));
+  // Phones only let sound start inside a tap. Wake the speaker then, with a silent blip, so her
+  // voice can play later; and on iPhone, play even when the ring/silent switch is on silent
+  // (like a video does) — otherwise Safari mutes this kind of sound.
+  let unlocked = false;
+  function unlock() {
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) { /* older Safari */ }
+    const ac = audioCtx();
+    if (!ac || unlocked) return;
+    try {
+      const b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource();
+      src.buffer = b; src.connect(ac.destination); src.start(0);
+      if (ac.state === 'running') unlocked = true;
+    } catch (e) { /* try again next tap */ }
+  }
+  ['pointerdown', 'keydown', 'touchend'].forEach((ev) => window.addEventListener(ev, () => { if (supported()) unlock(); }, { capture: true, passive: true }));
 
   function supported() { return typeof Worker === 'function' && typeof WebAssembly === 'object' && !!AC; }
   function got() { try { return localStorage.getItem(FLAG) === 'got'; } catch (e) { return false; } }
@@ -49,17 +64,17 @@
       // if the voice engine goes quiet while starting (a blocked file, a stuck download), give up
       // so Cassie keeps talking with the device's voice
       let watchdog = 0;
-      const quiet = () => { clearTimeout(watchdog); watchdog = setTimeout(() => reject(fail(new Error('The voice took too long to load.'))), 90000); };
+      const quiet = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { lastError = 'it took too long to load'; reject(fail(new Error('The voice took too long to load.'))); }, 90000); };
       quiet();
       worker.onmessage = (e) => {
         const m = e.data || {};
         if (status === 'loading') { if (m.type === 'ready' || m.type === 'failed') clearTimeout(watchdog); else quiet(); }
         if (m.type === 'progress') { progress = m.total ? Math.min(1, m.loaded / m.total) : 0; emit(); }
         else if (m.type === 'ready') { status = 'ready'; progress = 1; try { localStorage.setItem(FLAG, 'got'); } catch (err) { /* ignore */ } emit(); resolve(); }
-        else if (m.type === 'failed') { reject(fail(new Error(m.error || 'The voice did not load.'))); }
+        else if (m.type === 'failed') { lastError = m.error || ''; reject(fail(new Error(m.error || 'The voice did not load.'))); }
         else if (m.type === 'audio') { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); w.resolve(m); } }
       };
-      worker.onerror = (e) => { clearTimeout(watchdog); if (e && e.preventDefault) e.preventDefault(); reject(fail(new Error((e && e.message) || 'The voice stopped.'))); };
+      worker.onerror = (e) => { clearTimeout(watchdog); lastError = (e && e.message) || 'the voice engine stopped'; if (e && e.preventDefault) e.preventDefault(); reject(fail(new Error((e && e.message) || 'The voice stopped.'))); };
       worker.postMessage({ type: 'load' });
     });
     readyP.catch(() => {});
@@ -131,5 +146,7 @@
     slow: () => slowCount >= 3, // this device makes the voice slower than she talks
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     say,
+    unlock,
+    error: () => lastError,
   };
 })();

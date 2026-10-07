@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '113';
+const APP_VERSION = '114';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -269,6 +269,7 @@ const voiceOutToggle = document.getElementById('voice-out-toggle');
 const voiceGenderSelect = document.getElementById('voice-gender-select');
 const hearingSelect = document.getElementById('hearing-select');
 const voiceEngineSelect = document.getElementById('voice-engine-select');
+const highlightHelpToggle = document.getElementById('highlight-help-toggle');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
@@ -4066,9 +4067,11 @@ function openSettings() {
   groqModelSelect.value = state.groqModel;
   geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
+  if (highlightHelpToggle) highlightHelpToggle.checked = state.highlightHelp !== false;
   if (voiceGenderSelect) voiceGenderSelect.value = state.voiceGender === 'man' ? 'man' : 'woman';
   if (hearingSelect) hearingSelect.value = state.hearing === 'fast' ? 'fast' : 'accurate';
   if (voiceEngineSelect) voiceEngineSelect.value = state.voiceEngine === 'device' ? 'device' : 'human';
+  showHumanVoiceSetting();
   if (levelSelect) levelSelect.value = state.level || 'auto';
   if (citationSelect) citationSelect.value = state.citationStyle || 'APA';
   if (textsizeSelect) textsizeSelect.value = state.textSize || 'normal';
@@ -4167,6 +4170,7 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
+  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; if (!state.highlightHelp) hideAskChip(); }
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
   if (voiceEngineSelect) state.voiceEngine = voiceEngineSelect.value;
@@ -4645,7 +4649,8 @@ function speak(text) {
     window.speechSynthesis.speak(utter);
   };
   // Cassie's human voice once it's on this device (downloaded before); otherwise the device's own
-  if (humanVoiceWanted() && window.CassieVoice.got()) {
+  const hvs = humanVoiceWanted() ? window.CassieVoice.status() : 'off';
+  if (humanVoiceWanted() && hvs !== 'failed' && (window.CassieVoice.got() || hvs !== 'off' || humanVoiceAutoOK())) {
     window.CassieVoice.prepare().then(() => {
       const h = window.CassieVoice.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
       readAloud = h;
@@ -4783,6 +4788,38 @@ function buildVoiceUI() {
   return ui;
 }
 
+/* Settings → Voice: is her human voice on this device, and how does it sound? */
+const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together — ask me anything, and I’ll explain it step by step.';
+function showHumanVoiceSetting() {
+  const box = document.getElementById('hv-state');
+  if (!box) return;
+  const sel = document.getElementById('voice-engine-select');
+  const want = (sel ? sel.value : state.voiceEngine) !== 'device';
+  const CV = window.CassieVoice;
+  document.getElementById('hv-set').hidden = !want;
+  if (!want) return;
+  const st = CV && CV.supported() ? CV.status() : 'unsupported';
+  box.textContent = st === 'unsupported' ? 'This browser can’t make the human voice — Cassie uses the device’s voice. Try Chrome, Edge or Safari 16.4+.'
+    : st === 'ready' ? `✓ Her human voice is ready (${voiceGender() === 'man' ? 'Michael' : 'Bella'}).`
+      : st === 'loading' ? `Getting her human voice… ${Math.round(CV.progress() * 100)}% (only this once)`
+        : st === 'failed' ? `Couldn’t get the human voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
+          : CV.got() ? 'Her human voice is on this device. Tap Play a sample to hear it.' : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
+}
+function playHumanSample() {
+  const CV = window.CassieVoice;
+  if (!CV || !CV.supported()) { showHumanVoiceSetting(); return; }
+  CV.unlock(); // inside the tap
+  CV.prepare().then(() => {
+    const h = CV.say(speechChunks(HV_SAMPLE), { gender: voiceGender() });
+    h.done.then(showHumanVoiceSetting);
+  }).catch(showHumanVoiceSetting);
+  showHumanVoiceSetting();
+}
+document.getElementById('hv-play')?.addEventListener('click', playHumanSample);
+document.getElementById('voice-engine-select')?.addEventListener('change', showHumanVoiceSetting);
+document.getElementById('voice-gender-select')?.addEventListener('change', () => { state.voiceGender = document.getElementById('voice-gender-select').value; showHumanVoiceSetting(); });
+if (window.CassieVoice) window.CassieVoice.onChange(showHumanVoiceSetting);
+
 /* The human voice on the voice screen: get it (once), show the download, or say why not. */
 function humanVoiceAutoOK() {
   // on Wi-Fi or a computer it just downloads; on mobile data Cassie asks first
@@ -4866,6 +4903,14 @@ function sayThenListen(text) {
       if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
     const chunks = speechChunks(clean);
+    // her human voice is on its way: wait for it (the words are on screen) rather than use the robot voice
+    if (clean && humanVoiceWanted() && window.CassieVoice.status() === 'loading') {
+      v.stopSpeaking = finish;
+      window.CassieVoice.prepare().catch(() => {}).then(() => { if (!done && voiceChat === v) speakNow(); });
+      return;
+    }
+    speakNow();
+    function speakNow() {
     if (!clean || (!canTalk() && !humanVoiceReady())) { finish(); return; }
     if (humanVoiceReady()) {
       const h = window.CassieVoice.say(chunks, { gender: voiceGender() });
@@ -4896,6 +4941,7 @@ function sayThenListen(text) {
       v.speakTimer = setTimeout(next, Math.max(3500, u.text.length * 95));
     };
     next();
+    }
     }
   });
 }
@@ -5084,6 +5130,7 @@ function openVoice(mode = 'chat') {
   document.documentElement.classList.add('vc-open');
   if (voiceUI.bot) voiceUI.bot.pause(false);
   track('feature', 'voice:' + mode);
+  if (window.CassieVoice) window.CassieVoice.unlock(); // inside the tap, so phones let her speak later
   startHumanVoice();
   startVoiceMode(mode); // speaks right away, inside the tap, so phones allow the sound
   setTimeout(() => { try { voiceUI.mic.focus(); } catch (e) { /* ignore */ } }, 60);
@@ -5310,6 +5357,7 @@ if (askChip) {
 }
 function trySelectionPopover() {
   if (!highlightPopover || !askChip) return;
+  if (state.highlightHelp === false) { hideAskChip(); return; } // switched off in Settings: just highlighting
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hideAskChip(); return; }
   const text = sel.toString().trim();
@@ -5771,6 +5819,9 @@ if (liteSelect) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',
+  'Highlight help can be switched off (Settings, or the ON/OFF switch next to Snip in the Chrome extension): then highlighting is just highlighting.',
+  'Explore 3D: tap once for the whole organ (lung, heart, a muscle), tap again for the exact part. The muscles switch works now.',
   'Explore 3D body: all 10 body systems (circulatory, respiratory, nervous, digestive, musculoskeletal, endocrine, integumentary, urinary, lymphatic & immune, reproductive), a girl’s and a boy’s body, and every part you tap says what it is and what it does.',
   'Cassie sounds like a real person now — a woman’s or a man’s voice, made right on your device (a one-time download, then it works offline). No more robot voice.',
   'Copy and paste like normal: highlighting words no longer pops Cassie open. A small “Ask Cassie” button shows by the words — tap it when you want her.',

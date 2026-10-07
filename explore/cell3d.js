@@ -536,7 +536,12 @@ function createView() {
     path.hidden = false;
     path.innerHTML = [`<span>${info.system}</span>`, ...info.path.map((g) => `<button type="button" class="x3d-up" data-si="${g.index}" title="Show the whole ${g.name.replace(/"/g, '')}">${g.name.replace(/[<&>]/g, '')}</button>`)].join(' › ');
     // what it is and what it does, right away; Cassie adds the specifics for parts only known by kind
-    const fact = factFor(info);
+    let fact = factFor(info);
+    // a small part only known by its kind: say what the organ it belongs to is and does
+    if (fact && fact.general) for (const a of info.ancestors || []) {
+      const f = factFor(a);
+      if (f && !f.general) { fact = { what: `Part of the ${a.name.toLowerCase()}. ${f.what}`, does: f.does, general: true }; break; }
+    }
     const esc = (t) => String(t).replace(/[<&>]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[c]));
     sheet.querySelector('.x3d-like').innerHTML = (fact ? `<b>What it is:</b> ${esc(fact.what)}` : '') + (info.latin ? `<span class="x3d-latin">Latin: ${esc(info.latin)}</span>` : '');
     sheet.querySelector('.x3d-does').innerHTML = fact ? `<b>What it does:</b> ${esc(fact.does)}` : '';
@@ -635,7 +640,7 @@ function createView() {
   });
 
   partsEl.addEventListener('click', (e) => {
-    const s = e.target.closest('[data-sys]');
+    const s = e.target.closest('[data-sys], [data-muscles]');
     if (s && s.dataset.muscles) { const on = !body.muscles; s.setAttribute('aria-pressed', String(on)); body.setMuscles(on).catch(() => {}); return; }
     if (s) { const on = !body.isOn(s.dataset.sys); s.setAttribute('aria-pressed', String(on)); body.setSystem(s.dataset.sys, on).catch(() => {}); if (s.dataset.sys === 'musculoskeletal') renderParts(); return; }
     const b = e.target.closest('[data-part]'); if (b) select(b.dataset.part === selected ? null : b.dataset.part);

@@ -21,12 +21,15 @@ export const SYSTEMS = [
   { id: 'nervous', name: 'Nervous', parts: [['nervous']] },
   { id: 'digestive', name: 'Digestive', on: true, parts: [['visceral', 'digestive_system'], ['visceral', 'abdominopelvic_cavity']] },
   { id: 'musculoskeletal', name: 'Musculoskeletal', on: true, parts: [['skeletal'], ['muscular']] },
-  { id: 'endocrine', name: 'Endocrine', on: true, parts: [['visceral', 'endocrine_glands']] },
+  // textbooks count the pancreas, the ovaries or testes and the thymus as endocrine glands too
+  { id: 'endocrine', name: 'Endocrine', on: true, parts: [['visceral', 'endocrine_glands'], ['visceral', 'pancreas'], ['visceral', 'ovary_l'], ['visceral', 'ovary_r'], ['visceral', 'testis_l'], ['visceral', 'testis_r'], ['lymphoid', 'thymus']] },
   { id: 'integumentary', name: 'Integumentary (Skin)', on: true, parts: [['regions']] },
   { id: 'urinary', name: 'Urinary (Excretory)', on: true, parts: [['visceral', 'urinary_system']] },
   { id: 'lymphatic', name: 'Lymphatic & Immune', parts: [['lymphoid']] },
   { id: 'reproductive', name: 'Reproductive', on: true, parts: [['visceral', 'genital_systems']] },
 ];
+// the organs a first tap picks (a tap again inside one picks the exact part): whole organs, and whole muscles
+const MAIN_ORGAN = /^(heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
 // parts only a boy's body has (a girl's body shows the female organs instead)
 const MALE_ONLY = /^(male_genital_system|urogenital_region_[lr]|urethra)$|penis|scrot|testicular|ductus_deferens|prostat|seminal/;
 const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#ebe3d1', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
@@ -163,6 +166,8 @@ export function createBody(ctx) {
     while (p >= 0 && out.length < 3) { if (index.s[p][3] >= 0) out.unshift({ index: p, name: index.s[p][1] }); p = index.s[p][3]; }
     return out.slice(-2);
   }
+  // the whole organ (or whole muscle) a part belongs to
+  function mainOf(si) { for (let p = si; p >= 0; p = index.s[p][3]) if (MAIN_ORGAN.test(index.s[p][0])) return p; return si; }
   const blocked = (si) => hidden.has(si) || (sex === 'girl' ? maleParts.has(si) : femaleParts.has(si));
 
   // which layers to draw, and which of their parts: layer -> null (all of it) | Set of parts
@@ -174,6 +179,7 @@ export function createBody(ctx) {
         if (layer === 'muscular' && !muscles) continue;
         if (!root) { out.set(layer, null); continue; }
         if (out.get(layer) === null) continue;
+        if (!index.byId.has(root)) continue;
         if (!rootParts.has(root)) rootParts.set(root, partsOf(index.byId.get(root)));
         const set = out.get(layer) || new Set();
         rootParts.get(root).forEach((i) => set.add(i));
@@ -459,7 +465,9 @@ export function createBody(ctx) {
     label.userData = sphere ? sphere.center.clone() : null;
     const layer = layerOf(si), sys = systemsOf(si)[0];
     ctx.showPart({
-      index: si, id: index.s[si][0], name: nameOf(si), plain: index.s[si][1], latin: index.s[si][2], path: pathOf(si),
+      index: si, id: index.s[si][0], name: nameOf(si),
+      ancestors: (() => { const out = []; for (let p = index.s[si][3]; p >= 0 && index.s[p][3] >= 0; p = index.s[p][3]) out.push({ index: p, id: index.s[p][0], name: index.s[p][1], layer: layerOf(p) }); return out; })(),
+      organ: si !== mainOf(si) ? index.s[mainOf(si)][1] : '', plain: index.s[si][1], latin: index.s[si][2], path: pathOf(si),
       system: sys ? sys.name.replace(/\s*\(.*\)$/, '') : LAYERS[layer], systemId: sys ? sys.id : layer, layer, whole: !index.hasMesh.has(si),
       color: femaleColor.get(si) || colourFor(layer, index.s[si][0]), sex,
       focus: sphere ? { target: sphere.center.clone(), dist: Math.max(0.35, sphere.radius * 4.2) } : null,
@@ -471,11 +479,18 @@ export function createBody(ctx) {
     layers.forEach((L) => L.meshes.forEach((o) => { if (o.userData.pickable && o.visible && o.parent.visible) meshes.push(o); }));
     if (highlight) meshes.unshift(highlight);
     const hits = ray.intersectObjects(meshes, false);
+    const partAt = (h) => { const si = index.mesh[h.object.geometry.attributes._id.getX(h.face.a)]; return si >= 0 && !blocked(si) ? si : -1; };
+    // tapping the picked organ again picks the exact part of it under the finger
+    if (selected >= 0 && hits.some((h) => h.object === highlight)) {
+      const inside = partsOf(selected);
+      for (const h of hits) { if (h.object === highlight) continue; const si = partAt(h); if (si >= 0 && inside.has(si)) return si; }
+      return selected;
+    }
     for (const h of hits) {
-      if (h.object === highlight) return selected; // tapping the picked part (or group) again keeps it
-      const ids = h.object.geometry.attributes._id;
-      const si = index.mesh[ids.getX(h.face.a)];
-      if (si >= 0 && !blocked(si)) return selected >= 0 && partsOf(selected).has(si) && !index.hasMesh.has(selected) ? selected : si;
+      if (h.object === highlight) continue;
+      const si = partAt(h);
+      if (si < 0) continue;
+      return si === selected ? si : mainOf(si); // a first tap picks the whole organ
     }
     return -1;
   }
