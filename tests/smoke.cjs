@@ -1084,16 +1084,32 @@ test("What's new shows once after an update", async (b) => {
   await ctx.close();
 });
 
-test('Research finds real papers and writes an RRL', async (b) => {
+test('Research finds real papers and writes an RRL; references copy as APA/MLA and download as BibTeX/RIS', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Studies agree that sleep improves memory (Smith, 2020).\n\n**References**\nSmith, J. (2020). Sleep and memory.' }) });
   await ctx.route(/api\.openalex\.org/, (route) => route.fulfill({ json: { results: [
-    { title: 'Sleep and memory', publication_year: 2020, authorships: [{ author: { display_name: 'J. Smith' } }], primary_location: { source: { display_name: 'Journal of Sleep' } }, doi: 'https://doi.org/10.1/abc', cited_by_count: 12, abstract_inverted_index: { Sleep: [0], helps: [1], memory: [2] } },
+    { title: 'Sleep and memory', publication_year: 2020, authorships: [{ author: { display_name: 'J. Smith' } }], primary_location: { source: { display_name: 'Journal of Sleep' } }, doi: 'https://doi.org/10.1/abc', type: 'article', biblio: { volume: '29', issue: '3', first_page: '101', last_page: '115' }, cited_by_count: 12, abstract_inverted_index: { Sleep: [0], helps: [1], memory: [2] } },
     { title: 'Naps in students', publication_year: 2019, authorships: [{ author: { display_name: 'A. Cruz' } }], cited_by_count: 3 },
   ] } }));
   await page.fill('#prompt-input', 'sleep and memory');
   await page.click('#research-btn');
   await page.waitForSelector('text=Found 2 real papers', { timeout: 10000 });
   await page.waitForSelector('text=Studies agree', { timeout: 10000 });
+  // the citations come from the papers' own data, not from the AI
+  const bar = page.locator('.cite-tools').first();
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await bar.locator('button', { hasText: 'Copy APA' }).click();
+  const apa = await page.evaluate(() => navigator.clipboard.readText());
+  expect(/Smith, J\. \(2020\)\. Sleep and memory\. Journal of Sleep, 29\(3\), 101–115\. https:\/\/doi\.org\/10\.1\/abc/.test(apa) && /Cruz, A\. \(2019\)/.test(apa), 'APA references: ' + apa);
+  const [bib] = await Promise.all([page.waitForEvent('download'), bar.locator('button', { hasText: 'BibTeX' }).click()]);
+  const bibText = fs.readFileSync(await bib.path(), 'utf8');
+  expect(/@article\{smith2020sleep,/.test(bibText) && /doi = \{10\.1\/abc\}/.test(bibText) && /pages = \{101--115\}/.test(bibText), 'BibTeX: ' + bibText);
+  const [risDl] = await Promise.all([page.waitForEvent('download'), bar.locator('button', { hasText: 'RIS' }).click()]);
+  const risText = fs.readFileSync(await risDl.path(), 'utf8');
+  expect(/TY  - JOUR/.test(risText) && /AU  - Smith, J\./.test(risText) && /DO  - 10\.1\/abc/.test(risText), 'RIS: ' + risText);
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/cite-bar.png' });
+  // still there after a reload
+  await page.reload();
+  await page.waitForSelector('.cite-tools >> text=Copy MLA', { timeout: 5000 });
   await ctx.close();
 });
 
