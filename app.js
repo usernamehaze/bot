@@ -1420,7 +1420,7 @@ function scrollToBottom() {
 function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, '&quot;'); // safe inside attribute values too
 }
 
 // Escape first, then apply inline markdown (`code`, **bold**, *italic*).
@@ -1453,7 +1453,8 @@ function inlineFormat(text) {
   html = prettifyMath(html);
   html = html.replace(/\u0002(\d+)\u0002/g, (m, i) => {
     const { label, url } = links[+i];
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    // quotes can't end the address early (the text is already HTML-escaped, but quotes aren't)
+    return `<a href="${url.replace(/"/g, '%22').replace(/'/g, '%27')}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
   html = html.replace(/\u0001(\d+)\u0001/g, (m, i) => escaped[+i]);
   html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[+i]}</code>`);
@@ -2369,8 +2370,7 @@ async function docImages(doc, max, onlyPages) {
   const out = [];
   try {
     if (doc.kind === 'pdf') {
-      await loadScript(PDFJS_URL);
-      if (!doc.pdfDoc) doc.pdfDoc = window.pdfjsLib.getDocument({ data: await doc.file.arrayBuffer() }).promise; // open once, reuse
+      if (!doc.pdfDoc) doc.pdfDoc = openPdf(await doc.file.arrayBuffer()); // open once, reuse
       const pdf = await doc.pdfDoc;
       const pages = (onlyPages || (doc.visualPages && doc.visualPages.length ? doc.visualPages : [...Array(Math.min(pdf.numPages, max)).keys()].map((i) => i + 1))).slice(0, max);
       for (const n of pages) {
@@ -2728,20 +2728,26 @@ function loadScript(src) {
   return _scriptCache[src];
 }
 
-const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-const MAMMOTH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
-const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+// File readers live on Cassie's own site (vendor/), pinned to patched versions — nothing is
+// loaded from a third-party CDN, so a hacked CDN can't slip code into the app.
+const MAMMOTH_URL = 'vendor/mammoth.browser.min.js';
+const JSZIP_URL = 'vendor/jszip.min.js';
 const DOC_TEXT_CAP = 400000; // characters of extracted text we keep (long files are read in parts)
+// pdf.js 4.10 (legacy build, for older phones). isEvalSupported: false switches off the font
+// code that a booby-trapped PDF could abuse to run JavaScript (CVE-2024-4367).
+let pdfjsReady = null;
+function loadPdfJs() {
+  if (!pdfjsReady) pdfjsReady = import('./vendor/pdf.min.mjs').then((m) => { m.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.mjs', document.baseURI).href; return m; }).catch((e) => { pdfjsReady = null; throw e; });
+  return pdfjsReady;
+}
+const openPdf = async (data) => (await loadPdfJs()).getDocument({ data, isEvalSupported: false }).promise;
 
 // Returns { text, numPages, visualPages } — visualPages are pages holding
 // pictures/figures or almost no text (scanned), so they can be looked at too.
 async function extractPdf(file) {
-  await loadScript(PDFJS_URL);
-  const pdfjs = window.pdfjsLib;
-  pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  const pdfjs = await loadPdfJs();
   const data = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data }).promise;
+  const pdf = await openPdf(data);
   const maxPages = Math.min(pdf.numPages, 300);
   const imgOps = new Set([pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintJpegXObject].filter(Boolean));
   const visualPages = [];

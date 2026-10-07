@@ -89,7 +89,7 @@ export async function startFakeServer(port = 4630) {
     return Response.json({ choices: [{ message: { role: 'assistant', content: smart(body.messages) || mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
   };
   const env = {
-    DB, ADMIN_TOKEN: 'test-token', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
+    DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     AI: { async run(model, input) {

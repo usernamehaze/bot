@@ -11,8 +11,6 @@
     return;
   }
 
-  console.log('[Cassie] extension loaded on this page — highlight text to use it.');
-
   // Let the popup ask for the text of the page the user is viewing (top frame only).
   if (window.top === window) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
