@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '120';
+const APP_VERSION = '121';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1682,7 +1682,7 @@ const HOME_EXAMPLES = [
   { label: 'Solve step by step', icon: 'M3 5h2v2H3zM7 5h14v2H7zM3 11h2v2H3zM7 11h14v2H7zM3 17h2v2H3zM7 17h14v2H7z', text: 'Solve step by step: 3x + 7 = 22', send: true },
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
-  { label: 'Explore the body in 3D', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openExplore('body') },
+  { label: 'Explore in 3D (in Labs)', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openLabs(null, { subject: '3d' }) },
   { label: 'Labs: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
   { label: 'Draw together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
@@ -4133,7 +4133,6 @@ if (hintBtn) {
 /* ---------- Explore 3D: cells you can turn, zoom and tap ----------
    The viewer (explore/cell3d.js, with three.js) only loads when it's opened, so the app
    stays light. Tapping "Ask Cassie" or "Quiz me" in it brings the question back here. */
-const exploreBtn = document.getElementById('explore-btn');
 let exploreMod = null;
 function startQuizOn(topic) {
   if (!canChat()) { openSettings(); return; }
@@ -4143,7 +4142,8 @@ function startQuizOn(topic) {
   dressCassie();
   handleSend(`Quiz me on: ${topic}. Ask the first question.`, {});
 }
-async function openExplore(cell) {
+// ret: { back(), leave() } when it was opened from Labs — closing goes back to Labs, asking Cassie leaves it
+async function openExplore(cell, ret) {
   track('feature', 'explore');
   try {
     if (!exploreMod) {
@@ -4155,20 +4155,24 @@ async function openExplore(cell) {
       renderMessage('assistant', 'This browser can’t show 3D right now (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.');
       return;
     }
+    let leaving = false;
     const view = exploreMod.open({
       cell: ['plant', 'animal', 'body'].includes(cell) ? cell : undefined,
-      onAsk: (q) => { view.close(); handleSend(q); },
-      onQuiz: (topic) => { view.close(); startQuizOn(topic); },
+      onAsk: (q) => { leaving = true; view.close(); if (ret) ret.leave(); handleSend(q); },
+      onQuiz: (topic) => { leaving = true; view.close(); if (ret) ret.leave(); startQuizOn(topic); },
       // a short explanation of a tapped part of the body, without leaving the 3D view
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
-      onClose: () => { try { exploreBtn && exploreBtn.focus(); } catch (e) { /* ignore */ } },
+      onClose: () => {
+        if (ret && !leaving) { ret.back(); return; }
+        try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ }
+      },
     });
   } catch (e) {
+    if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
     renderMessage('assistant', 'I couldn’t open the 3D cell just now — check your internet connection and try again.');
   }
 }
-if (exploreBtn) exploreBtn.addEventListener('click', () => openExplore());
 // a link like app.html?explore=plant opens it straight away
 { const ex = new URLSearchParams(location.search).get('explore'); if (ex) setTimeout(() => openExplore(ex), 300); }
 
@@ -4176,7 +4180,7 @@ if (exploreBtn) exploreBtn.addEventListener('click', () => openExplore());
    labs/ loads only when opened. "Ask Cassie" in a lab sends what's on its screen right now. */
 const labsBtn = document.getElementById('labs-btn');
 let labsMod = null;
-async function openLabs(lab) {
+async function openLabs(lab, more = {}) {
   track('feature', 'labs');
   try {
     if (!labsMod) {
@@ -4186,9 +4190,10 @@ async function openLabs(lab) {
     }
     labsMod.open({
       lab,
+      ...more,
       onAsk: (q) => handleSend(q),
       onQuiz: (topic) => startQuizOn(topic),
-      openExplore: (cell) => openExplore(cell),
+      openExplore: (cell, ret) => openExplore(cell, ret),
       // a short hint from Cassie inside the lab, without leaving it
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       // the daily puzzles' score board (on Cassie's server)
@@ -5945,6 +5950,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs, part 3: Labs has two shelves now — Learn (simulations, and the 3D body and cells, which come back to Labs when you close them) and Games & puzzles. “Try this” goals tick only when you do them (tap the box to tick or untick it yourself). The colour mixer names colours, coins flip and dice tumble, 13 3D shapes at any size, and Sudoku (4×4 to 12×12), Nonogram, Bridges, Pipes and Mirrors come in many sizes with a New puzzle button. Geography: find countries on the map, or tap around to explore.',
+  'Explore 3D body: the liver is drawn once (it was doubled), and “Pull it apart” keeps each organ in one piece.',
   'Labs, part 2: 12 more simulations — the solar system (planets where they really are today, Moon phases and the next eclipses), colour mixing, vectors, magnetic fields, lenses & mirrors, logic gates, ice to steam, metals in water, a rocket workshop, 3D shapes, recursion with Python, and build-a-cell. Plus 7 daily puzzles (Sudoku, Nonogram, Bridges, Pipes, Laser mirrors, Guess the equation, Geography) with a score board. “Try this” goals now open a hint, and Cassie can nudge you right inside the lab.',
   'Labs (the flask at the top): 15 simulations to play with — launch a ball, swing a pendulum, bend light, balance equations, mix acid and base, build an atom, cross pea plants, graph any function and more. Tap “Ask Cassie” in any lab and she explains what’s on your screen, using your numbers. Each lab has small goals to tick off.',
   'Explore 3D body: “Look around” turns it to the Front, Back or Side, and “Pull it apart” lifts every bone and organ out and sorts them into labelled trays (Bones, Digestive, Respiratory…) — “Put back” rebuilds the body. The S/I/R/L/A/P letters show which way you face (tap one to turn), and the skin can be tapped too.',

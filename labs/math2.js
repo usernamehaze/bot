@@ -103,6 +103,12 @@ const SOLIDS = {
   cone: { name: 'Cone', dims: [['Radius r', 3], ['Height h', 6]], V: ([r, h]) => (Math.PI * r * r * h) / 3, A: ([r, h]) => Math.PI * r * (r + Math.hypot(r, h)), fV: '1⁄3 π r² h', fA: 'πr² + πr·√(r² + h²)' },
   pyramid: { name: 'Square pyramid', dims: [['Base side a', 5], ['Height h', 6]], V: ([a, h]) => (a * a * h) / 3, A: ([a, h]) => a * a + 2 * a * Math.hypot(a / 2, h), fV: '1⁄3 a² h', fA: 'a² + 2a·√((a/2)² + h²)' },
   prism: { name: 'Triangular prism', dims: [['Triangle side a', 4], ['Length l', 7]], V: ([a, l]) => ((Math.sqrt(3) / 4) * a * a) * l, A: ([a, l]) => 2 * (Math.sqrt(3) / 4) * a * a + 3 * a * l, fV: '(√3⁄4 a²) × l', fA: '2 × √3⁄4 a² + 3al' },
+  hexprism: { name: 'Hexagonal prism', dims: [['Side a', 2.5], ['Length l', 6]], V: ([a, l]) => ((3 * Math.sqrt(3)) / 2) * a * a * l, A: ([a, l]) => 3 * Math.sqrt(3) * a * a + 6 * a * l, fV: '(3√3⁄2 a²) × l', fA: '3√3 a² + 6al' },
+  hemisphere: { name: 'Hemisphere', dims: [['Radius r', 3]], V: ([r]) => (2 / 3) * Math.PI * r ** 3, A: ([r]) => 3 * Math.PI * r * r, fV: '2⁄3 π r³', fA: '2πr² (dome) + πr² (base) = 3πr²' },
+  frustum: { name: 'Frustum (cut cone)', dims: [['Bottom radius R', 4], ['Top radius r', 2], ['Height h', 5]], V: ([R, r, h]) => (Math.PI * h * (R * R + R * r + r * r)) / 3, A: ([R, r, h]) => Math.PI * (R + r) * Math.hypot(R - r, h) + Math.PI * (R * R + r * r), fV: '1⁄3 π h (R² + Rr + r²)', fA: 'π(R + r)·√((R − r)² + h²) + πR² + πr²' },
+  tetrahedron: { name: 'Tetrahedron', dims: [['Edge a', 5]], V: ([a]) => a ** 3 / (6 * Math.SQRT2), A: ([a]) => Math.sqrt(3) * a * a, fV: 'a³ ⁄ (6√2)', fA: '√3 a²' },
+  octahedron: { name: 'Octahedron', dims: [['Edge a', 4]], V: ([a]) => (Math.SQRT2 / 3) * a ** 3, A: ([a]) => 2 * Math.sqrt(3) * a * a, fV: '√2⁄3 a³', fA: '2√3 a²' },
+  torus: { name: 'Torus (ring)', dims: [['Ring radius R', 4], ['Tube radius r', 1.5]], V: ([R, r]) => 2 * Math.PI * Math.PI * R * r * r, A: ([R, r]) => 4 * Math.PI * Math.PI * R * r, fV: '2π² R r²', fA: '4π² R r' },
 };
 function meshOf(kind, d) {
   const T = [], quad = (p, q, r, s) => { T.push([p, q, r], [p, r, s]); }, N = 28;
@@ -128,24 +134,44 @@ function meshOf(kind, d) {
   } else if (kind === 'pyramid') {
     const [a, h] = d, s = a / 2, v = [[-s, -s, -h / 3], [s, -s, -h / 3], [s, s, -h / 3], [-s, s, -h / 3]], apex = [0, 0, (2 * h) / 3];
     quad(v[0], v[3], v[2], v[1]); for (let i = 0; i < 4; i++) T.push([v[i], v[(i + 1) % 4], apex]);
-  } else {
-    const [a, l] = d, R = a / Math.sqrt(3), tri = (z) => [0, 1, 2].map((k) => [R * Math.cos(-Math.PI / 2 + (k * 2 * Math.PI) / 3), R * Math.sin(-Math.PI / 2 + (k * 2 * Math.PI) / 3), z]);
-    const A = tri(-l / 2), B = tri(l / 2);
-    T.push([A[0], A[2], A[1]], [B[0], B[1], B[2]]);
-    for (let k = 0; k < 3; k++) quad(A[k], A[(k + 1) % 3], B[(k + 1) % 3], B[k]);
+  } else if (kind === 'prism' || kind === 'hexprism') {
+    const [a, l] = d, k0 = kind === 'prism' ? 3 : 6, R = kind === 'prism' ? a / Math.sqrt(3) : a, poly = (z) => Array.from({ length: k0 }, (_, k) => [R * Math.cos(-Math.PI / 2 + (k * 2 * Math.PI) / k0), R * Math.sin(-Math.PI / 2 + (k * 2 * Math.PI) / k0), z]);
+    const A = poly(-l / 2), B = poly(l / 2);
+    for (let k = 1; k < k0 - 1; k++) T.push([A[0], A[k + 1], A[k]], [B[0], B[k], B[k + 1]]);
+    for (let k = 0; k < k0; k++) quad(A[k], A[(k + 1) % k0], B[(k + 1) % k0], B[k]);
+  } else if (kind === 'hemisphere') {
+    const r = d[0], M = 8, z0 = -r * 3 / 8; // (centred on its centre of mass)
+    for (let i = 0; i < M; i++) for (let j = 0; j < N; j++) {
+      const P = (ii, jj) => { const t = (ii / M) * Math.PI / 2, p = (jj / N) * Math.PI * 2; return [r * Math.sin(t) * Math.cos(p), r * Math.sin(t) * Math.sin(p), z0 + r * Math.cos(t)]; };
+      quad(P(i, j), P(i, j + 1), P(i + 1, j + 1), P(i + 1, j));
+    }
+    const base = ring(r, z0); for (let i = 0; i < N; i++) T.push([[0, 0, z0], base[(i + 1) % N], base[i]]);
+  } else if (kind === 'frustum') {
+    const [R, r, h] = d, bot = ring(R, -h / 2), top = ring(r, h / 2);
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N; quad(bot[i], bot[j], top[j], top[i]); T.push([[0, 0, -h / 2], bot[j], bot[i]], [[0, 0, h / 2], top[i], top[j]]); }
+  } else if (kind === 'tetrahedron') {
+    const k = d[0] / (2 * Math.SQRT2), v = [[k, k, k], [k, -k, -k], [-k, k, -k], [-k, -k, k]];
+    [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]].forEach(([p, q, r]) => T.push([v[p], v[q], v[r]]));
+  } else if (kind === 'octahedron') {
+    const k = d[0] / Math.SQRT2, v = [[k, 0, 0], [-k, 0, 0], [0, k, 0], [0, -k, 0], [0, 0, k], [0, 0, -k]];
+    for (const z of [4, 5]) for (const [p, q] of [[0, 2], [2, 1], [1, 3], [3, 0]]) T.push([v[p], v[q], v[z]]);
+  } else if (kind === 'torus') {
+    const [R, r] = d, M = 16;
+    const P = (i, j) => { const u = (i / N) * Math.PI * 2, w = (j / M) * Math.PI * 2; return [(R + r * Math.cos(w)) * Math.cos(u), (R + r * Math.cos(w)) * Math.sin(u), r * Math.sin(w)]; };
+    for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) quad(P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1));
   }
   return T;
 }
 const solidsLab = {
   id: 'solids', name: '3D shapes', subject: 'math', topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
-  blurb: 'Turn cubes, spheres, cones and more. Change their size and watch volume and surface area change.',
+  blurb: 'Turn 13 solids — cubes, spheres, cones, prisms, a torus… Make them any size and watch volume and surface area change.',
   words: 'volume surface area 3d solids geometry cube sphere cylinder cone pyramid prism cuboid',
   icon: '<path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/>',
   tries: ['Make a cube with a volume of exactly 64 cm³', 'Double a cube’s side — what happens to its volume?', 'Compare shapes with the same volume: which has the least surface?'],
   hints: ['A cube’s volume is a × a × a. Which whole number cubed is 64?', 'Note the volume, double the side, and divide the new volume by the old one.', 'Choose “Same volume” and compare the surface areas of the cube, cylinder and sphere.'],
-  about: 'Formulas are the exact ones, worked out with π to many decimal places; answers are rounded to 3 significant figures. Lengths are in centimetres, areas in cm² and volumes in cm³.\nThe 3D pictures are drawn to scale. Curved shapes are drawn with flat facets (like a disco ball), but the numbers use the true curved formulas.\nIn “Same volume” the cylinder is as tall as it is wide (h = 2r) and every shape holds exactly the same volume; the sphere always needs the least surface — that is why bubbles and raindrops are round.',
+  about: 'Formulas are the exact ones, worked out with π to many decimal places; answers are rounded to 3 significant figures. Lengths are in the unit you pick (mm, cm, m or inches), areas in that unit squared and volumes in that unit cubed. Slide from 0.1 to 100 or type any size up to 10,000.\nThe 3D pictures are drawn to scale. Curved shapes are drawn with flat facets (like a disco ball), but the numbers use the true curved formulas.\nIn “Same volume” the cylinder is as tall as it is wide (h = 2r) and every shape holds exactly the same volume; the sphere always needs the least surface — that is why bubbles and raindrops are round.',
   mount({ stage, panel, api }) {
-    let kind = 'cube', dims = Object.fromEntries(Object.entries(SOLIDS).map(([k, s]) => [k, s.dims.map((x) => x[1])])), same = false, Vsame = 100;
+    let kind = 'cube', dims = Object.fromEntries(Object.entries(SOLIDS).map(([k, s]) => [k, s.dims.map((x) => x[1])])), same = false, Vsame = 100, unit = 'cm';
     let yaw = 0.6, pitch = 0.5, auto = true, cubeVols = [];
     function sameDims() {
       const V = Vsame;
@@ -167,8 +193,11 @@ const solidsLab = {
     }
     const cv = canvas(stage, (ctx, w, h) => {
       if (!same) {
-        const d = dims[kind], size = Math.max(...d) * 1.2 + 2;
-        drawSolid(ctx, kind, d, w / 2, h / 2, Math.min(w, h) / (size * 1.7));
+        // to scale: a bigger shape fills more of the picture (the grey bar is a ruler)
+        const d = dims[kind], ext = Math.max(...meshOf(kind, d).flat().map((v) => Math.hypot(...v))), size = ext * 2.4 + 2, sc = Math.min(w, h) / (size * 1.25);
+        drawSolid(ctx, kind, d, w / 2, h / 2, sc);
+        const nice = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find((x) => x * sc > 50) || 1000;
+        line(ctx, [[16, h - 18], [16 + nice * sc, h - 18]], DIM, 3); text(ctx, `${nice} ${unit}`, 16 + (nice * sc) / 2, h - 26, DIM, 'center');
       } else {
         const sd = sameDims(), sc = Math.min(w / 3, h) / (Math.cbrt(Vsame) * 3.2);
         [['cube', w / 6], ['cylinder', w / 2], ['sphere', (5 * w) / 6]].forEach(([k, x]) => {
@@ -190,14 +219,19 @@ const solidsLab = {
       if (same) { slider(group(box, 'Volume'), { label: 'Volume', min: 10, max: 500, step: 10, value: Vsame, fmt: (x) => x + ' cm³', onInput: (x) => { Vsame = x; report(); } }); return; }
       seg(group(box, 'Shape'), { options: Object.entries(SOLIDS).map(([k, s]) => [k, s.name]), value: kind, onChange: (v) => { kind = v; build(); report(); } });
       const g = group(box, 'Size');
-      SOLIDS[kind].dims.forEach(([n], i) => slider(g, { label: n, min: 1, max: 10, step: 0.5, value: dims[kind][i], fmt: (x) => x + ' cm', onInput: (x) => { dims[kind][i] = x; report(); } }));
+      // any size: slide from 0.1 to 100, or type an exact one (up to 10,000)
+      SOLIDS[kind].dims.forEach(([n], i) => slider(g, { label: n, min: 0.1, max: 100, step: 0.1, value: dims[kind][i], typed: { min: 0.001, max: 10000, unit }, onInput: (x) => { dims[kind][i] = x; report(); } }));
+      seg(group(box, 'Units'), { options: [['mm', 'mm'], ['cm', 'cm'], ['m', 'm'], ['in', 'inches']], value: unit, onChange: (v) => { unit = v; build(); report(); } });
+      if (kind === 'torus') box.appendChild(el('p', 'lab-note', 'A torus needs the tube radius r smaller than the ring radius R (otherwise the ring has no hole).'));
+      if (kind === 'frustum') box.appendChild(el('p', 'lab-note', 'Make the top radius 0 and the frustum becomes a cone; make it equal to the bottom and it becomes a cylinder.'));
     }
     const st = stats(panel);
     function report() {
       if (same) { const sd = sameDims(); st.set(['cube', 'cylinder', 'sphere'].map((k) => [SOLIDS[k].name, `surface ${num(SOLIDS[k].A(sd[k]))} cm²`])); cv.redraw(); return; }
       const S = SOLIDS[kind], d = dims[kind], V = S.V(d), A = S.A(d);
-      st.set([['Volume', `${S.fV} = ${num(V, 4)} cm³`], ['Surface area', `${S.fA} = ${num(A, 4)} cm²`], ...(kind === 'cube' ? [['Doubling the side', '× 2 side → × 4 surface, × 8 volume']] : [])]);
-      if (kind === 'cube') {
+      if (kind === 'torus' && d[1] >= d[0]) { st.set([['Torus', 'Make the tube radius r smaller than the ring radius R.']]); cv.redraw(); return; }
+      st.set([['Volume', `${S.fV} = ${num(V, 4)} ${unit}³`], ['Surface area', `${S.fA} = ${num(A, 4)} ${unit}²`], ...(kind === 'cube' ? [['Doubling the side', '× 2 side → × 4 surface, × 8 volume']] : [])]);
+      if (kind === 'cube' && unit === 'cm') {
         if (Math.abs(V - 64) < 1e-9) api.check(0);
         cubeVols.push([d[0], V]); if (cubeVols.length > 40) cubeVols.shift();
         if (cubeVols.some(([s0]) => Math.abs(d[0] - 2 * s0) < 1e-9)) api.check(1);
@@ -205,7 +239,7 @@ const solidsLab = {
       cv.redraw();
     }
     build(); report(); tick.start();
-    return { state: () => (same ? `comparing a cube, a cylinder and a sphere that all hold ${Vsame} cm³` : `a ${SOLIDS[kind].name.toLowerCase()} with ${SOLIDS[kind].dims.map(([n], i) => `${n.toLowerCase()} = ${dims[kind][i]} cm`).join(', ')}: volume ${num(SOLIDS[kind].V(dims[kind]), 4)} cm³, surface area ${num(SOLIDS[kind].A(dims[kind]), 4)} cm²`), destroy: () => { tick.stop(); cv.destroy(); } };
+    return { state: () => (same ? `comparing a cube, a cylinder and a sphere that all hold ${Vsame} cm³` : `a ${SOLIDS[kind].name.toLowerCase()} with ${SOLIDS[kind].dims.map(([n], i) => `${n.toLowerCase()} = ${dims[kind][i]} ${unit}`).join(', ')}: volume ${num(SOLIDS[kind].V(dims[kind]), 4)} ${unit}³, surface area ${num(SOLIDS[kind].A(dims[kind]), 4)} ${unit}²`), destroy: () => { tick.stop(); cv.destroy(); } };
   },
 };
 

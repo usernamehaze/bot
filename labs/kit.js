@@ -110,19 +110,30 @@ export function group(panel, title) {
   panel.appendChild(g);
   return g;
 }
-export function slider(host, { label, min, max, step = 1, value, fmt = (v) => num(v), onInput }) {
-  const w = el('label', 'lab-sl');
-  w.innerHTML = `<span class="lab-sl-top"><b>${esc(label)}</b><output></output></span><input type="range" min="${min}" max="${max}" step="${step}">`;
-  const input = w.querySelector('input'), out = w.querySelector('output');
+// typed: { min, max, unit } adds a box to type an exact number (it can go past the slider's ends)
+export function slider(host, { label, min, max, step = 1, value, fmt = (v) => num(v), onInput, typed }) {
+  const w = el(typed ? 'div' : 'label', 'lab-sl');
+  w.innerHTML = `<span class="lab-sl-top"><b>${esc(label)}</b>${typed ? `<span class="lab-sl-typed"><input type="number" inputmode="decimal" min="${typed.min}" max="${typed.max}" step="any" aria-label="${esc(label)} (type a number)">${typed.unit ? `<i>${esc(typed.unit)}</i>` : ''}</span>` : '<output></output>'}</span><input type="range" min="${min}" max="${max}" step="${step}" aria-label="${esc(label)}">`;
+  const input = w.querySelector('input[type=range]'), out = w.querySelector('output'), box = w.querySelector('input[type=number]');
+  let val = +value;
   const show = () => {
-    out.textContent = fmt(+input.value);
-    input.style.setProperty('--fill', ((+input.value - min) / (max - min)) * 100 + '%');
+    if (out) out.textContent = fmt(val);
+    if (box && document.activeElement !== box) box.value = String(+val.toFixed(4));
+    input.style.setProperty('--fill', Math.min(100, Math.max(0, ((Math.min(max, Math.max(min, val)) - min) / (max - min)) * 100)) + '%');
   };
   input.value = value;
   show();
-  input.addEventListener('input', () => { show(); onInput && onInput(+input.value); });
+  input.addEventListener('input', () => { val = +input.value; show(); onInput && onInput(val); });
+  if (box) {
+    box.addEventListener('input', () => {
+      const v = parseFloat(box.value);
+      if (!Number.isFinite(v) || v < typed.min || v > typed.max) { box.classList.add('bad'); return; }
+      box.classList.remove('bad'); val = v; input.value = Math.min(max, Math.max(min, v)); show(); onInput && onInput(val);
+    });
+    box.addEventListener('blur', show);
+  }
   host.appendChild(w);
-  return { el: w, get value() { return +input.value; }, set(v) { input.value = v; show(); } };
+  return { el: w, get value() { return val; }, set(v) { val = +v; input.value = v; show(); } };
 }
 export function seg(host, { label, options, value, onChange }) {
   const w = el('div', 'lab-seg-wrap');

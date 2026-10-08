@@ -78,7 +78,7 @@ const dateOf = (d) => new Date(J2000 + d * 86400000);
 const fmtDate = (d) => dateOf(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
 const solarLab = {
-  id: 'solar', name: 'Solar system', subject: 'physics', topic: 'the solar system: planets, orbits, the Moon’s phases and eclipses',
+  id: 'solar', name: 'Planets today, Moon & eclipses', subject: 'space', topic: 'the solar system: planets, orbits, the Moon’s phases and eclipses',
   blurb: 'The eight planets where they really are today, the Moon’s phases, and when the next eclipses come.',
   words: 'solar system planets sun orbit moon phases eclipse astronomy space kepler year',
   icon: '<circle cx="24" cy="24" r="5"/><ellipse cx="24" cy="24" rx="19" ry="8"/><circle cx="41" cy="22" r="2.5"/><ellipse cx="24" cy="24" rx="11" ry="4.5"/><circle cx="14" cy="27" r="1.6"/>',
