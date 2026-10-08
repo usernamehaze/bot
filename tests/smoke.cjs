@@ -78,6 +78,13 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await page.goto(APP);
   return { ctx, page, errors, groqCalls };
 }
+// the 3D models are opened from Labs (the 3D shelf)
+async function open3d(page, id) {
+  await page.click('#labs-btn');
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.click('.labs-chips [data-subject="3d"]');
+  await page.click(`.labs-grid [data-lab="${id}"]`);
+}
 async function ask(page, text) {
   const before = await page.locator('#chat-log .bubble-assistant').count();
   await page.fill('#prompt-input', text);
@@ -776,7 +783,7 @@ test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a
 
 test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
-  await page.click('#explore-btn');
+  await open3d(page, 'cells3d');
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 20000 });
   await page.click('.x3d-switch [data-cell="animal"]');
   await page.waitForSelector('.x3d-chip[data-part="nucleus"]', { timeout: 20000 });
@@ -805,7 +812,7 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   expect(await page.locator('.x3d').isHidden(), 'the viewer closes so the answer shows');
   expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
   // plant cell → quiz
-  await page.click('#explore-btn');
+  await open3d(page, 'cells3d');
   await page.click('.x3d-switch [data-cell="plant"]');
   await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 10000 });
   const plant = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
@@ -1020,9 +1027,10 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
 
 test('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
-  await page.click('#explore-btn');
+  await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
-  expect(await page.locator('.x3d-switch [data-cell="body"]').getAttribute('aria-selected') === 'true', 'the 3D button opens the human body');
+  expect(await page.locator('.labs').isHidden(), 'Labs steps aside while the 3D body is open');
+  expect(await page.locator('.x3d-switch [data-cell="body"]').getAttribute('aria-selected') === 'true', 'the 3D card opens the human body');
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
   const on = await page.$$eval('.x3d-sys', (c) => c.filter((x) => x.getAttribute('aria-pressed') === 'true').map((x) => x.dataset.sys));
   const all = await page.$$eval('.x3d-sys[data-sys]', (c) => c.map((x) => x.textContent.trim()));
@@ -1098,7 +1106,7 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
 
 test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece apart and back, structure count, which-way letters', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
-  await page.click('#explore-btn');
+  await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden && +document.querySelector('.x3d-count b').textContent.replace(/\D/g, '') > 50, null, { timeout: 40000 });
   expect(await page.locator('.x3d-view').isVisible(), 'the view controls are open at the start');
@@ -1174,20 +1182,29 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await page.click('#labs-btn');
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
-  const ids = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  // two shelves: Learn (simulations, 3D, atlas) and Games & puzzles
+  const learn = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  expect(!learn.includes('sudoku') && learn.includes('pendulum'), 'Learn has the simulations, not the puzzles: ' + learn);
+  await page.click('.labs-tabs [data-section="games"]');
+  const games = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  expect(games.includes('sudoku') && !games.includes('pendulum'), 'Games has the puzzles: ' + games);
+  expect(await page.locator('.labs-chips').isHidden(), 'the subject chips are for the Learn shelf');
+  await page.click('.labs-tabs [data-section="learn"]');
+  const ids = [...learn, ...games];
   for (const id of ['function', 'fractions', 'chance', 'units', 'interest', 'square-proof', 'hanoi', 'projectile', 'pendulum', 'waves', 'refraction', 'balance', 'ph', 'atom', 'punnett', 'body3d',
     'solar', 'colour', 'vectors', 'magnets', 'optics', 'logic', 'ice-steam', 'metals', 'rocket', 'solids', 'recursion', 'build-cell', 'sudoku', 'nonogram', 'hashi', 'pipes', 'mirrors', 'equation', 'geography']) expect(ids.includes(id), 'the shelf has ' + id + ': ' + ids);
   expect(await page.locator('.labs-feature').count() === 1, 'today’s lab is featured');
   await shot('labs-shelf');
   // subject chips and search
   await page.click('.labs-chips [data-subject="chemistry"]');
-  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs');
+  expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs: ' + (await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join());
   await page.click('.labs-chips [data-subject="all"]');
   await page.fill('.labs-search', 'pendul');
   expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'pendulum', 'search finds the pendulum');
   await page.fill('.labs-search', '');
   // every lab opens, draws, says how its model works, and closes without an error
   for (const id of ids.filter((x) => !/3d$/.test(x))) {
+    await page.click(`.labs-tabs [data-section="${games.includes(id) ? 'games' : 'learn'}"]`);
     await page.click(`.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 8000 });
     expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq').count() >= 1, id + ' draws something');
@@ -1200,6 +1217,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
     await page.click('.lab-back');
   }
   // “Try this” goals are buttons: a tap shows the hint
+  await page.click('.labs-tabs [data-section="learn"]');
   await page.click('.labs-grid [data-lab="pendulum"]');
   await page.click('.lab-try >> nth=0');
   expect(await page.locator('.lab-hint >> nth=0').isVisible() && /1 m/.test(await page.locator('.lab-hint >> nth=0').innerText()), 'tapping a goal shows its hint');
@@ -1288,7 +1306,9 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   const { ctx, page, errors } = await open(b, { state: { groqKey: 'gsk_test', profile: { name: 'Hazel' } }, device: process.env.DEVICE || 'Pixel 7' });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await page.click('#labs-btn');
-  await page.waitForSelector('.labs:not([hidden]) .labs-board:not([hidden])', { timeout: 20000 });
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.click('.labs-tabs [data-section="games"]');
+  await page.waitForSelector('.labs-board:not([hidden])', { timeout: 5000 });
   expect(/Be the first today|playing today/.test(await page.locator('.labs-board').innerText()), 'the score board shows on the shelf');
   // solve today's Laser mirrors puzzle by trying mirror turns (the real path exists)
   await page.click('.labs-grid [data-lab="mirrors"]');
@@ -1346,6 +1366,93 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   await page.waitForSelector('.geo-next');
   await page.waitForTimeout(500);
   await shot('puzzle-geography');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Labs: goals tick only when you do them (and you can untick), colour names, flipping coins, any-size shapes, bigger puzzles, find a country', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
+  const stats = () => page.locator('.lab-stats').innerText();
+  // Punnett starts at Yy × Yy (already 3 : 1) — that's not the student finding it, so nothing ticks
+  await page.goto(APP + '?lab=punnett');
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="punnett"] .lab-tries li', { timeout: 20000 });
+  expect(await page.locator('.lab-tries li.done').count() === 0, 'no goal is ticked before the student does anything');
+  // change a parent and change it back: now it's theirs
+  await page.locator('.lab-group:has-text("Parent 1") .lab-seg button >> nth=0').click();
+  await page.locator('.lab-group:has-text("Parent 1") .lab-seg button >> nth=1').click();
+  expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'finding 3 : 1 ticks the goal');
+  // the box can be unticked (and ticked) by hand
+  await page.click('.lab-tries [data-tick="0"]');
+  expect(!/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'tapping a ticked box unticks it');
+  // (YY × Yy on the way made every offspring yellow, so the third goal ticked itself too)
+  expect(/done/.test(await page.locator('.lab-tries li').nth(2).getAttribute('class')), 'YY × Yy makes every offspring look the same');
+  await page.click('.lab-tries [data-tick="0"]');
+  expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'tapping an empty box ticks it');
+  await shot('lab-goals');
+  await page.click('.lab-back');
+  // colour: a named colour, its name, and the hex
+  await page.click('.labs-grid [data-lab="colour"]');
+  await page.click('.lab-colour-chips [aria-label="Mustard"]');
+  expect(/Mustard/.test(await page.locator('.lab-swatch').innerText()) && /#FFDB58/.test(await page.locator('.lab-swatch').innerText()), 'the swatch says the colour’s name and hex: ' + await page.locator('.lab-swatch').innerText());
+  await page.locator('.lab-sl:has-text("Blue") input').fill('255');
+  expect(/Name/.test(await stats()) && /Looks/.test(await stats()), 'the name and a plain description are listed: ' + await stats());
+  await shot('lab-colour-names');
+  await page.click('.lab-back');
+  // chance: the coin flips through the air, then the count goes up
+  await page.click('.labs-grid [data-lab="chance"]');
+  await page.click('.lab-row-btns .lab-btn:has-text("× 1") >> nth=0');
+  await page.waitForTimeout(250);
+  await shot('lab-coin-flipping');
+  await page.waitForFunction(() => /Trials\s*1(?![\d,])/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 4000 });
+  await page.click('.lab-seg button:has-text("Spinner")');
+  const cb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + 60); await page.mouse.down(); await page.mouse.move(cb.x + cb.width / 2 + 80, cb.y + 40, { steps: 2 }); await page.mouse.up();
+  await page.waitForTimeout(300);
+  await shot('lab-spinner-spinning');
+  await page.waitForFunction(() => /Trials\s*1(?![\d,])/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 4000 });
+  await page.click('.lab-back');
+  // 3D shapes: 13 of them, any size typed in
+  await page.click('.labs-grid [data-lab="solids"]');
+  expect(await page.locator('.lab-group:has(h4:text-is("Shape")) .lab-seg button').count() === 13, '13 shapes');
+  await page.click('.lab-seg button:has-text("Torus")');
+  await page.locator('.lab-sl:has-text("Ring radius") input[type=number]').fill('12.5');
+  await page.locator('.lab-sl:has-text("Tube radius") input[type=number]').fill('3');
+  expect(/2π² R r²\s*=\s*2,?221/.test(await stats()), 'torus volume 2π²·12.5·3² ≈ 2,221: ' + await stats());
+  await shot('lab-torus');
+  await page.click('.lab-back');
+  // puzzles: more sizes, and a new puzzle any time
+  await page.click('.labs-tabs [data-section="games"]');
+  await page.click('.labs-grid [data-lab="sudoku"]');
+  await page.click('.lab-seg button:has-text("12 × 12")');
+  expect(await page.locator('.sdk-c').count() === 144 && await page.locator('.sdk-pad [data-d="12"]').count() === 1, 'a 12 × 12 sudoku with 1–12');
+  const first = await page.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(','));
+  await page.click('.puz-head .lab-btn:has-text("New puzzle")');
+  expect(await page.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(',')) !== first && /Practice/.test(await page.locator('.puz-day').innerText()), 'New puzzle makes a different one');
+  await shot('puzzle-sudoku-12');
+  await page.click('.lab-back');
+  for (const [id, label] of [['nonogram', '20 × 20'], ['hashi', 'Huge'], ['pipes', '10 × 10'], ['mirrors', '11 × 11']]) {
+    await page.click(`.labs-grid [data-lab="${id}"]`);
+    await page.click(`.lab-seg button:has-text("${label}")`);
+    await page.waitForTimeout(150);
+    await shot('puzzle-' + id + '-big');
+    expect(errors.length === 0, id + ': ' + errors.join('; '));
+    await page.click('.lab-back');
+  }
+  // geography: find a country by tapping it on the map
+  await page.click('.labs-grid [data-lab="geography"]');
+  await page.click('.lab-seg button:has-text("Find it on the map")');
+  await page.waitForFunction(() => /Tap .+ on the map/.test(document.querySelector('.geo-q').textContent), null, { timeout: 10000 });
+  const gb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.click(gb.x + gb.width * 0.5, gb.y + gb.height * 0.62);
+  await page.mouse.click(gb.x + gb.width * 0.3, gb.y + gb.height * 0.55);
+  await page.mouse.click(gb.x + gb.width * 0.7, gb.y + gb.height * 0.5);
+  await page.waitForTimeout(300);
+  await shot('puzzle-geo-find');
+  await page.click('.lab-seg button:has-text("Explore the map")');
+  await page.mouse.click(gb.x + gb.width * 0.28, gb.y + gb.height * 0.5);
+  await page.waitForTimeout(300);
+  await shot('puzzle-geo-explore');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

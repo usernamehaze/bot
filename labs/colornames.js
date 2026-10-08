@@ -1,0 +1,198 @@
+/* Colour names: the CSS named colours (all but "dark gray", which CSS made lighter than "gray") (the same names browsers know, as in the
+   color-name package, MIT) plus 21 everyday ones with their usual values (burgundy, mustard,
+   lilac…). nameColour() finds the nearest by how different two colours look to people (CIE Lab). */
+export const NAMES = [
+  ["Alice blue", "#f0f8ff"],
+  ["Antique white", "#faebd7"],
+  ["Aquamarine", "#7fffd4"],
+  ["Azure", "#f0ffff"],
+  ["Beige", "#f5f5dc"],
+  ["Bisque", "#ffe4c4"],
+  ["Black", "#000000"],
+  ["Blanched almond", "#ffebcd"],
+  ["Blue", "#0000ff"],
+  ["Blue violet", "#8a2be2"],
+  ["Brown", "#a52a2a"],
+  ["Burlywood", "#deb887"],
+  ["Cadet blue", "#5f9ea0"],
+  ["Chartreuse", "#7fff00"],
+  ["Chocolate", "#d2691e"],
+  ["Coral", "#ff7f50"],
+  ["Cornflower blue", "#6495ed"],
+  ["Cornsilk", "#fff8dc"],
+  ["Crimson", "#dc143c"],
+  ["Cyan", "#00ffff"],
+  ["Dark blue", "#00008b"],
+  ["Dark cyan", "#008b8b"],
+  ["Dark goldenrod", "#b8860b"],
+  ["Dark green", "#006400"],
+  ["Dark khaki", "#bdb76b"],
+  ["Dark magenta", "#8b008b"],
+  ["Dark olive green", "#556b2f"],
+  ["Dark orange", "#ff8c00"],
+  ["Dark orchid", "#9932cc"],
+  ["Dark red", "#8b0000"],
+  ["Dark salmon", "#e9967a"],
+  ["Dark sea green", "#8fbc8f"],
+  ["Dark slate blue", "#483d8b"],
+  ["Dark slate gray", "#2f4f4f"],
+  ["Dark turquoise", "#00ced1"],
+  ["Dark violet", "#9400d3"],
+  ["Deep pink", "#ff1493"],
+  ["Deep sky blue", "#00bfff"],
+  ["Dim gray", "#696969"],
+  ["Dodger blue", "#1e90ff"],
+  ["Firebrick", "#b22222"],
+  ["Floral white", "#fffaf0"],
+  ["Forest green", "#228b22"],
+  ["Gainsboro", "#dcdcdc"],
+  ["Ghost white", "#f8f8ff"],
+  ["Gold", "#ffd700"],
+  ["Goldenrod", "#daa520"],
+  ["Gray", "#808080"],
+  ["Green", "#008000"],
+  ["Green yellow", "#adff2f"],
+  ["Honeydew", "#f0fff0"],
+  ["Hot pink", "#ff69b4"],
+  ["Indian red", "#cd5c5c"],
+  ["Indigo", "#4b0082"],
+  ["Ivory", "#fffff0"],
+  ["Khaki", "#f0e68c"],
+  ["Lavender", "#e6e6fa"],
+  ["Lavender blush", "#fff0f5"],
+  ["Lawn green", "#7cfc00"],
+  ["Lemon chiffon", "#fffacd"],
+  ["Light blue", "#add8e6"],
+  ["Light coral", "#f08080"],
+  ["Light cyan", "#e0ffff"],
+  ["Light goldenrod yellow", "#fafad2"],
+  ["Light gray", "#d3d3d3"],
+  ["Light green", "#90ee90"],
+  ["Light pink", "#ffb6c1"],
+  ["Light salmon", "#ffa07a"],
+  ["Light sea green", "#20b2aa"],
+  ["Light sky blue", "#87cefa"],
+  ["Light slate gray", "#778899"],
+  ["Light steel blue", "#b0c4de"],
+  ["Light yellow", "#ffffe0"],
+  ["Lime", "#00ff00"],
+  ["Lime green", "#32cd32"],
+  ["Linen", "#faf0e6"],
+  ["Magenta", "#ff00ff"],
+  ["Maroon", "#800000"],
+  ["Medium aquamarine", "#66cdaa"],
+  ["Medium blue", "#0000cd"],
+  ["Medium orchid", "#ba55d3"],
+  ["Medium purple", "#9370db"],
+  ["Medium sea green", "#3cb371"],
+  ["Medium slate blue", "#7b68ee"],
+  ["Medium spring green", "#00fa9a"],
+  ["Medium turquoise", "#48d1cc"],
+  ["Medium violet red", "#c71585"],
+  ["Midnight blue", "#191970"],
+  ["Mint cream", "#f5fffa"],
+  ["Misty rose", "#ffe4e1"],
+  ["Moccasin", "#ffe4b5"],
+  ["Navajo white", "#ffdead"],
+  ["Navy", "#000080"],
+  ["Old lace", "#fdf5e6"],
+  ["Olive", "#808000"],
+  ["Olive drab", "#6b8e23"],
+  ["Orange", "#ffa500"],
+  ["Orange red", "#ff4500"],
+  ["Orchid", "#da70d6"],
+  ["Pale goldenrod", "#eee8aa"],
+  ["Pale green", "#98fb98"],
+  ["Pale turquoise", "#afeeee"],
+  ["Pale violet red", "#db7093"],
+  ["Papaya whip", "#ffefd5"],
+  ["Peach puff", "#ffdab9"],
+  ["Peru", "#cd853f"],
+  ["Pink", "#ffc0cb"],
+  ["Plum", "#dda0dd"],
+  ["Powder blue", "#b0e0e6"],
+  ["Purple", "#800080"],
+  ["Rebecca purple", "#663399"],
+  ["Red", "#ff0000"],
+  ["Rosy brown", "#bc8f8f"],
+  ["Royal blue", "#4169e1"],
+  ["Saddle brown", "#8b4513"],
+  ["Salmon", "#fa8072"],
+  ["Sandy brown", "#f4a460"],
+  ["Sea green", "#2e8b57"],
+  ["Seashell", "#fff5ee"],
+  ["Sienna", "#a0522d"],
+  ["Silver", "#c0c0c0"],
+  ["Sky blue", "#87ceeb"],
+  ["Slate blue", "#6a5acd"],
+  ["Slate gray", "#708090"],
+  ["Snow", "#fffafa"],
+  ["Spring green", "#00ff7f"],
+  ["Steel blue", "#4682b4"],
+  ["Tan", "#d2b48c"],
+  ["Teal", "#008080"],
+  ["Thistle", "#d8bfd8"],
+  ["Tomato", "#ff6347"],
+  ["Turquoise", "#40e0d0"],
+  ["Violet", "#ee82ee"],
+  ["Wheat", "#f5deb3"],
+  ["White", "#ffffff"],
+  ["White smoke", "#f5f5f5"],
+  ["Yellow", "#ffff00"],
+  ["Yellow green", "#9acd32"],
+  ["Burgundy", "#800020"],
+  ["Mustard", "#ffdb58"],
+  ["Peach", "#ffe5b4"],
+  ["Lilac", "#c8a2c8"],
+  ["Mauve", "#e0b0ff"],
+  ["Rust", "#b7410e"],
+  ["Mint green", "#98ff98"],
+  ["Cream", "#fffdd0"],
+  ["Charcoal", "#36454f"],
+  ["Emerald", "#50c878"],
+  ["Ruby", "#e0115f"],
+  ["Sapphire", "#0f52ba"],
+  ["Amber", "#ffbf00"],
+  ["Scarlet", "#ff2400"],
+  ["Taupe", "#483c32"],
+  ["Cerulean", "#007ba7"],
+  ["Eggplant", "#614051"],
+  ["Bronze", "#cd7f32"],
+  ["Copper", "#b87333"],
+  ["Jade", "#00a86b"],
+  ["Lemon", "#fff700"],
+];
+
+// sRGB (0–255) → CIE Lab (D65)
+function lab([r, g, b]) {
+  const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const [R, G, B] = [lin(r), lin(g), lin(b)];
+  const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+  const x = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047), y = f(0.2126 * R + 0.7152 * G + 0.0722 * B), z = f((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+let LABS = null;
+// the nearest named colour: { name, hex, exact, close } (exact = the same colour; close = hard to tell apart)
+export function nameColour(rgb) {
+  if (!LABS) LABS = NAMES.map(([n, h]) => [n, h, lab(rgbOf(h))]);
+  const L = lab(rgb);
+  let best = null, bd = Infinity;
+  for (const [n, h, l] of LABS) { const d = Math.hypot(L[0] - l[0], L[1] - l[1], L[2] - l[2]); if (d < bd) { bd = d; best = [n, h]; } }
+  return { name: best[0], hex: best[1], exact: bd < 1, close: bd < 6 };
+}
+// a plain description anyone can picture: "light pink", "dark greyish blue"…
+export function describeColour([r, g, b]) {
+  const mx = Math.max(r, g, b) / 255, mn = Math.min(r, g, b) / 255, l = (mx + mn) / 2, d = mx - mn;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (l > 0.96) return 'white';
+  if (l < 0.06) return 'black';
+  let h = 0;
+  if (d) { const R = r / 255, G = g / 255, B = b / 255; h = mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4; h = (h * 60 + 360) % 360; }
+  if (s < 0.1) return l > 0.68 ? 'light grey' : l < 0.3 ? 'dark grey' : 'grey';
+  let hue = h < 15 || h >= 345 ? 'red' : h < 40 ? 'orange' : h < 65 ? 'yellow' : h < 85 ? 'lime green' : h < 160 ? 'green' : h < 195 ? 'cyan' : h < 255 ? 'blue' : h < 290 ? 'purple' : h < 330 ? 'pink' : 'pinkish red';
+  if ((hue === 'orange' || hue === 'red' || hue === 'yellow') && l < 0.4 && s < 0.75) hue = hue === 'yellow' ? 'olive' : 'brown';
+  const tone = l > 0.8 ? 'pale ' : l > 0.65 ? 'light ' : l < 0.25 ? 'very dark ' : l < 0.4 ? 'dark ' : '';
+  const dull = s < 0.3 ? 'greyish ' : s > 0.85 && l > 0.35 && l < 0.65 ? 'bright ' : '';
+  return (tone + dull + hue).trim();
+}

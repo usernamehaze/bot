@@ -1,6 +1,7 @@
 /* More physics labs: colour (light and ink), magnetic fields, lenses and mirrors, logic gates,
    and a rocket you build and launch. */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, at, clock, group, slider, seg, button, row, stats, line, dot, text, arrow, overlay } from './kit.js';
+import { NAMES as COLOUR_NAMES, nameColour, describeColour } from './colornames.js';
 
 /* ---------------- Colour ---------------- */
 const hex2 = (v) => Math.round(v).toString(16).padStart(2, '0');
@@ -85,6 +86,12 @@ const colourLab = {
     }
     drag(cv.c, { down: pickAt, move: pickAt });
     const swatch = el('div', 'lab-swatch'); panel.appendChild(swatch);
+    // tap a named colour to try it
+    const QUICK = ['Red', 'Orange', 'Yellow', 'Lime', 'Green', 'Teal', 'Cyan', 'Sky blue', 'Blue', 'Navy', 'Purple', 'Magenta', 'Pink', 'Brown', 'Gold', 'Silver', 'Gray', 'Black', 'White', 'Burgundy', 'Mustard', 'Lilac', 'Peach', 'Mint green'];
+    const chips = el('div', 'lab-colour-chips'); chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Named colours');
+    chips.innerHTML = QUICK.map((n) => { const h = COLOUR_NAMES.find(([x]) => x === n)[1]; return `<button type="button" data-hex="${h}" title="${n}" aria-label="${n}" style="background:${h}"></button>`; }).join('');
+    chips.addEventListener('click', (e) => { const b = e.target.closest('[data-hex]'); if (!b) return; const h = b.dataset.hex; [R, G, B] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); sync(); });
+    group(panel, 'Named colours').appendChild(chips);
     seg(group(panel, 'Model'), { options: [['light', 'Light (RGB)'], ['ink', 'Ink (CMYK)'], ['wheel', 'Wheel (HSV)']], value: mode, onChange: (v) => { mode = v; build(); sync(); } });
     const box = el('div'); panel.appendChild(box);
     let sliders = [];
@@ -102,14 +109,15 @@ const colourLab = {
     }
     function sync(fromSliders) {
       const [hh, ss, vv] = rgb2hsv(R, G, B), [c, m, y, k] = rgb2cmyk(R, G, B), hex = '#' + hex2(R) + hex2(G) + hex2(B);
+      const named = nameColour([R, G, B]), looks = describeColour([R, G, B]), ink = vv > 0.6 && ss < 0.6 ? '#111' : '#fff';
       swatch.style.background = hex;
-      swatch.innerHTML = `<b style="color:${vv > 0.6 && ss < 0.6 ? '#111' : '#fff'}">${hex.toUpperCase()}</b>`;
+      swatch.innerHTML = `<b style="color:${ink}">${named.exact ? '' : named.close ? 'about ' : 'nearest: '}${esc(named.name)}</b><small style="color:${ink}">${esc(looks)} · ${hex.toUpperCase()}</small>`;
       if (!fromSliders) {
         if (mode === 'light') sliders.forEach((s, i) => s.set([R, G, B][i]));
         else if (mode === 'ink') sliders.forEach((s, i) => s.set(Math.round([c, m, y, k][i] * 100)));
         else sliders.forEach((s, i) => s.set(Math.round([hh, ss * 100, vv * 100][i])));
       }
-      st.set([['RGB', `${R}, ${G}, ${B}`], ['Hex', hex.toUpperCase()], ['CMYK', `${Math.round(c * 100)}%, ${Math.round(m * 100)}%, ${Math.round(y * 100)}%, ${Math.round(k * 100)}%`], ['HSV', `${Math.round(hh)}°, ${Math.round(ss * 100)}%, ${Math.round(vv * 100)}%`]]);
+      st.set([['Name', named.exact ? named.name : `${named.close ? 'about' : 'nearest'} ${named.name} (${named.hex.toUpperCase()})`], ['Looks', looks], ['RGB', `${R}, ${G}, ${B}`], ['Hex', hex.toUpperCase()], ['CMYK', `${Math.round(c * 100)}%, ${Math.round(m * 100)}%, ${Math.round(y * 100)}%, ${Math.round(k * 100)}%`], ['HSV', `${Math.round(hh)}°, ${Math.round(ss * 100)}%, ${Math.round(vv * 100)}%`]]);
       if (mode === 'light' && R > 240 && G > 240 && B < 15) api.check(0);
       if (mode === 'light' && R > 245 && G > 245 && B > 245) api.check(1);
       if (mode === 'wheel' && Math.abs(hh - 240) <= 2 && ss > 0.9 && vv > 0.9) api.check(2);
@@ -117,7 +125,7 @@ const colourLab = {
     }
     const st = stats(panel);
     build(); sync();
-    return { state: () => { const [hh, ss, vv] = rgb2hsv(R, G, B); return `mixing ${mode === 'light' ? 'light' : mode === 'ink' ? 'inks' : 'on the colour wheel'}: the colour is RGB ${R}, ${G}, ${B} (#${hex2(R)}${hex2(G)}${hex2(B)}), hue ${Math.round(hh)}°, saturation ${Math.round(ss * 100)}%, value ${Math.round(vv * 100)}%`; }, destroy: () => cv.destroy() };
+    return { state: () => { const [hh, ss, vv] = rgb2hsv(R, G, B); return `mixing ${mode === 'light' ? 'light' : mode === 'ink' ? 'inks' : 'on the colour wheel'}: the colour is ${nameColour([R, G, B]).name} (${describeColour([R, G, B])}), RGB ${R}, ${G}, ${B} (#${hex2(R)}${hex2(G)}${hex2(B)}), hue ${Math.round(hh)}°, saturation ${Math.round(ss * 100)}%, value ${Math.round(vv * 100)}%`; }, destroy: () => cv.destroy() };
   },
 };
 

@@ -108,6 +108,9 @@ export function createBody(ctx) {
   const hidden = new Set(); // structure indexes the student hid
   const rootParts = new Map(); // group id -> its parts (cached)
   let maleParts = new Set(), femaleParts = new Set(), femaleColor = new Map();
+  // pieces the atlas also has as one whole (the liver comes whole AND cut into its 8 segments,
+  // which sit on top of each other and flicker): the whole organ is drawn, not its pieces too
+  const overlap = new Set();
   const femaleBuilt = new Set(); // layers whose female parts are made
   let selected = -1, highlight = null;
   const shownParts = new Set(), shownSkin = new Set(); // the structures on screen now
@@ -146,6 +149,10 @@ export function createBody(ctx) {
       index.s.forEach((r, i) => { if (r[3] < 0) count(i); });
       femaleParts = new Set(femaleColor.keys());
       index.s.forEach((r, i) => { if (MALE_ONLY.test(r[0])) partsOf(i).forEach((k) => maleParts.add(k)); });
+      index.s.forEach((r, i) => {
+        if (!index.hasMesh.has(i) || !MAIN_ORGAN.test(r[0])) return;
+        for (const k of index.kids[i]) if (index.hasMesh.has(k) && /segment|lobe/i.test(index.s[k][1])) overlap.add(k);
+      });
     }
     return index;
   }
@@ -171,7 +178,7 @@ export function createBody(ctx) {
   }
   // the whole organ (or whole muscle) a part belongs to
   function mainOf(si) { for (let p = si; p >= 0; p = index.s[p][3]) if (MAIN_ORGAN.test(index.s[p][0])) return p; return si; }
-  const blocked = (si) => hidden.has(si) || (sex === 'girl' ? maleParts.has(si) : femaleParts.has(si));
+  const blocked = (si) => hidden.has(si) || overlap.has(si) || (sex === 'girl' ? maleParts.has(si) : femaleParts.has(si));
 
   // which layers to draw, and which of their parts: layer -> null (all of it) | Set of parts
   function plan() {
@@ -479,9 +486,16 @@ export function createBody(ctx) {
     const mid = all.getCenter(new THREE.Vector3()), height = all.getSize(new THREE.Vector3()).y;
     // Cassie sorts the pieces into labelled trays, one per kind (bones, muscles, each organ system),
     // biggest first, like a study kit laid out on a desk
-    const items = parts.map((si) => {
-      const b = partBox.get(si), c = b.getCenter(new THREE.Vector3()), size = b.getSize(new THREE.Vector3());
-      return { si, c, w: Math.max(size.x, 0.006), h: Math.max(size.y, 0.006), tray: trayOf(si) };
+    // a whole organ (the heart, a kidney, a lung, a muscle) moves as one piece: its chambers,
+    // lobes and layers stay together, the way it looks in a book
+    const units = new Map();
+    parts.forEach((si) => {
+      const m = mainOf(si), u = units.get(m) || { si: m, members: [], box: new THREE.Box3() };
+      u.members.push(si); u.box.union(partBox.get(si)); units.set(m, u);
+    });
+    const items = [...units.values()].map((u) => {
+      const c = u.box.getCenter(new THREE.Vector3()), size = u.box.getSize(new THREE.Vector3());
+      return { si: u.si, members: u.members, c, w: Math.max(size.x, 0.006), h: Math.max(size.y, 0.006), tray: trayOf(u.members[0]) };
     });
     const trays = TRAYS.map((name) => ({ name, items: items.filter((it) => it.tray === name).sort((a, b) => (b.h * b.w) - (a.h * a.w) || a.si - b.si) })).filter((t) => t.items.length);
     const gap = (it) => 0.01 + Math.max(it.w, it.h) * 0.18;
@@ -526,7 +540,8 @@ export function createBody(ctx) {
           tray.expandByPoint(at.clone().add(new THREE.Vector3(it.w / 2, it.h / 2, 0))).expandByPoint(at.clone().sub(new THREE.Vector3(it.w / 2, it.h / 2, 0)));
           // flying out: away from the middle, with a little scatter
           const d = it.c.clone().sub(mid).multiplyScalar(0.9).add(new THREE.Vector3(hash(it.si, 1), hash(it.si, 2), hash(it.si, 3)).multiplyScalar(height * 0.28));
-          layout.set(it.si, { d, g: at.sub(it.c) });
+          const move = { d, g: at.sub(it.c) };
+          it.members.forEach((si) => layout.set(si, move));
         }
         y -= r.h;
       }

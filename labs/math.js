@@ -278,7 +278,8 @@ const chanceLab = {
   about: 'Every flip, roll and spin uses the browser’s random-number generator, so each outcome has exactly the theoretical probability shown. (Real coins and dice are very slightly imperfect; these are ideal ones.)\nThe dashed lines are the theoretical probabilities; the bars are what actually happened. The law of large numbers says the bars tend to get closer to the lines as the number of trials grows — but any single run can still wander.',
   mount({ stage, panel, api }) {
     let mode = 'coin', counts = [], n = 0, last = null, streak = 0, spin = 0;
-    const reset = () => { counts = MODES[mode].out.map(() => 0); n = 0; last = null; streak = 0; };
+    let shown = { counts: [], n: 0 }; // what the bars show (they catch up when the coin lands)
+    const reset = () => { counts = MODES[mode].out.map(() => 0); n = 0; last = null; streak = 0; shown = { counts: counts.slice(), n: 0 }; };
     reset();
     const COLORS = { spin: [C.gold, C.blue, C.red] };
     function pips(ctx, x, y, s, v) {
@@ -286,28 +287,52 @@ const chanceLab = {
       const P = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] }[v];
       P.forEach(([i, j]) => dot(ctx, x + s * (0.25 + i * 0.25), y + s * (0.25 + j * 0.25), s * 0.08, '#16171c'));
     }
+    // the coin flips through the air, the dice tumble and the spinner spins before the result shows
+    let anim = null; // { t0, dur, from (spinner angle) }
+    const ease = (x) => 1 - (1 - x) ** 3;
+    const ticker = clock(() => { cv.redraw(); if (anim && performance.now() - anim.t0 > anim.dur) { anim = null; report(); return false; } });
+    function coinFace(ctx, cx, cy, r, ry, heads) {
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(1, Math.max(0.06, ry));
+      dot(ctx, 0, 0, r, heads ? C.gold : '#c9c4b8');
+      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2); ctx.stroke();
+      if (ry > 0.35) text(ctx, heads ? 'H' : 'T', 0, 1, '#16171c', 'center', 'middle');
+      ctx.restore();
+    }
     const cv = canvas(stage, (ctx, w, h) => {
-      const M = MODES[mode], top = Math.min(150, h * 0.34);
+      const M = MODES[mode], top = Math.min(170, h * 0.36), sc = shown.counts, sn = shown.n;
       // the thing itself
-      const cx = w / 2, cy = top / 2 + 6, s = Math.min(80, top * 0.6);
+      const cx = w / 2, cy = top / 2 + 10, s = Math.min(80, top * 0.55);
+      const a = anim ? Math.min(1, (performance.now() - anim.t0) / anim.dur) : 1, flying = a < 1;
       if (mode === 'coin') {
-        dot(ctx, cx, cy, s / 2, last === 1 ? '#c9c4b8' : C.gold);
-        text(ctx, last == null ? '?' : last === 0 ? 'H' : 'T', cx, cy + 1, '#16171c', 'center', 'middle');
-      } else if (mode === 'die') pips(ctx, cx - s / 2, cy - s / 2, s, last == null ? 1 : last + 1);
-      else if (mode === 'two') { const a = last ? last[0] : 1, b = last ? last[1] : 1; pips(ctx, cx - s - 6, cy - s / 2, s, a); pips(ctx, cx + 6, cy - s / 2, s, b); }
-      else {
+        // up, turning over and over, and down again; it lands on its result
+        const turns = anim ? anim.turns : 0, th = ease(a) * turns * Math.PI, lift = flying ? Math.sin(Math.PI * a) * top * 0.32 : 0;
+        const ry = Math.cos(th), heads = flying ? ry >= 0 === (last === 0) : last !== 1;
+        ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.62, s * 0.42 * (1 - lift / top), s * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+        coinFace(ctx, cx, cy - lift, s / 2, flying ? Math.abs(ry) : 1, heads);
+        if (last == null && !flying) text(ctx, '?', cx, cy + 1, '#16171c', 'center', 'middle');
+      } else if (mode === 'die' || mode === 'two') {
+        // tumbling: it spins, bounces and shows random faces, then settles on the result
+        const faces = mode === 'two' ? (last || [1, 1]) : [last == null ? 1 : last + 1];
+        faces.forEach((f, k) => {
+          const x0 = mode === 'two' ? (k ? cx + s * 0.6 : cx - s * 0.6) : cx, spinA = flying ? (1 - ease(a)) * (k ? -5 : 6) * Math.PI : 0, hop = flying ? Math.abs(Math.sin(a * Math.PI * 3)) * (1 - a) * top * 0.3 : 0;
+          const face = flying && a < 0.85 ? 1 + Math.floor((Math.sin(performance.now() / 47 + k * 3) + 1) * 2.99) : f;
+          ctx.save(); ctx.translate(x0, cy - hop); ctx.rotate(spinA); pips(ctx, -s / 2, -s / 2, s, face); ctx.restore();
+        });
+      } else {
         let ang = -Math.PI / 2;
-        M.p.forEach((pp, i) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, s / 2, ang, ang + pp * Math.PI * 2); ctx.closePath(); ctx.fillStyle = COLORS.spin[i]; ctx.fill(); ang += pp * Math.PI * 2; });
-        const a = spin - Math.PI / 2;
-        line(ctx, [[cx, cy], [cx + Math.cos(a) * s * 0.55, cy + Math.sin(a) * s * 0.55]], INK, 3); dot(ctx, cx, cy, 5, INK);
+        M.p.forEach((pp, i) => { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, s * 0.62, ang, ang + pp * Math.PI * 2); ctx.closePath(); ctx.fillStyle = COLORS.spin[i]; ctx.fill(); ang += pp * Math.PI * 2; });
+        const now = flying ? anim.from + (spin + anim.extra - anim.from) * ease(a) : spin, pa = now - Math.PI / 2;
+        line(ctx, [[cx, cy], [cx + Math.cos(pa) * s * 0.7, cy + Math.sin(pa) * s * 0.7]], INK, 4); dot(ctx, cx, cy, 6, INK);
       }
-      text(ctx, n ? `${n.toLocaleString()} ${mode === 'coin' ? 'flips' : mode === 'spin' ? 'spins' : 'rolls'}` : `Tap the ${mode === 'coin' ? 'coin' : mode === 'spin' ? 'spinner' : 'dice'} to start`, cx, top + 4, DIM, 'center');
+      if (flying) { text(ctx, mode === 'coin' ? 'Flipping…' : mode === 'spin' ? 'Spinning…' : 'Rolling…', cx, top + 4, DIM, 'center'); }
+      else
+      text(ctx, sn ? `${sn.toLocaleString()} ${mode === 'coin' ? 'flips' : mode === 'spin' ? 'spins' : 'rolls'}` : `Tap or flick the ${mode === 'coin' ? 'coin' : mode === 'spin' ? 'spinner' : 'dice'} to start`, cx, top + 4, DIM, 'center');
       // the results, as bars, with the theory as a line
       const left = 36, bottom = h - 34, chartH = bottom - top - 30, k = M.out.length, bw = (w - left - 12) / k;
-      const maxP = Math.max(...M.p, ...counts.map((c) => (n ? c / n : 0))) * 1.15;
+      const maxP = Math.max(...M.p, ...sc.map((c) => (sn ? c / sn : 0))) * 1.15;
       for (let t = 0; t <= 4; t++) { const v = (maxP * t) / 4, y = bottom - (v / maxP) * chartH; line(ctx, [[left, y], [w - 8, y]], GRID, 1); text(ctx, Math.round(v * 100) + '%', left - 4, y + 4, DIM, 'right'); }
       M.out.forEach((o, i) => {
-        const x = left + i * bw, f = n ? counts[i] / n : 0, bh2 = (f / maxP) * chartH;
+        const x = left + i * bw, f = sn ? (sc[i] || 0) / sn : 0, bh2 = (f / maxP) * chartH;
         ctx.fillStyle = mode === 'spin' ? COLORS.spin[i] : C.gold;
         ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.roundRect(x + bw * 0.15, bottom - bh2, bw * 0.7, bh2, [4, 4, 0, 0]); ctx.fill(); ctx.globalAlpha = 1;
         const ty = bottom - (M.p[i] / maxP) * chartH;
@@ -325,36 +350,46 @@ const chanceLab = {
       if (mode === 'coin') streak = r === 0 ? streak + 1 : 0;
       if (mode === 'spin') { const before = M.p.slice(0, r).reduce((s2, v) => s2 + v, 0); spin = (before + M.p[r] * (0.2 + Math.random() * 0.6)) * Math.PI * 2; }
     }
-    function run(k) {
+    function run(k, power = 1) {
+      if (anim) anim = null; // a new go cuts the last one short
+      const from = spin;
       for (let i = 0; i < k; i++) once();
+      // one at a time: the whole show; many at once: a quick one for the last
+      const dur = (k === 1 ? 1100 : 500) * Math.min(1.6, Math.max(0.7, power)) * (matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.2 : 1);
+      anim = { t0: performance.now(), dur, from: from % (Math.PI * 2), extra: Math.PI * 2 * Math.round(3 + 3 * power), turns: 2 * Math.round(3 + 3 * power) };
+      ticker.start();
       if (mode === 'coin' && streak >= 5) api.check(0);
       if (mode === 'two' && n >= 1000) api.check(1);
       if (mode === 'coin' && n >= 500 && Math.abs(counts[0] / n - 0.5) < 0.02) api.check(2);
-      report();
     }
     function report() {
       const M = MODES[mode];
+      shown = { counts: counts.slice(), n };
       const list = [['Trials', n.toLocaleString()]];
       if (mode === 'coin') list.push(['Heads in a row', String(streak)]);
       M.out.forEach((o, i) => { if (M.out.length <= 6 || counts[i] === Math.max(...counts)) list.push([o, `${n ? num((counts[i] / n) * 100) : 0}% (theory ${num(M.p[i] * 100)}%)`]); });
       st.set(list);
       cv.redraw();
     }
-    seg(group(panel, 'Machine'), { options: Object.entries(MODES).map(([k, m]) => [k, m.name]), value: mode, onChange: (v) => { mode = v; reset(); report(); } });
+    seg(group(panel, 'Machine'), { options: Object.entries(MODES).map(([k, m]) => [k, m.name]), value: mode, onChange: (v) => { anim = null; ticker.stop(); mode = v; reset(); report(); } });
     const r1 = row(group(panel, 'Go'), 'lab-row-btns');
     button(r1, '× 1', () => run(1), 'main');
     button(r1, '× 10', () => run(10));
     button(r1, '× 100', () => run(100));
     button(r1, '× 1,000', () => run(1000));
-    button(r1, 'Start over', () => { reset(); report(); });
-    // tap the coin, die or spinner itself
-    cv.c.addEventListener('click', (e) => { const r0 = cv.c.getBoundingClientRect(); if (e.clientY - r0.top < Math.min(150, r0.height * 0.34)) run(1); });
+    button(r1, 'Start over', () => { anim = null; ticker.stop(); reset(); report(); });
+    // tap the coin, die or spinner itself — or flick it: a faster flick spins it longer
+    let press = null;
+    drag(cv.c, {
+      down(p) { if (p.y > Math.min(170, cv.h * 0.36) + 10) return false; press = { ...p, t: performance.now() }; },
+      up(p) { if (!press) return; const dist = Math.hypot(p.x - press.x, p.y - press.y), ms = Math.max(30, performance.now() - press.t); press = null; run(1, dist < 8 ? 1 : Math.min(1.6, 0.8 + (dist / ms) * 0.6)); },
+    });
     cv.c.style.cursor = 'pointer';
     const st = stats(panel);
     report();
     return {
       state: () => { const M = MODES[mode]; return `${M.name} — ${n} trials so far: ${M.out.map((o, i) => `${o} ${n ? num((counts[i] / n) * 100) : 0}% (theory ${num(M.p[i] * 100)}%)`).join(', ')}`; },
-      destroy: () => cv.destroy(),
+      destroy: () => { ticker.stop(); cv.destroy(); },
     };
   },
 };
