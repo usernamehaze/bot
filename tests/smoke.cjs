@@ -71,6 +71,10 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
     groqCalls.push(body);
     const out = fakeGroq ? await fakeGroq(body, groqCalls.length) : { text: 'Own-key answer.' };
     if (out.status) return route.fulfill({ status: out.status, json: { error: { message: out.message || 'error' } }, headers: out.headers || {} });
+    if (body.stream) { // like Groq: the answer as server-sent events, a few words at a time
+      const sse = (out.text.match(/\S+\s*/g) || [out.text]).map((w) => `data: ${JSON.stringify({ choices: [{ delta: { content: w } }] })}\n\n`).join('') + 'data: [DONE]\n\n';
+      return route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: sse });
+    }
     return route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: out.text } }] } });
   });
   const page = await ctx.newPage();
@@ -896,7 +900,7 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
 });
 
 test('Talk with Cassie without a built-in speech recognizer: Cassie’s server writes down what you said', async (b) => {
-  await serverMode({ groq: 'ok', heard: 'What is osmosis?', heardCalls: 0, reply: 'Osmosis is water moving through a membrane.' });
+  await serverMode({ groq: 'ok', heard: 'What is osmosis?', heardCalls: 0, streamed: 0, reply: 'Osmosis is water moving through a membrane.' });
   const { ctx, page, errors } = await open(b, {});
   await ctx.addInitScript(FAKE_VOICE, { noRecognizer: true });
   await page.reload();
@@ -907,6 +911,7 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   await page.waitForFunction(() => window.__shown.some((t) => /water moving through a membrane/.test(t)), null, { timeout: 15000 });
   expect(/What is osmosis/.test(await page.locator('.vc-you').innerText()), 'what you said shows on screen');
   expect((await serverMode({})).heardCalls === 1, 'the recording went to the server once');
+  expect((await serverMode({})).streamed >= 1, 'the spoken answer streamed from the server (she can start talking before it is all written)');
   // the next thing you say goes with words from the conversation, so Whisper spells them right
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   await page.click('.vc-mic');
@@ -964,7 +969,7 @@ test('Cassie’s voice is Bella (or Michael) — never a robot voice, and she ne
   await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
   const said = await page.evaluate(() => window.__said);
   expect(said.every((x) => x.voice === 'af_bella'), 'the woman’s voice is Bella, like the explainer video: ' + JSON.stringify(said.map((x) => x.voice)));
-  expect(said[0].text.length <= 95, 'her first piece is short, so she starts talking quickly: ' + said[0].text);
+  expect(said[0].text.length <= 75, 'her first piece is short, so she starts talking quickly: ' + said[0].text);
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
   expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
   // the man's voice

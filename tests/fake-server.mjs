@@ -86,7 +86,17 @@ export async function startFakeServer(port = 4630) {
     const hasPic = typeof body.messages.at(-1).content !== 'string' && body.messages.at(-1).content.some((p) => p.type === 'image_url');
     if (hasPic && !/scout|-vl-|new-eyes/.test(body.model)) return Response.json({ error: { message: "'messages.0' : for 'role:user' the following must be satisfied[('messages.0.content' : value must be a string)]" } }, { status: 400 });
     if (mode.groqVision === 'second' && /llama-4-scout/.test(body.model)) return Response.json({ error: { message: 'The model `meta-llama/llama-4-scout-17b-16e-instruct` has been decommissioned.' } }, { status: 400 });
-    return Response.json({ choices: [{ message: { role: 'assistant', content: smart(body.messages) || mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.' } }] });
+    const answer = smart(body.messages) || mode.reply || 'Hello from the server! Photosynthesis is how plants make food from light.';
+    if (body.stream) { // like Groq: server-sent events, a few words at a time, then [DONE]
+      mode.streamed = (mode.streamed || 0) + 1;
+      const words = answer.match(/\S+\s*/g) || [answer];
+      const enc = new TextEncoder();
+      return new Response(new ReadableStream({ async start(c) {
+        for (const w of words) { c.enqueue(enc.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: w } }] })}\n\n`)); await new Promise((r) => setTimeout(r, 15)); }
+        c.enqueue(enc.encode('data: [DONE]\n\n')); c.close();
+      } }), { headers: { 'content-type': 'text/event-stream' } });
+    }
+    return Response.json({ choices: [{ message: { role: 'assistant', content: answer } }] });
   };
   const env = {
     DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
@@ -116,6 +126,11 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);
     res.writeHead(r.status, Object.fromEntries(r.headers));
+    if (/event-stream/.test(r.headers.get('content-type') || '') && r.body) { // pass a stream on as it comes, like Cloudflare does
+      const rd = r.body.getReader();
+      for (;;) { const { done, value } = await rd.read(); if (done) break; res.write(Buffer.from(value)); }
+      return res.end();
+    }
     res.end(Buffer.from(await r.arrayBuffer()));
   }
   await new Promise((ok) => server.listen(port, ok));

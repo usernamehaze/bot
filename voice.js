@@ -2,7 +2,7 @@
    The voice itself is made in voice/voice-worker.js (Kokoro, on the device). This file
    asks it for one sentence at a time and plays each as soon as it's ready, while the
    next one is being made. Nothing is sent anywhere; once downloaded it works offline.
-   window.CassieVoice = { supported, got, prepare, status, progress, onChange, say, VOICES } */
+   window.CassieVoice = { supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
 (function () {
   // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); Michael for a man's voice
   const VOICES = { woman: 'af_bella', man: 'am_michael' };
@@ -137,7 +137,68 @@
     };
   }
 
+  // Like say(), but the sentences arrive one by one while the answer is still being written:
+  // push(text) adds a sentence (it's made at once and played in turn), end() says no more are coming.
+  // Returns { push, end, done, stop, said }; done resolves like say()'s.
+  function sayStream(opts = {}) {
+    const myTurn = ++turn;
+    const voice = VOICES[opts.gender] || VOICES.woman;
+    const reqs = [];
+    let ended = false, stopped = false, current = null, endNow = null, wake = null, said = 0;
+    const nudge = () => { if (wake) { const w = wake; wake = null; w(); } };
+    const ac = status === 'ready' && worker ? audioCtx() : null;
+    const done = (async () => {
+      if (!ac) return { status: 'error', at: 0 };
+      for (let i = 0; ; i++) {
+        while (i >= reqs.length && !ended && !stopped) await new Promise((r) => { wake = r; });
+        if (stopped) return { status: 'stopped' };
+        if (i >= reqs.length) return { status: 'done' };
+        const m = await reqs[i].p;
+        if (stopped) return { status: 'stopped' };
+        if (!m || m.error || !m.audio || !m.audio.length) return { status: 'error', at: i };
+        const secs = m.audio.length / m.rate;
+        if (m.ms > secs * 1000 * 1.3) slowCount++; else slowCount = Math.max(0, slowCount - 1);
+        let buf;
+        try { buf = ac.createBuffer(1, m.audio.length, m.rate); buf.getChannelData(0).set(m.audio); } catch (e) { return { status: 'error', at: i }; }
+        const src = ac.createBufferSource();
+        src.buffer = buf; src.connect(ac.destination);
+        if (i === 0 && opts.onStart) opts.onStart();
+        await new Promise((resolve) => {
+          const t = setTimeout(resolve, secs * 1000 + 1500);
+          endNow = () => { clearTimeout(t); resolve(); };
+          src.onended = endNow; current = src;
+          try { src.start(); } catch (e) { endNow(); }
+        });
+        current = null; said = i + 1;
+        if (stopped) return { status: 'stopped' };
+      }
+    })();
+    return {
+      done,
+      get said() { return said; },
+      get live() { return !!ac; },
+      push(text) {
+        if (stopped || ended || !ac || !text) return;
+        const id = ++seq;
+        const p = new Promise((resolve) => waiting.set(id, { resolve }));
+        worker.postMessage({ type: 'say', id, turn: myTurn, text, voice, speed: opts.speed || 1 });
+        reqs.push({ id, p }); nudge();
+      },
+      end() { ended = true; nudge(); },
+      stop() {
+        if (stopped) return;
+        stopped = true;
+        if (worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
+        try { if (current) current.stop(); } catch (e) { /* ignore */ }
+        if (endNow) endNow();
+        reqs.forEach((r) => { const w = waiting.get(r.id); if (w) { waiting.delete(r.id); w.resolve(null); } });
+        nudge();
+      },
+    };
+  }
+
   window.CassieVoice = {
+    sayStream,
     VOICES,
     supported,
     got,
