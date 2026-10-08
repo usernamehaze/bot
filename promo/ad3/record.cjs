@@ -49,7 +49,7 @@ const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
 const center = async (page, sel) => { const b = await page.locator(sel).first().boundingBox(); if (!b) throw new Error('not found: ' + sel); return [b.x + b.width / 2, b.y + b.height / 2]; };
 // the landing page, cut down to one thing filling the screen
 const FOCUS_TRY = `.nav,.strip,#try-hint,.try-note,#try-page .tp-meta{display:none!important} .hero,.hero .inner{min-height:720px!important} .hero .inner{grid-template-columns:1fr!important;padding:18px 0!important;justify-items:center;align-items:start!important} .hero .inner>div:first-child{display:none!important} .try{width:860px} #try-page p.tp-text{font-size:20px} #try-page h3{font-size:30px} #try-bot{right:-10px;bottom:-30px;width:110px;height:110px} .rv{opacity:1!important;transform:none!important;transition:none!important}`;
-const FOCUS_DESK = `.nav{display:none!important} .rv{opacity:1!important;transform:none!important;transition:none!important} #desk .head{display:none} .desk-sec{padding:0!important} #desk .wrap{width:1240px} .dk-stage{height:680px!important} .dk{border-radius:22px}`;
+const FOCUS_DESK = `html{scroll-behavior:auto!important} .nav{display:none!important} .rv{opacity:1!important;transform:none!important;transition:none!important} #desk .head{display:none} .desk-sec{padding:0!important} #desk .wrap{width:1240px} .dk-stage{height:680px!important} .dk{border-radius:22px}`;
 
 /* Each scene: where it opens, how it gets ready (real time), then what happens on the film's clock.
    cursor: [t, x, y] keyframes (eased between); events: [t, async (page) => …]. */
@@ -79,6 +79,8 @@ const SCENES = {
       await page.waitForSelector('#desk-stage .sn-cv');
       await page.click('#desk [data-demo="files"]');
       await page.waitForSelector('.fl-file');
+      await page.evaluate(() => { document.querySelector('.dk').scrollIntoView({ block: 'center' }); });
+      await page.waitForTimeout(300);
       await page.mouse.move(1270, 715);
       return { f: await center(page, '.fl-file[data-f="pptx"]') };
     },
@@ -92,6 +94,8 @@ const SCENES = {
       await page.waitForSelector('#desk-stage .sn-cv');
       await page.click('#desk [data-demo="talk"]');
       await page.waitForSelector('.tk-mic');
+      await page.evaluate(() => { document.querySelector('.dk').scrollIntoView({ block: 'center' }); });
+      await page.waitForTimeout(300);
       await page.mouse.move(1270, 715);
       return { m: await center(page, '.tk-mic') };
     },
@@ -137,15 +141,19 @@ const SCENES = {
       cursor: [[0, 900, 380], [0.2, 900, 380], [1.5, 700, 380], [2.2, q[0], q[1]]],
       events: [[0.25, (p) => p.mouse.down()], [1.5, (p) => p.mouse.up()], [2.3, (p) => p.mouse.down()], [2.35, (p) => p.mouse.up()],
         ...'heart'.split('').map((ch, i) => [2.5 + i * 0.09, (p) => p.keyboard.type(ch)]),
-        [2.95, async (p) => { SCENES.body.go = await center(p, 'text="Heart" >> visible=true'); }],
-        [3.45, (p) => p.mouse.down()], [3.5, (p) => p.mouse.up()]],
-      after: (t) => (t > 2.95 && SCENES.body.go ? lerp(q, SCENES.body.go, (t - 2.95) / 0.45) : null),
+        [3.1, async (p) => { SCENES.body.go = await center(p, '.x3d-results:not([hidden]) button'); }], // after the search's 120 ms pause
+        [3.6, (p) => p.mouse.down()], [3.65, (p) => p.mouse.up()]],
+      after: (t) => (t > 3.1 && SCENES.body.go ? lerp(q, SCENES.body.go, (t - 3.1) / 0.45) : null),
     }),
   },
   rocket: {
     dur: 4.0, url: '/app.html?lab=rocket',
     async setup(page) {
       await page.waitForSelector('.lab-stage canvas'); await page.waitForTimeout(5000);
+      // the starting rocket is too weak to lift off (that's a lesson in the lab): give it more thrust first
+      const sl = await page.locator('.lab-panel input[type="range"]').first().boundingBox();
+      await page.mouse.click(sl.x + sl.width * 0.8, sl.y + sl.height / 2);
+      await page.waitForTimeout(1500);
       return { l: await center(page, '.lab-stage button:has-text("Launch")') };
     },
     script: ({ l }) => ({ cursor: [[0, 700, 500], [0.5, l[0], l[1]]], events: [[0.6, (p) => p.mouse.down()], [0.65, (p) => p.mouse.up()]] }),
