@@ -36,7 +36,9 @@ self.onmessage = (e) => {
   const m = e.data || {};
   if (m.type === 'load') {
     // isolated: the page lets the voice use several processor cores (much less lag)
-    load().then(() => self.postMessage({ type: 'ready', isolated: !!self.crossOriginIsolated, cores: navigator.hardwareConcurrency || 1 }), (err) => self.postMessage({ type: 'failed', error: String((err && err.message) || err) }));
+    // (one tiny sentence is made first and thrown away: the engine's first run is much slower than the
+    // rest, so this way it isn't the student's first answer that waits)
+    load().then(async (tts) => { try { await tts.generate('Hi.', { voice: 'af_bella' }); } catch (err) { /* only a warm-up */ } self.postMessage({ type: 'ready', isolated: !!self.crossOriginIsolated, cores: navigator.hardwareConcurrency || 1 }); }, (err) => self.postMessage({ type: 'failed', error: String((err && err.message) || err) }));
   } else if (m.type === 'stop') {
     stopBefore = Math.max(stopBefore, m.turn || 0);
   } else if (m.type === 'say') {

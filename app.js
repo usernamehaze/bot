@@ -2300,7 +2300,53 @@ async function askPicture(msgs, image, opts = {}) {
 }
 
 /* Router: Claude (if the server has it) → text to Groq, pictures to Gemini / Groq vision. */
+/* Talk with Cassie: the answer streams in a few words at a time (Groq, straight with your own key
+   or through Cassie's server), so she can start speaking the first sentence while the rest is
+   still being written. onText(textSoFar) is called as it grows; resolves to the whole answer. */
+async function streamChat(messages, onText) {
+  const body = { messages, max_tokens: 900, temperature: 0.6, stream: true };
+  let res;
+  if (state.groqKey) {
+    const model = state.groqModel || GROQ_MODELS[0];
+    res = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + state.groqKey }, body: JSON.stringify({ ...body, model, ...(/gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}) }) });
+  } else if (SERVER) {
+    res = await fetch(SERVER + '/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...body, uid: installId(), model: GROQ_MODELS[0], reasoning_effort: 'low' }) });
+  } else throw new Error('no brain');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  // an older server answers all at once: that's fine too
+  if (!/event-stream/.test(res.headers.get('content-type') || '') || !res.body) {
+    const d = await res.json();
+    const t = (d.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+    if (t) onText(t);
+    return t;
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (data === '[DONE]') continue;
+      try { const piece = JSON.parse(data).choices?.[0]?.delta?.content; if (piece) { text += piece; onText(text.replace(/<think>[\s\S]*?(<\/think>\s*|$)/g, '')); } } catch (e) { /* a partial line */ }
+    }
+  }
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+}
+
 async function askCassie(msgs, image, opts = {}) {
+  // spoken answers stream (quickest to start talking); anything that fails uses the usual brains
+  if (opts.onDelta && !image && canChat()) {
+    try {
+      const messages = [{ role: 'system', content: buildSystemPrompt(opts) }, ...trimHistory(msgs, 2500).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))];
+      const t = await streamChat(messages, opts.onDelta);
+      if (t) return t;
+    } catch (e) { /* the usual way below */ }
+  }
   if (SERVER && serverClaude) {
     try { return await askClaudeViaServer(msgs, image ? [image] : [], opts); } catch (e) { /* the usual brains take over */ }
   }
@@ -3291,7 +3337,7 @@ async function handleSend(text, opts = {}) {
   try {
     let reply = doc
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
-      : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait });
+      : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait, onDelta: opts.onDelta });
     reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
     if (!reply) throw friendlyError('I went blank on that one — please ask again.');
     // A picture request the detector missed: the model hands it over as [[IMAGE: …]],
@@ -5140,7 +5186,7 @@ function listenWithBrowser(v) {
     voiceUI.you.textContent = t;
     if (t) setVoicePhase('listening', 'Listening… tap the mic to send now');
     clearTimeout(timer);
-    timer = setTimeout(send, interim ? 2000 : 1200); // a short pause means they've finished
+    timer = setTimeout(send, interim ? 1400 : 850); // a short pause means they've finished
   };
   rec.onerror = (e) => {
     if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) {
@@ -5193,7 +5239,7 @@ async function listenWithRecorder(v) {
         if (!v.heardSomething) { v.heardSomething = true; setVoicePhase('listening', 'Listening… tap the mic to send now'); }
       }
     }
-    if (spoke && an && now - lastLoud > 1300) stop();
+    if (spoke && an && now - lastLoud > 950) stop();
     else if (!spoke && now - t0 > 15000) stop();
     else if (now - t0 > 45000) stop();
   }, 100);
@@ -5242,17 +5288,68 @@ async function transcribeAudio(blob) {
   throw new Error('To talk with me here, use Chrome, Edge or Safari — or add a free Groq key in Settings.');
 }
 
+// Cut a growing answer into pieces to speak: the first piece as soon as there is one (short, so
+// she starts quickly), later ones a sentence or two at a time. Returns [pieces, where it got to].
+function speakablePieces(text, from, finished) {
+  const out = [];
+  let i = from;
+  for (;;) {
+    const rest = text.slice(i);
+    if (!rest.trim()) break;
+    const first = !out.length && from === 0;
+    const m = /[.!?…]+["”’)]*(\s|$)/.exec(rest);
+    let end = m ? m.index + m[0].length : -1;
+    // a long sentence: cut at a comma so no piece takes long to make
+    const lim = first ? 70 : 200;
+    if ((end < 0 || end > lim) && rest.length > lim) { const cut = Math.max(rest.lastIndexOf(', ', lim), rest.lastIndexOf('; ', lim), rest.lastIndexOf(' — ', lim)); if (cut > 20) end = cut + 2; }
+    if (end < 0) { if (finished) end = rest.length; else break; }
+    // short sentences after the first are joined to the next (fewer, smoother pieces)
+    if (!first && end < 40 && !finished) { const m2 = /[.!?…]+["”’)]*(\s|$)/.exec(rest.slice(end)); if (!m2) break; end += m2.index + m2[0].length; }
+    out.push(rest.slice(0, end).trim()); i += end;
+  }
+  return [out.filter(Boolean), i];
+}
 async function askOutLoud(text) {
   const v = voiceChat;
   if (!v) return;
   setVoicePhase('thinking');
   voiceUI.cassie.textContent = '';
   const before = state.messages.length;
-  try { await handleSend(text, { mode: v.mode === 'teach' ? 'teach' : 'voice' }); } catch (e) { /* handleSend shows its own errors */ }
-  if (voiceChat !== v) return;
+  // she starts speaking the first sentence while the rest of the answer is still coming
+  const CV = window.CassieVoice;
+  const live = humanVoiceReady() && CV && CV.sayStream ? CV.sayStream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); } }) : null;
+  let upTo = 0;
+  v.stopSpeaking = live ? () => live.stop() : null;
+  const onDelta = (sofar) => {
+    if (voiceChat !== v) return;
+    const clean = cleanForSpeech(sofar);
+    voiceUI.cassie.textContent = clean;
+    if (!live) return;
+    const [pieces, at] = speakablePieces(clean, upTo, false);
+    upTo = at; pieces.forEach((p) => live.push(p));
+  };
+  try { await handleSend(text, { mode: v.mode === 'teach' ? 'teach' : 'voice', onDelta }); } catch (e) { /* handleSend shows its own errors */ }
+  if (voiceChat !== v) { if (live) live.stop(); return; }
   const last = state.messages[state.messages.length - 1];
   const reply = state.messages.length > before && last && last.role === 'assistant' ? last.content : '';
   track('feature', 'voice');
+  if (live && upTo > 0 && reply) {
+    // the rest of the answer, then listen again
+    const clean = cleanForSpeech(reply);
+    voiceUI.cassie.textContent = clean;
+    const [pieces] = speakablePieces(clean, Math.min(upTo, clean.length), true);
+    pieces.forEach((p) => live.push(p));
+    live.end();
+    if (v.phase !== 'speaking') setVoicePhase('speaking');
+    v.stopSpeaking = () => { live.stop(); };
+    const r = await live.done;
+    if (voiceChat !== v) return;
+    v.stopSpeaking = null;
+    if (r.status === 'error') { sayThenListen(bellaChunks(clean).slice(r.at).join(' ')); return; }
+    if (v.wantPause) setVoicePhase('paused'); else listenVoice();
+    return;
+  }
+  if (live) live.stop();
   sayThenListen(reply || 'Sorry, I couldn’t answer that just now. Can you say it again?');
 }
 

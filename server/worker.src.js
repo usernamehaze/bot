@@ -539,8 +539,11 @@ async function chat(request, env, ctx) {
     let models;
     if (cleaned.image || body.model === 'vision') { models = (await visionModels(env)).slice(0, 4); if (!models.length) problems.push('Groq: no picture-reading model on this key'); }
     else models = [CHAT_MODELS.includes(body.model) ? body.model : CHAT_MODELS[0], ...CHAT_MODELS].filter((m, k, a) => a.indexOf(m) === k);
+    // stream: true (Talk with Cassie) — the answer comes back word by word, so she starts speaking
+    // as soon as the first sentence is written instead of waiting for all of it
+    const stream = body.stream === true && !cleaned.image;
     for (const model of models) {
-      const payload = { model, messages: cleaned.messages, max_tokens: maxTokens, temperature };
+      const payload = { model, messages: cleaned.messages, max_tokens: maxTokens, temperature, ...(stream ? { stream: true } : {}) };
       if (/gpt-oss/.test(model) && ['low', 'medium', 'high'].includes(body.reasoning_effort)) payload.reasoning_effort = body.reasoning_effort;
       let r;
       try {
@@ -548,7 +551,7 @@ async function chat(request, env, ctx) {
       } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : e.message}`); continue; }
       if (r.ok) {
         ctx.waitUntil(countChat(env, today, 'groq'));
-        return new Response(r.body, { status: 200, headers: { 'content-type': 'application/json', ...h, ...left, 'x-cassie-source': 'groq' } });
+        return new Response(r.body, { status: 200, headers: { 'content-type': stream ? 'text/event-stream' : 'application/json', 'cache-control': 'no-store', ...h, ...left, 'x-cassie-source': 'groq' } });
       }
       lastStatus = r.status;
       try { lastDetail = (await r.json()).error?.message || ''; } catch (e) { lastDetail = ''; }
