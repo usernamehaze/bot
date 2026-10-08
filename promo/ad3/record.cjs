@@ -128,7 +128,7 @@ const SCENES = {
       await page.waitForFunction(() => /\d+\s*parts showing/.test(document.body.innerText), null, { timeout: 90000 });
       await page.waitForTimeout(4000);
       // close the "Look around" panel so the body has the screen
-      await page.evaluate(() => { const h = [...document.querySelectorAll('*')].filter((e) => e.children.length < 40 && /Pull it apart/.test(e.textContent) && e.querySelector('button')).pop(); const box = h && h.closest('div:has(> button), section, aside'); const x = box && [...box.querySelectorAll('button')].find((b) => /×|✕/.test(b.textContent) || /close/i.test(b.getAttribute('aria-label') || '')); if (x) x.click(); });
+      await page.evaluate(() => { const h = [...document.querySelectorAll('*')].find((e) => e.children.length <= 2 && e.textContent.trim() === 'Look around' && !e.closest('button')); const x = h && h.parentElement.querySelector('button'); if (x) x.click(); });
       await page.waitForTimeout(800);
       await page.mouse.move(1270, 715);
       return { q: await center(page, 'input[placeholder^="Find a part"]') };
@@ -136,7 +136,10 @@ const SCENES = {
     script: ({ q }) => ({
       cursor: [[0, 900, 380], [0.2, 900, 380], [1.5, 700, 380], [2.2, q[0], q[1]]],
       events: [[0.25, (p) => p.mouse.down()], [1.5, (p) => p.mouse.up()], [2.3, (p) => p.mouse.down()], [2.35, (p) => p.mouse.up()],
-        ...'heart'.split('').map((ch, i) => [2.5 + i * 0.09, (p) => p.keyboard.type(ch)]), [3.1, (p) => p.keyboard.press('Enter')]],
+        ...'heart'.split('').map((ch, i) => [2.5 + i * 0.09, (p) => p.keyboard.type(ch)]),
+        [2.95, async (p) => { SCENES.body.go = await center(p, 'text="Heart" >> visible=true'); }],
+        [3.45, (p) => p.mouse.down()], [3.5, (p) => p.mouse.up()]],
+      after: (t) => (t > 2.95 && SCENES.body.go ? lerp(q, SCENES.body.go, (t - 2.95) / 0.45) : null),
     }),
   },
   rocket: {
