@@ -7,7 +7,8 @@
 # The rest are security headers:
 #   Content-Security-Policy  only Cassie's own scripts run (no injected <script>, no eval), and the page
 #                            may only talk to the services it really uses (Cassie's server, Groq, Gemini,
-#                            OpenAlex, the picture service, the voice model, Google sign-in).
+#                            OpenAlex, Wikipedia and the World Bank (the atlas), the picture service, the
+#                            voice model, Google sign-in).
 #   X-Frame-Options / frame-ancestors   no other site can put Cassie inside a frame (clickjacking).
 #   X-Content-Type-Options   the browser never guesses a file's type (an upload can't turn into a script).
 #   Referrer-Policy          other sites see only "askcassie.pages.dev", never the full page address.
@@ -17,7 +18,7 @@
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://cassie.failanzahazel.workers.dev https://api.groq.com https://generativelanguage.googleapis.com https://api.openalex.org https://image.pollinations.ai https://huggingface.co https://*.huggingface.co https://*.hf.co https://accounts.google.com/gsi/; worker-src 'self' blob:; frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://cassie.failanzahazel.workers.dev https://api.groq.com https://generativelanguage.googleapis.com https://api.openalex.org https://en.wikipedia.org https://api.worldbank.org https://image.pollinations.ai https://huggingface.co https://*.huggingface.co https://*.hf.co https://accounts.google.com/gsi/; worker-src 'self' blob:; frame-src https://accounts.google.com/gsi/; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

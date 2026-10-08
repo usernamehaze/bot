@@ -62,6 +62,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
   await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
+  await ctx.route(/wikipedia\.org|worldbank\.org/, (route) => route.abort()); // the atlas's live lookups (a test brings its own)
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
     const req = route.request();
@@ -1453,6 +1454,79 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await page.mouse.click(gb.x + gb.width * 0.28, gb.y + gb.height * 0.5);
   await page.waitForTimeout(300);
   await shot('puzzle-geo-explore');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket, look up Japan and a place; pour, drag particles and disks', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
+  // space: the planets, then the Local Group
+  await page.goto(APP + '?lab=space3d');
+  await page.waitForSelector('.lab3d-label:not([hidden])', { timeout: 30000 });
+  await page.locator('.lab3d-label:not([hidden]):text-is("Jupiter")').click({ force: true });
+  await page.waitForSelector('.space-card h3:text-is("Jupiter")');
+  expect(/Distance from Earth now/.test(await page.locator('.space-card').innerText()) && /95 known/.test(await page.locator('.space-card').innerText()), 'Jupiter’s card has live distances and its moons');
+  await page.waitForTimeout(1200); await shot('space-jupiter');
+  await page.click('.lab-seg button:has-text("Local Group")');
+  await page.locator('.lab3d-label:not([hidden]):has-text("Andromeda")').click({ force: true });
+  await page.waitForSelector('.space-card h3:has-text("Andromeda")');
+  expect(await page.locator('.lab-tries li.done').count() === 2, 'Jupiter and Andromeda goals ticked');
+  await page.waitForTimeout(1200); await shot('space-andromeda');
+  // the rocket in 3D: launch it
+  await page.goto(APP + '?lab=rocket');
+  await page.waitForSelector('canvas.lab-3d', { timeout: 30000 });
+  await page.locator('.lab-sl:has-text("First-stage thrust") input').fill('400');
+  await page.click('.lab-overlay .lab-btn:has-text("Launch")');
+  await page.waitForFunction(() => /Height now/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 8000 });
+  await page.waitForTimeout(2500); await shot('rocket-3d-flying');
+  expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'lift-off ticks the first goal');
+  // the atlas: Japan (with the newest population from the World Bank) and a place from Wikipedia
+  await ctx.route(/en\.wikipedia\.org\/api\/rest_v1\/page\/summary\/History_of_Japan/, (r) => r.fulfill({ json: { type: 'standard', title: 'History of Japan', extract: 'People first lived in Japan about 38,000 years ago.', content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/History_of_Japan' } } } }));
+  await ctx.route(/en\.wikipedia\.org\/w\/api\.php/, (r) => r.fulfill({ json: { query: { search: [{ title: 'Mount Apo' }] } } }));
+  await ctx.route(/en\.wikipedia\.org\/api\/rest_v1\/page\/summary\/Mount_Apo$/, (r) => r.fulfill({ json: { type: 'standard', title: 'Mount Apo', description: 'Volcano in the Philippines', extract: 'Mount Apo is the highest mountain in the Philippines.', coordinates: { lat: 6.987, lon: 125.271 }, content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Mount_Apo' } } } }));
+  await ctx.route(/api\.worldbank\.org/, (r) => r.fulfill({ json: [{ page: 1 }, [{ value: 123975371, date: '2024' }]] }));
+  await page.goto(APP + '?lab=atlas');
+  await page.waitForSelector('.atlas-search input');
+  await page.fill('.atlas-search input', 'Japan');
+  await page.click('.atlas-sugg [data-c3="JPN"]');
+  await page.waitForSelector('.atlas-flag');
+  await page.waitForFunction(() => /2024/.test(document.querySelector('.atlas-card').textContent) && /38,000 years/.test(document.querySelector('.atlas-card').textContent), null, { timeout: 5000 });
+  expect(/Tokyo/.test(await page.locator('.atlas-card').innerText()) && /Japanese yen/.test(await page.locator('.atlas-card').innerText()), 'Japan’s capital and money');
+  await shot('atlas-japan');
+  await page.fill('.atlas-search input', 'Mount Apo');
+  await page.press('.atlas-search input', 'Enter');
+  await page.waitForSelector('.atlas-card h3:text-is("Mount Apo")', { timeout: 5000 });
+  expect(/pinned on the map/.test(await page.locator('.atlas-card').innerText()) && await page.locator('.atlas-card button:has-text("About Philippines")').count() === 1, 'a place is pinned, with its country');
+  // tapping a country on the map
+  const ab = await page.locator('.lab-stage canvas').boundingBox();
+  await page.click('.lab-overlay .lab-btn:has-text("Whole world")');
+  await page.mouse.click(ab.x + ab.width * 0.25, ab.y + ab.height * 0.4);
+  await page.waitForTimeout(400); await shot('atlas-tap');
+  // pH: tap the acid bottle for a drop
+  await page.goto(APP + '?lab=ph');
+  await page.waitForSelector('.lab-stage canvas');
+  const pb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.click(pb.x + 52, pb.y + 40);
+  await page.waitForFunction(() => /Acid added[\s\S]*0\.05 mL/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 3000 });
+  // drag the base bottle over the beaker and hold it there: it pours
+  await page.mouse.move(pb.x + 30 + Math.min(170, pb.width * 0.32) - 22, pb.y + 40); await page.mouse.down();
+  await page.mouse.move(pb.x + 110, pb.y + 90, { steps: 4 }); await page.waitForTimeout(900); await page.mouse.up();
+  expect(!/Base added[\s\S]*\b0 mL/.test(await page.locator('.lab-stats').innerText()), 'pouring the base adds base: ' + await page.locator('.lab-stats').innerText());
+  // the atom: drag a neutron from the tray into the nucleus (carbon-12 → carbon-13)
+  await page.goto(APP + '?lab=atom');
+  await page.waitForSelector('.lab-stage canvas');
+  const tb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.move(tb.x + 24, tb.y + tb.height - 48); await page.mouse.down();
+  await page.mouse.move(tb.x + tb.width * 0.42, tb.y + tb.height / 2, { steps: 6 }); await page.mouse.up();
+  expect(/carbon-13/.test(await page.locator('.lab-stats').innerText()), 'a dragged-in neutron makes carbon-13: ' + await page.locator('.lab-stats').innerText());
+  // Hanoi: drag the top disk from A to C
+  await page.goto(APP + '?lab=hanoi');
+  await page.waitForSelector('.lab-stage canvas');
+  const hb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.move(hb.x + hb.width / 6, hb.y + hb.height - 60); await page.mouse.down();
+  await page.mouse.move(hb.x + (hb.width * 5) / 6, hb.y + hb.height - 80, { steps: 6 }); await page.mouse.up();
+  expect(/Moves\s*1\b/.test(await page.locator('.lab-stats').innerText().then((t) => t.replace(/\n/g, ' '))), 'dragging a disk moves it: ' + await page.locator('.lab-stats').innerText());
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

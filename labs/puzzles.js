@@ -869,3 +869,4 @@ const geographyLab = {
 
 export const PUZZLES = [sudokuLab, nonogramLab, hashiLab, pipesLab, mirrorsLab, equationLab, geographyLab];
 export { sudokuMake, logicSolvable, cluesOf, hashiMake, validEq, makeEquation, COUNTRIES }; // (for the tests)
+export { loadWorld, naturalEarth, FULL_NAMES }; // (the atlas uses the same map)

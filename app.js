@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '121';
+const APP_VERSION = '122';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -5950,6 +5950,9 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs, new in 3D: “Solar system & beyond” — fly to any planet (they’re where they really are today), then zoom out to the Milky Way, our neighbour galaxies and the whole universe; tap anything to learn about it. The Rocket workshop is 3D now: build it, launch it from the pad and watch the sky turn black and spent stages fall away.',
+  'Labs → World atlas: tap any country (or search it) for its flag, capital, population, languages, money, neighbours and a short history — or search any place in the world and Cassie pins it on the map.',
+  'More things to touch in Labs: drag disks in the Towers of Hanoi, pour acid or base from the bottles, drag protons, neutrons and electrons into an atom, drag along the ice-to-steam curve, and drop metals into water.',
   'Labs, part 3: Labs has two shelves now — Learn (simulations, and the 3D body and cells, which come back to Labs when you close them) and Games & puzzles. “Try this” goals tick only when you do them (tap the box to tick or untick it yourself). The colour mixer names colours, coins flip and dice tumble, 13 3D shapes at any size, and Sudoku (4×4 to 12×12), Nonogram, Bridges, Pipes and Mirrors come in many sizes with a New puzzle button. Geography: find countries on the map, or tap around to explore.',
   'Explore 3D body: the liver is drawn once (it was doubled), and “Pull it apart” keeps each organ in one piece.',
   'Labs, part 2: 12 more simulations — the solar system (planets where they really are today, Moon phases and the next eclipses), colour mixing, vectors, magnetic fields, lenses & mirrors, logic gates, ice to steam, metals in water, a rocket workshop, 3D shapes, recursion with Python, and build-a-cell. Plus 7 daily puzzles (Sudoku, Nonogram, Bridges, Pipes, Laser mirrors, Guess the equation, Geography) with a score board. “Try this” goals now open a hint, and Cassie can nudge you right inside the lab.',
