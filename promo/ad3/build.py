@@ -115,15 +115,21 @@ for b in range(int(total / bar) + 2):
             ts = t0 + s8 * beat / 2
             m = ch[[0, 1, 2, 3, 2, 1, 2, 3][s8]] + 24
             j0, j1 = int(ts * SR), min(N, int((ts + 0.5) * SR))
+            if j0 >= N:
+                continue
             q = tt[j0:j1] - ts
             music[j0:j1] += ((np.sin(2 * np.pi * hz(m) * q) + 0.3 * np.sin(4 * np.pi * hz(m) * q)) * np.exp(-q * 9) * 0.10).astype(np.float32)
         for k4 in range(4):  # soft kick on every beat, a tick between
             ts = t0 + k4 * beat
             j0, j1 = int(ts * SR), min(N, int((ts + 0.25) * SR))
+            if j0 >= N:
+                continue
             q = tt[j0:j1] - ts
             music[j0:j1] += (np.sin(2 * np.pi * (45 + 70 * np.exp(-q * 30)) * q) * np.exp(-q * 14) * 0.32).astype(np.float32)
             ts2 = ts + beat / 2
             j0, j1 = int(ts2 * SR), min(N, int((ts2 + 0.06) * SR))
+            if j0 >= N:
+                continue
             nz = rng.standard_normal(j1 - j0)
             music[j0:j1] += (np.diff(nz, prepend=0) * np.exp(-(tt[j0:j1] - ts2) * 70) * 0.025).astype(np.float32)
 # swell in, fade out
