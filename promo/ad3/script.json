@@ -1,0 +1,15 @@
+[
+  {"key": "hook", "text": "Forty-seven slides. One exam. And it's two A.M.", "scene": "title-hook", "dur": 4.6},
+  {"key": "meet", "text": "Meet Cassie, the study buddy that shows you how.", "scene": "title-meet", "dur": 3.9},
+  {"key": "highlight", "text": "Highlight anything, and she explains it, right there.", "scene": "highlight", "dur": 5.2, "cap": "Highlight anything.", "sub": "She explains it, right there."},
+  {"key": "reviewer", "text": "Drop in your slides, and get a reviewer you can save.", "scene": "reviewer", "dur": 5.0, "cap": "Slides in. Reviewer out.", "sub": "Save it as Word, PDF or an image."},
+  {"key": "talk", "text": "Talk it through out loud. She answers in a real voice.", "scene": "talk", "dur": 4.8, "cap": "Talk it through.", "sub": "She answers out loud, in a real voice."},
+  {"key": "labs", "text": "Open Labs. Launch, mix, and build, then ask her why it works.", "scene": "labs", "dur": 5.6, "cap": "Labs you can touch.", "sub": "29 experiments, then ask her why."},
+  {"key": "space", "text": "Fly past the planets, then zoom out to the whole universe.", "scene": "space", "dur": 5.2, "cap": "Planets to galaxies.", "sub": "Where they really are, in 3D."},
+  {"key": "body", "text": "Explore the human body in 3D. Tap any organ to learn it.", "scene": "body", "dur": 5.6, "cap": "The human body, in 3D.", "sub": "Tap any part to learn it."},
+  {"key": "rocket", "text": "Build a rocket, and launch it into space.", "scene": "rocket", "dur": 4.0, "cap": "Build it. Launch it.", "sub": "Real rocket physics."},
+  {"key": "atlas", "text": "Look up any country: its flag, its capital, its story.", "scene": "atlas", "dur": 5.0, "cap": "Every country.", "sub": "Flags, capitals, population, history."},
+  {"key": "puzzles", "text": "And play daily puzzles with your whole class.", "scene": "puzzles", "dur": 3.9, "cap": "Daily puzzles.", "sub": "The same ones for your whole class."},
+  {"key": "private", "text": "It's free, and your notes stay on your device.", "scene": "title-private", "dur": 3.6},
+  {"key": "cta", "text": "Whatever you're studying, Cassie explains it. Try it free, at ask cassie dot pages dot dev.", "scene": "title-cta", "dur": 7.6}
+]
