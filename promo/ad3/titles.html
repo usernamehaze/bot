@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cassie tour — title cards</title>
+<link rel="stylesheet" href="../../landing/fonts.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #0c0c10; color: #f4efe7; overflow: hidden; font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
+  body::before { content: ""; position: fixed; inset: 0; background: radial-gradient(60% 70% at 25% 30%, rgba(233,226,214,.10), transparent 60%), radial-gradient(50% 60% at 80% 85%, rgba(142,138,146,.16), transparent 60%); }
+  body::after { content: ""; position: fixed; inset: 0; background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px); background-size: 24px 24px; }
+  .card { position: fixed; inset: 0; z-index: 1; }
+  .a { opacity: 0; will-change: transform, opacity; }
+  h1, .big { font-family: "Inter Tight", sans-serif; font-weight: 800; letter-spacing: -.045em; line-height: .98; margin: 0; }
+  .s { color: rgba(244,239,231,.5); }
+  .bot { position: absolute; }
+  .bot .cassie-bot { width: 100%; height: 100%; display: block; }
+  /* hook */
+  .hook { padding: 120px 0 0 110px; }
+  .hook .big { font-size: 112px; }
+  .hook .big + .big { margin-top: 14px; }
+  .colon { display: inline-block; }
+  /* meet */
+  .meet { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .meet .bot { position: relative; width: 300px; height: 300px; margin-bottom: 10px; }
+  .meet h1 { font-size: 96px; }
+  .meet p { font-size: 32px; margin: 18px 0 0; color: rgba(244,239,231,.7); font-weight: 500; }
+  /* private */
+  .private { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .private .row { display: flex; gap: 34px; }
+  .private .big { font-size: 120px; }
+  .private p { font-size: 32px; margin: 34px 0 0; color: rgba(244,239,231,.7); display: flex; align-items: center; gap: 14px; }
+  .private svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* cta */
+  .cta { display: grid; grid-template-columns: 330px 1fr; align-items: center; gap: 40px; padding: 0 100px; }
+  .cta .bot { position: relative; width: 330px; height: 330px; }
+  .cta h1 { font-size: 84px; }
+  .cta .pill { display: inline-flex; align-items: center; gap: 16px; margin-top: 40px; padding: 18px 30px; border-radius: 999px; background: #f4efe7; color: #121117; font: 750 34px/1 "Inter Tight", sans-serif; letter-spacing: -.02em; }
+  .cta .pill span { font-weight: 500; color: #6f6c74; }
+  .cta small { display: block; margin-top: 22px; font-size: 24px; color: rgba(244,239,231,.55); }
+</style>
+</head>
+<body>
+<script src="../../cassie-bot.js"></script>
+<script src="titles.js"></script>
+</body>
+</html>

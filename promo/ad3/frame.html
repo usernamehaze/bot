@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cassie tour — scene frame</title>
+<link rel="stylesheet" href="../../landing/fonts.css">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0c0c10; color: #f4efe7; font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
+  body { background: radial-gradient(70% 60% at 50% 0%, rgba(233,226,214,.13), transparent 70%), radial-gradient(50% 60% at 90% 100%, rgba(142,138,146,.14), transparent 60%), #0c0c10; }
+  .cap { position: absolute; left: 224px; right: 224px; top: 46px; display: flex; align-items: baseline; gap: 22px; }
+  .cap b { font: 800 66px/1.05 "Inter Tight", sans-serif; letter-spacing: -.04em; }
+  .cap span { font: 500 30px/1.2 "Inter", sans-serif; color: rgba(244,239,231,.55); }
+  .win { position: absolute; left: 224px; top: 196px; width: 1472px; height: 828px; border-radius: 22px; box-shadow: 0 40px 100px rgba(0,0,0,.55), 0 0 0 1.5px rgba(255,255,255,.12); background: #000; }
+  body.mask { background: #000; } body.mask .cap { display: none; } body.mask .win { background: #fff; box-shadow: none; }
+</style>
+</head>
+<body>
+<div class="cap"><b></b><span></span></div>
+<div class="win"></div>
+<script src="frame.js"></script>
+</body>
+</html>

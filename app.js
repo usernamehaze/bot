@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '122';
+const APP_VERSION = '123';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -6047,6 +6047,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Talk with Cassie answers faster: she starts speaking as soon as the first sentence of her answer is ready (instead of waiting for all of it), and notices sooner when you’ve finished talking.',
   'Labs, new in 3D: “Solar system & beyond” — fly to any planet (they’re where they really are today), then zoom out to the Milky Way, our neighbour galaxies and the whole universe; tap anything to learn about it. The Rocket workshop is 3D now: build it, launch it from the pad and watch the sky turn black and spent stages fall away.',
   'Labs → World atlas: tap any country (or search it) for its flag, capital, population, languages, money, neighbours and a short history — or search any place in the world and Cassie pins it on the map.',
   'More things to touch in Labs: drag disks in the Towers of Hanoi, pour acid or base from the bottles, drag protons, neutrons and electrons into an atom, drag along the ice-to-steam curve, and drop metals into water.',

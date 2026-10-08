@@ -1555,6 +1555,67 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   await ctx.close();
 });
 
+test('landing: highlight a word on the page and Cassie explains it, quizzes you, makes a card', async (b) => {
+  const ctx = watchCsp(await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }));
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(APP.replace('app.html', 'index.html'));
+  await page.click('#try-page b[data-term]:text-is("mitochondria")');
+  await page.waitForSelector('#try-pop:not([hidden])');
+  expect(/mitochondria/.test(await page.locator('#try-pop .tp-q').innerText()), 'the popup names the word');
+  await page.click('#try-pop [data-act="explain"]');
+  await page.waitForFunction(() => /power stations/.test(document.querySelector('#try-pop .tp-out').textContent), null, { timeout: 8000 });
+  await page.click('#try-pop [data-act="quiz"]');
+  await page.click('#try-pop [data-o="0"]');
+  expect(/Yes!/.test(await page.locator('#try-pop .tp-fb').innerText()), 'the right answer is praised');
+  await page.click('#try-pop [data-act="card"]');
+  await page.click('#try-pop .tp-card');
+  expect(await page.locator('#try-pop .tp-card.flip').count() === 1, 'the flashcard flips');
+  // a word that isn't in the demo still gets a friendly answer
+  await page.click('#try-pop .tp-x');
+  await page.locator('#try-page p.tp-text').first().click({ position: { x: 4, y: 8 } });
+  await page.waitForSelector('#try-pop:not([hidden])');
+  await page.click('#try-pop [data-act="explain"]');
+  await page.waitForFunction(() => /only know the words in bold|power stations|smallest living unit/.test(document.querySelector('#try-pop .tp-out').textContent), null, { timeout: 8000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('landing: the desk runs the demos and the real labs; the little toys work', async (b) => {
+  const ctx = watchCsp(await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }));
+  await ctx.route(/wikipedia\.org|worldbank\.org/, (r) => r.abort());
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(APP.replace('app.html', 'index.html'));
+  await page.locator('#desk').scrollIntoViewIfNeeded();
+  await page.waitForSelector('#desk-stage .sn-cv');
+  await page.click('.sn-auto');
+  await page.waitForFunction(() => document.querySelectorAll('.sn-steps li').length >= 4, null, { timeout: 15000 });
+  await page.click('.sn-board .dk-btn');
+  await page.waitForSelector('#desk-stage .sn-board[hidden]', { state: 'attached' });
+  await page.click('#desk [data-demo="files"]');
+  await page.click('.fl-file[data-f="pdf"]');
+  await page.waitForFunction(() => /Reviewer ready/.test(document.querySelector('.fl-pill').textContent), null, { timeout: 10000 });
+  expect(/Decomposer/.test(await page.locator('.fl-rev').innerText()), 'a reviewer is written');
+  await page.click('#desk [data-demo="labs"]');
+  await page.waitForSelector("#desk-stage .labs-embed .lab-panel input[type=range]", { state: "attached" });
+  await page.click('.lp-chips [data-i="1"]');
+  await page.waitForSelector('#desk-stage .labs-embed .lab-stage canvas');
+  await page.click('#desk [data-demo="puzzles"]');
+  await page.waitForSelector('#desk-stage .labs-embed .puz-head');
+  // toys
+  await page.click('#toy-quiz [data-a="1"]');
+  expect(/Right!/.test(await page.locator('#toy-quiz .qz-fb').innerText()), 'quiz answers');
+  await page.click('#toy-cite [data-c="MLA"]');
+  expect(/vol\. 44/.test(await page.locator('#toy-cite .ct-ref').innerText()), 'MLA citation shown');
+  await page.click('#toy-memory [data-forget] >> nth=0');
+  await page.waitForFunction(() => document.querySelectorAll('#toy-memory li').length === 3);
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('a reflection paper is written as the student, not as Cassie', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'My reflection.' }) });
   await ask(page, 'Make me a reflection paper about our field trip to the museum');

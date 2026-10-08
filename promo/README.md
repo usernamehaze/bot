@@ -1,22 +1,36 @@
-# Cassie — 60-second ad
+# Cassie — the 1-minute tour
 
-`cassie-ad-60s.mp4` — 1920×1080, 30 fps, with a synthesised soundtrack (no voice-over, no licensed music).
+`cassie-ad-60s.mp4` — 1920×1080, 30 fps, about 60 s. Bella (Cassie's voice) reads the voice-over;
+the music is synthesised from sine waves (no licensed music). It plays from "Watch the 1-minute tour"
+on the landing page; `landing/tour-poster.jpg` is its poster.
 
-Story: hook → *Meet Cassie* (Cursor Cassie waves; the cursor highlights the word and clicks) → highlight popup →
-snip + side board → PDF to reviewer (the status pill: Opening → Reading → Done; save as PDF) → real graphs →
-focus timer + memory → real talk → Free / Private / Yours → end card. Cursor Cassie is the real
-`cassie-bot.js`, driven by the video's clock so every frame is exact. The footnote "not for use during tests or quizzes" is in the ad on purpose.
+Story: 2 A.M. hook → *Meet Cassie* → highlight a word and she explains it → slides in, reviewer out →
+talk with her → Labs → 3D space → the human body in 3D → rocket → World atlas → daily puzzles →
+Free · Private · Yours → try it free at askcassie.pages.dev.
+
+Every filmed scene is the real thing, not a mock-up: the landing page's own demos and the real app
+(`app.html?lab=…`), driven by a script with a visible cursor. Playwright's fake clock moves time 1/30 s
+per frame, so even the 3D scenes come out smooth and identical on every run.
 
 ## Rebuild it
 
-`source/ad.html` + `ad2.js` is a fully seekable animation (everything is a Web Animation on a 60 s timeline).
+`ad3/` holds everything. `script.json` is the source of truth: each scene's voice-over line,
+length and caption.
 
 ```bash
-cd promo/source
-node render.cjs 0 1800 30 frames        # needs Playwright + Chromium; writes frames/ and clicks.json
-python3 music.py                        # needs numpy; writes music.wav (clicks are locked to the cursor)
-ffmpeg -framerate 30 -i frames/f_%05d.jpg -i music.wav -c:v libx264 -crf 20 -pix_fmt yuv420p \
-       -c:a aac -b:a 192k -movflags +faststart -shortest ../cassie-ad-60s.mp4
+# serve the site with its real headers on :4700 (any static server; tests/smoke.cjs has one)
+node promo/ad3/record.cjs OUT          # films every scene into OUT/<scene>/f_00000.jpg … (slow: ~30 min)
+node promo/ad3/record.cjs OUT talk     # …or just one scene again
+node promo/ad3/frames.cjs OUT          # the caption frames + window mask
+python3 promo/ad3/build.py OUT         # cross-fades, voice-over + music → promo/cassie-ad-60s.mp4
 ```
 
-Change the copy, timings or colours in `ad.html` / `ad2.js`, then re-run the three commands.
+The voice-over (`ad3/vo/*.wav`) was made with Kokoro (voice `af_bella`) from the lines in
+`script.json`; re-make a line the same way if you change its text. Title cards are
+`ad3/titles.html`; the frame around each scene is `ad3/frame.html`.
+
+`build.py` needs numpy and imageio-ffmpeg (`pip install numpy imageio-ffmpeg`), `record.cjs` needs
+the Playwright in `tests/` (`cd tests && npm install`).
+
+Older pieces: `source/` is the first animated ad (2025), `reel/`, `explainer/` and `explainer-vo/`
+are the earlier reels.

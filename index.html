@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preload" href="landing/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="landing/fonts.css">
+<link rel="stylesheet" href="landing/desk.css?v=145">
 <link rel="prefetch" href="start.html">
 <style>
   :root {
@@ -102,31 +103,8 @@
   @keyframes hlSel { 0%, 12% { clip-path: inset(0 100% 0 0); } 30% { clip-path: inset(0 0 0 0); } 37% { clip-path: inset(0 0 0 0); transform: scale(1); } 39% { transform: scale(1.04); } 42%, 82% { clip-path: inset(0 0 0 0); transform: scale(1); } 90%, 100% { clip-path: inset(0 0 0 100%); } }
   @keyframes hlCur { 0% { left: 110%; top: 160%; opacity: 0; } 5% { opacity: 1; } 11% { left: 0%; top: 62%; transform: scale(1); } 12% { transform: scale(.85); } 30% { left: 100%; top: 62%; transform: scale(.85); animation-timing-function: linear; } 32% { transform: scale(1); } 36% { left: 100%; transform: scale(1); } 38% { transform: scale(.78); } 40% { transform: scale(1); } 60% { left: 100%; top: 62%; opacity: 1; } 68%, 100% { left: 112%; top: 120%; opacity: 0; } }
 
-  /* floating composition */
-  .stage { position: relative; height: 560px; }
-  .stage .hero-bot { position: absolute; z-index: 0; right: 10%; top: -12%; width: min(400px, 78%); aspect-ratio: 1; }
-  .stage .hero-bot .cassie-bot { width: 100%; height: 100%; display: block; filter: drop-shadow(0 34px 40px rgba(0,0,0,.35)); }
-  .glass { position: absolute; z-index: 1; border-radius: 18px; background: rgba(28,27,34,.55); border: 1px solid var(--glass-line); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); box-shadow: 0 24px 60px rgba(0,0,0,.35); color: #fff; }
-  .g1 { left: 0; top: 58%; width: 300px; padding: 0 0 14px; animation: float 7s -1s ease-in-out infinite; }
-  .g1 .gh { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--glass-line); font-size: 12px; font-weight: 800; letter-spacing: .16em; }
-  .g1 .q { font-size: 15px; font-weight: 700; padding: 12px 14px 10px; }
-  .g1 .row { display: flex; gap: 8px; padding: 0 14px; }
-  .g1 .row b { flex: 1; text-align: center; padding: 9px 0; border-radius: 10px; background: rgba(255,255,255,.12); font-size: 13.5px; }
-  .g1 .row b.on { background: var(--pearl); color: var(--ink); }
-  .g2 { right: -2%; bottom: -3%; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 14.5px; animation: float 8s -3s ease-in-out infinite; }
-  .g2 .ico { width: 34px; height: 42px; border-radius: 7px; background: var(--pearl); color: var(--ink); font-size: 10px; font-weight: 800; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; }
-  .g2 small { display: block; color: rgba(255,255,255,.66); font-size: 12.5px; }
-  .g3 { right: -4%; top: -4%; padding: 10px 14px; font-size: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; animation: float 6.5s -2s ease-in-out infinite; }
-  .g3 svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
-  @media (max-width: 960px) {
-    .hero .inner { grid-template-columns: 1fr; padding-top: 120px; gap: 10px; }
-    .stage { height: 560px; margin-top: 28px; } .stage .hero-bot { right: 50%; margin-right: -160px; width: 320px; top: 70px; }
-    .g1 { left: 0; top: auto; bottom: 0; width: 270px; } .g2 { right: 0; bottom: 0; top: auto; } .g3 { left: 0; right: auto; top: 0; }
-  }
-  @media (max-width: 600px) {
-    .stage { height: 520px; } .g2 { display: none; }
-  }
+  @media (max-width: 960px) { .hero, .hero .inner { min-height: 0; } .hero .inner { grid-template-columns: 1fr; padding: 112px 0 70px; gap: 40px; } }
+  @media (max-width: 600px) { #try-bot { right: -6px; bottom: -40px; width: 78px; height: 78px; } #try-page { padding: 18px 18px 22px; } }
 
   /* ---------- strip ---------- */
   .strip { border-bottom: 1px solid var(--line); background: var(--pearl); overflow: hidden; }
@@ -235,7 +213,7 @@
   .rv { opacity: 0; transform: translateY(26px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
   .rv.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) {
-    .rv { opacity: 1; transform: none; transition: none; } .marquee, .glass { animation: none; }
+    .rv { opacity: 1; transform: none; transition: none; } .marquee { animation: none; }
     .hl .sel { animation: none; clip-path: inset(0 0 0 0); } .hl .cur { display: none; }
   }
 </style>
@@ -247,7 +225,7 @@
     <svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="116" fill="currentColor"/><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" transform="translate(66 52) scale(.75)" fill="var(--logo-arrow, #121117)"/></svg>
     Cassie
   </a>
-  <nav class="links"><a href="#features">Features</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
+  <nav class="links"><a href="#top">Try it</a><a href="#desk">Features</a><a href="#more">More</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
   <a class="btn pearl" href="start.html">Open Cassie</a>
 </header>
 
@@ -258,10 +236,10 @@
       <div>
         <span class="eyebrow rv"><i></i>Free for students · Philippines &amp; worldwide</span>
         <h1 class="rv">Highlight <span class="hl"><span class="t">anything.</span><span class="sel" aria-hidden="true">anything.</span><span class="cur" aria-hidden="true"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span></span><br><span class="nw"><em class="s">Cassie</em> explains it.</span></h1>
-        <p class="lead rv">Your AI study buddy for readings, homework and reviewers — on any website, PDF, slide deck or photo. She explains the <em class="s">why</em>, so it actually sticks.</p>
+        <p class="lead rv">Your AI study buddy for readings, homework and reviewers. Don’t take our word for it — <b>highlight a word on the page here</b> and see what she does.</p>
         <div class="cta rv">
           <a class="btn pearl" href="start.html">Start free <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-          <button class="btn ghost" id="watch" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>Watch the 60-second tour</button>
+          <button class="btn ghost" id="watch" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>Watch the 1-minute tour</button>
         </div>
         <div class="trust rv">
           <span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>No account needed</span>
@@ -269,11 +247,25 @@
           <span><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Phone, web &amp; Chrome</span>
         </div>
       </div>
-      <div class="stage rv" aria-hidden="true">
-        <div class="glass g3"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Reviewer ready · Module 6.pdf</div>
-        <div class="hero-bot" id="hero-bot"></div>
-        <div class="glass g1"><div class="gh"><span>CASSIE</span><span>×</span></div><div class="q">What should I do with this?</div><div class="row"><b class="on">Explain</b><b>Answer</b><b>Code</b></div></div>
-        <div class="glass g2"><span class="ico">PDF</span><span>Anatomy &amp; Physiology.pdf<small>412 pages · reading slides & diagrams</small></span></div>
+      <div class="try rv">
+        <div class="try-win">
+          <div class="try-bar" aria-hidden="true"><i></i><i></i><i></i><span>Biology 8 · Module 3 — Energy in cells.pdf</span></div>
+          <div id="try-page">
+            <p id="try-hint"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff"/></svg>Try it: highlight any word — or tap a bold one</p>
+            <h3>Energy in cells</h3>
+            <p class="tp-meta">Lesson 3.2 · page 14</p>
+            <p class="tp-text">Every <b data-term>cell</b> in your body needs energy. It gets it through <b data-term>cellular respiration</b>: inside the <b data-term>mitochondria</b>, <b data-term>glucose</b> from your food reacts with oxygen to make <b data-term>ATP</b>, and you breathe out the <b data-term>carbon dioxide</b> that’s left.</p>
+            <p class="tp-text">Plants run it the other way. With the <b data-term>chlorophyll</b> in their leaves, they use <b data-term>photosynthesis</b> to turn carbon dioxide, water and sunlight into glucose — and the oxygen you breathe.</p>
+            <div id="try-pop" hidden role="dialog" aria-label="Cassie">
+              <div class="tp-h"><span>CASSIE</span><button type="button" class="tp-x" aria-label="Close">×</button></div>
+              <p class="tp-q"></p>
+              <div class="tp-acts"><button type="button" data-act="explain">Explain</button><button type="button" data-act="quiz">Quiz me</button><button type="button" data-act="card">Flashcard</button></div>
+              <div class="tp-out" hidden aria-live="polite"></div>
+            </div>
+          </div>
+          <div id="try-bot" aria-hidden="true"></div>
+        </div>
+        <p class="try-note">This is how Cassie works on any website, PDF, slide deck or photo of your notes.</p>
       </div>
     </div>
   </section>
@@ -283,13 +275,21 @@
     <span>Any website</span><span>PDFs</span><span>Google Docs</span><span>Google Slides</span><span>PowerPoint</span><span>Word files</span><span>Photos of your notes</span><span>Graphs &amp; diagrams</span><span>Your phone</span><span>Chrome</span>
   </div></div>
 
-  <section id="how">
+  <section id="desk" class="desk-sec">
     <div class="wrap">
-      <div class="head rv"><div class="kicker">How it works</div><h2>Three moves. <em class="s">That’s it.</em></h2><p class="sub">No prompts to learn. Cassie meets you where you’re already studying.</p></div>
-      <div class="steps">
-        <div class="step rv"><div class="n">1</div><h3>Highlight or snip</h3><p>Select a sentence, drag a box around a graph, or drop in your PDF, slides or a photo.</p></div>
-        <div class="step rv"><div class="n">2</div><h3>Ask Cassie</h3><p>Explain, answer, write code — or ask for a reviewer, a quiz or flashcards.</p></div>
-        <div class="step rv"><div class="n">3</div><h3>Actually get it</h3><p>Step-by-step reasoning, real graphs, and a board to try it yourself. Then save it as Word, PDF or an image.</p></div>
+      <div class="head rv"><div class="kicker">The main things</div><h2>Don’t watch a demo. <em class="s">Use it.</em></h2><p class="sub">Every tab is a working piece of Cassie. The Labs, 3D space, atlas and puzzles are the real ones from the app, running right here.</p></div>
+      <div class="dk rv">
+        <div class="dk-tabs" role="tablist" aria-label="Cassie’s main features">
+          <button type="button" role="tab" data-demo="snip" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M7 15l3-4 3 2 4-5"/></svg><span><b>Snip a graph</b><small>She solves it on a board</small></span></button>
+          <button type="button" role="tab" data-demo="files" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg><span><b>Drop in a file</b><small>PDF, slides or notes → reviewer</small></span></button>
+          <button type="button" role="tab" data-demo="talk" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span><b>Talk with her</b><small>Her real voice, out loud</small></span></button>
+          <button type="button" role="tab" data-demo="labs" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 14h9"/></svg><span><b>Labs</b><small>Real experiments to play with</small></span></button>
+          <button type="button" role="tab" data-demo="space" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-20 12 12)"/></svg><span><b>Space & rockets</b><small>3D, from planets to galaxies</small></span></button>
+          <button type="button" role="tab" data-demo="atlas" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span><b>World atlas</b><small>Flags, capitals, history</small></span></button>
+          <button type="button" role="tab" data-demo="puzzles" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 4 0V4h5v7h-4a2 2 0 1 0 0 4h4v5h-7v-4a2 2 0 1 0-4 0v4H4z"/></svg><span><b>Puzzles</b><small>New ones every day</small></span></button>
+          <p class="dk-more">In the app she answers anything — these demos are written ahead.</p>
+        </div>
+        <div class="dk-stage" id="desk-stage" role="tabpanel"></div>
       </div>
     </div>
   </section>
@@ -308,17 +308,43 @@
     </div>
   </section>
 
-  <section id="features" style="padding-top:20px">
+  <section id="more" style="padding-top:20px">
     <div class="wrap">
-      <div class="head rv"><div class="kicker">Features</div><h2>Everything a study buddy <em class="s">should</em> do.</h2><p class="sub">Built for real coursework — readings, problem sets, lab reports and the night-before review.</p></div>
-      <div class="bento">
-        <article class="tile v span3 rv"><div class="txt"><h3>Highlight anything</h3><p>Explain it, answer it, or write the code — right on the page, with follow-up questions.</p></div><div class="media"><video muted loop playsinline preload="none" poster="landing/clip-highlight.jpg" data-src="landing/clip-highlight.mp4"></video></div></article>
-        <article class="tile v span3 rv"><div class="txt"><h3>Snip a graph. Sketch on it.</h3><p>Grab any picture, graph or question. Cassie explains it on a board beside the page.</p></div><div class="media"><video muted loop playsinline preload="none" poster="landing/clip-snip.jpg" data-src="landing/clip-snip.mp4"></video></div></article>
-        <article class="tile v span3 rv"><div class="txt"><h3>PDF in. Reviewer out.</h3><p>PDFs, PowerPoint and Word files — diagrams included. Save the reviewer as Word, PDF or an image.</p></div><div class="media"><video muted loop playsinline preload="none" poster="landing/clip-reviewer.jpg?v=120" data-src="landing/clip-reviewer.mp4?v=120"></video></div></article>
-        <article class="tile v span3 rv"><div class="txt"><h3>Real graphs</h3><p>No ASCII art. She draws the graph — then you try.</p></div><div class="media"><video muted loop playsinline preload="none" poster="landing/clip-graphs.jpg" data-src="landing/clip-graphs.mp4"></video></div></article>
-        <article class="tile span2 rv"><div class="mini-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg></div><h3>Your own focus timer</h3><p>25/5, 50/10 or whatever works for you.</p></article>
-        <article class="tile span2 rv"><div class="mini-ico"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-4.9 4A4 4 0 0 0 4 9.8a4 4 0 0 0 1.4 6.4A3.5 3.5 0 0 0 9 21a3 3 0 0 0 3-3V4"/><path d="M12 4a2 2 0 0 1 2-2 5 5 0 0 1 4.9 4A4 4 0 0 1 20 9.8a4 4 0 0 1-1.4 6.4A3.5 3.5 0 0 1 15 21a3 3 0 0 1-3-3"/></svg></div><h3>She remembers</h3><p>Your topics, weak spots and streak — kept on your device.</p></article>
-        <article class="tile dark span2 rv"><div class="mini-ico"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg></div><h3>Real talk</h3><p>When it’s not about homework, she listens — honest, never just flattering.</p></article>
+      <div class="head rv"><div class="kicker">Everything else</div><h2>Small things that <em class="s">add up.</em></h2><p class="sub">Go on — every card works.</p></div>
+      <div class="toys">
+        <article class="toy rv" id="toy-cards"><h3>Flashcards that come back</h3><p>Tap to flip. Cassie brings each card back right before you’d forget it.</p>
+          <div class="tbody"><button type="button" class="fc-card"><span class="f"></span><span class="b"></span></button>
+            <div class="row"><button type="button" class="pill" data-k="again">Again</button><button type="button" class="pill" data-k="good">Got it</button></div>
+            <div class="fc-meta"><span class="fc-due">Export to Anki or Quizlet any time</span><span class="fc-n"></span></div></div></article>
+        <article class="toy rv" id="toy-quiz"><h3>Quiz me</h3><p>On your lesson, your file, or what you got wrong last time.</p>
+          <div class="tbody"><p class="q">Photosynthesis gives off…</p>
+            <button type="button" data-a="0">Carbon dioxide</button><button type="button" data-a="1">Oxygen</button><button type="button" data-a="0">Nitrogen</button>
+            <p class="qz-fb" aria-live="polite"></p></div></article>
+        <article class="toy dark rv" id="toy-timer"><h3>Focus timer</h3><p>25/5, 50/10 — or your own rhythm.</p>
+          <div class="tbody"><div class="tm-ring"><span class="tm-t">25:00</span></div>
+            <div class="row"><button type="button" class="pill on" data-min="25">25</button><button type="button" class="pill" data-min="50">50</button><button type="button" class="pill" data-min="1">1 min</button></div>
+            <button type="button" class="pill tm-go">Start</button></div></article>
+        <article class="toy rv" id="toy-level"><h3>At your level</h3><p>The same idea, explained for whoever’s asking.</p>
+          <div class="tbody"><div class="row"><button type="button" class="pill" data-lv="5" aria-pressed="false">Age 5</button><button type="button" class="pill" data-lv="10" aria-pressed="true">Grade 10</button><button type="button" class="pill" data-lv="13" aria-pressed="false">College</button></div>
+            <p class="lv-say">Photosynthesis turns light energy into chemical energy. In the chloroplasts, chlorophyll captures light to combine carbon dioxide and water into glucose, releasing oxygen: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂.</p></div></article>
+        <article class="toy rv" id="toy-cite"><h3>Research with real sources</h3><p>Real papers, organized — then cite them in any style.</p>
+          <div class="tbody"><div class="row"><button type="button" class="pill" data-c="APA" aria-pressed="true">APA</button><button type="button" class="pill" data-c="MLA" aria-pressed="false">MLA</button><button type="button" class="pill" data-c="IEEE" aria-pressed="false">IEEE</button><button type="button" class="pill" data-c="Chicago" aria-pressed="false">Chicago</button></div>
+            <p class="ct-ref">Walker, M. P., &amp; Stickgold, R. (2004). Sleep-dependent learning and memory consolidation. <i>Neuron, 44</i>(1), 121–133.</p></div></article>
+        <article class="toy rv" id="toy-draw"><h3>Draw together</h3><p>A shared board with your classmates — share a code and sketch it out.</p>
+          <div class="tbody"><canvas aria-label="A drawing board: draw with your finger or mouse"></canvas>
+            <div class="dw-foot"><span class="dw-who">Mika is here</span><button type="button" class="pill dw-clear">Clear</button></div></div></article>
+        <article class="toy dark rv" id="toy-memory"><h3>She remembers — you decide</h3><p>What Cassie remembers stays on your device. Forget anything with a tap.</p>
+          <div class="tbody"><ul>
+            <li>You’re in Grade 10, Section Rizal <button type="button" data-forget>Forget</button></li>
+            <li>Fractions trip you up a little <button type="button" data-forget>Forget</button></li>
+            <li>Biology exam on Friday <button type="button" data-forget>Forget</button></li>
+            <li>You like examples with basketball <button type="button" data-forget>Forget</button></li></ul></div></article>
+        <article class="toy rv" id="toy-pro"><h3>Student or working</h3><p>Cassie dresses for the job — reviewers for school, reports and emails for work.</p>
+          <div class="tbody"><div class="pr-bot" aria-hidden="true"></div>
+            <div class="row"><button type="button" class="pill" data-aud="student" aria-pressed="true">Student</button><button type="button" class="pill" data-aud="pro" aria-pressed="false">Professional</button></div>
+            <p class="pr-say">Let’s turn chapter 4 into a reviewer with 10 practice questions.</p></div></article>
+        <article class="toy rv" id="toy-island"><h3>Always in sight</h3><p>Cassie’s Island shows what she’s doing — even while you read something else.</p>
+          <div class="tbody"><div class="il"><div class="il-bot" aria-hidden="true"></div><span class="il-txt">Reading Module 6.pdf · page 4 of 18</span></div></div></article>
       </div>
     </div>
   </section>
@@ -449,11 +475,12 @@
   </div>
 </footer>
 
-<div class="modal" id="modal" role="dialog" aria-label="Cassie tour video"><button type="button" aria-label="Close">×</button><video controls playsinline preload="none" src="promo/cassie-ad-60s.mp4?v=120" poster="landing/clip-highlight.jpg"></video></div>
+<div class="modal" id="modal" role="dialog" aria-label="Cassie tour video"><button type="button" aria-label="Close">×</button><video controls playsinline preload="none" src="promo/cassie-ad-60s.mp4?v=145" poster="landing/tour-poster.jpg?v=145"></video></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="cassie-bot.js?v=144"></script>
-<script src="landing/play.js?v=144"></script>
-<script src="landing/landing.js?v=144"></script>
+<script src="cassie-bot.js?v=145"></script>
+<script src="landing/play.js?v=145"></script>
+<script src="landing/landing.js?v=145"></script>
+<script type="module" src="landing/desk.js?v=145"></script>
 </body>
 </html>
