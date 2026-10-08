@@ -11,9 +11,9 @@ export function webglOk() {
 }
 
 // stage: the lab's picture box. Returns { THREE, scene, camera, controls, renderer, add, pickable, label, flyTo, onFrame, destroy }
-export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0.01, far = 1e7 } = {}) {
+export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0.01, far = 1e7, logDepth = false } = {}) {
   const { THREE, OrbitControls } = await loadThree();
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: logDepth });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(background, 1);

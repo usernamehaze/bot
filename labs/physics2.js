@@ -2,6 +2,7 @@
    and a rocket you build and launch. */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, at, clock, group, slider, seg, button, row, stats, line, dot, text, arrow, overlay } from './kit.js';
 import { NAMES as COLOUR_NAMES, nameColour, describeColour } from './colornames.js';
+import { webglOk } from './three-kit.js';
 
 /* ---------------- Colour ---------------- */
 const hex2 = (v) => Math.round(v).toString(16).padStart(2, '0');
@@ -490,14 +491,20 @@ const ENGINES = { solid: ['Solid fuel', 260], kerosene: ['Kerosene + oxygen', 31
 const G0 = 9.80665, R_EARTH = 6371e3;
 const rocketLab = {
   id: 'rocket', name: 'Rocket workshop', subject: 'physics', topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
-  blurb: 'Choose engines, fuel and stages, then launch. Can it lift off, reach space, or have enough Δv for orbit?',
+  blurb: 'Build a 3D rocket — engines, fuel, stages — and launch it from the pad. Can it lift off, reach space, or have enough Δv for orbit?',
   words: 'rocket launch thrust weight stages delta v orbit space newton tsiolkovsky fuel',
   icon: '<path d="M24 4c6 6 8 14 8 22v8H16v-8c0-8 2-16 8-22z"/><circle cx="24" cy="18" r="3"/><path d="M16 28l-6 8v4l6-4M32 28l6 8v4l-6-4M20 40l4 6 4-6"/>',
+  three: true,
   tries: ['Lift off: the thrust must beat the weight', 'Reach space — 100 km up', 'Get enough Δv for orbit (about 9.4 km/s)'],
   hints: ['At the start this rocket is too heavy for its engine. Raise the thrust, or use less fuel.', 'More fuel burns for longer. Keep the thrust well above the weight (thrust ÷ weight above about 1.3).', 'One stage can’t carry its empty tanks all the way. Try 2 or 3 stages and the hydrogen engine.'],
   about: 'Newton’s second law each tenth of a second: acceleration = (thrust − weight − air drag) ÷ mass. Gravity weakens with height; air thins with height (density halves about every 6 km).\nThe rocket flies straight up, which is the quickest way to reach space (100 km, the Kármán line). Getting into orbit is much harder: it needs a sideways speed of about 7.8 km/s, so this checks the rocket’s total Δv from the rocket equation, Δv = Isp × g₀ × ln(full mass ÷ empty mass), against the ~9.4 km/s a real launch needs (including losses to gravity and air).\nAssumptions: each stage’s empty tanks and engines weigh 10% of its fuel; every engine uses its vacuum efficiency (Isp: solid 260 s, kerosene 311 s, hydrogen 450 s); upper stages get an engine strong enough to push 1.2 g.',
   mount({ stage, panel, api }) {
     let n = 1, eng = 'kerosene', fuel = [10, 3, 1], payload = 1, thrust = 100, flight = null, best = 0;
+    // the rocket in 3D (where the browser can), with the height scale and graph drawn on top
+    let R3 = null, dead = false, rebuildT = 0;
+    const use3d = webglOk();
+    if (use3d) import('./rocket3d.js').then((m) => m.rocketScene(stage)).then((r) => { if (dead) { r.destroy(); return; } R3 = r; R3.show(design(), eng); cv.c.parentNode.appendChild(cv.c); cv.redraw(); /* (the drawing stays on top) */ }).catch(() => { /* the flat drawing stays */ });
+    const show3d = () => { if (!R3 || (flight && !flight.over)) return; clearTimeout(rebuildT); rebuildT = setTimeout(() => R3 && R3.show(design(), eng), 120); };
     function design() {
       const isp = ENGINES[eng][1], st = [];
       let above = payload * 1000;
@@ -511,6 +518,7 @@ const rocketLab = {
       flight = { D, t: 0, h: 0, v: 0, i: 0, fuelLeft: D.st[0].f, mass: D.st[0].m0, maxH: 0, maxV: 0, path: [[0, 0]], over: false, msg: '' };
       if (D.twr <= 1) { flight.over = true; flight.msg = `It can’t lift off: the thrust (${num(D.st[0].T / 1000)} kN) is less than the weight (${num((D.m0 * G0) / 1000)} kN).`; report(); return; }
       api.check(0);
+      if (R3) R3.show(D, eng);
       tick.start();
     }
     function step(dt) {
@@ -529,6 +537,7 @@ const rocketLab = {
       const speedUp = flight.h > 100e3 ? 60 : flight.h > 10e3 ? 20 : 6;
       for (let k = 0; k < Math.round((dt * speedUp) / 0.1); k++) { step(0.1); if (flight.over) break; }
       if (flight.path.length < 4000) flight.path.push([flight.t, flight.h]);
+      if (R3) R3.fly({ h: flight.h, v: flight.v, stage: flight.i, burning: flight.fuelLeft > 0 && !flight.over, D: flight.D, eng });
       if (flight.maxH >= 100e3) api.check(1);
       if (flight.over || flight.t > 4000) { flight.over = true; best = Math.max(best, flight.maxH); report(); return false; }
       report(true);
@@ -544,6 +553,11 @@ const rocketLab = {
         if (hm === 100e3) { ctx.setLineDash([4, 6]); line(ctx, [[sx, y], [w, y]], 'rgba(255,207,90,.3)', 1); ctx.setLineDash([]); }
       });
       const F = flight, hm = F ? F.h : 0, y = altY(hm, top, bottom), rx = w * 0.42;
+      if (R3) { // in 3D: just a marker on the height scale, and the height in big numbers
+        dot(ctx, sx, y, 6, C.gold);
+        ctx.font = '700 22px -apple-system, Segoe UI, sans-serif'; text(ctx, F ? (F.h >= 1000 ? `${num(F.h / 1000)} km` : `${Math.round(F.h)} m`) : 'On the pad', w / 2, 34, '#fff', 'center');
+        ctx.font = '600 13px -apple-system, Segoe UI, sans-serif'; if (F) text(ctx, `${num(Math.abs(F.v))} m/s ${F.v < -1 ? 'falling' : 'up'}`, w / 2, 54, 'rgba(255,255,255,.8)', 'center');
+      } else {
       // the rocket
       ctx.save(); ctx.translate(rx, y - 50); ctx.scale(1.8, 1.8);
       const stagesLeft = F ? F.D.st.length - F.i : n;
@@ -551,17 +565,22 @@ const rocketLab = {
       ctx.fillStyle = '#e8e6df'; ctx.beginPath(); ctx.moveTo(-8, -stagesLeft * 18); ctx.lineTo(0, -stagesLeft * 18 - 16); ctx.lineTo(8, -stagesLeft * 18); ctx.fill();
       if (F && !F.over && F.fuelLeft > 0) { ctx.fillStyle = 'rgba(255,170,60,.9)'; ctx.beginPath(); ctx.moveTo(-6, 18); ctx.lineTo(0, 18 + 18 + Math.random() * 10); ctx.lineTo(6, 18); ctx.fill(); }
       ctx.restore();
+      }
       // height against time
       if (F && F.path.length > 1 && w > 560) {
         const gx = w * 0.58, gy = 40, gw = w * 0.38, gh = h * 0.45, tMax = Math.max(60, F.t), hMax = Math.max(1000, F.maxH);
+        if (R3) { ctx.fillStyle = 'rgba(10,11,16,.55)'; ctx.beginPath(); ctx.roundRect(gx - 12, gy - 26, gw + 24, gh + 50, 12); ctx.fill(); }
         ctx.strokeStyle = GRID; ctx.strokeRect(gx, gy, gw, gh);
         line(ctx, F.path.map(([t, hh]) => [gx + (t / tMax) * gw, gy + gh - (hh / hMax) * gh]), C.gold, 2);
         text(ctx, `height (max ${num(hMax / 1000)} km)`, gx, gy - 8, DIM); text(ctx, `time (${num(tMax)} s)`, gx + gw, gy + gh + 16, DIM, 'right');
       }
       if (F && F.msg) text(ctx, F.msg, w / 2, h - 14, F.over && F.maxH === 0 ? C.red : INK, 'center');
     });
+    cv.c.classList.add('lab-hud');
     const ov = overlay(stage, 'br');
     button(ov, '▶ Launch', () => { if (!flight || flight.over) launch(); }, 'main big');
+    if (use3d) button(ov, 'Zoom out', () => R3 && R3.zoomOut());
+    if (use3d) stage.appendChild(el('p', 'lab-hint-3d', 'Drag to look around the rocket · pinch or scroll to zoom'));
     seg(group(panel, 'Stages'), { options: [[1, '1'], [2, '2'], [3, '3']], value: n, onChange: (v) => { n = v; build(); report(); } });
     seg(group(panel, 'Engines'), { options: Object.entries(ENGINES).map(([k, [nm, isp]]) => [k, `${nm} (Isp ${isp} s)`]), value: eng, onChange: (v) => { eng = v; report(); } });
     const box = el('div'); panel.appendChild(box);
@@ -581,12 +600,13 @@ const rocketLab = {
       if (flight) list.push(['Height now', `${num(flight.h / 1000)} km`], ['Speed now', `${num(flight.v)} m/s`], ['Highest so far', `${num(flight.maxH / 1000)} km`]);
       st.set(list);
       if (D.dv >= 9400) api.check(2);
+      if (!soft) show3d();
       cv.redraw();
     }
     build(); report();
     return {
       state: () => { const D = design(); return `a ${n}-stage rocket with ${ENGINES[eng][0].toLowerCase()} engines, lift-off mass ${num(D.m0 / 1000)} t, thrust ÷ weight ${num(D.twr)}, total Δv ${num(D.dv / 1000)} km/s${flight ? `; the last launch reached ${num(flight.maxH / 1000)} km` : ''}`; },
-      destroy: () => { tick.stop(); cv.destroy(); },
+      destroy: () => { dead = true; tick.stop(); cv.destroy(); if (R3) R3.destroy(); },
     };
   },
 };

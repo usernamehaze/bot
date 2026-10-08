@@ -180,15 +180,31 @@ const phLab = {
       const h = d / 2 + Math.sqrt((d / 2) ** 2 + 1e-14);
       return -Math.log10(h);
     };
+    // the acid and base bottles: tap one for a drop, or drag it over the beaker and hold to pour
+    const bottles = { acid: { home: null, at: null, color: '#ff8c78', label: 'acid' }, base: { home: null, at: null, color: '#8caaff', label: 'base' } };
+    let geoB = null, pouring = null, pourT = 0;
+    function bottle(ctx, b, tilt) {
+      const [x, y] = b.at || b.home;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
+      ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-14, -18, 28, 36, 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = b.color; ctx.fillRect(-11, -4, 22, 19);
+      ctx.fillStyle = INK; ctx.fillRect(-5, -26, 10, 8);
+      ctx.restore();
+      text(ctx, b.label, x, y + 32, DIM, 'center');
+    }
     const cv = canvas(stage, (ctx, w, h) => {
-      const p = pH(), bw = Math.min(170, w * 0.32), bx = 30, by = 60, bh = Math.min(240, h - 120);
+      const p = pH(), bw = Math.min(170, w * 0.32), bx = 30, by = 110, bh = Math.min(240, h - 170);
+      bottles.acid.home = [bx + 22, 40]; bottles.base.home = [bx + bw - 22, 40];
+      geoB = { bx, by, bw, bh };
+      ['acid', 'base'].forEach((k) => bottle(ctx, bottles[k], pouring === k ? 1.9 : bottles[k].at ? 0.4 : 0));
       const fill = Math.min(1, (V0 + Va + Vb) / 250);
       // the beaker
       ctx.fillStyle = INDICATORS[ind][1](p);
       ctx.fillRect(bx + 4, by + bh * (1 - fill), bw - 8, bh * fill - 4);
       ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by - 10); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by - 10); ctx.stroke();
       for (let k = 1; k <= 4; k++) { const y = by + bh - (bh * k) / 5; line(ctx, [[bx + bw - 16, y], [bx + bw - 4, y]], DIM, 1); text(ctx, k * 50 + ' mL', bx + bw + 6, y + 4, DIM); }
-      if (drop) { dot(ctx, bx + bw / 2, by - 30 + drop.t * (bh * (1 - fill) + 20), 6, drop.color); }
+      if (drop) { dot(ctx, drop.x || bx + bw / 2, by - 30 + drop.t * (bh * (1 - fill) + 20), 6, drop.color); }
       text(ctx, `pH ${p.toFixed(2)}`, bx + bw / 2, by + bh + 34, INK, 'center');
       // the scale, with everyday things
       const sx = bx + bw + 80, sw = 18, sh = h - 60, Y = (v) => 30 + (sh * v) / 14;
@@ -210,7 +226,8 @@ const phLab = {
       if (acid) Va += mL; else Vb += mL;
       Va = Math.round(Va * 100) / 100; Vb = Math.round(Vb * 100) / 100;
       hist.push([Vb - Va, pH()]); if (hist.length > 300) hist.shift();
-      drop = { t: 0, color: acid ? 'rgba(255,140,120,.9)' : 'rgba(140,170,255,.9)' }; fall.start();
+      const from = pouring && bottles[pouring].at;
+      drop = { t: 0, x: from ? Math.min(geoB.bx + geoB.bw - 10, Math.max(geoB.bx + 10, from[0] - 20)) : null, color: acid ? 'rgba(255,140,120,.9)' : 'rgba(140,170,255,.9)' }; fall.start();
       report();
     }
     function report() {
@@ -227,14 +244,40 @@ const phLab = {
     button(rb, '+ 1 drop', () => add(false, 0.05)); button(rb, '+ 1 mL', () => add(false, 1)); button(rb, '+ 10 mL', () => add(false, 10));
     seg(group(panel, 'Indicator'), { options: Object.entries(INDICATORS).map(([k, [n]]) => [k, n]), value: ind, onChange: (v) => { ind = v; report(); } });
     button(row(panel, 'lab-row-btns'), 'Fresh water', () => { Va = Vb = 0; hist = [[0, 7]]; report(); });
+    // pick a bottle up and pour: over the beaker it pours a drop at a time, faster the longer you hold
+    const which = (p) => ['acid', 'base'].find((k) => { const [x, y] = bottles[k].home || [-99, -99]; return Math.abs(p.x - x) < 24 && Math.abs(p.y - y) < 30; });
+    let held = null, heldMoved = false, start = null;
+    const pourTick = clock((dt) => {
+      if (!pouring) return false;
+      pourT += dt;
+      if (pourT > Math.max(0.06, 0.35 - (held ? held.t : 0) * 0.05)) { pourT = 0; add(pouring === 'acid', 0.05 * (1 + Math.floor((held ? held.t : 0) / 2))); }
+      if (held) held.t += dt;
+      return true;
+    });
+    drag(cv.c, {
+      down(p) { const k = which(p); if (!k) return false; held = { k, t: 0 }; heldMoved = false; start = p; },
+      move(p) {
+        if (!held) return;
+        if (Math.hypot(p.x - start.x, p.y - start.y) > 6) heldMoved = true;
+        bottles[held.k].at = [p.x, p.y];
+        const over = geoB && p.x > geoB.bx - 10 && p.x < geoB.bx + geoB.bw + 30 && p.y < geoB.by + 10;
+        if (over && !pouring) { pouring = held.k; pourT = 0; pourTick.start(); } else if (!over && pouring) { pouring = null; }
+        cv.redraw();
+      },
+      up() {
+        if (held && !heldMoved) add(held.k === 'acid', 0.05); // a tap: one drop
+        if (held) bottles[held.k].at = null;
+        held = null; pouring = null; pourTick.stop(); cv.redraw();
+      },
+    });
     // drip straight into the beaker
     const ov = overlay(stage, 'bl');
     button(ov, 'Drip acid', () => add(true, 0.05));
     button(ov, 'Drip base', () => add(false, 0.05));
-    panel.appendChild(el('p', 'lab-note', 'The beaker starts with 50 mL of pure water. A drop is 0.05 mL.'));
+    panel.appendChild(el('p', 'lab-note', 'The beaker starts with 50 mL of pure water. A drop is 0.05 mL. Tap a bottle for one drop, or drag it over the beaker to pour (hold it there to pour faster).'));
     const st = stats(panel);
     report();
-    return { state: () => `50 mL of water with ${num(Va)} mL of 0.1 M hydrochloric acid and ${num(Vb)} mL of 0.1 M sodium hydroxide added; pH ${pH().toFixed(2)}, using ${INDICATORS[ind][0]} indicator`, destroy: () => { fall.stop(); cv.destroy(); } };
+    return { state: () => `50 mL of water with ${num(Va)} mL of 0.1 M hydrochloric acid and ${num(Vb)} mL of 0.1 M sodium hydroxide added; pH ${pH().toFixed(2)}, using ${INDICATORS[ind][0]} indicator`, destroy: () => { fall.stop(); pourTick.stop(); cv.destroy(); } };
   },
 };
 
@@ -279,7 +322,35 @@ const atomLab = {
         ctx.font = '600 12px -apple-system, Segoe UI, sans-serif'; text(ctx, el2[1], tx + 54, ty + 98, INK, 'center');
         const q = Z - E; if (q) text(ctx, (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '−'), tx + 102, ty + 40, C.gold, 'right');
       } else text(ctx, 'no protons', tx + 54, ty + 64, DIM, 'center');
-      text(ctx, '● proton', 16, h - 46, C.red); text(ctx, '● neutron', 16, h - 28, '#b8b4aa'); text(ctx, '● electron', 16, h - 10, C.blue);
+      // the tray: drag a particle into the atom (protons and neutrons into the middle, electrons anywhere round it)
+      tray = [['p', 'proton', C.red], ['n', 'neutron', '#b8b4aa'], ['e', 'electron', C.blue]].map(([k, n2, col], i) => { const x = 24, y = h - 76 + i * 28; dot(ctx, x, y, 10, col); text(ctx, n2, x + 18, y + 4, DIM); return { k, x, y, col }; });
+      text(ctx, 'drag into the atom · drag out to remove', 16, h - 96, DIM);
+      geoA = { cx, cy, R, nuc: pr * 1.05 * Math.sqrt(Math.max(1, Z + N)) + pr * 1.5, pts, pr, total };
+      if (heldP) { dot(ctx, heldP.x, heldP.y, heldP.k === 'e' ? 6 : pr + 1, heldP.k === 'p' ? C.red : heldP.k === 'n' ? '#b8b4aa' : C.blue); }
+    });
+    let tray = [], geoA = null, heldP = null;
+    drag(cv.c, {
+      down(p) {
+        const t = tray.find((q) => Math.hypot(p.x - q.x, p.y - q.y) < 16);
+        if (t) { heldP = { k: t.k, from: 'tray', x: p.x, y: p.y }; return; }
+        if (!geoA) return false;
+        const d = Math.hypot(p.x - geoA.cx, p.y - geoA.cy);
+        if (d < geoA.nuc && Z + N > 0) { // a proton or neutron out of the nucleus (whichever is under the finger)
+          let best = -1, bd = Infinity; geoA.pts.forEach(([x, y], k) => { const dd = Math.hypot(p.x - x, p.y - y); if (dd < bd) { bd = dd; best = k; } });
+          const isP = Math.floor(((best + 1) * Z) / Math.max(1, geoA.total)) > Math.floor((best * Z) / Math.max(1, geoA.total));
+          heldP = { k: isP ? 'p' : 'n', from: 'atom', x: p.x, y: p.y }; if (isP) Z--; else N--; report(); return;
+        }
+        if (d < geoA.R * 1.05 && E > 0) { heldP = { k: 'e', from: 'atom', x: p.x, y: p.y }; E--; report(); return; }
+        return false;
+      },
+      move(p) { if (heldP) { heldP.x = p.x; heldP.y = p.y; cv.redraw(); } },
+      up(p) {
+        if (!heldP) return;
+        const d = geoA ? Math.hypot(p.x - geoA.cx, p.y - geoA.cy) : Infinity, k = heldP.k;
+        const into = k === 'e' ? d < geoA.R * 1.05 : d < Math.max(geoA.nuc, 30);
+        if (into) { if (k === 'p') Z = Math.min(20, Z + 1); else if (k === 'n') N = Math.min(30, N + 1); else E = Math.min(28, E + 1); }
+        heldP = null; sp.set(Z); sn.set(N); se.set(E); report();
+      },
     });
     const tick = clock((dt) => { spin += dt * 0.7; cv.redraw(); return true; });
     const st = stats(panel);

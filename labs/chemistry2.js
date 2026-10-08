@@ -1,6 +1,6 @@
 /* More chemistry: heating ice into steam (the heating curve), and dropping metals into water
    (the reactivity series). */
-import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, group, slider, seg, button, row, stats, line, dot, text, overlay } from './kit.js';
+import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, drag, group, slider, seg, button, row, stats, line, dot, text, overlay } from './kit.js';
 
 /* ---------------- Ice to steam ---------------- */
 // per kilogram, at normal air pressure (1 atm)
@@ -30,6 +30,7 @@ const iceLab = {
       // the heating curve
       const gx = 56, gy = 30, gw = wide ? w * 0.55 : w - 80, gh = wide ? h - 80 : h * 0.42;
       const X = (q) => gx + (q / maxQ()) * gw, Y = (t) => gy + gh - ((t - START) / (END - START)) * gh;
+      curve = { gx, gw, gy, gh };
       ctx.strokeStyle = GRID; ctx.strokeRect(gx, gy, gw, gh);
       [START, 0, 50, 100, 150].forEach((t) => { line(ctx, [[gx, Y(t)], [gx + gw, Y(t)]], GRID, 1); text(ctx, `${t} °C`, gx - 6, Y(t) + 4, DIM, 'right'); });
       const pts = []; for (let k = 0; k <= 300; k++) { const q = (maxQ() * k) / 300; pts.push([X(q), Y(stateOf(m, q).T)]); }
@@ -49,6 +50,10 @@ const iceLab = {
       text(ctx, S.phase === 'melting' ? 'ice and water' : S.phase === 'boiling' ? 'water and steam' : S.phase, bx + bw / 2, by - 8, col, 'center');
       text(ctx, `${num(S.T)} °C`, gx + 6, gy + 18, INK);
     });
+    // drag along the heating curve to add or take away energy by hand
+    let curve = null;
+    const scrub = (p) => { if (!curve || p.x < curve.gx - 20 || p.y < curve.gy - 20 || p.y > curve.gy + curve.gh + 20) return false; Q = Math.max(0, Math.min(maxQ(), ((p.x - curve.gx) / curve.gw) * maxQ())); report(); };
+    drag(cv.c, { down: (p) => { if (scrub(p) === false) return false; heating = 0; heatB.textContent = 'Heat'; coolB.textContent = 'Cool'; }, move: scrub });
     // where each molecule goes: a neat lattice (solid), a jostling crowd (liquid) or flying everywhere (gas)
     function moveMolecules(dt) {
       const S = stateOf(m, Q), kT = Math.sqrt((S.T + 273) / 273), cols = 7;
@@ -134,6 +139,7 @@ const metalsLab = {
     const bubbles = [];
     const cv = canvas(stage, (ctx, w, h) => {
       const M = METALS[pick], bw = Math.min(260, w * 0.5), bx = w * 0.3 - bw / 2 + 20, by = h * 0.2, bh = h * 0.6;
+      geoM = { bx, by, bw, bh, sx: w - 150, sy: 30, chunk: [bx + bw / 2, by - 40] };
       if (!steam) {
         const pink = run ? Math.min(0.55, run.progress * (M[3] > 0.1 ? 0.7 : 0.25)) : 0;
         const cloudy = M[1] === 'Ca' && run ? Math.min(0.5, run.progress * 0.6) : 0;
@@ -154,6 +160,8 @@ const metalsLab = {
           }
         }
         text(ctx, 'water + phenolphthalein', bx + bw / 2, by + bh + 22, DIM, 'center');
+        // a piece ready to drop: drag it into the water (or tap the beaker)
+        if (!run || heldM) { const [cx0, cy0] = heldM ? [heldM.x, heldM.y] : geoM.chunk; ctx.fillStyle = '#cfcfd4'; ctx.fillRect(cx0 - 8, cy0 - 8, 16, 16); if (!heldM) text(ctx, `drag the ${M[0].toLowerCase()} in`, cx0, cy0 - 16, DIM, 'center'); }
       } else {
         // a heated tube: steam passes over the metal
         const ty = h * 0.42, tx = w * 0.08, tw = Math.min(w * 0.55, 420);
@@ -190,6 +198,21 @@ const metalsLab = {
       cv.redraw();
       return true;
     });
+    // tap a metal in the list to pick it; drag the piece into the water (or tap the beaker) to drop it
+    let geoM = null, heldM = null;
+    drag(cv.c, {
+      down(p) {
+        if (!geoM) return false;
+        const i = Math.floor((p.y - (geoM.sy + 22 - 15)) / 22);
+        if (p.x > geoM.sx - 8 && i >= 0 && i < METALS.length) { pick = i; run = null; bubbles.length = 0; metalSeg.set(i); report(); return false; }
+        const [cx0, cy0] = geoM.chunk;
+        if (!steam && !run && Math.hypot(p.x - cx0, p.y - cy0) < 26) { heldM = { x: p.x, y: p.y, moved: false }; return; }
+        if (p.x > geoM.bx && p.x < geoM.bx + geoM.bw && p.y > geoM.by && p.y < geoM.by + geoM.bh) { drop(); return false; }
+        return false;
+      },
+      move(p) { if (heldM) { heldM.x = p.x; heldM.y = p.y; heldM.moved = true; cv.redraw(); } },
+      up(p) { if (!heldM) return; const inside = p.x > geoM.bx && p.x < geoM.bx + geoM.bw && p.y > geoM.by - 20; heldM = null; if (inside) { drop(); if (run) run.x = Math.max(0.08, Math.min(0.92, (p.x - geoM.bx) / geoM.bw)); } cv.redraw(); },
+    });
     function drop() {
       const M = METALS[pick];
       if (steam && M[4] == null) { msg.textContent = `${M[0]} already reacts with cold water — it would be far too dangerous in steam. Try it in cold water.`; return; }
@@ -204,7 +227,7 @@ const metalsLab = {
     const ov = overlay(stage, 'bl');
     button(ov, steam ? 'Heat it in steam' : 'Drop it in', drop, 'main big');
     const g = group(panel, 'Metal');
-    seg(g, { options: METALS.map((mm, i) => [i, `${mm[0]} (${mm[1]})`]), value: pick, onChange: (v) => { pick = +v; run = null; bubbles.length = 0; report(); } });
+    const metalSeg = seg(g, { options: METALS.map((mm, i) => [i, `${mm[0]} (${mm[1]})`]), value: pick, onChange: (v) => { pick = +v; run = null; bubbles.length = 0; report(); } });
     seg(group(panel, 'With'), { options: [[false, 'Cold water'], [true, 'Steam']], value: steam, onChange: (v) => { steam = v === true || v === 'true'; run = null; ov.querySelector('button').textContent = steam ? 'Heat it in steam' : 'Drop it in'; report(); } });
     const msg = el('p', 'lab-note'); panel.appendChild(msg);
     const st = stats(panel);

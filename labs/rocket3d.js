@@ -115,6 +115,7 @@ export async function rocketScene(stage) {
     plume.userData.base = -g0.userData.nozzleLen;
     const total = y + fh;
     rocket.userData.height = total;
+    rocket.userData.lift = 3 + g0.userData.nozzleLen; // standing on the pad, on its engines
     return total;
   }
 
@@ -125,6 +126,7 @@ export async function rocketScene(stage) {
   S.onFrame((dt) => {
     // the world sinks as the rocket climbs; the sky darkens with height
     world.position.y = -h;
+    rocket.position.y = rocket.userData.lift || 0;
     const k = Math.min(1, h / 60000), k2 = Math.min(1, h / 100000);
     const sky = new THREE.Color(0x7db4e6).lerp(new THREE.Color(0x0b1430), Math.min(1, h / 35000)).lerp(new THREE.Color(0x000000), k2);
     S.renderer.setClearColor(sky, 1);
@@ -133,12 +135,13 @@ export async function rocketScene(stage) {
     // the flame grows wider and longer as the air thins
     if (plume) {
       plume.visible = burning;
-      if (burning) { const len = parts[0].userData.nozzleLen * (6 + 10 * k) * (0.9 + Math.random() * 0.2); plume.scale.set(1 + 2.5 * k, len, 1 + 2.5 * k); plume.position.y = plume.userData.base - len / 2; }
+      if (burning) { const len = parts[0].userData.nozzleLen * (11 + 14 * k) * (0.9 + Math.random() * 0.2); plume.scale.set(1.4 + 3 * k, len, 1.4 + 3 * k); plume.position.y = plume.userData.base - len / 2; }
     }
     // smoke below the clouds, left in the air behind the rocket
-    if (burning && h < 15000 && Math.random() < 0.9 * look.smoke) {
+    if (burning && h < 15000 && Math.random() < 0.5 + 0.5 * look.smoke) {
       const p = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xdedcd6, transparent: true, opacity: 0.6, depthWrite: false }));
-      p.position.set((Math.random() - 0.5) * 2, h - parts[0].userData.nozzleLen * 3, (Math.random() - 0.5) * 2); p.scale.setScalar(dims[0].d * 3); p.userData.age = 0;
+      p.position.set((Math.random() - 0.5) * 2, h + (rocket.userData.lift || 0) - parts[0].userData.nozzleLen * 8, (Math.random() - 0.5) * 2); p.scale.setScalar(dims[0].d * (h < 200 ? 9 : 5)); p.userData.age = 0;
+      if (h < 200) p.position.add(new THREE.Vector3((Math.random() - 0.5) * 30, 0, 12 + Math.random() * 25)); // at lift-off it pours out of the flame trench
       world.add(p); puffs.push(p);
     }
     for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.userData.age += dt; p.scale.multiplyScalar(1 + dt * 0.6); p.material.opacity = Math.max(0, 0.6 - p.userData.age / 10); if (p.userData.age > 10) { world.remove(p); p.material.dispose(); puffs.splice(i, 1); } }
@@ -151,8 +154,9 @@ export async function rocketScene(stage) {
   });
   // where the camera looks from at the start
   function frame(height) {
-    controls.target.set(0, height * 0.45, 0);
-    camera.position.set(height * 0.95, height * 0.55, height * 1.25);
+    const lift = rocket.userData.lift || 0;
+    controls.target.set(0, lift + height * 0.45, 0);
+    camera.position.set(height * 0.95, lift + height * 0.55, height * 1.25);
     controls.minDistance = 3; controls.maxDistance = Math.max(400, height * 12);
   }
   return {
@@ -163,7 +167,7 @@ export async function rocketScene(stage) {
       if (F.stage !== rocket.userData.stage) {
         if (rocket.userData.stage != null && F.stage > rocket.userData.stage) {
           // the empty stage drops away and falls back
-          const old = parts[0].clone(); old.position.y = h; old.userData.v = Math.max(0, v * 0.2); old.userData.spin = (Math.random() - 0.5) * 0.6;
+          const old = parts[0].clone(); old.position.y = h + (rocket.userData.lift || 0); old.userData.v = Math.max(0, v * 0.2); old.userData.spin = (Math.random() - 0.5) * 0.6;
           world.add(old); falling.push(old);
           build(F.D, F.eng, F.stage);
         }
@@ -171,6 +175,7 @@ export async function rocketScene(stage) {
       }
       h = F.h; v = F.v; burning = F.burning;
       controls.maxDistance = Math.max(400, (rocket.userData.height || 50) * 12, h > 30000 ? h * 4 : 0);
+      controls.target.y = (rocket.userData.lift || 0) + (rocket.userData.height || 40) * 0.45;
     },
     zoomOut() { controls.maxDistance = Math.max(controls.maxDistance, h * 4 + 2000); S.flyTo(controls.target.clone(), Math.max(200, h * 2.5 + 400), { dur: 1.2 }); },
     destroy: () => S.destroy(),

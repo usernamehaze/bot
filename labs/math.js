@@ -651,13 +651,17 @@ const hanoiLab = {
         const x = pw * i + pw / 2;
         line(ctx, [[x, base], [x, base - dh * (n + 1.6)]], i === pick ? INK : FAINT, 5);
         pg.forEach((d, j) => {
+          if (held && held.from === i && j === pg.length - 1) return; // (it's in your hand)
           const lift = i === pick && j === pg.length - 1 ? dh * 1.4 : 0, dw = 24 + ((maxW - 24) * d) / 7;
           ctx.fillStyle = hue(d); ctx.beginPath(); ctx.roundRect(x - dw / 2, base - (j + 1) * dh - lift, dw, dh - 3, 6); ctx.fill();
         });
         text(ctx, ['A', 'B', 'C'][i], x, base + 22, DIM, 'center');
       });
+      // the disk you're dragging
+      if (held) { const d = pegs[held.from][pegs[held.from].length - 1], dw = 24 + ((maxW - 24) * d) / 7; ctx.fillStyle = hue(d); ctx.beginPath(); ctx.roundRect(held.x - dw / 2, held.y - dh / 2, dw, dh - 3, 6); ctx.fill(); }
       if (msg) text(ctx, msg, w / 2, 28, won ? C.green : C.red, 'center');
     });
+    let held = null; // a disk being dragged: { from, x, y }
     function tryMove(i, j) {
       const from = pegs[i], to = pegs[j];
       if (!from.length || i === j) return false;
@@ -672,13 +676,18 @@ const hanoiLab = {
       }
       return true;
     }
-    cv.c.addEventListener('click', (e) => {
-      if (demo) { stopDemo(); return; }
-      const r = cv.c.getBoundingClientRect(), i = Math.min(2, Math.floor(((e.clientX - r.left) / r.width) * 3));
-      if (won) return;
-      if (pick < 0) { if (pegs[i].length) pick = i; }
-      else { tryMove(pick, i); pick = -1; }
-      report();
+    // tap a peg, then another — or drag the top disk onto a peg
+    const pegAt = (x) => Math.max(0, Math.min(2, Math.floor((x / cv.w) * 3)));
+    let downAt = null;
+    drag(cv.c, {
+      down(p) { if (demo) { stopDemo(); return false; } if (won) return false; downAt = p; const i = pegAt(p.x); if (pick < 0 && pegs[i].length) held = { from: i, x: p.x, y: p.y, moved: false }; },
+      move(p) { if (held && Math.hypot(p.x - downAt.x, p.y - downAt.y) > 8) { held.moved = true; held.x = p.x; held.y = p.y; cv.redraw(); } },
+      up(p) {
+        const i = pegAt(p.x), h = held; held = null;
+        if (h && h.moved) { tryMove(h.from, i); pick = -1; report(); return; }
+        if (pick < 0) { if (pegs[i].length) pick = i; } else { tryMove(pick, i); pick = -1; }
+        report();
+      },
     });
     function solveList(k, a, b, c, out) { if (!k) return out; solveList(k - 1, a, c, b, out); out.push([a, c]); solveList(k - 1, b, a, c, out); return out; }
     function stopDemo() { if (demo) { clearInterval(demo); demo = null; } }
@@ -694,7 +703,7 @@ const hanoiLab = {
     const r1 = row(g, 'lab-row-btns');
     button(r1, 'Start over', () => { reset(); report(); });
     button(r1, 'Watch Cassie solve it', watch, 'main');
-    group(panel).appendChild(el('p', 'lab-note', 'Tap a peg to lift its top disk, then tap where it goes.'));
+    group(panel).appendChild(el('p', 'lab-note', 'Drag a disk onto another peg — or tap a peg, then tap where its top disk goes.'));
     const st = stats(panel);
     function report() { st.set([['Moves', String(moves)], ['Fewest possible', `${2 ** n - 1} (2^${n} − 1)`]]); cv.redraw(); }
     reset(); report();

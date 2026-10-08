@@ -20,6 +20,7 @@ import { CHEMISTRY2 } from './chemistry2.js';
 import { BIOLOGY } from './biology.js';
 import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
+import { atlasLab } from './atlas.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography']];
@@ -31,7 +32,7 @@ const EXPLORE = [
   { id: 'cells3d', name: 'Animal & plant cells', subject: 'biology', blurb: 'Two cells cut open in 3D. Tap an organelle to see what it does.', explore: 'animal',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
 ];
-export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES];
+export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES];
 const SIMS = LABS.filter((l) => l.subject !== 'puzzles');
 const is3d = (l) => !!(l.explore || l.three);
 
@@ -55,7 +56,7 @@ function createView() {
   // the labs' own look loads with them (the app stays light until Labs is opened)
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=3', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=4', import.meta.url).href; css.dataset.labsCss = '1';
     document.head.appendChild(css);
   }
   const root = el('div', 'labs');

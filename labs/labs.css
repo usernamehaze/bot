@@ -302,3 +302,27 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 .space-card h3 { margin: 0; font-size: 1.15rem; }
 .space-sub { margin: 2px 0 10px; color: rgba(255, 255, 255, .6); font-size: .84rem; }
 .space-card .lab-btn { margin-top: 10px; }
+
+.lab-hud { z-index: 1; pointer-events: none; }
+.lab-hint-3d { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); margin: 0; padding: 4px 10px; border-radius: 99px; background: rgba(10, 11, 16, .5); color: rgba(255, 255, 255, .75); font-size: .74rem; pointer-events: none; white-space: nowrap; z-index: 1; }
+
+/* World atlas */
+.atlas-search { display: flex; gap: 8px; }
+.atlas-search input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; }
+.atlas-sugg { display: grid; gap: 4px; margin-top: 6px; }
+.atlas-sugg button, .atlas-results button, .atlas-chips button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .04); color: inherit; font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
+.atlas-sugg button:hover, .atlas-results button:hover, .atlas-chips button:hover { background: rgba(255, 255, 255, .1); }
+.atlas-sugg img, .atlas-chips img { width: 22px; height: 16px; object-fit: cover; border-radius: 2px; flex-shrink: 0; }
+.atlas-sugg small { color: rgba(255, 255, 255, .55); }
+.atlas-place-btn { color: #cfe2ff !important; }
+.atlas-card { margin-bottom: 14px; }
+.atlas-card h3 { margin: 0; font-size: 1.2rem; }
+.atlas-card p { font-size: .88rem; line-height: 1.5; }
+.atlas-card a { color: #9fc5ff; font-size: .86rem; }
+.atlas-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.atlas-flag { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); flex-shrink: 0; }
+.atlas-h4 { margin: 14px 0 6px; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 255, 255, .6); }
+.atlas-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.atlas-results { display: grid; gap: 6px; }
+.atlas-photo { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; }
+.atlas-pop small { color: rgba(255, 255, 255, .55); font-weight: 500; }
