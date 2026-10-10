@@ -13,6 +13,28 @@
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
   var SCENES = {
+    // 0. the camera flies down to the laptop until its screen fills yours, Labs scroll by, then it flies out the other side
+    show: function (el, p) {
+      var st = el._lx || (el._lx = { rig: $('.lx-rig', el), feed: $('.lx-feed img', el), scr: $('.lx-scr', el), sims: $$('.lx-sim', el), type: $('.lx-type', el), txt: $('.lx-type span', el), cap: $('.lx-cap', el), phone: $$('.lx-phone img', el) });
+      var vw = innerWidth, vh = innerHeight, small = vw <= 860;
+      var zin = ease(span(p, 0.05, 0.3)), zout = ease(span(p, 0.8, 0.97)), z = zin * (1 - zout);
+      var from = p < 0.5 ? { rx: 52, rz: -24 } : { rx: 54, rz: 18 }; // it leaves from the other side
+      var S0 = (small ? vw * 0.6 : Math.min(vw * 0.42, 680)) / 1000, S1 = Math.min(vw / 1000, vh / 640) * (small ? 1 : 0.94);
+      var S = lerp(S0, S1, z), out = 1 - z;
+      // far away, the whole desk (laptop and phone) sits a little lower and left so it's centred
+      var tx = (small ? -280 : -150) * S0 * out * (p < 0.5 ? 1 : 0.6), ty = (small ? 30 : 10) * out;
+      st.rig.style.transform = 'translate3d(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px,-309px) scale(' + S.toFixed(4) + ') rotateX(' + lerp(from.rx, 75, z).toFixed(2) + 'deg) rotateZ(' + lerp(from.rz, 0, z).toFixed(2) + 'deg)';
+      // on screen: the Labs shelf scrolls, then a pendulum, then the planets
+      var room = st.feed.offsetHeight - st.scr.offsetHeight;
+      st.feed.style.transform = 'translateY(' + (-room * ease(span(p, 0.3, 0.56))).toFixed(1) + 'px)';
+      var a = span(p, 0.56, 0.6), b = span(p, 0.68, 0.72);
+      st.sims[0].style.opacity = a * (1 - b); st.sims[1].style.opacity = b;
+      var line = p < 0.58 ? [0.3, TYPE[0]] : p < 0.7 ? [0.6, TYPE[1]] : [0.72, TYPE[2]];
+      st.txt.textContent = line[1].slice(0, Math.round(line[1].length * span(p, line[0], line[0] + 0.06)));
+      st.type.style.opacity = span(p, 0.27, 0.31) * (1 - span(p, 0.78, 0.81));
+      st.cap.style.opacity = p < 0.5 ? 1 - span(p, 0.02, 0.1) : span(p, 0.9, 0.98);
+      st.phone.forEach(function (im, i) { im.classList.toggle('on', i === (p > 0.6 ? 1 : 0)); });
+    },
     // 2. a dark card grows from the middle of the page until it fills the screen
     grow: function (el, p) {
       var card = $('.sg-card', el), g = ease(span(p, 0.12, 0.72));
@@ -87,6 +109,9 @@
       $('.sb-note', el).textContent = r < 1 ? 'thinking…' : 'step by step';
     },
   };
+
+  // what types itself on the laptop's screen while each Lab is showing
+  var TYPE = ['29 labs — from cells to the solar system.', 'Pendulum: let go and watch the energy swap.', 'The planets, where they really are today.'];
 
   // the path's stops: [where along the path 0…1, name, the status at the top, what travels]
   var NODES = [

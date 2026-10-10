@@ -14,8 +14,8 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preload" href="landing/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="landing/fonts.css">
-<link rel="stylesheet" href="landing/desk.css?v=148">
-<link rel="stylesheet" href="landing/story.css?v=148">
+<link rel="stylesheet" href="landing/desk.css?v=149">
+<link rel="stylesheet" href="landing/story.css?v=149">
 <link rel="prefetch" href="start.html">
 <style>
   :root {
@@ -79,7 +79,7 @@
   @media (max-width: 760px) { .nav .links { display: none; } .nav .btn { margin-left: auto; } }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; color: #fff; overflow: hidden; background: #121117; isolation: isolate; padding: 0 0 70px; }
+  .hero { position: relative; color: #fff; overflow: hidden; background: #121117; isolation: isolate; padding: 0 0 20px; }
   .hero-bg { position: absolute; inset: 0; z-index: -2;
     background: radial-gradient(60% 70% at 18% 30%, #e9e2d6 0%, rgba(233,226,214,.0) 55%), radial-gradient(50% 60% at 70% 80%, #8e8a92 0%, rgba(142,138,146,0) 60%), linear-gradient(130deg, #18171e 10%, #3a3840 50%, #18171e 90%); }
   .hero-bg canvas { opacity: 0; transition: opacity 1.4s ease; }
@@ -107,47 +107,15 @@
   @keyframes hlSel { 0%, 12% { clip-path: inset(0 100% 0 0); } 30% { clip-path: inset(0 0 0 0); } 37% { clip-path: inset(0 0 0 0); transform: scale(1); } 39% { transform: scale(1.04); } 42%, 82% { clip-path: inset(0 0 0 0); transform: scale(1); } 90%, 100% { clip-path: inset(0 0 0 100%); } }
   @keyframes hlCur { 0% { left: 110%; top: 160%; opacity: 0; } 5% { opacity: 1; } 11% { left: 0%; top: 62%; transform: scale(1); } 12% { transform: scale(.85); } 30% { left: 100%; top: 62%; transform: scale(.85); animation-timing-function: linear; } 32% { transform: scale(1); } 36% { left: 100%; transform: scale(1); } 38% { transform: scale(.78); } 40% { transform: scale(1); } 60% { left: 100%; top: 62%; opacity: 1; } 68%, 100% { left: 112%; top: 120%; opacity: 0; } }
 
-  /* the devices: a big laptop in the middle, a phone in front, real Cassie screens on both */
-  .devices { position: relative; width: min(1060px, calc(100% - 40px)); margin: 64px auto 0; }
-  .laptop { position: relative; width: 88%; margin: 0 auto; }
-  .lid { position: relative; padding: 1.6% 1.6% 2.2%; border-radius: 18px 18px 8px 8px; background: #08080a; box-shadow: 0 0 0 1px rgba(255,255,255,.16), inset 0 0 0 2px #1d1d22, 0 60px 120px rgba(0,0,0,.55); }
-  .lid::before { content: ""; position: absolute; left: 50%; top: .6%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #23232a; }
-  .scr { position: relative; aspect-ratio: 16 / 10; border-radius: 6px; overflow: hidden; background: #f2f0ec; }
-  .scr img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.015); transition: opacity .9s ease, transform 1.4s ease; }
-  .scr img.on { opacity: 1; transform: none; }
-  .deck { position: relative; width: 116%; margin-left: -8%; height: 18px; border-radius: 2px 2px 16px 16px; background: linear-gradient(180deg, #e9e9ee 0%, #c9c9d1 45%, #8f8f98 100%); box-shadow: 0 28px 40px rgba(0,0,0,.45); }
-  .deck::before { content: ""; position: absolute; left: 50%; top: 0; width: 15%; height: 7px; margin-left: -7.5%; border-radius: 0 0 10px 10px; background: linear-gradient(180deg, #a9a9b2, #d4d4da); }
-  .phone { position: absolute; right: -9%; bottom: -40px; width: 21.5%; padding: 1.1%; border-radius: 15% / 7%; background: #08080a; box-shadow: 0 0 0 1px rgba(255,255,255,.18), inset 0 0 0 2px #22222a, 0 40px 80px rgba(0,0,0,.6); }
-  .phone .scr { aspect-ratio: 600 / 1298; border-radius: 13% / 6%; }
-  .phone::after { content: ""; position: absolute; left: 50%; top: 2.6%; width: 30%; height: 3.2%; margin-left: -15%; border-radius: 99px; background: #08080a; }
-  .chip { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 9px; padding: 11px 16px; border-radius: 14px; background: rgba(24,23,30,.72); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font: 600 14px/1.2 var(--sans); color: #fff; box-shadow: 0 20px 50px rgba(0,0,0,.4); white-space: nowrap; animation: float 7s ease-in-out infinite; }
-  .chip svg { width: 17px; height: 17px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-  .chip.c1 { left: -1%; top: 14%; animation-delay: -1s; } .chip.c2 { left: 3%; bottom: 16%; animation-delay: -3s; } .chip.c3 { right: 16%; top: -4%; animation-delay: -5s; }
-  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-  .dev-tabs { position: relative; z-index: 2; display: flex; justify-content: center; gap: 6px; margin: 64px auto 0; padding: 5px; width: max-content; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
-  .dev-tabs button { border: 0; background: transparent; color: rgba(255,255,255,.72); padding: 9px 18px; border-radius: 999px; font: 600 14px/1 var(--sans); cursor: pointer; }
-  .dev-tabs button[aria-selected="true"] { background: var(--pearl); color: var(--ink); }
   .try-sec { padding-bottom: 40px; }
   .try-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 48px; align-items: center; }
   .try-sec .try-note { color: var(--mute); }
   @media (max-width: 960px) {
     .hero-top { grid-template-columns: 1fr; gap: 22px; padding-top: 118px; }
     .try-grid { grid-template-columns: 1fr; gap: 10px; }
-    .devices { margin-top: 44px; }
-    .laptop { width: 100%; } .deck { height: 12px; }
-    .phone { width: 25%; right: -1%; bottom: -9vw; }
-    .chip { font-size: 12.5px; padding: 8px 12px; } .chip.c1 { top: -7%; left: 0; } .chip.c2, .chip.c3 { display: none; }
-    .dev-tabs { margin-top: calc(9vw + 28px); }
-    .dev-tabs button { padding: 8px 13px; font-size: 13px; }
   }
   @media (max-width: 600px) { #try-bot { right: -6px; bottom: -40px; width: 78px; height: 78px; } #try-page { padding: 18px 18px 22px; } }
 
-  /* ---------- strip ---------- */
-  .strip { border-bottom: 1px solid var(--line); background: var(--pearl); overflow: hidden; }
-  .marquee { display: flex; gap: 48px; padding: 22px 0; width: max-content; animation: marquee 38s linear infinite; font-weight: 600; color: var(--mute); font-size: 16px; }
-  .marquee span { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
-  .marquee span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); opacity: .35; }
-  @keyframes marquee { to { transform: translateX(-50%); } }
 
   /* ---------- sections ---------- */
   section { padding: 120px 0; }
@@ -250,7 +218,7 @@
   .rv { opacity: 0; transform: translateY(26px); transition: opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1); }
   .rv.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) {
-    .rv { opacity: 1; transform: none; transition: none; } .marquee, .chip { animation: none; }
+    .rv { opacity: 1; transform: none; transition: none; }
     .hl .sel { animation: none; clip-path: inset(0 0 0 0); } .hl .cur { display: none; }
   }
 </style>
@@ -287,25 +255,31 @@
         </div>
       </div>
     </div>
-    <div class="devices rv">
-      <div class="laptop">
-        <div class="lid"><div class="scr" data-screens><img src="landing/hero/laptop-chat.webp" alt="Cassie solving a graph question step by step, with the graph drawn on her board" width="1600" height="1000" class="on"><img src="landing/hero/laptop-labs.webp" alt="Cassie’s Labs: simulations to play with, from biology to space" width="1600" height="1000" loading="lazy"><img src="landing/hero/laptop-space.webp" alt="The solar system in 3D, with the planets where they really are today" width="1600" height="1000" loading="lazy"><img src="landing/hero/laptop-body.webp" alt="The human body in 3D, with the heart picked out and explained" width="1600" height="1000" loading="lazy"></div></div>
-        <div class="deck" aria-hidden="true"></div>
-        <div class="phone">
-        <div class="scr" data-screens><img src="landing/hero/phone-chat.webp" alt="Cassie explaining photosynthesis on a phone" width="600" height="1298" class="on"><img src="landing/hero/phone-puzzle.webp" alt="Today’s Sudoku in Cassie on a phone" width="600" height="1298" loading="lazy"></div>
+  </section>
+
+  <!-- the laptop and phone: the camera flies in until the laptop's screen fills yours, Labs scroll by, then it flies out -->
+  <section class="st-scene lx-show" data-scene="show" aria-label="Cassie's Labs on a laptop and a phone">
+    <div class="st-pin">
+      <div class="lx-cap"><span class="eyebrow"><i></i>Labs</span><h2>29 labs. <em>Play with it,</em> then ask why.</h2></div>
+      <div class="lx-rig">
+        <div class="lx-mat" aria-hidden="true"></div>
+        <div class="lx-shadow" aria-hidden="true"></div>
+        <div class="lx-base" aria-hidden="true"><svg class="lx-keys" viewBox="0 0 780 320" aria-hidden="true"><rect x="0.0" y="0.0" width="50.1" height="30" rx="6"/><rect x="56.1" y="0.0" width="50.1" height="30" rx="6"/><rect x="112.3" y="0.0" width="50.1" height="30" rx="6"/><rect x="168.4" y="0.0" width="50.1" height="30" rx="6"/><rect x="224.6" y="0.0" width="50.1" height="30" rx="6"/><rect x="280.7" y="0.0" width="50.1" height="30" rx="6"/><rect x="336.9" y="0.0" width="50.1" height="30" rx="6"/><rect x="393.0" y="0.0" width="50.1" height="30" rx="6"/><rect x="449.1" y="0.0" width="50.1" height="30" rx="6"/><rect x="505.3" y="0.0" width="50.1" height="30" rx="6"/><rect x="561.4" y="0.0" width="50.1" height="30" rx="6"/><rect x="617.6" y="0.0" width="50.1" height="30" rx="6"/><rect x="673.7" y="0.0" width="50.1" height="30" rx="6"/><rect x="729.9" y="0.0" width="50.1" height="30" rx="6"/><rect x="0.0" y="36.0" width="48.4" height="52" rx="6"/><rect x="54.4" y="36.0" width="48.4" height="52" rx="6"/><rect x="108.8" y="36.0" width="48.4" height="52" rx="6"/><rect x="163.2" y="36.0" width="48.4" height="52" rx="6"/><rect x="217.7" y="36.0" width="48.4" height="52" rx="6"/><rect x="272.1" y="36.0" width="48.4" height="52" rx="6"/><rect x="326.5" y="36.0" width="48.4" height="52" rx="6"/><rect x="380.9" y="36.0" width="48.4" height="52" rx="6"/><rect x="435.3" y="36.0" width="48.4" height="52" rx="6"/><rect x="489.7" y="36.0" width="48.4" height="52" rx="6"/><rect x="544.1" y="36.0" width="48.4" height="52" rx="6"/><rect x="598.6" y="36.0" width="48.4" height="52" rx="6"/><rect x="653.0" y="36.0" width="48.4" height="52" rx="6"/><rect x="707.4" y="36.0" width="72.6" height="52" rx="6"/><rect x="0.0" y="94.0" width="72.6" height="52" rx="6"/><rect x="78.6" y="94.0" width="48.4" height="52" rx="6"/><rect x="133.0" y="94.0" width="48.4" height="52" rx="6"/><rect x="187.4" y="94.0" width="48.4" height="52" rx="6"/><rect x="241.9" y="94.0" width="48.4" height="52" rx="6"/><rect x="296.3" y="94.0" width="48.4" height="52" rx="6"/><rect x="350.7" y="94.0" width="48.4" height="52" rx="6"/><rect x="405.1" y="94.0" width="48.4" height="52" rx="6"/><rect x="459.5" y="94.0" width="48.4" height="52" rx="6"/><rect x="513.9" y="94.0" width="48.4" height="52" rx="6"/><rect x="568.3" y="94.0" width="48.4" height="52" rx="6"/><rect x="622.8" y="94.0" width="48.4" height="52" rx="6"/><rect x="677.2" y="94.0" width="48.4" height="52" rx="6"/><rect x="731.6" y="94.0" width="48.4" height="52" rx="6"/><rect x="0.0" y="152.0" width="87.3" height="52" rx="6"/><rect x="93.3" y="152.0" width="48.5" height="52" rx="6"/><rect x="147.8" y="152.0" width="48.5" height="52" rx="6"/><rect x="202.3" y="152.0" width="48.5" height="52" rx="6"/><rect x="256.8" y="152.0" width="48.5" height="52" rx="6"/><rect x="311.3" y="152.0" width="48.5" height="52" rx="6"/><rect x="365.8" y="152.0" width="48.5" height="52" rx="6"/><rect x="420.2" y="152.0" width="48.5" height="52" rx="6"/><rect x="474.7" y="152.0" width="48.5" height="52" rx="6"/><rect x="529.2" y="152.0" width="48.5" height="52" rx="6"/><rect x="583.7" y="152.0" width="48.5" height="52" rx="6"/><rect x="638.2" y="152.0" width="48.5" height="52" rx="6"/><rect x="692.7" y="152.0" width="87.3" height="52" rx="6"/><rect x="0.0" y="210.0" width="112.5" height="52" rx="6"/><rect x="118.5" y="210.0" width="48.9" height="52" rx="6"/><rect x="173.4" y="210.0" width="48.9" height="52" rx="6"/><rect x="228.3" y="210.0" width="48.9" height="52" rx="6"/><rect x="283.2" y="210.0" width="48.9" height="52" rx="6"/><rect x="338.1" y="210.0" width="48.9" height="52" rx="6"/><rect x="393.0" y="210.0" width="48.9" height="52" rx="6"/><rect x="447.9" y="210.0" width="48.9" height="52" rx="6"/><rect x="502.8" y="210.0" width="48.9" height="52" rx="6"/><rect x="557.7" y="210.0" width="48.9" height="52" rx="6"/><rect x="612.6" y="210.0" width="48.9" height="52" rx="6"/><rect x="667.5" y="210.0" width="112.5" height="52" rx="6"/><rect x="0.0" y="268.0" width="53.4" height="52" rx="6"/><rect x="59.4" y="268.0" width="53.4" height="52" rx="6"/><rect x="118.9" y="268.0" width="53.4" height="52" rx="6"/><rect x="178.3" y="268.0" width="66.8" height="52" rx="6"/><rect x="251.1" y="268.0" width="277.8" height="52" rx="6"/><rect x="534.9" y="268.0" width="66.8" height="52" rx="6"/><rect x="607.7" y="268.0" width="53.4" height="52" rx="6"/><rect x="667.1" y="268.0" width="53.4" height="52" rx="6"/><rect x="726.6" y="268.0" width="53.4" height="52" rx="6"/></svg><div class="lx-pad"></div></div>
+        <div class="lx-lid">
+          <div class="lx-scr">
+            <div class="lx-feed"><img src="landing/hero/laptop-labs-tall.webp" alt="Cassie’s Labs: simulations, 3D models and daily puzzles, from biology to space" width="1600" height="2080"></div>
+            <img class="lx-sim s1" src="landing/hero/laptop-pendulum.webp" alt="The pendulum lab: set the length and let go, with energy bars and challenges" width="1600" height="1000" loading="lazy">
+            <img class="lx-sim s2" src="landing/hero/laptop-space.webp" alt="The solar system in 3D, with the planets where they really are today" width="1600" height="1000" loading="lazy">
+            <div class="lx-type" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <div class="lx-phone">
+          <div class="scr"><img src="landing/hero/phone-labs.webp" alt="Cassie’s Labs on a phone" width="600" height="1298" class="on"><img src="landing/hero/phone-lab.webp" alt="Planets today, Moon and eclipses on a phone" width="600" height="1298" loading="lazy"></div>
         </div>
       </div>
-      <div class="chip c1" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Reviewer ready · Module 6.pdf</div>
-      <div class="chip c2" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 2h6v2h-1v5l5 9a2 2 0 0 1-1.8 3H6.8A2 2 0 0 1 5 18l5-9V4H9z"/></svg>29 labs to play with</div>
-      <div class="chip c3" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Talk with her, out loud</div>
-      <div class="dev-tabs" role="tablist" aria-label="Cassie screens"><button type="button" role="tab" data-screen="0" aria-selected="true">Chat</button><button type="button" role="tab" data-screen="1" aria-selected="false">Labs</button><button type="button" role="tab" data-screen="2" aria-selected="false">Space</button><button type="button" role="tab" data-screen="3" aria-selected="false">Body</button></div>
     </div>
   </section>
 
-  <div class="strip" aria-label="Where Cassie works"><div class="marquee">
-    <span>Any website</span><span>PDFs</span><span>Google Docs</span><span>Google Slides</span><span>PowerPoint</span><span>Word files</span><span>Photos of your notes</span><span>Graphs &amp; diagrams</span><span>Your phone</span><span>Chrome</span>
-    <span>Any website</span><span>PDFs</span><span>Google Docs</span><span>Google Slides</span><span>PowerPoint</span><span>Word files</span><span>Photos of your notes</span><span>Graphs &amp; diagrams</span><span>Your phone</span><span>Chrome</span>
-  </div></div>
 
   <section class="story" id="story" aria-label="How Cassie helps you learn">
     <!-- 1. the study shelf -->
@@ -618,10 +592,10 @@
 <div class="modal" id="modal" role="dialog" aria-label="Cassie tour video"><button type="button" aria-label="Close">×</button><video controls playsinline preload="none" src="promo/cassie-ad-60s.mp4?v=145" poster="landing/tour-poster.jpg?v=145"></video></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="cassie-bot.js?v=148"></script>
-<script src="landing/play.js?v=148"></script>
-<script src="landing/landing.js?v=148"></script>
-<script type="module" src="landing/desk.js?v=148"></script>
-<script src="landing/story.js?v=148"></script>
+<script src="cassie-bot.js?v=149"></script>
+<script src="landing/play.js?v=149"></script>
+<script src="landing/landing.js?v=149"></script>
+<script type="module" src="landing/desk.js?v=149"></script>
+<script src="landing/story.js?v=149"></script>
 </body>
 </html>
