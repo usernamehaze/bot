@@ -14,7 +14,8 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preload" href="landing/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="landing/fonts.css">
-<link rel="stylesheet" href="landing/desk.css?v=147">
+<link rel="stylesheet" href="landing/desk.css?v=148">
+<link rel="stylesheet" href="landing/story.css?v=148">
 <link rel="prefetch" href="start.html">
 <style>
   :root {
@@ -306,6 +307,88 @@
     <span>Any website</span><span>PDFs</span><span>Google Docs</span><span>Google Slides</span><span>PowerPoint</span><span>Word files</span><span>Photos of your notes</span><span>Graphs &amp; diagrams</span><span>Your phone</span><span>Chrome</span>
   </div></div>
 
+  <section class="story" id="story" aria-label="How Cassie helps you learn">
+    <!-- 1. the study shelf -->
+    <div class="wrap st-lib">
+      <div class="st-lib-copy rv">
+        <div class="kicker">Your study shelf</div>
+        <h2>Your lessons, <em class="s">all in one place.</em></h2>
+        <p class="sub">Readings, slides, PDFs and photos of your notes. Cassie reads them all — diagrams too — and keeps your reviewers, flashcards and mistakes together.</p>
+      </div>
+      <div class="st-shelf rv" aria-hidden="true">
+        <div class="sh-top"><div><small>This week</small><b>3 reviewers ready</b><span>+12 flashcards from your files</span></div><svg class="sh-ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18"/><circle class="on" cx="22" cy="22" r="18"/></svg></div>
+        <div class="sh-row"><span class="sh-ic">PDF</span><span><b>Module 6 — Ecosystems</b><small>18 pages</small></span><em>Reviewer ready</em></div>
+        <div class="sh-row"><span class="sh-ic">PPT</span><span><b>Cell Biology</b><small>47 slides</small></span><em>12 flashcards</em></div>
+        <div class="sh-row"><span class="sh-ic">JPG</span><span><b>my-notes.jpg</b><small>Handwritten</small></span><em>Typed up</em></div>
+        <div class="sh-acts"><span class="sh-b dark">Add a file</span><span class="sh-b">Quiz me</span></div>
+      </div>
+    </div>
+
+    <!-- 2. a card that grows to fill the screen -->
+    <div class="st-scene st-grow" data-scene="grow">
+      <div class="st-pin">
+        <h3 class="sg-top">Every page you read,</h3>
+        <div class="sg-card"><div class="st-glow"></div><p class="sg-text">Every cell in your body needs energy. It gets it through <mark>cellular respiration</mark>.</p><div class="st-line"><i></i></div><span class="sg-cur"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span></div>
+        <h3 class="sg-bot"><em class="s">one buddy beside you.</em></h3>
+      </div>
+    </div>
+
+    <!-- 3. Highlight → Explain → Quiz → Remember -->
+    <div class="st-scene st-steps" data-scene="steps">
+      <div class="st-pin dark">
+        <div class="st-glow"></div>
+        <div class="ss-big" aria-hidden="true">Highlight</div>
+        <ol class="ss-list">
+          <li><span>Highlight</span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></li><li><span>Explain</span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></li><li><span>Quiz</span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></li><li><span>Remember</span><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></li>
+        </ol>
+        <div class="ss-cards" aria-hidden="true">
+          <div class="ss-card c0"><small>Biology 8 · page 14</small><p>Inside the mitochondria, glucose reacts with oxygen to make ATP — that’s <mark>cellular respiration</mark>.</p><span class="ss-cur"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span></div>
+          <div class="ss-card c1"><small>Cassie explains</small><b>Cellular respiration</b><p>How cells “burn” food without fire: glucose + oxygen → CO₂ + water + <b>ATP</b>, the energy every part of you spends.</p></div>
+          <div class="ss-card c2"><small>Quiz · 3 of 10</small><b>What do mitochondria make?</b><ul><li>Proteins</li><li class="ok">ATP — the cell’s energy <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></li><li>DNA</li></ul></div>
+          <div class="ss-card c3"><small>Flashcards</small><b>Mitochondria</b><p>Back in <b>3 days</b> — right before you’d forget it.</p><div class="ss-streak"><span>12-day streak</span><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div></div>
+        </div>
+        <div class="st-line wide"><i></i></div>
+      </div>
+    </div>
+
+    <!-- 4. every subject -->
+    <div class="st-scene st-subjects" data-scene="subjects">
+      <div class="st-pin dark">
+        <div class="st-glow"></div>
+        <div class="sj-copy"><h3>One buddy. <em class="s">Every subject.</em></h3><p>From nursery rhymes to calculus — explained at your level.</p></div>
+        <div class="sj-chips" aria-hidden="true"><span>Biology</span><span>Math</span><span>Physics</span><span>Chemistry</span><span>History</span><span>English</span><span>Filipino</span><span>Coding</span><span>Economics</span><span>Geography</span></div>
+        <div class="st-line"><i></i></div>
+      </div>
+    </div>
+
+    <!-- 5. from reading to remembering -->
+    <div class="st-scene st-path" data-scene="path">
+      <div class="st-pin dark">
+        <div class="sp-head"><h3>From reading to remembering.</h3><p>Follow one word through Cassie.</p></div>
+        <div class="sp-status"><i></i><span>Reading</span></div>
+        <svg class="sp-svg" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <path class="sp-ghost" d="M60 360 C 200 360, 240 200, 380 210 S 560 330, 640 300 S 820 120, 940 190 S 1080 330, 1150 300"/>
+          <path class="sp-ghost thin" d="M640 300 C 720 420, 860 470, 1000 430"/>
+          <path class="sp-ghost thin" d="M380 210 C 470 90, 620 70, 760 110"/>
+          <path class="sp-main" d="M60 360 C 200 360, 240 200, 380 210 S 560 330, 640 300 S 820 120, 940 190 S 1080 330, 1150 300"/>
+          <g class="sp-nodes"></g>
+          <circle class="sp-dot" r="7"/>
+        </svg>
+        <div class="sp-pill">cellular respiration</div>
+      </div>
+    </div>
+
+    <!-- 6. Cassie's brain -->
+    <div class="st-scene st-brain" data-scene="brain">
+      <div class="st-pin dark">
+        <div class="sb-head"><h3>Cassie’s brain</h3><p>She shows the why — step by step — not just the answer.</p></div>
+        <div class="sb-in"><small>You ask</small><b>x² − 2x − 3 = 0</b></div>
+        <div class="sb-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="bg" cx="100" cy="100" r="86"/><circle class="fg" cx="100" cy="100" r="86"/></svg><div class="sb-core"><span class="sb-eyes"><i></i><i></i></span><b class="sb-steps">Factor</b><small class="sb-note">thinking…</small></div></div>
+        <div class="sb-out"><small>She answers</small><b>x = 3 or x = −1</b><span>with a graph you can draw on</span></div>
+      </div>
+    </div>
+  </section>
+
   <section id="try" class="try-sec">
     <div class="wrap try-grid">
       <div class="head rv"><div class="kicker">Try it</div><h2>Highlight a word. <em class="s">Right here.</em></h2><p class="sub">This page works like a lesson in Cassie. Select any word — or tap a bold one — and ask her to explain it, quiz you on it, or make a flashcard.</p></div>
@@ -535,9 +618,10 @@
 <div class="modal" id="modal" role="dialog" aria-label="Cassie tour video"><button type="button" aria-label="Close">×</button><video controls playsinline preload="none" src="promo/cassie-ad-60s.mp4?v=145" poster="landing/tour-poster.jpg?v=145"></video></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="cassie-bot.js?v=147"></script>
-<script src="landing/play.js?v=147"></script>
-<script src="landing/landing.js?v=147"></script>
-<script type="module" src="landing/desk.js?v=147"></script>
+<script src="cassie-bot.js?v=148"></script>
+<script src="landing/play.js?v=148"></script>
+<script src="landing/landing.js?v=148"></script>
+<script type="module" src="landing/desk.js?v=148"></script>
+<script src="landing/story.js?v=148"></script>
 </body>
 </html>
