@@ -8,7 +8,15 @@ const $ = (s) => document.querySelector(s);
 const view = $('#view');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// the panel can also run in its own small floating window (?float=1): then "this tab" is the
+// tab you were last looking at in a normal browser window
+const FLOATING = new URLSearchParams(location.search).has('float');
 async function activeTab() {
+  if (FLOATING) {
+    const w = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+    const [t] = await chrome.tabs.query({ active: true, windowId: w.id });
+    return t;
+  }
   const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
   return t;
 }
@@ -288,6 +296,42 @@ async function handleJob(job) {
   }
 }
 chrome.storage.onChanged.addListener((changes, area) => { if (area === 'session' && changes.cassieJob && changes.cassieJob.newValue) handleJob(changes.cassieJob.newValue); });
+
+/* Pop out: Cassie floats in a small window that stays on top of every other app (Word, a PDF
+   reader, the desktop). The panel itself moves into the window and comes back when it closes.
+   Where Chrome doesn't allow that, a small Cassie window opens instead. */
+const popBtn = $('#t-pop');
+let pipWin = null;
+async function popOut() {
+  if (pipWin) { try { pipWin.focus(); } catch (e) { /* ignore */ } return; }
+  if (FLOATING) return;
+  const parts = [$('header'), $('.tools'), view];
+  if ('documentPictureInPicture' in window) {
+    try {
+      const w = await window.documentPictureInPicture.requestWindow({ width: 380, height: 560 });
+      w.document.title = 'Cassie';
+      document.querySelectorAll('style').forEach((st) => w.document.head.appendChild(st.cloneNode(true)));
+      w.document.body.append(...parts);
+      const note = document.createElement('div');
+      note.className = 'popped';
+      note.innerHTML = '<p>Cassie is in her floating window — it stays on top of your other apps.</p><button type="button" class="btn">Bring her back here</button>';
+      note.querySelector('button').addEventListener('click', () => w.close());
+      document.body.appendChild(note);
+      pipWin = w;
+      popBtn.setAttribute('aria-pressed', 'true');
+      w.addEventListener('pagehide', () => {
+        note.remove();
+        document.body.append(...parts);
+        pipWin = null;
+        popBtn.setAttribute('aria-pressed', 'false');
+      });
+      return;
+    } catch (e) { /* not allowed here: a small window instead */ }
+  }
+  chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 400, height: 620 });
+}
+popBtn.addEventListener('click', popOut);
+if (FLOATING) popBtn.hidden = true;
 
 $('#t-snip').addEventListener('click', snip);
 $('#t-file').addEventListener('click', wholeFile);

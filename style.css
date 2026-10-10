@@ -1,3 +1,8 @@
+/* No zooming on a double-tap (the phone's home-screen app jumped in and Cassie slid off when
+   she was tapped twice). Pinch-to-zoom still works for anyone who wants it. Parts that handle
+   touches themselves (3D, the board, dragging Cassie) keep their own touch-action. */
+html, :where(body, body *) { touch-action: manipulation; }
+
 :root {
   /* Marble monochrome — warm neutral greys, no colour in the UI. Colour lives
      only on the loading screens and the 3D bot (see --bot-glow below). */
@@ -1218,6 +1223,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .pf-field[hidden] { display: none; }
 .pf-field input, .pf-field select { font: inherit; font-weight: 500; font-size: 1rem; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 .pf-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pf-seg.pf-seg3 { grid-template-columns: 1fr 1fr 1.4fr; }
 .pf-seg button { font: inherit; font-weight: 650; padding: 11px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
 .pf-seg button.on { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); border-color: transparent; }
 .pf-check { display: flex; gap: 10px; align-items: flex-start; font-size: .82rem; color: var(--muted); line-height: 1.4; }
@@ -1272,7 +1278,8 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-kicker { margin: 0 0 12px; font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; color: rgba(244, 239, 228, .62); }
 .auth-copy h2 { margin: 0 0 14px; font-size: clamp(1.9rem, 3.2vw, 2.7rem); line-height: 1.08; letter-spacing: -.035em; }
 .auth-copy p { margin: 0; color: rgba(244, 239, 228, .72); line-height: 1.55; font-size: 1rem; }
-.auth-hero { position: relative; width: min(340px, 70%); height: auto; margin: 34px 0 0 auto; filter: drop-shadow(0 30px 40px rgba(0, 0, 0, .5)); }
+.auth-hero { position: relative; width: min(300px, 64%); aspect-ratio: 1; margin: 34px 0 0 auto; filter: drop-shadow(0 30px 40px rgba(0, 0, 0, .5)); }
+.auth-hero .cassie-bot { width: 100%; height: 100%; display: block; }
 @media (max-width: 760px) {
   .auth-page { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .auth-right { order: -1; padding: calc(64px + var(--safe-top, 0px)) 22px 18px; flex-direction: row; align-items: center; gap: 12px; justify-content: space-between; }
@@ -1375,9 +1382,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .isle-input::placeholder { color: rgba(255, 255, 255, .5); }
 .isle-input:focus { outline: none; border-color: rgba(255, 255, 255, .55); }
 .isle-send { width: 38px; height: 38px; border: 0; border-radius: 50%; background: #fff; color: #131317; font-size: 1.1rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
-#popout-btn[hidden] { display: none; }
-@media (max-width: 560px) { #popout-btn { display: none; } } /* a floating window is for computers */
-#popout-btn[aria-pressed="true"] { opacity: .55; }
 /* the pop-out Cassie window: the whole window is her card */
 html:has(body.isle-pip), body.isle-pip { height: 100%; margin: 0; background: #131317; overflow: hidden; }
 .isle-pip .isle-card {

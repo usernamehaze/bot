@@ -330,7 +330,7 @@ DEMOS.talk = async (stage) => {
 /* --- The real Labs, running here --- */
 let labsCss = false;
 async function mountLab(stage, loadLab, { tall = false } = {}) {
-  if (!labsCss) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=4'; document.head.appendChild(l); labsCss = true; }
+  if (!labsCss) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=5'; document.head.appendChild(l); labsCss = true; }
   stage.innerHTML = `<div class="labs labs-embed${tall ? ' tall' : ''}"><div class="lab-body"><div class="lab-stage"></div><aside class="lab-panel"><div class="lab-controls"></div></aside></div></div>`;
   const lab = await loadLab();
   const api = { check() {}, finish: async () => null, doneToday: () => null };

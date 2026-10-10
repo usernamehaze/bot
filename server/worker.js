@@ -768,23 +768,38 @@ async function scores(request, env, url) {
     me = uid; day = b.day;
   } else if (!(request.method === 'GET' && url.pathname === '/scores/today')) return new Response('not found', { status: 404, headers: h });
   if (!/^\d{4}-\d\d-\d\d$/.test(day)) return json({ error: 'bad day' }, 400, h);
+  // every player's points in each game (by where they placed), and their total
+  const tally = (rows) => {
+    const players = new Map();
+    let lastKey = '', rank = 0;
+    for (const r of rows) {
+      const key = (r.day || '') + '|' + r.game;
+      if (key !== lastKey) { lastKey = key; rank = 0; }
+      rank++;
+      const p = placePoints(rank);
+      const pl = players.get(r.uid) || { uid: r.uid, name: r.name, games: {}, total: 0, played: 0 };
+      pl.name = r.name; pl.total += p; pl.played++;
+      pl.games[r.game] = (pl.games[r.game] || 0) + p;
+      if (r.uid === me && (!r.day || r.day === day)) pl.mine = { ...(pl.mine || {}), [r.game]: { rank, points: p, shown: r.shown } };
+      players.set(r.uid, pl);
+    }
+    return [...players.values()].sort((a, b) => b.total - a.total || b.played - a.played);
+  };
   const rows = (await db.prepare('SELECT game, uid, name, value, shown FROM scores WHERE day = ? ORDER BY game, value, ts LIMIT 20000').bind(day).all()).results || [];
-  const total = new Map(), names = new Map(), mine = {};
-  let lastGame = '', rank = 0;
-  for (const r of rows) {
-    if (r.game !== lastGame) { lastGame = r.game; rank = 0; }
-    rank++;
-    const p = placePoints(rank);
-    total.set(r.uid, (total.get(r.uid) || 0) + p);
-    names.set(r.uid, r.name);
-    if (r.uid === me) mine[r.game] = { rank, points: p, shown: r.shown };
-  }
-  const board = [...total.entries()].sort((a, b) => b[1] - a[1]);
-  const at = board.findIndex(([u]) => u === me);
+  const board = tally(rows);
+  const at = board.findIndex((p) => p.uid === me);
+  const weekFrom = puzzleDay(Date.parse(day + 'T12:00:00Z') - 6 * 86400e3);
+  const weekRows = (await db.prepare('SELECT day, game, uid, name, value FROM scores WHERE day >= ? AND day <= ? ORDER BY day, game, value, ts LIMIT 50000').bind(weekFrom, day).all()).results || [];
+  const week = tally(weekRows);
+  const wAt = week.findIndex((p) => p.uid === me);
+  // the top 50, plus your own row if you're further down
+  const list = (all, i, row) => { const out = all.slice(0, 50).map((p, k) => row(p, k)); if (i >= 50) out.push(row(all[i], i)); return out; };
   return json({
     day, players: board.length,
-    top: board.slice(0, 3).map(([u, points]) => ({ name: names.get(u), points, me: u === me })),
-    me: at >= 0 ? { rank: at + 1, points: board[at][1], games: mine } : null,
+    top: board.slice(0, 3).map((p) => ({ name: p.name, points: p.total, me: p.uid === me })),
+    me: at >= 0 ? { rank: at + 1, points: board[at].total, games: board[at].mine || {} } : null,
+    table: list(board, at, (p, k) => ({ rank: k + 1, name: p.name, me: p.uid === me, games: p.games, total: p.total })),
+    week: { from: weekFrom, players: week.length, table: list(week, wAt, (p, k) => ({ rank: k + 1, name: p.name, me: p.uid === me, games: p.games, played: p.played, total: p.total })) },
   }, 200, h);
 }
 
@@ -882,7 +897,7 @@ async function auth(request, env, path) {
     const password = String(body.password || '');
     if (!EMAIL_RE.test(email)) return fail('Please type a valid email address.');
     if (path === '/auth/signup') {
-      if (!(+body.age >= 13)) return fail('Cassie accounts are for ages 13 and up.');
+      if (!(+body.age >= 2 && +body.age <= 100)) return fail('Please enter your age.'); // every age is welcome
       if (DISPOSABLE_RE.test(email)) return fail('Please use your real email address — throwaway emails can’t make accounts.');
       if (password.length < 8) return fail('Use at least 8 characters for your password.');
       if (password.length > 200) return fail('That password is too long.');
