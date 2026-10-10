@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '123';
+const APP_VERSION = '124';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -788,62 +788,6 @@ if (isleMain) islandEl.after(isleMain.el);
   });
 })();
 
-/* ---------- Pop-out Cassie ----------
-   Chrome and Edge can open a small window that stays on top of every other app
-   (Word, a PDF reader, the desktop). Cassie's Island lives in it: drop a file,
-   paste a picture, or ask — the answers also land in the chat here. */
-const popBtn = document.getElementById('popout-btn');
-let pip = null; // { win, card }
-async function popOut() {
-  if (pip) { try { pip.win.focus(); } catch (e) { /* ignore */ } return; }
-  let win;
-  try { win = await window.documentPictureInPicture.requestWindow({ width: 380, height: 340 }); }
-  catch (e) { islandShow('oops', 'Your browser didn’t let Cassie pop out', 3000); return; }
-  const d = win.document;
-  d.title = 'Cassie';
-  [...document.styleSheets].forEach((ss) => {
-    try {
-      const st = d.createElement('style');
-      st.textContent = [...ss.cssRules].map((r) => r.cssText).join('\n');
-      d.head.appendChild(st);
-    } catch (e) { // a stylesheet from another site (fonts): link it instead
-      if (!ss.href) return;
-      const l = d.createElement('link'); l.rel = 'stylesheet'; l.href = ss.href; d.head.appendChild(l);
-    }
-  });
-  for (const a of document.documentElement.attributes) if (a.name.startsWith('data-') || a.name === 'class') d.documentElement.setAttribute(a.name, a.value);
-  d.body.className = 'isle-pip';
-  const card = makeIsleCard(d, { pip: true });
-  d.body.appendChild(card.el);
-  card.go('home');
-  pip = { win, card };
-  track('feature', 'popout');
-  if (popBtn) popBtn.setAttribute('aria-pressed', 'true');
-
-  d.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (card.step !== 'drop' && !isleBusy) card.go('drop'); });
-  d.addEventListener('dragleave', (e) => { if (!e.relatedTarget && card.step === 'drop') card.go('home'); });
-  d.addEventListener('drop', (e) => {
-    const got = isleFromTransfer(e.dataTransfer);
-    if (got && got.text && e.target.closest && e.target.closest('input')) { if (card.step === 'drop') card.go('ask'); return; } // words dropped in the box land there
-    e.preventDefault();
-    isleTake(card, got);
-  });
-  d.addEventListener('paste', (e) => {
-    const files = [...((e.clipboardData && e.clipboardData.files) || [])];
-    if (!files.length) return; // plain words paste into the box as usual
-    e.preventDefault();
-    isleTake(card, { file: files[0] });
-  });
-  win.addEventListener('pagehide', () => {
-    card.destroy();
-    pip = null;
-    if (popBtn) popBtn.setAttribute('aria-pressed', 'false');
-  });
-}
-if (popBtn && 'documentPictureInPicture' in window) {
-  popBtn.hidden = false;
-  popBtn.addEventListener('click', popOut);
-}
 // which way the 3D Cassie turns while she walks (-1 left, 1 right)
 function face3D(dir) {
   try { if (window.CassieMascot && window.CassieMascot.setFacing) window.CassieMascot.setFacing(dir); } catch (e) { /* ignore */ }
@@ -5164,6 +5108,20 @@ function heard(text) {
   voiceUI.you.textContent = text;
   askOutLoud(text);
 }
+// Is the microphone really blocked? Phones (iPhone most of all) also refuse to listen when the
+// mic is busy — Cassie was still talking, or listening started without a tap — even though it is
+// allowed. Only a real "blocked" asks you to change the setting; otherwise a tap on the mic does it.
+async function micBlocked() {
+  try { const p = await navigator.permissions.query({ name: 'microphone' }); return p.state === 'denied'; } catch (e) { return null; } // null: this browser can't say
+}
+const MIC_BLOCKED = 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.';
+async function micTrouble(v, sure) {
+  if (voiceChat !== v) return;
+  const blocked = await micBlocked();
+  if (voiceChat !== v) return;
+  if (blocked === true || (blocked === null && sure)) setVoicePhase('paused', /iPhone|iPad/.test(navigator.userAgent) ? MIC_BLOCKED + ' (iPhone: Settings → Safari → Microphone → Allow.)' : MIC_BLOCKED);
+  else setVoicePhase('paused', 'Tap the mic to talk.');
+}
 function listenWithBrowser(v) {
   const rec = new SpeechRecognitionCtor();
   rec.lang = navigator.language || 'en-US';
@@ -5182,18 +5140,25 @@ function listenWithBrowser(v) {
       if (r.isFinal) finalText += r[0].transcript + ' '; else interim += r[0].transcript;
     }
     const t = (finalText + interim).trim();
+    v.micWorked = true;
     v.heardSomething = !!t;
     voiceUI.you.textContent = t;
     if (t) setVoicePhase('listening', 'Listening… tap the mic to send now');
     clearTimeout(timer);
     timer = setTimeout(send, interim ? 1400 : 850); // a short pause means they've finished
   };
-  rec.onerror = (e) => {
-    if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) {
-      sent = true;
-      if (e.error === 'service-not-allowed' && navigator.mediaDevices && window.MediaRecorder) { v.useRecorder = true; listenVoice(); return; }
-      setVoicePhase('paused', 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.');
+  rec.onerror = async (e) => {
+    if (!/not-allowed|service-not-allowed|audio-capture/.test(e.error)) return;
+    sent = true;
+    // the recorder often works where the browser's listener won't (on iPhone it wants a fresh tap
+    // every time) — unless the microphone really is blocked
+    const canRecord = navigator.mediaDevices && window.MediaRecorder && (SERVER || state.groqKey);
+    if (canRecord && !v.triedRecorder && (e.error !== 'not-allowed' || (await micBlocked()) !== true)) {
+      v.triedRecorder = true; v.useRecorder = true;
+      if (voiceChat === v) listenVoice();
+      return;
     }
+    micTrouble(v, e.error === 'not-allowed' && !v.micWorked);
   };
   rec.onend = () => {
     if (sent || voiceChat !== v || v.phase !== 'listening') return;
@@ -5206,9 +5171,23 @@ function listenWithBrowser(v) {
   try { rec.start(); } catch (e) { setTimeout(() => { if (voiceChat === v && v.phase === 'listening') listenVoice(); }, 400); }
 }
 async function listenWithRecorder(v) {
-  try {
-    if (!v.stream) v.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-  } catch (e) { setVoicePhase('paused', 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.'); return; }
+  // a microphone that went quiet (the phone took it back while Cassie talked) is opened again
+  if (v.stream && !v.stream.getAudioTracks().some((t) => t.readyState === 'live')) { v.stream.getTracks().forEach((t) => t.stop()); v.stream = null; }
+  if (!v.stream) {
+    for (let tries = 0; !v.stream && tries < 2; tries++) {
+      try { v.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+      catch (e) {
+        if (voiceChat !== v) return;
+        if (/NotAllowed|Security/.test(e.name) || tries) {
+          // busy or refused: the browser's own listener may still work; otherwise say what to do
+          if (!/NotAllowed|Security/.test(e.name) && SpeechRecognitionCtor && !v.triedBrowser) { v.triedBrowser = true; v.useRecorder = false; listenVoice(); return; }
+          micTrouble(v, /NotAllowed|Security/.test(e.name) && !v.micWorked); return;
+        }
+        await new Promise((r) => setTimeout(r, 400)); // the mic may still be busy for a moment
+      }
+    }
+  }
+  v.micWorked = true;
   if (voiceChat !== v || v.phase !== 'listening') return;
   const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
   const recorder = new MediaRecorder(v.stream, type ? { mimeType: type } : undefined);
@@ -5673,17 +5652,23 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 // Sets Cassie's explanation level and Student/Pro mode, and personalises answers.
 // Stored only in this browser.
 const GRADE_GROUPS = [
+  ['Preschool', 'elementary', ['Nursery', 'Kindergarten']],
   ['Elementary', 'elementary', ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']],
   ['Junior High School', 'middle', ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10']],
   ['Senior High School', 'high', ['Grade 11', 'Grade 12']],
   ['College / University', 'college', ['1st year college', '2nd year college', '3rd year college', '4th year college', '5th year college']],
   ['Graduate school', 'college', ['Graduate school']],
+  ['Working', 'auto', ['Working professional']],
 ];
+const WORKING = 'Working professional';
 const levelForGrade = (g) => { const grp = GRADE_GROUPS.find((x) => x[2].includes(g)); return grp ? grp[1] : 'auto'; };
 const ageBand = (a) => (!a ? '' : a < 13 ? 'under 13' : a < 18 ? '13-17' : a < 25 ? '18-24' : a < 35 ? '25-34' : a < 50 ? '35-49' : '50+');
 function profileLine(p) {
-  const who = p.role === 'pro' ? `a working professional${p.field ? ` (${p.field})` : ''}` : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
-  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then when talking with them — but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
+  const who = p.role === 'pro' ? `a working professional${p.field ? ` (${p.field})` : ''}`
+    : /^(Nursery|Kindergarten)$/.test(p.grade || '') ? `a little one in ${p.grade.toLowerCase()}`
+    : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
+  const young = (p.age && p.age < 8) || /^(Nursery|Kindergarten)$/.test(p.grade || '');
+  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then when talking with them — but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${young ? ' They are a very young child: use very short sentences, simple everyday words and a warm, playful tone, and keep everything safe.' : p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
 }
 function openProfile(first) {
   const p = state.profile || (state.account && state.account.name ? { name: state.account.name } : {});
@@ -5692,60 +5677,42 @@ function openProfile(first) {
   wrap.innerHTML = `<form class="profile-card" novalidate>
     <h2>${first ? 'Let’s set up Cassie for you' : 'Your profile'}</h2>
     <p class="pf-sub">So she explains things at the right level. Saved only on this device.</p>
-    <label class="pf-field"><span>Your name</span><input name="name" maxlength="40" autocomplete="given-name" placeholder="e.g. Hazel"></label>
-    <div class="pf-field"><span>I’m a…</span><div class="pf-seg"><button type="button" data-role="student">Student</button><button type="button" data-role="pro">Working professional</button></div></div>
-    <label class="pf-field pf-student"><span>Grade level</span><select name="grade"><option value="">Choose your grade…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
-    <label class="pf-field pf-pro"><span>What do you do?</span><input name="field" maxlength="60" list="pf-fields" placeholder="e.g. nurse, accountant, teacher"><datalist id="pf-fields"><option>Teacher</option><option>Nurse</option><option>Engineer</option><option>Accountant</option><option>Software developer</option><option>Marketing</option><option>Customer service</option><option>Business owner</option><option>Researcher</option></datalist></label>
-    <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="5" max="100" placeholder="e.g. 16"></label>
-    <label class="pf-check pf-usage"><input type="checkbox" name="usage"> <span>Help improve Cassie: share <b>anonymous</b> usage — which features you use and how often. No names, no messages.</span></label>
-    <label class="pf-check pf-topics"><input type="checkbox" name="topics"> <span>Also share the <b>topics</b> I ask about (single keywords only, never my messages).</span></label>
+    <label class="pf-field"><span>Your name (nickname)</span><input name="name" maxlength="40" autocomplete="nickname" placeholder="e.g. Hazel"></label>
+    <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
+    <label class="pf-field"><span>Level</span><select name="grade"><option value="">Choose your level…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    <div class="pf-field"><span>Gender</span><div class="pf-seg pf-seg3"><button type="button" data-gender="female">Female</button><button type="button" data-gender="male">Male</button><button type="button" data-gender="none">Prefer not to say</button></div></div>
     <p class="pf-err" hidden></p>
     <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save'}</button>
   </form>`;
   document.body.appendChild(wrap);
   const f = wrap.querySelector('form');
-  let role = p.role || '';
-  f.name.value = p.name || ''; f.grade.value = p.grade || ''; f.field.value = p.field || ''; f.age.value = p.age || '';
-  const an = state.analytics || { usage: true, topics: true };
-  f.usage.checked = an.usage !== false; f.topics.checked = an.topics !== false;
-  function sync() {
-    f.querySelectorAll('[data-role]').forEach((b) => b.classList.toggle('on', b.dataset.role === role));
-    f.querySelector('.pf-student').hidden = role !== 'student';
-    f.querySelector('.pf-pro').hidden = role !== 'pro';
-    const minor = +f.age.value > 0 && +f.age.value < 18;
-    const child = +f.age.value > 0 && +f.age.value < 13;
-    f.querySelector('.pf-topics').hidden = minor; // no topic sharing for under-18s
-    if (minor) f.topics.checked = false;
-    f.querySelector('.pf-usage').hidden = child; // and no usage counts at all for under-13s
-    if (child) f.usage.checked = false;
-  }
-  f.querySelectorAll('[data-role]').forEach((b) => b.addEventListener('click', () => { role = b.dataset.role; sync(); }));
-  f.age.addEventListener('input', sync);
+  let gender = p.gender || '';
+  f.name.value = p.name || ''; f.age.value = p.age || '';
+  f.grade.value = p.role === 'pro' ? WORKING : (p.grade || '');
+  const sync = () => f.querySelectorAll('[data-gender]').forEach((b) => b.classList.toggle('on', b.dataset.gender === gender));
+  f.querySelectorAll('[data-gender]').forEach((b) => b.addEventListener('click', () => { gender = b.dataset.gender; sync(); f.querySelector('.pf-err').hidden = true; }));
   f.addEventListener('input', () => { f.querySelector('.pf-err').hidden = true; });
-  f.addEventListener('click', (ev) => { if (ev.target.closest('[data-role]')) f.querySelector('.pf-err').hidden = true; });
   sync();
   f.addEventListener('submit', (e) => {
     e.preventDefault();
-    const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value, field = f.field.value.trim();
-    const err = !name ? 'Please type your name.' : !role ? 'Are you a student or a working professional?'
-      : role === 'student' && !grade ? 'Please choose your grade level.' : role === 'pro' && !field ? 'Please tell us what you do.'
-      : !(age >= 5 && age <= 100) ? 'Please enter your age (5–100).' : '';
+    const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value;
+    const err = !name ? 'Please type your name or nickname.' : !(age >= 2 && age <= 100) ? 'Please enter your age.'
+      : !grade ? 'Please choose your level.' : !gender ? 'Please choose your gender (or “Prefer not to say”).' : '';
     const errEl = f.querySelector('.pf-err');
     if (err) { errEl.textContent = err; errEl.hidden = false; return; }
-    state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? field : '', age, at: p.at || Date.now() };
+    const role = grade === WORKING ? 'pro' : 'student';
+    state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? (p.field || '') : '', age, gender, at: p.at || Date.now() };
     state.audience = role === 'pro' ? 'pro' : 'student';
     state.level = role === 'pro' ? 'auto' : levelForGrade(grade);
-    state.analytics = { usage: f.usage.checked, topics: f.topics.checked && age >= 18 };
+    // anonymous usage counts stay as they were (changeable in Settings); never for under-13s,
+    // and topic words only ever from adults
+    const an0 = state.analytics || { usage: true, topics: true };
+    state.analytics = { usage: an0.usage !== false && age >= 13, topics: an0.topics !== false && age >= 18 };
     save();
     try { if (window.CassieMemory) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
     if (typeof renderAudience === 'function') renderAudience();
     dressCassie();
     wrap.remove();
-    if (age < 13 && typeof authToken === 'function' && authToken()) {
-      // accounts are for 13 and up (e.g. a younger child who used Continue with Google)
-      authCall('/auth/delete', {}).catch(() => {}).finally(signedOutLocally);
-      setTimeout(() => mascotSay('Cassie accounts are for ages 13 and up, so I’ll keep your things on this device instead.', 5000), 400);
-    }
     if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
     try { mascotSay(first ? `Nice to meet you, ${name}! 👋` : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
     renderProfileSummary();
@@ -5847,14 +5814,14 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
         <div class="auth-google" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><div class="auth-gbtn"></div></div>
         <div class="auth-or" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><span>or</span></div>
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
-        <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="5" max="100" placeholder="e.g. 16"></label>
+        <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
         <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
         <p class="auth-err" role="alert" hidden></p>
         <button type="submit" class="auth-go"></button>
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
         <button type="button" class="auth-skip">Continue without an account</button>
-        <p class="auth-legal">Accounts are for ages 13 and up. Your chats stay on your device; an account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+        <p class="auth-legal">Cassie is for learners of every age, from nursery to college and work. Young children: ask a parent or teacher to help you sign up. Your chats stay on your device; an account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
       </form>
     </div>
     <div class="auth-right" aria-hidden="true">
@@ -5864,9 +5831,10 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
         <h2>Learn anything.<br>On every device.</h2>
         <p>Sign in once — your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
       </div>
-      <img class="auth-hero" src="landing/cassie-hero.webp" alt="" width="545" height="458">
+      <div class="auth-hero"></div>
     </div>`;
   document.body.appendChild(page);
+  try { window.CassieBot.create(page.querySelector('.auth-hero'), { state: 'greeting', glow: true, pokeable: true, accessory: window.CassieBot.seasonal() }); } catch (e) { /* no Cassie drawing: the words still work */ }
   const f = page.querySelector('form');
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');
@@ -5906,10 +5874,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     const email = f.email.value.trim(), password = f.password.value;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return showErr('Please type your email address.');
     const age = Math.round(+f.age.value);
-    if (mode === 'signup' && !(age >= 5 && age <= 100)) return showErr('Please enter your age.');
-    if (mode === 'signup' && age < 13) {
-      return showErr('Cassie accounts are for ages 13 and up. You can still use Cassie on this device — tap “Continue without an account”, ideally with a parent or teacher.');
-    }
+    if (mode === 'signup' && !(age >= 2 && age <= 100)) return showErr('Please enter your age.');
     if (mode === 'signup' && password.length < 8) return showErr('Use at least 8 characters for your password.');
     if (!password) return showErr('Please type your password.');
     go.disabled = true; go.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
@@ -5962,7 +5927,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
 
 function renderProfileSummary() {
   const el = document.getElementById('profile-summary'); const p = state.profile;
-  if (el) el.textContent = p ? `${p.name} · ${p.role === 'pro' ? p.field : p.grade} · age ${p.age}` : 'No profile yet.';
+  if (el) el.textContent = p ? [p.name, p.role === 'pro' ? (p.field || 'Working') : p.grade, p.age ? `age ${p.age}` : '', { female: 'Female', male: 'Male' }[p.gender] || ''].filter(Boolean).join(' · ') : 'No profile yet.';
   const u = document.getElementById('share-usage-toggle'), t = document.getElementById('share-topics-toggle'), row = document.getElementById('share-topics-row');
   const an = state.analytics || { usage: true, topics: true };
   if (u) u.checked = an.usage !== false;
@@ -6047,6 +6012,10 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs → Games: the score board now shows everyone’s points in every puzzle and their total — for today and for the whole week.',
+  'Cassie is for every learner, from nursery to college and work. Setting up is just four questions: your name (or nickname), age, level and gender.',
+  'Talk with Cassie: no more “allow the microphone” message when the microphone is already allowed.',
+  'On phones, a double-tap no longer zooms the app (pinch to zoom still works). The pop-out window now lives in the Chrome extension’s side panel.',
   'Talk with Cassie answers faster: she starts speaking as soon as the first sentence of her answer is ready (instead of waiting for all of it), and notices sooner when you’ve finished talking.',
   'Labs, new in 3D: “Solar system & beyond” — fly to any planet (they’re where they really are today), then zoom out to the Milky Way, our neighbour galaxies and the whole universe; tap anything to learn about it. The Rocket workshop is 3D now: build it, launch it from the pad and watch the sky turn black and spent stages fall away.',
   'Labs → World atlas: tap any country (or search it) for its flag, capital, population, languages, money, neighbours and a short history — or search any place in the world and Cassie pins it on the map.',

@@ -124,6 +124,7 @@ export async function startFakeServer(port = 4630) {
       return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, lastCalls: mode.calls.slice(-6).map((c) => c.model), claudeCalls: mode.claudeCalls.slice(-5), geminiCalls: mode.geminiCalls.slice(-6) }));
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
+    if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);
     res.writeHead(r.status, Object.fromEntries(r.headers));
     if (/event-stream/.test(r.headers.get('content-type') || '') && r.body) { // pass a stream on as it comes, like Cloudflare does

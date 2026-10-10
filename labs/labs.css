@@ -152,6 +152,19 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 .pod.me b { text-decoration: underline; text-underline-offset: 3px; }
 .pod.empty { opacity: .5; }
 .board-me { margin: 10px 0 0; font-size: .84rem; color: rgba(255, 255, 255, .75); }
+.board-tabs { display: inline-flex; gap: 4px; margin-top: 14px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+.board-tabs button { border: 0; background: transparent; color: rgba(255, 255, 255, .75); padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: .8rem; cursor: pointer; }
+.board-tabs button[aria-selected="true"] { background: #f2f2f4; color: #111; }
+.board-empty { margin: 10px 0 0; font-size: .82rem; color: rgba(255, 255, 255, .55); }
+.board-table-wrap { margin-top: 10px; max-height: 340px; overflow: auto; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); }
+.board-table { width: 100%; border-collapse: collapse; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.board-table th, .board-table td { padding: 7px 8px; text-align: center; white-space: nowrap; border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.board-table th { position: sticky; top: 0; background: #1c1e25; color: rgba(255, 255, 255, .6); font-weight: 600; font-size: .72rem; }
+.board-table .bt-name { text-align: left; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.board-table .bt-total { font-weight: 700; }
+.board-table tr.me td { background: rgba(255, 255, 255, .09); }
+.board-table small { color: rgba(255, 255, 255, .55); font-weight: 400; }
+.bt-dash { color: rgba(255, 255, 255, .3); }
 
 /* controls */
 .lab-group { margin-bottom: 14px; }

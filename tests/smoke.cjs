@@ -118,14 +118,50 @@ test('sign-up shows on first open and saves the profile', async (b) => {
   await page.waitForSelector('.auth-page', { timeout: 5000 }); // with a server: sign-in page first
   await page.click('.auth-skip');
   await page.waitForSelector('.profile-overlay', { timeout: 5000 });
+  // just four questions: name (nickname), age, level, gender
+  expect(await page.locator('.profile-card input, .profile-card select').count() === 3 && await page.locator('.profile-card [data-gender]').count() === 3, 'the profile should ask only name, age, level and gender');
+  expect(!(await page.locator('.profile-card [data-role], .profile-card input[name=field]').count()), 'no student/professional or job questions');
   await page.fill('.profile-card input[name=name]', 'Hazel');
-  await page.click('.profile-card [data-role=student]');
-  await page.selectOption('.profile-card select[name=grade]', 'Grade 10');
   await page.fill('.profile-card input[name=age]', '15');
+  await page.selectOption('.profile-card select[name=grade]', 'Grade 10');
+  await page.click('.profile-card .pf-go');
+  expect(/gender/.test(await page.locator('.pf-err').textContent()), 'gender is asked for');
+  await page.click('.profile-card [data-gender=female]');
   await page.click('.profile-card .pf-go');
   await page.waitForSelector('.profile-overlay', { state: 'detached' });
   const p = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
-  expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15, 'profile not saved: ' + JSON.stringify(p));
+  expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15 && p.gender === 'female' && p.role === 'student', 'profile not saved: ' + JSON.stringify(p));
+  await ctx.close();
+});
+
+test('every age is welcome: nursery to work, with an account too', async (b) => {
+  const { ctx, page } = await open(b, { state: null });
+  await page.waitForSelector('.auth-page');
+  expect(await page.locator('.auth-hero svg.cassie-bot').count() === 1 && !(await page.locator('img[src*="cassie-hero"]').count()), 'the sign-in page shows Cursor Cassie, not the 3D picture');
+  expect(!/13 and up/.test(await page.locator('.auth-page').innerText()), 'no age limit on the sign-in page');
+  const signupStatus = (body) => page.evaluate(async ([srv, bb]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bb) })).status, [SERVER, body]);
+  expect(await signupStatus({ email: `kid${Date.now()}@example.com`, password: 'secret-pass-1', age: 6 }) === 200, 'a 6-year-old can make an account');
+  await page.click('.auth-skip');
+  await page.waitForSelector('.profile-overlay');
+  const levels = await page.$$eval('.profile-card select[name=grade] option', (o) => o.map((x) => x.textContent));
+  expect(levels.includes('Nursery') && levels.includes('Kindergarten') && levels.includes('Grade 1') && levels.includes('4th year college') && levels.includes('Working professional'), 'levels go from nursery to work: ' + levels);
+  await page.fill('.profile-card input[name=name]', 'Mia');
+  await page.fill('.profile-card input[name=age]', '4');
+  await page.selectOption('.profile-card select[name=grade]', 'Nursery');
+  await page.click('.profile-card [data-gender=none]');
+  await page.click('.profile-card .pf-go');
+  await page.waitForSelector('.profile-overlay', { state: 'detached' });
+  const r = await page.evaluate(() => ({ p: state.profile, an: state.analytics, line: profileLine(state.profile) }));
+  expect(r.p.age === 4 && r.p.grade === 'Nursery', 'a 4-year-old in nursery can use Cassie: ' + JSON.stringify(r.p));
+  expect(!r.an.usage && !r.an.topics, 'nothing is counted for a young child');
+  expect(/very young child/.test(r.line), 'Cassie talks simply to a little one');
+  // a working person
+  await page.evaluate(() => openProfile(false));
+  await page.selectOption('.profile-card select[name=grade]', 'Working professional');
+  await page.fill('.profile-card input[name=age]', '30');
+  await page.click('.profile-card .pf-go');
+  await page.waitForSelector('.profile-overlay', { state: 'detached' });
+  expect(await page.evaluate(() => state.profile.role === 'pro' && state.audience === 'pro'), 'Working professional sets the professional mode');
   await ctx.close();
 });
 
@@ -136,12 +172,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.waitForSelector('.auth-page');
   expect(await page.locator('.auth-title').textContent() === 'Create your Cassie account', 'should open on sign up');
   await page.fill('.auth-form input[name=email]', email);
-  await page.fill('.auth-form input[name=age]', '11');
-  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
-  await page.click('.auth-go');
-  expect(/13 and up/.test(await page.locator('.auth-err').textContent()), 'under-13 account not refused');
   const signupStatus = (body) => page.evaluate(async ([srv, b]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, [SERVER, body]);
-  expect(await signupStatus({ email: 'kid@example.com', password: 'secret-pass-1', age: 11 }) === 400, 'server let an 11-year-old sign up');
   expect(await signupStatus({ email: 'x@mailinator.com', password: 'secret-pass-1', age: 20 }) === 400, 'throwaway email allowed');
   await page.fill('.auth-form input[name=age]', '16');
   await page.fill('.auth-form input[name=password]', 'short');
@@ -151,9 +182,9 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.click('.auth-go');
   await page.waitForSelector('.profile-overlay', { timeout: 5000 });
   await page.fill('.profile-card input[name=name]', 'Hazel');
-  await page.click('.profile-card [data-role=student]');
   await page.selectOption('.profile-card select[name=grade]', 'Grade 11');
   await page.fill('.profile-card input[name=age]', '16');
+  await page.click('.profile-card [data-gender=female]');
   await page.click('.profile-card .pf-go');
   await page.evaluate(() => syncAccount(true));
   await page.waitForTimeout(800);
@@ -749,40 +780,11 @@ test('Island drop: highlighted words and a photo dropped on Cassie, with Ask abo
   await ctx.close();
 });
 
-test('Pop-out Cassie: a floating window on top of other apps — ask, and drop a file', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Mitosis makes two identical cells.' }) });
-  const btn = page.locator('#popout-btn');
-  expect(!(await btn.isVisible()), 'phones don’t get the pop-out button (it’s for computers)');
-  await page.setViewportSize({ width: 1280, height: 800 });
-  expect(await btn.isVisible(), 'the pop-out button should show in Chrome / Edge on a computer');
-  await btn.click();
-  await page.waitForFunction(() => typeof pip !== 'undefined' && pip && pip.win.document.querySelector('.isle-card'), null, { timeout: 5000 });
-  const inPip = (fn, arg) => page.evaluate(([f, a]) => new Function('d', 'a', f)(pip.win.document, a), [fn, arg]);
-  expect(await inPip("return d.querySelector('.isle-card').dataset.step") === 'home', 'the pop-out starts ready to ask');
-  expect(await inPip("return !!d.querySelector('.isle-card svg.cassie-bot')"), 'Cassie should be in the pop-out');
-  expect(await inPip("return d.styleSheets.length") > 0, 'the pop-out should have Cassie’s styles');
-  expect(await btn.getAttribute('aria-pressed') === 'true', 'the button shows it is popped out');
-  // ask a question in the floating window
-  await inPip("const i = d.querySelector('.isle-input'); i.value = 'What is mitosis?'; d.querySelector('.isle-ask').requestSubmit();");
-  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
-  expect(/two identical cells/.test(await inPip("return d.querySelector('.isle-ans-body').innerText")), 'the answer should show in the pop-out');
-  expect(await page.locator('#chat-log .bubble-assistant', { hasText: 'two identical cells' }).count() === 1, 'and in the chat');
-  // drop a Word-free text file onto the floating window
-  await inPip(`const dt = new DataTransfer(); dt.items.add(new File(['Photosynthesis turns light into sugar.'], 'notes.txt', { type: 'text/plain' }));
-    d.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-    d.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));`);
-  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 8000 });
-  expect(/Photosynthesis/.test(await inPip("return d.querySelector('.isle-peek').innerText")), 'the dropped notes should show');
-  await inPip("[...d.querySelectorAll('.isle-chip')].find((b) => b.textContent === 'Explain').click()");
-  await page.waitForFunction(() => pip.win.document.querySelector('.isle-card').dataset.step === 'ans', null, { timeout: 15000 });
-  expect(JSON.stringify(groqCalls[groqCalls.length - 1]).includes('Photosynthesis turns light into sugar'), 'the notes should be in the question');
-  // × goes back to the start, then closes the window
-  await inPip("d.querySelector('.isle-x').click()");
-  expect(await inPip("return d.querySelector('.isle-card').dataset.step") === 'home', '× should go back to the start first');
-  await page.evaluate(() => pip.win.close());
-  await page.waitForFunction(() => pip === null, null, { timeout: 5000 });
-  expect(await btn.getAttribute('aria-pressed') === 'false', 'closing the window resets the button');
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+test('the web app has no pop-out (it lives in the Chrome extension)', async (b) => {
+  const { ctx, page } = await open(b, { device: 'Desktop Chrome' });
+  expect(await page.locator('#popout-btn').count() === 0, 'no pop-out button in the web app');
+  const ext = require('fs').readFileSync(require('path').join(ROOT, 'extension/panel.js'), 'utf8');
+  expect(/documentPictureInPicture/.test(ext) && /id="t-pop"/.test(require('fs').readFileSync(require('path').join(ROOT, 'extension/panel.html'), 'utf8')), 'the extension side panel has the pop-out');
   await ctx.close();
 });
 
@@ -1180,6 +1182,33 @@ test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece a
   expect(/Integumentary/.test(await page.locator('.x3d-path').innerText()), 'a tap on the skin names a part of the skin: ' + await page.locator('.x3d-sheet h3').innerText());
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/atlas-skin.png' });
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('score board: everyone’s points in every game and their total, today and this week', async (b) => {
+  const { ctx, page, errors } = await open(b);
+  const day = await page.evaluate(() => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
+  const submit = (body) => page.evaluate(async ([srv, bb]) => (await fetch(srv + '/scores/submit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bb) })).json(), [SERVER, body]);
+  await submit({ uid: 'player-ana-0001', name: 'Ana', game: 'sudoku', value: 300, shown: '5:00', day });
+  await submit({ uid: 'player-ben-0002', name: 'Ben', game: 'sudoku', value: 400, shown: '6:40', day });
+  await submit({ uid: 'player-ben-0002', name: 'Ben', game: 'mirrors', value: 60, shown: '1:00', day });
+  const d = await submit({ uid: 'player-ana-0001', name: 'Ana', game: 'mirrors', value: 90, shown: '1:30', day });
+  const ana = d.table.find((r) => r.name === 'Ana'), ben = d.table.find((r) => r.name === 'Ben');
+  expect(ana && ben && ana.games.sudoku === 100 && ana.games.mirrors === 80 && ana.total === 180, 'Ana: first in Sudoku, second in Mirrors = 180: ' + JSON.stringify(ana));
+  expect(ben.games.sudoku === 80 && ben.games.mirrors === 100 && ben.total === 180, 'Ben has both games too: ' + JSON.stringify(ben));
+  expect(d.week && d.week.table.some((r) => r.name === 'Ana' && r.total >= 180 && r.played >= 2), 'the week adds them up: ' + JSON.stringify(d.week));
+  await page.click('#labs-btn');
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.click('.labs-tabs [data-section="games"]');
+  await page.waitForSelector('.board-table td', { timeout: 10000 });
+  const head = await page.$$eval('.board-table th', (t) => t.map((x) => x.textContent));
+  expect(head.includes('Sudoku') && head.includes('Mirrors') && head.includes('Total'), 'a column for every game and the total: ' + head);
+  const rows = await page.$$eval('.board-table tbody tr', (r) => r.map((x) => x.innerText.replace(/\s+/g, ' ')));
+  expect(rows.some((r) => /Ana/.test(r) && /180/.test(r)), 'Ana’s total shows: ' + rows);
+  await page.click('[data-board-tab="week"]');
+  expect(await page.locator('[data-board-tab="week"][aria-selected="true"]').count() === 1 && await page.locator('.board-table td').count() > 0, 'This week shows the totals too');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await fetch(`${SERVER}/__reset-scores`); // other tests start from an empty board
   await ctx.close();
 });
 

@@ -56,7 +56,7 @@ function createView() {
   // the labs' own look loads with them (the app stays light until Labs is opened)
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=4', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=5', import.meta.url).href; css.dataset.labsCss = '1';
     document.head.appendChild(css);
   }
   const root = el('div', 'labs');
@@ -156,7 +156,19 @@ function createView() {
   }
 
   /* ---------- the daily puzzles' score board ---------- */
-  let board = null, boardAt = 0;
+  let board = null, boardAt = 0, boardTab = 'today';
+  // everyone's points in every game, and their total — today, or added up over the week
+  const SHORT = { sudoku: 'Sudoku', nonogram: 'Nonogram', hashi: 'Bridges', pipes: 'Pipes', mirrors: 'Mirrors', equation: 'Equation', geography: 'Geography' };
+  function scoreTable(b) {
+    const week = boardTab === 'week';
+    const rows = (week ? b.week && b.week.table : b.table) || [];
+    const tabs = `<div class="board-tabs" role="tablist"><button type="button" role="tab" data-board-tab="today" aria-selected="${!week}">Today</button><button type="button" role="tab" data-board-tab="week" aria-selected="${week}">This week</button></div>`;
+    if (!rows.length) return tabs + `<p class="board-empty">${week ? 'No scores this week yet.' : 'No scores yet today.'}</p>`;
+    const games = PUZZLES.map((p) => p.id);
+    const head = `<tr><th>#</th><th class="bt-name">Player</th>${games.map((g) => `<th title="${esc(SHORT[g] || g)}">${esc(SHORT[g] || g)}</th>`).join('')}<th class="bt-total">Total</th></tr>`;
+    const body = rows.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.rank}</td><td class="bt-name">${esc(r.name || 'Student')}${r.me ? ' <small>(you)</small>' : ''}</td>${games.map((g) => `<td>${r.games && r.games[g] ? r.games[g] : '<span class="bt-dash">–</span>'}</td>`).join('')}<td class="bt-total">${r.total}</td></tr>`).join('');
+    return `${tabs}<div class="board-table-wrap"><table class="board-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
   async function renderBoard(show) {
     const box = $('.labs-board');
     if (!show || !opts.scores) { box.hidden = true; return; }
@@ -168,7 +180,9 @@ function createView() {
       box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline ? 'The score board can’t be reached right now — your finishes are still kept on this device.' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
         <button type="button" class="lab-btn board-go" data-subject-go="puzzles">${done ? `${done}/${PUZZLES.length} done` : 'Play today’s puzzles'}</button></div>
         <div class="podium">${podium}</div>
-        ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : board === null ? '<p class="board-me">Loading today’s board…</p>' : ''}`;
+        ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : board === null ? '<p class="board-me">Loading today’s board…</p>' : ''}
+        ${scoreTable(b)}`;
+      box.querySelectorAll('[data-board-tab]').forEach((t) => t.addEventListener('click', () => { boardTab = t.dataset.boardTab; draw(); }));
     };
     draw();
     if (Date.now() - boardAt < 30000 && board) return;
