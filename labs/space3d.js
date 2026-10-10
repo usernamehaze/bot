@@ -5,6 +5,7 @@
 import { el, esc, num, group, seg, button, row, stats, overlay } from './kit.js';
 import { stage3d, webglOk, paintTexture, noise2 } from './three-kit.js';
 import { PLANETS, planetAt, periodDays } from './space.js';
+import { planetLook } from './planet-look.js';
 
 const J2000 = Date.UTC(2000, 0, 1, 12), DAY = 86400000, AU_KM = 149597870.7, LY_KM = 9.4607e12;
 const today = () => (Date.now() - J2000) / DAY;
@@ -68,7 +69,7 @@ export const space3dLab = {
   icon: '<circle cx="24" cy="24" r="5"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-20 24 24)"/><circle cx="40" cy="17" r="2.5"/><circle cx="9" cy="31" r="2"/>',
   tries: ['Fly to Jupiter and find the Great Red Spot', 'Zoom out to the Milky Way and find where the Sun is', 'Find the Andromeda Galaxy — the nearest big galaxy'],
   hints: ['Tap Jupiter (the biggest planet, the 5th from the Sun). Turn it round — the spot is a giant storm in its southern half.', 'Tap “Milky Way” under Scale, or keep zooming out past Neptune. Look for “You are here”.', 'Go to the Local Group scale and look for the biggest spiral apart from ours.'],
-  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged — at true size every planet would be far smaller than a pixel). The planets’ surfaces are painted to look like the real ones (bands, storms, ice caps) but are illustrations, not photos.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
+  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged — at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project) — Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
   mount({ stage, panel, api }) {
     if (!webglOk()) { stage.appendChild(el('p', 'lab-err', 'This browser can’t show 3D (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.')); return {}; }
     const loading = el('p', 'lab-loading', 'Loading 3D space…'); stage.appendChild(loading);
@@ -87,7 +88,7 @@ export const space3dLab = {
     const inB = button(zoomBox, 'Zoom in', () => { const i = LEVELS.findIndex(([k]) => k === level); if (i > 0) go(LEVELS[i - 1][0]); });
 
     const groups = {}, things = {}; // level → THREE.Group; name → { obj, info }
-    let THREE = null;
+    let THREE = null, look = null;
     stage3d(stage, { background: 0x020308, far: 2e6 }).then((st) => {
       if (dead) { st.destroy(); return; }
       S = st; THREE = S.THREE; loading.remove();
@@ -120,22 +121,24 @@ export const space3dLab = {
     function marker(grp, name, sub, info, pos, color = 0xffffff, size = 1, near = Infinity) {
       const m = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 12), new THREE.MeshBasicMaterial({ color }));
       m.position.copy(pos); grp.add(m);
-      things[name] = { obj: m, name, sub, info, level: grp.userData.level, size };
-      S.pickable(m, () => pick(name), () => grp.visible);
-      S.label(m, name, { onTap: () => pick(name), show: () => grp.visible && (selected === name || S.camera.position.distanceTo(m.position) < near) });
+      // the Milky Way has a "Sun" too: keep it apart from the solar system's Sun
+      const key = things[name] && things[name].level !== grp.userData.level ? grp.userData.level + ':' + name : name;
+      things[key] = { obj: m, name, sub, info, level: grp.userData.level, size };
+      S.pickable(m, () => pick(key), () => grp.visible);
+      S.label(m, name, { onTap: () => pick(key), show: () => grp.visible && (selected === key || S.camera.position.distanceTo(m.position) < near) });
       return m;
     }
     function build() {
       // ----- the solar system
       const sol = new THREE.Group(); sol.userData.level = 'solar'; groups.solar = sol; S.scene.add(sol);
-      sol.add(stars(2500, 900));
-      sol.add(new THREE.AmbientLight(0xffffff, 0.3));
+      look = planetLook(THREE, S); S.onFrame((dt) => { if (level === 'solar') look.tick(dt); });
+      look.sky().then((pts) => { if (pts) sol.add(pts); }); // the real night sky
+      sol.add(new THREE.AmbientLight(0xffffff, 0.07)); // space is dark: the night side of a planet is too
       sol.add(new THREE.PointLight(0xffffff, 3, 0, 0));
       const sunTex = paintTexture(THREE, 512, 256, (g, w, h) => { const n = noise2(3); const img = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = n(x / 18, y / 18, 4); const i = (y * w + x) * 4; img.data[i] = 255; img.data[i + 1] = 150 + v * 90; img.data[i + 2] = 40 + v * 50; img.data[i + 3] = 255; } g.putImageData(img, 0, 0); });
-      const sun = new THREE.Mesh(new THREE.SphereGeometry(1.7, 48, 32), new THREE.MeshBasicMaterial({ map: sunTex }));
+      const sun = new THREE.Mesh(new THREE.SphereGeometry(1.7, 64, 48), new THREE.MeshBasicMaterial({ map: sunTex }));
       sol.add(sun);
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: 0xffb347, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
-      glow.scale.setScalar(8); sun.add(glow);
+      look.sun(sun);
       things.Sun = { obj: sun, name: 'Sun', sub: 'Our star', size: 1.7, level: 'solar', info: () => [['What it is', 'A yellow dwarf star — a ball of hot gas (mostly hydrogen and helium) that makes energy by nuclear fusion'], ['Diameter', '1,392,700 km (109 Earths across)'], ['Mass', '99.86% of everything in the solar system'], ['Surface', 'about 5,500 °C (the core: about 15 million °C)'], ['Light to Earth', 'about 8 minutes 20 seconds'], ['Age', 'about 4.6 billion years']] };
       S.pickable(sun, () => pick('Sun')); S.label(sun, 'Sun', { onTap: () => pick('Sun'), offset: new THREE.Vector3(0, -2.3, 0), show: () => sol.visible });
       const tex = {
@@ -154,18 +157,20 @@ export const space3dLab = {
         const r = 0.18 + 0.32 * (p[6] / 12756) ** 0.5;
         const pivot = new THREE.Group(); sol.add(pivot);
         const tilt = new THREE.Group(); tilt.rotation.z = (MORE[name][2] * Math.PI) / 180; pivot.add(tilt);
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 32), new THREE.MeshStandardMaterial({ map, roughness: 0.9, metalness: 0 }));
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 72, 48), new THREE.MeshStandardMaterial({ map, roughness: 0.9, metalness: 0 }));
         tilt.add(ball);
-        if (name === 'Saturn' || name === 'Uranus') {
-          const ringTex = paintTexture(THREE, 256, 4, (g, w) => { for (let x = 0; x < w; x++) { const t = x / w, a = name === 'Uranus' ? (Math.sin(t * 40) > 0.6 ? 0.35 : 0) : (t > 0.48 && t < 0.52 ? 0.08 : 0.25 + 0.6 * Math.abs(Math.sin(t * 31))); g.fillStyle = `rgba(225,210,170,${a})`; g.fillRect(x, 0, 1, 4); } });
-          const inner = r * 1.25, outer = r * (name === 'Uranus' ? 1.9 : 2.3), geo = new THREE.RingGeometry(inner, outer, 96, 1);
+        look.dress(name, ball, r); // the real map (and its air) replaces the painted one when it arrives
+        if (name === 'Saturn') look.saturnRings(ball, r, tilt);
+        if (name === 'Uranus') { // thin, dark rings
+          const ringTex = paintTexture(THREE, 256, 4, (g, w) => { for (let x = 0; x < w; x++) { const t = x / w, a = Math.sin(t * 40) > 0.75 ? 0.22 : 0; g.fillStyle = `rgba(190,200,205,${a})`; g.fillRect(x, 0, 1, 4); } });
+          const inner = r * 1.6, outer = r * 2.0, geo = new THREE.RingGeometry(inner, outer, 96, 1);
           const pos = geo.attributes.position, uv = geo.attributes.uv; for (let k = 0; k < pos.count; k++) { const d = Math.hypot(pos.getX(k), pos.getY(k)); uv.setXY(k, (d - inner) / (outer - inner), 0.5); }
           const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: ringTex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
           ring.rotation.x = Math.PI / 2; tilt.add(ring);
         }
         if (name === 'Earth') { // the Moon (its distance is enlarged too)
-          const moon = new THREE.Mesh(new THREE.SphereGeometry(r * 0.27, 24, 16), new THREE.MeshStandardMaterial({ map: paintTexture(THREE, 256, 128, (g, w, h) => { const nn = noise2(42); const img = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = nn(x / 14, y / 14, 5); const c = 110 + v * 100; const k = (y * w + x) * 4; img.data[k] = c; img.data[k + 1] = c; img.data[k + 2] = c; img.data[k + 3] = 255; } g.putImageData(img, 0, 0); }), roughness: 1 }));
-          pivot.add(moon); pivot.userData.moon = moon;
+          const moon = new THREE.Mesh(new THREE.SphereGeometry(r * 0.27, 48, 32), new THREE.MeshStandardMaterial({ map: paintTexture(THREE, 256, 128, (g, w, h) => { const nn = noise2(42); const img = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = nn(x / 14, y / 14, 5); const c = 110 + v * 100; const k = (y * w + x) * 4; img.data[k] = c; img.data[k + 1] = c; img.data[k + 2] = c; img.data[k + 3] = 255; } g.putImageData(img, 0, 0); }), roughness: 1 }));
+          pivot.add(moon); pivot.userData.moon = moon; look.dress('Moon', moon, r * 0.27);
           things.Moon = { obj: moon, name: 'Moon', sub: 'Earth’s moon', size: r * 0.27, level: 'solar', info: () => [['Diameter', '3,474 km (about a quarter of Earth’s)'], ['Distance from Earth', 'about 384,400 km (light takes 1.3 s)'], ['One orbit', '27.3 days (29.5 days from new moon to new moon)'], ['Fact', 'The same side always faces Earth, because it spins exactly once each orbit.'], ['Visited', '12 people walked on it (1969–1972)']] };
           S.pickable(moon, () => pick('Moon'), () => sol.visible); S.label(moon, 'Moon', { onTap: () => pick('Moon'), className: 'small', show: () => sol.visible && S.camera.position.distanceTo(pivot.position) < 25 });
         }
@@ -178,8 +183,8 @@ export const space3dLab = {
       // the asteroid belt and the Kuiper belt (with Pluto)
       const belt = (a0, a1, n, c, ref) => { const out = []; for (let k = 0; k < n; k++) { const a = a0 + Math.random() * (a1 - a0), th = Math.random() * Math.PI * 2; out.push([a, th, (Math.random() - 0.5) * 0.08 * a, ...c]); } const pts = points(out.map(() => [0, 0, 0, ...c]), ref, 0.7); pts.userData.belt = out; sol.add(pts); return pts; };
       groups.solar.userData.belts = [belt(2.2, 3.3, 1500, [0.75, 0.7, 0.62], 0.12), belt(30, 50, 2000, [0.55, 0.62, 0.8], 0.25)];
-      const pluto = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 14), new THREE.MeshStandardMaterial({ color: 0xc9b39a, roughness: 1 }));
-      sol.add(pluto);
+      const pluto = new THREE.Mesh(new THREE.SphereGeometry(0.16, 40, 28), new THREE.MeshStandardMaterial({ color: 0xc9b39a, roughness: 1 }));
+      sol.add(pluto); look.dress('Pluto', pluto, 0.16);
       things.Pluto = { obj: pluto, name: 'Pluto', sub: 'Dwarf planet', size: 0.16, level: 'solar', pluto: true, info: () => [['What it is', 'A dwarf planet in the Kuiper Belt (called a planet until 2006)'], ['Diameter', '2,377 km (smaller than our Moon)'], ['One orbit', '248 years'], ['Moons', '5 (the biggest is Charon)'], ['Fact', 'New Horizons flew past in 2015 and found a giant heart-shaped plain of nitrogen ice.']] };
       S.pickable(pluto, () => pick('Pluto'), () => sol.visible); S.label(pluto, 'Pluto', { onTap: () => pick('Pluto'), className: 'small', show: () => sol.visible });
       placeOrbits();
@@ -314,15 +319,15 @@ export const space3dLab = {
       const t = things[name]; if (!t) return;
       selected = name; lastTarget = null;
       const at = new THREE.Vector3(); t.obj.getWorldPosition(at);
-      const dist = t.level === 'solar' ? Math.max(1.2, t.size * 6) : t.level === 'galaxy' ? (name === 'Sun' || name === 'Sagittarius A*' ? 22 : 8) : t.level === 'local' ? Math.max(12, t.size * 30) : 120;
+      const dist = t.level === 'solar' ? Math.max(1.2, t.size * 6) : t.level === 'galaxy' ? (t.name === 'Sun' || t.name === 'Sagittarius A*' ? 22 : 8) : t.level === 'local' ? Math.max(12, t.size * 30) : 120;
       S.flyTo(at, dist, { dur: 1, done: () => { lastTarget = null; if (t.level === 'solar') follow(true); } });
       const info = t.info();
       card.hidden = false;
-      card.innerHTML = `<h3>${esc(name)}</h3><p class="space-sub">${esc(t.sub || '')}</p>`;
+      card.innerHTML = `<h3>${esc(t.name)}</h3><p class="space-sub">${esc(t.sub || '')}</p>`;
       const st = stats(card); st.set(info);
       const back = el('button', 'lab-btn', 'See everything'); back.type = 'button'; back.addEventListener('click', () => go(level)); card.appendChild(back);
       if (name === 'Jupiter') api.check(0);
-      if (name === 'Sun' && t.level === 'galaxy') api.check(1);
+      if (t.name === 'Sun' && t.level === 'galaxy') api.check(1);
       if (/Andromeda/.test(name)) api.check(2);
     }
     function planetFacts(p) {
@@ -342,7 +347,7 @@ export const space3dLab = {
         const sc = LEVELS.find(([k]) => k === level)[1];
         if (!selected) return `looking at the ${sc} scale in 3D${level === 'solar' ? ` on ${new Date(J2000 + day * DAY).toDateString()}` : ''}`;
         const t = things[selected];
-        return `looking at ${selected} (${t.sub}) in the ${sc} view: ${t.info().map(([k, v]) => `${k}: ${v}`).join('; ')}`;
+        return `looking at ${t.name} (${t.sub}) in the ${sc} view: ${t.info().map(([k, v]) => `${k}: ${v}`).join('; ')}`;
       },
       destroy: () => { dead = true; if (S) S.destroy(); },
     };
