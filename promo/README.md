@@ -34,3 +34,13 @@ the Playwright in `tests/` (`cd tests && npm install`).
 
 Older pieces: `source/` is the first animated ad (2025), `reel/`, `explainer/` and `explainer-vo/`
 are the earlier reels.
+
+## The logo and the landing page's device screens
+
+- **Logo (`brand/mark.cjs`):** Cursor Cassie herself — the pointer with her two caret eyes — in
+  black and white. `node promo/brand/mark.cjs` redraws every app and extension icon
+  (`icons/`, `extension/icons/`) and `icons/logo.svg` from that one shape.
+- **Hero screens (`hero/capture.cjs`):** the laptop and phone in the landing page's hero show real
+  Cassie screens. `node promo/hero/capture.cjs` (site served at :4700) takes them again with a
+  scripted stand-in for the AI; then convert `promo/hero/raw/*.png` to `landing/hero/*.webp`
+  (laptop 1600 × 1000, phone 600 wide).

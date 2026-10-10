@@ -87,6 +87,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .topbar #menu-btn { justify-self: start; }
 .topbar-actions { justify-self: end; display: flex; align-items: center; gap: 2px; }
 #board-btn svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.brand .brand-mark { width: 24px; height: 24px; flex: none; color: var(--text); --logo-arrow: var(--surface); }
 .brand {
   display: flex;
   align-items: center;
@@ -1246,7 +1247,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-page { position: fixed; inset: 0; z-index: 210; display: grid; grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); background: var(--surface); color: var(--text); overflow-y: auto; }
 .auth-left { position: relative; display: flex; align-items: center; justify-content: center; padding: 72px 24px 32px; min-height: 100%; box-sizing: border-box; }
 .auth-brand { position: absolute; top: calc(22px + var(--safe-top, 0px)); left: 26px; display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 1.1rem; letter-spacing: -.01em; }
-.auth-brand svg { width: 20px; height: 23px; fill: var(--surface); stroke: var(--text); stroke-width: 24; stroke-linejoin: round; paint-order: stroke; }
+.auth-brand svg { width: 24px; height: 24px; color: var(--text); --logo-eyes: var(--bg); }
 .auth-form { width: min(330px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .auth-title { margin: 0; font-size: 1.55rem; letter-spacing: -.025em; text-align: center; }
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
