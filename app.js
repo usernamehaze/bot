@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '125';
+const APP_VERSION = '126';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -6012,6 +6012,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs in 3D look real now: the planets wear real NASA maps (Earth with its clouds, city lights at night and the Sun glinting on the sea), the Sun boils, Saturn’s rings cast its shadow, and the stars are the real sky. The human body has wet, fibrous muscles and real-looking bones, and the cells look like living things.',
   'A new look: Cassie’s logo is now Cursor Cassie herself — the pointer with her two blinking eyes — on the app, your home screen and the Chrome extension.',
   'Labs → Games: the score board now shows everyone’s points in every puzzle and their total — for today and for the whole week.',
   'Cassie is for every learner, from nursery to college and work. Setting up is just four questions: your name (or nickname), age, level and gender.',

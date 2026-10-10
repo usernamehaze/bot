@@ -12,6 +12,7 @@ import { RoundedBoxGeometry } from './RoundedBoxGeometry.js';
 import { PARTS, CELLS } from './cells.js';
 import { createBody, SYSTEMS } from './body3d.js';
 import { factFor } from './body-facts.js';
+import { tissueMaterial } from './tissue.js';
 
 let view = null; // kept after closing, so opening again is instant
 
@@ -56,12 +57,13 @@ function makeBuilder(kind) {
   const rand = rng(kind === 'animal' ? 11 : 23);
   const part = (id) => { if (!parts.has(id)) parts.set(id, { objects: [], materials: new Set(), anchor: null }); return parts.get(id); };
   const mat = (id, o = {}) => {
-    const color = new THREE.Color(o.color || PARTS[id].color);
+    // living things are softer in colour than a diagram: the same hues, a little quieter
+    const color = new THREE.Color(o.color || PARTS[id].color).offsetHSL(0, -0.14, 0);
     const opacity = o.opacity ?? 1;
-    const m = new THREE.MeshPhysicalMaterial({
-      color, roughness: o.rough ?? 0.42, metalness: 0, clearcoat: o.clearcoat ?? 0.7, clearcoatRoughness: 0.28,
-      sheen: o.sheen ?? 0.25, sheenColor: new THREE.Color('#ffffff'), transparent: opacity < 1, opacity,
-      side: o.side ?? THREE.FrontSide, depthWrite: opacity >= 0.9,
+    // organic: a wet shine, a fine uneven surface, and see-through shells that thicken at their edges
+    const m = tissueMaterial(THREE, 'cell', {
+      vertexColors: false, film: opacity < 0.7, color, roughness: o.rough ?? 0.42, clearcoat: o.clearcoat ?? 0.7, clearcoatRoughness: 0.28,
+      sheen: o.sheen ?? 0.25, transparent: opacity < 1, opacity, side: o.side ?? THREE.FrontSide, depthWrite: opacity >= 0.9,
     });
     m.userData = { base: opacity, clip: !!o.clip, color: color.clone() };
     if (o.clip) { m.clippingPlanes = CUT; m.clipIntersection = true; }
@@ -96,11 +98,18 @@ function makeBuilder(kind) {
 // Organelles shared by both cells
 function mitochondrion(b, p, scale = 1) {
   const g = new THREE.Group();
-  const outer = new THREE.Mesh(new THREE.CapsuleGeometry(0.3 * scale, 0.75 * scale, 8, 18), b.mat('mito', { opacity: 0.62 }));
-  const pts = [];
-  for (let i = 0; i <= 9; i++) pts.push(V((i % 2 ? 0.17 : -0.17) * scale, (-0.5 + i / 9) * 0.95 * scale, 0));
-  const cristae = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.06 * scale, 8), b.mat('mito', { color: '#ffd29a', clearcoat: 0.3 }));
-  g.add(outer, cristae);
+  const outer = new THREE.Mesh(new THREE.CapsuleGeometry(0.3 * scale, 0.75 * scale, 8, 18), b.mat('mito', { opacity: 0.55 }));
+  g.add(outer);
+  // the cristae: shelves of folded inner membrane reaching in from each side
+  const cm = b.mat('mito', { color: '#ffcf96', clearcoat: 0.35 }), shelf = new THREE.SphereGeometry(1, 16, 10);
+  for (let i = 0; i < 7; i++) {
+    const side = i % 2 ? 1 : -1, c = new THREE.Mesh(shelf, cm);
+    c.scale.set(0.17 * scale, 0.028 * scale, 0.2 * scale);
+    c.position.set(side * 0.09 * scale, (-0.42 + i * 0.14) * scale, 0);
+    c.rotation.z = side * 0.12;
+    g.add(c);
+  }
+  g.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.24 * scale, 0.68 * scale, 6, 14), b.mat('mito', { color: '#c4652a', opacity: 0.45 }))); // the matrix inside
   g.position.copy(p); b.randomTilt(g);
   return b.add('mito', g);
 }
@@ -213,6 +222,18 @@ function smallSacs(b, id, n, r, fits, extra) {
     b.add(id, g);
   }
 }
+// the cytoplasm is crowded: thousands of proteins and small molecules, a fine haze of specks
+function cytosol(b, n, fits) {
+  const pos = [];
+  for (let i = 0; i < n * 4 && pos.length < n * 3; i++) { const p = fits.random(); if (fits.ok(p, 0.02) && !inCut(p, 0.02)) pos.push(p.x, p.y, p.z); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const color = new THREE.Color('#cfe6f2');
+  const m = new THREE.PointsMaterial({ color, size: 0.035, transparent: true, opacity: 0.55, depthWrite: false, sizeAttenuation: true });
+  m.userData = { base: 0.55, color };
+  b.part('cytoplasm').materials.add(m);
+  const pts = new THREE.Points(g, m); pts.raycast = () => {};
+  b.group.add(pts);
+}
 function cytoskeleton(b, n, fits) {
   const m = new THREE.LineBasicMaterial({ color: PARTS.cytoskeleton.color, transparent: true, opacity: 0.45 });
   m.userData = { base: 0.45, color: new THREE.Color(PARTS.cytoskeleton.color), line: true };
@@ -270,6 +291,7 @@ function buildAnimal() {
   const free = [];
   for (let i = 0; i < 900 && free.length < 170; i++) { const p = fits.random(); if (fits.ok(p, 0.05) && !inCut(p, 0.05)) free.push(p); }
   ribosomes(b, free, 0.038);
+  cytosol(b, 2600, fits);
   cytoskeleton(b, 34, fits);
   return { ...b, camera: V(8.6, 5.2, 10.6), radius: 6, fit: 5.4 };
 }
@@ -321,6 +343,7 @@ function buildPlant() {
   const free = [];
   for (let i = 0; i < 900 && free.length < 110; i++) { const p = fits.random(); if (fits.ok(p, 0.05) && !inCut(p, 0.05)) free.push(p); }
   ribosomes(b, free, 0.038);
+  cytosol(b, 2200, fits);
   // plasmodesmata: little channels through the wall
   const pm = b.mat('plasmodesmata');
   const pg = new THREE.Group();

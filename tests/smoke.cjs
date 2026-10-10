@@ -1495,13 +1495,19 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
 test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket, look up Japan and a place; pour, drag particles and disks', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
-  // space: the planets, then the Local Group
+  // space: the planets, then the Local Group (the real maps and stars arrive, and every shader compiles)
+  const tex = new Set(), shaderErr = [];
+  page.on('response', (r) => { if (/\/labs\/tex\//.test(r.url()) && r.ok()) tex.add(r.url().split('/').pop()); });
+  page.on('console', (m) => { if (/Shader Error|WebGLProgram/.test(m.text())) shaderErr.push(m.text().slice(0, 200)); });
   await page.goto(APP + '?lab=space3d');
   await page.waitForSelector('.lab3d-label:not([hidden])', { timeout: 30000 });
   await page.locator('.lab3d-label:not([hidden]):text-is("Jupiter")').click({ force: true });
   await page.waitForSelector('.space-card h3:text-is("Jupiter")');
   expect(/Distance from Earth now/.test(await page.locator('.space-card').innerText()) && /95 known/.test(await page.locator('.space-card').innerText()), 'Jupiter’s card has live distances and its moons');
   await page.waitForTimeout(1200); await shot('space-jupiter');
+  for (let i = 0; i < 40 && tex.size < 15; i++) await page.waitForTimeout(250);
+  expect(['earth-day.webp', 'earth-night.webp', 'earth-clouds.webp', 'jupiter.webp', 'saturn-ring.png', 'stars.bin', 'mercury-bump.webp'].every((f) => tex.has(f)), 'the planets’ real maps and the star sky load: ' + [...tex].join(', '));
+  expect(shaderErr.length === 0, 'the planet shaders compile: ' + shaderErr.join(' | '));
   await page.click('.lab-seg button:has-text("Local Group")');
   await page.locator('.lab3d-label:not([hidden]):has-text("Andromeda")').click({ force: true });
   await page.waitForSelector('.space-card h3:has-text("Andromeda")');

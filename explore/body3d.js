@@ -11,6 +11,7 @@ import * as THREE from './three.module.min.js';
 import { GLTFLoader } from './GLTFLoader.js';
 import { MeshoptDecoder } from './meshopt_decoder.module.js';
 import { mergeGeometries } from './BufferGeometryUtils.js';
+import { tissueMaterial } from './tissue.js';
 
 // The data comes in layers (one per folder in body/); students see the 10 body systems
 // they learn in school. A system is whole layers, or groups inside the organs layer.
@@ -32,12 +33,30 @@ export const SYSTEMS = [
 const MAIN_ORGAN = /^(heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
 // parts only a boy's body has (a girl's body shows the female organs instead)
 const MALE_ONLY = /^(male_genital_system|urogenital_region_[lr]|urethra)$|penis|scrot|testicular|ductus_deferens|prostat|seminal/;
-const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#ebe3d1', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
+const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#e6d8bd', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
+
+// Smooth normals: vertices at the same place share one normal (the files repeat them per triangle)
+function smoothNormals(g) {
+  const pos = g.attributes.position, idx = g.index, n = pos.count, key = new Map(), group = new Int32Array(n);
+  if (!g.boundingBox) g.computeBoundingBox();
+  const { min, max } = g.boundingBox, q = (v, lo, hi) => Math.round(((v - lo) / ((hi - lo) || 1)) * 199999);
+  for (let i = 0; i < n; i++) { const k = q(pos.getX(i), min.x, max.x) * 4e10 + q(pos.getY(i), min.y, max.y) * 2e5 + q(pos.getZ(i), min.z, max.z); let gi = key.get(k); if (gi === undefined) { gi = key.size; key.set(k, gi); } group[i] = gi; }
+  const acc = new Float32Array(key.size * 3), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < idx.count; t += 3) {
+    const i0 = idx.getX(t), i1 = idx.getX(t + 1), i2 = idx.getX(t + 2);
+    a.fromBufferAttribute(pos, i0); b.fromBufferAttribute(pos, i1); c.fromBufferAttribute(pos, i2);
+    c.sub(b); a.sub(b); c.cross(a); // the face normal, weighted by its area
+    for (const i of [i0, i1, i2]) { const o = group[i] * 3; acc[o] += c.x; acc[o + 1] += c.y; acc[o + 2] += c.z; }
+  }
+  const nor = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const o = group[i] * 3, x = acc[o], y = acc[o + 1], z = acc[o + 2], l = Math.hypot(x, y, z) || 1; nor[i * 3] = x / l; nor[i * 3 + 1] = y / l; nor[i * 3 + 2] = z / l; }
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+}
 
 // Colours students expect from an anatomy book, by what a part is.
 function colourFor(sys, id) {
   const has = (re) => re.test(id);
-  if (sys === 'skeletal') return has(/cartilag|disc/) ? '#a9c9cf' : has(/tooth|teeth|incisor|canine|premolar|molar/) ? '#f6f3ea' : SYS_COLOR.skeletal;
+  if (sys === 'skeletal') return has(/cartilag|disc/) ? '#d6e0dc' : has(/tooth|teeth|incisor|canine|premolar|molar/) ? '#f6f3ea' : SYS_COLOR.skeletal;
   if (sys === 'muscular') return has(/tendon|aponeuros|retinacul|sheath|bursa/) ? '#e8dcc8' : SYS_COLOR.muscular;
   if (sys === 'cardiovascular') {
     if (has(/pulmonary_trunk|pulmonary_arter|pulmonary_valve/)) return '#3c62b8';
@@ -222,11 +241,9 @@ export function createBody(ctx) {
           }
           g.setAttribute('color', new THREE.BufferAttribute(col, 3));
           g.userData.fullIndex = g.index.array.slice();
+          smoothNormals(g); // the files' normals are per-triangle; smooth ones let the wet shine run smoothly over a muscle
           const skin = id === 'regions';
-          o.material = new THREE.MeshPhysicalMaterial({
-            vertexColors: true, roughness: skin ? 0.6 : id === 'skeletal' ? 0.55 : 0.42, clearcoat: skin ? 0 : 0.35, clearcoatRoughness: 0.4,
-            transparent: skin, opacity: skin ? 0.16 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide,
-          });
+          o.material = tissueMaterial(THREE, id, { transparent: skin, opacity: skin ? 0.16 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide });
           o.userData.system = id;
           o.userData.pickable = true; o.userData.skin = skin;
           o.renderOrder = skin ? 2 : 0;
@@ -328,10 +345,7 @@ export function createBody(ctx) {
     geo.computeVertexNormals();
     geo.userData.fullIndex = geo.index.array.slice();
     const skin = !!look.skin;
-    const o = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
-      vertexColors: true, roughness: skin ? 0.6 : 0.45, clearcoat: skin ? 0 : 0.35, clearcoatRoughness: 0.4,
-      transparent: skin, opacity: skin ? 0.3 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide,
-    }));
+    const o = new THREE.Mesh(geo, tissueMaterial(THREE, skin ? 'regions' : layer, { transparent: skin, opacity: skin ? 0.3 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide }));
     o.userData = { system: layer, pickable: true, skin, female: true };
     o.renderOrder = skin ? 2 : 0;
     return o;
