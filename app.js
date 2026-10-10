@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '124';
+const APP_VERSION = '125';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -5807,7 +5807,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
   page.className = 'auth-page';
   page.innerHTML = `
     <div class="auth-left">
-      <div class="auth-brand"><svg viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z"/></svg>Cassie</div>
+      <div class="auth-brand"><svg viewBox="40 40 420 420" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="currentColor" stroke="currentColor" stroke-width="56" stroke-linejoin="round"/><g fill="var(--logo-eyes, var(--bg, #fff))"><rect x="168" y="196" width="22" height="70" rx="11"/><rect x="236" y="214" width="22" height="70" rx="11"/></g></svg>Cassie</div>
       <form class="auth-form" novalidate>
         <h1 class="auth-title"></h1>
         <p class="auth-sub"></p>
@@ -6012,6 +6012,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'A new look: Cassie’s logo is now Cursor Cassie herself — the pointer with her two blinking eyes — on the app, your home screen and the Chrome extension.',
   'Labs → Games: the score board now shows everyone’s points in every puzzle and their total — for today and for the whole week.',
   'Cassie is for every learner, from nursery to college and work. Setting up is just four questions: your name (or nickname), age, level and gender.',
   'Talk with Cassie: no more “allow the microphone” message when the microphone is already allowed.',

@@ -1590,6 +1590,13 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
+  // the hero: a laptop and a phone with real Cassie screens; the tabs switch them
+  expect(await page.locator('.devices .lid .scr img').count() === 4 && await page.locator('.devices .phone .scr img').count() === 2, 'the laptop and phone show Cassie screens');
+  await page.click('.dev-tabs [data-screen="2"]');
+  expect(await page.locator('.lid .scr img.on').getAttribute('src') === 'landing/hero/laptop-space.webp', 'the Space tab shows the 3D space screen');
+  expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.devices img')]; await Promise.all(all.map((i) => i.decode().catch(() => null))); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
+  expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the new logo: Cursor Cassie with her two eyes');
+  await page.locator('#try').scrollIntoViewIfNeeded();
   await page.click('#try-page b[data-term]:text-is("mitochondria")');
   await page.waitForSelector('#try-pop:not([hidden])');
   expect(/mitochondria/.test(await page.locator('#try-pop .tp-q').innerText()), 'the popup names the word');
