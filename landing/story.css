@@ -1,0 +1,149 @@
+/* The scroll story (landing/story.js): scenes that stay on screen while you scroll through them.
+   Black and white like the rest of Cassie — a soft white glow instead of colour. */
+.story { background: var(--pearl); }
+.st-scene { position: relative; }
+.st-pin { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
+.st-pin.dark { background: #0b0b0e; color: #fff; }
+.st-glow { position: absolute; left: -10%; right: -10%; bottom: -40%; height: 90%; pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(255,255,255,.16), rgba(255,255,255,.04) 45%, transparent 70%); filter: blur(10px); }
+.st-pin h3 { margin: 0; font: 400 clamp(34px, 4.6vw, 64px)/1 'Instrument Serif', Georgia, serif; letter-spacing: -.02em; }
+.st-pin h3 em.s { font-style: italic; color: var(--mute); }
+.st-pin.dark h3 em.s { color: rgba(255,255,255,.55); }
+/* a thin line with a dot that follows your scrolling */
+.st-line { position: absolute; left: 50%; bottom: 9%; width: min(560px, 70%); height: 1px; transform: translateX(-50%); background: rgba(255,255,255,.14); }
+.st-line.wide { width: min(980px, 84%); }
+.st-line i { position: absolute; left: 0; top: 0; height: 1px; width: calc(var(--p, 0) * 100%); background: linear-gradient(90deg, rgba(255,255,255,.1), #fff); }
+.st-line i::after { content: ""; position: absolute; right: -4px; top: -4px; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 14px 3px rgba(255,255,255,.7); }
+
+/* 1. the study shelf */
+.st-lib { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; padding: 130px 0 90px; }
+.st-shelf { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: 0 40px 80px rgba(18,17,23,.12); max-width: 480px; justify-self: end; width: 100%; }
+.sh-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.sh-top small { display: block; color: var(--mute); font-size: 12.5px; }
+.sh-top b { display: block; font: 400 34px/1.1 'Instrument Serif', Georgia, serif; letter-spacing: -.01em; }
+.sh-top span { font-size: 13px; color: var(--mute); }
+.sh-ring { width: 54px; height: 54px; transform: rotate(-90deg); }
+.sh-ring circle { fill: none; stroke: var(--line); stroke-width: 4; }
+.sh-ring circle.on { stroke: var(--ink); stroke-linecap: round; stroke-dasharray: 113; stroke-dashoffset: 113; transition: stroke-dashoffset 1.6s cubic-bezier(.2,.7,.2,1) .3s; }
+.st-shelf.in .sh-ring circle.on { stroke-dashoffset: 34; }
+.sh-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.sh-row small { display: block; color: var(--mute); font-size: 12.5px; }
+.sh-row em { font-style: normal; font-size: 12.5px; font-weight: 650; padding: 5px 10px; border-radius: 999px; background: var(--pearl); }
+.sh-ic { width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font: 800 10px/1 var(--sans); }
+.sh-acts { display: flex; gap: 8px; padding-top: 16px; }
+.sh-b { padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); font: 650 13.5px/1 var(--sans); }
+.sh-b.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* 2. the card that grows */
+.st-grow { height: 240vh; }
+.st-grow .st-pin { background: var(--pearl); }
+.sg-top, .sg-bot { position: absolute; left: 0; right: 0; text-align: center; padding: 0 20px; }
+.sg-top { top: 15%; } .sg-bot { bottom: 13%; }
+.sg-card { position: absolute; left: 50%; top: 50%; width: min(560px, 76vw); height: min(320px, 40vh); transform: translate(-50%, -50%); border-radius: 18px; background: #0b0b0e; overflow: hidden; box-shadow: 0 40px 90px rgba(18,17,23,.25); }
+.sg-card .st-line { bottom: 16%; width: 62%; }
+.sg-text { position: absolute; left: 50%; top: 42%; width: min(720px, 80%); transform: translate(-50%, -50%); margin: 0; text-align: center; color: rgba(255,255,255,.9); font: 400 clamp(22px, 3vw, 44px)/1.25 'Instrument Serif', Georgia, serif; opacity: var(--sg-text, 0); }
+.sg-text mark { background: linear-gradient(#f2efe8, #f2efe8) no-repeat 0 0 / calc(var(--sg-hl, 0) * 100%) 100%; color: inherit; padding: 0 .06em; border-radius: .06em; }
+.sg-text mark { color: color-mix(in srgb, #0b0b0e calc(var(--sg-hl, 0) * 100%), rgba(255,255,255,.9)); }
+.sg-cur { position: absolute; width: 22px; height: 26px; left: var(--sg-cx, 50%); top: var(--sg-cy, 60%); opacity: var(--sg-text, 0); filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }
+.sg-cur svg { width: 100%; height: 100%; display: block; }
+
+/* 3. Highlight → Explain → Quiz → Remember */
+.st-steps { height: 460vh; }
+.ss-big { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--big-s, 1)); opacity: var(--big-o, 1); font: 400 clamp(64px, 11vw, 170px)/1 'Instrument Serif', Georgia, serif; letter-spacing: -.03em; white-space: nowrap; }
+.ss-list { position: absolute; left: max(6vw, 24px); top: 50%; transform: translateY(-50%); list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; opacity: var(--list-o, 0); }
+.ss-list li { display: flex; align-items: center; gap: 12px; font: 400 clamp(24px, 2.6vw, 38px)/1 'Instrument Serif', Georgia, serif; color: rgba(255,255,255,.38); transition: color .4s, transform .4s; }
+.ss-list li::before { content: ""; width: 18px; height: 1px; background: currentColor; }
+.ss-list li.on { color: #fff; transform: translateX(6px); }
+.ss-list li.done { color: rgba(255,255,255,.7); }
+.ss-list svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity .3s; }
+.ss-list li.done svg { opacity: 1; }
+.ss-cards { position: absolute; right: max(6vw, 24px); top: 50%; width: min(440px, 44vw); height: 0; opacity: var(--list-o, 0); }
+.ss-card { position: absolute; inset: 0 0 auto 0; padding: 20px 22px; border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(calc(-50% + 26px)) scale(.97); transition: opacity .5s ease, transform .6s cubic-bezier(.2,.7,.2,1); font-size: 15px; line-height: 1.55; color: rgba(255,255,255,.82); }
+.ss-card.on { opacity: 1; transform: translateY(-50%); }
+.ss-card.past { opacity: .2; transform: translateY(calc(-50% - 40px)) scale(.94); }
+.ss-card small { display: block; margin-bottom: 8px; font-size: 12px; letter-spacing: .04em; color: rgba(255,255,255,.5); }
+.ss-card b { color: #fff; } .ss-card > b { display: block; font: 400 28px/1.1 'Instrument Serif', Georgia, serif; margin-bottom: 6px; }
+.ss-card p { margin: 0; }
+.ss-card mark { background: #f2efe8; color: #0b0b0e; padding: 0 .15em; border-radius: 3px; }
+.ss-cur { position: absolute; right: 28%; bottom: 14px; width: 20px; height: 24px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }
+.ss-cur svg { width: 100%; height: 100%; display: block; }
+.ss-card ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; }
+.ss-card li { padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); }
+.ss-card li.ok { background: #f2efe8; color: #0b0b0e; font-weight: 650; display: flex; justify-content: space-between; align-items: center; }
+.ss-card li svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ss-streak { display: flex; align-items: center; gap: 5px; margin-top: 14px; font-size: 12.5px; color: rgba(255,255,255,.6); }
+.ss-streak span { margin-right: 6px; }
+.ss-streak i { width: 18px; height: 18px; border-radius: 5px; background: #f2efe8; } .ss-streak i.off { background: rgba(255,255,255,.12); }
+
+/* 4. every subject */
+.st-subjects { height: 220vh; }
+.sj-copy { position: absolute; left: 0; right: 0; top: 30%; text-align: center; padding: 0 20px; opacity: var(--sj-o, 0); }
+.sj-copy p { margin: 12px 0 0; color: rgba(255,255,255,.62); font-size: 17px; }
+.sj-chips { position: absolute; left: 50%; top: 56%; width: min(760px, 92vw); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.sj-chips span { padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.05); font: 600 14px/1 var(--sans); white-space: nowrap; will-change: transform, opacity; }
+
+/* 5. from reading to remembering */
+.st-path { height: 340vh; }
+.sp-head { position: absolute; left: max(6vw, 24px); top: 13%; }
+.sp-head p { margin: 10px 0 0; color: rgba(255,255,255,.55); font-size: 15px; }
+.sp-status { position: absolute; right: max(6vw, 24px); top: 14%; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.05); font: 600 13px/1 var(--sans); }
+.sp-status i { width: 7px; height: 7px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px 2px rgba(255,255,255,.6); }
+.sp-svg { position: absolute; left: 50%; top: 58%; width: min(1200px, 96vw); transform: translate(-50%, -50%); overflow: visible; }
+.sp-ghost { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 1.5; }
+.sp-ghost.thin { stroke-dasharray: 3 6; stroke: rgba(255,255,255,.1); }
+.sp-main { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+.sp-dot { fill: #fff; filter: drop-shadow(0 0 10px rgba(255,255,255,.9)); }
+.sp-node circle { fill: #0b0b0e; stroke: rgba(255,255,255,.35); stroke-width: 1.5; transition: stroke .3s, fill .3s; }
+.sp-node.on circle { fill: #fff; stroke: #fff; }
+.sp-node text { fill: rgba(255,255,255,.45); font: 600 15px/1 Inter, sans-serif; transition: fill .3s; }
+.sp-node text.sub { font-size: 12px; font-weight: 500; fill: rgba(255,255,255,.3); }
+.sp-node.on text { fill: #fff; } .sp-node.on text.sub { fill: rgba(255,255,255,.6); }
+.sp-pill { position: absolute; left: 0; top: 0; padding: 6px 12px; border-radius: 999px; background: #f2efe8; color: #0b0b0e; font: 650 12.5px/1 var(--sans); white-space: nowrap; pointer-events: none; transform: translate(-50%, -150%); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+
+/* 6. Cassie's brain */
+.st-brain { height: 240vh; }
+.sb-head { position: absolute; left: max(6vw, 24px); top: 13%; }
+.sb-head p { margin: 10px 0 0; color: rgba(255,255,255,.55); font-size: 15px; }
+.sb-ring { position: absolute; left: 50%; top: 55%; width: min(380px, 62vw); aspect-ratio: 1; transform: translate(-50%, -50%); }
+.sb-ring::before { content: ""; position: absolute; inset: -30%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,calc(.08 + var(--glow, 0) * .16)), transparent 70%); }
+.sb-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); overflow: visible; }
+.sb-ring circle { fill: none; stroke-width: 2; }
+.sb-ring .bg { stroke: rgba(255,255,255,.12); fill: rgba(11,11,14,.6); }
+.sb-ring .fg { stroke: #fff; stroke-linecap: round; stroke-dasharray: 540.4; stroke-dashoffset: calc(540.4 * (1 - var(--ring, 0))); filter: drop-shadow(0 0 8px rgba(255,255,255,.7)); }
+.sb-core { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+.sb-eyes { display: flex; gap: 14px; height: 30px; }
+.sb-eyes i { width: 7px; height: 26px; border-radius: 4px; background: #fff; animation: sbBlink 3.2s infinite; }
+.sb-eyes i:last-child { margin-top: 5px; }
+@keyframes sbBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.sb-steps { font: 400 clamp(26px, 3.2vw, 40px)/1 'Instrument Serif', Georgia, serif; }
+.sb-note { color: rgba(255,255,255,.5); font-size: 12.5px; }
+.sb-in, .sb-out { position: absolute; top: 55%; transform: translateY(-50%); }
+.sb-in { left: max(6vw, 24px); opacity: calc(.4 + var(--in, 0) * .6); }
+.sb-out { right: max(6vw, 24px); text-align: right; opacity: var(--out, 0); transform: translate(calc((1 - var(--out, 0)) * 20px), -50%); }
+.sb-in small, .sb-out small { display: block; color: rgba(255,255,255,.5); font-size: 12.5px; margin-bottom: 6px; }
+.sb-in b, .sb-out b { display: block; font: 400 clamp(26px, 3vw, 42px)/1.1 'Instrument Serif', Georgia, serif; white-space: nowrap; }
+.sb-out span { display: block; margin-top: 6px; color: rgba(255,255,255,.55); font-size: 13px; }
+
+@media (max-width: 860px) {
+  .st-lib { grid-template-columns: 1fr; gap: 30px; padding: 90px 0 60px; }
+  .st-shelf { justify-self: stretch; max-width: none; }
+  .ss-list { top: 15%; left: 24px; transform: none; gap: 8px; }
+  .ss-list li { font-size: 24px; }
+  .ss-cards { left: 20px; right: 20px; width: auto; top: 62%; }
+  .sp-head, .sb-head { top: 11%; right: 24px; }
+  .sp-status { top: auto; bottom: 12%; right: auto; left: 24px; }
+  .sp-svg { width: calc(100vw - 32px); top: 56%; }
+  .sp-main { stroke-width: 5; } .sp-ghost { stroke-width: 3; }
+  .sp-node circle { stroke-width: 3; }
+  .sp-node text { font-size: 34px; }
+  .sb-ring { top: 50%; width: 58vw; }
+  .sb-in { top: 74%; left: 24px; transform: none; } .sb-out { top: 74%; right: 24px; transform: none; }
+  .sb-in b, .sb-out b { font-size: 22px; }
+}
+/* no motion: every scene simply shows how it ends, without staying on screen */
+@media (prefers-reduced-motion: reduce) {
+  .st-scene { height: auto !important; }
+  .st-pin { position: relative; height: 100vh; }
+  .sb-eyes i { animation: none; }
+}

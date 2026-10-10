@@ -1596,6 +1596,20 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   expect(await page.locator('.lid .scr img.on').getAttribute('src') === 'landing/hero/laptop-space.webp', 'the Space tab shows the 3D space screen');
   expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.devices img')]; await Promise.all(all.map((i) => i.decode().catch(() => null))); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
   expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the new logo: Cursor Cassie with her two eyes');
+  // the scroll story: scrolling through a scene moves what's inside it
+  const scrollTo = async (sel, p) => {
+    await page.evaluate(([s, q]) => { const el = document.querySelector(s); const top = el.getBoundingClientRect().top + scrollY; scrollTo({ top: top + (el.offsetHeight - innerHeight) * q, behavior: 'instant' }); }, [sel, p]);
+    await page.waitForTimeout(150);
+  };
+  await scrollTo('.st-steps', 0.7);
+  expect(await page.locator('.ss-list li.on').innerText() === 'Quiz', 'two-thirds through the steps, Quiz is the step on: ' + await page.locator('.ss-list li.on').innerText());
+  expect(await page.locator('.ss-card.on').count() === 1, 'one step card shows at a time');
+  await scrollTo('.st-path', 0.1);
+  const early = await page.locator('.sp-node.on').count();
+  await scrollTo('.st-path', 1);
+  expect(early >= 1 && await page.locator('.sp-node.on').count() === 6 && /Remembered/.test(await page.locator('.sp-status').innerText()), 'the dot travels the path to Remembered');
+  await scrollTo('.st-brain', 1);
+  expect(await page.locator('.sb-steps').innerText() === 'Solved', 'the ring fills and the answer comes out');
   await page.locator('#try').scrollIntoViewIfNeeded();
   await page.click('#try-page b[data-term]:text-is("mitochondria")');
   await page.waitForSelector('#try-pop:not([hidden])');
