@@ -477,25 +477,7 @@ function toys() {
   }
 }
 
-/* =============================== 0. The hero's laptop and phone =============================== */
-// Real Cassie screens take turns on both devices; the tabs under them jump to one.
-function heroScreens() {
-  const lap = $('.laptop [data-screens]'), phone = $('.phone [data-screens]'), tabs = $$('.dev-tabs [data-screen]');
-  if (!lap || !tabs.length) return;
-  let i = 0, timer = 0, visible = true;
-  const show = (k) => {
-    i = (k + tabs.length) % tabs.length;
-    $$('img', lap).forEach((im, n) => im.classList.toggle('on', n === i));
-    if (phone) { const pi = $$('img', phone); pi.forEach((im, n) => im.classList.toggle('on', n === i % pi.length)); }
-    tabs.forEach((t, n) => t.setAttribute('aria-selected', String(n === i)));
-  };
-  const run = () => { clearInterval(timer); if (!reduce && visible) timer = setInterval(() => show(i + 1), 4200); };
-  tabs.forEach((t) => t.addEventListener('click', () => { show(+t.dataset.screen); run(); }));
-  new IntersectionObserver(([en]) => { visible = en.isIntersecting; run(); }).observe(lap);
-}
-
 /* =============================== start =============================== */
-heroScreens();
 tryIt();
 desk();
 toys();

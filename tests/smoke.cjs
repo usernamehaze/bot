@@ -1590,17 +1590,20 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
-  // the hero: a laptop and a phone with real Cassie screens; the tabs switch them
-  expect(await page.locator('.devices .lid .scr img').count() === 4 && await page.locator('.devices .phone .scr img').count() === 2, 'the laptop and phone show Cassie screens');
-  await page.click('.dev-tabs [data-screen="2"]');
-  expect(await page.locator('.lid .scr img.on').getAttribute('src') === 'landing/hero/laptop-space.webp', 'the Space tab shows the 3D space screen');
-  expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.devices img')]; await Promise.all(all.map((i) => i.decode().catch(() => null))); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
+  // under the hero: a 3D laptop and phone showing Labs (the Google Docs strip is gone)
+  expect(await page.locator('.strip, .marquee').count() === 0, 'the scrolling strip is gone');
+  expect(await page.locator('.lx-lid .lx-scr img').count() === 3 && await page.locator('.lx-phone img').count() === 2, 'the laptop and phone show Labs screens');
+  expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.lx-show img')]; await Promise.all(all.map((i) => { i.loading = 'eager'; return i.decode().catch(() => null); })); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
   expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the new logo: Cursor Cassie with her two eyes');
   // the scroll story: scrolling through a scene moves what's inside it
   const scrollTo = async (sel, p) => {
     await page.evaluate(([s, q]) => { const el = document.querySelector(s); const top = el.getBoundingClientRect().top + scrollY; scrollTo({ top: top + (el.offsetHeight - innerHeight) * q, behavior: 'instant' }); }, [sel, p]);
     await page.waitForTimeout(150);
   };
+  await scrollTo('.lx-show', 0.32);
+  expect(await page.evaluate(() => { const r = document.querySelector('.lx-scr').getBoundingClientRect(); return r.width > innerWidth * 0.85; }), 'scrolled in, the laptop screen fills the window');
+  await scrollTo('.lx-show', 0.66);
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.lx-sim.s1')).opacity === '1') && /^Pendulum/.test(await page.locator('.lx-type span').innerText()), 'then the pendulum lab is on the screen');
   await scrollTo('.st-steps', 0.7);
   expect(await page.locator('.ss-list li.on').innerText() === 'Quiz', 'two-thirds through the steps, Quiz is the step on: ' + await page.locator('.ss-list li.on').innerText());
   expect(await page.locator('.ss-card.on').count() === 1, 'one step card shows at a time');
