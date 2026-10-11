@@ -1864,3 +1864,57 @@ html.native .home:not([hidden]) {
 }
 @media (prefers-reduced-motion: reduce) { .home button:active { transform: none; } html.native .tabbar, .tab { transition: none; } }
 @media (prefers-reduced-transparency: reduce) { html.native .tabbar { background: #18181b; -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+/* ===================== Liquid Glass =====================
+   Apple's material for the layer of controls that floats above the content (Human Interface
+   Guidelines › Materials, via the apple-design skill): the top bar, the tab bar, the chat box,
+   the quick chips, sheets and the side menu. Content — bubbles, cards, lists — stays solid, so
+   it reads clearly and the glass has something to show through it. No colour of its own: it
+   takes the colours beneath. With Reduce Transparency or Increase Contrast it turns solid. */
+:root {
+  --lg-fill: linear-gradient(180deg, rgba(255, 255, 255, .78), rgba(255, 255, 255, .58));
+  --lg-fill-thick: linear-gradient(180deg, rgba(255, 255, 255, .92), rgba(250, 249, 247, .84));
+  --lg-line: rgba(18, 17, 23, .07);
+  --lg-edge: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 -1px 0 rgba(255, 255, 255, .35), inset 0 0 0 .5px rgba(255, 255, 255, .55);
+  --lg-lift: 0 10px 30px rgba(18, 17, 23, .10), 0 1px 3px rgba(18, 17, 23, .06);
+  --lg-blur: blur(26px) saturate(1.6);
+  --lg-ink: rgba(18, 17, 23, .62);
+  --lg-pick: rgba(18, 17, 23, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lg-fill: linear-gradient(180deg, rgba(58, 58, 64, .62), rgba(34, 34, 38, .52));
+    --lg-fill-thick: linear-gradient(180deg, rgba(44, 44, 48, .9), rgba(30, 30, 33, .86));
+    --lg-line: rgba(255, 255, 255, .08);
+    --lg-edge: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -1px 0 rgba(255, 255, 255, .04), inset 0 0 0 .5px rgba(255, 255, 255, .1);
+    --lg-lift: 0 12px 34px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .3);
+    --lg-ink: rgba(255, 255, 255, .7);
+    --lg-pick: rgba(255, 255, 255, .16);
+  }
+}
+.topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar, .home-ask, .home-round {
+  background: var(--lg-fill); border: 1px solid var(--lg-line);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  box-shadow: var(--lg-edge), var(--lg-lift);
+}
+/* text-heavy surfaces use the thicker glass, so every word stays easy to read */
+.settings-card, .sidebar { background: var(--lg-fill-thick); }
+/* the top bar floats: the chat scrolls up underneath it (native.js keeps --topbar-h) */
+.topbar { position: relative; z-index: 7; border-width: 0 0 1px; box-shadow: var(--lg-edge), 0 6px 22px rgba(18, 17, 23, .06); }
+#chat-log { margin-top: calc(-1 * var(--topbar-h, 0px)); padding-top: calc(var(--topbar-h, 0px) + 16px); scroll-padding-top: var(--topbar-h, 0px); }
+.composer { position: relative; z-index: 6; }
+.composer:focus-within { border-color: var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift), 0 0 0 2px var(--text); }
+#quick-actions .chip { box-shadow: var(--lg-edge), 0 2px 8px rgba(18, 17, 23, .06); }
+.home-avatar { box-shadow: var(--lg-edge), var(--lg-lift); }
+/* the tab bar: glass that shows what's beneath; the open tab sits in a brighter bubble */
+html.native .tabbar { background: var(--lg-fill); }
+.tab { color: var(--lg-ink); }
+.tab.on { background: var(--lg-pick); color: var(--text); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+.tab:focus-visible { outline-color: var(--text); }
+/* Reduce Transparency and Increase Contrast: solid surfaces and clear edges, no blur */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar, .home-ask, .home-round {
+    background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+  }
+  .tab.on { background: var(--text); color: var(--surface); }
+}

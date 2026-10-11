@@ -20,6 +20,8 @@ module.exports = { P, mark, icon };
 if (require.main === module) (async () => {
   const out = [
     ['icons/icon-192.png', { size: 192 }], ['icons/icon-512.png', { size: 512 }],
+    // the iPhone home screen: a full square, no see-through corners (iOS rounds it itself and fills any gap with black)
+    ['icons/apple-touch-icon.png', { size: 180, rounded: false, scale: 0.7 }],
     ['icons/icon-maskable-192.png', { size: 192, rounded: false, scale: 0.6 }], ['icons/icon-maskable-512.png', { size: 512, rounded: false, scale: 0.6 }],
     ['extension/icons/icon-16.png', { size: 16, eyes: false, scale: 0.86 }], ['extension/icons/icon-32.png', { size: 32, scale: 0.84 }],
     ['extension/icons/icon-48.png', { size: 48, scale: 0.8 }], ['extension/icons/icon-128.png', { size: 128 }],

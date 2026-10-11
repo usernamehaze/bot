@@ -76,7 +76,8 @@
         else if (m.type === 'audio') { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); w.resolve(m); } }
       };
       worker.onerror = (e) => { clearTimeout(watchdog); lastError = (e && e.message) || 'the voice engine stopped'; if (e && e.preventDefault) e.preventDefault(); reject(fail(new Error((e && e.message) || 'The voice stopped.'))); };
-      worker.postMessage({ type: 'load' });
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      worker.postMessage({ type: 'load', oneThread: ios });
     });
     readyP.catch(() => {});
     return readyP;
@@ -197,7 +198,64 @@
     };
   }
 
+  // The device's own voice — only while Bella isn't ready on this device (still downloading, or her
+  // engine can't run here), so Cassie never goes silent. Picks the most natural voice it has:
+  // Apple's Premium/Enhanced voices, Google's and Microsoft's natural ones, then a known good name.
+  const synth = window.speechSynthesis;
+  const NICE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Karen', 'Moira', 'Serena', 'Aria', 'Jenny', 'Google US English'], man: ['Evan', 'Nathan', 'Tom', 'Daniel', 'Alex', 'Aaron', 'Arthur', 'Guy', 'Ryan', 'Google UK English Male'] };
+  function deviceVoice(gender) {
+    const all = synth ? synth.getVoices() : [];
+    const lang = (navigator.language || 'en').slice(0, 2);
+    const names = NICE[gender] || NICE.woman, other = NICE[gender === 'man' ? 'woman' : 'man'];
+    let best = null, bestScore = -1;
+    for (const v of all) {
+      if (!/^en/i.test(v.lang) && v.lang.slice(0, 2) !== lang) continue;
+      let sc = /^en/i.test(v.lang) ? 1 : 0;
+      if (/premium|enhanced|neural|natural|siri/i.test(v.name)) sc += 6;
+      const i = names.findIndex((n) => v.name.includes(n));
+      if (i >= 0) sc += 4 - i * 0.2;
+      if (other.some((n) => v.name.includes(n))) sc -= 5;
+      if (/novelty|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|zarvox|albert|fred|junior|ralph|kathy|superstar|grandpa|grandma|eddy|flo|reed|rocko|sandy|shelley/i.test(v.name)) sc -= 20;
+      if (v.localService) sc += 0.5;
+      if (sc > bestScore) { bestScore = sc; best = v; }
+    }
+    return best;
+  }
+  if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', () => {}); // loads the list early
+  function deviceSay(text, opts = {}) {
+    let stopped = false, finish;
+    const done = new Promise((r) => { finish = r; });
+    if (!synth || !text) { finish({ status: 'done' }); return { done, stop() {} }; }
+    // one sentence at a time: long utterances get cut off on some phones
+    const parts = String(text).match(/[^.!?]+[.!?]*\s*/g) || [String(text)];
+    let i = 0;
+    const next = () => {
+      if (stopped) return;
+      if (i >= parts.length) { finish({ status: 'done' }); return; }
+      try {
+        const u = new SpeechSynthesisUtterance(parts[i++].trim());
+        const v = deviceVoice(opts.gender);
+        if (v) { try { u.voice = v; } catch (e) { /* not a voice this browser knows */ } u.lang = v.lang; }
+        u.rate = opts.rate || 1; u.pitch = 1;
+        u.onstart = () => { if (i === 1 && opts.onStart) opts.onStart(); };
+        u.onend = next;
+        u.onerror = next;
+        synth.speak(u);
+      } catch (e) { finish({ status: 'done' }); } // never leave Cassie stuck
+    };
+    try { synth.cancel(); } catch (e) { /* ignore */ }
+    setTimeout(next, 30);
+    return { done, stop() { stopped = true; try { synth.cancel(); } catch (e) { /* ignore */ } finish({ status: 'stopped' }); } };
+  }
+  // phones: speech has to start once inside a tap — do it with a silent word on the first tap
+  let synthWoken = false;
+  ['pointerdown', 'touchend'].forEach((ev) => window.addEventListener(ev, () => {
+    if (synthWoken || !synth) return; synthWoken = true;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } catch (e) { /* ignore */ }
+  }, { capture: true, passive: true }));
+
   window.CassieVoice = {
+    device: { say: deviceSay, voice: deviceVoice, supported: () => !!synth },
     sayStream,
     VOICES,
     supported,
