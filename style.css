@@ -1931,3 +1931,7 @@ html.native .tabbar { background: var(--lg-fill); }
 .listen-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .x3d .listen-btn { background: rgba(255, 255, 255, .1); color: #fff; border-color: rgba(255, 255, 255, .22); margin-left: auto; }
 .x3d .listen-btn.on { background: #fff; color: #111; }
+/* her voice is downloaded and being set up: a bar that moves instead of sitting at 100% */
+.vc-hv-bar.busy i { background: linear-gradient(90deg, transparent, var(--primary), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: hvBusy 1.3s linear infinite; }
+@keyframes hvBusy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+@media (prefers-reduced-motion: reduce) { .vc-hv-bar.busy i { animation: none; background: var(--primary); opacity: .6; } }

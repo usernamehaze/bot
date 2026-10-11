@@ -2,7 +2,7 @@
    The voice itself is made in voice/voice-worker.js (Kokoro, on the device). This file
    asks it for one sentence at a time and plays each as soon as it's ready, while the
    next one is being made. Nothing is sent anywhere; once downloaded it works offline.
-   window.CassieVoice = { supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
+   window.CassieVoice = { speak, stream, best, supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
 (function () {
   // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); Michael for a man's voice
   const VOICES = { woman: 'af_bella', man: 'am_michael' };
@@ -10,6 +10,8 @@
   let worker = null;
   let status = 'off'; // off | loading | ready | failed
   let progress = 0;
+  let warming = false; // downloaded, now being set up (this can take a while on a phone)
+  let retried = false;
   let readyP = null;
   let ctx = null;
   let turn = 0, seq = 0;
@@ -18,7 +20,7 @@
   let info = { isolated: false, cores: 1 };
   const waiting = new Map();
   const listeners = new Set();
-  const emit = () => listeners.forEach((f) => { try { f({ status, progress }); } catch (e) { /* ignore */ } });
+  const emit = () => listeners.forEach((f) => { try { f({ status, progress, warming }); } catch (e) { /* ignore */ } });
 
   const AC = window.AudioContext || window.webkitAudioContext;
   function audioCtx() {
@@ -47,7 +49,7 @@
   function got() { try { return localStorage.getItem(FLAG) === 'got'; } catch (e) { return false; } }
 
   function fail(err) {
-    status = 'failed';
+    status = 'failed'; warming = false;
     if (worker) { try { worker.terminate(); } catch (e) { /* ignore */ } }
     worker = null; readyP = null;
     waiting.forEach((w) => w.resolve({ error: 'stopped' })); waiting.clear();
@@ -58,8 +60,18 @@
   function prepare() {
     if (readyP) return readyP;
     if (!supported()) { status = 'failed'; emit(); return Promise.reject(new Error('This browser can’t make the human voice.')); }
-    status = 'loading'; progress = 0; emit();
-    readyP = new Promise((resolve, reject) => {
+    status = 'loading'; progress = 0; warming = false; emit();
+    readyP = start().catch((err) => {
+      // a phone often manages it the second time (the download is kept): try once more by itself
+      if (retried) throw err;
+      retried = true; readyP = null; status = 'loading'; emit();
+      return prepare();
+    });
+    readyP.catch(() => {});
+    return readyP;
+  }
+  function start() {
+    return new Promise((resolve, reject) => {
       try { worker = new Worker(new URL('voice/voice-worker.js', document.baseURI), { type: 'module' }); }
       catch (e) { reject(fail(e)); return; }
       // if the voice engine goes quiet while starting (a blocked file, a stuck download), give up
@@ -71,7 +83,8 @@
         const m = e.data || {};
         if (status === 'loading') { if (m.type === 'ready' || m.type === 'failed') clearTimeout(watchdog); else quiet(); }
         if (m.type === 'progress') { progress = m.total ? Math.min(1, m.loaded / m.total) : 0; emit(); }
-        else if (m.type === 'ready') { info = { isolated: !!m.isolated, cores: m.cores || 1 }; status = 'ready'; progress = 1; try { localStorage.setItem(FLAG, 'got'); } catch (err) { /* ignore */ } emit(); resolve(); }
+        else if (m.type === 'warming') { warming = true; progress = 1; emit(); }
+        else if (m.type === 'ready') { info = { isolated: !!m.isolated, cores: m.cores || 1 }; status = 'ready'; progress = 1; warming = false; try { localStorage.setItem(FLAG, 'got'); } catch (err) { /* ignore */ } emit(); resolve(); }
         else if (m.type === 'failed') { lastError = m.error || ''; reject(fail(new Error(m.error || 'The voice did not load.'))); }
         else if (m.type === 'audio') { const w = waiting.get(m.id); if (w) { waiting.delete(m.id); w.resolve(m); } }
       };
@@ -79,8 +92,6 @@
       const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       worker.postMessage({ type: 'load', oneThread: ios });
     });
-    readyP.catch(() => {});
-    return readyP;
   }
 
   // Say these sentences. Returns { done, stop }. done resolves to
@@ -303,31 +314,100 @@
     }
     return out;
   }
-  // Read anything aloud with the best voice there is: the studio voice, else Bella, else the
-  // device's — and if one fails partway, the next carries on from that sentence.
-  function speak(text, opts = {}) {
-    const parts = sentences(text);
-    let stopped = false, cur = null, finish;
-    const done = new Promise((r) => { finish = r; });
-    (async () => {
-      if (!parts.length) return finish({ status: 'done' });
-      let from = 0;
-      if (studioReady()) {
-        cur = studioSay(parts, opts); const r = await cur.done;
-        if (stopped) return; if (r.status !== 'error') return finish(r); from = r.at;
+  // Which voice speaks: Cassie's own (Bella or Michael) once she's on this device — always the same
+  // voice from then on, and no limits. Until then the studio voice stands in (when Cassie's server
+  // has it and today's allowance isn't used up), else the device's own.
+  const has = (k) => (k === 'bella' ? status === 'ready' && !!worker : k === 'studio' ? studioReady() : k === 'device' && !!synth);
+  function best() { return has('bella') ? 'bella' : has('studio') ? 'studio' : 'device'; }
+  const fallback = (k) => ['bella', 'studio', 'device'].find((x) => x !== k && has(x)) || 'device';
+  function bellaClip(text, voice, myTurn, speed) {
+    const id = ++seq;
+    const p = new Promise((resolve) => waiting.set(id, { resolve }));
+    worker.postMessage({ type: 'say', id, turn: myTurn, text, voice, speed: speed || 1 });
+    return p.then((m) => {
+      if (!m || m.error || !m.audio || !m.audio.length) throw new Error((m && m.error) || 'no sound');
+      const secs = m.audio.length / m.rate;
+      if (m.ms > secs * 1000 * 1.3) slowCount++; else slowCount = Math.max(0, slowCount - 1);
+      const b = audioCtx().createBuffer(1, m.audio.length, m.rate); b.getChannelData(0).set(m.audio);
+      return b;
+    });
+  }
+  // Speak an answer while it is still being written: push(text) a piece at a time, end() when it's
+  // all there. One voice for the whole answer (picked now); if it fails partway, the next best
+  // carries on from that piece and keeps going. Returns { push, end, done, stop, said, voice }.
+  // opts.onVoice(kind) tells which voice took over.
+  function stream(opts = {}) {
+    const myTurn = ++turn, bv = VOICES[opts.gender] || VOICES.woman;
+    let kind = has(opts.voice) ? opts.voice : best();
+    if (kind !== 'device' && !audioCtx()) kind = 'device';
+    const pieces = [];
+    let ended = false, stopped = false, wake = null, said = 0, srcNode = null, dev = null, endNow = null;
+    const nudge = () => { if (wake) { const w = wake; wake = null; w(); } };
+    const make = (text) => (kind === 'bella' ? bellaClip(text, bv, myTurn, opts.speed) : kind === 'studio' ? studioClip(text, opts.gender) : null);
+    // the studio voice downloads a couple of pieces ahead (it costs credits); Bella makes them all in turn
+    const ahead = (i) => { for (let j = i; j < pieces.length && (kind === 'bella' || j < i + 3); j++) if (!pieces[j].job && kind !== 'device') { pieces[j].job = make(pieces[j].text); pieces[j].job.catch(() => {}); } };
+    const play = (buf) => new Promise((resolve) => {
+      const src = audioCtx().createBufferSource(); src.buffer = buf; src.connect(audioCtx().destination);
+      // a phone that hasn't woken the speaker never says "ended": move on after the piece's length
+      const t = setTimeout(() => endNow && endNow(), buf.duration * 1000 + 1500);
+      endNow = () => { clearTimeout(t); endNow = null; resolve(); };
+      src.onended = () => endNow && endNow(); srcNode = src;
+      try { src.start(); } catch (e) { endNow(); }
+    });
+    const done = (async () => {
+      for (let i = 0; ; i++) {
+        while (i >= pieces.length && !ended && !stopped) await new Promise((r) => { wake = r; });
+        if (stopped) return { status: 'stopped' };
+        if (i >= pieces.length) return { status: 'done' };
+        let buf = null;
+        while (kind !== 'device') {
+          ahead(i);
+          try { buf = await pieces[i].job; break; } catch (e) {
+            if (stopped) return { status: 'stopped' };
+            if (kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
+            kind = fallback(kind); pieces.forEach((p, j) => { if (j >= i) p.job = null; });
+            if (opts.onVoice) opts.onVoice(kind);
+          }
+        }
+        if (stopped) return { status: 'stopped' };
+        if (i === 0 && opts.onStart) opts.onStart(kind);
+        if (kind === 'device') { dev = deviceSay(pieces[i].text, { gender: opts.gender, rate: opts.rate }); await dev.done; dev = null; }
+        else await play(buf);
+        srcNode = null; said = i + 1;
+        if (stopped) return { status: 'stopped' };
       }
-      if (status === 'ready' && worker && from < parts.length) {
-        cur = say(parts.slice(from), opts); const r = await cur.done;
-        if (stopped) return; if (r.status !== 'error') return finish(r); from += r.at;
-      }
-      cur = deviceSay(parts.slice(from).join(' '), opts);
-      finish(await cur.done);
     })();
-    return { done, stop() { stopped = true; if (cur) cur.stop(); finish({ status: 'stopped' }); } };
+    return {
+      done,
+      get said() { return said; },
+      get voice() { return kind; },
+      live: true,
+      push(text) { if (stopped || ended || !text || !String(text).trim()) return; pieces.push({ text: String(text).trim(), job: null }); ahead(said); nudge(); },
+      end() { ended = true; nudge(); },
+      stop() {
+        if (stopped) return;
+        stopped = true;
+        if (kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
+        try { if (srcNode) srcNode.stop(); } catch (e) { /* ignore */ }
+        if (endNow) endNow();
+        if (dev) dev.stop();
+        nudge();
+      },
+    };
+  }
+  // Read anything aloud with the best voice there is (see best()).
+  function speak(text, opts = {}) {
+    const st = stream(opts);
+    sentences(text).forEach((p) => st.push(p));
+    st.end();
+    return st;
   }
 
   window.CassieVoice = {
     speak,
+    stream,
+    best,
+    warming: () => warming,
     studio: { setup: setupStudio, ready: studioReady, on: () => studio.on, say: studioSay },
     device: { say: deviceSay, voice: deviceVoice, supported: () => !!synth },
     sayStream,
