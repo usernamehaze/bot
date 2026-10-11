@@ -230,6 +230,20 @@ test('server backup brain answers when Groq is down', async (b) => {
   await ctx.close();
 });
 
+test('free questions: only what the student asks counts (file sections and helpers don’t), and the limit says so', async (b) => {
+  await serverMode({ groq: 'ok', ai: 'ok', dailyAll: 50, freeQuestions: 3 });
+  const { ctx, page } = await open(b);
+  try {
+    const call = (q) => page.evaluate(async ([srv, qq]) => { const r = await fetch(srv + '/chat', { method: 'POST', body: JSON.stringify({ uid: installId(), q: qq ? 1 : undefined, messages: [{ role: 'user', content: 'hi' }] }) }); return [r.status, r.headers.get('x-cassie-left')]; }, [SERVER, q]);
+    for (let i = 0; i < 6; i++) expect((await call(false))[0] === 200, 'a file section / helper call is not a question');
+    for (let i = 0; i < 3; i++) { const [st, left] = await call(true); expect(st === 200 && +left === 2 - i, `question ${i + 1}: ${st} left ${left}`); }
+    expect((await call(true))[0] === 429, 'the 4th question is over the limit');
+    expect((await call(false))[0] === 200, 'helpers still work after the questions run out');
+    const a = await ask(page, 'One more question');
+    expect(/3 free questions/.test(await a.textContent()), 'the message says how many: ' + await a.textContent());
+  } finally { await serverMode({ dailyAll: null, freeQuestions: null }); await fetch(`${SERVER}/__reset`); await ctx.close(); }
+});
+
 test('daily limit shows a friendly message with Try again', async (b) => {
   await serverMode({ groq: 'ok', ai: 'ok' });
   const { ctx, page } = await open(b);
@@ -2381,7 +2395,7 @@ test('Claude on the server: the main chat and photos use Claude, Groq covers whe
     expect(/Claude here/.test(await a.textContent()), 'Claude should answer: ' + await a.textContent());
     let m = await (await fetch(SERVER + '/__mode')).json();
     const call = m.claudeCalls.at(-1);
-    expect(call && call.model === 'test-opus-newest', 'should pick the newest Opus: ' + (call && call.model));
+    expect(call && call.model === 'test-haiku', 'a free student gets Haiku (when the owner allows any Claude for free): ' + (call && call.model));
     expect(call.effort === 'medium' && call.fallbacks === 'default' && call.beta === 'server-side-fallback-2026-07-01', 'effort + refusal fallback: ' + JSON.stringify(call).slice(0, 200));
     expect(/You are Cassie/.test(call.system) && call.messages[0].role === 'user', 'system prompt goes on its own, chat starts with the user');
     // a photo goes to Claude as an image block
@@ -2392,12 +2406,32 @@ test('Claude on the server: the main chat and photos use Claude, Groq covers whe
     m = await (await fetch(SERVER + '/__mode')).json();
     const blocks = m.claudeCalls.at(-1).messages.at(-1).content;
     expect(blocks.some((x) => x.type === 'image' && x.source.type === 'base64' && /^image\//.test(x.source.media_type)), 'photo should be an image block');
+    // paid plans: the owner gives an account Pro with the dashboard password → Sonnet answers
+    const email = `pro${Date.now()}@example.com`;
+    const token = await page.evaluate(async ([srv, em]) => (await (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: em, password: 'secret-pass-1', age: 17 }) })).json()).token, [SERVER, email]);
+    const grant = async (plan) => (await (await fetch(SERVER + '/admin/plan', { method: 'POST', headers: { authorization: 'Bearer test-admin-token-0123456789', 'content-type': 'application/json' }, body: JSON.stringify({ email, plan, days: 30 }) })).json());
+    expect((await grant('pro')).plan === 'pro', 'the owner can give Pro');
+    const chatAs = (tok) => page.evaluate(async ([srv, t]) => { const r = await fetch(srv + '/chat', { method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: JSON.stringify({ uid: installId(), brain: 'claude', q: 1, messages: [{ role: 'user', content: 'What is ATP?' }] }) }); return [r.headers.get('x-cassie-plan'), r.headers.get('x-cassie-source')]; }, [SERVER, tok]);
+    let [plan, source] = await chatAs(token);
+    m = await (await fetch(SERVER + '/__mode')).json();
+    expect(plan === 'pro' && source === 'claude' && m.claudeCalls.at(-1).model === 'test-sonnet', 'Pro gets Sonnet: ' + plan + ' ' + source + ' ' + m.claudeCalls.at(-1).model);
+    expect((await grant('plus')).plan === 'plus', 'the owner can give Plus');
+    [plan] = await chatAs(token);
+    m = await (await fetch(SERVER + '/__mode')).json();
+    expect(plan === 'plus' && m.claudeCalls.at(-1).model === 'test-haiku', 'Plus gets Haiku');
+    // with the real default (no Claude for free students), a free student is answered by Groq
+    await serverMode({ freeClaude: 0 });
+    const before = m.claudeCount;
+    [plan, source] = await chatAs('');
+    m = await (await fetch(SERVER + '/__mode')).json();
+    expect(plan === 'free' && source === 'groq' && m.claudeCount === before, 'free students don’t use Claude: ' + plan + ' ' + source);
+    await serverMode({ freeClaude: 3 });
     // Claude down → the answer still comes (Groq on the server)
     await serverMode({ claude: 'down', reply: 'Groq covered for Claude.' });
     const c = await ask(page, 'And respiration?');
     expect(/Groq covered/.test(await c.textContent()), 'Groq should cover: ' + await c.textContent());
     await ctx.close();
-  } finally { await serverMode({ claude: 'off', reply: '' }); }
+  } finally { await serverMode({ claude: 'off', reply: '', freeClaude: null }); }
 });
 
 test('board: Cassie draws on it when asked', async (b) => {
