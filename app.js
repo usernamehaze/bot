@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '132';
+const APP_VERSION = '133';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -3862,6 +3862,7 @@ function openSketch(opts = {}) {
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    ...boardDecks(),
     extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code — draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
   });
 }
@@ -3892,7 +3893,7 @@ function openRoomChooser(prefill = '') {
       <button type="button" class="room-go main" data-room="new">Start a room</button>
       <form class="room-join"><input name="code" maxlength="6" placeholder="Have a code? e.g. K7M2QX" autocomplete="off" autocapitalize="characters" value="${escapeHtml(prefill)}"><button type="submit" class="room-go">Join</button></form>
       <p class="room-err" hidden></p>
-      <p class="room-fine">Rooms last a day. What you share in a room — drawings, messages, cards, notes — everyone in it sees. Be kind, it’s a study room.</p>
+      <p class="room-fine">Rooms last a day. What you share in a room — drawings, sticky notes, cards, messages, and where your pointer is on the board — everyone in it sees. Be kind, it’s a study room.</p>
     </div>`;
   document.body.appendChild(el);
   const err = el.querySelector('.room-err');
@@ -3910,6 +3911,21 @@ function openRoomChooser(prefill = '') {
     try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { fail(x); }
   });
   setTimeout(() => el.querySelector(prefill ? '.room-join input' : '[data-room="new"]').focus(), 30);
+}
+// Flashcards for the board: your own decks, or a deck Cassie writes on a topic
+function boardDecks() {
+  return {
+    name: roomName(),
+    decks: () => { const m = new Map(); (state.cards || []).forEach((c) => { if (!m.has(c.deck)) m.set(c.deck, []); m.get(c.deck).push({ f: c.f, b: c.b }); }); return [...m.entries()].map(([name, cards]) => ({ name, cards })); },
+    makeCards: async (topic) => {
+      const p = state.profile || {};
+      const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
+      const reply = await askCassie([{ role: 'user', content: `Write 8 flashcards about "${topic}" for a ${level} student. The front is a short question or term; the back is the answer in one short sentence. Reply with ONLY a JSON array, no other text: [{"f": "front", "b": "back"}]` }]);
+      const t = String(reply || ''), i = t.indexOf('['), j = t.lastIndexOf(']');
+      if (i < 0 || j <= i) return [];
+      try { track('feature', 'board-cards'); return JSON.parse(t.slice(i, j + 1)).filter((c) => c && c.f && c.b).slice(0, 16).map((c) => ({ f: String(c.f), b: String(c.b) })); } catch (e) { return []; }
+    },
+  };
 }
 // a quiz for the whole room: Cassie writes 5 multiple-choice questions as data
 async function roomQuiz(topic) {
@@ -3937,7 +3953,8 @@ async function startRoom(code, title) {
     onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board — what did we get right, and what should we fix?'); return ''; },
     askPlaceholder: 'Ask Cassie about the board (only you see her answer)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
-    room: { me, send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); } },
+    ...boardDecks(),
+    room: { me, name: roomName(), send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); } },
     onClose: () => R.stop(),
   });
   const session = window.CassieSketch.session();
@@ -3949,7 +3966,7 @@ async function startRoom(code, title) {
     send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); },
     ask: (q) => askCassie([{ role: 'user', content: q }]),
     makeQuiz: roomQuiz,
-    decks: () => { const m = new Map(); (state.cards || []).forEach((c) => { if (!m.has(c.deck)) m.set(c.deck, []); m.get(c.deck).push({ f: c.f, b: c.b }); }); return [...m.entries()].map(([name, cards]) => ({ name, cards })); },
+    decks: boardDecks().decks,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
     onUnread: (n) => { const b = document.querySelector('[data-room-act="study"]'); if (b) b.textContent = n ? `📚 Study together (${n})` : '📚 Study together'; },
   }) : null;
@@ -3957,9 +3974,10 @@ async function startRoom(code, title) {
   R.stop = () => { stopRoom(); if (study) study.destroy(); };
   const banner = (note = '') => {
     const who = R.members.map((m) => `<span>${escapeHtml(m.uid === me ? `${m.name} (you)` : m.name)}</span>`).join('');
-    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button><button type="button" class="csk-btn" data-room-act="check" title="Cassie looks at the whole board — a proof, code, a diagram — and everyone sees her answer">🔎 Ask Cassie to check our board</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
     const sb = el.querySelector('[data-room-act="study"]');
     if (sb) sb.onclick = () => study.toggle();
+    el.querySelector('[data-room-act="check"]').onclick = (e) => groupCheck(e.currentTarget);
     const btn = el.querySelector('[data-room-act="copy"]');
     btn.onclick = () => {
       const txt = `Join my Cassie study room: ${link} (code ${code})`;
@@ -3967,6 +3985,26 @@ async function startRoom(code, title) {
       try { if (navigator.share && matchMedia('(pointer: coarse)').matches) navigator.share({ title: 'Cassie study room', text: txt, url: link }).catch(() => {}); else navigator.clipboard.writeText(txt).then(done, done); } catch (e) { done(); }
     };
   };
+  // "Ask Cassie to check our board": she looks at the whole shared board and everyone sees the answer
+  async function groupCheck(btn) {
+    if (btn.disabled) return;
+    const input = document.querySelector('.csk-ask input');
+    const typed = input && input.value.trim();
+    const q = typed || 'Check our shared board. If it’s maths or a proof, check every step; if it’s code or a diagram of how code fits together, look for bugs and design problems; if it’s a drawing, diagram or notes, say whether it’s right. Say what’s right, what’s wrong, and how to fix it.';
+    const was = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Cassie is looking…';
+    session.showNote({ reply: 'Cassie is checking the board for everyone…' });
+    try {
+      const out = await askBoard(session.snapshot(), q, session.parts());
+      if (input && typed) input.value = '';
+      if (out.draw) session.draw(out.draw);
+      const a = String(out.reply || (out.draw ? 'I drew it on the board.' : '')).slice(0, 4000);
+      session.showNote({ headline: 'Cassie checked the board (everyone sees this)', reply: a });
+      if (study) study.share(typed ? q : 'Check our board', a, { board: 1 });
+      track('feature', 'room:check');
+    } catch (e) { session.showNote({ reply: errorText(e) || 'Couldn’t reach Cassie — try again.' }); }
+    finally { btn.disabled = false; btn.textContent = was; }
+  }
   banner('Connecting…');
   async function tick() {
     if (R.stopped) return;
@@ -3977,7 +4015,10 @@ async function startRoom(code, title) {
         try { await roomCall('/room/ops', { code, ops }); }
         catch (e) { if (e.full) { banner(e.message); } else { R.queue.unshift(...ops); throw e; } }
       }
-      const r = await fetch(`${SERVER}/room/poll?code=${code}&uid=${encodeURIComponent(me)}&since=${R.since}`);
+      // where your pointer is (and your laser's trail) goes along with the check for news
+      const here = session.presence && session.presence();
+      if (here) R.active = Date.now();
+      const r = await fetch(`${SERVER}/room/poll?code=${code}&uid=${encodeURIComponent(me)}&since=${R.since}${here ? `&p=${encodeURIComponent(JSON.stringify(here).slice(0, 3900))}` : ''}`);
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(d.error || 'Lost the room'), { gone: !!d.gone });
       if (d.ops && d.ops.length) {
@@ -3985,10 +4026,15 @@ async function startRoom(code, title) {
         const isStudy = (o) => o.op && window.CassieStudy && window.CassieStudy.kinds.has(o.op.t);
         if (study) study.receive(d.ops.filter(isStudy), d.now);
         session.remote(d.ops.filter((o) => !isStudy(o)));
+        // a classmate asked Cassie to check the board: show it on everyone's board
+        const checked = d.ops.filter((o) => o.op && o.op.t === 'share' && o.op.board && o.uid !== me && (d.now || Date.now()) - (o.ts || 0) < 120000).pop();
+        if (checked) session.showNote({ headline: `${String(checked.op.n || 'A classmate').slice(0, 30)} asked Cassie to check the board`, reply: String(checked.op.a || '').slice(0, 4000) });
       }
+      if (session.others) { session.others(d.here || [], d.members || R.members); if ((d.here || []).some((h) => d.now - h.ts < 3000)) R.active = Date.now(); }
       const names = JSON.stringify(d.members || []);
       if (names !== JSON.stringify(R.members) || R.fails) { R.members = d.members || []; R.fails = 0; if (study) study.members(R.members); banner(); }
-      R.timer = setTimeout(tick, d.more ? 50 : document.hidden ? 4000 : 1000);
+      // quicker while people are moving pointers, so cursors and lasers feel live
+      R.timer = setTimeout(tick, d.more || R.queue.length ? 50 : document.hidden ? 4000 : Date.now() - (R.active || 0) < 4000 ? 450 : 1000);
     } catch (e) {
       if (e.gone) { banner('This room has ended. Save your board with the picture button.'); R.stop(); return; }
       R.fails++;
@@ -4031,9 +4077,11 @@ async function askBoard(png, q, parts) {
   const B = window.CassieBoard;
   const strokes = (parts && parts.strokes) || [];
   const typed = strokes.filter((x) => x.tool === 'text').map((x) => x.text).join('\n').trim();
+  const notes = strokes.filter((x) => x.obj === 'note' && x.text).map((x) => `- sticky note${x.n ? ` (${x.n})` : ''}: ${x.text}`);
+  const cards = strokes.filter((x) => x.obj === 'card').map((x) => `- flashcard: ${x.f} → ${x.b}`);
   // only typed text on the board: send it as text, no picture needed (exact, and works with any brain)
-  const needsPicture = !!(parts && parts.image) || strokes.some((x) => x.tool !== 'text' && x.by !== 'cassie');
-  const wrote = typed ? 'On my board I wrote:\n"' + typed + '"\n' : '';
+  const needsPicture = !!(parts && parts.image) || strokes.some((x) => x.tool !== 'text' && !x.obj && x.by !== 'cassie');
+  const wrote = (typed ? 'On my board I wrote:\n"' + typed + '"\n' : '') + (notes.length || cards.length ? 'On the board there are also:\n' + notes.concat(cards).slice(0, 60).join('\n') + '\n' : '');
   const prompt = `${needsPicture ? 'This is my board (maybe a picture, maybe my own writing on it). ' : ''}${wrote}${q}\n\nIf I asked you to draw, graph, plot, sketch or show something, or the answer is best shown as a graph, shape or numbered steps, include exactly one cassie-board block: it gets drawn right on my board. Keep your words short (under 120 words).`;
   const image = needsPicture ? { mimeType: 'image/png', base64: String(png).split(',')[1] || '' } : null;
   let reply;
@@ -6119,6 +6167,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'The board got study tools: sticky notes in six colours with your name on them (sort them into colour groups in one tap), flashcards you paste, pick from your decks or have Cassie write — dropped on the board to flip and move — and quick shapes: a coordinate grid, Venn diagrams, flowchart boxes and logic gates. Save the board as a picture, a PDF or a board file you can open again later.',
+  'In a study room you see everyone’s pointer with their name and what they’re doing (drawing, erasing, typing), point at things with a laser that fades in 2 seconds, and “Ask Cassie to check our board” shows her answer to the whole group.',
   'Talk with Cassie answers sooner: every voice now starts on the first sentence while the rest of the answer is still being written, and she replies after a shorter pause.',
   'One voice: once Cassie’s own voice is on your device, she always uses it (no more switching between voices). Until then a stand-in voice speaks, and she tells you when her own voice is ready. After the download, “Setting up…” shows instead of sitting at 100%, and if setting up fails she tries again by herself.',
   'Labs in real 3D: metals fizz in a glass beaker (or burn in steam over a Bunsen burner), you pour from real reagent bottles in the pH mixer, the atom turns in your hand, water molecules move in a box on a hot plate, and the pendulum, cannon, rope, laser, magnets and compass, lenses and Tower of Hanoi are all real things on a bench. Drag an empty spot to look around; “Diagram” brings back the flat drawing.',

@@ -67,6 +67,8 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, created INTEGER, owner TEXT, title TEXT)`,
   `CREATE TABLE IF NOT EXISTS room_members (code TEXT, uid TEXT, name TEXT, seen INTEGER, PRIMARY KEY (code, uid))`,
   `CREATE TABLE IF NOT EXISTS room_ops (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, uid TEXT, ts INTEGER, op TEXT)`,
+  // where each person's pointer is right now (and their laser pointer's trail) — kept, not logged
+  `CREATE TABLE IF NOT EXISTS room_here (code TEXT, uid TEXT, ts INTEGER, p TEXT, PRIMARY KEY (code, uid))`,
   // daily puzzles: each student's first finish of each puzzle, each day (lower value = better)
   `CREATE TABLE IF NOT EXISTS scores (day TEXT, game TEXT, uid TEXT, name TEXT, value REAL, shown TEXT, ts INTEGER, PRIMARY KEY (day, game, uid))`,
   `CREATE INDEX IF NOT EXISTS room_ops_code ON room_ops(code, id)`,
@@ -736,8 +738,12 @@ async function room(request, env, url) {
     if (!(await live(code))) return json({ error: 'This room has ended.', gone: true }, 404, h);
     // "I'm still here" at most every 10 s (a write only when it's due)
     await db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000).run();
+    // the pointer: where you are and what you're doing (a cursor, a laser trail), replaced each time
+    const p = url.searchParams.get('p');
+    if (p && p.length <= 4000 && (await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) { try { if (typeof JSON.parse(p) !== 'object') throw 0; await db.prepare('INSERT INTO room_here (code, uid, ts, p) VALUES (?, ?, ?, ?) ON CONFLICT(code, uid) DO UPDATE SET ts = excluded.ts, p = excluded.p').bind(code, uid, now, p).run(); } catch (e) { /* not a pointer */ } }
     const rows = (await db.prepare('SELECT id, uid, ts, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since).all()).results || [];
-    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, ts: r.ts, op: JSON.parse(r.op) })), members: await members(code), more: rows.length === 400, now }, 200, h);
+    const here = (await db.prepare('SELECT uid, ts, p FROM room_here WHERE code = ? AND uid != ? AND ts > ?').bind(code, uid, now - 6000).all()).results || [];
+    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, ts: r.ts, op: JSON.parse(r.op) })), members: await members(code), here: here.map((r) => ({ uid: r.uid, ts: r.ts, p: JSON.parse(r.p) })), more: rows.length === 400, now }, 200, h);
   }
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   const text = await request.text();
@@ -752,6 +758,7 @@ async function room(request, env, url) {
     await db.batch([
       db.prepare('DELETE FROM room_ops WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
       db.prepare('DELETE FROM room_members WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
+      db.prepare('DELETE FROM room_here WHERE ts < ?').bind(old),
       db.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
     ]);
     const mine = await db.prepare('SELECT COUNT(*) AS n FROM rooms WHERE owner = ? AND created > ?').bind(uid, old).first();

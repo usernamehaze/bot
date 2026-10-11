@@ -244,6 +244,7 @@
       members(list) { S.members = list || []; },
       toggle(show) { root.hidden = show == null ? !root.hidden : !show; if (!root.hidden) { if (tab === 'chat') unread = 0; render(); } return !root.hidden; },
       unread: () => unread,
+      share(q, a, extra) { send({ t: 'share', q: cut(q, 300), a: cut(a, 4000), ...(extra || {}) }); },
       destroy() { clearTimeout(tick); clearInterval(watch); if (voice) voice.stop(); root.remove(); },
     };
   }
