@@ -290,7 +290,7 @@ export function viewSwitch(panel, stage, cv, make, { plane, look, pitch, yaw, mi
   }
   const g = group(panel, 'View');
   const s = seg(g, { options: [['3d', 'Real 3D'], ['flat', 'Diagram']], value: want ? '3d' : 'flat', onChange: (x) => {
-    // free: a few Real 3D views a day (one per lab you open; switching back and forth in it is free)
+    // free: 2 Real 3D views a week in each lab (one per time you open it; switching back and forth in it is free)
     if (x === '3d' && !premium.has() && !tried) {
       if (!premium.take(freeKind)) { s.set('flat'); premium.ask('The Real 3D view', 'You’ve used this lab’s 2 free Real 3D views this week. They come back on Monday.'); return; }
       tried = true; const n = premium.left(freeKind);
