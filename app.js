@@ -4265,6 +4265,7 @@ async function openExplore(cell, ret) {
       islandRest();
     }
     if (!exploreMod.supported()) {
+      if (ret) ret.leave();
       renderMessage('assistant', 'This browser can’t show 3D right now (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.');
       return;
     }
@@ -4280,6 +4281,7 @@ async function openExplore(cell, ret) {
         try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ }
       },
     });
+    if (ret && ret.opened) ret.opened(); // Labs stayed on screen until now (no flash of the chat)
   } catch (e) {
     if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
