@@ -625,6 +625,17 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await page.click('.csk-pop [data-pop="make"]');
   await page.waitForFunction(() => window.CassieSketch.session().objects().filter((o) => o.tool === 'card').length === 3, null, { timeout: 10000 });
   expect(await page.locator('[data-tool="select"].on').count() === 1, 'the Move tool is picked so the cards can be flipped');
+  // with the pen on, dragging a card moves it — it doesn't draw on the board
+  await page.click('[data-tool="pen"]');
+  const card = (await page.evaluate(() => window.CassieSketch.session().objects()))[0];
+  const bb = await page.locator('.csk-live').boundingBox(), kk = bb.width / (await page.evaluate(() => document.querySelector('.csk-live').width));
+  await page.mouse.move(bb.x + (card.x + 30) * kk, bb.y + (card.y + 30) * kk); await page.mouse.down();
+  await page.mouse.move(bb.x + (card.x + 30) * kk, bb.y + (card.y + 130) * kk, { steps: 8 }); await page.mouse.up();
+  const moved = (await page.evaluate(() => window.CassieSketch.session().objects())).find((o) => o.id === card.id);
+  expect(Math.abs(moved.y - card.y - 100) < 3 && await page.evaluate(() => window.CassieSketch.session().strokeCount()) === 3, 'the card moved and nothing was drawn: ' + (moved.y - card.y));
+  // and a tool that's on switches off when tapped again (back to Move)
+  await page.click('[data-tool="pen"]');
+  expect(await page.locator('[data-tool="select"].on').count() === 1 && await page.locator('[data-tool="pen"].on').count() === 0, 'tapping the pen again switches it off');
   // notes in two colours, mixed up — then sorted into a column per colour
   await note('Yellow', 0.1, 0.12, 'Intro');
   await note('Green', 0.9, 0.85, 'Method');
