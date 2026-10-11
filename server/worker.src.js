@@ -27,12 +27,18 @@
  *   ANTHROPIC_KEY     (optional) secret — makes Claude Cassie's brain for the main chat and
  *                     photos (console.anthropic.com → API keys). Groq and Workers AI stay as backup.
  * Optional variables:
- *   DAILY_LIMIT      questions per person per day through your key (default 150)
+ *   FREE_DAILY_QUESTIONS  questions a free student asks a day (default 20; the website says 20)
+ *   DAILY_LIMIT      all requests per free student per day, including file sections and helpers
+ *                    (default 150 — a ceiling against abuse, not the "questions" students see)
+ *   PLUS_DAILY_QUESTIONS / PRO_DAILY_QUESTIONS  fair use on paid plans (default 100 / 150)
  *   MINUTE_LIMIT     questions per person per minute (default 12)
  *   IMAGE_LIMIT      backup pictures per person per day (default 20)
- *   CLAUDE_DAILY_LIMIT  Claude answers per person per day (default 40); after that, Groq answers
- *   CLAUDE_MODEL     which Claude model to use (default: Anthropic's newest Opus, looked up
- *                    automatically from the Models API)
+ *   Claude is for paid plans (rows in the plans table — see /admin/plan below):
+ *   FREE_CLAUDE_LIMIT   Claude answers a day for free students (default 0 = none; Groq answers)
+ *   PLUS_CLAUDE_LIMIT   Claude Haiku answers a day on Plus (default 100)
+ *   PRO_CLAUDE_LIMIT    Claude Sonnet answers a day on Pro (default 15), then Haiku (PRO_HAIKU_LIMIT, 100)
+ *   CLAUDE_MODEL     one Claude model for everyone (default: the newest Haiku / Sonnet for each
+ *                    plan, looked up automatically from the Models API)
  *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
  *   TRANSCRIBE_DAILY_LIMIT  voice recordings written down per network per day (default 3000)
@@ -66,6 +72,8 @@ const SCHEMA = [
   // live board rooms: a code, who's in, and every drawing step in order (rooms last a day)
   `CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, created INTEGER, owner TEXT, title TEXT)`,
   `CREATE TABLE IF NOT EXISTS room_members (code TEXT, uid TEXT, name TEXT, seen INTEGER, PRIMARY KEY (code, uid))`,
+  // paid plans: an account's plan and when it ends (written by the owner's /admin/plan, later by payments)
+  `CREATE TABLE IF NOT EXISTS plans (account TEXT PRIMARY KEY, plan TEXT, until INTEGER, note TEXT, updated INTEGER)`,
   `CREATE TABLE IF NOT EXISTS room_ops (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, uid TEXT, ts INTEGER, op TEXT)`,
   // where each person's pointer is right now (and their laser pointer's trail) — kept, not logged
   `CREATE TABLE IF NOT EXISTS room_here (code TEXT, uid TEXT, ts INTEGER, p TEXT, PRIMARY KEY (code, uid))`,
@@ -89,7 +97,7 @@ function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
   const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)))
     || (env.ALLOW_EXTENSION !== 'off' && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)); // the Cassie extension (Chrome and Edge)
-  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left', vary: 'origin' } : {};
+  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left, x-cassie-plan', vary: 'origin' } : {};
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra } });
 // The dashboard page: only its own script may run (a fresh one-time code each visit), it can't be
@@ -324,19 +332,21 @@ async function countChat(env, day, src) {
    go to Claude first. Raw HTTP to Anthropic's Messages API: a Worker pasted into the
    dashboard can't load npm packages. Groq and Workers AI stay as the backup. */
 const ANTHROPIC = 'https://api.anthropic.com/v1';
-let claudePick = { id: '', at: 0 };
+let claudeIds = { ids: [], at: 0 };
 const anthropicHeaders = (env) => ({ 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' });
-// Anthropic's newest Opus (the Models API lists newest first), unless CLAUDE_MODEL picks one.
-async function claudeModel(env) {
+// Anthropic's newest model of a family — haiku, sonnet or opus (the Models API lists newest
+// first) — unless CLAUDE_MODEL picks one for everyone.
+async function claudeModel(env, family = 'opus') {
   if (env.CLAUDE_MODEL) return env.CLAUDE_MODEL;
-  if (claudePick.id && Date.now() - claudePick.at < 6 * 3600e3) return claudePick.id;
-  try {
-    const r = await fetch(`${ANTHROPIC}/models?limit=100`, { headers: anthropicHeaders(env), signal: AbortSignal.timeout(10000) });
-    const ids = ((await r.json()).data || []).map((m) => m.id);
-    const id = ids.find((x) => /opus/i.test(x)) || ids[0] || '';
-    if (id) claudePick = { id, at: Date.now() };
-  } catch (e) { /* keep the old pick */ }
-  return claudePick.id;
+  if (!claudeIds.ids.length || Date.now() - claudeIds.at > 6 * 3600e3) {
+    try {
+      const r = await fetch(`${ANTHROPIC}/models?limit=100`, { headers: anthropicHeaders(env), signal: AbortSignal.timeout(10000) });
+      const ids = ((await r.json()).data || []).map((m) => m.id);
+      if (ids.length) claudeIds = { ids, at: Date.now() };
+    } catch (e) { /* keep the old list */ }
+  }
+  const ids = claudeIds.ids;
+  return ids.find((x) => x.toLowerCase().includes(family)) || ids[0] || '';
 }
 // Groq-style messages → Claude: the system prompt goes on its own, pictures become image blocks,
 // and turns alternate user / assistant starting with the user.
@@ -360,8 +370,8 @@ function toClaude(messages) {
   while (out.length && out[0].role !== 'user') out.shift();
   return { system, messages: out };
 }
-async function askClaude(env, cleaned) {
-  const model = await claudeModel(env);
+async function askClaude(env, cleaned, family = 'opus') {
+  const model = await claudeModel(env, family);
   if (!model) return null;
   const { system, messages } = toClaude(cleaned.messages);
   if (!messages.length) return null;
@@ -383,6 +393,47 @@ async function askClaude(env, cleaned) {
   const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   return text || null;
 }
+/* ------------------------------------------------------------------ plans
+   Free, Plus or Pro. A plan belongs to an account (sign in to subscribe), so it follows the
+   student to every device. The owner can give one with /admin/plan; payments will write here too. */
+async function planOf(request, env) {
+  if (!(request.headers.get('authorization') || '').trim()) return { plan: 'free' };
+  try {
+    const acc = await accountFromRequest(request, env);
+    if (!acc) return { plan: 'free' };
+    const row = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(acc.id, Date.now()).first();
+    return { plan: row && ['plus', 'pro'].includes(row.plan) ? row.plan : 'free', account: acc.id, until: row ? row.until : 0 };
+  } catch (e) { return { plan: 'free' }; }
+}
+// what each plan gets a day: questions the student sees, every request (a ceiling against abuse),
+// and Claude answers (family, then a second family once the first runs out)
+function limitsFor(env, plan) {
+  const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v) ? +v : d);
+  if (plan === 'pro') return { questions: n(env.PRO_DAILY_QUESTIONS, 150), all: n(env.PRO_DAILY_LIMIT, 600), claude: [['sonnet', n(env.PRO_CLAUDE_LIMIT, 15)], ['haiku', n(env.PRO_HAIKU_LIMIT, 100)]] };
+  if (plan === 'plus') return { questions: n(env.PLUS_DAILY_QUESTIONS, 100), all: n(env.PLUS_DAILY_LIMIT, 400), claude: [['haiku', n(env.PLUS_CLAUDE_LIMIT, 100)]] };
+  return { questions: n(env.FREE_DAILY_QUESTIONS, 20), all: n(env.DAILY_LIMIT, 150), claude: [['haiku', n(env.FREE_CLAUDE_LIMIT, 0)]] };
+}
+// The owner gives (or ends) a plan: POST /admin/plan {"email": "...", "plan": "pro", "days": 30}
+// with the dashboard password; GET /admin/plan?email=... shows it.
+async function adminPlan(request, env, url) {
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
+  const b = request.method === 'POST' ? await request.json().catch(() => ({})) : { email: url.searchParams.get('email') };
+  const email = String(b.email || '').trim().toLowerCase().slice(0, 200);
+  const acc = email && await env.DB.prepare('SELECT id, email, name FROM accounts WHERE email = ?').bind(email).first();
+  if (!acc) return json({ error: 'No Cassie account with that email — they need to sign up first.' }, 404);
+  if (request.method === 'POST') {
+    const plan = ['free', 'plus', 'pro'].includes(b.plan) ? b.plan : null;
+    if (!plan) return json({ error: 'plan must be free, plus or pro' }, 400);
+    const days = Math.max(0, Math.min(3660, +b.days || 30)), until = plan === 'free' ? 0 : Date.now() + days * 864e5;
+    await env.DB.prepare('INSERT INTO plans (account, plan, until, note, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account) DO UPDATE SET plan = excluded.plan, until = excluded.until, note = excluded.note, updated = excluded.updated')
+      .bind(acc.id, plan, until, String(b.note || 'given by the owner').slice(0, 200), Date.now()).run();
+  }
+  const row = await env.DB.prepare('SELECT plan, until, note FROM plans WHERE account = ?').bind(acc.id).first();
+  const active = row && row.until > Date.now() ? row.plan : 'free';
+  return json({ email: acc.email, name: acc.name, plan: active, until: active === 'free' ? null : new Date(row.until).toISOString(), note: row ? row.note : '' });
+}
+
 async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -468,7 +519,7 @@ async function ask(request, env, ctx) {
   if ((row && row.n || 0) > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
   const messages = [{ role: 'system', content: ASK_SYSTEM }, { role: 'user', content: text }];
   let reply = null, src = 'shortcut';
-  if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
+  if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }, 'haiku'); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
   for (const model of env.GROQ_KEY && !reply ? CHAT_MODELS : []) {
     try {
       const r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify({ model, messages, max_tokens: 2500, temperature: 0.4 }) });
@@ -497,7 +548,7 @@ async function chat(request, env, ctx) {
   const now = Date.now(), today = dayOf(now);
   const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : 'anon';
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-  const perMin = +env.MINUTE_LIMIT || 12, perDay = +env.DAILY_LIMIT || 150;
+  const perMin = +env.MINUTE_LIMIT || 12;
   const minute = Math.floor(now / 60e3), mk = `${uid}|${ip}`;
   const hit = minuteHits.get(mk);
   const n = hit && hit.m === minute ? hit.n + 1 : 1;
@@ -509,27 +560,40 @@ async function chat(request, env, ctx) {
   if (minuteHits.size > 5000) minuteHits.clear();
   if (n > perMin || nIp > perMin * 10) return chatError('Whoa, lots of questions! Give me a few seconds, then ask again.', 429, h, { 'retry-after': String(60 - Math.floor((now / 1000) % 60)) });
   await ensureSchema(env.DB);
+  // the student's plan (free unless they're signed in to a paid account) sets their allowance
+  const { plan, account } = await planOf(request, env), L = limitsFor(env, plan), perDay = L.all;
+  const who = account ? 'a:' + account : uid; // a paid plan counts per account, across devices
   const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
       ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
   // no id → the allowance is per network ("anon" is never one shared pool)
-  const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'an:' + ip : 'u:' + uid), bump('i:' + ip)]);
-  const usedU = u.results?.[0]?.n || 0, usedI = i.results?.[0]?.n || 0;
+  const question = body.q === 1 || body.q === true; // something the student asked (not a file section)
+  const keys = [who === 'anon' ? 'an:' + ip : 'u:' + who, 'i:' + ip, ...(question ? ['q:' + (who === 'anon' ? 'an:' + ip : who)] : [])];
+  const counts = (await env.DB.batch(keys.map(bump))).map((r) => r.results?.[0]?.n || 0);
+  const [usedU, usedI, usedQ = 0] = counts;
   if (Math.random() < 0.01) ctx.waitUntil(env.DB.prepare('DELETE FROM quota WHERE day < ?').bind(today).run());
-  if (usedU > perDay || usedI > perDay * 25) {
-    const secs = Math.ceil(msUntilMidnightPH(now) / 1000);
-    return chatError(`You've used today's ${perDay} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
+  const refund = () => env.DB.batch(keys.map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k)));
+  if (usedU > perDay || usedI > Math.max(perDay, 150) * 25 || usedQ > L.questions) {
+    const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
+    if (question && usedQ > L.questions) ctx.waitUntil(refund().catch(() => {})); // a refused question isn't counted
+    return chatError(plan === 'free'
+      ? `You've used today's ${shown} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`
+      : `You've reached today's fair-use limit (${shown}). It resets at midnight — thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
   }
-  const left = { 'x-cassie-left': String(Math.max(0, perDay - usedU)) };
+  const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
 
-  // Claude first for the main chat, within its own daily allowance per person
-  if (env.ANTHROPIC_KEY && body.brain === 'claude') {
-    const perDayClaude = +env.CLAUDE_DAILY_LIMIT || 40;
-    let usedC = 0;
-    let usedCi = 0;
-    try { [usedC, usedCi] = (await env.DB.batch([bump('c:' + uid), bump('ci:' + ip)])).map((r) => r.results?.[0]?.n || 0); } catch (e) { usedC = usedCi = Infinity; }
-    if (uid !== 'anon' && usedC <= perDayClaude && usedCi <= perDayClaude * 25) {
+  // Claude first for the main chat, on paid plans (free students get Groq unless FREE_CLAUDE_LIMIT
+  // is set): Pro gets Sonnet for its first answers each day, then Haiku; Plus gets Haiku
+  if (env.ANTHROPIC_KEY && body.brain === 'claude' && uid !== 'anon') {
+    let family = null;
+    for (const [fam, max] of L.claude) {
+      if (!(max > 0)) continue;
+      let usedC = Infinity, usedCi = Infinity;
+      try { [usedC, usedCi] = (await env.DB.batch([bump('c:' + fam + ':' + who), bump('ci:' + ip)])).map((r) => r.results?.[0]?.n || 0); } catch (e) { /* treat as used up */ }
+      if (usedC <= max && usedCi <= Math.max(max, 40) * 25) { family = fam; break; }
+    }
+    if (family) {
       let reply = null;
-      try { reply = await askClaude(env, cleaned); } catch (e) { reply = null; }
+      try { reply = await askClaude(env, cleaned, family); } catch (e) { reply = null; }
       if (reply) {
         ctx.waitUntil(countChat(env, today, 'claude'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: reply }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'claude' });
@@ -597,7 +661,7 @@ async function chat(request, env, ctx) {
   ctx.waitUntil(countChat(env, today, 'failed'));
   ctx.waitUntil(logProblem(env, cleaned.image ? 'chat: picture' : 'chat: text', problems.filter(Boolean).join(' | ') || `status ${lastStatus}`));
   // an unanswered question shouldn't use up the person's daily allowance
-  ctx.waitUntil(env.DB.batch(['u:' + uid, 'i:' + ip].map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k))));
+  ctx.waitUntil(refund());
   if (cleaned.image && !env.GROQ_KEY && !env.GEMINI_KEY) return chatError('Reading photos needs a Groq or Gemini key — add one in Settings.', 503, h);
   if (cleaned.image) vision.at = 0; // look again for picture readers next time
   return lastStatus === 429
@@ -1057,8 +1121,8 @@ async function runHealth(env) {
     run('Gemini: read a picture', gem(picQ), (t) => /\b56\b/.test(t));
   }
   if (env.ANTHROPIC_KEY) {
-    run('Claude: text maths', () => askClaude(env, { messages: textQ }), (t) => /\b391\b/.test(t));
-    run('Claude: read a picture', () => askClaude(env, { messages: picQ }), (t) => /\b56\b/.test(t));
+    run('Claude: text maths', () => askClaude(env, { messages: textQ }, 'haiku'), (t) => /\b391\b/.test(t));
+    run('Claude: read a picture', () => askClaude(env, { messages: picQ }, 'haiku'), (t) => /\b56\b/.test(t));
   }
   if (env.AI) run('Workers AI (backup): read a picture', async () => { const v = await aiVision(env, picQ, 300); if (!v.reply) throw new Error(v.detail); return v.reply; }, (t) => /\b56\b/.test(t));
   if (env.AI) run('Workers AI (backup): text maths', async () => { const o = await env.AI.run(BACKUP_MODEL, { messages: textQ, max_tokens: 200 }); return (o && (o.response ?? o.result?.response)) || ''; }, (t) => /\b391\b/.test(t));
@@ -1142,6 +1206,7 @@ export default {
     try {
       if (tooFast(request, url.pathname)) return json({ error: 'Too many requests — please wait a minute.' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
+      if (url.pathname === '/admin/plan' && (request.method === 'GET' || request.method === 'POST')) return await adminPlan(request, env, url);
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);

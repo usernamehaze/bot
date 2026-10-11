@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '134';
+const APP_VERSION = '135';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1926,10 +1926,10 @@ async function groqAlternative(tried, size = 0) {
    swapped out, per-minute limits switch to another model (rotate) or are waited
    out (onWait tells the UI; noWait throws instead so a caller can use Gemini),
    and overloads are retried. Returns the reply text. */
-async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false, rotate = false, noWait = false, viaServer = false } = {}) {
+async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = false, rotate = false, noWait = false, viaServer = false, q = false } = {}) {
   // No key of their own → Cassie's server answers (it holds the key and has a backup brain).
   if (!state.groqKey && SERVER) viaServer = true;
-  if (viaServer) return serverChat(messages, { model, maxTokens, onWait, lean });
+  if (viaServer) return serverChat(messages, { model, maxTokens, onWait, lean, q });
   if (geminiOnly()) return geminiFromChat(messages, { maxTokens });
   model = model || state.groqModel;
   const tried = new Set();
@@ -1937,7 +1937,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
   const size = estimateTokens(JSON.stringify(messages)) + maxTokens;
   if (rotate && groqCooling(model)) model = (await groqAlternative(new Set([model]), size)) || model;
   // When the user's own key can't answer (daily limit, bad key, Groq down), use Cassie's server.
-  const viaServerInstead = (e) => (SERVER ? serverChat(messages, { model, maxTokens, onWait, lean }) : Promise.reject(e));
+  const viaServerInstead = (e) => (SERVER ? serverChat(messages, { model, maxTokens, onWait, lean, q }) : Promise.reject(e));
   while (true) {
     tried.add(model);
     const body = { model, messages, max_tokens: maxTokens, temperature: 0.6 };
@@ -2006,15 +2006,17 @@ function friendlyError(msg) { const e = new Error(msg); e.friendly = true; retur
 
 /* Cassie's own server (server/worker.js): the same chat call, but with the owner's
    key, a fair daily allowance per person, and Workers AI as a backup brain. */
-async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain } = {}) {
+// signed in → the server knows the student's plan (Plus and Pro belong to an account)
+const chatHeaders = () => { const t = typeof authToken === 'function' ? authToken() : ''; return { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }; };
+async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q } = {}) {
   let waits = 0;
   while (true) {
     let res;
     try {
       res = await fetch(SERVER + '/chat', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain }),
+        headers: chatHeaders(),
+        body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined }),
       });
     } catch (e) {
       throw friendlyError("I couldn't connect — check your internet connection and try again.");
@@ -2052,7 +2054,7 @@ async function askGroq(msgs, opts = {}) {
       ...trimHistory(msgs, historyBudget).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
     ];
     try {
-      let text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey });
+      let text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey, q: opts.q });
       if (!text) text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true }); // blank once? ask again
       if (!text) throw friendlyError('I went blank on that one — please ask again, maybe in different words.');
       return text;
@@ -2060,7 +2062,7 @@ async function askGroq(msgs, opts = {}) {
       if (e.groqLimited) {
         // every Groq model is out for this minute — answer with Gemini instead of waiting
         try { return await geminiFromChat(messages); } catch (g) { /* Gemini busy too: wait for Groq */ }
-        return (await groqChat(messages, { model, onWait: opts.onWait, rotate: true })) || '(no response)';
+        return (await groqChat(messages, { model, onWait: opts.onWait, rotate: true, q: opts.q })) || '(no response)';
       }
       if (!e.tooLarge) {
         // Groq (and the server) couldn't answer: try Gemini before giving up.
@@ -2218,7 +2220,7 @@ async function askClaudeViaServer(msgs, images, opts = {}) {
   const hist = trimHistory(msgs, 12000).slice(-30).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
   const last = hist[hist.length - 1];
   if (images.length && last) last.content = [{ type: 'text', text: last.content || 'Please look at this and help me with it.' }, ...images.map((img) => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } }))];
-  return serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist], { brain: 'claude', maxTokens: 4000, onWait: opts.onWait });
+  return serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist], { brain: 'claude', maxTokens: 4000, onWait: opts.onWait, q: opts.q });
 }
 
 /* Pictures: Gemini first (with your key), then Groq's picture reader (your key or the server).
@@ -2236,7 +2238,7 @@ async function askPicture(msgs, image, opts = {}) {
       const hist = trimHistory(msgs, 2000).slice(-12).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
       const last = hist.pop() || { role: 'user', content: '' };
       const content = [{ type: 'text', text: last.content || 'Please look at this picture and help me with it.' }, { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.base64}` } }];
-      return await serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist, { role: 'user', content }], { model: 'vision', maxTokens: 2048, onWait: opts.onWait });
+      return await serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist, { role: 'user', content }], { model: 'vision', maxTokens: 2048, onWait: opts.onWait, q: opts.q });
     } catch (e) { firstErr = firstErr || e; }
   }
   if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now — please try again in a minute.') : firstErr;
@@ -2254,7 +2256,7 @@ async function streamChat(messages, onText) {
     const model = state.groqModel || GROQ_MODELS[0];
     res = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + state.groqKey }, body: JSON.stringify({ ...body, model, ...(/gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}) }) });
   } else if (SERVER) {
-    res = await fetch(SERVER + '/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...body, uid: installId(), model: GROQ_MODELS[0], reasoning_effort: 'low' }) });
+    res = await fetch(SERVER + '/chat', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ ...body, uid: installId(), model: GROQ_MODELS[0], reasoning_effort: 'low', q: 1 }) });
   } else throw new Error('no brain');
   if (!res.ok) throw new Error('HTTP ' + res.status);
   // an older server answers all at once: that's fine too
@@ -2283,6 +2285,7 @@ async function streamChat(messages, onText) {
 }
 
 async function askCassie(msgs, image, opts = {}) {
+  opts = { ...opts, q: true }; // one question on the free daily count (file sections and helpers aren't)
   // spoken answers stream (quickest to start talking); anything that fails uses the usual brains
   if (opts.onDelta && !image && canChat()) {
     try {

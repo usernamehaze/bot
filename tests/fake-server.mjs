@@ -34,7 +34,7 @@ export async function startFakeServer(port = 4630) {
       return Response.json({ aud: 'test-client-id', iss: 'https://accounts.google.com', exp: String(Math.floor(Date.now() / 1000) + 600), sub: m[1], email: m[2], email_verified: 'true', given_name: 'Gia' });
     }
     if (u.startsWith('https://api.anthropic.com/')) { // fake Claude: mode.claude 'ok' | 'down' | 'refuse'
-      if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
+      if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-haiku' }, { id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
       const body = JSON.parse(init.body);
       mode.claudeCalls.push({ model: body.model, system: body.system, messages: body.messages, effort: body.output_config && body.output_config.effort, fallbacks: body.fallbacks, beta: init.headers['anthropic-beta'], key: init.headers['x-api-key'] });
       if (mode.claude === 'down') return Response.json({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }, { status: 529 });
@@ -99,7 +99,8 @@ export async function startFakeServer(port = 4630) {
     return Response.json({ choices: [{ message: { role: 'assistant', content: answer } }] });
   };
   const env = {
-    DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', DAILY_LIMIT: '5', GOOGLE_CLIENT_ID: 'test-client-id', CLAUDE_DAILY_LIMIT: '3',
+    DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, GOOGLE_CLIENT_ID: 'test-client-id',
+    get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 0 — Claude is for paid plans)
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     AI: { async run(model, input) {
@@ -121,7 +122,7 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/__mode') {
       if (req.method === 'POST') Object.assign(mode, JSON.parse(body.toString() || '{}'));
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
-      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, lastCalls: mode.calls.slice(-6).map((c) => c.model), claudeCalls: mode.claudeCalls.slice(-5), geminiCalls: mode.geminiCalls.slice(-6) }));
+      return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, lastCalls: mode.calls.slice(-6).map((c) => c.model), claudeCalls: mode.claudeCalls.slice(-5), claudeCount: mode.claudeCalls.length, geminiCalls: mode.geminiCalls.slice(-6) }));
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }
