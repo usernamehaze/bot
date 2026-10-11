@@ -347,6 +347,27 @@ test('picture request makes a real picture, not ASCII art', async (b) => {
   // a style the student asks for, and a labelled diagram, are not turned into photos
   const kinds = await page.evaluate(() => [imageKind('a cartoon cat'), imageKind('a labeled diagram of a plant cell'), imageKind('a plant cell under a microscope'), picturePrompt('a plant cell under a microscope')]);
   expect(kinds[0] === 'art' && kinds[1] === 'diagram' && kinds[2] === 'photo' && /micrograph/.test(kinds[3]), 'wrong picture kinds: ' + kinds.join(' | '));
+  // no people unless the student asks for them; when they do, everyone is modestly dressed
+  expect(/No people, no faces/.test(words), 'an apple picture says no people: ' + words.slice(0, 400));
+  const ppl = await page.evaluate(() => [picturePrompt('farmers planting rice'), picturePrompt('a cartoon volcano'), picturePrompt('a labeled diagram of the heart')]);
+  expect(/modestly dressed/.test(ppl[0]) && !/No people/.test(ppl[0]) && /No people/.test(ppl[1]) && /No people/.test(ppl[2]), 'safety words: ' + ppl.join(' | '));
+  await ctx.close();
+});
+
+test('“a photo of the answer” saves Cassie’s answer as a picture — the picture maker never gets “the answer” as words', async (b) => {
+  const { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: '**Answer: No, this map is not 2-colorable.** Three regions meet at one point, so there is a circuit of 3 (an odd number).' }) });
+  const made = [];
+  await ctx.route(/pollinations\.ai/, (route) => { made.push(route.request().url()); return route.fulfill({ body: PNG, contentType: 'image/png' }); });
+  await ask(page, 'Is a map where three regions meet at one point 2-colorable?');
+  await page.fill('#prompt-input', 'generate a photo of the answer');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('#chat-log .bubble img.chat-img[src^="data:image/png"]', { timeout: 15000 });
+  const last = await page.locator('#chat-log .bubble').last().innerText();
+  expect(/my answer as a picture/i.test(last) && /Download image/.test(last), 'the answer picture: ' + last);
+  expect(made.length === 0, 'the picture maker was not asked: ' + made.join(' '));
+  // "a picture of it" pictures what we talked about, never the word "it"
+  const subj = await page.evaluate(() => [ANSWER_SUBJECT_RE.test('your answer'), ANSWER_SUBJECT_RE.test('the solution'), PRONOUN_SUBJECT_RE.test('it'), ANSWER_SUBJECT_RE.test('a volcano')]);
+  expect(subj.join() === 'true,true,true,false', 'subject words: ' + subj.join());
   await ctx.close();
 });
 

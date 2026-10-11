@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '138';
+const APP_VERSION = '139';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -3535,16 +3535,24 @@ function photoSetup(s) {
   return ['documentary photograph, full-frame camera, 35mm f/2.8 lens', 'available natural light, true shadows', 'Kodak Portra 400 colour and fine grain, real textures and small imperfections, candid eye-level framing'];
 }
 const PHOTO_AVOID = 'CGI, 3D render, digital painting, plastic or waxy surfaces, airbrushed smoothness, oversaturated colour, HDR halos, glowing edges, lens flare added in, text, letters, captions, watermark, extra or missing limbs and fingers';
+// Pictures are for school. A person only appears when the student asks for one (a picture maker
+// given a vague subject tends to invent a portrait), and anyone shown is fully, modestly dressed.
+const PEOPLE_RE = /\b(people|persons?|m[ae]n|wom[ae]n|boys?|girls?|kids?|child(?:ren)?|students?|teachers?|doctors?|nurses?|farmers?|workers?|scientists?|portraits?|famil(?:y|ies)|faces?|athletes?|players?|dancers?|soldiers?|kings?|queens?|heroe?s?|president|crowds?|babies|baby|lad(?:y|ies)|guys?|astronauts?|chefs?|fisherm[ae]n|tao|bata|guro|estudyante|selfie|myself|me)\b/i;
+function pictureSafety(s) {
+  return PEOPLE_RE.test(s)
+    ? 'Everyone fully and modestly dressed in everyday clothes, natural and school-appropriate.'
+    : 'No people, no faces and no human figures in the picture.';
+}
 // The words sent to the picture maker. short: for the free service's quick retry (long prompts time out there).
 function picturePrompt(subject, { short = false } = {}) {
   const s = String(subject || '').replace(/\s+/g, ' ').trim();
-  const kind = imageKind(s);
-  if (kind === 'art') return short ? s.slice(0, 260) : `${s}. Clean, careful work with accurate details.`;
-  if (kind === 'diagram') return `${short ? s.slice(0, 220) : s}. A clean educational diagram: accurate, clearly labelled parts with correctly spelled labels, flat white background, even line weight.`;
+  const kind = imageKind(s), safe = pictureSafety(s);
+  if (kind === 'art') return short ? `${s.slice(0, 220)}. ${safe}` : `${s}. Clean, careful work with accurate details. ${safe}`;
+  if (kind === 'diagram') return `${short ? s.slice(0, 200) : s}. A clean educational diagram: accurate, clearly labelled parts with correctly spelled labels, flat white background, even line weight. ${safe}`;
   const [camera, day, look] = photoSetup(s);
   const light = /\b(night|midnight|in the dark)\b/i.test(s) && !/micrograph|astrophotograph/.test(camera) ? 'at night, lit only by the real lights in the scene, long exposure on a tripod, deep natural shadows' : day;
-  if (short) return `Real photograph of ${s.slice(0, 200)}. ${camera}. ${light}. No CGI, no 3D render, no plastic look, no text.`;
-  return `A real photograph of ${s}. ${camera[0].toUpperCase() + camera.slice(1)}. Lighting: ${light}. Look: ${look}. Accurate to how it really is in the world. Avoid: ${PHOTO_AVOID}.`;
+  if (short) return `Real photograph of ${s.slice(0, 180)}. ${camera}. ${light}. ${safe} No CGI, no 3D render, no plastic look, no text.`;
+  return `A real photograph of ${s}. ${camera[0].toUpperCase() + camera.slice(1)}. Lighting: ${light}. Look: ${look}. ${safe} Accurate to how it really is in the world. Avoid: ${PHOTO_AVOID}.`;
 }
 // First try: the full photographic description. Second try: a shorter one — long prompts are what
 // usually time out on the free service. (Its prompt "enhancer" stays off for photos: it adds the
@@ -3586,8 +3594,45 @@ function imageFileName(subject) {
   return (subject || 'cassie-image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'cassie-image';
 }
 
+// "a photo of the answer", "a picture of your explanation": that's Cassie's own answer, saved as a picture
+// (exact, every word right). "a picture of it / this" means what we were talking about.
+const ANSWER_SUBJECT_RE = /^(?:(?:the|your|ur|my|that|this|ung|yung)\s+)?(?:final\s+|whole\s+|full\s+)?(?:answers?|solutions?|explanations?|results?|response|reply|steps|working|summary|sagot)(?:\s+(?:above|you\s+(?:just\s+)?(?:gave|wrote|said)|to\s+(?:this|that|it|my\s+question|the\s+question)))?$/i;
+const PRONOUN_SUBJECT_RE = /^(?:it|this|that|these|those|them|the\s+above|this\s+one|that\s+one|what\s+you\s+(?:said|wrote|explained)|ito|iyan|yan|yun)$/i;
+function lastAnswer() {
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    const m = state.messages[i];
+    if (m.role === 'assistant' && m.content && !/^\[I (?:made|saved) a picture/.test(m.content)) return m;
+  }
+  return null;
+}
+async function answerPicture(label) {
+  const ans = lastAnswer();
+  if (!state.messages.length) chatLog.innerHTML = '';
+  state.messages.push({ role: 'user', content: label });
+  touchChat(); save();
+  renderMessage('user', label);
+  promptInput.value = ''; autoGrow(); clearFollowups();
+  if (!ans || !window.CassieExport) {
+    const ask = 'Ask me the question first, then I can save my answer as a picture. Or tell me what the picture should show, like “a picture of a map coloured with 2 colours”.';
+    state.messages.push({ role: 'assistant', content: ask }); save(); renderMessage('assistant', ask);
+    return;
+  }
+  track('feature', 'answer-picture');
+  const title = (window.CassieExport.titleOf && window.CassieExport.titleOf(ans.content)) || 'Cassie’s answer';
+  const caption = 'Here’s my answer as a picture you can save or share. (Want a drawing instead? Tell me exactly what it should show.)';
+  const bubble = renderMessage('assistant', caption);
+  try {
+    const blob = await window.CassieExport.toPng(ans.content, title);
+    const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+    addImageToBubble(bubble, url, { download: true, name: window.CassieExport.fileBase(title) });
+  } catch (e) { bubble.appendChild(Object.assign(document.createElement('p'), { textContent: 'I couldn’t make the picture just now. Use “Save as → Image” under my answer instead.' })); }
+  state.messages.push({ role: 'assistant', content: '[I saved a picture of my answer]', display: caption });
+  save();
+}
 async function handleImageRequest(text, subject) {
   const label = text.trim();
+  if (subject && ANSWER_SUBJECT_RE.test(subject.trim())) return answerPicture(label);
+  if (subject && PRONOUN_SUBJECT_RE.test(subject.trim())) subject = '';
   if (!subject) subject = imageSubjectFromChat();
   if (!state.messages.length) chatLog.innerHTML = ''; // clear the home screen
   state.messages.push({ role: 'user', content: label });
@@ -3616,6 +3661,9 @@ async function handleImageRequest(text, subject) {
 // answers a picture request with [[IMAGE: …]] instead of drawing ASCII art).
 async function pictureReply(subject, typingBubble) {
   track('feature', 'image');
+  // never send "the answer" or "it" to the picture maker as words: it would invent something
+  const bare = String(subject || '').trim();
+  if (ANSWER_SUBJECT_RE.test(bare) || PRONOUN_SUBJECT_RE.test(bare)) subject = imageSubjectFromChat() || bare;
   setTypingStatus(typingBubble, 'Making your picture…');
   sendBtn.disabled = true;
   try {
@@ -6342,6 +6390,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Pictures fixed: “a photo of the answer” now saves Cassie’s real answer as a picture, and the picture maker only draws people when you ask for them.',
   'Send many photos and files at once: up to 15 photos and 5 files in one message (nothing gets replaced anymore). Cassie reads every page, one by one, takes notes of the key facts, and says which photo or file each answer came from.',
   'Labs: the atom’s proton, neutron and electron tray stays still while you turn the 3D view, zooming goes to the spot you point at, “Try this” folds up on phones (tap Hide or Show), and Labs and Explore 3D open without a flash.',
   'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. On Free every 3D view (the body, the cells, the solar system, the globe and each lab’s Real 3D) opens twice a week, every lab, game and tool still works, and a board picture is always free.',
