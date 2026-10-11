@@ -53,7 +53,7 @@ const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/AP
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
 async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7' } = {}) {
   const ctx = await browser.newContext({ ...devices[device], acceptDownloads: true });
-  const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', ...state };
+  const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
@@ -1924,6 +1924,54 @@ test('Study tools: vocabulary chain, timeline, essay structure, flashcards from 
   await ctx.close();
 });
 
+test('Plus extras: a free student sees the diagram, and Real 3D, the Museum quiz and saving/printing say how to get them', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', plan: null } });
+  const lab = async (id) => { await page.evaluate((x) => openLabs(x), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 15000 }); };
+  const sheet = async (what) => {
+    await page.waitForSelector('.plus-sheet', { timeout: 5000 });
+    if (process.env.SHOTS && what === 'Real 3D') await page.screenshot({ path: process.env.SHOTS + '/plus-sheet.png' });
+    const t = await page.locator('.plus-sheet h3').innerText();
+    expect(t.includes(what), 'says what it is: ' + t);
+    await page.click('.plus-sheet .plus-ok');
+    expect(await page.locator('.plus-sheet').count() === 0, 'Not now closes it');
+  };
+  await lab('atom');
+  await page.waitForTimeout(800);
+  expect(await page.locator('.lab-stage.lab-is-3d').count() === 0, 'a free student starts on the diagram');
+  await page.click('.lab-panel .lab-seg button:has-text("Real 3D")');
+  await sheet('Real 3D');
+  expect(await page.locator('.lab-seg button[data-v="flat"][aria-pressed="true"]').count() === 1, 'still on the diagram');
+  await lab('museum');
+  await page.click('.lab-panel .lab-btn:has-text("Who painted it?")');
+  await sheet('Who painted it?');
+  expect(await page.locator('[data-guess]').count() === 0, 'the quiz did not start');
+  await lab('cornell');
+  await page.click('.lab-panel .lab-btn:has-text("Print")');
+  await sheet('Printing');
+  await page.click('.lab-panel .lab-btn:has-text("Download (.txt)")');
+  await sheet('Saving');
+  // once the account has Plus, the extras open
+  await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 864e5 }; });
+  await lab('atom');
+  await page.click('.lab-panel .lab-seg button:has-text("Real 3D")');
+  await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
+  expect(await page.locator('.plus-sheet').count() === 0, 'no note for Plus');
+  await page.evaluate(() => { state.plan = null; });
+  // the board: a picture is free, a PDF and board files are Plus
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  await page.evaluate(() => openSketch());
+  await page.waitForSelector('.csk-wrap');
+  await page.click('[data-act="save"]');
+  expect(/PDF · Plus/.test(await page.locator('.csk-pop').innerText()), 'the PDF says Plus');
+  const [png] = await Promise.all([page.waitForEvent('download'), page.click('.csk-pop [data-pop="png"]')]);
+  expect(/\.png$/.test(png.suggestedFilename()), 'the picture still saves');
+  await page.click('[data-act="save"]');
+  await page.click('.csk-pop [data-pop="pdf"]');
+  await sheet('PDF');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Museum and games: famous paintings, a logic circuit, cracking a rule / regex / compound, a pinning blitz, the fraction diner, the city market', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await ctx.route(/wikipedia\.org/, (r) => r.abort());
@@ -2481,6 +2529,9 @@ test('Claude on the server: the main chat and photos use Claude, Groq covers whe
     [plan] = await chatAs(token);
     m = await (await fetch(SERVER + '/__mode')).json();
     expect(plan === 'plus' && m.claudeCalls.at(-1).model === 'test-haiku', 'Plus gets Haiku');
+    // the app learns the plan from the account (so it can open the Plus extras)
+    const me = await page.evaluate(async ([srv, t]) => (await (await fetch(srv + '/auth/me', { headers: { authorization: 'Bearer ' + t } })).json()), [SERVER, token]);
+    expect(me.plan && me.plan.plan === 'plus' && me.plan.until > Date.now(), 'the account says Plus: ' + JSON.stringify(me.plan));
     // with the real default (no Claude for free students), a free student is answered by Groq
     await serverMode({ freeClaude: 0 });
     const before = m.claudeCount;

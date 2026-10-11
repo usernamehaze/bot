@@ -2,7 +2,7 @@
    who made each one, when, what it is made of, where it is now, and the story behind it.
    Pictures come from Wikipedia (Wikimedia Commons) for works that are free to show; works
    still under copyright show their details and a link instead of a copy of the picture. */
-import { el, esc, group, seg, button, row, stats, shuffle } from './kit.js';
+import { el, esc, group, seg, button, row, stats, shuffle, plusOnly } from './kit.js';
 
 // [id, title, artist, year, medium, where it is, the story, Wikipedia article, free to show?]
 const PH = [
@@ -88,7 +88,7 @@ const museumLab = {
     group(panel, 'Search').appendChild(search);
     search.addEventListener('input', () => { open = null; game = null; draw(); });
     const r = row(panel);
-    button(r, 'Play “Who painted it?”', () => startGame(), 'main');
+    button(r, 'Play “Who painted it?”', plusOnly('The “Who painted it?” quiz', () => startGame()), 'main');
     button(r, 'Surprise me', () => { const list = shown(); show(list[Math.floor(Math.random() * list.length)].id); });
     const st = stats(panel);
     const shown = () => { const q = search.value.trim().toLowerCase(); return ALL.filter((a) => (wing === 'all' || a.from === wing) && (!q || (a.title + ' ' + a.artist + ' ' + a.year).toLowerCase().includes(q))); };

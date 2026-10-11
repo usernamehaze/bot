@@ -927,12 +927,15 @@
       openPop('shapes', `<h4>Quick shapes</h4><p>Pick one, then tap where it should go. Draw on top of it.</p>
         <div class="csk-list">${TEMPLATES.map(([k, n]) => `<button class="csk-btn" data-pop="tpl" data-k="${k}">${n}</button>`).join('')}</div>`);
     }
+    // PDF and board files are Plus extras where the app says so (opts.premium); a picture is always free
+    const plusLocked = () => !!(opts.premium && !opts.premium.has());
     function savePop() {
+      const plus = plusLocked() ? ' · Plus' : '';
       openPop('save', `<h4>Save the board</h4><div class="csk-list">
         <button class="csk-btn" data-pop="png">Picture (PNG)</button>
-        <button class="csk-btn" data-pop="pdf">PDF</button>
-        <button class="csk-btn" data-pop="json">Board file (.json) — open it again later</button>
-        <button class="csk-btn" data-pop="open">Open a board file…</button></div>`);
+        <button class="csk-btn" data-pop="pdf">PDF${plus}</button>
+        <button class="csk-btn" data-pop="json">Board file (.json) — open it again later${plus}</button>
+        <button class="csk-btn" data-pop="open">Open a board file…${plus}</button></div>`);
     }
     function popErr(msg) { const el = pop && pop.querySelector('.csk-poperr'); if (el) { el.hidden = false; el.textContent = msg; } }
     async function popAct(b) {
@@ -958,6 +961,7 @@
       }
       if (a === 'tpl') { closePop(); setTool('place'); pendingTpl = b.dataset.k; toast('Tap the board where it should go'); return; }
       closePop();
+      if ((a === 'pdf' || a === 'json' || a === 'open') && plusLocked()) { opts.premium.ask(a === 'pdf' ? 'Saving the board as a PDF' : 'Board files'); return; }
       if (a === 'png') download(snapshot(), fileName('png'));
       else if (a === 'pdf') { const u = URL.createObjectURL(pdfFromJpeg(composite().toDataURL('image/jpeg', 0.92), W, H)); download(u, fileName('pdf')); setTimeout(() => URL.revokeObjectURL(u), 5000); }
       else if (a === 'json') { const u = URL.createObjectURL(new Blob([JSON.stringify(boardData())], { type: 'application/json' })); download(u, fileName('json')); setTimeout(() => URL.revokeObjectURL(u), 5000); }
