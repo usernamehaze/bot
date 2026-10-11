@@ -1778,7 +1778,8 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   await page.goto(APP.replace('app.html', 'index.html'));
   // under the hero: a 3D laptop and phone showing Labs (the Google Docs strip is gone)
   expect(await page.locator('.strip, .marquee').count() === 0, 'the scrolling strip is gone');
-  expect(await page.locator('.lx-lid .lx-scr img').count() === 3 && await page.locator('.lx-phone img').count() === 2, 'the laptop and phone show Labs screens');
+  expect(await page.locator('.lx-lid .lx-scr img').count() === 6 && await page.locator('.lx-phone img').count() === 3, 'the laptop and phone show Labs, the body and the planets');
+  expect(await page.locator('.lx-notch').count() === 1 && await page.locator('.lx-keys text').count() > 60 && await page.locator('.lx-island').count() === 1, 'a real-looking laptop (notch, labelled keys) and phone (dynamic island)');
   expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.lx-show img')]; await Promise.all(all.map((i) => { i.loading = 'eager'; return i.decode().catch(() => null); })); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
   expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the new logo: Cursor Cassie with her two eyes');
   // the scroll story: scrolling through a scene moves what's inside it
@@ -1788,8 +1789,15 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   };
   await scrollTo('.lx-show', 0.32);
   expect(await page.evaluate(() => { const r = document.querySelector('.lx-scr').getBoundingClientRect(); return r.width > innerWidth * 0.85; }), 'scrolled in, the laptop screen fills the window');
-  await scrollTo('.lx-show', 0.66);
-  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.lx-sim.s1')).opacity === '1') && /^Pendulum/.test(await page.locator('.lx-type span').innerText()), 'then the pendulum lab is on the screen');
+  // Cassie taps "Human body 3D" and the body pulls apart, frame by frame
+  await scrollTo('.lx-show', 0.385);
+  expect(await page.evaluate(() => +getComputedStyle(document.querySelector('.lx-cursor')).opacity > 0.5), 'Cassie’s cursor goes to the card');
+  await scrollTo('.lx-show', 0.5);
+  await page.waitForFunction(() => +getComputedStyle(document.querySelector('.lx-body')).opacity === 1 && document.querySelector('.lx-show')._lx.drawn > 0, null, { timeout: 8000 }).catch(() => {});
+  expect(await page.evaluate(() => document.querySelector('.lx-show')._lx.drawn > 0) && /^Human body/.test(await page.locator('.lx-type span').innerText()), 'then the body is pulled apart on the screen');
+  // then the planets
+  await scrollTo('.lx-show', 0.72);
+  expect(await page.evaluate(() => +getComputedStyle(document.querySelector('.lx-planets')).opacity === 1 && [...document.querySelectorAll('.lx-planets img')].some((i) => +getComputedStyle(i).opacity === 1)) && /^The planets/.test(await page.locator('.lx-type span').innerText()), 'then the planets');
   await scrollTo('.st-steps', 0.7);
   expect(await page.locator('.ss-list li.on').innerText() === 'Quiz', 'two-thirds through the steps, Quiz is the step on: ' + await page.locator('.ss-list li.on').innerText());
   expect(await page.locator('.ss-card.on').count() === 1, 'one step card shows at a time');

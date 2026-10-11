@@ -40,8 +40,9 @@ are the earlier reels.
 - **Logo (`brand/mark.cjs`):** Cursor Cassie herself — the pointer with her two caret eyes — in
   black and white. `node promo/brand/mark.cjs` redraws every app and extension icon
   (`icons/`, `extension/icons/`) and `icons/logo.svg` from that one shape.
-- **Laptop & phone screens (`hero/labs.cjs`):** the 3D laptop and phone under the landing page's
-  hero show Cassie's Labs. `node promo/hero/labs.cjs` (site served at :4700) takes them again; then
-  convert `promo/hero/raw/*.png` to `landing/hero/*.webp` (laptop 1600 wide — the shelf cropped to where
-  its cards end — phone 600 wide). `hero/capture.cjs` takes the older chat, Space and Body screens
-  (`laptop-space.webp` is still used).
+- **Laptop & phone screens (`hero/devices.cjs`):** the laptop and phone under the landing page's
+  hero show Cassie's Labs, the human body pulling apart (18 frames of the "Pull it apart" slider) and
+  the 3D solar system. `node promo/hero/devices.cjs` (site served at :4650) takes them again, then
+  `python3 promo/hero/devices.py` turns them into `landing/hero/lx-*.webp`. If the Labs shelf changes,
+  check where the Human body and Solar system cards are (story.js taps them at y 395 and 568).
+  `hero/capture.cjs` takes the older chat, Space and Body screens.
