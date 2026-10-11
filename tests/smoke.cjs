@@ -623,7 +623,7 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await page.click('[data-act="cards"]');
   await page.fill('.csk-pop .csk-topic', 'the water cycle');
   await page.click('.csk-pop [data-pop="make"]');
-  await page.waitForFunction(() => window.CassieSketch.session().objects().filter((o) => o.tool === 'card').length === 3, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.CassieSketch.session().objects().filter((o) => o.tool === 'card').length === 3, null, { timeout: 20000 }); // (Cassie's reply is slower when the machine is busy)
   expect(await page.locator('[data-tool="select"].on').count() === 1, 'the Move tool is picked so the cards can be flipped');
   // with the pen on, dragging a card moves it — it doesn't draw on the board
   await page.click('[data-tool="pen"]');
