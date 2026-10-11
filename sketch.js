@@ -391,7 +391,7 @@
         </div>
         ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie"><button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
         <div class="csk-stage"><div class="csk-board">
-          <canvas class="csk-bg"></canvas><canvas class="csk-obj"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-live"></canvas><canvas class="csk-fx"></canvas>
+          <canvas class="csk-bg"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-obj"></canvas><canvas class="csk-live"></canvas><canvas class="csk-fx"></canvas>
         </div></div>
       </div>`;
     root.appendChild(wrap);
@@ -409,8 +409,9 @@
     let tool = 'pen', color = dark ? '#ffffff' : '#1b1b1d', size = SIZES[0];
     const strokes = [], redo = [];
     let drawing = null;
-    // sticky notes and flashcards sit on their own layer under the ink; you move them with the Move tool
-    let sel = null, drag = null, laserDown = false, pendingTpl = null, fixedSize = null, editing = false;
+    // sticky notes and flashcards sit on their own layer above the ink; with the Move tool, or any pen,
+    // pressing on one picks it up (it never gets drawn on by accident)
+    let sel = null, drag = null, skipClick = false, laserDown = false, pendingTpl = null, fixedSize = null, editing = false;
     let noteColor = NOTE_COLORS[0][0], zTop = 0, vSeq = 0, objRaf = 0, myColor = PEOPLE[0];
     const glide = new Map(), flipAnim = new Map(), ver = new Map();
     const isObj = (st) => !!st && (st.tool === 'note' || st.tool === 'card');
@@ -777,17 +778,24 @@
       if (e.button > 0) return;
       e.preventDefault();
       closePop();
-      if (tool === 'text' || tool === 'note' || tool === 'place') return; // placed on click (below) so a new box keeps focus
+      skipClick = false;
       const pt = toBoard(e);
-      live.setPointerCapture(e.pointerId);
-      if (tool === 'select') {
-        if (onHandle(pt)) { removeObj(sel); return; }
-        const hit = objAt(pt);
+      // on a note or card, pens, text and notes pick it up (move it, tap to flip/edit) instead of drawing on it
+      const grabs = tool === 'select' || ['pen', 'hl', 'line', 'text', 'note'].includes(tool);
+      const hit = grabs ? (onHandle(pt) ? 'x' : objAt(pt)) : null;
+      if (tool === 'select' || hit) {
+        e.preventDefault();
+        live.setPointerCapture(e.pointerId);
+        skipClick = !!hit;
+        if (hit === 'x') { removeObj(sel); return; }
         sel = hit;
         if (hit) { drag = { s: hit, dx: pt[0] - hit.x, dy: pt[1] - hit.y, at: pt, moved: false }; hit.z = ++zTop; glide.delete(hit.id); }
         redrawObjs();
         return;
       }
+      if (sel) { sel = null; redrawObjs(); }
+      if (tool === 'text' || tool === 'note' || tool === 'place') return; // placed on click (below) so a new box keeps focus
+      live.setPointerCapture(e.pointerId);
       if (tool === 'laser') { laserDown = true; laserAdd('me', myColor, pt[0], pt[1], true); track(pt, 2); return; }
       drawing = { tool, color, size: size * scaleK(), points: [pt] };
       redo.length = 0;
@@ -809,7 +817,7 @@
         track(pt, 1);
         return;
       }
-      if (tool === 'select') live.style.cursor = objAt(pt) ? 'grab' : 'default';
+      if (!drawing && ['select', 'pen', 'hl', 'line', 'text', 'note'].includes(tool)) live.style.cursor = objAt(pt) ? 'grab' : toolCursor(tool);
       track(pt);
       if (!drawing) return;
       const pts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
@@ -843,6 +851,7 @@
     };
     live.addEventListener('pointerup', end);
     live.addEventListener('click', (e) => {
+      if (skipClick) { skipClick = false; return; } // that press was on a note or card
       const pt = toBoard(e);
       if (tool === 'text') placeText(e, pt);
       else if (tool === 'note') {
@@ -994,11 +1003,12 @@
       toast('Board opened');
     }
     $('.csk-boardfile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) openBoardFile(f); });
+    const toolCursor = (name) => ({ text: 'text', select: 'default', note: 'copy', place: 'copy' }[name] || 'crosshair');
     function setTool(name) {
       tool = name;
       wrap.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === name));
       $('[data-act="shapes"]').classList.toggle('on', name === 'place');
-      live.style.cursor = { text: 'text', select: 'default', note: 'copy', place: 'copy' }[name] || 'crosshair';
+      live.style.cursor = toolCursor(name);
       if (name !== 'select' && sel) { sel = null; redrawObjs(); }
       if (name !== 'place') pendingTpl = null;
     }
@@ -1028,6 +1038,8 @@
       if (t.dataset.extra != null) { const b = (opts.extra || [])[+t.dataset.extra]; if (b && b.onClick) b.onClick(); return; }
       if (t.dataset.pop) { popAct(t); return; }
       if (t.dataset.tool) {
+        // tap a tool that's already on to switch it off: back to Move, so a drag never draws by accident
+        if (t.dataset.tool === tool && tool !== 'select') { setTool('select'); closePop(); toast('Drawing is off — drag notes and cards freely, or tap a tool to draw again'); return; }
         setTool(t.dataset.tool);
         if (tool === 'hl' && (color === '#1b1b1d' || color === '#ffffff')) { color = '#f2c200'; syncInk(); }
         if (tool === 'note') { if (pop && pop.dataset.kind === 'note') closePop(); else notePop(); } else closePop();
@@ -1303,7 +1315,7 @@
       const was = sel; sel = null; redrawObjs(); // no selection box in the picture
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const x = c.getContext('2d');
-      x.drawImage(bg, 0, 0); x.drawImage(obj, 0, 0); x.drawImage(ink, 0, 0);
+      x.drawImage(bg, 0, 0); x.drawImage(ink, 0, 0); x.drawImage(obj, 0, 0);
       sel = was; if (was) redrawObjs();
       return c;
     }

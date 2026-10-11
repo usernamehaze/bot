@@ -6167,6 +6167,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',
   'The board got study tools: sticky notes in six colours with your name on them (sort them into colour groups in one tap), flashcards you paste, pick from your decks or have Cassie write — dropped on the board to flip and move — and quick shapes: a coordinate grid, Venn diagrams, flowchart boxes and logic gates. Save the board as a picture, a PDF or a board file you can open again later.',
   'In a study room you see everyone’s pointer with their name and what they’re doing (drawing, erasing, typing), point at things with a laser that fades in 2 seconds, and “Ask Cassie to check our board” shows her answer to the whole group.',
   'Talk with Cassie answers sooner: every voice now starts on the first sentence while the rest of the answer is still being written, and she replies after a shorter pause.',
