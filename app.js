@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '129';
+const APP_VERSION = '130';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -3339,7 +3339,8 @@ async function handleSend(text, opts = {}) {
 
 /* ---------- image generation (Gemini) ---------- */
 // Try these image models in order — if one is off on the free tier, fall back.
-const GEMINI_IMAGE_MODELS = [GEMINI_IMAGE_MODEL, 'gemini-2.0-flash-preview-image-generation'];
+const GEMINI_IMAGE_MODELS = ['gemini-3.1-flash-image-preview', GEMINI_IMAGE_MODEL, 'gemini-2.0-flash-preview-image-generation'];
+const geminiImageGone = new Set(); // models this key can't use (asked once, then skipped)
 
 async function tryGenerateImage(prompt, model) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -3347,8 +3348,9 @@ async function tryGenerateImage(prompt, model) {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': state.geminiKey },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+      contents: [{ role: 'user', parts: [{ text: picturePrompt(prompt) }] }],
+      // a low temperature keeps it literal: what a camera would really see, not the model's own flourishes
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.35, ...(/2\.0/.test(model) ? {} : { imageConfig: { aspectRatio: '4:3' } }) },
     }),
   });
   if (!res.ok) {
@@ -3401,8 +3403,10 @@ let geminiImageOff = false; // free Gemini keys usually have image generation se
 async function geminiImage(prompt) {
   let lastErr;
   for (const model of GEMINI_IMAGE_MODELS) {
+    if (geminiImageGone.has(model)) continue;
     try { return await tryGenerateImage(prompt, model); } catch (e) {
       lastErr = e;
+      if (e.status === 404) geminiImageGone.add(model);
       if (e.quota || e.notAvailable) continue;
       throw e;
     }
@@ -3410,22 +3414,59 @@ async function geminiImage(prompt) {
   geminiImageOff = true;
   throw lastErr || new Error('image generation is off for this key');
 }
-// Style follows the request: realistic by default; clean diagrams for labelled /
-// scientific diagrams; the student's own style words (cartoon, anime…) win.
-function imageStyle(prompt) {
-  if (/\b(cartoon|anime|chibi|pixel|clipart|clip art|watercolou?r|sketch|line art|3d render|illustration|drawing|painting|logo|icon|sticker|poster)\b/i.test(prompt)) return 'high quality, detailed';
-  if (/\b(diagram|labell?ed|parts of|cross[- ]section|infographic|chart|cycle|anatomy|structure)\b/i.test(prompt)) return 'clean educational diagram, accurate, clearly labelled parts, white background, high detail';
-  return 'photorealistic, natural lighting, sharp focus, realistic textures, high detail, 4k photo';
+// Style follows the request. The student's own style words (cartoon, anime, poster…) win, and labelled
+// diagrams stay clean diagrams. Everything else is a real photograph: described the way a photographer
+// would (camera, lens, light, film, framing) with what to avoid spelled out, never "hyperrealistic,
+// stunning, 8k" — those words are what make pictures look plastic and computer-made.
+const ART_STYLE_RE = /\b(cartoon|anime|chibi|pixel|clipart|clip art|watercolou?r|sketch|line art|3d render|illustration|drawing|painting|logo|icon|sticker|poster|wallpaper|comic|kawaii|vector|emoji|meme)\b/i;
+const DIAGRAM_RE = /\b(diagram|labell?ed|parts of|cross[- ]section|infographic|chart|cycle|anatomy|structure|timeline|map of|flow ?chart|steps of)\b/i;
+function imageKind(subject) {
+  const s = String(subject || '');
+  if (ART_STYLE_RE.test(s)) return 'art';
+  if (DIAGRAM_RE.test(s)) return 'diagram';
+  return 'photo';
 }
-// First try: full detail with the service's prompt helper. Second try: a shorter
-// prompt without the helper — long, detailed prompts are what usually time out.
+// how a photographer would really take it
+function photoSetup(s) {
+  if (/\b(cells?|bacteri\w*|virus\w*|microb\w*|amoeba|paramecium|pollen|chromosomes?|tissue|blood cells?|plankton|algae|mitosis|under a microscope)\b/i.test(s))
+    return ['light micrograph through a laboratory microscope, 40x objective, stained glass slide', 'even transmitted light from below, slight chromatic fringing at the edges', 'circular field of view, shallow focal plane, a few out-of-focus particles'];
+  if (/\b(planets?|moon|mars|jupiter|saturn|venus|mercury|neptune|uranus|galax\w*|nebula\w*|stars?|comet|eclipse|milky way|solar system|asteroid|space|orbit|astronaut)\b/i.test(s))
+    return ['astrophotograph from a spacecraft camera or a telescope with a cooled sensor, long exposure', 'single hard light from the Sun, true black sky, no glow added', 'faint sensor noise in the shadows, natural colour as the eye would see it'];
+  if (/\b(insects?|bugs?|ants?|bees?|butterfl\w*|spiders?|flowers?|leaf|leaves|seeds?|mushrooms?|fungi|moss|crystals?|minerals?|rocks?|snowflakes?|feathers?|beetle|ladybug|dragonfly|frog)\b/i.test(s))
+    return ['macro photograph, full-frame camera, 100mm f/2.8 macro lens at f/8', 'soft overcast daylight with a small reflector fill', 'real fine texture (hairs, pores, veins, dust), shallow depth of field, close candid framing'];
+  if (/\b(mountains?|volcano\w*|rivers?|lakes?|oceans?|seas?|beach\w*|forests?|jungle|desert|glacier|canyon|waterfall|landscape|city|cities|skyline|village|farm|field|rice terraces?|island|coral reef|weather|storm|tornado|clouds?|sunset|sunrise)\b/i.test(s))
+    return ['landscape photograph, full-frame camera, 24mm f/8 lens on a tripod', 'natural light at golden hour, soft directional shadows, a little atmospheric haze', 'Kodak Ektar 100 colour, fine grain, eye-level horizon, nothing staged'];
+  if (/\b(people|person|man|woman|boy|girl|kids?|children|students?|teachers?|doctors?|farmers?|workers?|scientists?|portrait|family|face|athlete)\b/i.test(s))
+    return ['candid documentary photograph, full-frame camera, 50mm f/2 lens', 'soft window light from one side, natural shadows', 'Kodak Portra 400 colour and grain, real skin texture with pores and fine lines, unposed, eye-level'];
+  if (/\b(animals?|dogs?|cats?|birds?|lions?|tigers?|elephants?|horses?|cows?|fish|whales?|sharks?|monkeys?|bears?|wolf|wolves|deer|snakes?|turtles?|eagles?|owls?|carabao|wildlife)\b/i.test(s))
+    return ['wildlife photograph, full-frame camera, 300mm f/4 telephoto lens', 'natural daylight, the animal in its real habitat', 'real fur, feather or scale detail, slightly soft background, candid moment, not posed'];
+  if (/\b(foods?|fruits?|vegetables?|apple|banana|mango|bread|rice|dish|meal|cake|soup|adobo|pizza)\b/i.test(s))
+    return ['food photograph, full-frame camera, 50mm f/2.8 lens, a little above eye level', 'soft daylight from a nearby window, gentle natural shadows', 'real surface texture and small imperfections, on a plain worn table, nothing glossy or styled'];
+  return ['documentary photograph, full-frame camera, 35mm f/2.8 lens', 'available natural light, true shadows', 'Kodak Portra 400 colour and fine grain, real textures and small imperfections, candid eye-level framing'];
+}
+const PHOTO_AVOID = 'CGI, 3D render, digital painting, plastic or waxy surfaces, airbrushed smoothness, oversaturated colour, HDR halos, glowing edges, lens flare added in, text, letters, captions, watermark, extra or missing limbs and fingers';
+// The words sent to the picture maker. short: for the free service's quick retry (long prompts time out there).
+function picturePrompt(subject, { short = false } = {}) {
+  const s = String(subject || '').replace(/\s+/g, ' ').trim();
+  const kind = imageKind(s);
+  if (kind === 'art') return short ? s.slice(0, 260) : `${s}. Clean, careful work with accurate details.`;
+  if (kind === 'diagram') return `${short ? s.slice(0, 220) : s}. A clean educational diagram: accurate, clearly labelled parts with correctly spelled labels, flat white background, even line weight.`;
+  const [camera, day, look] = photoSetup(s);
+  const light = /\b(night|midnight|in the dark)\b/i.test(s) && !/micrograph|astrophotograph/.test(camera) ? 'at night, lit only by the real lights in the scene, long exposure on a tripod, deep natural shadows' : day;
+  if (short) return `Real photograph of ${s.slice(0, 200)}. ${camera}. ${light}. No CGI, no 3D render, no plastic look, no text.`;
+  return `A real photograph of ${s}. ${camera[0].toUpperCase() + camera.slice(1)}. Lighting: ${light}. Look: ${look}. Accurate to how it really is in the world. Avoid: ${PHOTO_AVOID}.`;
+}
+// First try: the full photographic description. Second try: a shorter one — long prompts are what
+// usually time out on the free service. (Its prompt "enhancer" stays off for photos: it adds the
+// glossy buzzwords this is written to avoid.)
 function freeImageUrl(prompt, seed, simple = false) {
-  const p = simple ? `${prompt.slice(0, 220)}, ${imageStyle(prompt)}` : `${prompt}, ${imageStyle(prompt)}`.slice(0, 600);
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=${simple ? 896 : 1024}&height=${simple ? 672 : 768}&seed=${seed}&model=flux${simple ? '' : '&enhance=true'}&nologo=true&safe=true`;
+  const p = picturePrompt(prompt, { short: simple }).slice(0, 700);
+  const enhance = !simple && imageKind(prompt) !== 'photo';
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=${simple ? 896 : 1024}&height=${simple ? 672 : 768}&seed=${seed}&model=flux${enhance ? '&enhance=true' : ''}&nologo=true&safe=true`;
 }
 // Backup: Cassie's own server makes the picture (Workers AI).
 async function serverImage(prompt) {
-  const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: `${prompt}, ${imageStyle(prompt)}` }) });
+  const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }) });
   let data = {};
   try { data = await res.json(); } catch (e) { /* ignore */ }
   if (!res.ok || !data.image) throw friendlyError((data.error && data.error.message) || 'The picture makers are busy right now — give it a minute and ask again.');
@@ -6059,6 +6100,7 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Pictures look like real photos now: Cassie asks for them the way a photographer would (the camera, the lens, the light), so they come out natural instead of glossy or computer-made. Ask for a cartoon, a poster or a labelled diagram and you still get exactly that.',
   'Listen: every answer, quiz question and 3D part card has a 🔊 Listen button, and flashcards can be read to you — one at a time, automatically, or hands-free with 🎧 Listen (the question, a moment to think, then the answer).',
   'Study together: in a study room, open 📚 Study together — chat with your group, ask Cassie for everyone, study shared flashcards together, take a group quiz with a live score board, pin notes, and run a focus timer for the whole room.',
   'Talk with Cassie always talks now: if her own voice can’t load on your phone, she speaks with your phone’s best voice instead of going quiet. Her own voice also loads better on iPhone.',

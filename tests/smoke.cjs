@@ -326,6 +326,13 @@ test('picture request makes a real picture, not ASCII art', async (b) => {
   const src = await page.locator('#chat-log img').last().getAttribute('src');
   expect(/pollinations|^data:|^blob:/.test(src || ''), 'unexpected image src: ' + src);
   expect(!/```/.test(await a.textContent()), 'ASCII art in reply');
+  // asked like a photographer would: camera, lens, light, and what to avoid; no glossy buzzwords
+  const words = decodeURIComponent(src || '');
+  expect(/real photograph of a red apple/i.test(words) && /\d+mm f\/[\d.]+ lens/.test(words) && /Avoid: CGI/.test(words), 'not a photographic prompt: ' + words.slice(0, 300));
+  expect(!/hyperrealistic|photorealistic|stunning|4k|8k|masterpiece/i.test(words) && !/enhance=true/.test(words), 'buzzwords or the enhancer in a photo prompt: ' + words.slice(0, 300));
+  // a style the student asks for, and a labelled diagram, are not turned into photos
+  const kinds = await page.evaluate(() => [imageKind('a cartoon cat'), imageKind('a labeled diagram of a plant cell'), imageKind('a plant cell under a microscope'), picturePrompt('a plant cell under a microscope')]);
+  expect(kinds[0] === 'art' && kinds[1] === 'diagram' && kinds[2] === 'photo' && /micrograph/.test(kinds[3]), 'wrong picture kinds: ' + kinds.join(' | '));
   await ctx.close();
 });
 
@@ -337,7 +344,7 @@ test('picture: when the free service fails, the server makes it', async (b) => {
   await page.press('#prompt-input', 'Enter');
   await page.waitForSelector('#chat-log img[src^="data:image"]', { timeout: 30000 });
   const m = await serverMode({});
-  expect(/futuristic city/.test(m.lastImagePrompt || ''), 'server did not get the prompt: ' + m.lastImagePrompt);
+  expect(/futuristic city/.test(m.lastImagePrompt || '') && /24mm/.test(m.lastImagePrompt), 'server did not get the photographic prompt: ' + m.lastImagePrompt);
   await ctx.close();
 });
 
