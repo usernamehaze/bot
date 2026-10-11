@@ -339,3 +339,30 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 .atlas-results { display: grid; gap: 6px; }
 .atlas-photo { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; }
 .atlas-pop small { color: rgba(255, 255, 255, .55); font-weight: 500; }
+
+/* the real-looking 3D view of a lab (bench3d.js) */
+.lab-stage.lab-is-3d .lab-canvas:not(.lab-3d) { background: transparent; }
+.lab3d-label.plain { background: none; border: 0; padding: 0; color: rgba(242, 242, 244, .82); font-weight: 600; pointer-events: none; backdrop-filter: none; -webkit-backdrop-filter: none; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); transform-origin: center; }
+.lab3d-label.plain.faint { color: rgba(242, 242, 244, .55); font-weight: 500; }
+.lab3d-label.plain.big { font-size: .95rem; font-weight: 700; color: #fff; }
+.lab3d-label.plain.on-light { color: #1a1b20; text-shadow: 0 1px 2px rgba(255, 255, 255, .7); }
+.lab3d-label.plain.gold { color: #ffcf5a; }
+.lab3d-label.plain.blue { color: #9cc4ff; }
+.lab3d-label.plain.red { color: #ff8f8f; }
+.lab-series { position: absolute; z-index: 2; right: 10px; top: 10px; display: none; flex-direction: column; gap: 2px; padding: 8px; border-radius: 14px; background: rgba(10, 11, 16, .55); border: 1px solid rgba(255, 255, 255, .12); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.lab-stage.lab-is-3d .lab-series { display: flex; }
+.lab-series small { font-size: .66rem; color: rgba(255, 255, 255, .55); padding: 2px 6px; }
+.lab-series button { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; border: 0; border-radius: 8px; background: none; color: rgba(255, 255, 255, .72); font-size: .78rem; text-align: left; cursor: pointer; }
+.lab-series button b { width: 1.6em; font-weight: 700; }
+.lab-series button[aria-pressed="true"] { background: rgba(255, 255, 255, .16); color: #fff; }
+@media (max-width: 760px) { .lab-series { padding: 5px; } .lab-series button { padding: 3px 6px; font-size: .72rem; } }
+.lab-overlay.col { flex-direction: column; align-items: stretch; }
+@media (min-width: 761px) { .lab-overlay.col { flex-direction: row; } }
+/* the atlas: what you just tapped, right on the map (tap it for the facts) */
+.atlas-peek { position: absolute; z-index: 3; left: 10px; top: 10px; max-width: calc(100% - 20px); display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(10, 11, 16, .62); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: #f2f2f4; text-align: left; cursor: pointer; }
+.atlas-peek img { width: 34px; height: 24px; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .2); }
+.atlas-peek span { display: flex; flex-direction: column; min-width: 0; }
+.atlas-peek b { font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-peek small { font-size: .72rem; color: rgba(255, 255, 255, .65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-peek i { font-style: normal; font-size: .72rem; font-weight: 600; padding: 3px 8px; border-radius: 99px; background: rgba(255, 255, 255, .14); white-space: nowrap; }
+@media (min-width: 761px) { .atlas-peek i { display: none; } }

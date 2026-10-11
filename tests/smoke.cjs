@@ -1369,7 +1369,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   for (const id of ids.filter((x) => !/3d$/.test(x))) {
     await page.click(`.labs-tabs [data-section="${games.includes(id) ? 'games' : 'learn'}"]`);
     await page.click(`.labs-grid [data-lab="${id}"]`);
-    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 8000 });
+    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
     expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq').count() >= 1, id + ' draws something');
     expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
     // tap the middle of the picture (nothing should break)
@@ -1444,7 +1444,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   expect(await page.locator('.lab-sl:has-text("Angle") output').innerText() !== '40°', 'dragging on the picture aims the launcher');
   await page.locator('.lab-sl:has-text("Angle") input').fill('45');
   await page.click('.lab-overlay .lab-btn:has-text("Launch")');
-  await page.waitForFunction(() => /Landed|Hit/.test(document.querySelector('.lab-note').textContent), null, { timeout: 8000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.lab-note')].some((n) => /Landed|Hit/.test(n.textContent)), null, { timeout: 25000 });
   expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), '45° from the ground ticks the farthest-angle goal');
   await shot('lab-projectile');
   await page.click('.lab-ask');
@@ -1666,34 +1666,50 @@ test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket
   await page.press('.atlas-search input', 'Enter');
   await page.waitForSelector('.atlas-card h3:text-is("Mount Apo")', { timeout: 5000 });
   expect(/pinned on the map/.test(await page.locator('.atlas-card').innerText()) && await page.locator('.atlas-card button:has-text("About Philippines")').count() === 1, 'a place is pinned, with its country');
-  // tapping a country on the map
-  const ab = await page.locator('.lab-stage canvas').boundingBox();
+  // the globe (3D): tap a country on it
+  await page.waitForSelector('.lab-stage.lab-is-3d canvas.lab-3d', { timeout: 20000 });
+  await page.click('.lab-overlay .lab-btn:has-text("Whole world")');
+  await page.waitForTimeout(1200);
+  const oz = await page.evaluate(() => document.querySelector('.lab-stage canvas.lab-3d')._toScreen(-25, 134));
+  await page.mouse.click(oz.x, oz.y);
+  await page.waitForSelector('.atlas-card h3:text-is("Australia")', { timeout: 5000 });
+  expect(/Australia/.test(await page.locator('.atlas-peek').innerText()), 'tapping the globe picks the country, shown right on the globe');
+  await shot('atlas-globe');
+  // the flat map: tapping a country there too
+  await page.click('.lab-seg button:has-text("Flat map")');
+  const ab = await page.locator('.lab-stage canvas.lab-canvas:not(.lab-3d)').boundingBox();
   await page.click('.lab-overlay .lab-btn:has-text("Whole world")');
   await page.mouse.click(ab.x + ab.width * 0.25, ab.y + ab.height * 0.4);
   await page.waitForTimeout(400); await shot('atlas-tap');
-  // pH: tap the acid bottle for a drop
+  // pH, in 3D on a lab bench: tap the acid bottle for a drop (pointers go through the 3D view onto the lab)
+  const flatAt = (x, y) => page.evaluate(([px, py]) => document.querySelector('.lab-stage canvas.lab-canvas:not(.lab-3d)')._toScreen(px, py), [x, y]);
   await page.goto(APP + '?lab=ph');
-  await page.waitForSelector('.lab-stage canvas');
-  const pb = await page.locator('.lab-stage canvas').boundingBox();
-  await page.mouse.click(pb.x + 52, pb.y + 40);
+  await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
+  await page.waitForTimeout(500);
+  const pb = await page.locator('.lab-stage').boundingBox();
+  const acid = await flatAt(52, 40);
+  await page.mouse.click(acid.x, acid.y);
   await page.waitForFunction(() => /Acid added[\s\S]*0\.05 mL/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 3000 });
   // drag the base bottle over the beaker and hold it there: it pours
-  await page.mouse.move(pb.x + 30 + Math.min(170, pb.width * 0.32) - 22, pb.y + 40); await page.mouse.down();
-  await page.mouse.move(pb.x + 110, pb.y + 90, { steps: 4 }); await page.waitForTimeout(900); await page.mouse.up();
+  const base = await flatAt(30 + Math.min(170, pb.width * 0.32) - 22, 40), over = await flatAt(110, 90);
+  await page.mouse.move(base.x, base.y); await page.mouse.down();
+  await page.mouse.move(over.x, over.y, { steps: 4 }); await page.waitForTimeout(1500); await page.mouse.up();
   expect(!/Base added[\s\S]*\b0 mL/.test(await page.locator('.lab-stats').innerText()), 'pouring the base adds base: ' + await page.locator('.lab-stats').innerText());
-  // the atom: drag a neutron from the tray into the nucleus (carbon-12 → carbon-13)
-  await page.goto(APP + '?lab=atom');
+  // the atom, as the flat diagram: drag a neutron from the tray into the nucleus (carbon-12 → carbon-13)
+  await page.goto(APP + '?lab=atom&flat');
   await page.waitForSelector('.lab-stage canvas');
   const tb = await page.locator('.lab-stage canvas').boundingBox();
   await page.mouse.move(tb.x + 24, tb.y + tb.height - 48); await page.mouse.down();
   await page.mouse.move(tb.x + tb.width * 0.42, tb.y + tb.height / 2, { steps: 6 }); await page.mouse.up();
   expect(/carbon-13/.test(await page.locator('.lab-stats').innerText()), 'a dragged-in neutron makes carbon-13: ' + await page.locator('.lab-stats').innerText());
-  // Hanoi: drag the top disk from A to C
+  // Hanoi, in 3D: drag the top wooden disk from A to C
   await page.goto(APP + '?lab=hanoi');
-  await page.waitForSelector('.lab-stage canvas');
-  const hb = await page.locator('.lab-stage canvas').boundingBox();
-  await page.mouse.move(hb.x + hb.width / 6, hb.y + hb.height - 60); await page.mouse.down();
-  await page.mouse.move(hb.x + (hb.width * 5) / 6, hb.y + hb.height - 80, { steps: 6 }); await page.mouse.up();
+  await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
+  await page.waitForTimeout(500);
+  const hb = await page.locator('.lab-stage').boundingBox();
+  const from = await flatAt(hb.width / 6, hb.height - 60), to = await flatAt((hb.width * 5) / 6, hb.height - 80);
+  await page.mouse.move(from.x, from.y); await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 }); await page.mouse.up();
   expect(/Moves\s*1\b/.test(await page.locator('.lab-stats').innerText().then((t) => t.replace(/\n/g, ' '))), 'dragging a disk moves it: ' + await page.locator('.lab-stats').innerText());
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
@@ -2628,13 +2644,18 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
   const { startFakeServer } = await import('./fake-server.mjs');
   const app = staticServer();
   const server = await startFakeServer(SERVER_PORT);
-  const browser = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
-  const newContext = browser.newContext.bind(browser);
-  browser.newContext = async (...a) => watchCsp(await newContext(...a));
+  // a fresh browser for every test: the 3D tests leave the graphics side busy, and that made later tests flaky
+  const launch = async () => {
+    const browser = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async (...a) => watchCsp(await newContext(...a));
+    return browser;
+  };
   const only = process.argv[2];
   let failed = 0;
   for (const t of tests) {
     if (only && !t.name.includes(only)) continue;
+    const browser = await launch();
     try {
       cspViolations.length = 0;
       await t.fn(browser);
@@ -2642,8 +2663,9 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
       console.log('PASS', t.name);
     }
     catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (e && e.message || e).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
+    finally { await browser.close().catch(() => {}); }
   }
-  await browser.close(); await server.close(); app.close();
+  await server.close(); app.close();
   console.log(failed ? `\n${failed} failed` : '\nAll passed');
   process.exit(failed ? 1 : 0);
 })();

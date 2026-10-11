@@ -2,6 +2,7 @@
    a unit converter, simple vs compound interest, a picture proof of (a + b)², and the
    Tower of Hanoi. */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, slider, seg, button, row, stats, stepper, line, dot, text, niceStep, formula, integrate, gcd } from './kit.js';
+import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Function lab ---------------- */
 const fnLab = {
@@ -644,8 +645,15 @@ const hanoiLab = {
     let n = 3, pegs, pick = -1, moves = 0, msg = '', demo = null, won = false, byCassie = false;
     const reset = () => { pegs = [Array.from({ length: n }, (_, i) => n - i), [], []]; pick = -1; moves = 0; msg = ''; won = false; byCassie = false; stopDemo(); };
     const hue = (d) => `hsl(${40 + (d / 7) * 200}, 70%, 64%)`;
+    let V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const base = h - 40, pw = w / 3, maxW = Math.min(pw - 16, 200), dh = Math.min(26, (h - 120) / 8);
+      if (V && V.scene && V.scene.update) {
+        // in 3D: wooden pegs and lacquered disks
+        V.scene.update({ pegs, n, pick, held, base, pw, maxW, dh, w, h });
+        if (msg) text(ctx, msg, w / 2, 28, won ? C.green : C.red, 'center');
+        return;
+      }
       line(ctx, [[10, base], [w - 10, base]], DIM, 3);
       pegs.forEach((pg, i) => {
         const x = pw * i + pw / 2;
@@ -705,9 +713,12 @@ const hanoiLab = {
     button(r1, 'Watch Cassie solve it', watch, 'main');
     group(panel).appendChild(el('p', 'lab-note', 'Drag a disk onto another peg — or tap a peg, then tap where its top disk goes.'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.hanoi3d(B)), { pitch: 14 });
     function report() { st.set([['Moves', String(moves)], ['Fewest possible', `${2 ** n - 1} (2^${n} − 1)`]]); cv.redraw(); }
     reset(); report();
-    return { state: () => `${n} disks, ${moves} moves so far${won ? ' — solved' : ''}; the fewest possible is ${2 ** n - 1}`, destroy: () => { stopDemo(); cv.destroy(); } };
+    // (the disks glide to their places in 3D)
+    const glide = clock(() => { if (V && V.on) cv.redraw(); return true; }); glide.start();
+    return { state: () => `${n} disks, ${moves} moves so far${won ? ' — solved' : ''}; the fewest possible is ${2 ** n - 1}`, destroy: () => { glide.stop(); stopDemo(); V.destroy(); cv.destroy(); } };
   },
 };
 

@@ -70,19 +70,24 @@ export function canvas(host, draw) {
   return v;
 }
 // where a pointer is on a canvas, in CSS pixels
-export function at(c, e) { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-// press, drag and let go — with the mouse, a pen or a finger
+// (in the 3D view, c._at maps the pointer through the camera onto the flat layout)
+export function at(c, e) { if (c._at) return c._at(e); const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+// press, drag and let go — with the mouse, a pen or a finger. In the 3D view a drag that starts
+// on nothing turns the view instead (c._orbit), and two fingers belong to the view (c._pinch).
 export function drag(c, { down, move, up }) {
-  let on = false;
+  let on = false, orb = false;
   c.addEventListener('pointerdown', (e) => {
+    if (orb || c._pinch) return;
     const p = at(c, e);
-    if (down && down(p, e) === false) return;
-    on = true;
+    if (down && down(p, e) === false) {
+      if (!c._orbit || on) return;
+      orb = true; c._orbit.down(e);
+    } else on = true;
     try { c.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     e.preventDefault();
   });
-  c.addEventListener('pointermove', (e) => { if (on && move) move(at(c, e), e); });
-  const end = (e) => { if (!on) return; on = false; if (up) up(at(c, e), e); };
+  c.addEventListener('pointermove', (e) => { if (orb) { if (c._orbit) c._orbit.move(e); return; } if (on && move && !c._pinch) move(at(c, e), e); });
+  const end = (e) => { if (orb) { orb = false; if (c._orbit) c._orbit.up(e); return; } if (!on) return; on = false; if (up) up(at(c, e), e); };
   c.addEventListener('pointerup', end);
   c.addEventListener('pointercancel', end);
 }

@@ -11,7 +11,8 @@ export function webglOk() {
 }
 
 // stage: the lab's picture box. Returns { THREE, scene, camera, controls, renderer, add, pickable, label, flyTo, onFrame, destroy }
-export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0.01, far = 1e7, logDepth = false } = {}) {
+// lazy: draw only for a moment after wake() (or while the camera flies) — for scenes that sit still
+export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0.01, far = 1e7, logDepth = false, lazy = false } = {}) {
   const { THREE, OrbitControls } = await loadThree();
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance', logarithmicDepthBuffer: logDepth });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -31,11 +32,11 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
   controls.rotateSpeed = 0.7; controls.zoomSpeed = 1.1;
   controls.screenSpacePanning = true;
   const frames = new Set(), picks = [], tags = [];
-  let w = 1, h = 1, raf = 0, alive = true, fly = null;
+  let w = 1, h = 1, raf = 0, alive = true, fly = null, awake = performance.now() + 1500;
   const fit = () => {
     const r = stage.getBoundingClientRect();
     w = Math.max(1, Math.round(r.width)); h = Math.max(1, Math.round(r.height));
-    renderer.setSize(w, h, false); canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    renderer.setSize(w, h, false); canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; awake = performance.now() + 700;
     camera.aspect = w / h; camera.updateProjectionMatrix();
   };
   const ro = new ResizeObserver(fit); ro.observe(stage); fit();
@@ -53,6 +54,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
     }
     frames.forEach((f) => f(dt));
     controls.update();
+    if (lazy && !fly && performance.now() > awake) return;
     renderer.render(scene, camera);
     // labels follow their objects (hidden when behind the camera or too far away to matter)
     for (const t of tags) {
@@ -62,7 +64,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
       v.project(camera);
       if (v.z > 1 || v.z < -1) { t.el.hidden = true; continue; }
       t.el.hidden = false;
-      t.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -130%)`;
+      t.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) ${t.align === 'left' ? 'translate(0, -50%)' : t.align === 'center' ? 'translate(-50%, -50%)' : 'translate(-50%, -130%)'}`;
     }
   }
   loop();
@@ -91,16 +93,17 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
   return {
     THREE, scene, camera, controls, renderer, canvas,
     get size() { return { w, h }; },
+    wake(ms = 700) { awake = Math.max(awake, performance.now() + ms); },
     onFrame(f) { frames.add(f); return () => frames.delete(f); },
     // tap on an object (or anything inside it)
     pickable(obj, onTap, when) { picks.push({ obj, onTap, when }); },
     // a name tag that follows an object; tap it too
-    label(obj, text, { className = '', onTap, offset, show } = {}) {
+    label(obj, text, { className = '', onTap, offset, show, align } = {}) {
       const el = document.createElement(onTap ? 'button' : 'span');
       if (onTap) { el.type = 'button'; el.addEventListener('click', onTap); }
       el.className = 'lab3d-label ' + className; el.textContent = text; el.hidden = true;
       labels.appendChild(el);
-      const t = { obj, el, offset, show };
+      const t = { obj, el, offset, show, align };
       tags.push(t);
       return el;
     },
@@ -110,7 +113,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
       const t1 = target.clone(), d = (dir || camera.position.clone().sub(controls.target)).normalize();
       fly = { t: 0, dur: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.01 : dur, p0: camera.position.clone(), t0: controls.target.clone(), p1: t1.clone().add(d.multiplyScalar(dist)), t1, done };
     },
-    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); }); canvas.remove(); labels.remove(); },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* ignore */ } scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); }); canvas.remove(); labels.remove(); },
   };
 }
 
