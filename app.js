@@ -366,8 +366,8 @@ const cursorEl = document.getElementById('cassie-cursor');
 const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 const attachPreview = document.getElementById('attach-preview');
-const attachThumb = document.getElementById('attach-thumb');
-const attachName = document.getElementById('attach-name');
+const attachStrip = document.getElementById('att-strip');
+const attachCount = document.getElementById('att-count');
 const attachRemove = document.getElementById('attach-remove');
 const highlightPopover = document.getElementById('highlight-popover');
 const highlightPopoverBody = document.getElementById('highlight-popover-body');
@@ -690,7 +690,7 @@ function fileSizeText(n) {
 function isleFromTransfer(dt) {
   if (!dt) return null;
   const files = [...(dt.files || [])];
-  if (files.length) return { file: files[0], more: files.length - 1 };
+  if (files.length) return { file: files[0], more: files.length - 1, files: files.slice(1) };
   const text = (dt.getData('text/plain') || '').trim();
   return text ? { text } : null;
 }
@@ -711,8 +711,10 @@ async function isleTake(card, got) {
     try { const text = (await file.text()).trim(); if (text) { clearAttach(); card.ready({ kind: 'text', text: text.slice(0, 12000), name: file.name }); return; } } catch (e) { /* fall through */ }
   }
   const ok = await attachFile(file);
-  if (!ok) { card.error(attachName.textContent || `I can’t open ${file.name}.`); clearAttach(); return; }
-  if (pendingImage) card.ready({ kind: 'image', name: file.name, dataUrl: pendingImage.dataUrl });
+  if (!ok) { card.error(attachError || `I can’t open ${file.name}.`); clearAttach(); return; }
+  const last = attachments[attachments.length - 1];
+  for (const more of got.files || []) await attachFile(more); // the rest of a multi-file drop comes along too
+  if (last && last.kind === 'image') card.ready({ kind: 'image', name: file.name, dataUrl: last.image.dataUrl });
   else card.ready({ kind: 'doc', name: file.name });
 }
 
@@ -2672,6 +2674,51 @@ async function groqDocument(doc, request, history, onStatus) {
   return [`**${doc.name}${pagesNote}**`, ...sections, master, questions ? `**Practice questions**\n\n${questions}` : ''].filter(Boolean).join('\n\n') + tail;
 }
 
+/* Several photos and files at once. Each photo is read on its own — every word copied out
+   exactly, every diagram described, then notes of what matters — and each file goes through the
+   usual whole-file reading. Their notes become one combined "file" (marked photo by photo,
+   file by file) that Cassie answers from, so nothing from photo 9 is lost behind photo 1. */
+const PHOTO_READ = (k, n, name) => `This is photo ${k} of ${n} that I attached${name ? ` ("${name}")` : ''}. Read it carefully and completely, then answer in three parts:
+**Text in the photo** — copy out EVERY word exactly as written (printed or handwritten), in reading order: headings, paragraphs, lists, questions with all of their answer choices, labels, captions, table cells, formulas and numbers. Don't summarise or correct anything; write [unclear] for a word you can't read.
+**Pictures** — every diagram, chart, table, map or drawing: what it shows, with every label and value you can read.
+**Notes** — ${NOTES_GUIDE}
+Never add anything that isn't in the photo. If part of it is blurry or cut off, say which part.`;
+async function readPhoto(image, prompt) {
+  const msgs = [{ role: 'user', content: prompt }];
+  if (SERVER && serverClaude) { try { return await askClaudeViaServer(msgs, [image], {}); } catch (e) { /* the usual picture readers */ } }
+  return askPicture(msgs, image, {});
+}
+async function answerAboutMany(items, request, history, onStatus) {
+  const photos = items.filter((a) => a.kind === 'image'), files = items.filter((a) => a.kind === 'doc');
+  const parts = new Array(items.length);
+  // photos: three at a time (quick, and kind to the free per-minute limits), kept in order
+  let done = 0;
+  const queue = photos.map((a) => ({ a, k: photos.indexOf(a) + 1 }));
+  const worker = async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) {
+      let notes = '';
+      try { notes = await readPhoto(job.a.image, PHOTO_READ(job.k, photos.length, job.a.name)); }
+      catch (e) { notes = `(I couldn’t read this photo: ${errorText(e) || 'try it again on its own'}.)`; }
+      parts[items.indexOf(job.a)] = `=== Photo ${job.k} of ${photos.length}${job.a.name ? ` (${job.a.name})` : ''} ===\n${notes}`;
+      onStatus(`Read ${++done} of ${photos.length} photo${photos.length === 1 ? '' : 's'}…`);
+    }
+  };
+  if (photos.length) { onStatus(`Reading ${photos.length} photo${photos.length === 1 ? '' : 's'}…`); await Promise.all([worker(), worker(), worker()]); }
+  // files: short text files go in word for word; long or scanned ones are read into full notes
+  for (let i = 0; i < files.length; i++) {
+    const d = files[i].doc, k = i + 1, head = `=== File ${k} of ${files.length}: ${d.name} (${d.label}) ===`;
+    let body;
+    if (d.text && d.text.length <= 14000 && !d.hasVisuals && !d.scanned) body = d.text;
+    else body = await readDocumentAnswer(d, `Take complete, accurate study notes of this WHOLE file, in its order. ${NOTES_GUIDE}`, [], (m) => onStatus(`File ${k} of ${files.length} (${d.name}): ${m}`));
+    parts[items.indexOf(files[i])] = `${head}\n${body}`;
+  }
+  const label = [photos.length ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : '', files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  const doc = { name: `your ${label}`, kind: 'txt', label, text: parts.filter(Boolean).join('\n\n'), hasVisuals: false, scanned: false, combined: true };
+  onStatus('Putting it all together…');
+  const reply = await answerAboutDocument(doc, `${request}\n\n(This content comes from ${label}, each marked with === headers. Use all of them — don't skip any. When it helps, say where a fact is from, like "(photo 3)" or "(${files[0] ? files[0].doc.name : 'the file'}, p. 4)".)`, history, onStatus);
+  return { reply, doc };
+}
+
 async function answerAboutDocument(doc, request, history, onStatus) {
   try { return await readDocumentAnswer(doc, request, history, onStatus); }
   catch (e) {
@@ -2692,18 +2739,41 @@ async function readDocumentAnswer(doc, request, history, onStatus) {
 }
 
 /* ---------- upload / download / image + document helpers ---------- */
-let pendingImage = null; // { mimeType, base64, dataUrl }
-let pendingDoc = null;   // { name, text } — extracted text from a PDF/DOCX/PPTX
-let attachReading = null; // the file still being read, if any
-
+/* What's attached to the next message: up to 15 photos and 5 files, read in the order they
+   were added. Each is { id, kind: 'image' | 'doc', name, status: 'reading' | 'ready' | 'error',
+   image: { mimeType, base64, dataUrl } | doc: { name, text, … }, note: what the chip says }. */
+const MAX_PHOTOS = 15, MAX_FILES = 5;
+let attachments = [];
+let attachError = '';      // why the last file couldn't be attached
+const readyOf = (kind) => attachments.filter((a) => a.kind === kind && a.status === 'ready');
+const readyImages = () => readyOf('image').map((a) => ({ ...a.image, name: a.name }));
+const readyDocs = () => readyOf('doc').map((a) => a.doc);
+function renderAttachments() {
+  attachPreview.hidden = !attachments.length;
+  attachStrip.replaceChildren(...attachments.map((a) => {
+    const chip = document.createElement('div');
+    chip.className = `att att-${a.kind} att-${a.status}`; chip.dataset.id = a.id; chip.title = a.note || a.name;
+    if (a.kind === 'image' && a.image && a.image.dataUrl) { const img = document.createElement('img'); img.src = a.image.dataUrl; img.alt = a.name || 'attached photo'; chip.appendChild(img); }
+    else { const t = document.createElement('span'); t.className = 'att-name'; t.textContent = a.note || a.name; chip.appendChild(t); }
+    if (a.kind === 'doc' && a.status === 'ready' && a.doc && a.doc.text) {
+      const r = document.createElement('button'); r.type = 'button'; r.className = 'att-read'; r.textContent = '📖'; r.title = `Read ${a.name} here and highlight any part`; r.setAttribute('aria-label', r.title); chip.appendChild(r);
+    }
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'att-x'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${a.name || 'attachment'}`); chip.appendChild(x);
+    return chip;
+  }));
+  const nI = readyOf('image').length, nD = readyOf('doc').length, busy = attachments.some((a) => a.status === 'reading');
+  attachCount.textContent = [nI ? `${nI} photo${nI === 1 ? '' : 's'}` : '', nD ? `${nD} file${nD === 1 ? '' : 's'}` : '', busy ? 'reading…' : ''].filter(Boolean).join(' · ');
+}
+attachStrip.addEventListener('click', (e) => {
+  const chip = e.target.closest('.att'); if (!chip) return;
+  const a = attachments.find((x) => x.id === chip.dataset.id); if (!a) return;
+  if (e.target.closest('.att-read')) { openReader(a.doc); return; }
+  if (e.target.closest('.att-x')) { attachments = attachments.filter((x) => x !== a); renderAttachments(); }
+});
+function addAttachment(a) { a.id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); attachments.push(a); renderAttachments(); return a; }
 function clearAttach() {
-  pendingImage = null;
-  pendingDoc = null;
-  if (attachRead) attachRead.hidden = true;
-  attachPreview.hidden = true;
-  attachThumb.removeAttribute('src');
-  attachThumb.hidden = false;
-  if (attachName) { attachName.hidden = true; attachName.textContent = ''; }
+  attachments = []; attachError = '';
+  renderAttachments();
   fileInput.value = '';
 }
 
@@ -3197,10 +3267,11 @@ function reviewMistakes(all = false) {
 }
 
 async function handleSend(text, opts = {}) {
-  if (attachReading) {
-    const wait = attachReading;
+  // photos and files still being read: Send waits for them, so nothing is left behind
+  const stillReading = attachments.filter((a) => a.status === 'reading').map((a) => a.done);
+  if (stillReading.length) {
     sendBtn.disabled = true;
-    try { await wait; } finally { sendBtn.disabled = false; if (attachReading === wait) attachReading = null; }
+    try { await Promise.all(stillReading); } finally { sendBtn.disabled = false; }
   }
   // a question typed under a share card is about what was shared
   if (sharedText && chatLog.querySelector('.share-card') && text.trim() && !text.includes(sharedText.slice(0, 40))) {
@@ -3208,16 +3279,21 @@ async function handleSend(text, opts = {}) {
     chatLog.querySelector('.share-card').remove();
   }
   sharedText = chatLog.querySelector('.share-card') ? sharedText : '';
-  const image = pendingImage;
-  let doc = pendingDoc;
-  if (!text.trim() && !image && !doc) return;
-  if (!doc && !image && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
-  if (!image && !pendingDoc && !opts.mode) {
+  // one photo → Cassie looks at it; one file → she reads it; more than one → each is read
+  // carefully on its own, then she answers from all of them together
+  const sentItems = attachments.filter((a) => a.status === 'ready');
+  const images = readyImages(), docs = readyDocs(), many = images.length + docs.length > 1;
+  const image = !many && images.length ? images[0] : null;
+  const attachedDoc = !many && docs.length ? docs[0] : null;
+  let doc = attachedDoc;
+  if (!text.trim() && !images.length && !docs.length) return;
+  if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
+  if (!images.length && !docs.length && !opts.mode) {
     const pic = imageRequest(text);
     if (pic) return handleImageRequest(text, pic.subject);
   }
 
-  const needKey = (image || doc) ? !(state.geminiKey || canChat()) : !canChat();
+  const needKey = (image || doc || many) ? !(state.geminiKey || canChat()) : !canChat();
   if (needKey) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 }); // one Google key covers everything
@@ -3234,6 +3310,7 @@ async function handleSend(text, opts = {}) {
   let sendText = text.trim();
   if (!sendText && image) sendText = 'Please look at this image and help me with it. If it has questions or a lesson on it, read all of it carefully.';
   if (!sendText && doc) sendText = 'Please read this file and make me a complete reviewer of it.';
+  if (!sendText && many) sendText = docs.length ? 'Please read all of these carefully and make me one complete reviewer of everything in them.' : 'Please read all of these photos carefully. If they have questions, answer every one; if they are notes or a lesson, make me a complete reviewer of everything in them.';
 
   clearFollowups();
   // if the home screen is showing, clear it before the first message
@@ -3242,30 +3319,35 @@ async function handleSend(text, opts = {}) {
   // so later questions don't blow past the free per-minute limits.
   let modelContent = sendText;
   let displayContent = sendText;
-  if (pendingDoc) {
+  if (attachedDoc) {
     const excerpt = doc.text ? `\n\n(Excerpt from the start of the file:)\n${doc.text.slice(0, 1200)}` : '';
     modelContent = `[I attached the file "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.] ${sendText}${excerpt}`;
     displayContent = `${sendText}\n\n(attached: ${doc.name} — ${doc.label})`;
   }
+  const manyLabel = [images.length ? `${images.length} photo${images.length === 1 ? '' : 's'}` : '', docs.length ? `${docs.length} file${docs.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+  if (many) {
+    modelContent = `[I attached ${manyLabel}: ${sentItems.map((a) => a.name).join(', ')}.] ${sendText}`;
+    displayContent = `${sendText}\n\n(attached: ${docs.length ? docs.map((d) => d.name).join(', ') + (images.length ? ' + ' : '') : ''}${images.length ? `${images.length} photo${images.length === 1 ? '' : 's'}` : ''})`;
+  }
   const history = state.messages.slice();
   const userMsg = { role: 'user', content: modelContent };
-  if (pendingDoc) userMsg.display = displayContent;
+  if (attachedDoc || many) userMsg.display = displayContent;
   state.messages.push(userMsg);
   touchChat();
   save();
   if (doc) activeDoc = { chatId: state.currentId, doc };
-  if (attachRead) attachRead.hidden = true;
   const userBubble = renderMessage('user', displayContent);
-  if (image && image.dataUrl) addImageToBubble(userBubble, image.dataUrl);
+  images.forEach((im) => { if (im.dataUrl) addImageToBubble(userBubble, im.dataUrl); });
+  if (images.length > 1) userBubble.classList.add('many-imgs'); // a neat grid of small photos
   clearAttach();
   promptInput.value = '';
   promptInput.placeholder = 'Ask Cassie a question…';
   autoGrow();
   taskOutfit = null;
   dressCassie();
-  const featureName = doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat';
+  const featureName = many ? 'files:many' : doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat';
   track('feature', featureName);
-  if (!doc && !image) trackWords(sendText);
+  if (!doc && !image && !many) trackWords(sendText);
   mascotOnSend(sendText); // Cassie reacts/comments on what you sent
   // remember what the student is studying + any explicit "remember ..." note
   try {
@@ -3276,13 +3358,18 @@ async function handleSend(text, opts = {}) {
   } catch (e) { /* ignore */ }
 
   setCursorMode('thinking');
-  if (doc) botMood('reading');
+  if (doc || many) botMood('reading');
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
   const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`); botMood('busy'); };
 
   try {
-    let reply = doc
+    let reply;
+    if (many) {
+      const out = await answerAboutMany(sentItems, sendText, history, (msg) => setTypingStatus(typingBubble, msg));
+      reply = out.reply; doc = out.doc;
+      activeDoc = { chatId: state.currentId, doc }; // follow-up questions are about all of them
+    } else reply = doc
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait, onDelta: opts.onDelta });
     reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
@@ -3309,7 +3396,7 @@ async function handleSend(text, opts = {}) {
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
-    if (doc && doc.text) { // open the file itself to read it and highlight any part
+    if (doc && doc.text && !doc.combined) { // open the file itself to read it and highlight any part
       const rb = document.createElement('button');
       rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `📖 Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
       rb.addEventListener('click', () => openReader(doc));
@@ -3839,10 +3926,7 @@ function attachDataUrl(dataUrl, prompt) {
     x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
     x.drawImage(img, 0, 0, c.width, c.height);
     const jpg = c.toDataURL('image/jpeg', 0.88);
-    pendingImage = { mimeType: 'image/jpeg', base64: jpg.split(',')[1], dataUrl: jpg };
-    pendingDoc = null;
-    attachThumb.src = jpg; attachThumb.hidden = false;
-    attachName.hidden = true; attachPreview.hidden = false;
+    addAttachment({ kind: 'image', name: 'Board', status: 'ready', image: { mimeType: 'image/jpeg', base64: jpg.split(',')[1], dataUrl: jpg } });
     if (prompt && !promptInput.value.trim()) promptInput.value = prompt;
     autoGrow();
     promptInput.focus();
@@ -4137,79 +4221,74 @@ if (boardBtn) boardBtn.addEventListener('click', () => { track('feature', 'board
 
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files && fileInput.files[0];
-  if (file) attachFile(file);
+fileInput.addEventListener('change', async () => {
+  const files = [...(fileInput.files || [])];
+  fileInput.value = '';
+  for (const f of files) await attachFile(f); // in order, so photo 1 is the first one picked
 });
 
-// Attach a picture or document to the next message. Returns true when it's ready.
+// Attach a picture or document to the next message (it joins the others — up to 15 photos and
+// 5 files). Its chip shows at once, in order; returns true when it's ready.
 async function attachFile(file) {
+  attachError = '';
+  const a = addAttachment({ kind: 'pending', name: file.name || 'file', status: 'reading', note: `Reading ${file.name || 'your file'}…` });
+  let finish;
+  a.done = new Promise((ok) => { finish = ok; });
+  try { return await attachInto(a, file); }
+  catch (e) { a.status = 'error'; a.note = attachError = `Couldn’t open ${file.name}.`; return false; }
+  finally { finish(); renderAttachments(); }
+}
+async function attachInto(a, file) {
   const kind = await sniffKind(file);
-  const showName = (t) => { attachThumb.hidden = true; attachName.hidden = false; attachName.textContent = t; attachPreview.hidden = false; };
+  const fail = (msg) => { a.status = 'error'; a.note = msg; attachError = msg; islandShow('oops', msg.length > 60 ? 'Couldn’t attach that' : msg, 2600); botMood('oops', 2600); return false; };
+  const others = (k) => attachments.filter((x) => x !== a && x.kind === k && x.status !== 'error').length;
 
   // Photos / screenshots → picture reading.
   if (kind === 'image' || kind === 'heic') {
+    a.kind = 'image';
+    if (others('image') >= MAX_PHOTOS) return fail(`Up to ${MAX_PHOTOS} photos at a time — send these first, then add more.`);
     try {
-      pendingImage = await processImageFile(file);
-      pendingDoc = null;
-      attachThumb.src = pendingImage.dataUrl;
-      attachThumb.hidden = false;
-      attachName.hidden = true;
-      attachPreview.hidden = false;
-      islandShow('upload', 'Got your photo!', 2200); botMood('upload', 2200);
+      a.image = await processImageFile(file);
+      a.status = 'ready'; a.note = '';
+      const n = readyOf('image').length;
+      islandShow('upload', n > 1 ? `Got ${n} photos!` : 'Got your photo!', 2200); botMood('upload', 2200);
       return true;
     } catch (e) {
       // iPhone HEIC photos can't be drawn by most browsers — Gemini can still read them as-is.
-      pendingDoc = null;
       if (kind === 'heic' && state.geminiKey) {
         const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.readAsDataURL(file); });
-        pendingImage = { mimeType: file.type || 'image/heic', base64, dataUrl: '' };
-        showName(`Photo (iPhone HEIC) · ${file.name}`);
+        a.image = { mimeType: file.type || 'image/heic', base64, dataUrl: '' };
+        a.status = 'ready'; a.note = `Photo (iPhone HEIC) · ${file.name}`;
         return true;
       }
-      clearAttach();
-      showName(kind === 'heic'
+      return fail(kind === 'heic'
         ? 'That’s an iPhone HEIC photo, which this browser can’t open. Send a screenshot of it instead, or set iPhone Camera → Formats → Most Compatible.'
         : `Couldn’t open ${file.name} as a picture.`);
-      return false;
     }
   }
 
   // Documents → read the whole thing in the browser.
+  a.kind = 'doc';
   if (kind === 'pdf' || kind === 'docx' || kind === 'pptx' || kind === 'txt') {
-    pendingImage = null;
-    showName(`Reading ${file.name}…`);
+    if (others('doc') >= MAX_FILES) return fail(`Up to ${MAX_FILES} files at a time — send these first, then add more.`);
+    renderAttachments();
     islandShow('upload', `Opening ${file.name}…`); botMood('upload');
-    const reading = readDocument(file, kind);
-    attachReading = reading.catch(() => null); // Send waits for this, so the file is never left behind
     try {
-      const doc = await reading;
-      if (!doc.text && !doc.hasVisuals) {
-        pendingDoc = null;
-        attachName.textContent = `Couldn’t find anything readable in ${file.name}.`;
-        islandShow('oops', 'Nothing readable in that file', 2600); botMood('oops', 2600);
-        return false;
-      }
-      pendingDoc = doc;
-      attachName.textContent = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
-      if (attachRead) attachRead.hidden = !doc.text;
+      const doc = await readDocument(file, kind);
+      if (!doc.text && !doc.hasVisuals) return fail(`Couldn’t find anything readable in ${file.name}.`);
+      a.doc = doc; a.status = 'ready';
+      a.note = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
       islandShow('done', `Got it · ${doc.label}`, 2200); botMood('done', 2200);
       return true;
     } catch (e) {
-      pendingDoc = null;
-      attachName.textContent = `Couldn’t read ${file.name}. Try a PDF, PowerPoint (.pptx), Word (.docx) or a photo.`;
-      islandShow('oops', 'Couldn’t read that file', 2600); botMood('oops', 2600);
-      return false;
+      return fail(`Couldn’t read ${file.name}. Try a PDF, PowerPoint (.pptx), Word (.docx) or a photo.`);
     }
   }
-
-  pendingImage = null; pendingDoc = null;
-  if (kind === 'legacy-ppt') showName('That’s an old PowerPoint (.ppt). Open it and Save As .pptx or PDF, then attach it again.');
-  else if (kind === 'legacy-doc') showName('That’s an old Word file (.doc). Open it and Save As .docx or PDF, then attach it again.');
-  else if (kind === 'xlsx') showName('Spreadsheets aren’t supported yet — save it as a PDF and attach that.');
-  else showName(`I can’t open ${file.name}. I read PDFs, PowerPoint (.pptx), Word (.docx), text files and photos.`);
-  return false;
+  if (kind === 'legacy-ppt') return fail('That’s an old PowerPoint (.ppt). Open it and Save As .pptx or PDF, then attach it again.');
+  if (kind === 'legacy-doc') return fail('That’s an old Word file (.doc). Open it and Save As .docx or PDF, then attach it again.');
+  if (kind === 'xlsx') return fail('Spreadsheets aren’t supported yet — save it as a PDF and attach that.');
+  return fail(`I can’t open ${file.name}. I read PDFs, PowerPoint (.pptx), Word (.docx), text files and photos.`);
 }
 attachRemove.addEventListener('click', clearAttach);
 
@@ -6249,7 +6328,6 @@ function showWhatsNew() {
 /* ---------- Read & highlight: a file opened inside Cassie (phones and tablets) ----------
    Phone browsers don't run extensions, so students read their PDF / Word / PowerPoint here,
    page by page, and highlight any part of it: the same Ask Cassie button as in the chat shows. */
-const attachRead = document.getElementById('attach-read');
 const readerEl = document.getElementById('reader');
 function openReader(doc) {
   if (!readerEl || !doc || !doc.text) return;
@@ -6274,7 +6352,7 @@ function openReader(doc) {
   islandShow('reading', 'Select any words to ask me', 2600);
 }
 function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); hideAskChip(); }
-if (attachRead) attachRead.addEventListener('click', () => openReader(pendingDoc));
+
 document.getElementById('reader-close')?.addEventListener('click', closeReader);
 
 /* "Paste & ask": copy words in any app, open Cassie, tap once (the easiest way on iPhone). */
