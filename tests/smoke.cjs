@@ -1931,7 +1931,7 @@ test('Plus extras: a free student sees the diagram, and Real 3D, the Museum quiz
     await page.waitForSelector('.plus-sheet', { timeout: 5000 });
     if (process.env.SHOTS && what === 'Real 3D') await page.screenshot({ path: process.env.SHOTS + '/plus-sheet.png' });
     const t = await page.locator('.plus-sheet h3').innerText();
-    if (what === 'Real 3D') expect(/used today’s free Real 3D views/.test(await page.locator('.plus-sheet').innerText()), 'says the free views are used up');
+    if (what === 'Real 3D') expect(/2 free Real 3D views this week/.test(await page.locator('.plus-sheet').innerText()), 'says the free views are used up');
     expect(t.includes(what), 'says what it is: ' + t);
     await page.click('.plus-sheet .plus-ok');
     expect(await page.locator('.plus-sheet').count() === 0, 'Not now closes it');
@@ -1940,25 +1940,31 @@ test('Plus extras: a free student sees the diagram, and Real 3D, the Museum quiz
   await page.waitForTimeout(800);
   expect(await page.locator('.lab-stage.lab-is-3d').count() === 0, 'a free student starts on the diagram');
   const note = () => page.locator('.lab-panel .lab-note').first().innerText();
-  expect(/2 free views today/.test(await note()), 'says 2 free views: ' + await note());
-  // two free Real 3D views a day: one per lab opened (switching back and forth in it is free)
+  expect(/2 free views of this lab this week/.test(await note()), 'says 2 free views: ' + await note());
+  // two free Real 3D views a week in each lab (switching back and forth while it's open is free)
   const real3d = () => page.click('.lab-panel .lab-seg button:has-text("Real 3D")');
+  const flat = () => page.click('.lab-panel .lab-seg button:has-text("Diagram")');
   await real3d();
   await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
-  expect(/1 more free Real 3D view today/.test(await note()), 'one left: ' + await note());
-  await page.click('.lab-panel .lab-seg button:has-text("Diagram")'); await real3d();
+  expect(/1 more free Real 3D view of this lab this week/.test(await note()), 'one left: ' + await note());
+  await flat(); await real3d();
   await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
-  expect(await page.evaluate(() => freeLeft('3d')) === 1, 'switching back in the same lab is free');
-  await page.click('.lab-panel .lab-seg button:has-text("Diagram")');
+  expect(await page.evaluate(() => freeLeft('3d:atom')) === 1, 'switching back in the same lab is free');
+  await flat();
   await lab('pendulum');
+  expect(/2 free views of this lab/.test(await note()), 'another lab has its own 2: ' + await note());
+  await lab('atom');
   await real3d();
   await page.waitForSelector('.lab-stage.lab-is-3d', { timeout: 20000 });
-  expect(/last free Real 3D view today/.test(await note()), 'the last one: ' + await note());
-  await page.click('.lab-panel .lab-seg button:has-text("Diagram")');
+  expect(/last free Real 3D view this week/.test(await note()), 'the last one: ' + await note());
+  await flat();
   await lab('atom');
   await page.waitForTimeout(500);
   await real3d();
   await sheet('Real 3D');
+  // next week they come back
+  await page.evaluate(() => { state.freeUses.week = '2000-01-03'; });
+  expect(await page.evaluate(() => freeLeft('3d:atom')) === 2, 'a new week, 2 again');
   expect(await page.locator('.lab-seg button[data-v="flat"][aria-pressed="true"]').count() === 1, 'still on the diagram');
   await lab('museum');
   await page.click('.lab-panel .lab-btn:has-text("Who painted it?")');

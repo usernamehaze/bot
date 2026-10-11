@@ -292,15 +292,17 @@ export function viewSwitch(panel, stage, cv, make, { plane, look, pitch, yaw, mi
   const s = seg(g, { options: [['3d', 'Real 3D'], ['flat', 'Diagram']], value: want ? '3d' : 'flat', onChange: (x) => {
     // free: a few Real 3D views a day (one per lab you open; switching back and forth in it is free)
     if (x === '3d' && !premium.has() && !tried) {
-      if (!premium.take('3d')) { s.set('flat'); premium.ask('The Real 3D view', 'You’ve used today’s free Real 3D views. They come back tomorrow.'); return; }
-      tried = true; const n = premium.left('3d');
-      note3d.textContent = `${n === 0 ? 'That was your last free Real 3D view today' : n === 1 ? '1 more free Real 3D view today' : n + ' more free Real 3D views today'} · Plus has it always. Drag an empty spot to look around · pinch to zoom.`;
+      if (!premium.take(freeKind)) { s.set('flat'); premium.ask('The Real 3D view', 'You’ve used this lab’s 2 free Real 3D views this week. They come back on Monday.'); return; }
+      tried = true; const n = premium.left(freeKind);
+      note3d.textContent = `${n === 0 ? 'That was this lab’s last free Real 3D view this week' : n === 1 ? '1 more free Real 3D view of this lab this week' : n + ' more free Real 3D views of this lab this week'} · Plus has it always. Drag an empty spot to look around · pinch to zoom.`;
     }
     want = x === '3d'; try { localStorage.setItem('cassie.labs.view', x); } catch (e) { /* ignore */ } if (want) start(); else stop(); } });
   const note3d = el('p', 'lab-note', note || '3D: drag an empty spot (or use two fingers) to look around · pinch to zoom · double-tap to look straight on.');
   g.appendChild(note3d);
+  // (free views are counted for each lab: "3d:atom")
+  const lv = stage.closest('[data-lab]'), freeKind = '3d:' + ((lv && lv.dataset.lab) || 'lab');
   let tried = false;
-  if (!premium.has()) { const n = premium.left('3d'); note3d.textContent = n > 0 ? `Real 3D is a Plus extra. You have ${n} free ${n === 1 ? 'view' : 'views'} today: tap Real 3D.` : 'Real 3D is a Plus extra. The diagram shows everything the lab does.'; }
+  if (!premium.has()) { const n = premium.left(freeKind); note3d.textContent = n > 0 ? `Real 3D is a Plus extra. You have ${n} free ${n === 1 ? 'view' : 'views'} of this lab this week: tap Real 3D.` : 'Real 3D is a Plus extra. The diagram shows everything the lab does.'; }
   panel.prepend(g);
   if (!can3d()) { s.el.hidden = true; note3d.hidden = true; g.hidden = true; }
   if (want) start();
