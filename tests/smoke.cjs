@@ -362,6 +362,7 @@ test('“a photo of the answer” saves Cassie’s answer as a picture — the p
   await page.fill('#prompt-input', 'generate a photo of the answer');
   await page.press('#prompt-input', 'Enter');
   await page.waitForSelector('#chat-log .bubble img.chat-img[src^="data:image/png"]', { timeout: 15000 });
+  if (process.env.SHOTS) { const src = await page.locator('#chat-log .bubble img.chat-img').last().getAttribute('src'); require('fs').writeFileSync(process.env.SHOTS + '/answer-picture.png', Buffer.from(src.split(',')[1], 'base64')); }
   const last = await page.locator('#chat-log .bubble').last().innerText();
   expect(/my answer as a picture/i.test(last) && /Download image/.test(last), 'the answer picture: ' + last);
   expect(made.length === 0, 'the picture maker was not asked: ' + made.join(' '));

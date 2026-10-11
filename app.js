@@ -3601,7 +3601,10 @@ const PRONOUN_SUBJECT_RE = /^(?:it|this|that|these|those|them|the\s+above|this\s
 function lastAnswer() {
   for (let i = state.messages.length - 1; i >= 0; i--) {
     const m = state.messages[i];
-    if (m.role === 'assistant' && m.content && !/^\[I (?:made|saved) a picture/.test(m.content)) return m;
+    if (m.role === 'assistant' && m.content && !/^\[I (?:made|saved) a picture/.test(m.content)) {
+      const q = state.messages.slice(0, i).reverse().find((x) => x.role === 'user');
+      return { ...m, question: q ? String(q.display || q.content || '').replace(/\(attached:[^)]*\)/g, '').replace(/\s+/g, ' ').trim() : '' };
+    }
   }
   return null;
 }
@@ -3618,7 +3621,9 @@ async function answerPicture(label) {
     return;
   }
   track('feature', 'answer-picture');
-  const title = (window.CassieExport.titleOf && window.CassieExport.titleOf(ans.content)) || 'Cassie’s answer';
+  // the student's question is the title (the answer's own first line would just repeat itself)
+  const q = ans.question && !/^(?:answer|solve|explain)\b.{0,30}$/i.test(ans.question) ? ans.question : '';
+  const title = q ? (q.length > 90 ? q.slice(0, 87).replace(/\s+\S*$/, '') + '…' : q) : 'Cassie’s answer';
   const caption = 'Here’s my answer as a picture you can save or share. (Want a drawing instead? Tell me exactly what it should show.)';
   const bubble = renderMessage('assistant', caption);
   try {
