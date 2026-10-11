@@ -21,10 +21,13 @@ import { BIOLOGY } from './biology.js';
 import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
+import { TOOLS } from './tools.js';
+import { MUSEUM } from './museum.js';
+import { GAMES } from './games.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography']];
-const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', puzzles: 'Puzzle' };
+const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
   { id: 'body3d', name: 'Human body 3D', subject: 'biology', blurb: 'Turn, zoom and pull apart the real body — 10 systems, tap any part.', explore: 'body',
@@ -32,8 +35,10 @@ const EXPLORE = [
   { id: 'cells3d', name: 'Animal & plant cells', subject: 'biology', blurb: 'Two cells cut open in 3D. Tap an organelle to see what it does.', explore: 'animal',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
 ];
-export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES];
-const SIMS = LABS.filter((l) => l.subject !== 'puzzles');
+export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES, ...GAMES, ...TOOLS, ...MUSEUM];
+// three shelves: Learn (simulations), Games (daily puzzles + games), Study tools
+const shelfOf = (l) => (l.subject === 'puzzles' || l.subject === 'games' ? 'games' : l.subject === 'tools' ? 'tools' : 'learn');
+const SIMS = LABS.filter((l) => shelfOf(l) === 'learn');
 const is3d = (l) => !!(l.explore || l.three);
 
 let view = null;
@@ -56,7 +61,7 @@ function createView() {
   // the labs' own look loads with them (the app stays light until Labs is opened)
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=6', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=7', import.meta.url).href; css.dataset.labsCss = '1';
     document.head.appendChild(css);
   }
   const root = el('div', 'labs');
@@ -72,10 +77,11 @@ function createView() {
       </header>
       <div class="labs-tabs" role="tablist" aria-label="Labs shelves">
         <button type="button" role="tab" data-section="learn" aria-selected="true">Learn <small>simulations · 3D · atlas</small></button>
-        <button type="button" role="tab" data-section="games" aria-selected="false">Games &amp; puzzles <small>daily puzzles · score board</small></button>
+        <button type="button" role="tab" data-section="games" aria-selected="false">Games &amp; puzzles <small>daily puzzles · games</small></button>
+        <button type="button" role="tab" data-section="tools" aria-selected="false">Study tools <small>notes · cards · essays · art</small></button>
       </div>
       <div class="labs-tools">
-        <input type="search" class="labs-search" placeholder="Find a lab: pendulum, pH, planets, sudoku…" aria-label="Find a lab or a puzzle" autocomplete="off">
+        <input type="search" class="labs-search" placeholder="Find a lab: pendulum, planets, sudoku, timeline, Cornell notes…" aria-label="Find a lab or a puzzle" autocomplete="off">
         <div class="labs-chips" role="group" aria-label="Subject">${SUBJECTS.map(([id, n]) => `<button type="button" data-subject="${id}" aria-pressed="${id === 'all'}">${n}</button>`).join('')}</div>
       </div>
       <div class="labs-scroll">
@@ -114,6 +120,8 @@ function createView() {
   }
 
   function progress(lab) {
+    if (lab.subject === 'games') { const b = store.get('cassie.games')[lab.id]; return { game: true, best: b && b.shown }; }
+    if (lab.subject === 'tools') return { tool: true };
     if (lab.subject === 'puzzles') { const d = store.get('cassie.puzzles')[dayKey()] || {}; return { puzzle: true, done: !!d[lab.id], shown: d[lab.id] && d[lab.id].shown }; }
     const done = store.get()[lab.id] || [];
     return { n: done.filter(Boolean).length, of: (lab.tries || []).length };
@@ -125,6 +133,8 @@ function createView() {
     const p = lab.explore ? null : progress(lab);
     const tag3d = lab.three ? '<span class="labs-3d">3D</span>' : '';
     const badge = is3d(lab) && !p ? '<span class="labs-3d">3D</span>'
+      : p.game ? (p.best ? `<span class="labs-prog all">Best · ${esc(p.best)}</span>` : '<span class="labs-prog">New game</span>')
+      : p.tool ? ''
       : p.puzzle ? `<span class="labs-prog${p.done ? ' all' : ''}">${p.done ? `Done today · ${esc(p.shown || '')}` : 'Today’s puzzle'}</span>`
         : p.of ? `<span class="labs-prog${p.n === p.of ? ' all' : ''}">${p.n}/${p.of} tried</span>` : '';
     b.innerHTML = `<span class="labs-icon">${iconSvg(lab.icon)}</span>
@@ -133,7 +143,7 @@ function createView() {
     return b;
   }
   function setSection(sec) {
-    section = sec === 'games' ? 'games' : 'learn';
+    section = sec === 'games' || sec === 'tools' ? sec : 'learn';
     root.querySelectorAll('[data-section]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === section)));
     $('.labs-chips').hidden = section !== 'learn';
     shelf.dataset.shelf = section;
@@ -143,7 +153,7 @@ function createView() {
     // searching looks on both shelves
     const list = [...EXPLORE, ...LABS].filter((l) => (q
       ? (l.name + ' ' + l.blurb + ' ' + (l.words || '') + ' ' + (NAMES[l.subject] || '')).toLowerCase().includes(q)
-      : section === 'games' ? l.subject === 'puzzles' : l.subject !== 'puzzles' && (subject === 'all' || (subject === '3d' ? is3d(l) : l.subject === subject))));
+      : section !== 'learn' ? shelfOf(l) === section : shelfOf(l) === 'learn' && (subject === 'all' || (subject === '3d' ? is3d(l) : l.subject === subject))));
     grid.replaceChildren(...list.map(card));
     $('.labs-empty').hidden = list.length > 0;
     const t = todays(), tp = progress(t);
@@ -216,7 +226,8 @@ function createView() {
     $('.lab-about').hidden = !lab.about;
     $('.lab-about').open = false;
     $('.lab-about p').textContent = lab.about || '';
-    $('.lab-quiz').hidden = lab.subject === 'puzzles' && !lab.topic;
+    $('.lab-quiz').hidden = (lab.subject === 'puzzles' || lab.subject === 'games' || lab.subject === 'tools') && !lab.topic;
+    labView.classList.toggle('lab-tool', !!lab.wide);
     renderTries();
     const api = {
       check(i) {
@@ -239,6 +250,23 @@ function createView() {
         try { board = await opts.scores('submit', { day, game: lab.id, value, shown }); boardAt = Date.now(); return board; } catch (e) { return { error: e.message }; }
       },
       doneToday() { const d = store.get('cassie.puzzles')[dayKey()] || {}; return d[lab.id] || null; },
+      // Cassie, from inside a lab (a hint, grading, cards from notes…)
+      ask: (q) => (opts.explain ? opts.explain(q) : Promise.reject(new Error('Cassie isn’t available here.'))),
+      canAsk: () => !!opts.explain,
+      // the student's flashcard decks (spaced repetition)
+      addCards: (list, deck) => (opts.addCards ? opts.addCards(list, deck) : 0),
+      openCards: opts.openCards ? (deck) => { close(); opts.openCards(deck); } : null,
+      decks: () => (opts.decks ? opts.decks() : []),
+      readFile: opts.readFile || null,
+      // a game's best result on this device (lower or higher is better, as the game says)
+      best(value, shown, lowerWins = false) {
+        const all = store.get('cassie.games'), b = all[lab.id];
+        if (value == null) return b || null;
+        if (b && (lowerWins ? b.value <= value : b.value >= value)) return b;
+        all[lab.id] = { value, shown, at: Date.now() }; store.set(all, 'cassie.games');
+        return { ...all[lab.id], isNew: true };
+      },
+      say: (t) => (opts.speak ? opts.speak(t) : null),
     };
     try { mounted = lab.mount({ stage, panel: controls, api }) || {}; }
     catch (e) { stage.textContent = 'This lab couldn’t start: ' + e.message; mounted = {}; }
@@ -295,7 +323,11 @@ function createView() {
   $('.lab-ask').addEventListener('click', () => {
     if (!current) return;
     const now = described();
-    const q = current.subject === 'puzzles'
+    const q = current.subject === 'tools'
+      ? `I'm using Cassie's ${current.name} study tool (${current.blurb})${now ? ` Right now: ${now}.` : ''} Look at my work, tell me what's good and what to fix, simply. Then ask me one quick question to check I understood.`
+      : current.subject === 'games'
+        ? `I'm playing the ${current.name} game in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain the idea behind it simply and give me one tip — don't just give me the answer.`
+        : current.subject === 'puzzles'
       ? `I'm doing the daily ${current.name} puzzle in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Give me a strategy tip for this kind of puzzle — don't solve it for me.`
       : `I'm playing with the ${current.name} lab in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain what is happening and why, simply, using my numbers. Then ask me one quick question to check I understood.`;
     const name = current.name;

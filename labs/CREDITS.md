@@ -17,3 +17,6 @@
   (`atlas/LICENSE-flag-icons-MIT.txt`), unchanged.
 - Live, when online: the newest population from the World Bank API, and history and place
   summaries from Wikipedia (CC BY-SA), always shown with a link to the article.
+
+## Museum of Famous Arts (museum.js)
+Pictures of the paintings are loaded from Wikipedia (the lead image of each artwork's article, hosted on Wikimedia Commons) and are only shown for works whose artists died long ago and that are free to show. Works still under copyright show a description and a link instead. The facts on each card (artist, year, medium, where it is now) are written for Cassie.
