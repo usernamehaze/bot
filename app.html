@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=150">
+<link rel="stylesheet" href="style.css?v=151">
 </head>
 <body>
 
@@ -105,6 +105,30 @@
     </button>
     </div>
   </header>
+
+  <!-- Phones: the Home screen (native.js). Tabs at the bottom move between Home, Chat, Labs, Cards and You. -->
+  <section id="home" class="home" hidden aria-label="Home">
+    <header class="home-head">
+      <div class="home-hi"><h1>Hello, <span id="home-name">there</span></h1><p id="home-sub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg><span></span></p></div>
+      <button type="button" id="home-new" class="home-round" aria-label="New chat" title="New chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
+      <button type="button" id="home-me" class="home-avatar" aria-label="You: your profile and settings" title="You"><span id="home-initial">C</span></button>
+    </header>
+    <button type="button" id="home-ask" class="home-ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"/></svg><span>Ask Cassie anything…</span><svg viewBox="0 0 24 24" aria-hidden="true" class="home-ask-mic"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <div class="home-tiles">
+      <button type="button" class="tile" data-go="labs"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg></i>Labs</button>
+      <button type="button" class="tile" data-go="cards"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg></i>Flashcards</button>
+      <button type="button" class="tile" data-go="board"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v11H4zM12 15v3M8 21l4-3 4 3M8 11l2.5-2.5 2 2L16 7"/></svg></i>Board</button>
+      <button type="button" class="tile" data-go="talk"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></i>Talk</button>
+      <button type="button" class="tile" data-go="quiz"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l2 2 4-4M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/></svg></i>Quiz me</button>
+      <button type="button" class="tile" data-go="research"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5M22 9v6"/></svg></i>Research</button>
+    </div>
+    <div class="home-today">
+      <button type="button" class="today-card dark" data-go="labs"><small id="home-day">Today</small><b id="home-date">1</b><span id="home-month"></span><em>Today’s lab</em></button>
+      <button type="button" class="today-card" data-go="cards"><small>Flashcards</small><b id="home-due">0</b><span id="home-due-txt">due today</span><em id="home-due-go">Review now ›</em></button>
+    </div>
+    <div class="home-sec"><h2>Continue</h2><button type="button" id="home-all" class="home-link">See all ›</button></div>
+    <div id="home-recent" class="home-recent"></div>
+  </section>
 
   <div id="memory-panel" class="settings-panel" hidden></div>
 
@@ -423,16 +447,18 @@
 
 </div>
 
-<script src="memory.js?v=150"></script>
-<script src="board.js?v=150"></script>
-<script src="export.js?v=150"></script>
-<script src="sketch.js?v=150"></script>
-<script src="config.js?v=150"></script>
-<script src="cassie-bot.js?v=150"></script>
-<script src="cards.js?v=150"></script>
-<script src="cite.js?v=150"></script>
-<script src="voice.js?v=150"></script>
-<script src="app.js?v=150"></script>
-<script src="boot3d.js?v=150"></script>
+<script src="memory.js?v=151"></script>
+<script src="board.js?v=151"></script>
+<script src="export.js?v=151"></script>
+<script src="sketch.js?v=151"></script>
+<script src="config.js?v=151"></script>
+<script src="cassie-bot.js?v=151"></script>
+<script src="cards.js?v=151"></script>
+<script src="cite.js?v=151"></script>
+<script src="voice.js?v=151"></script>
+<nav id="tabbar" class="tabbar" aria-label="Sections"><button type="button" class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button><button type="button" class="tab" data-tab="chat" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg><span>Chat</span></button><button type="button" class="tab" data-tab="labs" aria-label="Labs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg><span>Labs</span></button><button type="button" class="tab" data-tab="cards" aria-label="Cards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg><span>Cards</span></button><button type="button" class="tab" data-tab="you" aria-label="You"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>You</span></button></nav>
+<script src="app.js?v=151"></script>
+<script src="native.js?v=151"></script>
+<script src="boot3d.js?v=151"></script>
 </body>
 </html>
