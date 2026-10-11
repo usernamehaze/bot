@@ -6049,7 +6049,7 @@ function refreshPlan(force) {
   return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
-function plusSheet(what) {
+function plusSheet(what, why) {
   track('feature', 'plus-ask');
   document.querySelector('.plus-sheet')?.remove();
   const signedOut = accountsOn() && !authToken();
@@ -6057,6 +6057,7 @@ function plusSheet(what) {
   w.className = 'plus-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'plus-sheet-h');
   w.innerHTML = `<div class="plus-card">
     <h3 id="plus-sheet-h">${escapeHtml(what)} is a Plus extra</h3>
+    ${why ? `<p><b>${escapeHtml(why)}</b></p>` : ''}
     <p>Plus and Pro add the Real 3D view in Labs, the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
@@ -6075,7 +6076,21 @@ function plusSheet(what) {
   document.body.appendChild(w);
   w.querySelector('.plus-ok').focus();
 }
-const PREMIUM = { has: isSubscriber, ask: plusSheet };
+// free tries of an extra, a day (Philippine time): Real 3D in Labs twice a day
+const FREE_TRIES = { '3d': 2 };
+function freeLeft(kind) {
+  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), u = state.freeUses || {};
+  return Math.max(0, (FREE_TRIES[kind] || 0) - (u.day === day ? u[kind] || 0 : 0));
+}
+function freeTake(kind) {
+  if (freeLeft(kind) <= 0) return false;
+  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const u = state.freeUses && state.freeUses.day === day ? state.freeUses : { day };
+  u[kind] = (u[kind] || 0) + 1; state.freeUses = u; save();
+  track('feature', 'free-' + kind);
+  return true;
+}
+const PREMIUM = { has: isSubscriber, ask: plusSheet, take: freeTake, left: freeLeft };
 // After any sign-in: bring the account's profile here, or ask the profile questions once.
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
@@ -6309,7 +6324,7 @@ if (window.CassieCards) {
 const WHATS_NEW = [
   'Send many photos and files at once: up to 15 photos and 5 files in one message (nothing gets replaced anymore). Cassie reads every page, one by one, takes notes of the key facts, and says which photo or file each answer came from.',
   'Labs: the atom’s proton, neutron and electron tray stays still while you turn the 3D view, zooming goes to the spot you point at, “Try this” folds up on phones (tap Hide or Show), and Labs and Explore 3D open without a flash.',
-  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. Every lab, game and tool still works on Free, and a board picture is always free.',
+  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. On Free you get 2 Real 3D views a day, every lab, game and tool still works, and a board picture is always free.',
   'Labs has a new Study tools shelf: a Vocabulary Flash-Chain (drag terms onto their meanings — literary devices, Tayutay, medical, legal, tech or your own words), a Timeline Builder, an Argument & Essay Deconstructor that colours your Claim, Evidence and Counter-argument, a Smart Flashcard Matrix that turns notes or a PDF into a deck, Cornell Notes, a Citation & Thesis Mapper (APA, MLA, Chicago, IEEE), and a Museum of Famous Arts with Filipino and world masterpieces.',
   'Five new games in Labs: Logic Circuit (wires and AND/OR/NOT gates), Formula Cracker (a Wordle for function rules, regex and chemical formulas), Pinning Blitz (countries, cell parts and organs against the clock), Fraction Diner (pizzas, drinks and recipes) and City Market (supply, demand and taxes).',
   'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',
