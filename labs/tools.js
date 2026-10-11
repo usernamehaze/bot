@@ -4,7 +4,7 @@
      Vocabulary Flash-Chain · Timeline Builder · Argument & Essay Deconstructor ·
      Smart Flashcard Matrix · Cornell Notes · Citation & Thesis Mapper
    (The Museum of Famous Arts lives in museum.js.) */
-import { el, esc, group, seg, button, row, stats, shuffle, fmtTime } from './kit.js';
+import { el, esc, group, seg, button, row, stats, shuffle, fmtTime, plusOnly } from './kit.js';
 
 /* ---------- shared ---------- */
 // the JSON inside one of Cassie's replies ([…] or {…})
@@ -770,8 +770,8 @@ const cornellLab = {
       say(fb, n ? `Added ${n} cards (cue → notes) to your Flashcards.` : 'Those cards are already in your Flashcards.', 'good');
     });
     const r3 = row(g2);
-    button(r3, 'Download (.txt)', () => { if (doc) download(((doc.title || 'cornell-notes').replace(/[^\w-]+/g, '-').slice(0, 40) || 'cornell-notes') + '.txt', asText()); });
-    button(r3, 'Print', () => printIt());
+    button(r3, 'Download (.txt)', plusOnly('Saving your Cornell notes', () => { if (doc) download(((doc.title || 'cornell-notes').replace(/[^\w-]+/g, '-').slice(0, 40) || 'cornell-notes') + '.txt', asText()); }));
+    button(r3, 'Print', plusOnly('Printing your Cornell notes', () => printIt()));
     async function make() {
       const text = area.value.trim();
       if (text.length < 30) { say(fb, 'Paste some notes first.', 'bad'); return; }
@@ -921,7 +921,7 @@ const thesisLab = {
     const st = stats(panel);
     const r = row(panel);
     const testBtn = button(r, 'Cassie, stress-test my argument', () => test(), 'main');
-    button(r, 'Copy reference list', () => copyRefs());
+    button(r, 'Copy reference list', plusOnly('Copying your reference list', () => copyRefs()));
     const r2 = row(panel);
     button(r2, 'Start a new map', () => { if (confirm('Start a new, empty map? This one will be cleared.')) { map = BLANK_MAP(); save(); draw(); } });
     button(r2, 'Load the example', () => { map = JSON.parse(JSON.stringify(SAMPLE_MAP)); save(); draw(); });

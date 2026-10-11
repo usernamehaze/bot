@@ -11,7 +11,7 @@
      B.u(px)         → a length in pixels, in 3D units
 */
 import { stage3d, loadThree, webglOk, paintTexture, noise2 } from './three-kit.js';
-import { el, seg, group } from './kit.js';
+import { el, seg, group, premium } from './kit.js';
 
 let addonsP = null;
 const addons = () => addonsP || (addonsP = Promise.all([import('../explore/RoomEnvironment.js'), import('../explore/RoundedBoxGeometry.js')])
@@ -264,7 +264,7 @@ export function viewSwitch(panel, stage, cv, make, { plane, look, pitch, yaw, mi
   // (the small demos on the landing page start as diagrams, to keep that page light)
   // (and the 3D / diagram choice you made last time is kept)
   let saved = null; try { saved = localStorage.getItem('cassie.labs.view'); } catch (e) { /* ignore */ }
-  let want = can3d() && saved !== 'flat' && !/[?&]flat\b/.test(location.search) && !stage.closest('.labs-embed'), alive = true, busy = null;
+  let want = can3d() && premium.has() && saved !== 'flat' && !/[?&]flat\b/.test(location.search) && !stage.closest('.labs-embed'), alive = true, busy = null;
   async function start() {
     if (v.bench || busy) return busy;
     busy = (async () => {
@@ -289,9 +289,10 @@ export function viewSwitch(panel, stage, cv, make, { plane, look, pitch, yaw, mi
     cv.redraw();
   }
   const g = group(panel, 'View');
-  const s = seg(g, { options: [['3d', 'Real 3D'], ['flat', 'Diagram']], value: want ? '3d' : 'flat', onChange: (x) => { want = x === '3d'; try { localStorage.setItem('cassie.labs.view', x); } catch (e) { /* ignore */ } if (want) start(); else stop(); } });
+  const s = seg(g, { options: [['3d', 'Real 3D'], ['flat', 'Diagram']], value: want ? '3d' : 'flat', onChange: (x) => { if (x === '3d' && !premium.has()) { s.set('flat'); premium.ask('The Real 3D view'); return; } want = x === '3d'; try { localStorage.setItem('cassie.labs.view', x); } catch (e) { /* ignore */ } if (want) start(); else stop(); } });
   const note3d = el('p', 'lab-note', note || '3D: drag an empty spot (or use two fingers) to look around · pinch to zoom · double-tap to look straight on.');
   g.appendChild(note3d);
+  if (!premium.has()) note3d.textContent = 'Real 3D is a Plus extra. The diagram shows everything the lab does.';
   panel.prepend(g);
   if (!can3d()) { s.el.hidden = true; note3d.hidden = true; g.hidden = true; }
   if (want) start();

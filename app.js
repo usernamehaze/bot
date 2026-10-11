@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '135';
+const APP_VERSION = '136';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4003,6 +4003,7 @@ function openRoomChooser(prefill = '') {
 function boardDecks() {
   return {
     name: roomName(),
+    premium: PREMIUM,
     decks: () => { const m = new Map(); (state.cards || []).forEach((c) => { if (!m.has(c.deck)) m.set(c.deck, []); m.get(c.deck).push({ f: c.f, b: c.b }); }); return [...m.entries()].map(([name, cards]) => ({ name, cards })); },
     makeCards: async (topic) => {
       const p = state.profile || {};
@@ -4388,6 +4389,7 @@ async function openLabs(lab, more = {}) {
       onAsk: (q) => handleSend(q),
       onQuiz: (topic) => startQuizOn(topic),
       openExplore: (cell, ret) => openExplore(cell, ret),
+      premium: PREMIUM,
       // a short hint from Cassie inside the lab, without leaving it
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       // the study tools: your flashcard decks (spaced repetition) and reading your files
@@ -5783,7 +5785,7 @@ document.addEventListener('mousedown', (e) => {
   if (!highlightPopover.contains(e.target)) hideHighlightPopover();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && askChip && !askChip.hidden) hideAskChip();
+  // (Escape used to close the old "Ask Cassie" chip; it's gone)
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
 
@@ -6017,18 +6019,55 @@ function applyAccountData(d) {
   try { renderAudience(); applyAccent(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
   if (!state.messages.length) renderHistory();
 }
-function signedIn(token, account) {
+function signedIn(token, account, plan) {
   try { localStorage.setItem(AUTH_KEY, token); } catch (e) { /* ignore */ }
   state.account = { email: account.email || '', name: account.name || '', google: !!account.google };
+  if (plan) state.plan = plan;
   save();
 }
 function signedOutLocally() {
   try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
-  state.account = null; save(); renderProfileSummary();
+  state.account = null; state.plan = null; save(); renderProfileSummary();
 }
+
+/* ---------- Plus / Pro extras ----------
+   The server says which plan an account has (/auth/me and sign-in), and the app keeps it so it
+   works offline too. Signing out forgets it.
+   The AI limits are kept by the server; these extras (Real 3D in Labs, the Museum quiz,
+   saving and printing notes and boards) are checked here. */
+function planName() {
+  const p = state.plan;
+  return p && (p.plan === 'plus' || p.plan === 'pro') && (!p.until || p.until > Date.now()) ? p.plan : 'free';
+}
+const isSubscriber = () => planName() !== 'free';
+function plusSheet(what) {
+  track('feature', 'plus-ask');
+  document.querySelector('.plus-sheet')?.remove();
+  const signedOut = accountsOn() && !authToken();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'plus-sheet-h');
+  w.innerHTML = `<div class="plus-card">
+    <h3 id="plus-sheet-h">${escapeHtml(what)} is a Plus extra</h3>
+    <p>Plus and Pro add the Real 3D view in Labs, the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
+    <div class="plus-actions">
+      <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
+      ${signedOut ? '<button type="button" class="plus-in">I have Plus — sign in</button>' : ''}
+      <button type="button" class="plus-ok">Not now</button>
+    </div></div>`;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => {
+    if (e.target === w || e.target.closest('.plus-ok')) close();
+    else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
+  });
+  document.body.appendChild(w);
+  w.querySelector('.plus-ok').focus();
+}
+const PREMIUM = { has: isSubscriber, ask: plusSheet };
 // After any sign-in: bring the account's profile here, or ask the profile questions once.
 function afterSignIn(res) {
-  signedIn(res.token, res.account);
+  signedIn(res.token, res.account, res.plan);
   if (res.account.data && res.account.data.profile) {
     applyAccountData(res.account.data);
     track('open');
@@ -6257,6 +6296,9 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Send many photos and files at once: up to 15 photos and 5 files in one message (nothing gets replaced anymore). Cassie reads every page, one by one, takes notes of the key facts, and says which photo or file each answer came from.',
+  'Labs: the atom’s proton, neutron and electron tray stays still while you turn the 3D view, zooming goes to the spot you point at, “Try this” folds up on phones (tap Hide or Show), and Labs and Explore 3D open without a flash.',
+  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. Every lab, game and tool still works on Free, and a board picture is always free.',
   'Labs has a new Study tools shelf: a Vocabulary Flash-Chain (drag terms onto their meanings — literary devices, Tayutay, medical, legal, tech or your own words), a Timeline Builder, an Argument & Essay Deconstructor that colours your Claim, Evidence and Counter-argument, a Smart Flashcard Matrix that turns notes or a PDF into a deck, Cornell Notes, a Citation & Thesis Mapper (APA, MLA, Chicago, IEEE), and a Museum of Famous Arts with Filipino and world masterpieces.',
   'Five new games in Labs: Logic Circuit (wires and AND/OR/NOT gates), Formula Cracker (a Wordle for function rules, regex and chemical formulas), Pinning Blitz (countries, cell parts and organs against the clock), Fraction Diner (pizzas, drinks and recipes) and City Market (supply, demand and taxes).',
   'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',
@@ -6464,7 +6506,7 @@ if (!state.profile) {
 } else { track('open'); setTimeout(showWhatsNew, 1200); }
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
-  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = { email: r.account.email, name: r.account.name, google: r.account.google }; if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
+  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = { email: r.account.email, name: r.account.name, google: r.account.google }; if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
 requestAnimationFrame(() => {

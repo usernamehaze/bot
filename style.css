@@ -1929,3 +1929,12 @@ html.native .tabbar { background: var(--lg-fill); }
 .vc-hv-bar.busy i { background: linear-gradient(90deg, transparent, var(--primary), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: hvBusy 1.3s linear infinite; }
 @keyframes hvBusy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
 @media (prefers-reduced-motion: reduce) { .vc-hv-bar.busy i { animation: none; background: var(--primary); opacity: .6; } }
+
+/* Plus extras: what it is and how to get it (above Labs and the board) */
+.plus-sheet { position: fixed; inset: 0; z-index: 2147483640; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .45); }
+.plus-card { width: 100%; max-width: 380px; box-sizing: border-box; padding: 20px; border-radius: 18px; background: var(--surface, #fff); color: var(--text, #1b1b1d); border: 1px solid var(--border, rgba(0,0,0,.12)); box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.plus-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.plus-card p { margin: 0 0 16px; font-size: .9rem; line-height: 1.45; opacity: .85; }
+.plus-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.plus-actions > * { flex: 1 1 auto; min-height: 40px; padding: 8px 14px; border-radius: 99px; font: inherit; font-size: .88rem; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border, rgba(0,0,0,.15)); background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; }
+.plus-actions .plus-go { background: var(--text, #1b1b1d); color: var(--surface, #fff); border-color: transparent; }

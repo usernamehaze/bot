@@ -9,7 +9,7 @@
 
      import('./labs/labs.js').then((m) => m.open({ lab: 'projectile', onAsk, onQuiz, openExplore, explain, scores }));
 */
-import { el, esc, dayKey } from './kit.js';
+import { el, esc, dayKey, setPremium } from './kit.js';
 import { MATH } from './math.js';
 import { MATH2 } from './math2.js';
 import { PHYSICS } from './physics.js';
@@ -64,7 +64,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=8', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=9', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
@@ -383,6 +383,7 @@ function createView() {
 
   function open(o) {
     opts = o || {};
+    setPremium(opts.premium);
     cssReady.then(() => show());
   }
   function show() {

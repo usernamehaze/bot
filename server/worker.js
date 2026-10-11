@@ -401,9 +401,12 @@ async function planOf(request, env) {
   try {
     const acc = await accountFromRequest(request, env);
     if (!acc) return { plan: 'free' };
-    const row = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(acc.id, Date.now()).first();
-    return { plan: row && ['plus', 'pro'].includes(row.plan) ? row.plan : 'free', account: acc.id, until: row ? row.until : 0 };
+    return { ...(await accountPlan(env, acc.id)), account: acc.id };
   } catch (e) { return { plan: 'free' }; }
+}
+async function accountPlan(env, id) {
+  const row = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(id, Date.now()).first();
+  return row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until } : { plan: 'free', until: 0 };
 }
 // what each plan gets a day: questions the student sees, every request (a ceiling against abuse),
 // and Claude answers (family, then a second family once the first runs out)
@@ -1024,7 +1027,7 @@ async function auth(request, env, path) {
         acc = { id: randomToken(12), email: g.verified ? g.email : null, google: g.sub, name: g.name, data: null };
         await env.DB.prepare('INSERT INTO accounts (id, email, google, name, created, updated) VALUES (?, ?, ?, ?, ?, ?)').bind(acc.id, acc.email, acc.google, acc.name, now, now).run();
       }
-      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data });
+      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
     }
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
@@ -1051,14 +1054,16 @@ async function auth(request, env, path) {
       if (acc && !acc.pass && acc.google) return fail('This account uses Google — tap “Continue with Google”.', 401);
       return fail('That email and password don’t match. Check them and try again.', 401);
     }
-    return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data });
+    return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
   }
 
   const acc = await accountFromRequest(request, env);
   if (!acc) return fail('Please sign in again.', 401);
   if (path === '/auth/me') {
     await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
-    return ok({ account: publicAccount(acc) });
+    let plan = { plan: 'free', until: 0 };
+    try { plan = await accountPlan(env, acc.id); } catch (e) { /* free */ }
+    return ok({ account: publicAccount(acc), plan });
   }
   if (path === '/auth/save') {
     const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;
