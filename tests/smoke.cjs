@@ -523,9 +523,9 @@ test('study room: studying together — chat, Cassie for everyone, shared flashc
   } finally { await A.ctx.close(); await B.ctx.close(); }
 });
 
-test('Listen: Cassie reads answers and flashcards aloud — the studio voice first, the device’s when it runs out', async (b) => {
+test('Listen: Cassie reads answers and flashcards aloud — the studio voice while hers isn’t on the device, the device’s when it runs out', async (b) => {
   const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
-  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards } });
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards, hearing: 'fast' } });
   // a tiny real sound (a WAV), standing in for ElevenLabs' MP3
   const wav = (() => { const n = 1600, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
   const said = []; let credits = true;
@@ -546,6 +546,15 @@ test('Listen: Cassie reads answers and flashcards aloud — the studio voice fir
   await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 8000 });
   expect(said.some((t) => /Mitochondria make ATP/.test(t)), 'the answer went to the studio voice: ' + JSON.stringify(said));
   expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'the device voice wasn’t needed');
+  // in a voice conversation the same voice answers (it used to wait for the whole answer, then switch)
+  await page.click('#voice-btn');
+  await page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
+  const n0 = said.length;
+  await page.evaluate(() => window.__say('What do mitochondria do?'));
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening' && window.__shown.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 15000 });
+  expect(said.slice(n0).some((t) => /Mitochondria make ATP/.test(t)), 'the studio voice speaks in the conversation too: ' + JSON.stringify(said.slice(n0)));
+  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'one voice: the device’s never cut in');
+  await page.click('.vc-x');
   // the studio voice is used up: the device's voice reads it instead, never silence
   credits = false;
   await page.click('.bubble-assistant .listen-btn');
@@ -1091,7 +1100,9 @@ test('Cassie’s voice is Bella (or Michael) once she’s on the device — the 
   expect(/listening/.test(await page.locator('.vc-cassie').innerText()), 'the greeting shows as text');
   await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 30000 });
   const deviceBefore = await page.evaluate(() => window.__spoken.length); // the phone's voice filled in while she downloaded
-  expect(await page.locator('.vc-hv').isHidden(), 'the download note goes away when she is ready');
+  // the download note becomes "her own voice is ready" (the voice changes from her next answer), then goes away
+  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie’s own voice is ready', { timeout: 5000 });
+  await page.waitForSelector('.vc-hv[hidden]', { state: 'attached', timeout: 10000 });
   expect(await page.evaluate(() => window.CassieVoice.info().isolated), 'her voice uses several cores');
   // now she answers in Bella's voice
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });

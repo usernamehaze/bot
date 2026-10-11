@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '131';
+const APP_VERSION = '132';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4903,33 +4903,23 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
-// Read an answer aloud — always in Bella's voice (never the device's robot voice). If her voice
-// isn't on this device yet, the answer is just shown, and her voice downloads for next time.
+// Read an answer aloud in Cassie's voice: her own (Bella or Michael) once she's on this device, else
+// the studio voice or the device's as a stand-in (voice.js picks, and keeps one voice per answer).
 function speak(text) {
   if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
   if (readAloud) { readAloud.stop(); readAloud = null; }
   const chunks = bellaChunks(cleanForSpeech(text));
   if (!chunks.length || !humanVoiceWanted()) return;
   const CV = window.CassieVoice;
-  if (studioVoice()) { // the studio voice (and, if it stops, Bella or the device's) reads it
+  const go = () => {
     const h = CV.speak(chunks.join(' '), { gender: voiceGender(), onStart: () => botMood('talking') });
     readAloud = h;
     h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
-    return;
-  }
-  const go = () => {
-    const h = CV.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
-    readAloud = h;
-    h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
   };
-  if (CV.status() === 'ready') { go(); return; }
-  // not here yet: the device's own voice reads this one (Cassie is never silent), and Bella
-  // gets ready for the next answers
-  const fallback = () => { const h = CV.device.say(chunks.join(' '), { gender: voiceGender(), onStart: () => botMood('talking') }); readAloud = h; h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); }); };
-  if (CV.status() === 'loading' || CV.status() === 'failed') { fallback(); return; }
-  if (CV.got()) { CV.prepare().then(go, fallback); return; } // on this device already: a few seconds to wake up
-  fallback();
-  if (humanVoiceAutoOK()) CV.prepare().catch(() => {}); // get it now, for the next answers
+  // her own voice is on this device but asleep: a few seconds to wake her, so it's her voice every time
+  if (CV.status() === 'off' && CV.got()) { CV.prepare().then(go, go); return; }
+  go();
+  if (CV.status() === 'off' && humanVoiceAutoOK()) CV.prepare().catch(() => {}); // get it now, for the next answers
 }
 
 /* ---------- Talk with Cassie: a real voice conversation ----------
@@ -5064,10 +5054,10 @@ function showHumanVoiceSetting() {
   const name = voiceGender() === 'man' ? 'Michael' : 'Bella';
   box.textContent = st === 'unsupported' ? 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4+.'
     : st === 'ready' ? `✓ ${name}’s voice is ready.`
-      : st === 'loading' ? `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once — her answers show as text until then)`
+      : st === 'loading' ? (CV.warming && CV.warming() ? `Downloaded ✓ Setting up ${name}’s voice on this device (up to a minute)…` : `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once)`)
         : st === 'failed' ? `Couldn’t get her voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
           : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
-  if (CV && CV.studio && CV.studio.on()) box.textContent = `✓ Cassie’s studio voice is on (the most natural — she uses it first while you’re online). ${box.textContent}`;
+  if (CV && CV.studio && CV.studio.on() && st !== 'ready') box.textContent = `Cassie’s studio voice stands in until her own voice is on this device. ${box.textContent}`;
 }
 function playHumanSample() {
   const CV = window.CassieVoice;
@@ -5108,14 +5098,27 @@ function showHumanVoice() {
   const CV = window.CassieVoice, st = CV.status();
   let later = false;
   try { later = sessionStorage.getItem('cassie.hvLater') === '1'; } catch (e) { /* ignore */ }
+  const wasNote = box.dataset.st === 'note';
   box.dataset.st = st;
+  const v = voiceChat;
+  if (st === 'ready' && v && v.voiceKind && v.voiceKind !== 'bella' && !v.toldReady) {
+    // she just became ready, mid-conversation: say so, and switch from her next answer
+    v.toldReady = true; v.readyAt = Date.now();
+    box.dataset.st = 'note'; box.hidden = false;
+    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b> — she’ll use it from her next answer.';
+    clearTimeout(v.noteTimer); v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
+    return;
+  }
+  if (wasNote && v && v.readyAt) { box.dataset.st = 'note'; return; } // (the note stays a moment)
   if (st === 'ready') {
     box.hidden = !CV.slow();
     box.innerHTML = 'This device is a little slow at making her voice, so she may pause between sentences. Closing other tabs and apps helps.';
   } else if (st === 'loading') {
     box.hidden = false;
-    const pct = Math.round(CV.progress() * 100);
-    box.innerHTML = `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, she uses your phone’s voice.</small>`;
+    const pct = Math.round(CV.progress() * 100), standIn = studioVoice() ? 'a stand-in voice' : 'your phone’s voice';
+    box.innerHTML = CV.warming && CV.warming()
+      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there — this part can take up to a minute. She keeps talking with ${standIn} until then.</small>`
+      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, she uses ${standIn}.</small>`;
   } else if (st === 'failed') {
     box.hidden = false;
     box.innerHTML = 'Cassie is using your phone’s voice — her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
@@ -5127,6 +5130,21 @@ function showHumanVoice() {
   }
 }
 
+// The voice screen keeps one voice; it changes only when Cassie's own voice becomes ready (an
+// upgrade) or the studio voice runs out for the day — and then she says so, once.
+function noteVoice(kind) {
+  const v = voiceChat;
+  if (!v || !kind) return;
+  const was = v.voiceKind; v.voiceKind = kind;
+  if (!was || was === kind || !voiceUI || !voiceUI.hv || (kind === 'bella' && v.toldReady)) return;
+  const box = voiceUI.hv;
+  box.dataset.st = 'note'; box.hidden = false;
+  box.innerHTML = kind === 'bella' ? `✓ <b>Cassie’s own voice is ready</b> — she’ll use it from now on.`
+    : was === 'studio' ? 'Today’s studio voice is used up, so Cassie switched voices. Her own voice (in Settings → Voice) has no limit.'
+      : 'Cassie switched voices.';
+  clearTimeout(v.noteTimer); v.readyAt = Date.now();
+  v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
+}
 function setVoicePhase(phase, text) {
   const v = voiceChat, ui = voiceUI;
   if (!v || !ui) return;
@@ -5169,7 +5187,8 @@ function sayThenListen(text) {
     // Bella speaks it. If her voice isn't ready on this device (still downloading, or her engine
     // can't run here), the device's own best voice says it — Cassie is never silent.
     if (!clean) { finish(); return; }
-    const h = !studioVoice() && humanVoiceReady() ? window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() }) : window.CassieVoice.speak(clean, { gender: voiceGender() });
+    const h = window.CassieVoice.speak(clean, { gender: voiceGender(), onVoice: noteVoice });
+    noteVoice(h.voice);
     v.stopSpeaking = () => { h.stop(); finish(); };
     h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
@@ -5305,7 +5324,7 @@ async function listenWithRecorder(v) {
         if (!v.heardSomething) { v.heardSomething = true; setVoicePhase('listening', 'Listening… tap the mic to send now'); }
       }
     }
-    if (spoke && an && now - lastLoud > 950) stop();
+    if (spoke && an && now - lastLoud > 800) stop();
     else if (!spoke && now - t0 > 15000) stop();
     else if (now - t0 > 45000) stop();
   }, 100);
@@ -5366,7 +5385,7 @@ function speakablePieces(text, from, finished) {
     const m = /[.!?…]+["”’)]*(\s|$)/.exec(rest);
     let end = m ? m.index + m[0].length : -1;
     // a long sentence: cut at a comma so no piece takes long to make
-    const lim = first ? 70 : 200;
+    const lim = first ? 60 : 200;
     if ((end < 0 || end > lim) && rest.length > lim) { const cut = Math.max(rest.lastIndexOf(', ', lim), rest.lastIndexOf('; ', lim), rest.lastIndexOf(' — ', lim)); if (cut > 20) end = cut + 2; }
     if (end < 0) { if (finished) end = rest.length; else break; }
     // short sentences after the first are joined to the next (fewer, smoother pieces)
@@ -5383,7 +5402,8 @@ async function askOutLoud(text) {
   const before = state.messages.length;
   // she starts speaking the first sentence while the rest of the answer is still coming
   const CV = window.CassieVoice;
-  const live = !studioVoice() && humanVoiceReady() && CV && CV.sayStream ? CV.sayStream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); } }) : null;
+  const live = CV && CV.stream ? CV.stream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); }, onVoice: noteVoice }) : null;
+  if (live) noteVoice(live.voice);
   let upTo = 0;
   v.stopSpeaking = live ? () => live.stop() : null;
   const onDelta = (sofar) => {
@@ -5399,7 +5419,7 @@ async function askOutLoud(text) {
   const last = state.messages[state.messages.length - 1];
   const reply = state.messages.length > before && last && last.role === 'assistant' ? last.content : '';
   track('feature', 'voice');
-  if (live && upTo > 0 && reply) {
+  if (live && reply) {
     // the rest of the answer, then listen again
     const clean = cleanForSpeech(reply);
     voiceUI.cassie.textContent = clean;
@@ -5408,10 +5428,9 @@ async function askOutLoud(text) {
     live.end();
     if (v.phase !== 'speaking') setVoicePhase('speaking');
     v.stopSpeaking = () => { live.stop(); };
-    const r = await live.done;
+    await live.done;
     if (voiceChat !== v) return;
     v.stopSpeaking = null;
-    if (r.status === 'error') { sayThenListen(bellaChunks(clean).slice(r.at).join(' ')); return; }
     if (v.wantPause) setVoicePhase('paused'); else listenVoice();
     return;
   }
@@ -6100,6 +6119,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Talk with Cassie answers sooner: every voice now starts on the first sentence while the rest of the answer is still being written, and she replies after a shorter pause.',
+  'One voice: once Cassie’s own voice is on your device, she always uses it (no more switching between voices). Until then a stand-in voice speaks, and she tells you when her own voice is ready. After the download, “Setting up…” shows instead of sitting at 100%, and if setting up fails she tries again by herself.',
   'Labs in real 3D: metals fizz in a glass beaker (or burn in steam over a Bunsen burner), you pour from real reagent bottles in the pH mixer, the atom turns in your hand, water molecules move in a box on a hot plate, and the pendulum, cannon, rope, laser, magnets and compass, lenses and Tower of Hanoi are all real things on a bench. Drag an empty spot to look around; “Diagram” brings back the flat drawing.',
   'The World atlas is now a globe you can spin: tap any country on it (or on the flat map) and its name pops up right there — tap that for its flag, capital and history.',
   'Pictures look like real photos now: Cassie asks for them the way a photographer would (the camera, the lens, the light), so they come out natural instead of glossy or computer-made. Ask for a cartoon, a poster or a labelled diagram and you still get exactly that.',
