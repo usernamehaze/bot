@@ -523,6 +523,143 @@ test('study room: studying together — chat, Cassie for everyone, shared flashc
   } finally { await A.ctx.close(); await B.ctx.close(); }
 });
 
+test('board room: sticky notes, flashcards on the board, live cursors with names, a laser, quick shapes, Cassie checks the board for everyone', async (b) => {
+  const fake = () => ({ text: 'Step 2 is right; in step 3 you dropped a minus sign.' });
+  const A = await open(b, { device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test', profile: { ...PROFILE, name: 'Ana Reyes' } } });
+  const B = await open(b, { device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test', profile: { ...PROFILE, name: 'Ben Cruz' } } });
+  const at = async (page, fx, fy) => { const box = await page.locator('.csk-live').boundingBox(); return [box.x + box.width * fx, box.y + box.height * fy]; };
+  const objs = (page) => page.evaluate(() => window.CassieSketch.session().objects());
+  try {
+    await A.page.click('#board-btn');
+    await A.page.click('.csk-btn:has-text("Study together")');
+    await A.page.click('[data-room="new"]');
+    await A.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    const code = await A.page.locator('.csk-room b').innerText();
+    await B.page.goto(APP + '?room=' + code);
+    await B.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    await A.page.waitForFunction(() => /Ben/.test(document.querySelector('.csk-who').textContent), null, { timeout: 10000 });
+    // Ana adds a pink sticky note — Ben sees it with her name on it
+    await A.page.click('[data-tool="note"]');
+    await A.page.click('.csk-pop [data-pop="nc"][title="Pink"]');
+    await A.page.mouse.click(...(await at(A.page, 0.25, 0.3)));
+    await A.page.waitForSelector('.csk-notebox');
+    await A.page.keyboard.type('Thesis: sleep helps memory');
+    await A.page.keyboard.press('Enter');
+    await B.page.waitForFunction(() => { const o = window.CassieSketch.session().objects(); return o.length === 1 && o[0].tool === 'note' && /sleep helps memory/.test(o[0].text) && o[0].n === 'Ana' && o[0].color === '#ffc9de'; }, null, { timeout: 8000 });
+    // Ana's pointer shows on Ben's board with her name, and what she's doing
+    for (let i = 0; i < 6; i++) { await A.page.mouse.move(...(await at(A.page, 0.5 + i * 0.03, 0.6))); await A.page.waitForTimeout(80); }
+    await B.page.waitForSelector('.csk-cur:not([hidden]) >> text=Ana', { timeout: 8000 });
+    await A.page.click('[data-tool="pen"]');
+    await A.page.mouse.move(...(await at(A.page, 0.55, 0.7))); await A.page.mouse.down();
+    let sawDrawing = false;
+    for (let i = 0; i < 24 && !sawDrawing; i++) {
+      await A.page.mouse.move(...(await at(A.page, 0.55 + i * 0.008, 0.7 + (i % 2) * 0.01)));
+      await A.page.waitForTimeout(90);
+      sawDrawing = await B.page.evaluate(() => [...document.querySelectorAll('.csk-cur span')].some((s) => /Ana · drawing/.test(s.textContent)));
+    }
+    await A.page.mouse.up();
+    if (!sawDrawing) await B.page.waitForFunction(() => [...document.querySelectorAll('.csk-cur span')].some((s) => /Ana · drawing/.test(s.textContent)), null, { timeout: 5000 });
+    // Ben's laser shows on Ana's board, then fades away by itself
+    await B.page.click('[data-tool="laser"]');
+    await B.page.mouse.move(...(await at(B.page, 0.3, 0.75))); await B.page.mouse.down();
+    for (let i = 0; i < 10; i++) { await B.page.mouse.move(...(await at(B.page, 0.3 + i * 0.03, 0.75))); await B.page.waitForTimeout(40); }
+    await B.page.mouse.up();
+    const lit = (want) => { const c = document.querySelector('.csk-fx'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let on = false; for (let i = 3; i < d.length && !on; i += 4 * 7) if (d[i] > 40) on = true; return on === want; };
+    await A.page.waitForFunction(lit, true, { timeout: 8000, polling: 50 });
+    expect(await B.page.evaluate(() => window.CassieSketch.session().strokeCount()) === 2, 'the laser isn’t saved on the board');
+    await A.page.waitForFunction(lit, false, { timeout: 6000 });
+    // Ben drops two flashcards on the board
+    await B.page.click('[data-act="cards"]');
+    await B.page.fill('.csk-pop textarea', 'Osmosis – water moving across a membrane\nMitosis: one cell splitting into two identical cells');
+    await B.page.click('.csk-pop [data-pop="drop"]');
+    await A.page.waitForFunction(() => window.CassieSketch.session().objects().filter((o) => o.tool === 'card').length === 2, null, { timeout: 8000 });
+    // Ana flips one (Move tool, tap) and drags the other — Ben sees both
+    await A.page.click('[data-tool="select"]');
+    const cards = (await objs(A.page)).filter((o) => o.tool === 'card');
+    const box = await A.page.locator('.csk-live').boundingBox(), k = box.width / 1600;
+    const c0 = cards[0], c1 = cards[1];
+    await A.page.mouse.click(box.x + (c0.x + c0.w / 2) * k, box.y + (c0.y + c0.h / 2) * k);
+    await B.page.waitForFunction((id) => window.CassieSketch.session().objects().find((o) => o.id === id).flip === true, c0.id, { timeout: 8000 });
+    await A.page.mouse.move(box.x + (c1.x + 20) * k, box.y + (c1.y + 20) * k); await A.page.mouse.down();
+    await A.page.mouse.move(box.x + (c1.x + 20) * k, box.y + (c1.y + 220) * k, { steps: 8 }); await A.page.mouse.up();
+    await B.page.waitForFunction(([id, y]) => Math.abs(window.CassieSketch.session().objects().find((o) => o.id === id).y - y) < 4, [c1.id, c1.y + 200], { timeout: 8000 });
+    if (process.env.SHOTS) await A.page.screenshot({ path: process.env.SHOTS + '/board-room-tools.png' });
+    // Ben can move Ana's note but can't throw it away
+    await B.page.click('[data-tool="select"]');
+    const note = (await objs(B.page)).find((o) => o.tool === 'note');
+    await B.page.mouse.click(box.x + (note.x + 30) * k, box.y + (note.y + 30) * k);
+    await B.page.keyboard.press('Delete');
+    await B.page.waitForTimeout(1500);
+    expect((await objs(A.page)).some((o) => o.tool === 'note'), 'Ana’s note stays');
+    // a quick shape: a Venn diagram where Ana taps
+    await A.page.click('[data-act="shapes"]');
+    await A.page.click('.csk-pop [data-k="venn2"]');
+    await A.page.mouse.click(...(await at(A.page, 0.7, 0.5)));
+    await B.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 5, null, { timeout: 8000 });
+    // Ana asks Cassie to check the board: everyone sees the answer
+    await A.page.click('[data-room-act="check"]');
+    await A.page.waitForSelector('.csk-note >> text=dropped a minus sign', { timeout: 10000 });
+    await B.page.waitForSelector('.csk-note >> text=Ana asked Cassie to check the board', { timeout: 10000 });
+    expect(/dropped a minus sign/.test(await B.page.locator('.csk-note').innerText()), 'Ben sees Cassie’s answer');
+    const sent = JSON.stringify(A.groqCalls.at(-1).messages);
+    expect(/sticky note \(Ana\): Thesis: sleep helps memory/.test(sent) && /flashcard: Osmosis → water moving/.test(sent), 'Cassie is told what the notes and cards say');
+    expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
+  } finally { await A.ctx.close(); await B.ctx.close(); }
+});
+
+test('board: Cassie writes flashcards for it, notes sort into colour groups, and it saves as PNG, PDF and a board file that opens again', async (b) => {
+  const fake = (body) => ({ text: /flashcards about/.test(JSON.stringify(body.messages)) ? JSON.stringify([{ f: 'What is evaporation?', b: 'Water turning into vapour.' }, { f: 'What is condensation?', b: 'Vapour turning back into droplets.' }, { f: 'What is precipitation?', b: 'Water falling as rain or snow.' }]) : 'ok' });
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test' } });
+  const at = async (fx, fy) => { const box = await page.locator('.csk-live').boundingBox(); return [box.x + box.width * fx, box.y + box.height * fy]; };
+  const note = async (title, fx, fy, text) => {
+    await page.click('[data-tool="note"]');
+    if (!(await page.locator('.csk-pop').count())) await page.click('[data-tool="note"]');
+    await page.click(`.csk-pop [data-pop="nc"][title="${title}"]`);
+    await page.mouse.click(...(await at(fx, fy)));
+    await page.waitForSelector('.csk-notebox');
+    await page.keyboard.type(text); await page.keyboard.press('Enter');
+  };
+  await page.click('#board-btn');
+  await page.click('[data-act="cards"]');
+  await page.fill('.csk-pop .csk-topic', 'the water cycle');
+  await page.click('.csk-pop [data-pop="make"]');
+  await page.waitForFunction(() => window.CassieSketch.session().objects().filter((o) => o.tool === 'card').length === 3, null, { timeout: 10000 });
+  expect(await page.locator('[data-tool="select"].on').count() === 1, 'the Move tool is picked so the cards can be flipped');
+  // notes in two colours, mixed up — then sorted into a column per colour
+  await note('Yellow', 0.1, 0.12, 'Intro');
+  await note('Green', 0.9, 0.85, 'Method');
+  await note('Yellow', 0.5, 0.88, 'Background');
+  await page.click('[data-tool="note"]');
+  if (!(await page.locator('.csk-pop').count())) await page.click('[data-tool="note"]');
+  await page.click('.csk-pop [data-pop="tidy"]');
+  const ns = (await page.evaluate(() => window.CassieSketch.session().objects())).filter((o) => o.tool === 'note');
+  const yel = ns.filter((n) => n.color === '#fff1a6'), grn = ns.filter((n) => n.color === '#c8f0c4');
+  expect(yel.length === 2 && grn.length === 1 && yel[0].x === yel[1].x && grn[0].x > yel[0].x && yel[0].y !== yel[1].y, 'yellow notes stack in one column, green beside them: ' + JSON.stringify(ns.map((n) => [n.color, n.x, n.y])));
+  // the coordinate grid, logic gates and flowchart drop in
+  for (const k of ['grid', 'gates', 'flow']) { await page.click('[data-act="shapes"]'); await page.click(`.csk-pop [data-k="${k}"]`); await page.mouse.click(...(await at(0.5, 0.5))); }
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/board-tools.png' });
+  const before = await page.evaluate(() => window.CassieSketch.session().strokeCount());
+  // save: a picture, a PDF, and a board file
+  const save = async (k) => { await page.click('[data-act="save"]'); const [dl] = await Promise.all([page.waitForEvent('download'), page.click(`.csk-pop [data-pop="${k}"]`)]); return fs.readFileSync(await dl.path()); };
+  const png = await save('png'), pdf = await save('pdf'), json = await save('json');
+  expect(png.slice(1, 4).toString() === 'PNG', 'a PNG');
+  expect(pdf.slice(0, 5).toString() === '%PDF-' && /\/DCTDecode/.test(pdf.toString('latin1')) && /%%EOF\s*$/.test(pdf.toString('latin1')), 'a PDF with the board in it');
+  const data = JSON.parse(json.toString());
+  expect(data.cassie === 'board' && data.strokes.length === before && data.strokes.some((s) => s.tool === 'card' && /evaporation/.test(s.f)), 'the board file has everything');
+  // start over, then open the file again
+  page.once('dialog', (d) => d.accept());
+  await page.click('[data-act="clear"]');
+  await page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 0);
+  const file = path.join(require('os').tmpdir(), 'cassie-board-test.json'); fs.writeFileSync(file, json);
+  await page.click('[data-act="save"]');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.csk-pop [data-pop="open"]')]);
+  await chooser.setFiles(file);
+  await page.waitForFunction((n) => window.CassieSketch.session().strokeCount() === n, before, { timeout: 5000 });
+  expect((await page.evaluate(() => window.CassieSketch.session().objects())).filter((o) => o.tool === 'note').length === 3, 'notes are back');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Listen: Cassie reads answers and flashcards aloud — the studio voice while hers isn’t on the device, the device’s when it runs out', async (b) => {
   const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards, hearing: 'fast' } });
