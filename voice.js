@@ -254,7 +254,81 @@
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } catch (e) { /* ignore */ }
   }, { capture: true, passive: true }));
 
+  // Cassie's studio voice: ElevenLabs, through Cassie's server (it holds the key and counts the
+  // credits). The most natural of her voices, so it goes first when the server has it; when it's
+  // off, used up for the day or offline, Bella (on the device) or the device's voice carries on.
+  let studio = { server: '', uid: '', on: false, off: false };
+  function setupStudio(o) {
+    studio = { ...studio, ...o };
+    if (!studio.server) return;
+    fetch(studio.server + '/speak').then((r) => (r.ok ? r.json() : null)).then((d) => { studio.on = !!(d && d.on); emit(); }).catch(() => {});
+  }
+  const studioReady = () => studio.on && !studio.off && !!audioCtx();
+  async function studioClip(text, gender) {
+    const r = await fetch(studio.server + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: gender === 'man' ? 'man' : 'woman', uid: studio.uid }) });
+    if (!r.ok) { if (r.status === 429 || r.status === 503) studio.off = true; throw new Error('studio ' + r.status); } // used up / off: the other voices for the rest of the visit
+    const buf = await r.arrayBuffer();
+    return await new Promise((res, rej) => audioCtx().decodeAudioData(buf, res, rej));
+  }
+  // say these sentences in the studio voice; the next one downloads while this one plays
+  function studioSay(parts, opts = {}) {
+    let stopped = false, src = null, finish;
+    const done = new Promise((r) => { finish = r; });
+    (async () => {
+      const ac = audioCtx();
+      let next = studioClip(parts[0], opts.gender);
+      for (let i = 0; i < parts.length; i++) {
+        let buf;
+        try { buf = await next; } catch (e) { return finish({ status: 'error', at: i }); }
+        if (stopped) return;
+        if (i + 1 < parts.length) { next = studioClip(parts[i + 1], opts.gender); next.catch(() => {}); }
+        await new Promise((res) => {
+          src = ac.createBufferSource(); src.buffer = buf; src.connect(ac.destination);
+          src.onended = res;
+          if (i === 0 && opts.onStart) opts.onStart();
+          try { src.start(0); } catch (e) { res(); }
+        });
+        if (stopped) return;
+      }
+      finish({ status: 'done' });
+    })();
+    return { done, stop() { stopped = true; try { if (src) src.stop(); } catch (e) { /* ignore */ } finish({ status: 'stopped' }); } };
+  }
+  // sentences of a sensible size to say one at a time
+  function sentences(text) {
+    const out = [];
+    for (const s of String(text || '').replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || []) {
+      const t = s.trim(); if (!t) continue;
+      if (out.length && out[out.length - 1].length + t.length < 180) out[out.length - 1] += ' ' + t; else out.push(t);
+    }
+    return out;
+  }
+  // Read anything aloud with the best voice there is: the studio voice, else Bella, else the
+  // device's — and if one fails partway, the next carries on from that sentence.
+  function speak(text, opts = {}) {
+    const parts = sentences(text);
+    let stopped = false, cur = null, finish;
+    const done = new Promise((r) => { finish = r; });
+    (async () => {
+      if (!parts.length) return finish({ status: 'done' });
+      let from = 0;
+      if (studioReady()) {
+        cur = studioSay(parts, opts); const r = await cur.done;
+        if (stopped) return; if (r.status !== 'error') return finish(r); from = r.at;
+      }
+      if (status === 'ready' && worker && from < parts.length) {
+        cur = say(parts.slice(from), opts); const r = await cur.done;
+        if (stopped) return; if (r.status !== 'error') return finish(r); from += r.at;
+      }
+      cur = deviceSay(parts.slice(from).join(' '), opts);
+      finish(await cur.done);
+    })();
+    return { done, stop() { stopped = true; if (cur) cur.stop(); finish({ status: 'stopped' }); } };
+  }
+
   window.CassieVoice = {
+    speak,
+    studio: { setup: setupStudio, ready: studioReady, on: () => studio.on, say: studioSay },
     device: { say: deviceSay, voice: deviceVoice, supported: () => !!synth },
     sayStream,
     VOICES,

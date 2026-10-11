@@ -1918,3 +1918,16 @@ html.native .tabbar { background: var(--lg-fill); }
   }
   .tab.on { background: var(--text); color: var(--surface); }
 }
+/* flashcards out loud */
+.fc-progress { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.fc-say { display: inline-flex; gap: 6px; }
+.fc-mini { min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .82rem/1 inherit; cursor: pointer; }
+.fc-mini[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.fc-listening { cursor: default; }
+/* Listen (listen.js): Cassie reads an answer or a part card aloud */
+.listen-row { margin-top: 8px; }
+.listen-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .8rem/1 inherit; cursor: pointer; }
+.listen-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.listen-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
+.x3d .listen-btn { background: rgba(255, 255, 255, .1); color: #fff; border-color: rgba(255, 255, 255, .22); margin-left: auto; }
+.x3d .listen-btn.on { background: #fff; color: #111; }

@@ -133,7 +133,7 @@
     el.innerHTML = '<div class="fc-panel"><div class="fc-head"><button type="button" class="fc-back" aria-label="Back to decks" hidden>‹</button><h2>Flashcards</h2><button type="button" class="fc-x" aria-label="Close">×</button></div><div class="fc-body"></div></div>';
     document.body.appendChild(el);
     el.querySelector('.fc-x').addEventListener('click', close);
-    el.querySelector('.fc-back').addEventListener('click', () => { session = null; renderHome(); });
+    el.querySelector('.fc-back').addEventListener('click', () => { if (listening) listening.stop(); hush(); session = null; renderHome(); });
     el.addEventListener('click', (e) => { if (e.target === el) close(); });
     el.addEventListener('keydown', onKey);
     el.querySelector('.fc-body').addEventListener('click', onClick);
@@ -147,7 +147,7 @@
       ${note ? `<p class="fc-note">${esc(note)}</p>` : ''}
       ${ds.length ? `<ul class="fc-decks">${ds.map((d) => `
         <li><div class="fc-deck-name"><b>${esc(d.name)}</b><span>${d.total} card${d.total === 1 ? '' : 's'} · ${d.due ? `<em>${d.due} to review</em>` : 'all done for now'} · ${d.learned} learned</span></div>
-          <div class="fc-deck-acts"><button type="button" class="fc-btn main" data-study="${esc(d.name)}"${d.due ? '' : ' data-all="1"'}>${d.due ? 'Study' : 'Practise'}</button>
+          <div class="fc-deck-acts">${ctx.speak ? `<button type="button" class="fc-btn" data-listen="${esc(d.name)}" title="Cassie reads the cards to you: the question, a moment to think, then the answer">🎧 Listen</button>` : ''}<button type="button" class="fc-btn main" data-study="${esc(d.name)}"${d.due ? '' : ' data-all="1"'}>${d.due ? 'Study' : 'Practise'}</button>
           <details class="fc-more"><summary aria-label="More for ${esc(d.name)}">⋯</summary><div>
             <button type="button" data-anki="${esc(d.name)}">Export for Anki</button>
             <button type="button" data-quizlet="${esc(d.name)}">Copy for Quizlet</button>
@@ -175,6 +175,11 @@
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.study != null) { startStudy(t.dataset.study, !!t.dataset.all); return; }
+    if (t.dataset.listen != null) { startListen(t.dataset.listen); return; }
+    if (t.dataset.say != null && session && session.card) { say(session.flipped ? `${session.card.f}. ${session.card.b}` : session.card.f); return; }
+    if (t.dataset.aloud != null) { ctx.state().cardsAloud = !ctx.state().cardsAloud; ctx.save(); t.setAttribute('aria-pressed', String(!!ctx.state().cardsAloud)); if (ctx.state().cardsAloud && session && session.card) say(session.flipped ? session.card.b : session.card.f); else hush(); return; }
+    if (t.dataset.lnext != null && listening) { listening.skip(); return; }
+    if (t.dataset.lstop != null && listening) { listening.stop(); renderHome(); return; }
     if (t.dataset.anki) { exportAnki(t.dataset.anki); return; }
     if (t.dataset.csv) { exportCsv(t.dataset.csv); return; }
     if (t.dataset.quizlet) {
@@ -229,12 +234,13 @@
     session.card = session.list[session.i];
     session.flipped = false;
     const c = session.card, left = session.list.length - session.i;
-    body().innerHTML = `<p class="fc-progress">${esc(session.deck)} · ${left} left</p>
+    body().innerHTML = `<p class="fc-progress">${esc(session.deck)} · ${left} left${ctx.speak ? `<span class="fc-say"><button type="button" class="fc-mini" data-say="1" aria-label="Read this card aloud">🔊 Listen</button><button type="button" class="fc-mini" data-aloud="1" aria-pressed="${!!ctx.state().cardsAloud}" title="Read every card aloud">Auto</button></span>` : ''}</p>
       <button type="button" class="fc-card" data-flip="1" aria-label="Show the answer"><span class="fc-side">Question</span><span class="fc-text">${esc(c.f)}</span><span class="fc-tap">Tap to see the answer</span></button>
       <div class="fc-grades" hidden>
         ${[['again', 'Again'], ['hard', 'Hard'], ['good', 'Good'], ['easy', 'Easy']].map(([k, l], i) => `<button type="button" class="fc-grade ${k}" data-grade="${k}"><b>${l}</b><small>${nextLabel(c, k)}</small><kbd>${i + 1}</kbd></button>`).join('')}
       </div>`;
     body().querySelector('.fc-card').focus();
+    if (ctx.state().cardsAloud) say(c.f);
   }
   function flip() {
     if (!session || session.flipped || !session.card) return;
@@ -244,6 +250,47 @@
     card.innerHTML = `<span class="fc-side">Question</span><span class="fc-q">${esc(session.card.f)}</span><span class="fc-side">Answer</span><span class="fc-text">${esc(session.card.b)}</span>`;
     body().querySelector('.fc-grades').hidden = false;
     const g = body().querySelector('[data-grade="good"]'); if (g) g.focus();
+    if (ctx.state().cardsAloud) say(session.card.b);
+  }
+
+  /* ---------- listening: for students who learn by ear ---------- */
+  let voice = null, listening = null;
+  function hush() { if (voice) { voice.stop(); voice = null; } }
+  function say(text) { hush(); if (!ctx.speak) return null; voice = ctx.speak(text); return voice; }
+  // Hands-free: Cassie reads each card's question, gives you a moment to answer in your head,
+  // then reads the answer — like a study partner quizzing you. Nothing about your schedule changes.
+  function startListen(deck) {
+    const list = all().filter((c) => c.deck === deck).sort((a, b) => (a.due || 0) - (b.due || 0)).slice(0, 60);
+    if (!list.length) return;
+    session = null;
+    ui.querySelector('.fc-back').hidden = false;
+    if (ctx.track) ctx.track('feature', 'flashcards:listen');
+    let i = 0, stopped = false, wait = 0, skipNow = null;
+    const pause = (ms) => new Promise((r) => { skipNow = r; wait = setTimeout(r, ms); });
+    const show = (c, side) => {
+      body().innerHTML = `<p class="fc-progress">🎧 ${esc(deck)} · card ${i + 1} of ${list.length}</p>
+        <div class="fc-card flipped fc-listening"><span class="fc-side">Question</span><span class="fc-q">${esc(c.f)}</span>${side === 'b' ? `<span class="fc-side">Answer</span><span class="fc-text">${esc(c.b)}</span>` : '<span class="fc-tap">Think of the answer…</span>'}</div>
+        <div class="fc-row"><button type="button" class="fc-btn" data-lstop="1">Stop</button><button type="button" class="fc-btn main" data-lnext="1">Next card</button></div>`;
+    };
+    listening = {
+      stop() { stopped = true; clearTimeout(wait); hush(); if (skipNow) skipNow(); listening = null; },
+      skip() { clearTimeout(wait); hush(); if (skipNow) skipNow(); },
+    };
+    (async () => {
+      for (; i < list.length && !stopped; i++) {
+        const c = list[i];
+        show(c, 'f');
+        const q = say(c.f); if (q) await Promise.race([q.done, new Promise((r) => { skipNow = r; })]);
+        if (stopped) return;
+        await pause(4000);
+        if (stopped) return;
+        show(c, 'b');
+        const a = say(c.b); if (a) await Promise.race([a.done, new Promise((r) => { skipNow = r; })]);
+        if (stopped) return;
+        await pause(1800);
+      }
+      if (!stopped) { listening = null; renderHome('That’s the whole deck. Study it now to lock it in.'); }
+    })();
   }
 
   function open(deck) {
@@ -257,6 +304,8 @@
   }
   function close() {
     if (!ui) return;
+    if (listening) listening.stop();
+    hush();
     ui.hidden = true; session = null;
     document.documentElement.classList.remove('fc-open');
     if (ctx.onChange) ctx.onChange();

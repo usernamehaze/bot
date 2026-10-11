@@ -36,6 +36,10 @@
  *   CLAUDE_EFFORT    how hard Claude thinks: low, medium or high (default medium)
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
  *   TRANSCRIBE_DAILY_LIMIT  voice recordings written down per network per day (default 3000)
+ *   ELEVENLABS_API_KEY  (secret) Cassie's studio voice: reads answers, quizzes and flashcards aloud
+ *   SPEAK_DAILY_CHARS   characters of studio voice per student per day (default 3000)
+ *   SPEAK_MONTHLY_CHARS characters of studio voice for the whole app per month (default 9500)
+ *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
  *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
@@ -139,7 +143,7 @@ const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
 const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
 // A per-network speed limit for everything that writes to the database, so nobody can flood it.
 // (Counted per Worker instance, so it's a guard rail, not an exact number.)
-const SPEED = { '/e': 400, '/f': 100, '/scores/': 200, '/room/create': 30, '/room': 3000, '/auth/': 200, '/transcribe': 300, '/image': 100 };
+const SPEED = { '/e': 400, '/f': 100, '/scores/': 200, '/room/create': 30, '/room': 3000, '/auth/': 200, '/transcribe': 300, '/image': 100, '/speak': 240 };
 function tooFast(request, path) {
   const rule = Object.keys(SPEED).find((p) => (p.endsWith('/') ? path.startsWith(p) : path === p || path.startsWith(p + '/')));
   if (!rule) return false;
@@ -650,12 +654,70 @@ async function feedback(request, env) {
   return new Response(null, { status: 204, headers: h });
 }
 
+/* ------------------------------------------------------------------ Cassie's studio voice */
+// Reads text aloud with ElevenLabs when the secret ELEVENLABS_API_KEY is set (Cloudflare → the
+// worker → Settings → Variables and Secrets; never in the app). GET /speak says whether it's on;
+// POST /speak { text, voice: 'woman' | 'man', uid } answers with an MP3.
+// Credits cost money, so: each student gets SPEAK_DAILY_CHARS a day (default 3000), the whole app
+// SPEAK_MONTHLY_CHARS a month (default 9500, under ElevenLabs' free 10,000), and the same words
+// (a flashcard, a quiz question) are kept in Cloudflare's cache for 30 days, so they're paid for
+// once. When it's off or used up, the app speaks with Bella or the device's voice instead.
+const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
+const ELEVEN_VOICES = { woman: 'EXAVITQu4vr4xnSDxMaL', man: 'JBFqnCBsd6RMkjVDRZzb' }; // Sarah, George (ElevenLabs' own voices)
+async function speak(request, env, ctx) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  if (request.method === 'GET') return json({ on: !!env.ELEVENLABS_API_KEY }, 200, h);
+  if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
+  if (!env.ELEVENLABS_API_KEY) return chatError('Cassie’s studio voice isn’t set up.', 503, h, { 'x-speak': 'off' });
+  let b; try { b = await request.json(); } catch (e) { return chatError('bad json', 400, h); }
+  const text = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 700);
+  if (!text) return chatError('Nothing to say.', 400, h);
+  const uid = /^[\w-]{8,64}$/.test(String(b.uid || '')) ? String(b.uid) : 'anon';
+  const voice = b.voice === 'man' ? (env.ELEVENLABS_VOICE_MAN || ELEVEN_VOICES.man) : (env.ELEVENLABS_VOICE_WOMAN || ELEVEN_VOICES.woman);
+  const model = env.ELEVENLABS_MODEL || 'eleven_flash_v2_5';
+  const audio = (body, extra = {}) => new Response(body, { status: 200, headers: { ...h, 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400', ...extra } });
+  // said before? then it's free
+  const key = new Request('https://speak.cassie/' + (await sha256(`${voice}|${model}|${text}`)));
+  const cache = caches.default;
+  const hit = await cache.match(key);
+  if (hit) return audio(hit.body, { 'x-speak': 'cache' });
+  const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
+  if (env.DB) {
+    await ensureSchema(env.DB);
+    const add = (k, d) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, ?3)
+      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + ?3 ELSE ?3 END, day = ?2 RETURNING n`).bind(k, d, text.length).first();
+    const [mine, all] = await Promise.all([add('sp:' + uid, day), add('SP:month', month)]);
+    if (all && all.n > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
+    if (mine && mine.n > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today — Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
+  }
+  let r;
+  try {
+    r = await fetch(`${ELEVEN}/${voice}?output_format=mp3_44100_64`, {
+      method: 'POST', headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: model, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }), signal: AbortSignal.timeout(20000),
+    });
+  } catch (e) { ctx.waitUntil(logProblem(env, 'voice: elevenlabs', String(e.message || e)).catch(() => {})); return chatError('The studio voice didn’t answer.', 502, h); }
+  if (!r.ok) {
+    let m = ''; try { m = JSON.stringify(await r.json()).slice(0, 300); } catch (e) { /* not JSON */ }
+    ctx.waitUntil(logProblem(env, 'voice: elevenlabs', `${r.status} ${m}`).catch(() => {}));
+    return chatError('The studio voice didn’t work just now.', 502, h, { 'x-speak': 'error' });
+  }
+  const buf = await r.arrayBuffer();
+  ctx.waitUntil(cache.put(key, new Response(buf, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=2592000' } })));
+  ctx.waitUntil(countChat(env, day, 'speak').catch(() => {}));
+  return audio(buf, { 'x-speak': 'new' });
+}
+
 /* ------------------------------------------------------------------ live board rooms */
 // A study room is a shared drawing board. Someone creates it and gets a 6-letter code; up
 // to ROOM_MAX classmates join with the code (or the link) and everyone's strokes appear on
 // everyone's board. Clients send their strokes and ask for new ones about once a second.
 // Rooms and their drawings are deleted after a day. Only drawings are shared — no chat.
 const ROOM_MAX = 12, ROOM_HOURS = 24, ROOM_OPS_MAX = 6000, ROOM_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// studying together in a room (app.js / study-room.js): chat, Cassie's answers shared with the
+// group, shared flashcards, a group quiz, pinned notes and a shared timer — steps like the drawing's
+const STUDY_OPS = ['msg', 'share', 'deck', 'card', 'grade', 'quiz', 'ans', 'note', 'unnote', 'timer'];
 async function room(request, env, url) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -674,8 +736,8 @@ async function room(request, env, url) {
     if (!(await live(code))) return json({ error: 'This room has ended.', gone: true }, 404, h);
     // "I'm still here" at most every 10 s (a write only when it's due)
     await db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000).run();
-    const rows = (await db.prepare('SELECT id, uid, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since).all()).results || [];
-    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, op: JSON.parse(r.op) })), members: await members(code), more: rows.length === 400 }, 200, h);
+    const rows = (await db.prepare('SELECT id, uid, ts, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since).all()).results || [];
+    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, ts: r.ts, op: JSON.parse(r.op) })), members: await members(code), more: rows.length === 400, now }, 200, h);
   }
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   const text = await request.text();
@@ -725,9 +787,9 @@ async function room(request, env, url) {
     if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full — save it and start a new room.', full: true }, 409, h);
     const rows = [];
     for (const op of ops) {
-      if (!op || !['add', 'del', 'clearmine'].includes(op.t)) continue;
+      if (!op || !(['add', 'del', 'clearmine'].includes(op.t) || STUDY_OPS.includes(op.t))) continue;
       const t = JSON.stringify(op);
-      if (t.length > 60000) continue; // one huge stroke is dropped, not the room
+      if (t.length > (STUDY_OPS.includes(op.t) ? 24000 : 60000)) continue; // one huge step is dropped, not the room
       rows.push(db.prepare('INSERT INTO room_ops (code, uid, ts, op) VALUES (?, ?, ?, ?)').bind(code, uid, now, t));
     }
     if (rows.length) await db.batch(rows);
@@ -1077,6 +1139,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/transcribe') return await transcribe(request, env, ctx);
+      if (url.pathname === '/speak') return await speak(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);

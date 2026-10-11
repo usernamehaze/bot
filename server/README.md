@@ -148,6 +148,35 @@ a photo question costs a little more. Check current prices at
 anthropic.com/pricing. Watch the Claude row on your dashboard and the spending
 page in the Anthropic console.
 
+## Give Cassie a studio voice with ElevenLabs (optional, can cost money)
+
+With this on, Cassie reads answers, quiz questions, flashcards and the 3D explorers'
+part cards aloud in an ElevenLabs voice, the most natural one she has, and Talk with
+Cassie uses it too. When it's off, used up or offline, she reads with Bella (made on the
+student's own device) or the device's voice, so students never lose the read-aloud.
+
+1. Go to **elevenlabs.io**, sign up, and open **Developers → API Keys** → create a key.
+   Give it only **Text to Speech** access.
+2. In this Worker → **Settings** → **Variables and Secrets** → **Add** → type
+   **Secret**, name `ELEVENLABS_API_KEY`, paste the key → **Deploy**.
+
+The app notices the next time it opens. Never put the key in the app or send it in a chat.
+
+Optional variables (type **Text**):
+
+- `SPEAK_DAILY_CHARS`: characters each student can hear per day (default 3000, about
+  3 minutes of reading). After that, Bella reads.
+- `SPEAK_MONTHLY_CHARS`: characters for the whole app per month (default 9500, just under
+  ElevenLabs' free plan). Raise it to match your plan (for example 28000 on Starter).
+- `ELEVENLABS_VOICE_WOMAN` / `ELEVENLABS_VOICE_MAN`: voice IDs from your ElevenLabs
+  voice library (defaults: Sarah and George).
+- `ELEVENLABS_MODEL`: default `eleven_flash_v2_5` (fast, and about half the credits of
+  the top model).
+
+**Cost:** ElevenLabs charges by the character. The same words (a flashcard, a quiz
+question) are remembered for 30 days, so they're only paid for once. Check current plans
+at elevenlabs.io/pricing.
+
 ## The iPhone "Ask Cassie" Shortcut
 
 `GET /ask?text=…` returns a short plain-text answer. The iPhone Shortcut (steps in
