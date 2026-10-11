@@ -2347,6 +2347,36 @@ test('attach a PDF and Cassie reads it', async (b) => {
   await ctx.close();
 });
 
+test('chat: many photos and files at once — every one is read (photo by photo, file by file), nothing is dropped', async (b) => {
+  const fake = (body) => {
+    const t = JSON.stringify(body.messages);
+    const m = t.match(/This is photo (\d+) of (\d+)/);
+    if (m) return { text: `**Text in the photo**\nPHOTO-${m[1]}-TEXT` };
+    const marks = t.match(/PHOTO-\d+-TEXT|FILE-[AB]-TEXT/g) || [];
+    return { text: marks.length ? 'All read: ' + [...new Set(marks)].join(', ') : 'ok' };
+  };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test' } });
+  const photo = (n) => ({ name: `page${n}.png`, mimeType: 'image/png', buffer: PNG });
+  await page.setInputFiles('#file-input', [photo(1), photo(2), photo(3), { name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('FILE-A-TEXT: osmosis is water moving across a membrane.') }, { name: 'b.txt', mimeType: 'text/plain', buffer: Buffer.from('FILE-B-TEXT: diffusion spreads particles out.') }]);
+  await page.waitForFunction(() => document.querySelectorAll('.att.att-ready').length === 5, null, { timeout: 10000 });
+  expect(/3 photos · 2 files/.test(await page.locator('#att-count').innerText()), 'all five are attached (the second photo doesn’t replace the first)');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/attach-many.png' });
+  // take one photo out
+  await page.locator('.att-image .att-x').nth(1).click();
+  expect(/2 photos · 2 files/.test(await page.locator('#att-count').innerText()), 'one photo removed');
+  const a = await ask(page, 'Make a reviewer of all of these');
+  const t = await a.textContent();
+  expect(['PHOTO-1-TEXT', 'PHOTO-2-TEXT', 'FILE-A-TEXT', 'FILE-B-TEXT'].every((x) => t.includes(x)), 'every photo and file reached the answer: ' + t);
+  expect(await page.locator('#chat-log .bubble-user').last().locator('img.chat-img').count() === 2, 'both photos show in the message');
+  expect(await page.locator('#attach-preview').isHidden(), 'the attachments are cleared after sending');
+  // at most 15 photos at a time
+  await page.setInputFiles('#file-input', Array.from({ length: 16 }, (_, i) => photo(i + 1)));
+  await page.waitForFunction(() => document.querySelectorAll('.att.att-ready').length === 15 && document.querySelectorAll('.att.att-error').length === 1, null, { timeout: 15000 });
+  expect(/Up to 15 photos/.test(await page.locator('.att.att-error').innerText()), 'the 16th photo says why');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('phones: open a PDF in Read & highlight, select words → Explain', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Condensation is when water vapour cools into droplets.' }) });
   const pdf = await page.evaluate(async () => {
@@ -2354,8 +2384,8 @@ test('phones: open a PDF in Read & highlight, select words → Explain', async (
     const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
   });
   await page.setInputFiles('#file-input', { name: 'water.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
-  await page.waitForSelector('#attach-read:not([hidden])', { timeout: 10000 });
-  await page.click('#attach-read');
+  await page.waitForSelector('.att-read', { timeout: 10000 });
+  await page.click('.att-read');
   await page.waitForSelector('#reader:not([hidden]) .reader-page', { timeout: 5000 });
   expect(/Page 1/i.test(await page.locator('#reader .reader-label').first().textContent()), 'pages are labelled');
   const para = page.locator('#reader-body p', { hasText: 'condensation' }).first();
@@ -2754,7 +2784,8 @@ test('Android: Share → Cassie (text and a screenshot) opens the app with it', 
   expect(/example\.com/.test(await page.locator('.share-from').textContent()), 'where it came from');
   await share({ text: '', title: '', url: '' }, { name: 'screenshot.png', type: 'image/png', b64: PNG.toString('base64') });
   await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
-  expect(await page.locator('#attach-thumb').isVisible(), 'the shared screenshot is attached, ready to ask about');
+  await page.waitForSelector('.att-image img', { timeout: 10000 });
+  expect(await page.locator('.att-image img').isVisible(), 'the shared screenshot is attached, ready to ask about');
   await ctx.close();
 });
 
@@ -3046,7 +3077,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     const app = await appOpened;
     // the tab the extension opens starts loading before the test can serve it: load it again (the file waits for this tab)
     if (!/askcassie/.test(app.url()) || !(await app.locator('#chat-log').count())) await app.goto('https://askcassie.pages.dev/app.html');
-    try { await app.waitForSelector('#chat-log .bubble-assistant >> text=water evaporates', { timeout: 20000 }); } catch (e) { throw new Error('app url ' + app.url() + ' pages ' + ctx.pages().map((x) => x.url()).join(',') + ' app chat: ' + (await app.locator('#chat-log').innerText({ timeout: 2000 }).catch(() => '-')).slice(0, 600) + ' | url ' + app.url() + ' | calls ' + groqCalls.length + ' | attach ' + await app.locator('#attach-name').innerText().catch(() => '?')); }
+    try { await app.waitForSelector('#chat-log .bubble-assistant >> text=water evaporates', { timeout: 20000 }); } catch (e) { throw new Error('app url ' + app.url() + ' pages ' + ctx.pages().map((x) => x.url()).join(',') + ' app chat: ' + (await app.locator('#chat-log').innerText({ timeout: 2000 }).catch(() => '-')).slice(0, 600) + ' | url ' + app.url() + ' | calls ' + groqCalls.length + ' | attach ' + await app.locator('#attach-preview').innerText().catch(() => '?')); }
     expect(groqCalls.some((b) => /condensation/i.test(b) && /Summarize this file/.test(b)), 'the app should read the dropped PDF and summarize it');
     await page.bringToFront();
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 5000 });

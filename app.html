@@ -156,10 +156,9 @@
   </div>
 
   <div id="attach-preview" class="attach-preview" hidden>
-    <img id="attach-thumb" alt="attached image">
-    <span id="attach-name" hidden></span>
-    <button type="button" id="attach-read" class="attach-read" hidden title="Read the file here and highlight any part of it">📖 Read &amp; highlight</button>
-    <button type="button" id="attach-remove" title="Remove attachment" aria-label="Remove attachment">&times;</button>
+    <div id="att-strip" class="att-strip" aria-label="Attached photos and files"></div>
+    <span id="att-count" class="att-count" aria-live="polite"></span>
+    <button type="button" id="attach-remove" title="Remove all" aria-label="Remove all attachments">&times;</button>
   </div>
 
   <div id="quick-actions" class="quick-actions">
@@ -190,7 +189,7 @@
   </div>
 
   <form id="composer" class="composer">
-    <input type="file" id="file-input" accept="image/*,.heic,.heif,.pdf,.docx,.pptx,.txt,.md,.doc,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+    <input type="file" id="file-input" multiple accept="image/*,.heic,.heif,.pdf,.docx,.pptx,.txt,.md,.doc,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
     <textarea id="prompt-input" rows="1" placeholder="Ask Cassie a question…" autocomplete="off"></textarea>
     <div class="composer-row">
       <button type="button" id="model-pill" class="model-pill" title="Change model & level in Settings">
