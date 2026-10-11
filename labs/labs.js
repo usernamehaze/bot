@@ -56,7 +56,7 @@ function createView() {
   // the labs' own look loads with them (the app stays light until Labs is opened)
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=5', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=6', import.meta.url).href; css.dataset.labsCss = '1';
     document.head.appendChild(css);
   }
   const root = el('div', 'labs');

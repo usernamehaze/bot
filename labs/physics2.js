@@ -3,6 +3,7 @@
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, at, clock, group, slider, seg, button, row, stats, line, dot, text, arrow, overlay } from './kit.js';
 import { NAMES as COLOUR_NAMES, nameColour, describeColour } from './colornames.js';
 import { webglOk } from './three-kit.js';
+import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Colour ---------------- */
 const hex2 = (v) => Math.round(v).toString(16).padStart(2, '0');
@@ -167,32 +168,52 @@ const magnetLab = {
       }
       return pts;
     }
-    const cv = canvas(stage, (ctx, w, h) => {
-      W = w; H = h;
-      if (!placed) { mags[0].x = w * 0.42; mags[0].y = h * 0.5; compass.x = w * 0.75; compass.y = h * 0.3; placed = true; }
-      if (view !== 'lines') {
+    // the field itself: lines, arrows or iron filings — on the dark screen, or (3D) on a sheet of paper
+    let filings = null, ver = 0;
+    function drawField(ctx, w, h, look = 'dark') {
+      const paper = look === 'paper';
+      if (view === 'arrows' || view === 'both') {
         for (let x = 18; x < w; x += 34) for (let y = 18; y < h; y += 34) {
           const [bx, by] = B(x, y), m = Math.hypot(bx, by); if (m < 1e-6) continue;
           const a = Math.min(1, 0.15 + Math.log10(1 + m * 400) * 0.35);
-          arrow(ctx, x - (bx / m) * 9, y - (by / m) * 9, x + (bx / m) * 9, y + (by / m) * 9, `rgba(242,242,244,${a})`, 1.2);
+          arrow(ctx, x - (bx / m) * 9, y - (by / m) * 9, x + (bx / m) * 9, y + (by / m) * 9, paper ? `rgba(28,30,38,${a})` : `rgba(242,242,244,${a})`, 1.2);
         }
       }
-      if (view !== 'arrows') {
+      if (view === 'filings') {
+        if (!filings || filings.w !== w || filings.h !== h) { let sd = 7; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647); filings = { w, h, pts: Array.from({ length: Math.round((w * h) / 90) }, () => [r() * w, r() * h, 3 + r() * 4]) }; }
+        ctx.lineCap = 'round';
+        for (const [x, y, l] of filings.pts) {
+          if (mags.some((m) => inMagnet(m, { x, y }))) continue;
+          const [bx, by] = B(x, y), m = Math.hypot(bx, by); if (m < 1e-7) continue;
+          const a = Math.min(0.95, 0.12 + Math.log10(1 + m * 600) * 0.45), ux = (bx / m) * l, uy = (by / m) * l;
+          ctx.strokeStyle = paper ? `rgba(40,40,44,${a})` : `rgba(210,210,216,${a})`; ctx.lineWidth = paper ? 1.3 : 1.1;
+          ctx.beginPath(); ctx.moveTo(x - ux / 2, y - uy / 2); ctx.lineTo(x + ux / 2, y + uy / 2); ctx.stroke();
+        }
+      }
+      if (view === 'lines' || view === 'both') {
         ctx.lineWidth = 1.3;
         const allS = mags.flatMap((m) => poles(m).filter((p) => p.q < 0));
         for (const m of mags) {
           const n = poles(m)[0];
           for (let k = 0; k < 14; k++) {
             const a = (k / 14) * Math.PI * 2, pts = trace(n.x + Math.cos(a) * 8, n.y + Math.sin(a) * 8, 1, (x, y) => allS.some((s) => Math.hypot(x - s.x, y - s.y) < 8));
-            line(ctx, pts, 'rgba(127,178,255,.55)', 1.3);
+            line(ctx, pts, paper ? 'rgba(40,80,190,.9)' : 'rgba(127,178,255,.55)', paper ? 2.2 : 1.3);
           }
         }
         for (const wi of wires) for (const r of [26, 52, 90, 140]) {
           const sx = wi.x + r, sy = wi.y;
           const pts = trace(sx, sy, 1, (x, y, i) => i > 20 && Math.hypot(x - sx, y - sy) < 5);
-          line(ctx, pts, 'rgba(255,207,90,.5)', 1.3);
+          line(ctx, pts, paper ? 'rgba(190,110,20,.9)' : 'rgba(255,207,90,.5)', paper ? 2.2 : 1.3);
         }
       }
+      if (paper) for (const wi of wires) { ctx.fillStyle = 'rgba(20,20,24,.55)'; ctx.beginPath(); ctx.arc(wi.x, wi.y, 9, 0, Math.PI * 2); ctx.fill(); }
+    }
+    let V = null;
+    const cv = canvas(stage, (ctx, w, h) => {
+      W = w; H = h;
+      if (!placed) { mags[0].x = w * 0.42; mags[0].y = h * 0.5; compass.x = w * 0.75; compass.y = h * 0.3; placed = true; }
+      if (V && V.scene && V.scene.update) { V.scene.update({ mags, wires, compass, ML, MW, ver, B, drawField }); return; }
+      drawField(ctx, w, h);
       // the magnets
       for (const m of mags) {
         ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.a);
@@ -234,10 +255,12 @@ const magnetLab = {
     button(ov, '+ Magnet', () => { if (mags.length < 4) { mags.push({ x: W * (0.3 + 0.15 * mags.length), y: H * 0.7, a: 0 }); report(); } });
     button(ov, '+ Wire', () => { if (wires.length < 4) { wires.push({ x: W * (0.25 + 0.17 * wires.length), y: H * 0.25, I: 1 }); report(); } });
     button(ov, 'Clear', () => { mags.length = 0; wires.length = 0; report(); });
-    seg(group(panel, 'Show'), { options: [['lines', 'Field lines'], ['arrows', 'Arrows'], ['both', 'Both']], value: view, onChange: (v) => { view = v; cv.redraw(); } });
+    seg(group(panel, 'Show'), { options: [['lines', 'Field lines'], ['arrows', 'Arrows'], ['both', 'Both'], ['filings', 'Iron filings']], value: view, onChange: (v) => { view = v; ver++; cv.redraw(); } });
     panel.appendChild(el('p', 'lab-note', 'Drag magnets, wires and the compass. Tap a magnet to turn it 45°. Tap a wire to flip its current: ⊙ comes out of the screen, ⊗ goes in.'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B3) => import('./phys3d.js').then((mod) => mod.magnets3d(B3)), { plane: 'table', pitch: 60, minPitch: 30 });
     function report() {
+      ver++;
       const [bx, by] = B(compass.x, compass.y), deg = Math.round((Math.atan2(-by, bx) * 180) / Math.PI);
       st.set([['Magnets', String(mags.length)], ['Wires', wires.map((w) => (w.I > 0 ? '⊙ out' : '⊗ in')).join(', ') || 'none'], ['Compass points', `${(deg + 360) % 360}° (0° = right, 90° = up)`]]);
       for (const a of mags) for (const b of mags) if (a !== b) { const na = poles(a)[0], sb = poles(b)[1]; if (Math.hypot(na.x - sb.x, na.y - sb.y) < 70) api.check(0); }
@@ -246,7 +269,7 @@ const magnetLab = {
       cv.redraw();
     }
     report();
-    return { state: () => `${mags.length} bar magnet(s) and ${wires.length} wire(s) (${wires.map((w) => (w.I > 0 ? 'current out of the screen' : 'current into the screen')).join(', ') || 'no wires'}); the compass needle points ${(Math.round((Math.atan2(-B(compass.x, compass.y)[1], B(compass.x, compass.y)[0]) * 180) / Math.PI) + 360) % 360}° (0° = right)`, destroy: () => cv.destroy() };
+    return { state: () => `${mags.length} bar magnet(s) and ${wires.length} wire(s) (${wires.map((w) => (w.I > 0 ? 'current out of the screen' : 'current into the screen')).join(', ') || 'no wires'}); the compass needle points ${(Math.round((Math.atan2(-B(compass.x, compass.y)[1], B(compass.x, compass.y)[0]) * 180) / Math.PI) + 360) % 360}° (0° = right)`, destroy: () => { V.destroy(); cv.destroy(); } };
   },
 };
 
@@ -269,18 +292,42 @@ const opticsLab = {
       const v = 1 / (1 / F - 1 / u);
       return { F, v, m: -v / u };
     };
-    let geom = null;
+    let geom = null, V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const k = calc(), mirror = KINDS[kind][2], ax = h * 0.56, ox = mirror ? w * 0.64 : w * 0.5;
       const s = Math.min((ox - 24) / 62, (h * 0.42) / 12);
       const X = (x) => ox + x * s, Y = (y) => ax - y * s;
       geom = { X, Y, s, ox, ax };
-      line(ctx, [[0, ax], [w, ax]], DIM, 1);
-      // F and 2F marks (C for mirrors)
-      const marks = mirror ? [[-k.F, 'F'], [-2 * k.F, 'C']] : [[k.F, 'F'], [-k.F, 'F'], [2 * k.F, '2F'], [-2 * k.F, '2F']];
-      marks.forEach(([x, n]) => { if (X(x) > 4 && X(x) < w - 4) { dot(ctx, X(x), ax, 3.5, INK); text(ctx, n, X(x), ax + 18, DIM, 'center'); } });
-      // the lens or mirror
       const hh = h * 0.36;
+      // F and 2F marks (C for mirrors)
+      const marks = (mirror ? [[-k.F, 'F'], [-2 * k.F, 'C']] : [[k.F, 'F'], [-k.F, 'F'], [2 * k.F, '2F'], [-2 * k.F, '2F']]).filter(([x]) => X(x) > 4 && X(x) < w - 4);
+      // three principal rays from the object's tip, each heading to the image (or away from a virtual one)
+      const hi = k.m * ho, real = k.v > 0 && Number.isFinite(k.v);
+      const ix = mirror ? -k.v : k.v; // where the image is, along the bench
+      const hits = [ho, 0, Number.isFinite(k.v) ? (-k.F * ho) / (u - k.F) : ho * 0];
+      const segs = [];
+      hits.forEach((yl, i) => {
+        if (!Number.isFinite(k.v) && i === 2) return; // (at F that ray never reaches the lens)
+        const col = ['rgba(255,122,122,.9)', 'rgba(127,224,168,.9)', 'rgba(196,160,255,.9)'][i], hex = ['#ff7a7a', '#7fe0a8', '#c4a0ff'][i];
+        segs.push({ a: [X(-u), Y(ho)], b: [X(0), Y(yl)], col, hex });
+        let dx, dy;
+        if (!Number.isFinite(k.v)) { dx = mirror ? -k.F : k.F; dy = -ho; } // object at F: every ray leaves parallel
+        else if (real) { dx = ix - 0; dy = hi - yl; }
+        else { dx = 0 - ix; dy = yl - hi; }
+        const len = 400 / Math.max(1e-6, Math.hypot(dx, dy));
+        segs.push({ a: [X(0), Y(yl)], b: [X(0 + dx * len), Y(yl + dy * len)], col, hex });
+        if (!real && Number.isFinite(k.v)) segs.push({ a: [X(0), Y(yl)], b: [X(ix), Y(hi)], col: col.replace('.9', '.45'), hex, dashed: true });
+      });
+      const showImage = Number.isFinite(k.v) && Math.abs(hi) < 60;
+      const note = showImage ? '' : Number.isFinite(k.v) ? 'The image is very far away' : 'At F: the rays come out parallel — no image forms';
+      if (V && V.scene && V.scene.update) {
+        // in 3D: a real lens (or mirror) on an optical bench, with light rays
+        V.scene.update({ X, Y, ax, ox, hh, w, h, kind, mirror, u, ho, hi, ix, real, showImage, note, marks, segs: segs.map((g) => ({ ...g, col: g.hex })) });
+        return;
+      }
+      line(ctx, [[0, ax], [w, ax]], DIM, 1);
+      marks.forEach(([x, n]) => { dot(ctx, X(x), ax, 3.5, INK); text(ctx, n, X(x), ax + 18, DIM, 'center'); });
+      // the lens or mirror
       if (mirror) {
         const bulge = kind === 'cmirror' ? 10 : -10;
         ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(ox + bulge, ax - hh); ctx.quadraticCurveTo(ox - bulge, ax, ox + bulge, ax + hh); ctx.stroke();
@@ -293,28 +340,13 @@ const opticsLab = {
       }
       // the object: an upright arrow
       arrow(ctx, X(-u), ax, X(-u), Y(ho), C.gold, 3);
-      // three principal rays from the object's tip, each heading to the image (or away from a virtual one)
-      const hi = k.m * ho, real = k.v > 0 && Number.isFinite(k.v);
-      const ix = mirror ? -k.v : k.v; // where the image is, along the bench
-      const hits = [ho, 0, Number.isFinite(k.v) ? (-k.F * ho) / (u - k.F) : ho * 0];
-      hits.forEach((yl, i) => {
-        if (!Number.isFinite(k.v) && i === 2) return; // (at F that ray never reaches the lens)
-        const col = ['rgba(255,122,122,.9)', 'rgba(127,224,168,.9)', 'rgba(196,160,255,.9)'][i];
-        line(ctx, [[X(-u), Y(ho)], [X(0), Y(yl)]], col, 1.6);
-        let dx, dy;
-        if (!Number.isFinite(k.v)) { dx = mirror ? -k.F : k.F; dy = -ho; } // object at F: every ray leaves parallel
-        else if (real) { dx = ix - 0; dy = hi - yl; }
-        else { dx = 0 - ix; dy = yl - hi; }
-        const len = 400 / Math.max(1e-6, Math.hypot(dx, dy));
-        line(ctx, [[X(0), Y(yl)], [X(0 + dx * len), Y(yl + dy * len)]], col, 1.6);
-        if (!real && Number.isFinite(k.v)) { ctx.setLineDash([4, 4]); line(ctx, [[X(0), Y(yl)], [X(ix), Y(hi)]], col.replace('.9', '.45'), 1.2); ctx.setLineDash([]); }
-      });
-      if (Number.isFinite(k.v) && Math.abs(hi) < 60) { if (!real) ctx.setLineDash([5, 4]); arrow(ctx, X(ix), ax, X(ix), Y(hi), C.blue, 3); ctx.setLineDash([]); text(ctx, real ? 'image (real)' : 'image (virtual)', X(ix), Y(hi) + (hi > 0 ? -10 : 18), C.blue, 'center'); }
-      else text(ctx, Number.isFinite(k.v) ? 'The image is very far away' : 'At F: the rays come out parallel — no image forms', w / 2, 24, C.blue, 'center');
+      segs.forEach((g) => { if (g.dashed) ctx.setLineDash([4, 4]); line(ctx, [g.a, g.b], g.col, g.dashed ? 1.2 : 1.6); ctx.setLineDash([]); });
+      if (showImage) { if (!real) ctx.setLineDash([5, 4]); arrow(ctx, X(ix), ax, X(ix), Y(hi), C.blue, 3); ctx.setLineDash([]); text(ctx, real ? 'image (real)' : 'image (virtual)', X(ix), Y(hi) + (hi > 0 ? -10 : 18), C.blue, 'center'); }
+      else text(ctx, note, w / 2, 24, C.blue, 'center');
       text(ctx, 'object', X(-u), ax + 18, C.gold, 'center');
     });
     drag(cv.c, {
-      down(p) { if (!geom) return false; move(p); },
+      down(p) { if (!geom) return false; if (V && V.on && p.x > geom.ox - 10) return false; move(p); },
       move,
     });
     function move(p) {
@@ -329,6 +361,7 @@ const opticsLab = {
     const uS = slider(g, { label: 'Object distance', min: 2, max: 60, step: 0.5, value: u, fmt: (x) => x + ' cm', onInput: (x) => { u = x; report(); } });
     panel.appendChild(el('p', 'lab-note', 'Drag on the picture to move the object (and drag up or down to change its height).'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.optics3d(B)), { pitch: 8 });
     function report() {
       const k = calc(), mirror = KINDS[kind][2];
       if (!Number.isFinite(k.v)) st.set([['Image', 'none — the object is at the focal point']]);
@@ -342,7 +375,7 @@ const opticsLab = {
       cv.redraw();
     }
     report();
-    return { state: () => { const k = calc(); return `a ${KINDS[kind][0].toLowerCase()} with focal length ${f} cm and the object ${u} cm away (${ho} cm tall): ${Number.isFinite(k.v) ? `the image is ${num(Math.abs(k.v))} cm away, ${k.v > 0 ? 'real' : 'virtual'}, magnification ${num(k.m)}` : 'no image forms (object at the focal point)'}`; }, destroy: () => cv.destroy() };
+    return { state: () => { const k = calc(); return `a ${KINDS[kind][0].toLowerCase()} with focal length ${f} cm and the object ${u} cm away (${ho} cm tall): ${Number.isFinite(k.v) ? `the image is ${num(Math.abs(k.v))} cm away, ${k.v > 0 ? 'real' : 'virtual'}, magnification ${num(k.m)}` : 'no image forms (object at the focal point)'}`; }, destroy: () => { V.destroy(); cv.destroy(); } };
   },
 };
 

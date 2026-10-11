@@ -1,6 +1,7 @@
 /* Chemistry labs: balance an equation yourself (Cassie checks every atom), mix acid and
    base and watch the pH, and build an atom from protons, neutrons and electrons. */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, drag, group, slider, seg, button, row, stats, stepper, line, dot, text, arrow, gcd, overlay } from './kit.js';
+import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Balancing equations ---------------- */
 // "Ca(OH)2" → { Ca: 1, O: 2, H: 2 }; also [ ], hydrates (CuSO4·5H2O) and leading numbers
@@ -182,7 +183,7 @@ const phLab = {
     };
     // the acid and base bottles: tap one for a drop, or drag it over the beaker and hold to pour
     const bottles = { acid: { home: null, at: null, color: '#ff8c78', label: 'acid' }, base: { home: null, at: null, color: '#8caaff', label: 'base' } };
-    let geoB = null, pouring = null, pourT = 0;
+    let geoB = null, pouring = null, pourT = 0, V = null;
     function bottle(ctx, b, tilt) {
       const [x, y] = b.at || b.home;
       ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
@@ -197,15 +198,21 @@ const phLab = {
       const p = pH(), bw = Math.min(170, w * 0.32), bx = 30, by = 110, bh = Math.min(240, h - 170);
       bottles.acid.home = [bx + 22, 40]; bottles.base.home = [bx + bw - 22, 40];
       geoB = { bx, by, bw, bh };
-      ['acid', 'base'].forEach((k) => bottle(ctx, bottles[k], pouring === k ? 1.9 : bottles[k].at ? 0.4 : 0));
       const fill = Math.min(1, (V0 + Va + Vb) / 250);
-      // the beaker
-      ctx.fillStyle = INDICATORS[ind][1](p);
-      ctx.fillRect(bx + 4, by + bh * (1 - fill), bw - 8, bh * fill - 4);
-      ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by - 10); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by - 10); ctx.stroke();
-      for (let k = 1; k <= 4; k++) { const y = by + bh - (bh * k) / 5; line(ctx, [[bx + bw - 16, y], [bx + bw - 4, y]], DIM, 1); text(ctx, k * 50 + ' mL', bx + bw + 6, y + 4, DIM); }
-      if (drop) { dot(ctx, drop.x || bx + bw / 2, by - 30 + drop.t * (bh * (1 - fill) + 20), 6, drop.color); }
-      text(ctx, `pH ${p.toFixed(2)}`, bx + bw / 2, by + bh + 34, INK, 'center');
+      if (V && V.scene && V.scene.update) {
+        // in 3D: a glass beaker and two reagent bottles you can pick up and tip
+        const tilt = (k) => (pouring === k ? 1.9 : bottles[k].at ? 0.4 : 0);
+        V.scene.update({ geo: geoB, fill, pH: p, color: INDICATORS[ind][1](p), bottles: { acid: { ...bottles.acid, tilt: tilt('acid') }, base: { ...bottles.base, tilt: tilt('base') } }, drop: drop ? { x: drop.x || bx + bw / 2, y: by - 30 + drop.t * (bh * (1 - fill) + 20) } : null });
+      } else {
+        ['acid', 'base'].forEach((k) => bottle(ctx, bottles[k], pouring === k ? 1.9 : bottles[k].at ? 0.4 : 0));
+        // the beaker
+        ctx.fillStyle = INDICATORS[ind][1](p);
+        ctx.fillRect(bx + 4, by + bh * (1 - fill), bw - 8, bh * fill - 4);
+        ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by - 10); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by - 10); ctx.stroke();
+        for (let k = 1; k <= 4; k++) { const y = by + bh - (bh * k) / 5; line(ctx, [[bx + bw - 16, y], [bx + bw - 4, y]], DIM, 1); text(ctx, k * 50 + ' mL', bx + bw + 6, y + 4, DIM); }
+        if (drop) { dot(ctx, drop.x || bx + bw / 2, by - 30 + drop.t * (bh * (1 - fill) + 20), 6, drop.color); }
+        text(ctx, `pH ${p.toFixed(2)}`, bx + bw / 2, by + bh + 34, INK, 'center');
+      }
       // the scale, with everyday things
       const sx = bx + bw + 80, sw = 18, sh = h - 60, Y = (v) => 30 + (sh * v) / 14;
       for (let v = 0; v < 14; v += 0.25) { ctx.fillStyle = universal(v); ctx.fillRect(sx, Y(v), sw, sh / 56 + 1); }
@@ -276,8 +283,9 @@ const phLab = {
     button(ov, 'Drip base', () => add(false, 0.05));
     panel.appendChild(el('p', 'lab-note', 'The beaker starts with 50 mL of pure water. A drop is 0.05 mL. Tap a bottle for one drop, or drag it over the beaker to pour (hold it there to pour faster).'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./chem3d.js').then((mod) => mod.ph3d(B)), { pitch: 9 });
     report();
-    return { state: () => `50 mL of water with ${num(Va)} mL of 0.1 M hydrochloric acid and ${num(Vb)} mL of 0.1 M sodium hydroxide added; pH ${pH().toFixed(2)}, using ${INDICATORS[ind][0]} indicator`, destroy: () => { fall.stop(); pourTick.stop(); cv.destroy(); } };
+    return { state: () => `50 mL of water with ${num(Va)} mL of 0.1 M hydrochloric acid and ${num(Vb)} mL of 0.1 M sodium hydroxide added; pH ${pH().toFixed(2)}, using ${INDICATORS[ind][0]} indicator`, destroy: () => { fall.stop(); pourTick.stop(); V.destroy(); cv.destroy(); } };
   },
 };
 
@@ -297,12 +305,13 @@ const atomLab = {
   hints: ['Carbon has 6 protons. “Carbon-12” means protons + neutrons = 12. A neutral atom has as many electrons as protons.', 'Add one more electron than there are protons — the atom gets a negative charge.', 'Oxygen has 8 protons. Oxygen-18 needs 18 − 8 neutrons.'],
   about: 'The number of protons decides the element. Protons + neutrons = the mass number (carbon-12, carbon-14…). Atoms of one element with different numbers of neutrons are isotopes.\nThis is the Bohr model: electrons are drawn in shells holding 2, 8, 8 and then 2 (correct for the first 20 elements, hydrogen to calcium). Real electrons are spread in clouds (orbitals), not neat circles.\n“Stable” means the isotope is not known to decay; calcium-48 does decay, but so slowly (half-life about 6 × 10¹⁹ years) that it is treated as stable. Real ions rarely have charges bigger than about ±3.',
   mount({ stage, panel, api }) {
-    let Z = 6, N = 6, E = 6, spin = 0;
+    let Z = 6, N = 6, E = 6, spin = 0, V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const cx = w * 0.42, cy = h / 2, R = Math.min(w * 0.4, h * 0.45);
       // the shells, with their electrons going round
       const sh = shellsOf(E);
-      sh.forEach((n, i) => {
+      const in3d = !!(V && V.scene && V.scene.update);
+      if (!in3d) sh.forEach((n, i) => {
         const r = R * (0.32 + 0.2 * i);
         ctx.strokeStyle = FAINT; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
         for (let k = 0; k < n; k++) { const a = spin * (1 - i * 0.18) + (k / n) * Math.PI * 2; dot(ctx, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 5, C.blue); }
@@ -312,7 +321,7 @@ const atomLab = {
       const pts = [];
       for (let k = 0; k < total; k++) { const a = k * 2.39996, r = pr * 1.05 * Math.sqrt(k); pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
       // spread protons among the neutrons
-      pts.forEach(([x, y], k) => dot(ctx, x, y, pr, Math.floor(((k + 1) * Z) / Math.max(1, total)) > Math.floor((k * Z) / Math.max(1, total)) ? C.red : '#b8b4aa'));
+      if (!in3d) pts.forEach(([x, y], k) => dot(ctx, x, y, pr, Math.floor(((k + 1) * Z) / Math.max(1, total)) > Math.floor((k * Z) / Math.max(1, total)) ? C.red : '#b8b4aa'));
       // the element's tile
       const el2 = ELEMENTS[Z], tx = w - 130, ty = 24;
       ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(tx, ty, 108, 120);
@@ -323,10 +332,11 @@ const atomLab = {
         const q = Z - E; if (q) text(ctx, (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '−'), tx + 102, ty + 40, C.gold, 'right');
       } else text(ctx, 'no protons', tx + 54, ty + 64, DIM, 'center');
       // the tray: drag a particle into the atom (protons and neutrons into the middle, electrons anywhere round it)
-      tray = [['p', 'proton', C.red], ['n', 'neutron', '#b8b4aa'], ['e', 'electron', C.blue]].map(([k, n2, col], i) => { const x = 24, y = h - 76 + i * 28; dot(ctx, x, y, 10, col); text(ctx, n2, x + 18, y + 4, DIM); return { k, x, y, col }; });
+      tray = [['p', 'proton', C.red], ['n', 'neutron', '#b8b4aa'], ['e', 'electron', C.blue]].map(([k, n2, col], i) => { const x = 24, y = h - 76 + i * 28; if (!in3d) { dot(ctx, x, y, 10, col); text(ctx, n2, x + 18, y + 4, DIM); } return { k, x, y, col }; });
       text(ctx, 'drag into the atom · drag out to remove', 16, h - 96, DIM);
       geoA = { cx, cy, R, nuc: pr * 1.05 * Math.sqrt(Math.max(1, Z + N)) + pr * 1.5, pts, pr, total };
-      if (heldP) { dot(ctx, heldP.x, heldP.y, heldP.k === 'e' ? 6 : pr + 1, heldP.k === 'p' ? C.red : heldP.k === 'n' ? '#b8b4aa' : C.blue); }
+      if (in3d) V.scene.update({ cx, cy, R, Z, N, E, spin, pr, shells: sh, tray, held: heldP });
+      else if (heldP) { dot(ctx, heldP.x, heldP.y, heldP.k === 'e' ? 6 : pr + 1, heldP.k === 'p' ? C.red : heldP.k === 'n' ? '#b8b4aa' : C.blue); }
     });
     let tray = [], geoA = null, heldP = null;
     drag(cv.c, {
@@ -375,10 +385,11 @@ const atomLab = {
     const r1 = row(group(panel, 'Quick builds'), 'lab-chips');
     [['Hydrogen', 1, 0, 1], ['Helium-4', 2, 2, 2], ['Carbon-14', 6, 8, 6], ['Sodium ion Na⁺', 11, 12, 10], ['Chloride Cl⁻', 17, 18, 18], ['Calcium', 20, 20, 20]].forEach(([n, z, nn, e]) => button(r1, n, () => { Z = z; N = nn; E = e; sp.set(z); sn.set(nn); se.set(e); report(); }, 'chip'));
     panel.insertBefore(st.el, null);
+    V = viewSwitch(panel, stage, cv, (B) => import('./chem3d.js').then((mod) => mod.atom3d(B)), { look: 'dark', pitch: 6 });
     report(); tick.start();
     return {
       state: () => { const e = ELEMENTS[Z]; return `${Z} protons, ${N} neutrons and ${E} electrons${e ? `: that's ${e[1].toLowerCase()}-${Z + N}${Z !== E ? `, an ion with charge ${Z - E > 0 ? '+' : ''}${Z - E}` : ''}, and its nucleus is ${e[3].includes(N) ? 'stable' : 'unstable'}` : ''}`; },
-      destroy: () => { tick.stop(); cv.destroy(); },
+      destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },
 };

@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '130';
+const APP_VERSION = '131';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -6100,6 +6100,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs in real 3D: metals fizz in a glass beaker (or burn in steam over a Bunsen burner), you pour from real reagent bottles in the pH mixer, the atom turns in your hand, water molecules move in a box on a hot plate, and the pendulum, cannon, rope, laser, magnets and compass, lenses and Tower of Hanoi are all real things on a bench. Drag an empty spot to look around; “Diagram” brings back the flat drawing.',
+  'The World atlas is now a globe you can spin: tap any country on it (or on the flat map) and its name pops up right there — tap that for its flag, capital and history.',
   'Pictures look like real photos now: Cassie asks for them the way a photographer would (the camera, the lens, the light), so they come out natural instead of glossy or computer-made. Ask for a cartoon, a poster or a labelled diagram and you still get exactly that.',
   'Listen: every answer, quiz question and 3D part card has a 🔊 Listen button, and flashcards can be read to you — one at a time, automatically, or hands-free with 🎧 Listen (the question, a moment to think, then the answer).',
   'Study together: in a study room, open 📚 Study together — chat with your group, ask Cassie for everyone, study shared flashcards together, take a group quiz with a live score board, pin notes, and run a focus timer for the whole room.',

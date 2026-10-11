@@ -4,7 +4,8 @@
    Country facts: the world-countries data (ODbL) and World Bank population figures (CC BY 4.0),
    kept with the app so they work offline; the newest population and the history come live from
    the World Bank and Wikipedia when you're online. Flags: flag-icons (MIT). */
-import { el, esc, num, canvas, drag, at, group, button, row, overlay, text, dot, line, C, INK, DIM } from './kit.js';
+import { el, esc, num, canvas, drag, at, group, seg, button, row, overlay, text, dot, line, C, INK, DIM } from './kit.js';
+import { webglOk } from './three-kit.js';
 import { loadWorld, naturalEarth, FULL_NAMES } from './puzzles.js';
 
 let dataP = null;
@@ -48,6 +49,11 @@ export const atlasLab = {
   mount({ stage, panel, api }) {
     let data = [], world = null, sel = null, place = null, vk = 1, vx = 0, vy = 0, proj = null;
     const byN3 = new Map(), byC3 = new Map();
+    // the globe (3D) or the flat map
+    let G = null, globeOn = webglOk() && !/[?&]flat\b/.test(location.search), gBusy = false, dead = false;
+    const vg = group(panel, 'View');
+    seg(vg, { options: [['globe', 'Globe 3D'], ['map', 'Flat map']], value: globeOn ? 'globe' : 'map', onChange: (v) => { globeOn = v === 'globe'; showView(); } });
+    if (!webglOk()) vg.hidden = true;
     // search
     const sg = group(panel, 'Search');
     const form = el('form', 'atlas-search');
@@ -55,7 +61,11 @@ export const atlasLab = {
     sg.appendChild(form);
     const input = form.querySelector('input'), sugg = el('div', 'atlas-sugg'); sg.appendChild(sugg);
     const card = el('div', 'atlas-card'); panel.appendChild(card);
-    card.innerHTML = '<p class="lab-note">Tap a country on the map, or search for one. Drag to move the map; pinch or scroll to zoom.</p>';
+    const peek = el('button', 'atlas-peek'); peek.type = 'button'; peek.hidden = true;
+    peek.addEventListener('click', () => card.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    stage.appendChild(peek);
+    const showPeek = (flag, name, sub) => { peek.hidden = false; peek.innerHTML = `${flag ? `<img src="${flag}" alt="">` : ''}<span><b>${esc(name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><i>Facts ↓</i>`; };
+    card.innerHTML = '<p class="lab-note">Tap a country on the globe or the map, or search for one. Drag to turn the globe (or move the map); pinch or scroll to zoom.</p>';
 
     function suggest() {
       const q = input.value.trim().toLowerCase();
@@ -84,6 +94,8 @@ export const atlasLab = {
       sel = c; place = null;
       if (!fromMap) zoomTo(c);
       cv.redraw();
+      if (G) { G.select(c); G.pin(null); if (!fromMap) G.show(c); }
+      showPeek(c.f ? flagUrl(c) : '', c.n, (c.cap || []).length ? `Capital: ${c.cap[0]}` : c.sub || c.reg);
       const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : '');
       const neighbours = (c.bor || []).map((b) => byC3.get(b)).filter(Boolean);
       card.innerHTML = `<div class="atlas-head">${c.f ? `<img class="atlas-flag" src="${flagUrl(c)}" alt="Flag of ${esc(c.n)}">` : ''}<div><h3>${esc(c.n)}</h3><p class="space-sub">${esc(c.o)}</p></div></div>
@@ -115,6 +127,7 @@ export const atlasLab = {
     /* ---------- any place, from Wikipedia ---------- */
     async function findPlace(q) {
       sel = null; place = null; cv.redraw();
+      if (G) { G.select(null); G.pin(null); }
       card.innerHTML = `<p class="lab-note">Searching Wikipedia for “${esc(q)}”…</p>`;
       let titles = [];
       try { titles = await wikiSearch(q); } catch (e) { card.innerHTML = '<p class="lab-err">Searching places needs the internet. Countries work offline — try a country name.</p>'; return; }
@@ -130,6 +143,8 @@ export const atlasLab = {
       place = w.at ? { name: w.title, at: w.at } : null; sel = null;
       if (place) { const inC = world && countryAt(w.at[1], w.at[0]); zoomToPoint(w.at, inC ? 4 : 3); }
       cv.redraw();
+      if (G) { G.select(null); G.pin(place); }
+      showPeek('', w.title, w.kind);
       const img = safeImg(w.image);
       card.innerHTML = `${img ? `<img class="atlas-photo" src="${esc(img)}" alt="${esc(w.title)}">` : ''}<h3>${esc(w.title)}</h3>${w.kind ? `<p class="space-sub">${esc(w.kind)}</p>` : ''}<p>${esc(w.text)}</p>
         ${w.at ? `<p class="lab-note">📍 ${num(Math.abs(w.at[0]), 4)}° ${w.at[0] >= 0 ? 'N' : 'S'}, ${num(Math.abs(w.at[1]), 4)}° ${w.at[1] >= 0 ? 'E' : 'W'} — pinned on the map</p>` : '<p class="lab-note">Wikipedia has no single location for this, so it isn’t pinned.</p>'}
@@ -189,36 +204,57 @@ export const atlasLab = {
     // drag to move, pinch or scroll to zoom, tap a country
     const pts = new Map(); let last = null, moved = false;
     drag(cv.c, {
-      down(p, e) { pts.set(e.pointerId, p); last = p; moved = false; },
+      down(p, e) { if (e.isPrimary) pts.clear(); pts.set(e.pointerId, p); last = p; moved = false; },
       move(p, e) {
         const before = pts.get(e.pointerId); pts.set(e.pointerId, p);
         if (pts.size === 2) { const [a, b] = [...pts.values()], prev = [...pts.entries()].map(([id, q]) => (id === e.pointerId ? before : q)); const d0 = Math.hypot(prev[0].x - prev[1].x, prev[0].y - prev[1].y), d1 = Math.hypot(a.x - b.x, a.y - b.y); if (d0 > 0 && proj) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d1 / d0); moved = true; return; }
-        if (Math.hypot(p.x - last.x, p.y - last.y) > 6 || moved) { moved = true; vx += p.x - before.x; vy += p.y - before.y; cv.redraw(); }
+        if (!before) return;
+        if (Math.hypot(p.x - last.x, p.y - last.y) > 10 || moved) { moved = true; vx += p.x - before.x; vy += p.y - before.y; cv.redraw(); }
       },
       up(p, e) {
         pts.delete(e.pointerId);
         if (moved || pts.size || !proj || !world) return;
-        const ll = proj.inv(p.x, p.y), c = countryAt(ll[1], ll[0]);
-        if (c && byN3.has(String(c.id))) choose(byN3.get(String(c.id)), true);
-        else if (c) { sel = null; card.innerHTML = `<h3>${esc(FULL_NAMES[c.name] || c.name)}</h3><p class="lab-note">There is no country page for this area in the data (its status is disputed or it isn’t a separate country there). Tap Ask Cassie to learn about it.</p>`; place = { name: FULL_NAMES[c.name] || c.name, at: ll }; cv.redraw(); }
+        tapAt(proj.inv(p.x, p.y));
       },
     });
+    // a tap on the map or the globe: [lat, lon]
+    function tapAt(ll) {
+      if (!world) return;
+      const c = countryAt(ll[1], ll[0]);
+      if (c && byN3.has(String(c.id))) choose(byN3.get(String(c.id)), true);
+      else if (c) { sel = null; card.innerHTML = `<h3>${esc(FULL_NAMES[c.name] || c.name)}</h3><p class="lab-note">There is no country page for this area in the data (its status is disputed or it isn’t a separate country there). Tap Ask Cassie to learn about it.</p>`; place = { name: FULL_NAMES[c.name] || c.name, at: ll }; cv.redraw(); if (G) { G.select(null); G.pin(place); } showPeek('', place.name, 'no country page'); }
+    }
     cv.c.addEventListener('pointercancel', (e) => pts.delete(e.pointerId));
     cv.c.addEventListener('wheel', (e) => { if (!proj) return; e.preventDefault(); const p = at(cv.c, e); zoomAt(p.x, p.y, e.deltaY < 0 ? 1.25 : 1 / 1.25); }, { passive: false });
     const zb = overlay(stage, 'br');
-    button(zb, '+', () => proj && zoomAt(proj.w / 2, proj.h / 2, 1.6)).setAttribute('aria-label', 'Zoom in');
-    button(zb, '−', () => proj && zoomAt(proj.w / 2, proj.h / 2, 1 / 1.6)).setAttribute('aria-label', 'Zoom out');
-    button(zb, 'Whole world', () => { vk = 1; vx = 0; vy = 0; cv.redraw(); });
+    button(zb, '+', () => (G ? G.zoom(1.5) : proj && zoomAt(proj.w / 2, proj.h / 2, 1.6))).setAttribute('aria-label', 'Zoom in');
+    button(zb, '−', () => (G ? G.zoom(1 / 1.5) : proj && zoomAt(proj.w / 2, proj.h / 2, 1 / 1.6))).setAttribute('aria-label', 'Zoom out');
+    button(zb, 'Whole world', () => { if (G) G.whole(); vk = 1; vx = 0; vy = 0; cv.redraw(); });
+    async function showView() {
+      if (!globeOn) { if (G) { G.destroy(); G = null; } cv.c.style.display = ''; stage.classList.remove('lab-is-3d'); cv.redraw(); return; }
+      if (G || gBusy || !world) return;
+      gBusy = true;
+      try {
+        const m = await import('./globe3d.js');
+        const g = await m.globe(stage, { world, onTap: (lat, lon) => tapAt([lat, lon]) });
+        if (dead || !globeOn) { g.destroy(); return; }
+        G = g; cv.c.style.display = 'none'; stage.classList.add('lab-is-3d');
+        // keep the buttons and the peek above the globe
+        stage.appendChild(zb); stage.appendChild(peek);
+        if (sel) { G.select(sel); G.show(sel); } else if (place) G.pin(place);
+      } catch (e) { globeOn = false; cv.c.style.display = ''; }
+      finally { gBusy = false; }
+    }
     Promise.all([loadData(), loadWorld()]).then(([d, wd]) => {
       data = d; world = wd;
       d.forEach((c) => { byC3.set(c.c3, c); if (c.n3) byN3.set(String(+c.n3), c); });
       // (the map's ids have no leading zeros in a few files; keep both)
       d.forEach((c) => { if (c.n3) byN3.set(c.n3, c); });
-      cv.redraw(); suggest();
+      cv.redraw(); suggest(); showView();
     }).catch(() => { card.innerHTML = '<p class="lab-err">The atlas couldn’t load — check your internet and open it again.</p>'; });
     return {
-      state: () => (sel ? `looking at ${sel.n} in the world atlas: capital ${(sel.cap || []).join(', ')}, population ${sel.pop ? `${fmtPop(sel.pop[0])} (${sel.pop[1]})` : 'unknown'}, ${sel.sub || sel.reg}, languages ${(sel.lang || []).join(', ')}` : place ? `looking at ${place.name} in the world atlas` : 'looking at the world map in the atlas'),
-      destroy: () => cv.destroy(),
+      state: () => (sel ? `looking at ${sel.n} in the world atlas: capital ${(sel.cap || []).join(', ')}, population ${sel.pop ? `${fmtPop(sel.pop[0])} (${sel.pop[1]})` : 'unknown'}, ${sel.sub || sel.reg}, languages ${(sel.lang || []).join(', ')}` : place ? `looking at ${place.name} in the world atlas` : `looking at the world ${G ? 'globe' : 'map'} in the atlas`),
+      destroy: () => { dead = true; if (G) G.destroy(); cv.destroy(); },
     };
   },
 };

@@ -1,6 +1,7 @@
 /* Physics labs: launching a ball, a pendulum (and a chaotic double one), waves on a string,
    and light bending as it crosses into water or glass. */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, slider, seg, button, row, stats, line, dot, text, arrow, overlay } from './kit.js';
+import { viewSwitch } from './bench3d.js';
 
 const GRAVITY = { earth: ['Earth', 9.81], moon: ['Moon', 1.62], mars: ['Mars', 3.71], jupiter: ['Jupiter', 24.79] };
 
@@ -23,7 +24,7 @@ const projectileLab = {
       const T = (vy + Math.sqrt(vy * vy + 2 * G * h0)) / G;
       return { vx, vy, T, range: vx * T, top: h0 + (vy > 0 ? (vy * vy) / (2 * G) : 0), hit: Math.hypot(vx, vy - G * T) };
     }
-    let view = null;
+    let view = null, V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const P = plan();
       // keep the target, the flights and this launch's path in view (and hold still while you aim)
@@ -34,6 +35,13 @@ const projectileLab = {
         view = { w, h, s, spanX, X: (x) => 64 + x * s, Y: (y) => h - 40 - y * s };
       }
       const { s, X, Y, spanX } = view;
+      if (V && V.scene && V.scene.update) {
+        // in 3D: a cannon on a field (or the Moon, Mars…), a bullseye and distance posts
+        V.scene.update({ X, Y, sp: s, spanX, ang, v, h0, target, gk, flight, trails, w, h });
+        text(ctx, GRAVITY[gk][0] + ` · g = ${g()} m/s²`, 12, 20, gk === 'moon' ? DIM : 'rgba(10,12,16,.75)');
+        if (!trails.length && !flight) text(ctx, 'Drag in the sky to aim · tap Launch', 12, 40, gk === 'moon' ? DIM : 'rgba(10,12,16,.75)');
+        return;
+      }
       // ground, height marks
       ctx.fillStyle = 'rgba(255,255,255,.03)'; ctx.fillRect(0, Y(0), w, h - Y(0));
       line(ctx, [[0, Y(0)], [w, Y(0)]], DIM, 1.5);
@@ -66,11 +74,12 @@ const projectileLab = {
         dot(ctx, X(bx), Y(by), 7, C.gold);
       }
       text(ctx, GRAVITY[gk][0] + ` · g = ${g()} m/s²`, 12, 20, DIM);
-      if (!trails.length && !flight) text(ctx, 'Drag anywhere to aim · tap Launch', w / 2, 44, DIM, 'center');
+      if (!trails.length && !flight) text(ctx, 'Drag anywhere to aim · tap Launch', 12, 40, DIM);
     });
     // aim by dragging: the direction from the launcher sets the angle, the distance sets the speed
     drag(cv.c, {
-      down(p) { if (flight) return false; aiming = true; aim(p); },
+      // (in 3D, a press far from the cannon turns the view instead)
+      down(p) { if (flight) return false; if (V && V.on && view && p.y > view.Y(0) + 8) return false; aiming = true; aim(p); },
       move: aim,
       up() { aiming = false; report(); },
     });
@@ -82,7 +91,7 @@ const projectileLab = {
       angS.set(ang); vS.set(v);
       report();
     }
-    const ov = overlay(stage, 'br');
+    const ov = overlay(stage, 'tr');
     button(ov, '▶ Launch', () => launch(), 'main big');
     const tick = clock((dt) => {
       if (!flight) return false;
@@ -123,6 +132,7 @@ const projectileLab = {
     button(r1, 'Clear paths', () => { trails.length = 0; cv.redraw(); });
     const msg = el('p', 'lab-note'); panel.appendChild(msg);
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.projectile3d(B)), { look: 'field', pitch: 7 });
     function report() {
       const P = plan();
       st.set([['Range', `${num(P.range)} m`], ['Highest point', `${num(P.top)} m`], ['Time in the air', `${num(P.T)} s`], ['Target', `${target} m`]]);
@@ -131,7 +141,7 @@ const projectileLab = {
     report();
     return {
       state: () => { const P = plan(); return `launching at ${ang}° and ${v} m/s from ${h0} m high on ${GRAVITY[gk][0]} (g = ${g()} m/s²): it flies ${num(P.range)} m, rises to ${num(P.top)} m and is in the air for ${num(P.T)} s; the target is at ${target} m`; },
-      destroy: () => { tick.stop(); cv.destroy(); },
+      destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },
 };
@@ -165,18 +175,22 @@ const pendulumLab = {
       const k1 = f(s), k2 = f(s.map((v, i) => v + (h / 2) * k1[i])), k3 = f(s.map((v, i) => v + (h / 2) * k2[i])), k4 = f(s.map((v, i) => v + h * k3[i]));
       return s.map((v, i) => v + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
     }
-    let px = 0, pivot = [0, 0];
+    let px = 0, pivot = [0, 0], V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       // short strings look short, long ones still fit; the energy bars keep to the right edge
       const room = Math.max(L, 1.2), barsW = w < 520 ? 96 : 130;
       px = Math.min((h - 80) / (room * 1.05), (w - barsW - 30) / (2 * room * 1.02));
       pivot = [(w - barsW) / 2, 40];
-      line(ctx, [[pivot[0] - 60, pivot[1]], [pivot[0] + 60, pivot[1]]], DIM, 3);
+      const in3d = !!(V && V.scene && V.scene.update);
+      if (in3d) V.scene.update({ mode, pivot, px, L, th, dp, ghost, trail, gtrail, h });
+      else line(ctx, [[pivot[0] - 60, pivot[1]], [pivot[0] + 60, pivot[1]]], DIM, 3);
       if (mode === 'single') {
         const bx = pivot[0] + Math.sin(th) * L * px, by = pivot[1] + Math.cos(th) * L * px;
-        ctx.setLineDash([2, 5]); ctx.strokeStyle = FAINT; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(pivot[0], pivot[1], L * px, Math.PI / 2 - 1.5, Math.PI / 2 + 1.5); ctx.stroke(); ctx.setLineDash([]);
-        line(ctx, [pivot, [bx, by]], INK, 2);
-        dot(ctx, bx, by, 15, C.gold);
+        if (!in3d) {
+          ctx.setLineDash([2, 5]); ctx.strokeStyle = FAINT; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(pivot[0], pivot[1], L * px, Math.PI / 2 - 1.5, Math.PI / 2 + 1.5); ctx.stroke(); ctx.setLineDash([]);
+          line(ctx, [pivot, [bx, by]], INK, 2);
+          dot(ctx, bx, by, 15, C.gold);
+        }
         // energy bars (per kg)
         const PE = g() * L * (1 - Math.cos(th)), KE = 0.5 * (L * om) ** 2, E = PE + KE, max = Math.max(E, g() * L * (1 - Math.cos((start * Math.PI) / 180)), 0.01);
         const narrow = w < 520, bw = narrow ? 20 : 30, gap = narrow ? 11 : 12, bx0 = w - (bw * 3 + gap * 2) - 14, bh = Math.min(240, h - 120), top0 = 56;
@@ -194,8 +208,7 @@ const pendulumLab = {
           ctx.globalAlpha = alpha; line(ctx, [pivot, [x1, y1], [x2, y2]], INK, 2); dot(ctx, x1, y1, 9, INK); dot(ctx, x2, y2, 11, col); ctx.globalAlpha = 1;
           return [x2, y2];
         };
-        draw(ghost, gtrail, C.blue, 0.55);
-        draw(dp, trail, C.gold, 1);
+        if (!in3d) { draw(ghost, gtrail, C.blue, 0.55); draw(dp, trail, C.gold, 1); }
         text(ctx, 'two pendulums, started 0.001 rad apart', w / 2, h - 14, DIM, 'center');
       }
       text(ctx, `${GRAVITY[gk][0]} · L = ${num(L)} m`, 12, 20, DIM);
@@ -226,7 +239,7 @@ const pendulumLab = {
     });
     // drag the bob to where you want to let it go
     drag(cv.c, {
-      down(p) { if (mode !== 'single') return false; dragging = true; set(p); },
+      down(p) { if (mode !== 'single') return false; if (V && V.on && Math.hypot(p.x - (pivot[0] + Math.sin(th) * L * px), p.y - (pivot[1] + Math.cos(th) * L * px)) > 60) return false; dragging = true; set(p); },
       move: set,
       up() { dragging = false; om = 0; crossings = []; period = 0; },
     });
@@ -242,6 +255,7 @@ const pendulumLab = {
     button(r1, 'Let go again', () => { resetSingle(); resetDouble(); report(); });
     panel.appendChild(el('p', 'lab-note', 'Drag the ball to pull it back, then let go.'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.pendulum3d(B)), { pitch: 8 });
     let shown = 0;
     function report(force = true) {
       const now = performance.now();
@@ -258,7 +272,7 @@ const pendulumLab = {
       state: () => (mode === 'single'
         ? `a single pendulum ${num(L)} m long on ${GRAVITY[gk][0]} (g = ${g()} m/s²), let go from ${start}°, air friction ${damp}; measured period ${period ? num(period) + ' s' : 'not measured yet'}, the small-swing formula 2π√(L/g) gives ${num(2 * Math.PI * Math.sqrt(L / g()))} s`
         : `a double pendulum (two arms of ${num(L / 2)} m) next to a copy started 0.001 rad differently; after ${num(doubleTime)} s their lower arms are ${num(Math.abs(dp[2] - ghost[2]))} rad apart`),
-      destroy: () => { tick.stop(); cv.destroy(); },
+      destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },
 };
@@ -277,8 +291,11 @@ const wavesLab = {
     let y = new Float32Array(N), prev = new Float32Array(N), next = new Float32Array(N);
     let mode = 'wiggle', end = 'fixed', freq = 1.5, amp = 0.5, damp = 0.004, cc = 0.9, time = 0, pulseAt = -1, pulled = -1, steadyFor = 0;
     const speed = () => (cc * (LEN / (N - 1))) / STEP; // m/s
+    let V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const L = 40, R = w - 30, mid = h / 2, sy = Math.min(70, h / 5), X = (i) => L + ((R - L) * i) / (N - 1);
+      // in 3D: a real rope shaken by a wave driver, with a clamp, a ring on a rod, or more rope at the end
+      if (V && V.scene && V.scene.update) { V.scene.update({ y, L, R, mid, sy, end, w, h }); return; }
       for (let m = 0; m <= LEN; m++) { const x = L + ((R - L) * m) / LEN; line(ctx, [[x, mid + sy * 2.2], [x, mid + sy * 2.2 + 6]], DIM, 1); if (m % 2 === 0) text(ctx, m + ' m', x, mid + sy * 2.2 + 20, DIM, 'center'); }
       line(ctx, [[L, mid], [R, mid]], GRID, 1);
       // the end: a clamp, a ring on a rod, or a fade (the wave leaves)
@@ -320,7 +337,7 @@ const wavesLab = {
     });
     // pluck: drag a point of the string
     drag(cv.c, {
-      down(p) { const i = Math.round(((p.x - 40) / (cv.w - 70)) * (N - 1)); if (i < 2 || i > N - 3) return false; pulled = i; pull(p); },
+      down(p) { const i = Math.round(((p.x - 40) / (cv.w - 70)) * (N - 1)); if (i < 2 || i > N - 3) return false; if (V && V.on && Math.abs(p.y - (cv.h / 2 - y[i] * Math.min(70, cv.h / 5))) > 70) return false; pulled = i; pull(p); },
       move: pull,
       up() { pulled = -1; },
     });
@@ -341,6 +358,7 @@ const wavesLab = {
     button(r1, 'Calm the string', () => { still(); });
     panel.appendChild(el('p', 'lab-note', 'Drag the string anywhere to pluck it.'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.waves3d(B, N)), { pitch: 10 });
     function report() {
       const v = speed(), lam = v / freq, n1 = v / (2 * LEN);
       st.set([['Wave speed v', `${num(v)} m/s`], ['Wavelength λ = v ÷ f', mode === 'wiggle' ? `${num(lam)} m` : '—'], ['Standing-wave frequencies', `${num(n1)}, ${num(2 * n1)}, ${num(3 * n1)} Hz…`]]);
@@ -348,7 +366,7 @@ const wavesLab = {
     report(); tick.start();
     return {
       state: () => `a 10 m string, wave speed ${num(speed())} m/s; my hand is ${mode === 'wiggle' ? `wiggling at ${num(freq)} Hz (wavelength ${num(speed() / freq)} m)` : 'sending single pulses'}; the far end is ${end === 'fixed' ? 'fixed' : end === 'loose' ? 'loose (free to slide)' : 'open — the wave just leaves'}`,
-      destroy: () => { tick.stop(); cv.destroy(); },
+      destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },
 };
@@ -375,9 +393,17 @@ const lightLab = {
       const crit = n1() > n2() ? (Math.asin(n2() / n1()) * 180) / Math.PI : null;
       return { a, b, tir, R, crit };
     };
-    let O = [0, 0], len = 100;
+    let O = [0, 0], len = 100, V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       O = [w / 2, h / 2]; len = Math.min(w, h) * 0.45;
+      if (V && V.scene && V.scene.update) {
+        // in 3D: a laser pointer, a tank of water or a block of glass or diamond
+        const k = calc();
+        V.scene.update({ O, len, k, top, bottom, w, h, angText: num(ang), outText: k.tir ? '' : num((k.b * 180) / Math.PI) });
+        text(ctx, `${MEDIA[top][0]} (n = ${n1()})`, 12, 22, INK);
+        text(ctx, `${MEDIA[bottom][0]} (n = ${n2()})`, 12, h - 14, INK);
+        return;
+      }
       const tint = { air: 'rgba(255,255,255,0)', water: 'rgba(127,178,255,.13)', glass: 'rgba(160,230,220,.12)', diamond: 'rgba(220,210,255,.16)' };
       ctx.fillStyle = tint[top]; ctx.fillRect(0, 0, w, O[1]);
       ctx.fillStyle = tint[bottom]; ctx.fillRect(0, O[1], w, h - O[1]);
@@ -408,7 +434,7 @@ const lightLab = {
       cv.redraw();
     }
     // drag the laser round
-    drag(cv.c, { down: aim, move: aim });
+    drag(cv.c, { down: (p) => (p.y > O[1] - 4 ? false : aim(p)), move: aim });
     function aim(p) {
       if (p.y > O[1] - 4) return;
       ang = Math.round(Math.min(89, Math.abs((Math.atan2(O[0] - p.x, O[1] - p.y) * 180) / Math.PI)) * 4) / 4;
@@ -420,10 +446,11 @@ const lightLab = {
     seg(group(panel, 'Bottom'), { options: opts, value: bottom, onChange: (v) => { bottom = v; report(); } });
     panel.appendChild(el('p', 'lab-note', 'Drag the laser to aim it. Snell’s law: n₁ sin θ₁ = n₂ sin θ₂.'));
     const st = stats(panel);
+    V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.light3d(B)), { pitch: 7 });
     report();
     return {
       state: () => { const k = calc(); return `a laser in ${MEDIA[top][0].toLowerCase()} (n = ${n1()}) hits ${MEDIA[bottom][0].toLowerCase()} (n = ${n2()}) at ${num(ang)}° from the normal; ${k.tir ? 'it is totally internally reflected' : `it bends to ${num((k.b * 180) / Math.PI)}° and ${num(k.R * 100)}% reflects`}${k.crit ? `; the critical angle is ${num(k.crit)}°` : ''}`; },
-      destroy: () => cv.destroy(),
+      destroy: () => { V.destroy(); cv.destroy(); },
     };
   },
 };

@@ -1,6 +1,7 @@
 /* More chemistry: heating ice into steam (the heating curve), and dropping metals into water
    (the reactivity series). */
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, clock, drag, group, slider, seg, button, row, stats, line, dot, text, overlay } from './kit.js';
+import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Ice to steam ---------------- */
 // per kilogram, at normal air pressure (1 atm)
@@ -25,6 +26,7 @@ const iceLab = {
     let m = 1, P = 1000, speed = 50, heating = 0, Q = 0, wasSteam = false;
     const N = 42, mol = Array.from({ length: N }, (_, i) => ({ i, x: Math.random(), y: Math.random(), vx: 0, vy: 0 }));
     const maxQ = () => stateOf(m, 0).segs[4];
+    let V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const S = stateOf(m, Q), wide = w > 640;
       // the heating curve
@@ -42,17 +44,20 @@ const iceLab = {
       text(ctx, 'melting', (X(s1) + X(s2)) / 2, Y(0) - 8, DIM, 'center');
       text(ctx, 'boiling', (X(s3) + X(s4)) / 2, Y(100) - 8, DIM, 'center');
       text(ctx, 'energy added →', gx + gw, gy + gh + 18, DIM, 'right');
-      // the molecules
-      const bx = wide ? gx + gw + 30 : gx, by = wide ? gy : gy + gh + 30, bw = wide ? w - bx - 20 : gw, bh = wide ? gh : h - by - 16;
-      ctx.strokeStyle = DIM; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, bh);
+      // the molecules (in 3D: real water molecules in a sealed glass box on a hot plate)
+      const bx = wide ? gx + gw + 30 : gx, by = wide ? gy : gy + gh + 30, bw = wide ? w - bx - 20 : gw - 92, bh = wide ? gh : h - by - (V && V.on ? 40 : 16);
       const col = S.phase === 'ice' || (S.phase === 'melting') ? '#bfe3ff' : S.phase === 'steam' || S.phase === 'boiling' ? '#e8f2ff' : '#7fb2ff';
-      mol.forEach((p) => dot(ctx, bx + p.x * bw, by + p.y * bh, Math.max(3, Math.min(bw, bh) / 34), p.gas ? '#e8f2ff' : p.solid ? '#bfe3ff' : '#7fb2ff'));
+      if (V && V.scene && V.scene.update) V.scene.update({ box: { bx, by, bw, bh }, mol, T: S.T, phase: S.phase, heating });
+      else {
+        ctx.strokeStyle = DIM; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, bh);
+        mol.forEach((p) => dot(ctx, bx + p.x * bw, by + p.y * bh, Math.max(3, Math.min(bw, bh) / 34), p.gas ? '#e8f2ff' : p.solid ? '#bfe3ff' : '#7fb2ff'));
+      }
       text(ctx, S.phase === 'melting' ? 'ice and water' : S.phase === 'boiling' ? 'water and steam' : S.phase, bx + bw / 2, by - 8, col, 'center');
       text(ctx, `${num(S.T)} °C`, gx + 6, gy + 18, INK);
     });
     // drag along the heating curve to add or take away energy by hand
     let curve = null;
-    const scrub = (p) => { if (!curve || p.x < curve.gx - 20 || p.y < curve.gy - 20 || p.y > curve.gy + curve.gh + 20) return false; Q = Math.max(0, Math.min(maxQ(), ((p.x - curve.gx) / curve.gw) * maxQ())); report(); };
+    const scrub = (p) => { if (p.sx != null) p = { x: p.sx, y: p.sy }; if (!curve || p.x < curve.gx - 20 || p.y < curve.gy - 20 || p.y > curve.gy + curve.gh + 20) return false; Q = Math.max(0, Math.min(maxQ(), ((p.x - curve.gx) / curve.gw) * maxQ())); report(); };
     drag(cv.c, { down: (p) => { if (scrub(p) === false) return false; heating = 0; heatB.textContent = 'Heat'; coolB.textContent = 'Cool'; }, move: scrub });
     // where each molecule goes: a neat lattice (solid), a jostling crowd (liquid) or flying everywhere (gas)
     function moveMolecules(dt) {
@@ -91,7 +96,7 @@ const iceLab = {
       report(true);
       return true;
     });
-    const ov = overlay(stage, 'br');
+    const ov = overlay(stage, 'br col');
     const heatB = button(ov, 'Heat', () => { heating = heating > 0 ? 0 : 1; heatB.textContent = heating > 0 ? 'Stop' : 'Heat'; coolB.textContent = 'Cool'; }, 'main big');
     const coolB = button(ov, 'Cool', () => { heating = heating < 0 ? 0 : -1; coolB.textContent = heating < 0 ? 'Stop' : 'Cool'; heatB.textContent = 'Heat'; }, 'big');
     const g = group(panel, 'Set up');
@@ -108,8 +113,9 @@ const iceLab = {
       st.set([['Temperature', `${num(S.T)} °C`], ['State', state], ['Energy added', `${num(Q / 1000)} kJ`], ['Time with this heater', `${num(Q / P / 60)} minutes`], ['To melt it all', `${num((m * MELT) / 1000)} kJ`], ['To boil it all', `${num((m * BOIL) / 1000)} kJ`]]);
       cv.redraw();
     }
+    V = viewSwitch(panel, stage, cv, (B) => import('./chem3d.js').then((mod) => mod.ice3d(B, N)), { pitch: 8 });
     report(); tick.start();
-    return { state: () => { const S = stateOf(m, Q); return `${m} kg of water starting as ice at −20 °C, heated by a ${P} W heater: now ${num(S.T)} °C and ${S.phase}${S.phase === 'melting' || S.phase === 'boiling' ? ` (${Math.round(S.f * 100)}% changed)` : ''}, after ${num(Q / 1000)} kJ of energy`; }, destroy: () => { tick.stop(); cv.destroy(); } };
+    return { state: () => { const S = stateOf(m, Q); return `${m} kg of water starting as ice at −20 °C, heated by a ${P} W heater: now ${num(S.T)} °C and ${S.phase}${S.phase === 'melting' || S.phase === 'boiling' ? ` (${Math.round(S.f * 100)}% changed)` : ''}, after ${num(Q / 1000)} kJ of energy`; }, destroy: () => { tick.stop(); V.destroy(); cv.destroy(); } };
   },
 };
 
@@ -135,11 +141,18 @@ const metalsLab = {
   hints: ['Try the metals at the top of the reactivity series. Which are lighter than water?', 'It’s the most reactive metal in the list.', 'Magnesium barely reacts with cold water. Switch to “Steam”.'],
   about: 'Observations follow what happens in a school demonstration with small pieces. Metals higher in the reactivity series react faster: K > Na > Li > Ca > Mg > Zn > Fe > Cu > Au. (Lithium is sometimes listed above sodium by electrode potential, but with water it reacts more gently, as shown here.)\nThe pink colour is phenolphthalein indicator turning pink where the metal hydroxide (an alkali) forms. Every reaction with water or steam that happens here gives off hydrogen gas.\nSafety: potassium, sodium and lithium are only handled by teachers, in tiny pieces, behind a safety screen.',
   mount({ stage, panel, api }) {
-    let pick = 0, steam = false, run = null;
+    let pick = 0, steam = false, run = null, V = null;
     const bubbles = [];
     const cv = canvas(stage, (ctx, w, h) => {
       const M = METALS[pick], bw = Math.min(260, w * 0.5), bx = w * 0.3 - bw / 2 + 20, by = h * 0.2, bh = h * 0.6;
       geoM = { bx, by, bw, bh, sx: w - 150, sy: 30, chunk: [bx + bw / 2, by - 40] };
+      const ty = h * 0.42, tx = w * 0.08, tw = Math.min(w * 0.55, 420);
+      if (V && V.scene && V.scene.update) {
+        // in 3D: a real beaker, bench and burner (the list of metals is the one on the right)
+        const pink = run ? Math.min(0.55, run.progress * (M[3] > 0.1 ? 0.7 : 0.25)) : 0, cloudy = M[1] === 'Ca' && run ? Math.min(0.5, run.progress * 0.6) : 0;
+        V.scene.update({ steam, M, run, bubbles, held: heldM, geo: geoM, pink, cloudy, tube: { tx, ty, tw, mx: tx + tw * 0.6 } });
+        return;
+      }
       if (!steam) {
         const pink = run ? Math.min(0.55, run.progress * (M[3] > 0.1 ? 0.7 : 0.25)) : 0;
         const cloudy = M[1] === 'Ca' && run ? Math.min(0.5, run.progress * 0.6) : 0;
@@ -164,7 +177,6 @@ const metalsLab = {
         if (!run || heldM) { const [cx0, cy0] = heldM ? [heldM.x, heldM.y] : geoM.chunk; ctx.fillStyle = '#cfcfd4'; ctx.fillRect(cx0 - 8, cy0 - 8, 16, 16); if (!heldM) text(ctx, `drag the ${M[0].toLowerCase()} in`, cx0, cy0 - 16, DIM, 'center'); }
       } else {
         // a heated tube: steam passes over the metal
-        const ty = h * 0.42, tx = w * 0.08, tw = Math.min(w * 0.55, 420);
         ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(tx, ty - 22, tw, 44);
         for (let k = 0; k < 8; k++) { const a = (performance.now() / 300 + k) % 8; dot(ctx, tx + 10 + a * (tw / 8), ty + Math.sin(a * 2 + k) * 8, 3, 'rgba(255,255,255,.4)'); }
         const glow = run ? M[4] * (1 - run.used) : 0, mx = tx + tw * 0.6;
@@ -204,7 +216,7 @@ const metalsLab = {
       down(p) {
         if (!geoM) return false;
         const i = Math.floor((p.y - (geoM.sy + 22 - 15)) / 22);
-        if (p.x > geoM.sx - 8 && i >= 0 && i < METALS.length) { pick = i; run = null; bubbles.length = 0; metalSeg.set(i); report(); return false; }
+        if (!(V && V.on) && p.x > geoM.sx - 8 && i >= 0 && i < METALS.length) { pick = i; run = null; bubbles.length = 0; metalSeg.set(i); report(); return false; }
         const [cx0, cy0] = geoM.chunk;
         if (!steam && !run && Math.hypot(p.x - cx0, p.y - cy0) < 26) { heldM = { x: p.x, y: p.y, moved: false }; return; }
         if (p.x > geoM.bx && p.x < geoM.bx + geoM.bw && p.y > geoM.by && p.y < geoM.by + geoM.bh) { drop(); return false; }
@@ -231,13 +243,19 @@ const metalsLab = {
     seg(group(panel, 'With'), { options: [[false, 'Cold water'], [true, 'Steam']], value: steam, onChange: (v) => { steam = v === true || v === 'true'; run = null; ov.querySelector('button').textContent = steam ? 'Heat it in steam' : 'Drop it in'; report(); } });
     const msg = el('p', 'lab-note'); panel.appendChild(msg);
     const st = stats(panel);
+    // the reactivity series as a list you tap (the 3D view's; the diagram draws its own)
+    const series = el('div', 'lab-series', `<small>most reactive</small>${METALS.map((mm, i) => `<button type="button" data-i="${i}"><b>${mm[1]}</b> ${mm[0]}</button>`).join('')}<small>least reactive</small>`);
+    stage.appendChild(series);
+    series.addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (!b) return; pick = +b.dataset.i; run = null; bubbles.length = 0; metalSeg.set(pick); report(); });
+    V = viewSwitch(panel, stage, cv, (B) => import('./chem3d.js').then((mod) => mod.metals3d(B)), { pitch: 10 });
     function report() {
       const M = METALS[pick];
+      series.querySelectorAll('[data-i]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.i === pick)));
       st.set([['What you see', run || steam ? (steam ? (M[4] == null ? '—' : M[4] ? (M[1] === 'Mg' ? 'A dazzling white flame; white powder (magnesium oxide) is left.' : M[1] === 'Zn' ? 'It glows and turns into zinc oxide: yellow while hot, white when cool.' : 'Slowly turns into black iron oxide.') : 'Nothing happens.') : M[6]) : 'Tap “Drop it in”.'], ['Equation', steam ? (M[8] || '—') : M[7]], ['Floats?', M[2] < 1 ? `yes (density ${M[2]} g/cm³, less than water)` : `no — sinks (density ${M[2]} g/cm³)`]]);
       cv.redraw();
     }
     report(); tick.start();
-    return { state: () => { const M = METALS[pick]; return `${M[0]} ${steam ? 'heated in steam' : 'dropped into cold water'}${run ? '' : ' (not yet dropped)'}: ${steam ? (M[8] || 'too dangerous to try') : M[7]}`; }, destroy: () => { tick.stop(); cv.destroy(); } };
+    return { state: () => { const M = METALS[pick]; return `${M[0]} ${steam ? 'heated in steam' : 'dropped into cold water'}${run ? '' : ' (not yet dropped)'}: ${steam ? (M[8] || 'too dangerous to try') : M[7]}`; }, destroy: () => { tick.stop(); V.destroy(); cv.destroy(); } };
   },
 };
 
