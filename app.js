@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '133';
+const APP_VERSION = '134';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4306,6 +4306,12 @@ async function openLabs(lab, more = {}) {
       openExplore: (cell, ret) => openExplore(cell, ret),
       // a short hint from Cassie inside the lab, without leaving it
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
+      // the study tools: your flashcard decks (spaced repetition) and reading your files
+      addCards: (list, deck) => (window.CassieCards ? window.CassieCards.add(list, deck, 'labs') : 0),
+      openCards: window.CassieCards ? (deck) => window.CassieCards.open(deck) : null,
+      decks: () => boardDecks().decks(),
+      readFile: async (file) => (await readDocument(file)).text,
+      speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
       // the daily puzzles' score board (on Cassie's server)
       scores: SERVER ? scoreCall : null,
       onOpen: (id) => track('feature', 'lab-' + id),
@@ -6167,6 +6173,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Labs has a new Study tools shelf: a Vocabulary Flash-Chain (drag terms onto their meanings — literary devices, Tayutay, medical, legal, tech or your own words), a Timeline Builder, an Argument & Essay Deconstructor that colours your Claim, Evidence and Counter-argument, a Smart Flashcard Matrix that turns notes or a PDF into a deck, Cornell Notes, a Citation & Thesis Mapper (APA, MLA, Chicago, IEEE), and a Museum of Famous Arts with Filipino and world masterpieces.',
+  'Five new games in Labs: Logic Circuit (wires and AND/OR/NOT gates), Formula Cracker (a Wordle for function rules, regex and chemical formulas), Pinning Blitz (countries, cell parts and organs against the clock), Fraction Diner (pizzas, drinks and recipes) and City Market (supply, demand and taxes).',
   'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',
   'The board got study tools: sticky notes in six colours with your name on them (sort them into colour groups in one tap), flashcards you paste, pick from your decks or have Cassie write — dropped on the board to flip and move — and quick shapes: a coordinate grid, Venn diagrams, flowchart boxes and logic gates. Save the board as a picture, a PDF or a board file you can open again later.',
   'In a study room you see everyone’s pointer with their name and what they’re doing (drawing, erasing, typing), point at things with a laser that fades in 2 seconds, and “Ask Cassie to check our board” shows her answer to the whole group.',

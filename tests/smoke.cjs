@@ -1529,7 +1529,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
     await page.click(`.labs-tabs [data-section="${games.includes(id) ? 'games' : 'learn'}"]`);
     await page.click(`.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
-    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq').count() >= 1, id + ' draws something');
+    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet').count() >= 1, id + ' draws something');
     expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
     // tap the middle of the picture (nothing should break)
     const sb0 = await page.locator('.lab-stage').boundingBox();
@@ -1775,6 +1775,215 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await page.mouse.click(gb.x + gb.width * 0.28, gb.y + gb.height * 0.5);
   await page.waitForTimeout(300);
   await shot('puzzle-geo-explore');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Study tools: vocabulary chain, timeline, essay structure, flashcards from notes, Cornell notes, thesis and citations', async (b) => {
+  const fake = (body) => {
+    const t = JSON.stringify(body.messages);
+    if (/flashcards from these notes/.test(t)) return { text: JSON.stringify([{ f: 'What is osmosis?', b: 'Water moving across a membrane' }, { f: 'What is diffusion?', b: 'Particles spreading out' }, { f: 'What is ATP?', b: 'The energy molecule of cells' }]) };
+    if (/Cornell notes/.test(t)) return { text: JSON.stringify({ title: 'Osmosis and diffusion', rows: [{ cue: 'What is osmosis?', notes: ['Water moves across a membrane', 'Toward more solute'] }, { cue: 'What is diffusion?', notes: ['High to low concentration'] }], summary: 'Cells move water and particles by osmosis and diffusion.' }) };
+    if (/Analyse the structure/.test(t)) return { text: JSON.stringify({ roles: [{ n: 1, role: 'claim', why: 'States the position' }], feedback: 'Strong claim; add a source for the survey.' }) };
+    if (/vocabulary items/.test(t)) return { text: JSON.stringify([{ term: 'Lava', def: 'Melted rock on the surface' }, { term: 'Magma', def: 'Melted rock underground' }, { term: 'Crater', def: 'The bowl at the top of a volcano' }, { term: 'Ash', def: 'Tiny bits of rock blown out' }]) };
+    if (/Grade their timeline/.test(t)) return { text: 'You got 3 right — Magellan (1521) comes first.' };
+    if (/Stress-test/.test(t)) return { text: 'Reason 2 has no evidence yet — add a study on sleep and grades.' };
+    return { text: 'ok' };
+  };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test' } });
+  const lab = async (id) => { await page.evaluate((x) => openLabs(x), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 15000 }); };
+  const btn = (t) => page.click(`.lab-panel .lab-btn:has-text("${t}")`);
+  const msg = (t) => page.waitForSelector(`.lab-panel .tl-msg >> text=${t}`, { timeout: 8000 });
+  // a Study tools shelf, and the new games on the Games shelf
+  await page.evaluate(() => openLabs());
+  await page.click('.labs-tabs [data-section="tools"]');
+  const tools = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  expect(['vocab', 'timeline', 'essay', 'cardmatrix', 'cornell', 'thesis', 'museum'].every((t) => tools.includes(t)) && !tools.includes('pendulum') && !tools.includes('sudoku'), 'the Study tools shelf: ' + tools);
+  await page.click('.labs-tabs [data-section="games"]');
+  const games = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+  expect(['circuit', 'cracker', 'blitz', 'diner', 'economy', 'sudoku'].every((t) => games.includes(t)), 'the Games shelf: ' + games);
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/labs-games-shelf.png' });
+  await page.click('.labs-x');
+
+  // Vocabulary Flash-Chain: a wrong match breaks the chain; dragging the right term onto its meaning locks it in
+  await lab('vocab');
+  const term = page.locator('.tl-term').first(), i = await term.getAttribute('data-i');
+  await term.click(); await page.locator(`.tl-def:not([data-i="${i}"])`).first().click();
+  await page.waitForFunction(() => /Mistakes\s*1/.test(document.querySelector('.lab-stats').textContent));
+  const tb = await term.boundingBox(), db = await page.locator(`.tl-def[data-i="${i}"]`).boundingBox();
+  await page.mouse.move(tb.x + 20, tb.y + 10); await page.mouse.down(); await page.mouse.move(db.x + 80, db.y + 15, { steps: 8 }); await page.mouse.up();
+  await page.waitForSelector(`.tl-def[data-i="${i}"].tl-done`, { timeout: 4000 });
+  expect(/Chain 1/.test(await page.locator('.tl-chain').innerText()), 'the chain grows');
+  await page.fill('.tl-make .tl-input', 'volcanoes'); await page.click('.tl-make .lab-btn');
+  await page.waitForFunction(() => [...document.querySelectorAll('.tl-term')].some((t) => t.textContent === 'Magma'), null, { timeout: 8000 });
+
+  // Timeline Builder: arrows move events; Check grades the order; Cassie grades it too; your own years sort themselves
+  await lab('timeline');
+  const first = await page.locator('.tl-ev .tl-evtext').first().innerText();
+  await page.click('.tl-ev [data-down="0"]');
+  expect((await page.locator('.tl-ev .tl-evtext').nth(1).innerText()) === first, 'the ▼ arrow moves an event down');
+  await btn('Check my order');
+  await page.waitForSelector('.tl-ev.tl-ok, .tl-ev.tl-bad');
+  await btn('Cassie, grade my timeline');
+  await msg('Magellan (1521) comes first');
+  await page.click('.lab-panel .tl-paste summary');
+  await page.fill('.lab-panel .tl-paste textarea', '1946 – Independence recognised\n1898 – Independence declared\n1521 – Magellan arrives');
+  await page.click('.lab-panel .tl-paste .lab-btn');
+  expect(await page.locator('.tl-ev').count() === 3, 'my own timeline');
+  const want = ['Magellan arrives', 'Independence declared', 'Independence recognised'];
+  for (let k = 0; k < 3; k++) {
+    for (let guard = 0; guard < 4; guard++) {
+      const now = await page.$$eval('.tl-ev .tl-evtext', (e) => e.map((x) => x.textContent));
+      const at2 = now.findIndex((x) => x.includes(want[k]));
+      if (at2 <= k) break;
+      await page.click(`.tl-ev [data-up="${at2}"]`);
+    }
+  }
+  await btn('Check my order');
+  await msg('All 3 in the right order');
+
+  // Essay Deconstructor: the sample's parts are coloured and its structure scores 100; Cassie explains each part
+  await lab('essay');
+  await page.waitForSelector('.tl-structure >> text=100/100');
+  expect(await page.locator('.tl-sent.tl-r-counter').count() >= 1 && await page.locator('.tl-sent.tl-r-evidence').count() >= 1 && await page.locator('.tl-sent.tl-r-conclusion').count() === 1, 'claim, evidence, counter-argument and conclusion are coloured');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tool-essay.png' });
+  const cls = await page.locator('.tl-sent').nth(1).getAttribute('class');
+  await page.locator('.tl-sent').nth(1).click();
+  expect(await page.locator('.tl-sent').nth(1).getAttribute('class') !== cls, 'tapping a sentence changes its job');
+  await btn('Cassie, check the logic');
+  await msg('add a source for the survey');
+  expect(await page.locator('.tl-why li').count() >= 1, 'Cassie says why');
+
+  // Smart Flashcard Matrix: notes → cards → study here → saved for spaced repetition
+  await lab('cardmatrix');
+  await page.fill('.lab-panel .tl-area', 'Osmosis is the movement of water across a membrane. Diffusion is particles spreading from high to low concentration. ATP is the energy molecule of cells.');
+  await btn('Make the cards');
+  await page.waitForFunction(() => document.querySelectorAll('.tl-card').length === 3, null, { timeout: 8000 });
+  await page.locator('.tl-card').first().click();
+  expect(await page.locator('.tl-card.tl-flip').count() === 1, 'a card flips');
+  await btn('Study here');
+  for (let k = 0; k < 3; k++) { await page.click('[data-flip]'); await page.click('[data-grade="good"]'); }
+  await page.waitForSelector('.tl-empty >> text=Round done');
+  await page.fill('.lab-panel .tl-input', 'Cell transport');
+  await btn('Save to my Flashcards');
+  await msg('Saved 3 cards');
+  expect(await page.evaluate(() => window.CassieCards.count()) >= 3, 'the cards are in Flashcards');
+
+  // Cornell Notes: raw notes → cues, notes and a summary; cover the notes to test yourself; cues become flashcards
+  await lab('cornell');
+  await page.fill('.lab-panel .tl-area', 'osmosis - water across membrane toward more solute\ndiffusion - high to low');
+  await btn('Make Cornell notes');
+  await page.waitForSelector('.tl-cue >> text=What is osmosis?', { timeout: 8000 });
+  expect(/osmosis and diffusion/.test(await page.locator('.tl-cornell-page footer').innerText()), 'a summary');
+  await btn('Cover the notes');
+  expect(await page.locator('.tl-coverbar').count() === 2, 'the notes are covered');
+  await page.locator('.tl-coverbar').first().click();
+  expect(await page.locator('.tl-coverbar').count() === 1, 'tapping shows one answer');
+  await btn('Cues → flashcards');
+  await msg('Added 2 cards');
+
+  // Citation & Thesis Mapper: references in four styles; evidence makes the argument stronger; Cassie stress-tests it
+  await lab('thesis');
+  expect(/Carskadon, M\. A\. \(2011\)\. Sleep in adolescents: The perfect storm\./.test(await page.locator('.tl-refs').innerText()), 'APA reference');
+  await page.click('.lab-panel .lab-seg button:has-text("MLA")');
+  expect(/Carskadon, Mary A\. “Sleep in adolescents: The perfect storm\.”/.test(await page.locator('.tl-refs').innerText()), 'MLA reference');
+  await page.click('.lab-panel .lab-seg button:has-text("IEEE")');
+  expect(/\[1\] M\. A\. Carskadon, “Sleep in adolescents/.test(await page.locator('.tl-refs').innerText()), 'IEEE reference');
+  const before = await page.locator('.tl-structure h4').innerText();
+  await page.click('[data-adde="1"]');
+  await page.fill('.tl-form [data-k="quote"]', 'Students who slept 8 hours scored higher on tests.');
+  await page.fill('.tl-form [data-k="authors"]', 'Santos, Maria; Cruz, Juan');
+  await page.fill('.tl-form [data-k="year"]', '2022');
+  await page.fill('.tl-form [data-k="title"]', 'Sleep and grades of Filipino teens');
+  await page.fill('.tl-form [data-k="container"]', 'Philippine Journal of Education');
+  await page.click('[data-savee]');
+  expect(await page.locator('.tl-refs li').count() === 2 && (await page.locator('.tl-structure h4').innerText()) !== before, 'evidence added, strength changes');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tool-thesis.png' });
+  await btn('Cassie, stress-test my argument');
+  await msg('add a study on sleep and grades');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Museum and games: famous paintings, a logic circuit, cracking a rule / regex / compound, a pinning blitz, the fraction diner, the city market', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
+  await ctx.route(/wikipedia\.org/, (r) => r.abort());
+  const lab = async (id) => { await page.evaluate((x) => openLabs(x), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 15000 }); };
+  const btn = (t) => page.click(`.lab-panel .lab-btn:has-text("${t}")`);
+  // Museum: Filipino and world galleries, a work's story, and "Who painted it?"
+  await lab('museum');
+  expect(await page.locator('.tl-work').count() === 35, '35 works');
+  await page.click('.lab-panel .lab-seg button:has-text("Filipino artists")');
+  expect(await page.locator('.tl-work').count() === 13, '13 by Filipino artists');
+  await page.click('[data-open="spoliarium"]');
+  const facts = await page.locator('.tl-facts').innerText();
+  expect(/Juan Luna/.test(facts) && /1884/.test(facts) && /National Museum/.test(facts), 'Spoliarium’s facts: ' + facts);
+  await page.click('[data-close]');
+  await btn('Play “Who painted it?”');
+  for (let k = 0; k < 8; k++) { await page.locator('[data-guess]').first().click(); await page.click('[data-next]'); }
+  await page.waitForSelector('.tl-empty >> text=/of 8 right/');
+  // Logic Circuit: switches change the gates; tapping turns a tile
+  await lab('circuit');
+  const sw = page.locator('.gm-sw').first(), was = await sw.getAttribute('aria-pressed');
+  await sw.click();
+  expect((await page.locator('.gm-sw').first().getAttribute('aria-pressed')) !== was, 'a switch flips');
+  const cb = await page.locator('.lab-stage canvas').boundingBox();
+  await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 2 + 30);
+  await page.waitForFunction(() => /Turns\s*1/.test(document.querySelector('.lab-stats').textContent));
+  await page.click('.lab-panel .lab-seg button:has-text("Hard")');
+  expect(await page.locator('.gm-x output').count() === 1, 'Hard adds the number x');
+  // Formula Cracker: a rule, a regex and a compound
+  await lab('cracker');
+  await page.fill('.gm-guess input', 'x'); await page.click('.gm-guess button');
+  expect(await page.locator('.gm-guesses tr').count() === 2, 'a guess row');
+  await page.click('.lab-panel .lab-seg button:has-text("Regex pattern")');
+  await page.fill('.gm-guess input', '^a'); await page.click('.gm-guess button');
+  expect(await page.locator('.gm-guesses td.gm-g, .gm-guesses td.gm-bad').count() >= 6, 'each string is marked right or wrong for the guess');
+  await page.click('.lab-panel .lab-seg button:has-text("Chemical compound")');
+  await page.fill('.gm-guess input', 'Xq2'); await page.click('.gm-guess button');
+  await page.waitForSelector('.lab-panel .gm-msg >> text=isn’t an element');
+  await page.fill('.gm-guess input', 'H2O'); await page.click('.gm-guess button');
+  await page.waitForSelector('.gm-row .gm-tile');
+  // Pinning Blitz on the cell: find the parts by tapping them
+  await lab('blitz');
+  await page.click('.lab-panel .lab-seg button:has-text("Animal cell")');
+  await btn('Start (60 s)');
+  const CENTRES = { Nucleolus: [495, 318], Nucleus: [420, 330], Mitochondrion: [255, 215], 'Golgi apparatus': [735, 400], 'Rough ER': [641, 330], 'Smooth ER': [297, 496], Lysosome: [395, 585], Centrioles: [608, 158], Vacuole: [175, 400], 'Cell membrane': [500, 32] };
+  for (let k = 0; k < 4; k++) {
+    const name = await page.locator('.gm-label').innerText();
+    const box = await page.locator('.lab-stage canvas').boundingBox(), kk = Math.min((box.width - 20) / 1000, (box.height - 80) / 700), ox = (box.width - 1000 * kk) / 2, oy = 66 + (box.height - 76 - 700 * kk) / 2;
+    const [ux, uy] = CENTRES[name];
+    await page.mouse.click(box.x + ox + ux * kk, box.y + oy + uy * kk);
+    await page.waitForFunction((n) => +((document.querySelector('.lab-stats').textContent.match(/Right\s*(\d+)/) || [])[1]) === n, k + 1, { timeout: 3000 });
+    await page.waitForTimeout(350);
+  }
+  expect(/combo ×4/.test(await page.locator('.gm-bar').innerText()), 'a combo of 4');
+  // Fraction Diner: serve the first order right
+  await lab('diner');
+  await btn('Start a shift');
+  const q = await page.locator('.gm-order .gm-q').innerText();
+  if (/of a pizza/.test(q)) {
+    const [, n, d] = q.match(/(\d+)\/(\d+) of a pizza/).map(Number);
+    for (let g = 0; g < 20 && +(await page.locator('.gm-ctl > b').first().innerText()) !== d; g++) await page.click(`[data-sl="${+(await page.locator('.gm-ctl > b').first().innerText()) < d ? 1 : -1}"]`);
+    const box = await page.locator('.lab-stage canvas').boundingBox(), top = 150, cx = box.width / 2, cy = top + (box.height - top) / 2, R = Math.max(30, Math.min(box.width * 0.4, (box.height - top) * 0.42));
+    for (let k = 0; k < n; k++) { const a = -Math.PI / 2 + ((k + 0.5) / d) * Math.PI * 2; await page.mouse.click(box.x + cx + Math.cos(a) * R * 0.6, box.y + cy + Math.sin(a) * R * 0.6); }
+  } else if (/calamansi/.test(q)) {
+    const [, total, a, bb] = q.match(/(\d+) mL of calamansi juice — (\d+) parts? syrup to (\d+) parts water/).map(Number), unit = total / (a + bb);
+    await page.evaluate(([s1, w1]) => { const [rs, rw] = document.querySelectorAll('.gm-pour input[type=range]'); rs.value = s1; rs.dispatchEvent(new Event('input', { bubbles: true })); rw.value = w1; rw.dispatchEvent(new Event('input', { bubbles: true })); }, [a * unit, bb * unit]);
+  } else {
+    const [, from, to] = (await page.locator('.gm-recipe tr').first().innerText()).match(/For (\d+)\s+For (\d+)/).map(Number);
+    const amounts = await page.$$eval('.gm-recipe tr td:nth-child(2)', (t) => t.map((x) => x.textContent));
+    const inputs = page.locator('.gm-recipe input');
+    for (let k = 0; k < amounts.length; k++) { const s2 = amounts[k].trim().split(' '); const v = s2.reduce((sum, p) => sum + (p.includes('/') ? +p.split('/')[0] / +p.split('/')[1] : +p), 0); await inputs.nth(k).fill(String(+(v * to / from).toFixed(6))); }
+  }
+  await page.click('[data-serve]');
+  await page.waitForSelector('.lab-panel .gm-msg.good >> text=tip', { timeout: 3000 });
+  // City Market: a month passes and the market explains itself
+  await lab('economy');
+  await btn('Run the month');
+  expect(/Month 2 of 12/.test(await page.locator('.gm-market .gm-bar').innerText()), 'month 2');
+  expect(/Balanced|Surplus|Shortage/.test(await page.locator('.lab-panel .gm-msg').innerText()), 'it explains what happened');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/game-market.png' });
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
