@@ -1,0 +1,2 @@
+- 2026-10-11 · pricing-strategy · Public prices on the site: Free ₱0; Plus ₱149/month, ₱599/semester (5 months), ₱1,490/year; Pro ₱499/month, ₱1,999/semester, ₱4,990/year; USD Plus $7.99, Pro $14.99 a month.
+- 2026-10-11 · pricing-strategy · Payments will go through Lemon Squeezy, with Plus and Pro products set up; paid plans are on a waitlist.
