@@ -161,8 +161,12 @@ export function seg(host, { label, options, value, onChange }) {
 }
 // Plus / Pro extras: the app says who has them (anywhere else, like the landing page's demos, they're open).
 // plusOnly(what, fn) runs fn for a subscriber; for anyone else it shows what the extra is and how to get it.
-export const premium = { has: () => true, ask: () => {} };
-export function setPremium(p) { premium.has = (p && p.has) || (() => true); premium.ask = (p && p.ask) || (() => {}); }
+// Some extras have a few free tries a day: take(kind) uses one (false when none are left), left(kind) counts them.
+export const premium = { has: () => true, ask: () => {}, take: () => true, left: () => Infinity };
+export function setPremium(p) {
+  premium.has = (p && p.has) || (() => true); premium.ask = (p && p.ask) || (() => {});
+  premium.take = (p && p.take) || (() => false); premium.left = (p && p.left) || (() => 0);
+}
 export const plusOnly = (what, fn) => (...a) => (premium.has() ? fn(...a) : premium.ask(what));
 export function button(host, text, onClick, cls = '') {
   const b = el('button', 'lab-btn ' + cls, esc(text));
