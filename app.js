@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '137';
+const APP_VERSION = '138';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4338,6 +4338,10 @@ function startQuizOn(topic) {
 // ret: { back(), leave() } when it was opened from Labs — closing goes back to Labs, asking Cassie leaves it
 async function openExplore(cell, ret) {
   track('feature', 'explore');
+  // free: 2 views a week of each (the body, the animal cell, the plant cell); Plus has them always
+  const want = ['plant', 'animal', 'body'].includes(cell) ? cell : 'body', seen = new Set();
+  const first = free3d(want, seen);
+  if (!first) { if (ret) ret.back(); return; }
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
@@ -4351,7 +4355,8 @@ async function openExplore(cell, ret) {
     }
     let leaving = false;
     const view = exploreMod.open({
-      cell: ['plant', 'animal', 'body'].includes(cell) ? cell : undefined,
+      cell: want,
+      allow: (k) => free3d(k, seen),
       onAsk: (q) => { leaving = true; view.close(); if (ret) ret.leave(); handleSend(q); },
       onQuiz: (topic) => { leaving = true; view.close(); if (ret) ret.leave(); startQuizOn(topic); },
       // a short explanation of a tapped part of the body, without leaving the 3D view
@@ -4362,6 +4367,7 @@ async function openExplore(cell, ret) {
       },
     });
     if (ret && ret.opened) ret.opened(); // Labs stayed on screen until now (no flash of the chat)
+    if (typeof first === 'string' && view.toast) view.toast(first);
   } catch (e) {
     if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
@@ -6058,7 +6064,7 @@ function plusSheet(what, why) {
   w.innerHTML = `<div class="plus-card">
     <h3 id="plus-sheet-h">${escapeHtml(what)} is a Plus extra</h3>
     ${why ? `<p><b>${escapeHtml(why)}</b></p>` : ''}
-    <p>Plus and Pro add the Real 3D view in Labs, the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
+    <p>Plus and Pro open all the 3D any time (the body, the cells, the solar system, the globe and Real 3D in Labs), the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus — sign in</button>' : ''}
@@ -6096,6 +6102,15 @@ function freeTake(kind) {
   return true;
 }
 const PREMIUM = { has: isSubscriber, ask: plusSheet, take: freeTake, left: freeLeft };
+// Explore 3D: may this one open? true (Plus, or already open this time), a note (a free view used), or false
+const X3D_NAMES = { body: 'The 3D human body', animal: 'The 3D animal cell', plant: 'The 3D plant cell' };
+function free3d(k, seen) {
+  if (isSubscriber() || seen.has(k)) return true;
+  if (!freeTake('3d:' + k)) { plusSheet(X3D_NAMES[k] || 'This 3D view', 'You’ve used its 2 free views this week. They come back on Monday.'); return false; }
+  seen.add(k);
+  const n = freeLeft('3d:' + k);
+  return n === 0 ? 'Your last free view of this one this week · Plus has 3D always' : `${n} more free ${n === 1 ? 'view' : 'views'} of this one this week · Plus has 3D always`;
+}
 // After any sign-in: bring the account's profile here, or ask the profile questions once.
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
@@ -6329,7 +6344,7 @@ if (window.CassieCards) {
 const WHATS_NEW = [
   'Send many photos and files at once: up to 15 photos and 5 files in one message (nothing gets replaced anymore). Cassie reads every page, one by one, takes notes of the key facts, and says which photo or file each answer came from.',
   'Labs: the atom’s proton, neutron and electron tray stays still while you turn the 3D view, zooming goes to the spot you point at, “Try this” folds up on phones (tap Hide or Show), and Labs and Explore 3D open without a flash.',
-  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. On Free you get 2 Real 3D views a week in each lab, every lab, game and tool still works, and a board picture is always free.',
+  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. On Free every 3D view (the body, the cells, the solar system, the globe and each lab’s Real 3D) opens twice a week, every lab, game and tool still works, and a board picture is always free.',
   'Labs has a new Study tools shelf: a Vocabulary Flash-Chain (drag terms onto their meanings — literary devices, Tayutay, medical, legal, tech or your own words), a Timeline Builder, an Argument & Essay Deconstructor that colours your Claim, Evidence and Counter-argument, a Smart Flashcard Matrix that turns notes or a PDF into a deck, Cornell Notes, a Citation & Thesis Mapper (APA, MLA, Chicago, IEEE), and a Museum of Famous Arts with Filipino and world masterpieces.',
   'Five new games in Labs: Logic Circuit (wires and AND/OR/NOT gates), Formula Cracker (a Wordle for function rules, regex and chemical formulas), Pinning Blitz (countries, cell parts and organs against the clock), Fraction Diner (pizzas, drinks and recipes) and City Market (supply, demand and taxes).',
   'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',

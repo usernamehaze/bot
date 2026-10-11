@@ -2,7 +2,7 @@
    Milky Way, the Local Group of galaxies, and the wider universe. Tap anything to fly to it and
    read about it; drag to turn, pinch or scroll to zoom — scrolling out past the edge of one
    scale opens the next one. */
-import { el, esc, num, group, seg, button, row, stats, overlay } from './kit.js';
+import { el, esc, num, group, seg, button, row, stats, overlay, premium, free3dView } from './kit.js';
 import { stage3d, webglOk, paintTexture, noise2 } from './three-kit.js';
 import { PLANETS, planetAt, periodDays } from './space.js';
 import { planetLook } from './planet-look.js';
@@ -72,6 +72,16 @@ export const space3dLab = {
   about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged — at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project) — Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
   mount({ stage, panel, api }) {
     if (!webglOk()) { stage.appendChild(el('p', 'lab-err', 'This browser can’t show 3D (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.')); return {}; }
+    // free: 2 views a week; Plus has it always
+    const free = free3dView('3d:space3d', 'The 3D solar system');
+    if (!free) {
+      const w = el('div', 'lab-err');
+      w.innerHTML = '<p>You’ve used this week’s 2 free views of the 3D solar system. They come back on Monday.</p><p>“Planets today, Moon &amp; eclipses” works any time.</p>';
+      button(w, 'About Plus', () => premium.ask('The 3D solar system', 'You’ve used its 2 free views this week. They come back on Monday.'));
+      stage.appendChild(w);
+      return {};
+    }
+    if (typeof free === 'string') panel.appendChild(el('p', 'lab-note', esc(free)));
     const loading = el('p', 'lab-loading', 'Loading 3D space…'); stage.appendChild(loading);
     let S = null, dead = false, level = 'solar', selected = null, day = today(), speed = 1, scaleMode = 'squeezed';
     const card = el('div', 'space-card'); card.hidden = true;

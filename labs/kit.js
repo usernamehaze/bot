@@ -167,6 +167,13 @@ export function setPremium(p) {
   premium.has = (p && p.has) || (() => true); premium.ask = (p && p.ask) || (() => {});
   premium.take = (p && p.take) || (() => false); premium.left = (p && p.left) || (() => 0);
 }
+// a free view of a 3D thing (kind like "3d:atlas"): true for Plus, a note when a free view was used, false (and the Plus note) when none are left
+export function free3dView(kind, what) {
+  if (premium.has()) return true;
+  if (!premium.take(kind)) { premium.ask(what, 'You’ve used its 2 free views this week. They come back on Monday.'); return false; }
+  const n = premium.left(kind);
+  return n === 0 ? 'Your last free 3D view of this one this week · Plus has 3D always.' : `${n} more free 3D ${n === 1 ? 'view' : 'views'} of this one this week · Plus has 3D always.`;
+}
 export const plusOnly = (what, fn) => (...a) => (premium.has() ? fn(...a) : premium.ask(what));
 export function button(host, text, onClick, cls = '') {
   const b = el('button', 'lab-btn ' + cls, esc(text));
