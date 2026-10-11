@@ -1771,3 +1771,96 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .room-err { color: #c0392b !important; }
 .room-err[hidden] { display: none; }
 .room-fine { font-size: .78rem !important; margin: 0 !important; }
+
+/* ===================== The phone app (native.js) =====================
+   A Home screen and a floating tab bar, after Apple's Human Interface Guidelines: the bar floats
+   on glass above the content, tabs only move between sections, controls are at least 44 pt,
+   body text 17 pt. Black and white like the rest of Cassie. Only on phones (html.native). */
+.tabbar, .home { display: none; }
+html.native #app-bg, html.native #aud-bg { display: none; }
+html.native #labs-btn, html.native #settings-btn { display: none; } /* they're tabs now */
+
+/* --- the tab bar: a dark glass pill; the open tab is a white pill with its name --- */
+html.native .tabbar {
+  display: flex; align-items: center; gap: 2px; position: fixed; z-index: 236; left: 50%; transform: translateX(-50%);
+  bottom: calc(10px + var(--safe-bottom)); padding: 6px; border-radius: 999px;
+  background: rgba(22, 22, 25, .84); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(255, 255, 255, .09);
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s;
+}
+.tab {
+  display: flex; align-items: center; justify-content: center; gap: 7px; height: 48px; min-width: 52px; padding: 0 14px;
+  border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, .7); font: 600 15px/1 inherit; cursor: pointer;
+  transition: background .25s, color .25s, padding .25s;
+}
+.tab svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.tab span { display: none; }
+.tab.on { background: #fff; color: #111; padding: 0 18px 0 14px; }
+.tab.on svg { stroke-width: 2.1; }
+.tab.on span { display: inline; }
+.tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* full-screen views cover it, like a modal; and the keyboard needs the room */
+html.native.typing .tabbar, html.native.lab-in .tabbar, html.native.x3d-open .tabbar, html.native.vc-open .tabbar, body.reader-open .tabbar,
+body:has(.profile-overlay:not([hidden]), .auth-page:not([hidden])) .tabbar {
+  transform: translate(-50%, 140%); opacity: 0; pointer-events: none;
+}
+/* room for the bar under everything it floats over */
+html.native.tab-chat:not(.typing) #app { padding-bottom: calc(68px + var(--safe-bottom)); }
+html.native .labs-scroll { padding-bottom: calc(96px + var(--safe-bottom)); }
+html.native .fc { padding-bottom: calc(86px + var(--safe-bottom)); }
+html.native .settings-panel { padding-bottom: calc(76px + var(--safe-bottom)); }
+
+/* --- Home --- */
+html.native.tab-home .topbar, html.native.tab-home #chat-log, html.native.tab-home #quick-actions, html.native.tab-home .composer,
+html.native.tab-home #attach-preview, html.native.tab-home #mascot, html.native.tab-home #cassie-cursor, html.native.tab-home .ideas-fab { display: none !important; }
+html.native .home:not([hidden]) {
+  display: block; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: calc(20px + var(--safe-top)) 20px calc(104px + var(--safe-bottom));
+}
+.home { --ring: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, .04); }
+.home button { font: inherit; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.home button:active { transform: scale(.97); }
+.home button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.home svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.home-head { display: flex; align-items: center; gap: 10px; }
+.home-hi { flex: 1; min-width: 0; }
+.home-hi h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-hi p { display: flex; align-items: center; gap: 6px; margin: 5px 0 0; color: var(--muted); font-size: 15px; }
+.home-hi p svg { width: 16px; height: 16px; flex: none; }
+.home-round, .home-avatar { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: var(--ring); }
+.home-round svg { width: 21px; height: 21px; }
+.home-avatar { background: var(--text); color: var(--surface) !important; font-size: 17px; font-weight: 700; }
+.home-ask { display: flex; align-items: center; gap: 10px; width: 100%; height: 52px; margin-top: 20px; padding: 0 14px; border: 0; border-radius: 16px; background: var(--surface); box-shadow: var(--ring); text-align: left; }
+.home-ask span { flex: 1; color: var(--muted); font-size: 17px; }
+.home-ask svg { width: 21px; height: 21px; color: var(--muted); flex: none; }
+.home-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 104px; padding: 12px; border: 0; border-radius: 20px; background: var(--surface); box-shadow: var(--ring); font-size: 15px; font-weight: 600; text-align: left; transition: transform .15s; }
+/* each icon sits on a little lit pebble, so the tiles feel solid rather than flat */
+.tile i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+  background: radial-gradient(circle at 32% 26%, #ffffff 0%, #ecebe7 62%, #dcdad4 100%);
+  box-shadow: inset 0 -2px 5px rgba(0, 0, 0, .08), inset 0 1px 1px #fff, 0 5px 12px rgba(0, 0, 0, .09); }
+.tile svg { width: 22px; height: 22px; }
+.home-today { display: grid; grid-template-columns: .42fr .58fr; gap: 10px; margin-top: 14px; }
+.today-card { display: flex; flex-direction: column; align-items: flex-start; min-height: 138px; padding: 14px 16px; border: 0; border-radius: 22px; background: var(--surface); box-shadow: var(--ring); text-align: left; transition: transform .15s; }
+.today-card small { font-size: 13px; opacity: .7; }
+.today-card b { margin-top: 4px; font-size: 40px; line-height: 1; font-weight: 700; letter-spacing: -.03em; }
+.today-card span { font-size: 13px; opacity: .7; margin-top: 2px; }
+.today-card em { margin-top: auto; padding-top: 10px; font-style: normal; font-size: 15px; font-weight: 600; }
+.today-card.dark { background: #161618; color: #fff !important; box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
+.home-sec { display: flex; align-items: center; justify-content: space-between; margin: 24px 2px 6px; }
+.home-sec h2 { margin: 0; font-family: inherit; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.home-link { min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--muted) !important; font-size: 15px !important; }
+.recent { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; margin-bottom: 10px; padding: 12px 14px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: var(--ring); text-align: left; transition: transform .15s; }
+.recent i { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--bg); }
+.recent i svg { width: 19px; height: 19px; }
+.recent span { flex: 1; min-width: 0; }
+.recent b { display: block; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent small { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
+.recent-go { width: 18px; height: 18px; color: var(--muted); flex: none; }
+@media (prefers-color-scheme: dark) {
+  .tile i { background: radial-gradient(circle at 32% 26%, #4a4a50 0%, #2c2c30 65%, #222225 100%); box-shadow: inset 0 -2px 5px rgba(0, 0, 0, .35), inset 0 1px 1px rgba(255, 255, 255, .12), 0 5px 12px rgba(0, 0, 0, .3); }
+  .today-card.dark { background: #f2f2f4; color: #111 !important; }
+  html.native .tabbar { background: rgba(44, 44, 48, .82); }
+}
+@media (prefers-reduced-motion: reduce) { .home button:active { transform: none; } html.native .tabbar, .tab { transition: none; } }
+@media (prefers-reduced-transparency: reduce) { html.native .tabbar { background: #18181b; -webkit-backdrop-filter: none; backdrop-filter: none; } }
