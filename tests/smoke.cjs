@@ -2532,6 +2532,17 @@ test('Claude on the server: the main chat and photos use Claude, Groq covers whe
     // the app learns the plan from the account (so it can open the Plus extras)
     const me = await page.evaluate(async ([srv, t]) => (await (await fetch(srv + '/auth/me', { headers: { authorization: 'Bearer ' + t } })).json()), [SERVER, token]);
     expect(me.plan && me.plan.plan === 'plus' && me.plan.until > Date.now(), 'the account says Plus: ' + JSON.stringify(me.plan));
+    const appPlan = await page.evaluate(async (t) => { localStorage.setItem(AUTH_KEY, t); state.plan = null; await refreshPlan(true); const p = planName(); localStorage.removeItem(AUTH_KEY); state.plan = null; return p; }, token);
+    expect(appPlan === 'plus', 'the app picks up a plan given on the dashboard: ' + appPlan);
+    // the dashboard's Plans box gives it in a few taps
+    const dash = await ctx.newPage();
+    await dash.goto(SERVER + '/');
+    await dash.fill('#tok', 'test-admin-token-0123456789'); await dash.click('#go');
+    await dash.fill('#plan-email', email); await dash.selectOption('#plan-kind', 'pro'); await dash.selectOption('#plan-days', '365');
+    await dash.click('#plan-give');
+    await dash.waitForFunction(() => /has Pro until/.test(document.getElementById('plan-msg').textContent), null, { timeout: 8000 });
+    expect((await grant('plus')).plan === 'plus', 'back to Plus for the rest');
+    await dash.close();
     // with the real default (no Claude for free students), a free student is answered by Groq
     await serverMode({ freeClaude: 0 });
     const before = m.claudeCount;

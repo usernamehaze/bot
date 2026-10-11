@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '136';
+const APP_VERSION = '137';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4377,6 +4377,7 @@ const labsBtn = document.getElementById('labs-btn');
 let labsMod = null;
 async function openLabs(lab, more = {}) {
   track('feature', 'labs');
+  refreshPlan();
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
@@ -6040,6 +6041,14 @@ function planName() {
   return p && (p.plan === 'plus' || p.plan === 'pro') && (!p.until || p.until > Date.now()) ? p.plan : 'free';
 }
 const isSubscriber = () => planName() !== 'free';
+// ask the account again (a plan given on the dashboard shows up without signing out and in)
+let planAsked = 0;
+function refreshPlan(force) {
+  if (!accountsOn() || !authToken() || (!force && Date.now() - planAsked < 60e3)) return Promise.resolve();
+  planAsked = Date.now();
+  return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); } })
+    .catch((e) => { if (e.status === 401) signedOutLocally(); });
+}
 function plusSheet(what) {
   track('feature', 'plus-ask');
   document.querySelector('.plus-sheet')?.remove();
@@ -6057,6 +6066,8 @@ function plusSheet(what) {
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
+  // signed in: the plan may have just been given — check, and say so
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('p').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelector('.plus-go').remove(); w.querySelector('.plus-ok').textContent = 'OK'; } });
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
     else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
@@ -6192,7 +6203,7 @@ function renderAccountRow() {
   row.hidden = !accountsOn();
   const a = state.account && authToken() ? state.account : null;
   row.innerHTML = a
-    ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${a.google ? ' (Google)' : ''}. Your profile and saved mistakes sync to your account.</p>
+    ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${a.google ? ' (Google)' : ''}. Your profile and saved mistakes sync to your account. Plan: <b>${{ plus: 'Plus', pro: 'Pro' }[planName()] || 'Free'}</b>.</p>
        <div class="acct-btns"><button type="button" class="new-chat-btn" data-act="signout">Sign out</button><button type="button" class="new-chat-btn acct-del" data-act="delete">Delete account</button></div>`
     : `<p class="field-hint">Sign in to keep your profile and progress on every device.</p>
        <button type="button" class="new-chat-btn" data-act="signin">Sign in or create an account</button>`;

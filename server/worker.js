@@ -1455,6 +1455,13 @@ const DASHBOARD = `<!doctype html>
         \${tile('Features used', fmt(d.range && d.range.uses), \`last \${d.days} days\`)}
       </div>
       \${brainCard(d)}
+      <div class="card" style="margin-bottom:14px"><h2>Plans</h2><p class="sub">Give an account Plus or Pro (or take it back). They sign in to Cassie with that email, then reopen the app. Give yourself Pro to try every Plus extra.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <input id="plan-email" type="email" placeholder="Their Cassie email" autocomplete="off" style="flex:1 1 220px">
+          <select id="plan-kind"><option value="pro">Pro</option><option value="plus">Plus</option><option value="free">Free (end it)</option></select>
+          <select id="plan-days">\${[[30, '30 days'], [365, '1 year'], [3660, '10 years']].map(([n, t]) => \`<option value="\${n}">\${t}</option>\`).join('')}</select>
+          <button id="plan-give">Save</button><button id="plan-look">Look up</button>
+        </div><p id="plan-msg" class="muted" style="margin:10px 0 0"></p></div>
       <div class="card" style="margin-bottom:14px"><h2>Active users and opens per day</h2><p class="sub">How many people used Cassie each day, and how many times the app was opened</p>
         <div class="legend"><span><i style="background:var(--series-1)"></i>Active users</span><span><i style="background:var(--series-2)"></i>Opens</span></div>
         \${lineChart(rows)}
@@ -1489,6 +1496,22 @@ const DASHBOARD = `<!doctype html>
       try { const r = await fetch('health', { headers: { authorization: 'Bearer ' + token } }); if (!r.ok) throw new Error('HTTP ' + r.status); load(); }
       catch (e) { m.textContent = 'Could not run it: ' + e.message; }
     };
+    const planCall = async (give) => {
+      const m = document.getElementById('plan-msg'), email = document.getElementById('plan-email').value.trim();
+      if (!email) { m.textContent = 'Type the email they signed up to Cassie with.'; return; }
+      m.textContent = give ? 'Saving…' : 'Looking…';
+      try {
+        const r = give
+          ? await fetch('admin/plan', { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify({ email, plan: document.getElementById('plan-kind').value, days: +document.getElementById('plan-days').value }) })
+          : await fetch('admin/plan?email=' + encodeURIComponent(email), { headers: { authorization: 'Bearer ' + token } });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+        const name = j.name ? j.name + ' (' + j.email + ')' : j.email;
+        m.textContent = j.plan === 'free' ? \`\${name} is on Free.\` : \`\${name} has \${j.plan === 'pro' ? 'Pro' : 'Plus'} until \${new Date(j.until).toLocaleDateString()}.\`;
+      } catch (e) { m.textContent = 'Couldn’t do it: ' + e.message; }
+    };
+    document.getElementById('plan-give').onclick = () => planCall(true);
+    document.getElementById('plan-look').onclick = () => planCall(false);
     document.getElementById('logout').onclick = () => { try { localStorage.removeItem('cassie.stats.token'); } catch (e) {} token = ''; gate(''); };
     wireLine(rows);
     app.querySelectorAll('[data-tip]').forEach((n) => {
