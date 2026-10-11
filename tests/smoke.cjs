@@ -946,7 +946,7 @@ const WATCH_VOICE_WORKER = () => {
   AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
 };
 
-test('Cassie’s voice is Bella (or Michael) — never a robot voice, and she never makes you wait for the download', async (b) => {
+test('Cassie’s voice is Bella (or Michael) once she’s on the device — the phone’s voice only until then, and she never makes you wait', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
   // the voice model downloads slowly here, like on a slow connection
   await ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\/onnx\//, async (route) => {
@@ -966,6 +966,7 @@ test('Cassie’s voice is Bella (or Michael) — never a robot voice, and she ne
   expect(await page.evaluate(() => window.CassieVoice.status()) === 'loading', 'she listens while her voice is still downloading');
   expect(/listening/.test(await page.locator('.vc-cassie').innerText()), 'the greeting shows as text');
   await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 30000 });
+  const deviceBefore = await page.evaluate(() => window.__spoken.length); // the phone's voice filled in while she downloaded
   expect(await page.locator('.vc-hv').isHidden(), 'the download note goes away when she is ready');
   expect(await page.evaluate(() => window.CassieVoice.info().isolated), 'her voice uses several cores');
   // now she answers in Bella's voice
@@ -995,25 +996,25 @@ test('Cassie’s voice is Bella (or Michael) — never a robot voice, and she ne
   await page.fill('#prompt-input', 'And ribosomes?');
   await page.press('#prompt-input', 'Enter');
   await page.waitForFunction(() => window.__said.filter((x) => /powerhouse/.test(x.text)).length >= 2, null, { timeout: 15000 });
-  expect(await page.evaluate(() => window.__spoken.length) === 0, 'the robot voice was never used: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
+  expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'once Bella is ready, only Bella speaks: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 
-  // a phone on mobile data is asked first; if her voice can't load, her answers show as text — still no robot voice
+  // a phone on mobile data is asked first; if her voice can't load, the phone's own voice speaks — Cassie is never silent
   const c2 = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Sure.' }) });
   await c2.ctx.addInitScript(FAKE_VOICE, {});
   await c2.page.reload();
   await c2.page.click('#voice-btn');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Get Cassie’s voice?', { timeout: 5000 });
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Get Cassie’s own voice?', { timeout: 5000 });
   expect(await c2.page.evaluate(() => window.CassieVoice.status()) === 'off', 'nothing downloads on a phone until asked');
   if (process.env.SHOTS) await c2.page.screenshot({ path: process.env.SHOTS + '/voice-human-ask.png' });
   await c2.page.click('.vc-hv [data-hv="get"]');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Couldn’t get Cassie’s voice', { timeout: 20000 });
+  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie is using your phone’s voice', { timeout: 20000 });
   await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
   await c2.page.evaluate(() => window.__say('Hello'));
   await c2.page.waitForFunction(() => document.querySelector('.vc-cassie').textContent === 'Sure.', null, { timeout: 10000 });
   await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await c2.page.evaluate(() => window.__spoken.length) === 0, 'no robot voice, even when her voice can’t load');
+  expect(await c2.page.evaluate(() => window.__spoken.some((t) => /Sure/.test(t))), 'her voice couldn’t load, so the phone’s voice said the answer: ' + JSON.stringify(await c2.page.evaluate(() => window.__spoken)));
   await c2.ctx.close();
 });
 

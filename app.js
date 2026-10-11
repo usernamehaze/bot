@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '127';
+const APP_VERSION = '128';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4845,8 +4845,12 @@ function speak(text) {
     h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
   };
   if (CV.status() === 'ready') { go(); return; }
-  if (CV.status() === 'loading') return; // still downloading: this one is just read on screen
-  if (CV.got()) { CV.prepare().then(go, () => {}); return; } // on this device already: a few seconds to wake up
+  // not here yet: the device's own voice reads this one (Cassie is never silent), and Bella
+  // gets ready for the next answers
+  const fallback = () => { const h = CV.device.say(chunks.join(' '), { gender: voiceGender(), onStart: () => botMood('talking') }); readAloud = h; h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); }); };
+  if (CV.status() === 'loading' || CV.status() === 'failed') { fallback(); return; }
+  if (CV.got()) { CV.prepare().then(go, fallback); return; } // on this device already: a few seconds to wake up
+  fallback();
   if (humanVoiceAutoOK()) CV.prepare().catch(() => {}); // get it now, for the next answers
 }
 
@@ -4867,7 +4871,7 @@ const VOICE_MODES = {
 const voiceBtn = document.getElementById('voice-btn');
 const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
 // Cassie's voice (voice.js): Bella, made on the device by a small AI voice model, so she
-// sounds like a person. There is no robot-voice fallback any more.
+// sounds like a person. While Bella isn't ready on a device, its own best voice speaks instead.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
 const humanVoiceReady = () => humanVoiceWanted() && window.CassieVoice.status() === 'ready';
 let voiceUI = null;
@@ -5028,15 +5032,15 @@ function showHumanVoice() {
   } else if (st === 'loading') {
     box.hidden = false;
     const pct = Math.round(CV.progress() * 100);
-    box.innerHTML = `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, her answers show here as text.</small>`;
+    box.innerHTML = `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, she uses your phone’s voice.</small>`;
   } else if (st === 'failed') {
     box.hidden = false;
-    box.innerHTML = 'Couldn’t get Cassie’s voice (check the internet), so her answers show as text. <button type="button" data-hv="get">Try again</button>';
+    box.innerHTML = 'Cassie is using your phone’s voice — her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
   } else if (later) {
     box.hidden = true;
   } else {
     box.hidden = false;
-    box.innerHTML = '<b>Get Cassie’s voice?</b> A one-time download, about 90 MB (Wi-Fi is best), then it works offline. Until then her answers show as text. <span class="vc-hv-row"><button type="button" data-hv="get">Get her voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
+    box.innerHTML = '<b>Get Cassie’s own voice?</b> A one-time download, about 90 MB (Wi-Fi is best), then it works offline. Until then she uses your phone’s voice. <span class="vc-hv-row"><button type="button" data-hv="get">Get her voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
   }
 }
 
@@ -5079,10 +5083,10 @@ function sayThenListen(text) {
       resolve();
       if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
-    // Bella speaks it. If her voice isn't ready yet (still downloading), the words are on screen
-    // and Cassie listens again straight away — she never waits, and never uses a robot voice.
-    if (!clean || !humanVoiceReady()) { setTimeout(finish, clean ? 600 : 0); return; }
-    const h = window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() });
+    // Bella speaks it. If her voice isn't ready on this device (still downloading, or her engine
+    // can't run here), the device's own best voice says it — Cassie is never silent.
+    if (!clean) { finish(); return; }
+    const h = humanVoiceReady() ? window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() }) : window.CassieVoice.device.say(clean, { gender: voiceGender() });
     v.stopSpeaking = () => { h.stop(); finish(); };
     h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
@@ -6012,6 +6016,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Talk with Cassie always talks now: if her own voice can’t load on your phone, she speaks with your phone’s best voice instead of going quiet. Her own voice also loads better on iPhone.',
+  'A new Liquid Glass look: the bars, buttons and menus float on frosted glass over your chat. And the app icon on your iPhone home screen is now filled to the edges.',
   'On your phone, Cassie is now a real app: a Home screen with everything one tap away, and a tab bar at the bottom — Home, Chat, Labs, Cards and You.',
   'Labs in 3D look real now: the planets wear real NASA maps (Earth with its clouds, city lights at night and the Sun glinting on the sea), the Sun boils, Saturn’s rings cast its shadow, and the stars are the real sky. The human body has wet, fibrous muscles and real-looking bones, and the cells look like living things.',
   'A new look: Cassie’s logo is now Cursor Cassie herself — the pointer with her two blinking eyes — on the app, your home screen and the Chrome extension.',

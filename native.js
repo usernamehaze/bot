@@ -129,9 +129,20 @@
     seen = state.messages.length;
   }).observe(chatLog, { childList: true, subtree: true });
 
-  // while typing, the keyboard needs the room: the tab bar steps aside
-  promptInput.addEventListener('focus', () => root.classList.add('typing'));
-  promptInput.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== promptInput) root.classList.remove('typing'); }, 120));
+  // while the keyboard is up it needs the room: the tab bar steps aside. (Only when the keyboard is
+  // really open — the visible area shrinks — not just because the chat box has focus.)
+  const vv = window.visualViewport;
+  const keyboard = () => {
+    const up = document.activeElement === promptInput && !!vv && window.innerHeight - vv.height > 140;
+    root.classList.toggle('typing', up);
+  };
+  if (vv) vv.addEventListener('resize', keyboard);
+  promptInput.addEventListener('focus', () => setTimeout(keyboard, 250));
+  promptInput.addEventListener('blur', () => setTimeout(keyboard, 120));
+
+  // the top bar floats over the chat (Liquid Glass): the chat scrolls under it, so it needs the bar's height
+  const topbar = $('.topbar'), app = $('#app');
+  if (topbar && app && 'ResizeObserver' in window) new ResizeObserver(() => app.style.setProperty('--topbar-h', topbar.offsetHeight + 'px')).observe(topbar);
 
   sync();
 })();

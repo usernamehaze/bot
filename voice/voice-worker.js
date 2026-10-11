@@ -35,6 +35,9 @@ let stopBefore = 0; // requests with a lower turn number are skipped
 self.onmessage = (e) => {
   const m = e.data || {};
   if (m.type === 'load') {
+    // iPhone and iPad: one thread. Safari often refuses the big block of shared memory that several
+    // threads need, and then the voice never loads.
+    if (m.oneThread) env.numThreads = 1;
     // isolated: the page lets the voice use several processor cores (much less lag)
     // (one tiny sentence is made first and thrown away: the engine's first run is much slower than the
     // rest, so this way it isn't the student's first answer that waits)
