@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '128';
+const APP_VERSION = '129';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -1628,7 +1628,7 @@ const HOME_EXAMPLES = [
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
   { label: 'Explore in 3D (in Labs)', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openLabs(null, { subject: '3d' }) },
   { label: 'Labs: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
-  { label: 'Draw together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
+  { label: 'Study together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
@@ -3821,7 +3821,7 @@ function openSketch(opts = {}) {
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
-    extra: SERVER && !opts.noRoom ? [{ label: 'Draw together', title: 'Start a study room: classmates join with a code and draw on the same board', onClick: () => openRoomChooser() }] : [],
+    extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code — draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
   });
 }
 
@@ -3846,12 +3846,12 @@ function openRoomChooser(prefill = '') {
   el.setAttribute('aria-label', 'Study room');
   el.innerHTML = `<div class="room-card">
       <button type="button" class="room-x" aria-label="Close">×</button>
-      <h2>Draw together</h2>
-      <p>Start a study room and share the code — up to 12 classmates draw on the same board, live.</p>
+      <h2>Study together</h2>
+      <p>Start a study room and share the code — up to 12 classmates, each at home: draw on the same board, chat, ask Cassie for everyone, study shared flashcards, take a group quiz and pin notes, live.</p>
       <button type="button" class="room-go main" data-room="new">Start a room</button>
       <form class="room-join"><input name="code" maxlength="6" placeholder="Have a code? e.g. K7M2QX" autocomplete="off" autocapitalize="characters" value="${escapeHtml(prefill)}"><button type="submit" class="room-go">Join</button></form>
       <p class="room-err" hidden></p>
-      <p class="room-fine">Rooms last a day. Only drawings are shared — be kind, it’s a study room.</p>
+      <p class="room-fine">Rooms last a day. What you share in a room — drawings, messages, cards, notes — everyone in it sees. Be kind, it’s a study room.</p>
     </div>`;
   document.body.appendChild(el);
   const err = el.querySelector('.room-err');
@@ -3869,6 +3869,17 @@ function openRoomChooser(prefill = '') {
     try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { fail(x); }
   });
   setTimeout(() => el.querySelector(prefill ? '.room-join input' : '[data-room="new"]').focus(), 30);
+}
+// a quiz for the whole room: Cassie writes 5 multiple-choice questions as data
+async function roomQuiz(topic) {
+  const p = state.profile || {};
+  const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
+  const reply = await askCassie([{ role: 'user', content: `Write a 5-question multiple-choice quiz about "${topic}" for a ${level} student. Each question has 4 options and exactly one right answer; the wrong options should be believable. Reply with ONLY a JSON array, no other text: [{"q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "one short sentence on why the answer is right"}] — "a" is the index (0–3) of the right option.` }]);
+  const s = String(reply || ''), i = s.indexOf('['), j = s.lastIndexOf(']');
+  if (i < 0 || j <= i) return [];
+  try {
+    return JSON.parse(s.slice(i, j + 1)).filter((q) => q && q.q && Array.isArray(q.o) && q.o.length >= 2 && Number.isInteger(+q.a) && +q.a < q.o.length).slice(0, 10).map((q) => ({ q: String(q.q), o: q.o.map(String), a: +q.a, why: String(q.why || '') }));
+  } catch (e) { return []; }
 }
 async function startRoom(code, title) {
   if (!window.CassieSketch) return;
@@ -3890,9 +3901,24 @@ async function startRoom(code, title) {
   });
   const session = window.CassieSketch.session();
   if (!session) { R.stop(); return; }
+  // studying together beside the board (study-room.js): chat, Cassie for everyone, shared cards, a quiz, notes, a timer
+  const panel = document.querySelector('.csk-panel');
+  const study = window.CassieStudy && panel ? window.CassieStudy.attach({
+    panel, me, name: roomName(),
+    send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); },
+    ask: (q) => askCassie([{ role: 'user', content: q }]),
+    makeQuiz: roomQuiz,
+    decks: () => { const m = new Map(); (state.cards || []).forEach((c) => { if (!m.has(c.deck)) m.set(c.deck, []); m.get(c.deck).push({ f: c.f, b: c.b }); }); return [...m.entries()].map(([name, cards]) => ({ name, cards })); },
+    speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+    onUnread: (n) => { const b = document.querySelector('[data-room-act="study"]'); if (b) b.textContent = n ? `📚 Study together (${n})` : '📚 Study together'; },
+  }) : null;
+  const stopRoom = R.stop;
+  R.stop = () => { stopRoom(); if (study) study.destroy(); };
   const banner = (note = '') => {
     const who = R.members.map((m) => `<span>${escapeHtml(m.uid === me ? `${m.name} (you)` : m.name)}</span>`).join('');
-    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button>${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const sb = el.querySelector('[data-room-act="study"]');
+    if (sb) sb.onclick = () => study.toggle();
     const btn = el.querySelector('[data-room-act="copy"]');
     btn.onclick = () => {
       const txt = `Join my Cassie study room: ${link} (code ${code})`;
@@ -3913,9 +3939,14 @@ async function startRoom(code, title) {
       const r = await fetch(`${SERVER}/room/poll?code=${code}&uid=${encodeURIComponent(me)}&since=${R.since}`);
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(d.error || 'Lost the room'), { gone: !!d.gone });
-      if (d.ops && d.ops.length) { R.since = d.ops[d.ops.length - 1].id; session.remote(d.ops); }
+      if (d.ops && d.ops.length) {
+        R.since = d.ops[d.ops.length - 1].id;
+        const isStudy = (o) => o.op && window.CassieStudy && window.CassieStudy.kinds.has(o.op.t);
+        if (study) study.receive(d.ops.filter(isStudy), d.now);
+        session.remote(d.ops.filter((o) => !isStudy(o)));
+      }
       const names = JSON.stringify(d.members || []);
-      if (names !== JSON.stringify(R.members) || R.fails) { R.members = d.members || []; R.fails = 0; banner(); }
+      if (names !== JSON.stringify(R.members) || R.fails) { R.members = d.members || []; R.fails = 0; if (study) study.members(R.members); banner(); }
       R.timer = setTimeout(tick, d.more ? 50 : document.hidden ? 4000 : 1000);
     } catch (e) {
       if (e.gone) { banner('This room has ended. Save your board with the picture button.'); R.stop(); return; }
@@ -4839,6 +4870,12 @@ function speak(text) {
   const chunks = bellaChunks(cleanForSpeech(text));
   if (!chunks.length || !humanVoiceWanted()) return;
   const CV = window.CassieVoice;
+  if (studioVoice()) { // the studio voice (and, if it stops, Bella or the device's) reads it
+    const h = CV.speak(chunks.join(' '), { gender: voiceGender(), onStart: () => botMood('talking') });
+    readAloud = h;
+    h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
+    return;
+  }
   const go = () => {
     const h = CV.say(chunks, { gender: voiceGender(), onStart: () => botMood('talking') });
     readAloud = h;
@@ -4873,6 +4910,9 @@ const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && wi
 // Cassie's voice (voice.js): Bella, made on the device by a small AI voice model, so she
 // sounds like a person. While Bella isn't ready on a device, its own best voice speaks instead.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
+// the studio voice (ElevenLabs, through Cassie's server) goes first when the server has it
+if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId() });
+const studioVoice = () => !!window.CassieVoice && window.CassieVoice.studio.ready();
 const humanVoiceReady = () => humanVoiceWanted() && window.CassieVoice.status() === 'ready';
 let voiceUI = null;
 
@@ -4986,11 +5026,13 @@ function showHumanVoiceSetting() {
       : st === 'loading' ? `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once — her answers show as text until then)`
         : st === 'failed' ? `Couldn’t get her voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
           : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
+  if (CV && CV.studio && CV.studio.on()) box.textContent = `✓ Cassie’s studio voice is on (the most natural — she uses it first while you’re online). ${box.textContent}`;
 }
 function playHumanSample() {
   const CV = window.CassieVoice;
   if (!CV || !CV.supported()) { showHumanVoiceSetting(); return; }
   CV.unlock(); // inside the tap
+  if (CV.studio && CV.studio.ready()) { CV.speak(HV_SAMPLE, { gender: voiceGender() }); return; }
   CV.prepare().then(() => {
     const h = CV.say(bellaChunks(HV_SAMPLE), { gender: voiceGender() });
     h.done.then(showHumanVoiceSetting);
@@ -5086,7 +5128,7 @@ function sayThenListen(text) {
     // Bella speaks it. If her voice isn't ready on this device (still downloading, or her engine
     // can't run here), the device's own best voice says it — Cassie is never silent.
     if (!clean) { finish(); return; }
-    const h = humanVoiceReady() ? window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() }) : window.CassieVoice.device.say(clean, { gender: voiceGender() });
+    const h = !studioVoice() && humanVoiceReady() ? window.CassieVoice.say(bellaChunks(clean), { gender: voiceGender() }) : window.CassieVoice.speak(clean, { gender: voiceGender() });
     v.stopSpeaking = () => { h.stop(); finish(); };
     h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
@@ -5300,7 +5342,7 @@ async function askOutLoud(text) {
   const before = state.messages.length;
   // she starts speaking the first sentence while the rest of the answer is still coming
   const CV = window.CassieVoice;
-  const live = humanVoiceReady() && CV && CV.sayStream ? CV.sayStream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); } }) : null;
+  const live = !studioVoice() && humanVoiceReady() && CV && CV.sayStream ? CV.sayStream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); } }) : null;
   let upTo = 0;
   v.stopSpeaking = live ? () => live.stop() : null;
   const onDelta = (sofar) => {
@@ -6009,6 +6051,7 @@ if (window.CassieCards) {
     state: () => state,
     save,
     ask: (prompt) => askCassie([{ role: 'user', content: prompt }]),
+    speak: (text) => window.CassieVoice.speak(cleanForSpeech(text), { gender: voiceGender() }),
     track,
     onChange: () => { if (!state.messages.length) renderHistory(); }, // the home screen shows what's due
   });
@@ -6016,6 +6059,8 @@ if (window.CassieCards) {
 
 /* ---------- What's new (once per update, for returning users) ---------- */
 const WHATS_NEW = [
+  'Listen: every answer, quiz question and 3D part card has a 🔊 Listen button, and flashcards can be read to you — one at a time, automatically, or hands-free with 🎧 Listen (the question, a moment to think, then the answer).',
+  'Study together: in a study room, open 📚 Study together — chat with your group, ask Cassie for everyone, study shared flashcards together, take a group quiz with a live score board, pin notes, and run a focus timer for the whole room.',
   'Talk with Cassie always talks now: if her own voice can’t load on your phone, she speaks with your phone’s best voice instead of going quiet. Her own voice also loads better on iPhone.',
   'A new Liquid Glass look: the bars, buttons and menus float on frosted glass over your chat. And the app icon on your iPhone home screen is now filled to the edges.',
   'On your phone, Cassie is now a real app: a Home screen with everything one tap away, and a tab bar at the bottom — Home, Chat, Labs, Cards and You.',

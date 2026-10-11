@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v152';
+const CACHE_NAME = 'cassie-v153';
 const ASSETS = [
   './',
   'index.html',
@@ -15,6 +15,8 @@ const ASSETS = [
   'cassie-bot.js',
   'app.js',
   'native.js',
+  'listen.js',
+  'study-room.js',
   'boot3d.js',
   'start.js',
   'memory.js',

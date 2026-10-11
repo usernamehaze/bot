@@ -399,7 +399,7 @@ test('study room: two students draw on the same board, live (code, link, undo on
   try {
     // Ana opens the board and starts a room
     await A.page.click('#board-btn');
-    await A.page.click('.csk-btn:has-text("Draw together")');
+    await A.page.click('.csk-btn:has-text("Study together")');
     await A.page.click('[data-room="new"]');
     await A.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
     const code = await A.page.locator('.csk-room b').innerText();
@@ -438,6 +438,123 @@ test('study room: two students draw on the same board, live (code, link, undo on
     await A.page.waitForSelector('.room-err:not([hidden]) >> text=No room with that code', { timeout: 5000 });
     expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
   } finally { await A.ctx.close(); await B.ctx.close(); }
+});
+
+test('study room: studying together — chat, Cassie for everyone, shared flashcards, a group quiz, notes, a timer', async (b) => {
+  const QUIZ = JSON.stringify([{ q: 'What makes ATP?', o: ['Mitochondria', 'Ribosome', 'Nucleus', 'Golgi'], a: 0, why: 'Mitochondria release energy as ATP.' }, { q: 'Where is DNA kept?', o: ['Vacuole', 'Nucleus', 'Wall', 'Membrane'], a: 1, why: 'The nucleus holds the DNA.' }]);
+  const fake = (body) => ({ text: /multiple-choice quiz/.test(JSON.stringify(body.messages)) ? QUIZ : 'Plants make glucose from light, water and carbon dioxide.' });
+  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }, { id: 'c2', f: 'Where is DNA?', b: 'Nucleus', deck: 'Biology', box: 0, due: 0, at: 0 }];
+  const A = await open(b, { device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test', cards, profile: { ...PROFILE, name: 'Ana Reyes' } } });
+  const B = await open(b, { device: 'Desktop Chrome', fakeGroq: fake, state: { groqKey: 'gsk_test', profile: { ...PROFILE, name: 'Ben Cruz' } } });
+  try {
+    await A.page.click('#board-btn');
+    await A.page.click('.csk-btn:has-text("Study together")');
+    await A.page.click('[data-room="new"]');
+    await A.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    const code = await A.page.locator('.csk-room b').innerText();
+    await B.page.goto(APP + '?room=' + code);
+    await B.page.waitForSelector('[data-room-act="study"]', { timeout: 10000 });
+    await A.page.waitForFunction(() => /Ben/.test(document.querySelector('.csk-who').textContent), null, { timeout: 10000 });
+    // chat
+    await A.page.click('[data-room-act="study"]');
+    await A.page.fill('.sr-foot .sr-in', 'Hi Ben! Ready for bio?');
+    await A.page.click('.sr-foot [data-act="send"]');
+    await B.page.waitForFunction(() => /Study together \(1\)/.test(document.querySelector('[data-room-act="study"]').textContent), null, { timeout: 8000 });
+    await B.page.click('[data-room-act="study"]');
+    await B.page.waitForSelector('.sr-msg >> text=Hi Ben! Ready for bio?', { timeout: 5000 });
+    expect(/Ana/.test(await B.page.locator('.sr-msg b').first().innerText()), 'Ben sees who wrote it');
+    // Cassie answers for everyone
+    await A.page.fill('.sr-foot .sr-in', 'What is photosynthesis?');
+    await A.page.click('.sr-foot [data-act="ask"]');
+    await B.page.waitForSelector('.sr-share >> text=Plants make glucose', { timeout: 10000 });
+    if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/study-chat.png' });
+    expect(/Ana asked Cassie for everyone/.test(await B.page.locator('.sr-share small').innerText()), 'Ben sees Ana asked Cassie');
+    // shared flashcards: Ana shares, Ben flips, both mark
+    await A.page.click('.sr-tabs [data-tab="cards"]');
+    await A.page.click('[data-share-deck="0"]');
+    await B.page.click('.sr-tabs [data-tab="cards"]');
+    await B.page.waitForSelector('.sr-card >> text=Powerhouse of the cell?', { timeout: 8000 });
+    await B.page.click('.sr-card');
+    await A.page.waitForSelector('.sr-card .sr-ans >> text=Mitochondria', { timeout: 8000 });
+    if (process.env.SHOTS) await A.page.screenshot({ path: process.env.SHOTS + '/study-cards.png' });
+    await A.page.click('[data-act="got"]');
+    await B.page.click('[data-act="miss"]');
+    await A.page.waitForFunction(() => /Ana ✓/.test(document.querySelector('.sr-body').textContent) && /Ben ✗/.test(document.querySelector('.sr-body').textContent), null, { timeout: 8000 });
+    await B.page.click('[data-act="next"]');
+    await A.page.waitForSelector('.sr-card >> text=Where is DNA?', { timeout: 8000 });
+    // a group quiz with a score board
+    await B.page.click('.sr-tabs [data-tab="quiz"]');
+    await B.page.fill('.sr-foot .sr-in', 'cells');
+    await B.page.click('.sr-foot [data-act="quiz"]');
+    await A.page.click('.sr-tabs [data-tab="quiz"]');
+    await A.page.waitForSelector('.sr-q >> text=What makes ATP?', { timeout: 10000 });
+    await A.page.click('[data-ans="0|0"]'); await A.page.click('[data-ans="1|1"]');
+    await B.page.waitForSelector('.sr-q >> text=What makes ATP?', { timeout: 5000 });
+    await B.page.click('[data-ans="0|2"]');
+    await B.page.waitForFunction(() => { const t = (document.querySelector('.sr-board') || {}).textContent || ''; return /Ana\s*2 \/ 2/.test(t) && /You\s*0 \/ 2/.test(t); }, null, { timeout: 8000 });
+    expect(await B.page.locator('[data-ans="0|0"].right').count() === 1 && await B.page.locator('[data-ans="0|2"].wrong').count() === 1, 'Ben sees the right answer and his wrong pick');
+    if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/study-quiz.png' });
+    // notes, and only your own can be removed
+    await A.page.click('.sr-tabs [data-tab="notes"]');
+    await A.page.fill('.sr-foot .sr-in', 'Source: OpenStax Biology ch. 7');
+    await A.page.click('.sr-foot [data-act="note"]');
+    await B.page.click('.sr-tabs [data-tab="notes"]');
+    await B.page.waitForSelector('.sr-note >> text=OpenStax', { timeout: 8000 });
+    expect(await B.page.locator('.sr-note button').count() === 0, 'Ben can’t remove Ana’s note');
+    // a focus timer for everyone
+    await A.page.click('.sr-head [data-act="timer"]');
+    await B.page.waitForFunction(() => /⏱ (25|24):/.test(document.querySelector('.sr-tm').textContent), null, { timeout: 8000 });
+    // someone joining late sees it all
+    const C = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Cara' } } });
+    await C.page.goto(APP + '?room=' + code);
+    await C.page.waitForSelector('[data-room-act="study"]', { timeout: 10000 });
+    await C.page.click('[data-room-act="study"]');
+    await C.page.waitForSelector('.sr-share >> text=Plants make glucose', { timeout: 10000 });
+    await C.ctx.close();
+    expect(await A.page.locator('.sr-warn').isHidden(), 'the server takes study steps');
+    expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
+  } finally { await A.ctx.close(); await B.ctx.close(); }
+});
+
+test('Listen: Cassie reads answers and flashcards aloud — the studio voice first, the device’s when it runs out', async (b) => {
+  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards } });
+  // a tiny real sound (a WAV), standing in for ElevenLabs' MP3
+  const wav = (() => { const n = 1600, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
+  const said = []; let credits = true;
+  await ctx.route(/\/speak$/, (route) => {
+    const r = route.request();
+    if (r.method() === 'GET') return route.fulfill({ json: { on: true }, headers: { 'access-control-allow-origin': '*' } });
+    said.push(JSON.parse(r.postData()).text);
+    return credits ? route.fulfill({ body: wav, contentType: 'audio/mpeg', headers: { 'access-control-allow-origin': '*' } }) : route.fulfill({ status: 429, json: { error: { message: 'used up' } }, headers: { 'access-control-allow-origin': '*' } });
+  });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
+  await page.fill('#prompt-input', 'What do mitochondria do?');
+  await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('.bubble-assistant .listen-btn', { timeout: 10000 });
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForFunction(() => document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 3000 });
+  await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 8000 });
+  expect(said.some((t) => /Mitochondria make ATP/.test(t)), 'the answer went to the studio voice: ' + JSON.stringify(said));
+  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'the device voice wasn’t needed');
+  // the studio voice is used up: the device's voice reads it instead, never silence
+  credits = false;
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForFunction(() => window.__spoken.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 8000 });
+  // flashcards: a Listen button on the card, and hands-free listening
+  await page.evaluate(() => window.CassieCards.open());
+  await page.click('[data-study="Biology"]');
+  await page.click('.fc-mini[data-say]');
+  await page.waitForFunction(() => window.__spoken.some((t) => /Powerhouse of the cell/.test(t)), null, { timeout: 5000 });
+  await page.click('.fc-back');
+  await page.click('[data-listen="Biology"]');
+  await page.waitForSelector('.fc-listening >> text=Think of the answer', { timeout: 5000 });
+  await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 12000 });
+  await page.click('[data-lstop]');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('quiz saves missed questions for Review my mistakes', async (b) => {
