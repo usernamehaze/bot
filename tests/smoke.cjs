@@ -1997,6 +1997,54 @@ test('Plus extras: a free student sees the diagram, and Real 3D, the Museum quiz
   await ctx.close();
 });
 
+test('All 3D on Free: the cells, the body, the solar system and the globe open twice a week each, then say how to get Plus', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', plan: null } });
+  const plusSays = async (what) => {
+    await page.waitForSelector('.plus-sheet', { timeout: 8000 });
+    const t = await page.locator('.plus-sheet').innerText();
+    expect(t.includes(what) && /2 free views this week/.test(t), 'the Plus note: ' + t);
+    await page.click('.plus-sheet .plus-ok');
+  };
+  // Explore 3D: the animal cell, twice
+  for (let k = 1; k <= 2; k++) {
+    await page.evaluate(() => openExplore('animal'));
+    await page.waitForFunction((n) => { const t = document.querySelector('.x3d-toast'); return t && (n === 1 ? /1 more/ : /last/).test(t.textContent); }, k, { timeout: 30000 });
+    if (process.env.SHOTS && k === 1) { await page.waitForTimeout(1500); await page.screenshot({ path: process.env.SHOTS + '/x3d-toast.png' }); }
+    const t = await page.locator('.x3d-toast').textContent();
+    expect(k === 1 ? /1 more free view/.test(t) : /last free view/.test(t), `visit ${k}: ${t}`);
+    // switching to the plant cell uses the plant's own views
+    if (k === 1) {
+      await page.click('[data-cell="plant"]');
+      await page.waitForFunction(() => document.querySelector('[data-cell="plant"]').getAttribute('aria-selected') === 'true', null, { timeout: 15000 });
+      expect(await page.evaluate(() => freeLeft('3d:plant')) === 1, 'the plant cell has its own 2');
+      await page.click('[data-cell="animal"]'); // already open this time: free
+    }
+    await page.click('.x3d-close');
+  }
+  expect(await page.evaluate(() => freeLeft('3d:animal')) === 0, 'the animal cell is used up');
+  await page.evaluate(() => openExplore('animal'));
+  await plusSays('animal cell');
+  // the solar system: twice, then a note
+  const lab = async (id) => { await page.evaluate((x) => openLabs(x), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"]`, { timeout: 15000 }); };
+  await lab('space3d');
+  await page.waitForSelector('.lab-panel .lab-note >> text=/1 more free 3D view/', { timeout: 15000 });
+  await lab('solar'); await lab('space3d');
+  await page.waitForSelector('.lab-panel .lab-note >> text=/last free 3D view/', { timeout: 15000 });
+  await lab('solar'); await lab('space3d');
+  await plusSays('solar system');
+  await page.waitForSelector('.lab-stage >> text=/used this week’s 2 free views/', { timeout: 15000 });
+  await page.click('.lab-stage .lab-btn:has-text("About Plus")');
+  await plusSays('solar system');
+  // the globe: the flat map first; the globe twice a week
+  await lab('atlas');
+  expect(/2 free views this week/.test(await page.locator('.lab-panel').innerText()), 'the atlas says 2 free globe views');
+  await page.click('.lab-panel .lab-seg button:has-text("Globe 3D")');
+  await page.waitForSelector('.lab-panel >> text=/1 more free 3D view/', { timeout: 15000 });
+  expect(await page.evaluate(() => freeLeft('3d:atlas')) === 1, 'one globe view used');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Museum and games: famous paintings, a logic circuit, cracking a rule / regex / compound, a pinning blitz, the fraction diner, the city market', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await ctx.route(/wikipedia\.org/, (r) => r.abort());

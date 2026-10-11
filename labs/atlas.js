@@ -4,7 +4,7 @@
    Country facts: the world-countries data (ODbL) and World Bank population figures (CC BY 4.0),
    kept with the app so they work offline; the newest population and the history come live from
    the World Bank and Wikipedia when you're online. Flags: flag-icons (MIT). */
-import { el, esc, num, canvas, drag, at, group, seg, button, row, overlay, text, dot, line, C, INK, DIM } from './kit.js';
+import { el, esc, num, canvas, drag, at, group, seg, button, row, overlay, text, dot, line, C, INK, DIM, premium, free3dView } from './kit.js';
 import { webglOk } from './three-kit.js';
 import { loadWorld, naturalEarth, FULL_NAMES } from './puzzles.js';
 
@@ -50,9 +50,19 @@ export const atlasLab = {
     let data = [], world = null, sel = null, place = null, vk = 1, vx = 0, vy = 0, proj = null;
     const byN3 = new Map(), byC3 = new Map();
     // the globe (3D) or the flat map
-    let G = null, globeOn = webglOk() && !/[?&]flat\b/.test(location.search), gBusy = false, dead = false;
+    // (free: 2 views of the globe a week; switching back and forth while the atlas is open is free)
+    let G = null, globeOn = webglOk() && premium.has() && !/[?&]flat\b/.test(location.search), gBusy = false, dead = false, gTried = false;
     const vg = group(panel, 'View');
-    seg(vg, { options: [['globe', 'Globe 3D'], ['map', 'Flat map']], value: globeOn ? 'globe' : 'map', onChange: (v) => { globeOn = v === 'globe'; showView(); } });
+    const vs = seg(vg, { options: [['globe', 'Globe 3D'], ['map', 'Flat map']], value: globeOn ? 'globe' : 'map', onChange: (v) => {
+      if (v === 'globe' && !gTried && !premium.has()) {
+        const ok = free3dView('3d:atlas', 'The 3D globe');
+        if (!ok) { vs.set('map'); return; }
+        gTried = true; gNote.textContent = ok;
+      }
+      globeOn = v === 'globe'; showView();
+    } });
+    const gNote = el('p', 'lab-note', '');
+    if (!premium.has()) { const n = premium.left('3d:atlas'); gNote.textContent = n > 0 ? `The 3D globe is a Plus extra. You have ${n} free ${n === 1 ? 'view' : 'views'} this week: tap Globe 3D.` : 'The 3D globe is a Plus extra. The flat map has everything the globe does.'; vg.appendChild(gNote); }
     if (!webglOk()) vg.hidden = true;
     // search
     const sg = group(panel, 'Search');

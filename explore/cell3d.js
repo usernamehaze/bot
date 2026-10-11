@@ -750,7 +750,15 @@ function createView() {
     body.setSex(b.dataset.sex).catch(() => {});
     if (opts.onSelect) opts.onSelect('sex:' + b.dataset.sex);
   });
-  root.querySelector('.x3d-switch').addEventListener('click', (e) => { const b = e.target.closest('[data-cell]'); if (b && b.dataset.cell !== kind) showCell(b.dataset.cell); });
+  root.querySelector('.x3d-switch').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cell]');
+    if (!b || b.dataset.cell === kind) return;
+    // (the app may limit how often each one opens: allow() says no, or gives a note to show)
+    const ok = opts.allow ? opts.allow(b.dataset.cell) : true;
+    if (!ok) return;
+    showCell(b.dataset.cell);
+    if (typeof ok === 'string') toast(ok);
+  });
   root.querySelector('.x3d-tools').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tool]');
     if (!b) return;
@@ -969,11 +977,20 @@ function createView() {
     if ((!current && !inBody) || want !== kind) showCell(want);
     setTimeout(() => $('.x3d-close').focus(), 50);
   }
+  let toastT = 0;
+  function toast(msg) {
+    let t = root.querySelector('.x3d-toast');
+    if (!t) { t = document.createElement('div'); t.className = 'x3d-toast'; t.setAttribute('role', 'status'); root.appendChild(t); }
+    t.textContent = msg; t.hidden = false;
+    // it goes when you start turning things (or after a while)
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 15000);
+    canvas.addEventListener('pointerdown', () => { clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2500); }, { once: true });
+  }
   function close() {
     root.hidden = true;
     document.documentElement.classList.remove('x3d-open');
     cancelAnimationFrame(raf); raf = 0;
     if (opts.onClose) opts.onClose();
   }
-  return { open, close, select, body, get kind() { return kind; }, get selected() { return selected; }, root };
+  return { open, close, select, body, toast, get kind() { return kind; }, get selected() { return selected; }, root };
 }
