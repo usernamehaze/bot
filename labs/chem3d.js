@@ -256,10 +256,8 @@ export function atom3d(B) {
       for (let k = ie; k < eGlow.length; k++) eGlow[k].visible = false;
       electrons.count = ie; electrons.instanceMatrix.needsUpdate = true;
       // the tray, and what you're holding
-      for (const tr of s.tray) {
-        tray[tr.k].position.copy(B.P(tr.x, tr.y, 0)); tray[tr.k].scale.setScalar(B.u(10));
-        tags[tr.k].at(tr.x + 16, tr.y, 0, { p: 'proton', n: 'neutron', e: 'electron' }[tr.k]);
-      }
+      // (the tray is drawn flat on the screen by the lab, so it stays put when you turn the view)
+      for (const k of ['p', 'n', 'e']) { tray[k].visible = false; tags[k].hide(); }
       for (const k of ['p', 'n', 'e']) held[k].visible = !!(s.held && s.held.k === k);
       if (s.held) { const m = held[s.held.k]; m.position.copy(B.P(s.held.x, s.held.y, 0)); m.scale.setScalar(B.u(s.held.k === 'e' ? 6 : pr + 1)); }
     },

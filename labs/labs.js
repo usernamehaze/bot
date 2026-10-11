@@ -59,9 +59,13 @@ function todays() { const k = dayKey(), n = [...k].reduce((s, ch) => s * 31 + ch
 
 function createView() {
   // the labs' own look loads with them (the app stays light until Labs is opened)
+  // (Labs waits for its look before it shows — otherwise a phone on mobile data flashes plain
+  // white boxes for a moment, like an error page)
+  let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=7', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=8', import.meta.url).href; css.dataset.labsCss = '1';
+    cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
   const root = el('div', 'labs');
@@ -205,11 +209,15 @@ function createView() {
     const lab = LABS.find((l) => l.id === id);
     const ex = EXPLORE.find((l) => l.id === id);
     if (ex) {
-      // the 3D viewer opens over Labs; closing it comes back here (asking Cassie leaves Labs)
+      // the 3D viewer opens over Labs; closing it comes back here (asking Cassie leaves Labs).
+      // Labs stays on screen (the card says "Opening…") until the 3D view is there.
       if (!opts.openExplore) return;
-      root.hidden = true;
+      const cardEl = grid.querySelector(`[data-lab="${id}"]`);
+      if (cardEl) cardEl.classList.add('opening');
+      const shown = () => { root.hidden = true; if (cardEl) cardEl.classList.remove('opening'); };
       opts.openExplore(ex.explore, {
-        back: () => { root.hidden = false; renderShelf(); setTimeout(() => { const c = grid.querySelector(`[data-lab="${id}"]`); if (c) c.focus({ preventScroll: false }); }, 30); },
+        opened: shown,
+        back: () => { shown(); root.hidden = false; renderShelf(); setTimeout(() => { const c = grid.querySelector(`[data-lab="${id}"]`); if (c) c.focus({ preventScroll: false }); }, 30); },
         leave: () => close(),
       });
       return;
@@ -280,12 +288,21 @@ function createView() {
     const done = store.get()[lab.id] || [];
     box.hidden = false;
     const n = lab.tries.filter((t, i) => done[i]).length;
-    box.innerHTML = `<h4>Try this <small>${n ? `${n} of ${lab.tries.length} done · ` : ''}they tick when you do them · tap a goal for a hint</small></h4><ul>${lab.tries.map((t, i) => `<li class="${done[i] ? 'done' : ''}${i === justDone ? ' just' : ''}">
+    // on a phone the goals start folded up (they take a lot of room); the choice is remembered
+    const pref = store.get('cassie.labs.ui').tries, folded = pref ? pref === 'min' : matchMedia('(max-width: 760px)').matches;
+    box.classList.toggle('folded', folded);
+    const toggle = `<button type="button" class="lab-tries-toggle" aria-expanded="${!folded}">${folded ? 'Show ▾' : 'Hide ▴'}</button>`;
+    if (folded) { box.innerHTML = `<h4>Try this <small>${n} of ${lab.tries.length} done</small>${toggle}</h4>`; return; }
+    box.innerHTML = `<h4>Try this ${toggle}<small>${n ? `${n} of ${lab.tries.length} done · ` : ''}they tick when you do them · tap a goal for a hint</small></h4><ul>${lab.tries.map((t, i) => `<li class="${done[i] ? 'done' : ''}${i === justDone ? ' just' : ''}">
       <div class="lab-try-row"><button type="button" class="lab-tick" data-tick="${i}" aria-pressed="${!!done[i]}" aria-label="${done[i] ? 'Done — tap to untick' : 'Not done yet — tap to tick it yourself'}" title="${done[i] ? 'Done — tap to untick' : 'Tap to tick it yourself'}"></button>
       <button type="button" class="lab-try" data-try="${i}" aria-expanded="${i === openTry}"><span>${esc(t)}</span><span class="sr-only">${done[i] ? '(done)' : ''}</span><span class="lab-chev" aria-hidden="true">›</span></button></div>
       <div class="lab-hint" ${i === openTry ? '' : 'hidden'}><p>${esc((lab.hints || [])[i] || 'Play with the controls and watch what changes.')}</p>${opts.explain ? `<button type="button" class="lab-btn lab-nudge" data-nudge="${i}">${CURSOR}Still stuck? Cassie nudges you</button><p class="lab-nudge-text" hidden></p>` : ''}</div></li>`).join('')}</ul>`;
   }
   $('.lab-tries').addEventListener('click', (e) => {
+    if (e.target.closest('.lab-tries-toggle')) {
+      const ui = store.get('cassie.labs.ui'); ui.tries = $('.lab-tries').classList.contains('folded') ? 'max' : 'min'; store.set(ui, 'cassie.labs.ui');
+      renderTries(); return;
+    }
     const tick = e.target.closest('[data-tick]');
     if (tick && current) {
       const i = +tick.dataset.tick, all = store.get(), done = all[current.id] || [];
@@ -366,6 +383,9 @@ function createView() {
 
   function open(o) {
     opts = o || {};
+    cssReady.then(() => show());
+  }
+  function show() {
     root.hidden = false;
     document.documentElement.classList.add('labs-open');
     if (opts.lab && LABS.some((l) => l.id === opts.lab)) openLab(opts.lab);

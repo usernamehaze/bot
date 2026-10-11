@@ -332,7 +332,8 @@ const atomLab = {
         const q = Z - E; if (q) text(ctx, (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '−'), tx + 102, ty + 40, C.gold, 'right');
       } else text(ctx, 'no protons', tx + 54, ty + 64, DIM, 'center');
       // the tray: drag a particle into the atom (protons and neutrons into the middle, electrons anywhere round it)
-      tray = [['p', 'proton', C.red], ['n', 'neutron', '#b8b4aa'], ['e', 'electron', C.blue]].map(([k, n2, col], i) => { const x = 24, y = h - 76 + i * 28; if (!in3d) { dot(ctx, x, y, 10, col); text(ctx, n2, x + 18, y + 4, DIM); } return { k, x, y, col }; });
+      // (always drawn flat on the screen — in 3D too — so the legend stays still when you turn the view)
+      tray = [['p', 'proton', C.red], ['n', 'neutron', '#b8b4aa'], ['e', 'electron', C.blue]].map(([k, n2, col], i) => { const x = 24, y = h - 76 + i * 28; if (in3d) { ctx.fillStyle = 'rgba(11,12,16,.55)'; ctx.fillRect(x - 16, y - 13, 108, 26); } dot(ctx, x, y, 10, col); text(ctx, n2, x + 18, y + 4, in3d ? '#f2f2f4' : DIM); return { k, x, y, col }; });
       text(ctx, 'drag into the atom · drag out to remove', 16, h - 96, DIM);
       geoA = { cx, cy, R, nuc: pr * 1.05 * Math.sqrt(Math.max(1, Z + N)) + pr * 1.5, pts, pr, total };
       if (in3d) V.scene.update({ cx, cy, R, Z, N, E, spin, pr, shells: sh, tray, held: heldP });
@@ -341,7 +342,9 @@ const atomLab = {
     let tray = [], geoA = null, heldP = null;
     drag(cv.c, {
       down(p) {
-        const t = tray.find((q) => Math.hypot(p.x - q.x, p.y - q.y) < 16);
+        // the tray sits still on the screen: in 3D, test where the finger is on the screen
+        const sx = p.sx ?? p.x, sy = p.sy ?? p.y;
+        const t = tray.find((q) => Math.hypot(sx - q.x, sy - q.y) < 16);
         if (t) { heldP = { k: t.k, from: 'tray', x: p.x, y: p.y }; return; }
         if (!geoA) return false;
         const d = Math.hypot(p.x - geoA.cx, p.y - geoA.cy);

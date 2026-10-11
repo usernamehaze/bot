@@ -56,7 +56,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', ...state };
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
-    if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); sessionStorage.setItem('seeded', '1'); }
+    if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
@@ -1725,6 +1725,11 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   expect(/done/.test(await page.locator('.lab-tries li').nth(2).getAttribute('class')), 'YY × Yy makes every offspring look the same');
   await page.click('.lab-tries [data-tick="0"]');
   expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'tapping an empty box ticks it');
+  // "Try this" folds up to save room (on phones it starts folded), and opens again
+  await page.click('.lab-tries-toggle');
+  expect(await page.locator('.lab-tries.folded').count() === 1 && await page.locator('.lab-tries li').count() === 0 && /of 3 done/.test(await page.locator('.lab-tries').innerText()), 'Try this folds up and still says how many are done');
+  await page.click('.lab-tries-toggle');
+  expect(await page.locator('.lab-tries li').count() === 3, 'and opens again');
   await shot('lab-goals');
   await page.click('.lab-back');
   // colour: a named colour, its name, and the hex
@@ -1998,6 +2003,33 @@ test('Museum and games: famous paintings, a logic circuit, cracking a rule / reg
   expect(/Month 2 of 12/.test(await page.locator('.gm-market .gm-bar').innerText()), 'month 2');
   expect(/Balanced|Surplus|Shortage/.test(await page.locator('.lab-panel .gm-msg').innerText()), 'it explains what happened');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/game-market.png' });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Labs 3D: the atom’s particle tray stays still when the view turns, and zoom goes where you point', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome' });
+  await page.goto(APP + '?lab=atom');
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] canvas.lab-3d', { timeout: 30000 });
+  await page.waitForTimeout(1500);
+  const box = await page.locator('.lab-stage').boundingBox();
+  // turn the view
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.8); await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.6, { steps: 10 }); await page.mouse.up();
+  await page.waitForTimeout(800);
+  // zoom in with the wheel over a spot off the middle: the point under the pointer stays under it
+  const px = box.x + box.width * 0.3, py = box.y + box.height * 0.35;
+  const under = await page.evaluate(([x, y]) => { const c = document.querySelector('.lab-stage canvas:not(.lab-3d)'); const p = c._at({ clientX: x, clientY: y }); return [p.x, p.y]; }, [px, py]);
+  await page.mouse.move(px, py);
+  for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, -200); await page.waitForTimeout(60); }
+  await page.waitForTimeout(1200);
+  const now = await page.evaluate(([x, y]) => document.querySelector('.lab-stage canvas:not(.lab-3d)')._toScreen(x, y), under);
+  expect(Math.hypot(now.x - px, now.y - py) < 30, 'zoom keeps the pointed-at spot under the pointer: ' + JSON.stringify([now, px, py]));
+  // the tray is still in the bottom-left corner of the screen: drag a neutron from it into the nucleus
+  const nuc = await page.evaluate(() => { const c = document.querySelector('.lab-stage canvas:not(.lab-3d)'), r = c.getBoundingClientRect(); return c._toScreen(r.width * 0.42, r.height / 2); });
+  await page.mouse.move(box.x + 24, box.y + box.height - 76 + 28); await page.mouse.down();
+  await page.mouse.move(nuc.x, nuc.y, { steps: 10 }); await page.mouse.up();
+  await page.waitForFunction(() => /carbon-13/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 3000 });
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

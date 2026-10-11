@@ -31,6 +31,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
   controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.rotateSpeed = 0.7; controls.zoomSpeed = 1.1;
   controls.screenSpacePanning = true;
+  controls.zoomToCursor = true; // pinch or scroll zooms in on what you point at, not the middle
   const frames = new Set(), picks = [], tags = [];
   let w = 1, h = 1, raf = 0, alive = true, fly = null, awake = performance.now() + 1500;
   const fit = () => {

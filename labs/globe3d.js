@@ -72,7 +72,7 @@ export async function globe(stage, { world, onTap }) {
 
   // the camera: spin with a finger, pinch to zoom (slower spinning when close)
   camera.position.set(0, 0.6, 3.1);
-  controls.enablePan = false; controls.minDistance = 1.12; controls.maxDistance = 6; controls.rotateSpeed = 0.5;
+  controls.enablePan = false; controls.zoomToCursor = false; controls.minDistance = 1.12; controls.maxDistance = 6; controls.rotateSpeed = 0.5;
   S.onFrame(() => { const d = camera.position.length(); controls.rotateSpeed = Math.max(0.06, Math.min(0.55, (d - 1) * 0.28)); controls.zoomSpeed = Math.max(0.35, Math.min(1.1, (d - 1) * 0.6)); });
 
   // a tap (not a drag) on Earth: which place is that?

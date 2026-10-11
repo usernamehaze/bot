@@ -44,27 +44,32 @@ export async function bench(stage, cv, { plane = 'wall', look = 'lab', pitch = 9
   const u = (px) => px / k;
   const toPx = (v) => (table ? { x: v.x * k + w / 2, y: v.z * k + h / 2 } : { x: v.x * k + w / 2, y: h / 2 - v.y * k });
 
-  /* ---------- the camera: turn and zoom, always looking at the middle of the layout ---------- */
+  /* ---------- the camera: turn, and zoom towards what you point at (or pinch around) ---------- */
   const lim = { pitch: table ? [minPitch ?? 22, maxPitch ?? 88] : [minPitch ?? -6, maxPitch ?? 62], yaw: [-62, 62] };
   const home = { yaw, pitch, zoom: 1 };
   const cam = { ...home }, goal = { ...home };
+  const aim = new THREE.Vector3(), aimGoal = new THREE.Vector3(); // what the camera looks at (moves when you zoom in on something)
   const d0 = () => ((UNITS / 2) / Math.tan(((fov / 2) * Math.PI) / 180)) * fit;
   function place(dt) {
     const a = reduced() ? 1 : 1 - Math.exp(-dt * 12);
     for (const key of ['yaw', 'pitch', 'zoom']) { if (Math.abs(goal[key] - cam[key]) > 1e-3) S.wake(200); cam[key] += (goal[key] - cam[key]) * a; }
+    if (aim.distanceToSquared(aimGoal) > 1e-6) { S.wake(200); aim.lerp(aimGoal, a); }
     const y = (cam.yaw * Math.PI) / 180, p = (cam.pitch * Math.PI) / 180, d = d0() * cam.zoom;
-    if (table) camera.position.set(Math.sin(y) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(y) * Math.cos(p) * d);
-    else camera.position.set(Math.sin(y) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(y) * Math.cos(p) * d);
-    controls.target.set(0, 0, 0);
+    camera.position.set(Math.sin(y) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(y) * Math.cos(p) * d).add(aim);
+    controls.target.copy(aim);
   }
   S.onFrame(place);
   place(1);
   const clampGoal = () => {
     goal.yaw = Math.max(lim.yaw[0], Math.min(lim.yaw[1], goal.yaw));
     goal.pitch = Math.max(lim.pitch[0], Math.min(lim.pitch[1], goal.pitch));
-    goal.zoom = Math.max(0.45, Math.min(1.7, goal.zoom));
+    goal.zoom = Math.max(0.3, Math.min(1.7, goal.zoom));
+    // the closer you are, the further the view may slide off the middle (back to the middle when zoomed out)
+    const room2 = Math.max(0, 1 - goal.zoom), ex = (w / 2 / k) * room2 * 1.1, ey = (UNITS / 2) * room2 * 1.1;
+    aimGoal.x = Math.max(-ex, Math.min(ex, aimGoal.x));
+    if (table) { aimGoal.z = Math.max(-ey, Math.min(ey, aimGoal.z)); aimGoal.y = 0; } else { aimGoal.y = Math.max(-ey, Math.min(ey, aimGoal.y)); aimGoal.z = 0; }
   };
-  const resetView = () => Object.assign(goal, home);
+  const resetView = () => { Object.assign(goal, home); aimGoal.set(0, 0, 0); };
 
   // pointer → the flat layout, through the camera, onto the layout's plane
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3();
@@ -90,6 +95,20 @@ export async function bench(stage, cv, { plane = 'wall', look = 'lab', pitch = 9
     },
     up() { if (od && !od.moved) { const t = performance.now(); if (t - lastTap < 350) resetView(); lastTap = t; } od = null; },
   };
+  // zoom by a factor around a point on the screen: the thing under it stays under it
+  const zp = new THREE.Vector3();
+  function zoomAt(f, clientX, clientY) {
+    const before = goal.zoom;
+    goal.zoom *= f; clampGoal();
+    const g = goal.zoom / before;
+    if (clientX != null && Math.abs(g - 1) > 1e-4) {
+      const r = cv.c.getBoundingClientRect();
+      ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+      camera.updateMatrixWorld(); ray.setFromCamera(ndc, camera);
+      if (ray.ray.intersectPlane(flat, zp)) aimGoal.sub(zp).multiplyScalar(g).add(zp);
+    }
+    clampGoal(); S.wake(400);
+  }
   // two fingers: pinch to zoom, move together to turn
   const ptrs = new Map(); let pin = null;
   const twoOf = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
@@ -97,14 +116,14 @@ export async function bench(stage, cv, { plane = 'wall', look = 'lab', pitch = 9
   const pmove = (e) => {
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (ptrs.size === 2 && pin) { const t = twoOf(); goal.zoom = pin.zoom * (pin.d / Math.max(10, t.d)); goal.yaw = pin.yaw - (t.x - pin.x) * 0.35; goal.pitch = pin.pitch + (t.y - pin.y) * 0.3; clampGoal(); }
+    if (ptrs.size === 2 && pin) { const t = twoOf(); zoomAt((pin.zoom * (pin.d / Math.max(10, t.d))) / goal.zoom, t.x, t.y); goal.yaw = pin.yaw - (t.x - pin.x) * 0.35; goal.pitch = pin.pitch + (t.y - pin.y) * 0.3; clampGoal(); }
   };
   const pup = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pin = null; if (!ptrs.size) cv.c._pinch = false; };
   stage.addEventListener('pointerdown', pdown, true);
   stage.addEventListener('pointermove', pmove, true);
   stage.addEventListener('pointerup', pup, true);
   stage.addEventListener('pointercancel', pup, true);
-  const wheel = (e) => { e.preventDefault(); goal.zoom *= e.deltaY > 0 ? 1.1 : 1 / 1.1; clampGoal(); };
+  const wheel = (e) => { e.preventDefault(); zoomAt(e.deltaY > 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); };
   cv.c.addEventListener('wheel', wheel, { passive: false });
 
   /* ---------- light ---------- */
