@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '142';
+const APP_VERSION = '143';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -5637,6 +5637,23 @@ function hearingHint() {
   const recent = state.messages.slice(-4).map((m) => (typeof m.content === 'string' ? m.content : '')).join(' ');
   return cleanForSpeech(recent).slice(-400);
 }
+/* A pinch inside a full-screen view (Labs, a lab, the 3D body and cells, the board) turns and zooms the
+   picture, never the whole page: on iPhones a zoomed page leaves buttons hard to tap (or not tappable)
+   and stays zoomed after you leave. In the chat, pinch-to-zoom stays on for reading. */
+const inFullView = () => document.documentElement.matches('.labs-open, .x3d-open') || !!document.querySelector('.csk-wrap');
+['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => { if (inFullView()) e.preventDefault(); }, { passive: false }));
+// two fingers on a view's buttons and panels must not zoom the page either (the 3D canvas uses them itself)
+document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && inFullView() && !(e.target.closest && e.target.closest('canvas'))) e.preventDefault(); }, { passive: false });
+// …and if the page did get zoomed anyway, it goes back to normal
+const viewportMeta = document.querySelector('meta[name=viewport]'), viewportBase = viewportMeta && viewportMeta.content;
+function unzoomPage() {
+  if (!viewportMeta || !window.visualViewport || visualViewport.scale <= 1.01) return;
+  viewportMeta.content = viewportBase + ', maximum-scale=1';
+  setTimeout(() => { viewportMeta.content = viewportBase; }, 350);
+}
+new MutationObserver(unzoomPage).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (inFullView()) setTimeout(unzoomPage, 150); });
+
 // One thing said out loud (the lab tutor's 🎤): the browser's own listening where there is one, else a
 // short recording written down by Whisper. { done: Promise<text>, stop() } — stop() ends it early.
 function hearOnce() {
