@@ -1139,8 +1139,7 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   expect(await page.locator('.x3d').isVisible() && /Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()), 'the answer shows in the 3D view, which stays where it was');
   await page.click('.lab-helper .hp-x');
   expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
-  // plant cell → quiz
-  await open3d(page, 'cells3d');
+  // plant cell → quiz (the 3D view is still open: switch cells right there)
   await page.click('.x3d-switch [data-cell="plant"]');
   await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 10000 });
   const plant = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
@@ -1149,7 +1148,7 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.click('.x3d-chip[data-part="chloroplast"]');
   expect(/photosynthesis/.test(await page.locator('.x3d-sheet').innerText()) && /Only in plant cells/.test(await page.locator('.x3d-sheet').innerText()), 'the chloroplast card');
   await page.click('.x3d-act[data-act="quiz"]');
-  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-title >> text=Quiz me', { timeout: 5000 });
+  await page.waitForFunction(() => { const t = document.querySelector('.x3d .lab-helper:not([hidden]) .hp-title'); return t && t.textContent === 'Quiz me'; }, null, { timeout: 5000 });
   await page.waitForSelector('.lab-helper .hp-quiz .hp-err, .lab-helper .hp-quiz .hp-q', { timeout: 8000 });
   expect(/multiple-choice quiz about \\"the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell: ' + JSON.stringify(groqCalls.at(-1)).slice(0, 300));
   expect(await page.locator('#quiz-btn.active').count() === 0, 'the chat quiz did not start');
@@ -2324,7 +2323,7 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   expect(await page.locator('.lab-seg button:has-text("1 week / s")[aria-pressed="true"], .lab-seg button:has-text("1 week / s").on, .lab-seg button:has-text("1 week / s")[aria-checked="true"]').count() === 1, 'the lab’s controls work with the panel open');
   // Quiz me: two questions, one at a time, then the score
   await page.click('.lab-quiz');
-  await page.waitForSelector('.lab-helper .hp-title >> text=Quiz me');
+  await page.waitForFunction(() => (document.querySelector('.lab-helper:not([hidden]) .hp-title') || {}).textContent === 'Quiz me');
   await page.waitForSelector('.lab-helper .hp-q >> text=Which planet is the biggest?', { timeout: 15000 });
   expect(/multiple-choice quiz about "the solar system/.test(asked.at(-1)), 'the quiz is about the lab’s topic');
   expect(await page.locator('.lab-helper .hp-qn').innerText().then((t) => /Question 1 of 2/i.test(t)), 'question 1 of 2');
