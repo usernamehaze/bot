@@ -810,7 +810,9 @@ async function feedback(request, env) {
 // (a flashcard, a quiz question) are kept in Cloudflare's cache for 30 days, so they're paid for
 // once. When it's off or used up, the app speaks with Bella or the device's voice instead.
 const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
-const ELEVEN_VOICES = { woman: 'EXAVITQu4vr4xnSDxMaL', man: 'JBFqnCBsd6RMkjVDRZzb' }; // Sarah, George (ElevenLabs' own voices)
+// Sarah, and Daniel for the man's voice: calm, precise, British — an "AI butler" feel (ElevenLabs' own voices;
+// George is the spare if Daniel ever isn't there)
+const ELEVEN_VOICES = { woman: 'EXAVITQu4vr4xnSDxMaL', man: 'onwK4e9ZLuTAKqWW03F9', manSpare: 'JBFqnCBsd6RMkjVDRZzb' };
 async function speak(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
@@ -839,11 +841,15 @@ async function speak(request, env, ctx) {
     if (mine && mine.n > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today — Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
   }
   let r;
+  // the man's voice is steady and measured; Cassie's own stays lively
+  const settings = b.voice === 'man' ? { stability: 0.72, similarity_boost: 0.8, style: 0.05 } : { stability: 0.5, similarity_boost: 0.75 };
+  const say = (v) => fetch(`${ELEVEN}/${v}?output_format=mp3_44100_64`, {
+    method: 'POST', headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
+    body: JSON.stringify({ text, model_id: model, voice_settings: settings }), signal: AbortSignal.timeout(20000),
+  });
   try {
-    r = await fetch(`${ELEVEN}/${voice}?output_format=mp3_44100_64`, {
-      method: 'POST', headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: model, voice_settings: { stability: 0.5, similarity_boost: 0.75 } }), signal: AbortSignal.timeout(20000),
-    });
+    r = await say(voice);
+    if ((r.status === 404 || r.status === 400) && voice === ELEVEN_VOICES.man) r = await say(ELEVEN_VOICES.manSpare);
   } catch (e) { ctx.waitUntil(logProblem(env, 'voice: elevenlabs', String(e.message || e)).catch(() => {})); return chatError('The studio voice didn’t answer.', 502, h); }
   if (!r.ok) {
     let m = ''; try { m = JSON.stringify(await r.json()).slice(0, 300); } catch (e) { /* not JSON */ }

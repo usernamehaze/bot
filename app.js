@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '140';
+const APP_VERSION = '141';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4506,6 +4506,10 @@ async function openLabs(lab, more = {}) {
       decks: () => boardDecks().decks(),
       readFile: async (file) => (await readDocument(file)).text,
       speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+      // Teach me (the tutor in a lab): listen to one question, and the student's level
+      hear: canHear() ? hearOnce : null,
+      level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' '),
+      onTeach: (id) => track('feature', 'lab-teach-' + id),
       // the daily puzzles' score board (on Cassie's server)
       scores: SERVER ? scoreCall : null,
       onOpen: (id) => track('feature', 'lab-' + id),
@@ -4516,7 +4520,9 @@ async function openLabs(lab, more = {}) {
     renderMessage('assistant', 'I couldn’t open Labs just now — check your internet connection and try again.');
   }
 }
-if (labsBtn) labsBtn.addEventListener('click', () => openLabs());
+if (labsBtn) labsBtn.addEventListener('click', () => openLabs(undefined, { section: 'learn' }));
+// Games: Labs, opened straight on the games shelf
+document.getElementById('games-btn')?.addEventListener('click', () => openLabs(undefined, { section: 'games' }));
 async function scoreCall(kind, body = {}) {
   const r = kind === 'today'
     ? await fetch(`${SERVER}/scores/today?day=${encodeURIComponent(body.day || '')}&uid=${encodeURIComponent(installId())}`)
@@ -5151,7 +5157,7 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
-// Read an answer aloud in Cassie's voice: her own (Bella or Michael) once she's on this device, else
+// Read an answer aloud in Cassie's voice: her own (Bella or Edward) once she's on this device, else
 // the studio voice or the device's as a stand-in (voice.js picks, and keeps one voice per answer).
 function speak(text) {
   if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
@@ -5231,7 +5237,7 @@ function bellaChunks(t) {
   }
   return out;
 }
-// Cassie's voice can be a woman's (Bella) or a man's (Michael): Settings, or the switch on the voice screen.
+// Cassie's voice can be a woman's (Bella) or a man's (Edward, a calm British voice): Settings, or the switch on the voice screen.
 const voiceGender = () => (state.voiceGender === 'man' ? 'man' : 'woman');
 function buildVoiceUI() {
   const el = document.createElement('div');
@@ -5299,7 +5305,7 @@ function showHumanVoiceSetting() {
   if (!box) return;
   const CV = window.CassieVoice;
   const st = CV && CV.supported() ? CV.status() : 'unsupported';
-  const name = voiceGender() === 'man' ? 'Michael' : 'Bella';
+  const name = voiceGender() === 'man' ? 'Edward' : 'Bella';
   box.textContent = st === 'unsupported' ? 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4+.'
     : st === 'ready' ? `✓ ${name}’s voice is ready.`
       : st === 'loading' ? (CV.warming && CV.warming() ? `Downloaded ✓ Setting up ${name}’s voice on this device (up to a minute)…` : `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once)`)
@@ -5600,6 +5606,35 @@ async function listenWithRecorder(v) {
 function hearingHint() {
   const recent = state.messages.slice(-4).map((m) => (typeof m.content === 'string' ? m.content : '')).join(' ');
   return cleanForSpeech(recent).slice(-400);
+}
+// One thing said out loud (the lab tutor's 🎤): the browser's own listening where there is one, else a
+// short recording written down by Whisper. { done: Promise<text>, stop() } — stop() ends it early.
+function hearOnce() {
+  let stopFn = () => {}, finish, fail;
+  const done = new Promise((res, rej) => { finish = res; fail = rej; });
+  if (SpeechRecognitionCtor) {
+    const rec = new SpeechRecognitionCtor();
+    rec.continuous = false; rec.interimResults = false;
+    let got = '';
+    rec.addEventListener('result', (e) => { got = e.results[0][0].transcript; });
+    rec.addEventListener('error', (e) => { if (e.error === 'no-speech' || e.error === 'aborted') finish(''); else fail(new Error(/not-allowed|service-not-allowed/.test(e.error) ? 'Allow the microphone to talk to Cassie, or type instead.' : 'I couldn’t hear that. Try again, or type it.')); });
+    rec.addEventListener('end', () => finish(got));
+    try { rec.start(); } catch (e) { fail(e); }
+    stopFn = () => { try { rec.stop(); } catch (e) { /* already stopped */ } };
+  } else if (navigator.mediaDevices && window.MediaRecorder) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      const mr = new MediaRecorder(stream), chunks = [];
+      mr.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) chunks.push(e.data); });
+      mr.addEventListener('stop', async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        try { finish(chunks.length ? await transcribeAudio(new Blob(chunks, { type: mr.mimeType || 'audio/webm' })) : ''); } catch (e) { fail(e); }
+      });
+      mr.start();
+      stopFn = () => { if (mr.state !== 'inactive') mr.stop(); };
+      setTimeout(stopFn, 15000);
+    }).catch(() => fail(new Error('Allow the microphone to talk to Cassie, or type instead.')));
+  } else fail(new Error('This browser can’t listen here — type your question instead.'));
+  return { done, stop: () => stopFn() };
 }
 async function transcribeAudio(blob) {
   const ext = /mp4/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
@@ -6441,80 +6476,6 @@ if (window.CassieCards) {
   });
 }
 
-/* ---------- What's new (once per update, for returning users) ---------- */
-const WHATS_NEW = [
-  'Pictures fixed: “a photo of the answer” now saves Cassie’s real answer as a picture, and the picture maker only draws people when you ask for them.',
-  'Send many photos and files at once: up to 15 photos and 5 files in one message (nothing gets replaced anymore). Cassie reads every page, one by one, takes notes of the key facts, and says which photo or file each answer came from.',
-  'Labs: the atom’s proton, neutron and electron tray stays still while you turn the 3D view, zooming goes to the spot you point at, “Try this” folds up on phones (tap Hide or Show), and Labs and Explore 3D open without a flash.',
-  'Plus extras: the Real 3D view in Labs, the Museum quiz, and saving or printing your Cornell notes, reference lists and board PDFs or board files come with Plus and Pro. On Free every 3D view (the body, the cells, the solar system, the globe and each lab’s Real 3D) opens twice a week, every lab, game and tool still works, and a board picture is always free.',
-  'Labs has a new Study tools shelf: a Vocabulary Flash-Chain (drag terms onto their meanings — literary devices, Tayutay, medical, legal, tech or your own words), a Timeline Builder, an Argument & Essay Deconstructor that colours your Claim, Evidence and Counter-argument, a Smart Flashcard Matrix that turns notes or a PDF into a deck, Cornell Notes, a Citation & Thesis Mapper (APA, MLA, Chicago, IEEE), and a Museum of Famous Arts with Filipino and world masterpieces.',
-  'Five new games in Labs: Logic Circuit (wires and AND/OR/NOT gates), Formula Cracker (a Wordle for function rules, regex and chemical formulas), Pinning Blitz (countries, cell parts and organs against the clock), Fraction Diner (pizzas, drinks and recipes) and City Market (supply, demand and taxes).',
-  'The board is tidier when you share it: pressing on a sticky note or flashcard with the pen picks it up instead of drawing on it, notes and cards always sit on top of the drawings, and tapping a tool that’s on switches it off (so a drag never draws by accident).',
-  'The board got study tools: sticky notes in six colours with your name on them (sort them into colour groups in one tap), flashcards you paste, pick from your decks or have Cassie write — dropped on the board to flip and move — and quick shapes: a coordinate grid, Venn diagrams, flowchart boxes and logic gates. Save the board as a picture, a PDF or a board file you can open again later.',
-  'In a study room you see everyone’s pointer with their name and what they’re doing (drawing, erasing, typing), point at things with a laser that fades in 2 seconds, and “Ask Cassie to check our board” shows her answer to the whole group.',
-  'Talk with Cassie answers sooner: every voice now starts on the first sentence while the rest of the answer is still being written, and she replies after a shorter pause.',
-  'One voice: once Cassie’s own voice is on your device, she always uses it (no more switching between voices). Until then a stand-in voice speaks, and she tells you when her own voice is ready. After the download, “Setting up…” shows instead of sitting at 100%, and if setting up fails she tries again by herself.',
-  'Labs in real 3D: metals fizz in a glass beaker (or burn in steam over a Bunsen burner), you pour from real reagent bottles in the pH mixer, the atom turns in your hand, water molecules move in a box on a hot plate, and the pendulum, cannon, rope, laser, magnets and compass, lenses and Tower of Hanoi are all real things on a bench. Drag an empty spot to look around; “Diagram” brings back the flat drawing.',
-  'The World atlas is now a globe you can spin: tap any country on it (or on the flat map) and its name pops up right there — tap that for its flag, capital and history.',
-  'Pictures look like real photos now: Cassie asks for them the way a photographer would (the camera, the lens, the light), so they come out natural instead of glossy or computer-made. Ask for a cartoon, a poster or a labelled diagram and you still get exactly that.',
-  'Listen: every answer, quiz question and 3D part card has a 🔊 Listen button, and flashcards can be read to you — one at a time, automatically, or hands-free with 🎧 Listen (the question, a moment to think, then the answer).',
-  'Study together: in a study room, open 📚 Study together — chat with your group, ask Cassie for everyone, study shared flashcards together, take a group quiz with a live score board, pin notes, and run a focus timer for the whole room.',
-  'Talk with Cassie always talks now: if her own voice can’t load on your phone, she speaks with your phone’s best voice instead of going quiet. Her own voice also loads better on iPhone.',
-  'A new Liquid Glass look: the bars, buttons and menus float on frosted glass over your chat. And the app icon on your iPhone home screen is now filled to the edges.',
-  'On your phone, Cassie is now a real app: a Home screen with everything one tap away, and a tab bar at the bottom — Home, Chat, Labs, Cards and You.',
-  'Labs in 3D look real now: the planets wear real NASA maps (Earth with its clouds, city lights at night and the Sun glinting on the sea), the Sun boils, Saturn’s rings cast its shadow, and the stars are the real sky. The human body has wet, fibrous muscles and real-looking bones, and the cells look like living things.',
-  'A new look: Cassie’s logo is now Cursor Cassie herself — the pointer with her two blinking eyes — on the app, your home screen and the Chrome extension.',
-  'Labs → Games: the score board now shows everyone’s points in every puzzle and their total — for today and for the whole week.',
-  'Cassie is for every learner, from nursery to college and work. Setting up is just four questions: your name (or nickname), age, level and gender.',
-  'Talk with Cassie: no more “allow the microphone” message when the microphone is already allowed.',
-  'On phones, a double-tap no longer zooms the app (pinch to zoom still works). The pop-out window now lives in the Chrome extension’s side panel.',
-  'Talk with Cassie answers faster: she starts speaking as soon as the first sentence of her answer is ready (instead of waiting for all of it), and notices sooner when you’ve finished talking.',
-  'Labs, new in 3D: “Solar system & beyond” — fly to any planet (they’re where they really are today), then zoom out to the Milky Way, our neighbour galaxies and the whole universe; tap anything to learn about it. The Rocket workshop is 3D now: build it, launch it from the pad and watch the sky turn black and spent stages fall away.',
-  'Labs → World atlas: tap any country (or search it) for its flag, capital, population, languages, money, neighbours and a short history — or search any place in the world and Cassie pins it on the map.',
-  'More things to touch in Labs: drag disks in the Towers of Hanoi, pour acid or base from the bottles, drag protons, neutrons and electrons into an atom, drag along the ice-to-steam curve, and drop metals into water.',
-  'Labs, part 3: Labs has two shelves now — Learn (simulations, and the 3D body and cells, which come back to Labs when you close them) and Games & puzzles. “Try this” goals tick only when you do them (tap the box to tick or untick it yourself). The colour mixer names colours, coins flip and dice tumble, 13 3D shapes at any size, and Sudoku (4×4 to 12×12), Nonogram, Bridges, Pipes and Mirrors come in many sizes with a New puzzle button. Geography: find countries on the map, or tap around to explore.',
-  'Explore 3D body: the liver is drawn once (it was doubled), and “Pull it apart” keeps each organ in one piece.',
-  'Labs, part 2: 12 more simulations — the solar system (planets where they really are today, Moon phases and the next eclipses), colour mixing, vectors, magnetic fields, lenses & mirrors, logic gates, ice to steam, metals in water, a rocket workshop, 3D shapes, recursion with Python, and build-a-cell. Plus 7 daily puzzles (Sudoku, Nonogram, Bridges, Pipes, Laser mirrors, Guess the equation, Geography) with a score board. “Try this” goals now open a hint, and Cassie can nudge you right inside the lab.',
-  'Labs (the flask at the top): 15 simulations to play with — launch a ball, swing a pendulum, bend light, balance equations, mix acid and base, build an atom, cross pea plants, graph any function and more. Tap “Ask Cassie” in any lab and she explains what’s on your screen, using your numbers. Each lab has small goals to tick off.',
-  'Explore 3D body: “Look around” turns it to the Front, Back or Side, and “Pull it apart” lifts every bone and organ out and sorts them into labelled trays (Bones, Digestive, Respiratory…) — “Put back” rebuilds the body. The S/I/R/L/A/P letters show which way you face (tap one to turn), and the skin can be tapped too.',
-  'Draw together: open the board and tap “Draw together” (or Ideas → Draw together) to start a study room. Share the code or link and up to 12 classmates draw on the same board, live.',
-  'Research: under the papers Cassie finds, copy the references in APA or MLA, or download them for Zotero, Mendeley or EndNote (BibTeX / RIS).',
-  'Flashcards: tap “＋ Flashcards” under any answer and Cassie makes cards from it. Study them with spaced repetition (cards come back right before you’d forget), turn quiz mistakes into cards, and export to Anki or Quizlet.',
-  'Talking with Cassie is quicker: she answers right away (her words show while her voice downloads the first time), she starts speaking sooner, and her voice is always Bella — no more robot voice.',
-  'Cassie’s voice is now Bella — the same voice as in Cassie’s video. Settings → Voice shows if it’s ready, with a sample to play.',
-  'Highlight help ON / OFF: a switch in the Ideas side panel (and the ON/OFF switch next to Snip in the Chrome extension). Off, highlighting is just highlighting — copy and paste like normal.',
-  'Explore 3D: zoom in anywhere — scroll or pinch toward any part, double-tap to fly in close. Tap once for the whole organ, again for the exact part.',
-  'Cassie’s Island at the top is bigger and easier to read.',
-  'Explore 3D body: all 10 body systems (circulatory, respiratory, nervous, digestive, musculoskeletal, endocrine, integumentary, urinary, lymphatic & immune, reproductive), a girl’s and a boy’s body, and every part you tap says what it is and what it does.',
-  'Cassie sounds like a real person now — a woman’s or a man’s voice, made right on your device (a one-time download, then it works offline). No more robot voice.',
-  'Cassie’s voice can be a woman’s or a man’s — pick it on the voice screen or in Settings.',
-  'Talk with Cassie: tap the sound-wave button and just talk. Chat, get quizzed out loud, or “Teach Cassie” — explain a topic and she asks questions like a curious classmate, then tells you what you missed.',
-  'Explore 3D (the cube at the top): a real 3D human body — skeleton, organs, heart and blood vessels, brain and nerves, muscles. Tap any part or search it by name, then ask Cassie about it. Animal and plant cells too.',
-  'Drop on Cassie: drag a PDF, Word, PowerPoint, photo or some words onto Cassie and her pill opens — tap Summarize, Quiz me or Ask about it, and the answer shows right there.',
-  'Pop Cassie out (Chrome or Edge on a computer): tap the little window button at the top and she floats on top of Word, PDFs and your other apps. Drop files on her or ask anything.',
-  'Read & highlight: attach a PDF, Word or PowerPoint and tap “📖 Read & highlight” to read it here and highlight any part (great on phones).',
-  'Highlight on your phone: select words in any app → Share → Cassie (Android). iPhone/iPad: Settings → Use Cassie in other apps.',
-  'Cassie can draw on your board now: open the board and type “graph y = x² − 4”, or “graph the answer” on a snip.',
-  'Photo questions don’t stop when Google is busy: another picture reader takes over.',
-  'She follows your instructions more exactly, and sounds more like a friend than a robot.',
-  'Meet the new Cassie: a little cursor who changes colour with her mood. Tap her to poke her!',
-  'While she works, a pill at the top shows what she’s doing — “Reading pages 3–8…”, then “Done”.',
-  'Using the Chrome extension? What you highlight, snip or paste there now shows up in your chats here (“From Chrome”).',
-  'Reflection papers and personal essays are now written in your voice — with [brackets] for your own moments to fill in.',
-];
-function showWhatsNew() {
-  if (state.seenVersion === APP_VERSION) return;
-  state.seenVersion = APP_VERSION; save();
-  const wrap = document.createElement('div');
-  wrap.className = 'profile-overlay';
-  wrap.innerHTML = `<div class="profile-card"><h2>What’s new in Cassie</h2><ul class="wn-list">${WHATS_NEW.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul><button type="button" class="pf-go">Got it</button></div>`;
-  document.body.appendChild(wrap);
-  const close = () => wrap.remove();
-  wrap.querySelector('.pf-go').addEventListener('click', close);
-  wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
-}
-
-
 /* ---------- Read & highlight: a file opened inside Cassie (phones and tablets) ----------
    Phone browsers don't run extensions, so students read their PDF / Word / PowerPoint here,
    page by page, and highlight any part of it: the same Ask Cassie button as in the chat shows. */
@@ -6651,7 +6612,7 @@ if (!state.profile) {
   state.seenVersion = APP_VERSION;
   // with Cassie's server: the sign-in page first (or "Continue without an account")
   setTimeout(() => (accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
-} else { track('open'); setTimeout(showWhatsNew, 1200); }
+} else track('open');
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
   authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = { email: r.account.email, name: r.account.name, google: r.account.google }; if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })

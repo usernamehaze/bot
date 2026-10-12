@@ -4,8 +4,8 @@
    next one is being made. Nothing is sent anywhere; once downloaded it works offline.
    window.CassieVoice = { speak, stream, best, supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
 (function () {
-  // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); Michael for a man's voice
-  const VOICES = { woman: 'af_bella', man: 'am_michael' };
+  // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); George, a calm British voice, for a man's
+  const VOICES = { woman: 'af_bella', man: 'bm_george' };
   const FLAG = 'cassie.humanVoice';
   let worker = null;
   let status = 'off'; // off | loading | ready | failed
@@ -213,7 +213,7 @@
   // engine can't run here), so Cassie never goes silent. Picks the most natural voice it has:
   // Apple's Premium/Enhanced voices, Google's and Microsoft's natural ones, then a known good name.
   const synth = window.speechSynthesis;
-  const NICE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Karen', 'Moira', 'Serena', 'Aria', 'Jenny', 'Google US English'], man: ['Evan', 'Nathan', 'Tom', 'Daniel', 'Alex', 'Aaron', 'Arthur', 'Guy', 'Ryan', 'Google UK English Male'] };
+  const NICE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Karen', 'Moira', 'Serena', 'Aria', 'Jenny', 'Google US English'], man: ['Daniel', 'Arthur', 'Oliver', 'Google UK English Male', 'Ryan', 'Evan', 'Nathan', 'Tom', 'Alex', 'Aaron', 'Guy'] };
   function deviceVoice(gender) {
     const all = synth ? synth.getVoices() : [];
     const lang = (navigator.language || 'en').slice(0, 2);
@@ -227,6 +227,7 @@
       if (i >= 0) sc += 4 - i * 0.2;
       if (other.some((n) => v.name.includes(n))) sc -= 5;
       if (/novelty|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|zarvox|albert|fred|junior|ralph|kathy|superstar|grandpa|grandma|eddy|flo|reed|rocko|sandy|shelley/i.test(v.name)) sc -= 20;
+      if (gender === 'man' && /en-GB/i.test(v.lang)) sc += 2; // the man's voice is British
       if (v.localService) sc += 0.5;
       if (sc > bestScore) { bestScore = sc; best = v; }
     }
@@ -314,7 +315,7 @@
     }
     return out;
   }
-  // Which voice speaks: Cassie's own (Bella or Michael) once she's on this device — always the same
+  // Which voice speaks: Cassie's own (Bella or Edward) once she's on this device — always the same
   // voice from then on, and no limits. Until then the studio voice stands in (when Cassie's server
   // has it and today's allowance isn't used up), else the device's own.
   const has = (k) => (k === 'bella' ? status === 'ready' && !!worker : k === 'studio' ? studioReady() : k === 'device' && !!synth);

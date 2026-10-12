@@ -86,7 +86,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 }
 .topbar #menu-btn { justify-self: start; }
 .topbar-actions { justify-self: end; display: flex; align-items: center; gap: 2px; }
-#board-btn svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+#board-btn svg, #games-btn svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .brand .brand-mark { width: 24px; height: 24px; flex: none; color: var(--text); --logo-arrow: var(--surface); }
 .brand {
   display: flex;
@@ -1232,7 +1232,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .pf-field textarea { font: inherit; font-size: 1rem; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 .pf-row { display: flex; gap: 10px; justify-content: flex-end; }
 .pf-row .pf-go { flex: 1; }
-.wn-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.45; }
 .report-row { margin: 14px 0 4px; } .report-row .btn { width: 100%; }
 .mascot-fallback svg { width: 34px; height: 39px; fill: var(--surface, #fff); stroke: var(--text); stroke-width: 20; stroke-linejoin: round; paint-order: stroke; }
 @media (max-width: 480px) { .mascot-fallback svg { width: 28px; height: 32px; } }
@@ -1772,7 +1771,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
    body text 17 pt. Black and white like the rest of Cassie. Only on phones (html.native). */
 .tabbar, .home { display: none; }
 html.native #app-bg, html.native #aud-bg { display: none; }
-html.native #labs-btn, html.native #settings-btn { display: none; } /* they're tabs now */
+html.native #labs-btn, html.native #games-btn, html.native #settings-btn { display: none; } /* they're tabs now */
 
 /* --- the tab bar: a dark glass pill; the open tab is a white pill with its name --- */
 html.native .tabbar {
@@ -1783,13 +1782,14 @@ html.native .tabbar {
   transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s;
 }
 .tab {
-  display: flex; align-items: center; justify-content: center; gap: 7px; height: 48px; min-width: 52px; padding: 0 14px;
+  display: flex; align-items: center; justify-content: center; gap: 7px; height: 48px; min-width: 46px; padding: 0 11px;
   border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, .7); font: 600 15px/1 inherit; cursor: pointer;
   transition: background .25s, color .25s, padding .25s;
 }
 .tab svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .tab span { display: none; }
-.tab.on { background: #fff; color: #111; padding: 0 18px 0 14px; }
+.tab.on { background: #fff; color: #111; padding: 0 16px 0 12px; }
+@media (max-width: 370px) { .tab { min-width: 42px; padding: 0 9px; } .tab.on span { font-size: 14px; } }
 .tab.on svg { stroke-width: 2.1; }
 .tab.on span { display: inline; }
 .tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
