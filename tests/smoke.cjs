@@ -131,7 +131,8 @@ test('sign-up shows on first open and saves the profile', async (b) => {
   await page.fill('.profile-card input[name=age]', '15');
   await page.selectOption('.profile-card select[name=grade]', 'Grade 10');
   await page.click('.profile-card .pf-go');
-  expect(/gender/.test(await page.locator('.pf-err').textContent()), 'gender is asked for');
+  const pfErr = await page.locator('.pf-err').textContent();
+  expect(/gender/.test(pfErr), 'gender is asked for: ' + pfErr);
   await page.click('.profile-card [data-gender=female]');
   await page.click('.profile-card .pf-go');
   await page.waitForSelector('.profile-overlay', { state: 'detached' });
