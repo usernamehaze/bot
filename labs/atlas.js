@@ -45,7 +45,7 @@ export const atlasLab = {
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M14 12l4 4-2 5 4 3M32 30l3 4"/>',
   tries: ['Look up a country’s flag, capital and population', 'Find a country with more than 200 million people', 'Search a place that isn’t a country (a city, a volcano…)'],
   hints: ['Tap any country on the map — your own, maybe — or type its name in the search box.', 'Try the biggest countries in Asia, the Americas or Africa — there are only a few above 200 million.', 'Type a city, a mountain or a landmark in the search box, then tap “Search places”.'],
-  about: 'Country facts come from the open world-countries data (ODbL) and populations from the World Bank (CC BY 4.0), stored with Cassie so they work offline; when you’re online Cassie also asks the World Bank for its newest figure, and the year is always shown. Populations are estimates.\nThe history and place summaries come from Wikipedia (CC BY-SA) and are shown with a link to the full article. Map: Natural Earth (public domain). Borders are shown as drawn in that data and are not a statement about any disputed territory.',
+  about: 'Country facts come from the open world-countries data (ODbL) and populations from the World Bank (CC BY 4.0; for the Philippines, the PSA’s official 2024 census), stored with Cassie so they work offline; when you’re online Cassie also asks the World Bank for its newest figure, and the year is always shown. Populations are estimates.\nThe history and place summaries come from Wikipedia (CC BY-SA) and are shown with a link to the full article. Map: Natural Earth (public domain). Borders are shown as drawn in that data and are not a statement about any disputed territory.',
   mount({ stage, panel, api }) {
     let data = [], world = null, sel = null, place = null, vk = 1, vx = 0, vy = 0, proj = null;
     const byN3 = new Map(), byC3 = new Map();
@@ -111,7 +111,7 @@ export const atlasLab = {
       card.innerHTML = `<div class="atlas-head">${c.f ? `<img class="atlas-flag" src="${flagUrl(c)}" alt="Flag of ${esc(c.n)}">` : ''}<div><h3>${esc(c.n)}</h3><p class="space-sub">${esc(c.o)}</p></div></div>
         <dl class="lab-stats">
           ${fact('Capital', esc((c.cap || []).join(', ') || '—'))}
-          ${fact('Population', c.pop ? `<span class="atlas-pop">${fmtPop(c.pop[0])} <small>(${c.pop[1]}, World Bank)</small></span>` : 'not in the World Bank data')}
+          ${fact('Population', c.pop ? `<span class="atlas-pop">${fmtPop(c.pop[0])} <small>(${c.pop[1]}, ${esc(c.pop[2] || 'World Bank')})</small></span>` : 'not in the World Bank data')}
           ${fact('Area', c.area ? `${Math.round(c.area).toLocaleString()} km²` : '')}
           ${fact('Where', esc([c.sub || c.reg, c.land ? 'landlocked (no coast)' : ''].filter(Boolean).join(' · ')))}
           ${fact('Languages', esc((c.lang || []).join(', ')))}

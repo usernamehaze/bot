@@ -2524,6 +2524,69 @@ test('Teach me card: "where is the heart", made small, the heart still tappable,
   await ctx.close();
 });
 
+test('Accuracy: the labs’ numbers match the textbook (launch range, gravity, light, pH, balancing, rocket, interest, eclipses) and the audited facts stay fixed', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
+  const lab = async (id) => { await page.evaluate((x) => openLabs(x), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); };
+  const state = () => page.evaluate(() => labsMod.open({}).state);
+  const slide = (label, v) => page.evaluate(([l, val]) => { const s = [...document.querySelectorAll('.lab-panel .lab-sl')].find((x) => x.textContent.includes(l)); const i = s.querySelector('input[type=range]'); i.value = val; i.dispatchEvent(new Event('input', { bubbles: true })); }, [label, v]);
+  const numIn = (text, re) => { const m = re.exec(text); if (!m) throw new Error('not found ' + re + ' in ' + text); return parseFloat(m[1]); };
+  const near = (got, want, tol, what) => expect(Math.abs(got - want) <= tol, `${what}: got ${got}, the textbook gives ${want.toFixed(3)}`);
+  // the launch lab: gravity at Earth's surface is 9.81 m/s², and range = v² sin 2θ / g, height = (v sinθ)² / 2g, time = 2v sinθ / g
+  await lab('projectile');
+  for (const [ang, v] of [[45, 20], [30, 15], [60, 25]]) {
+    await slide('Angle', ang); await slide('Speed', v);
+    const st = await state(), g = numIn(st, /g = ([\d.]+) m\/s²/), t = (ang * Math.PI) / 180;
+    expect(g === 9.81, 'gravity at Earth’s surface is 9.81 m/s²: ' + g);
+    near(numIn(st, /flies ([\d.]+) m/), (v * v * Math.sin(2 * t)) / g, 0.06, `range at ${ang}° and ${v} m/s`);
+    near(numIn(st, /rises to ([\d.]+) m/), (v * Math.sin(t)) ** 2 / (2 * g), 0.06, `height at ${ang}°`);
+    near(numIn(st, /air for ([\d.]+) s/), (2 * v * Math.sin(t)) / g, 0.01, `time in the air at ${ang}°`);
+  }
+  // the pendulum: the small-swing period 2π√(L/g)
+  await lab('pendulum'); await slide('Length', 1);
+  near(numIn(await state(), /gives ([\d.]+) s/), 2 * Math.PI * Math.sqrt(1 / 9.81), 0.006, 'pendulum period for 1 m');
+  // bending light: Snell's law, air to water at 30°
+  await lab('refraction'); await slide('Angle from the normal', 30);
+  near(numIn(await state(), /bends to ([\d.]+)°/), (Math.asin(Math.sin(Math.PI / 6) / 1.33) * 180) / Math.PI, 0.06, 'air to water at 30°');
+  // pH: 10 mL of 0.1 M HCl in 50 mL of water, then neutralised with 10 mL of 0.1 M NaOH
+  await lab('ph');
+  const press = (label, nth) => page.evaluate(([l, n]) => [...document.querySelectorAll('.lab-panel button')].filter((x) => x.textContent.trim() === l)[n].click(), [label, nth]);
+  await press('+ 10 mL', 0);
+  near(numIn(await state(), /pH ([\d.]+)/), -Math.log10(0.001 / 0.06), 0.006, 'pH of the acid');
+  await press('+ 10 mL', 1);
+  near(numIn(await state(), /pH ([\d.]+)/), 7, 0.001, 'neutral');
+  // the balancer, the rocket equation, compound interest and the next eclipses (the labs' own code)
+  const calc = await page.evaluate(async () => {
+    const chem = await import('./labs/chemistry.js'), sp = await import('./labs/space.js');
+    const J2000 = Date.UTC(2000, 0, 1, 12), d = (Date.UTC(2026, 0, 1) - J2000) / 864e5, iso = (x) => new Date(J2000 + x * 864e5).toISOString().slice(0, 10);
+    const s1 = sp.nextEclipse(d, 'solar'), s2 = sp.nextEclipse(s1 + 1, 'solar'), l1 = sp.nextEclipse(d, 'lunar');
+    return { kmno4: chem.balance(chem.parseEquation('KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2')).join(','), photo: chem.balance(chem.parseEquation('CO2 + H2O -> C6H12O6 + O2')).join(','), solar: [iso(s1), iso(s2)], lunar: iso(l1), moons: Object.fromEntries(sp.PLANETS.map((p) => [p[0], p[8]])), year: sp.periodDays(sp.PLANETS[2]) };
+  });
+  expect(calc.kmno4 === '2,16,2,2,8,5' && calc.photo === '6,6,1,6', 'equations balance: ' + calc.kmno4 + ' / ' + calc.photo);
+  expect(calc.solar[0] === '2026-02-17' && calc.solar[1] === '2026-08-12' && calc.lunar === '2026-03-03', 'the 2026 eclipses: ' + JSON.stringify(calc));
+  near(calc.year, 365.256, 0.01, 'Earth’s year in days');
+  expect(calc.moons.Jupiter === 101 && calc.moons.Saturn === 285 && calc.moons.Uranus === 29 && calc.moons.Neptune === 16, 'moon counts as of 2026: ' + JSON.stringify(calc.moons));
+  await lab('rocket');
+  const r = await state();
+  near(numIn(r, /Δv ([\d.]+) km\/s/), (311 * 9.80665 * Math.log(12 / 2)) / 1000, 0.006, 'rocket Δv = Isp × g₀ × ln(full ÷ empty)');
+  near(numIn(r, /thrust ÷ weight ([\d.]+)/), 100000 / (12000 * 9.81), 0.006, 'thrust ÷ weight');
+  await lab('interest');
+  near(numIn((await state()).replace(/,/g, ''), /compound at ₱([\d.]+)/), 10000 * 1.005 ** 240, 1, 'compound interest ₱10,000 at 6% monthly for 20 years');
+  // the audited facts (docs/accuracy-audit.md) stay fixed
+  const facts = await page.evaluate(async () => {
+    const get = (u) => fetch(u).then((x) => x.text());
+    const [space3d, body, museum, cells] = await Promise.all(['./labs/space3d.js', './explore/body-facts.js', './labs/museum.js', './explore/cells.js'].map(get));
+    const ph = (await (await fetch('./labs/atlas/countries.json')).json()).find((c) => c.c3 === 'PHL');
+    return { space3d, body, museum, cells, ph };
+  });
+  expect(!/Everything you can see in the night sky/.test(facts.space3d) && /about 50% within 10 billion years/.test(facts.space3d) && /Galileo saw it in 1612/.test(facts.space3d) && /observations in 2017/.test(facts.space3d), 'the space facts are the corrected ones');
+  expect(/one of the most commonly broken bones/.test(facts.body) && /about 480 million in both/.test(facts.body) && /may hold a store of helpful gut bacteria/.test(facts.body), 'the body facts are the corrected ones');
+  expect(/standing on scaffolding/.test(facts.museum) && !/lying on scaffolding/.test(facts.museum), 'Michelangelo painted standing');
+  expect(/Lysosomes are mainly in animal cells/.test(facts.cells), 'lysosomes: mainly in animal cells');
+  expect(facts.ph.pop[0] === 112729484 && facts.ph.pop[1] === 2024 && /PSA/.test(facts.ph.pop[2]) && facts.ph.area === 300000, 'the Philippines: PSA 2024 census and 300,000 km²');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
   let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await page.click('#games-btn');
@@ -2665,7 +2728,7 @@ test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket
   await page.waitForSelector('.lab3d-label:not([hidden])', { timeout: 30000 });
   await page.locator('.lab3d-label:not([hidden]):text-is("Jupiter")').click({ force: true });
   await page.waitForSelector('.space-card h3:text-is("Jupiter")');
-  expect(/Distance from Earth now/.test(await page.locator('.space-card').innerText()) && /95 known/.test(await page.locator('.space-card').innerText()), 'Jupiter’s card has live distances and its moons');
+  expect(/Distance from Earth now/.test(await page.locator('.space-card').innerText()) && /101 known \(as of 2026\)/.test(await page.locator('.space-card').innerText()), 'Jupiter’s card has live distances and its moons (the 2026 count)');
   await page.waitForTimeout(1200); await shot('space-jupiter');
   for (let i = 0; i < 40 && tex.size < 15; i++) await page.waitForTimeout(250);
   expect(['earth-day.webp', 'earth-night.webp', 'earth-clouds.webp', 'jupiter.webp', 'saturn-ring.png', 'stars.bin', 'mercury-bump.webp'].every((f) => tex.has(f)), 'the planets’ real maps and the star sky load: ' + [...tex].join(', '));
