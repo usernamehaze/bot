@@ -32,8 +32,9 @@ The voice-over (`ad3/vo/*.wav`) was made with Kokoro (voice `af_bella`) from the
 `build.py` needs numpy and imageio-ffmpeg (`pip install numpy imageio-ffmpeg`), `record.cjs` needs
 the Playwright in `tests/` (`cd tests && npm install`).
 
-Older pieces: `source/` is the first animated ad (2025), `reel/`, `explainer/` and `explainer-vo/`
-are the earlier reels.
+The earlier ads and reels (`source/`, `reel/`, `explainer/`, `explainer-vo/` and their videos) were
+removed in the code cleanup; they're still in the git history if ever needed
+(`git checkout d3ec810 -- promo/reel`, for example).
 
 ## The logo and the landing page's device screens
 
