@@ -4437,7 +4437,13 @@ function describe3d(view) {
   return [`looking at the ${view.kind === 'body' ? 'human body' : view.kind + ' cell'}`, sys.length ? `body systems showing: ${sys.join(', ')}` : '', part ? `the part open now: ${part}` : ''].filter(Boolean).join('; ');
 }
 let teacher3d = null;
-function stopTeach3d() { if (teacher3d) { teacher3d.stop(); teacher3d = null; } }
+const lessons3d = new Map(); // the body, the animal cell, the plant cell -> where the student stopped a lesson
+function stopTeach3d() {
+  if (!teacher3d) return;
+  const l = teacher3d.lesson();
+  if (l) lessons3d.set(teacher3d.kind, l); else lessons3d.delete(teacher3d.kind);
+  teacher3d.stop(); teacher3d = null;
+}
 async function teach3d(view) {
   if (teacher3d && teacher3d.root.isConnected) { stopTeach3d(); return; }
   if (help3d && help3d.view === view && help3d.h.open) help3d.h.close();
@@ -4452,9 +4458,11 @@ async function teach3d(view) {
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
     hear: canHear() ? hearOnce : null,
     level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' ') });
-  teacher3d.root.querySelector('.tut-x').addEventListener('click', () => { teacher3d = null; });
+  teacher3d.kind = view.kind;
+  teacher3d.root.querySelector('.tut-x').addEventListener('click', () => stopTeach3d()); // (the lesson is kept: Teach me offers to carry on)
   track('feature', 'teach-' + lab.id);
-  teacher3d.teach('How do I use this? Teach me from the start.');
+  if (lessons3d.has(view.kind)) teacher3d.offer(lessons3d.get(view.kind));
+  else teacher3d.teach('How do I use this? Teach me from the start.');
 }
 async function openExplore(cell, ret) {
   track('feature', 'explore');
@@ -4486,6 +4494,7 @@ async function openExplore(cell, ret) {
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       onClose: () => {
         stopTeach3d();
+        lessons3d.clear(); // (a lesson is about the 3D view as it was on screen)
         dropHelp3d();
         if (ret) { ret.back(); return; }
         try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ }

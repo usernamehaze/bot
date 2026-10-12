@@ -338,7 +338,15 @@ function createView() {
   });
   // Teach me: Cassie as a tutor in this lab (labs/tutor.js)
   let teacher = null;
-  function stopTeaching() { if (teacher) { teacher.stop(); teacher = null; } labView.classList.remove('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'false'); }
+  const lessons = new Map(); // lab -> where the student stopped a lesson (Teach me offers to carry on)
+  function stopTeaching() {
+    if (teacher) {
+      const l = teacher.lesson();
+      if (current) { if (l) lessons.set(current.id, l); else lessons.delete(current.id); }
+      teacher.stop(); teacher = null;
+    }
+    labView.classList.remove('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'false');
+  }
   $('.lab-teach').addEventListener('click', () => {
     if (!current || !opts.explain) return;
     if (teacher && teacher.root.isConnected) { stopTeaching(); return; }
@@ -347,7 +355,8 @@ function createView() {
     teacher.root.querySelector('.tut-x').addEventListener('click', () => stopTeaching());
     labView.classList.add('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'true');
     if (opts.onTeach) opts.onTeach(current.id);
-    teacher.teach('How do I use this? Teach me from the start.');
+    if (lessons.has(current.id)) teacher.offer(lessons.get(current.id)); // carry on, or start over (no new question to Cassie)
+    else teacher.teach('How do I use this? Teach me from the start.');
   });
   // Ask Cassie and Quiz me: a panel inside the lab (labs/helper.js); the lab keeps working behind it
   let help = null;
@@ -369,6 +378,7 @@ function createView() {
   function closeLab() {
     dropHelp();
     stopTeaching();
+    if (current) lessons.delete(current.id); // (a lesson is about this lab as it is on screen now)
     if (mounted && mounted.destroy) { try { mounted.destroy(); } catch (e) { /* ignore */ } }
     mounted = null; current = null;
   }

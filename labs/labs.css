@@ -524,6 +524,7 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 .lab-tutor.thinking .tut-say { opacity: .7; animation: tut-think 1.2s ease-in-out infinite; }
 @keyframes tut-think { 50% { opacity: .35; } }
 .tut-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tut-nav[hidden] { display: none; } /* (the 3D views have no Labs rule for hidden things) */
 .tut-step { flex: 1; text-align: center; font-size: .78rem; opacity: .65; }
 .tut-btn { border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .08); color: inherit; border-radius: 99px; padding: 7px 13px; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
 .lab-tutor .tut-next, .lab-tutor .tut-go { background: #fff; color: #111; border-color: transparent; }
@@ -547,6 +548,17 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
   .tut-say { font-size: .95rem; margin: 8px 0; }
   .lab-view.tutoring .lab-body { padding-bottom: 210px; }
 }
+/* the card: dragged by its top, made small to a pill, and the choice to carry on after closing it */
+.lab-tutor .tut-head { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.lab-tutor .tut-head:active { cursor: grabbing; }
+.tut-pill { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px 0 12px; border: 0; border-radius: 99px; background: transparent; color: inherit; font: inherit; font-size: .88rem; font-weight: 650; cursor: pointer; touch-action: none; white-space: nowrap; }
+.tut-pill svg { width: 16px; height: 16px; fill: #fff; stroke: #111; stroke-width: 1.2; }
+.lab-tutor.tut-mini { width: auto !important; right: auto; padding: 0; border-radius: 99px; }
+.lab-tutor.tut-mini > :not(.tut-pill) { display: none !important; }
+.lab-tutor.tut-mini .tut-pill { display: inline-flex; }
+.tut-resume { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.tut-resume[hidden] { display: none; }
+.lab-tutor .tut-resume .tut-continue { background: #fff; color: #111; border-color: transparent; }
 @media (prefers-reduced-motion: reduce) { .tut-pointed, .tut-finger, .tut-ring, .lab-tutor.thinking .tut-say { animation: none; } }
 
 /* Ask Cassie and Quiz me inside the lab (labs/helper.js): a panel over the lab, which keeps working behind it */
