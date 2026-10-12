@@ -5605,18 +5605,25 @@ function hearingHint() {
    picture, never the whole page: on iPhones a zoomed page leaves buttons hard to tap (or not tappable)
    and stays zoomed after you leave. In the chat, pinch-to-zoom stays on for reading. */
 const inFullView = () => document.documentElement.matches('.labs-open, .x3d-open') || !!document.querySelector('.csk-wrap');
-['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => { if (inFullView()) e.preventDefault(); }, { passive: false }));
+const pageZoomed = () => !!window.visualViewport && visualViewport.scale > 1.01;
+// (a page that is zoomed anyway can always be pinched back out: blocking that left students stuck)
+['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => { if (inFullView() && !pageZoomed()) e.preventDefault(); }, { passive: false }));
 // two fingers on a view's buttons and panels must not zoom the page either (the 3D canvas uses them itself)
-document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && inFullView() && !(e.target.closest && e.target.closest('canvas'))) e.preventDefault(); }, { passive: false });
-// …and if the page did get zoomed anyway, it goes back to normal
+document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1 && inFullView() && !pageZoomed() && !(e.target.closest && e.target.closest('canvas'))) e.preventDefault(); }, { passive: false });
+// While a full view is open the page is held at its normal size (maximum-scale=1, for as long as the view
+// is open): this also stops an iPhone zooming into a box you type in, and puts back a page that got zoomed.
 const viewportMeta = document.querySelector('meta[name=viewport]'), viewportBase = viewportMeta && viewportMeta.content;
-function unzoomPage() {
-  if (!viewportMeta || !window.visualViewport || visualViewport.scale <= 1.01) return;
-  viewportMeta.content = viewportBase + ', maximum-scale=1';
-  setTimeout(() => { viewportMeta.content = viewportBase; }, 350);
+const viewportHeld = viewportBase + ', maximum-scale=1';
+function holdPageSize() {
+  if (!viewportMeta) return;
+  const want = inFullView() ? viewportHeld : viewportBase;
+  if (viewportMeta.content !== want) viewportMeta.content = want;
+  else if (want === viewportHeld && pageZoomed()) { viewportMeta.content = viewportBase + ', maximum-scale=1, minimum-scale=1'; requestAnimationFrame(() => { viewportMeta.content = viewportHeld; }); }
 }
-new MutationObserver(unzoomPage).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (inFullView()) setTimeout(unzoomPage, 150); });
+new MutationObserver(holdPageSize).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(holdPageSize).observe(document.body, { childList: true }); // (the board opens without a class on the page)
+document.addEventListener('focusin', holdPageSize, true);
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (inFullView()) setTimeout(holdPageSize, 150); });
 
 // One thing said out loud (the lab tutor's 🎤): the browser's own listening where there is one, else a
 // short recording written down by Whisper. { done: Promise<text>, stop() } — stop() ends it early.

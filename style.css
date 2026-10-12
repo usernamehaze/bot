@@ -2,6 +2,12 @@
    she was tapped twice). Pinch-to-zoom still works for anyone who wants it. Parts that handle
    touches themselves (3D, the board, dragging Cassie) keep their own touch-action. */
 html, :where(body, body *) { touch-action: manipulation; }
+/* iPhones zoom the whole page into any box whose text is smaller than 16px when it's tapped, and a
+   zoomed page leaves buttons hard to tap. On touch screens every box you type in is at least 16px
+   (Labs, the 3D explorer and the board load their own styles later, so this one wins with !important). */
+@media (pointer: coarse) {
+  input:not([type=range], [type=checkbox], [type=radio], [type=color], [type=file], [type=button], [type=submit], [type=reset], [type=image]), textarea, select { font-size: max(16px, 1rem) !important; }
+}
 
 :root {
   /* Marble monochrome — warm neutral greys, no colour in the UI. Colour lives

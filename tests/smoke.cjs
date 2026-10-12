@@ -2171,6 +2171,110 @@ test('a pinch in Labs or the 3D body never zooms the whole page (in the chat it 
   await ctx.close();
 });
 
+test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze the lab, and a pinch on the 3D never zooms the page', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    if (!/The things on the screen, numbered/.test(u)) return { text: 'Here is how it works.' };
+    const lines = u.split('\n').filter((l) => /^\d+\. /.test(l)), n = (re) => parseInt(lines.find((l) => re.test(l)) || '0', 10);
+    return { text: JSON.stringify({ steps: [{ say: 'This is the Sun.', point: n(/"Sun"/) }, { say: 'Tap To scale to see the true distances.', point: n(/To scale/) }] }) };
+  } });
+  const cdp = await ctx.newCDPSession(page);
+  // a real two-finger pinch (fingers spreading apart), as a phone sends it
+  const pinch = async (x, y) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x - 10, y, id: 1 }, { x: x + 10, y, id: 2 }] });
+    for (let i = 1; i <= 12; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - 10 - i * 8, y, id: 1 }, { x: x + 10 + i * 8, y, id: 2 }] }); await page.waitForTimeout(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(500);
+    return page.evaluate(() => visualViewport.scale);
+  };
+  // nothing covers a button, the page isn't zoomed or scrolled, and the tap reaches it
+  const reachable = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return s + ' missing'; const r = e.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(h) && visualViewport.scale === 1 && scrollY === 0 ? 'ok' : `${s} is covered by ${h && h.className} (zoom ${visualViewport.scale}, scrolled ${scrollY})`; }, sel);
+  const openSpace = async () => { await page.evaluate(() => openLabs('space3d')); await page.waitForSelector('.lab-view:not([hidden])[data-lab="space3d"] .lab3d-label:not([hidden])', { timeout: 30000 }); };
+  const today = '.lab-panel .lab-btn:has-text("Back to today")';
+  const held = () => page.evaluate(() => /maximum-scale=1/.test(document.querySelector('meta[name=viewport]').content));
+  await openSpace();
+  expect(await held(), 'Labs holds the page at its normal size (no iPhone zoom into a box you type in)');
+  // Teach me: she points at the picture and the panel; closing her leaves every button working
+  await page.tap('.lab-teach');
+  await page.waitForFunction(() => /the Sun/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
+  await page.tap('.tut-next');
+  await page.waitForFunction(() => /To scale/.test(document.querySelector('.tut-say').textContent), null, { timeout: 8000 });
+  await page.tap('.tut-x');
+  expect(await page.locator('.lab-tutor, .tut-finger, .tut-ring').count() === 0, 'the tutor leaves nothing behind');
+  for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', 'after Teach me: ' + r); }
+  await page.locator(today).scrollIntoViewIfNeeded(); await page.locator(today).tap();
+  // Ask Cassie and Quiz me take the question to the chat; the lab opens again and works
+  await page.tap('.lab-ask');
+  await page.waitForFunction(() => document.querySelector('.labs').hidden && /Solar system/.test(document.querySelector('#chat-log').textContent), null, { timeout: 10000 });
+  expect(await reachable('#prompt-input') === 'ok', 'the chat works after Ask Cassie: ' + await reachable('#prompt-input'));
+  await openSpace();
+  await page.tap('.lab-quiz');
+  await page.waitForFunction(() => document.querySelector('.labs').hidden && /Quiz me on/.test(document.querySelector('#chat-log').textContent), null, { timeout: 10000 });
+  await openSpace();
+  // a pinch on the 3D zooms the planets, never the page; nor on the buttons or the panel
+  const sunAt = () => page.evaluate(() => { const l = [...document.querySelectorAll('.lab3d-label')].find((x) => x.textContent === 'Saturn'); return l ? l.style.transform : ''; });
+  const before = await sunAt(), c = await page.locator('canvas.lab-3d').boundingBox();
+  await page.waitForTimeout(800);
+  expect(await pinch(c.x + c.width / 2, c.y + c.height / 2) === 1, 'a pinch on the 3D zoomed the whole page');
+  await page.waitForTimeout(600);
+  expect(await sunAt() !== before, 'a pinch on the 3D zooms the picture');
+  for (const sel of ['.lab-head', '.lab-panel']) { const r = await page.locator(sel).boundingBox(); expect(await pinch(r.x + r.width / 2, r.y + 30) === 1, 'a pinch on ' + sel + ' zoomed the whole page'); }
+  // if the page got zoomed anyway, Labs puts it back to normal
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 });
+  await page.waitForFunction(() => visualViewport.scale === 1, null, { timeout: 3000 }).catch(() => { throw new Error('a zoomed page stays zoomed in Labs'); });
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
+  for (const sel of ['.lab-back', '.lab-teach']) { const r = await reachable(sel); expect(r === 'ok', 'after pinching: ' + r); }
+  await page.tap('.lab-back');
+  await page.waitForSelector('.labs-shelf:not([hidden])', { timeout: 5000 });
+  // the chat can still be zoomed for reading
+  await page.tap('.labs-x');
+  await page.waitForFunction(() => !document.documentElement.classList.contains('labs-open'));
+  await page.waitForTimeout(500);
+  expect(!(await held()), 'the chat lets go of the page size');
+  expect(await pinch(195, 300) > 1.2, 'the chat can still be pinch-zoomed');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom the whole page), in the chat, Labs, every lab, the tutor and the 3D explorer', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' } });
+  expect(await page.evaluate(() => innerWidth) === 390, '390px wide');
+  const small = new Set();
+  const check = (where) => page.evaluate((w) => [...document.querySelectorAll('input, textarea, select')]
+    .filter((e) => !/^(range|checkbox|radio|color|file|hidden|button|submit|reset|image)$/.test(e.type))
+    .map((e) => [e, parseFloat(getComputedStyle(e).fontSize)]).filter(([, px]) => px < 16)
+    .map(([e, px]) => `${w}: ${e.tagName.toLowerCase()}.${String(e.className).trim().replace(/\s+/g, '.') || e.name || e.type} ${px}px`), where).then((l) => l.forEach((x) => small.add(x)));
+  await check('chat');
+  await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+  await page.waitForSelector('.labs-shelf:not([hidden]) .labs-card', { timeout: 15000 });
+  const ids = new Set();
+  for (const sec of ['learn', 'tools', 'games']) {
+    await page.evaluate((s) => openLabs(undefined, { section: s }), sec);
+    await page.waitForTimeout(300);
+    (await page.evaluate(() => [...document.querySelectorAll('.labs-grid [data-lab]')].map((c) => c.dataset.lab))).forEach((i) => ids.add(i));
+  }
+  await check('labs shelf');
+  expect(ids.size > 30, 'found the labs: ' + ids.size);
+  for (const id of ids) {
+    const opened = await page.evaluate((x) => { openLabs(x); return true; }, id);
+    if (!opened) continue;
+    await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *, .lab-view:not([hidden])[data-lab="${id}"] .lab-stage > *`, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(150);
+    await check(id);
+  }
+  await page.click('.lab-teach'); // the tutor's own box
+  await page.waitForSelector('.tut-ask input');
+  await check('tutor');
+  await page.click('.tut-x');
+  await page.evaluate(() => document.querySelector('.labs .labs-x').click());
+  await page.evaluate(() => openExplore('animal'));
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
+  await check('3D explorer');
+  expect(small.size === 0, 'boxes smaller than 16px: ' + [...small].join(' | '));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
   let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await page.click('#games-btn');
@@ -3436,6 +3540,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 3000 });
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
+
 
 /* ---------- run ---------- */
 (async () => {
