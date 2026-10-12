@@ -20,3 +20,7 @@ promo/hero/raw/
 promo/**/*.mp4
 promo/**/*.wav
 promo/**/*.mov
+promo/explainer/
+promo/explainer-vo/
+promo/reel/
+promo/source/
