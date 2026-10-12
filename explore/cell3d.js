@@ -662,7 +662,7 @@ function createView() {
     sheet.querySelector('.x3d-does').textContent = info.does;
     const only = sheet.querySelector('.x3d-only');
     only.hidden = !info.only;
-    only.textContent = info.only ? `Only in ${info.only} cells.` : '';
+    only.textContent = info.only ? (info.mostly ? `Mainly in ${info.only} cells. ${info.mostly}` : `Only in ${info.only} cells.`) : '';
     sheet.hidden = false;
     const chip = partsEl.querySelector(`[data-part="${id}"]`);
     if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });

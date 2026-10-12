@@ -24,7 +24,7 @@ const FACTS = [
   [/vein|vena\b|venous/, 'A vein — a blood vessel that carries blood back to the heart.', 'Veins have thinner walls than arteries and many have one-way valves, helped along by the squeeze of nearby muscles.', { layer: 'cardiovascular', general: true }],
 
   // ---------- respiratory ----------
-  [/^lungs?$|^(left|right)_lung$/, 'A lung — a spongy, air-filled organ in the chest. The left one is a little smaller, to make room for the heart.', 'Air reaches about 300 million tiny sacs (alveoli), where oxygen passes into the blood and carbon dioxide passes out to be breathed away.', { layer: 'visceral' }],
+  [/^lungs?$|^(left|right)_lung$/, 'A lung — a spongy, air-filled organ in the chest. The left one is a little smaller, to make room for the heart.', 'Air reaches about 240 million tiny sacs (alveoli) in each lung, about 480 million in both, where oxygen passes into the blood and carbon dioxide passes out to be breathed away.', { layer: 'visceral' }],
   [/lobe_of_(left|right)_lung|^(superior|middle|inferior)_lobe/, 'A lobe of a lung. The right lung has three lobes, the left has two.', 'Each lobe has its own branch of the airways and blood vessels, so a surgeon can remove one lobe and leave the rest working.', { layer: 'visceral' }],
   [/^trachea$/, 'The trachea (windpipe), the tube from the voice box down into the chest.', 'It carries air to and from the lungs. C-shaped rings of cartilage keep it open, and its lining sweeps dust and germs up and away.', { layer: 'visceral' }],
   [/bronch/, 'A bronchus — a branch of the airway inside the lungs.', 'The trachea splits into two main bronchi, which branch again and again (like an upside-down tree) to carry air to every part of the lungs.', { layer: 'visceral' }],
@@ -44,7 +44,7 @@ const FACTS = [
   [/pharyn/, 'The pharynx (throat), behind the nose and mouth.', 'Both food and air pass through it; it leads to the oesophagus and to the voice box.', { layer: 'visceral' }],
   [/duoden/, 'The duodenum — the first part of the small intestine.', 'Bile and pancreatic juice pour in here and break food down further.', { layer: 'visceral' }],
   [/jejun|ileum|small_intestine/, 'Part of the small intestine — a coiled tube about 6 metres long.', 'Most digestion and nearly all absorption of food happen here, through millions of tiny finger-like villi.', { layer: 'visceral' }],
-  [/caecum|cecum|appendix/, 'The caecum and appendix, where the small intestine meets the large intestine (lower right).', 'The caecum receives what’s left of digested food. The appendix holds helpful gut bacteria; when it’s infected, that’s appendicitis.', { layer: 'visceral' }],
+  [/caecum|cecum|appendix/, 'The caecum and appendix, where the small intestine meets the large intestine (lower right).', 'The caecum receives what’s left of digested food. The appendix may hold a store of helpful gut bacteria; when it’s infected, that’s appendicitis.', { layer: 'visceral' }],
   [/colon|large_intestine/, 'Part of the large intestine (colon).', 'It absorbs water and salts from what’s left of food, turning it into stool, with the help of trillions of gut bacteria.', { layer: 'visceral' }],
   [/rectum|anal_canal|anus/, 'The rectum and anal canal — the last part of the large intestine.', 'They store stool until you go to the toilet, with ring muscles (sphincters) to hold it in.', { layer: 'visceral' }],
   [/tongue/, 'The tongue — a muscle covered in taste buds.', 'It moves food while you chew, helps you swallow and shapes sounds when you speak.'],
@@ -129,7 +129,7 @@ const FACTS = [
   [/^radius/, 'The radius — the forearm bone on the thumb side.', 'It turns around the ulna so you can twist your hand palm up or down.', { layer: 'skeletal' }],
   [/^ulna/, 'The ulna — the forearm bone on the little-finger side.', 'It forms the hinge of the elbow with the humerus — the point of your elbow is its end.', { layer: 'skeletal' }],
   [/^scapula/, 'The scapula (shoulder blade).', 'It connects the arm to the body and anchors many shoulder muscles.', { layer: 'skeletal' }],
-  [/^clavicle/, 'The clavicle (collarbone).', 'It holds the shoulder out from the body like a strut. It is the most commonly broken bone.', { layer: 'skeletal' }],
+  [/^clavicle/, 'The clavicle (collarbone).', 'It holds the shoulder out from the body like a strut. It is one of the most commonly broken bones, especially in young children.', { layer: 'skeletal' }],
   [/sternum/, 'The sternum (breastbone), in the middle of the chest.', 'Most ribs join it by cartilage; together they form a cage that protects the heart and lungs.', { layer: 'skeletal' }],
   [/^rib|costal/, 'A rib — one of 12 pairs of curved bones.', 'The ribs protect the heart and lungs, and move up and out when you breathe in.', { layer: 'skeletal' }],
   [/vertebra|atlas|axis|vertebral_column/, 'A vertebra — one of the 33 bones of the backbone.', 'Stacked together they hold you upright, let you bend and twist, and protect the spinal cord inside.', { layer: 'skeletal' }],

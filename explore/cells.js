@@ -1,5 +1,6 @@
 /* What each part of the 3D cells is and does — short, accurate, in a student's words.
-   `like` is a "think of it as" comparison; `only` marks parts found in one kind of cell. */
+   `like` is a "think of it as" comparison; `only` marks parts found in one kind of cell
+   (`mostly`: mainly in that kind, with exceptions). */
 export const PARTS = {
   membrane: { name: 'Cell membrane', color: '#6fb6d9', does: 'A thin, flexible double layer of fats (phospholipids) with proteins in it. It wraps the cell and controls what goes in and out.', like: 'the security gate' },
   cytoplasm: { name: 'Cytoplasm', color: '#a9d4ea', does: 'The jelly-like fluid that fills the cell and holds the organelles in place. Many of the cell’s chemical reactions happen here.', like: 'the factory floor' },
@@ -11,7 +12,7 @@ export const PARTS = {
   golgi: { name: 'Golgi apparatus', color: '#e2649f', does: 'Stacks of flattened sacs that modify, sort and package proteins into vesicles for delivery.', like: 'the post office' },
   mito: { name: 'Mitochondria', color: '#f08a3c', does: 'Release energy from glucose through cellular respiration and store it as ATP. The folds inside (cristae) give more surface for this.', like: 'the power station' },
   ribosome: { name: 'Ribosomes', color: '#26306e', does: 'Tiny machines that read messenger RNA and join amino acids into proteins. Some float free; others sit on the rough ER.', like: 'the builders' },
-  lysosome: { name: 'Lysosomes', color: '#d8a51e', does: 'Small sacs of digestive enzymes that break down worn-out parts, food particles and germs.', like: 'the recycling centre', only: 'animal' },
+  lysosome: { name: 'Lysosomes', color: '#d8a51e', does: 'Small sacs of digestive enzymes that break down worn-out parts, food particles and germs.', like: 'the recycling centre', only: 'animal', mostly: 'Plant cells mostly use their big vacuole for this job instead.' },
   peroxisome: { name: 'Peroxisomes', color: '#a9c53a', does: 'Small sacs that break down fatty acids and turn harmful hydrogen peroxide into water and oxygen.', like: 'the clean-up crew' },
   centrioles: { name: 'Centrioles', color: '#c9c9d9', does: 'A pair of short tube bundles at right angles. They help build the spindle that pulls chromosomes apart when the cell divides.', like: 'the tug-of-war anchors', only: 'animal' },
   vesicle: { name: 'Vesicles', color: '#f4a9cb', does: 'Tiny bubbles of membrane that carry materials around the cell and to the membrane.', like: 'the delivery trucks' },
@@ -26,7 +27,7 @@ export const CELLS = {
   animal: {
     title: 'Animal cell',
     parts: ['membrane', 'cytoplasm', 'nucleus', 'envelope', 'nucleolus', 'rer', 'ser', 'golgi', 'mito', 'ribosome', 'lysosome', 'peroxisome', 'centrioles', 'vesicle', 'cytoskeleton'],
-    note: 'Only in animal cells: centrioles and lysosomes. No cell wall, no chloroplasts, and only small vacuoles.',
+    note: 'Only in animal cells: centrioles. Lysosomes are mainly in animal cells. No cell wall, no chloroplasts, and only small vacuoles.',
   },
   plant: {
     title: 'Plant cell',

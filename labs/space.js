@@ -4,16 +4,17 @@
 import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, seg, button, row, stats, line, dot, text, overlay } from './kit.js';
 
 const RAD = Math.PI / 180, AU_KM = 149597870.7, J2000 = Date.UTC(2000, 0, 1, 12);
+export const MOONS_AS_OF = 2026; // the IAU Minor Planet Center's confirmed counts (Jupiter 101, Saturn 285: March 2026)
 // [name, a (AU), e, mean longitude at J2000 (°), its rate (° per century), longitude of perihelion (°),
-//  diameter (km), day length (hours, − = spins backwards), known moons, mean temperature (°C), kind, colour]
+//  diameter (km), day length (hours, − = spins backwards), known moons (as of MOONS_AS_OF: new ones keep being found), mean temperature (°C), kind, colour]
 export const PLANETS = [
   ['Mercury', 0.38709927, 0.20563593, 252.25032350, 149472.67411175, 77.45779628, 4879, 1407.6, 0, 167, 'rocky', '#b1aca5'],
   ['Venus', 0.72333566, 0.00677672, 181.97909950, 58517.81538729, 131.60246718, 12104, -5832.5, 0, 464, 'rocky', '#e8cf9a'],
   ['Earth', 1.00000261, 0.01671123, 100.46457166, 35999.37244981, 102.93768193, 12756, 23.9, 1, 15, 'rocky', '#4f8fd8'],
   ['Mars', 1.52371034, 0.09339410, -4.55343205, 19140.30268499, -23.94362959, 6792, 24.6, 2, -65, 'rocky', '#d0643f'],
-  ['Jupiter', 5.20288700, 0.04838624, 34.39644051, 3034.74612775, 14.72847983, 142984, 9.9, 95, -110, 'gas giant', '#d9b38a'],
-  ['Saturn', 9.53667594, 0.05386179, 49.95424423, 1222.49362201, 92.59887831, 120536, 10.7, 274, -140, 'gas giant', '#e6cf91'],
-  ['Uranus', 19.18916464, 0.04725744, 313.23810451, 428.48202785, 170.95427630, 51118, -17.2, 28, -195, 'ice giant', '#9fd8de'],
+  ['Jupiter', 5.20288700, 0.04838624, 34.39644051, 3034.74612775, 14.72847983, 142984, 9.9, 101, -110, 'gas giant', '#d9b38a'],
+  ['Saturn', 9.53667594, 0.05386179, 49.95424423, 1222.49362201, 92.59887831, 120536, 10.7, 285, -140, 'gas giant', '#e6cf91'],
+  ['Uranus', 19.18916464, 0.04725744, 313.23810451, 428.48202785, 170.95427630, 51118, -17.2, 29, -195, 'ice giant', '#9fd8de'],
   ['Neptune', 30.06992276, 0.00859048, -55.12002969, 218.45945325, 44.96476227, 49528, 16.1, 16, -200, 'ice giant', '#4b6fd6'],
 ];
 const daysOf = (ms) => (ms - J2000) / 86400000;
@@ -226,7 +227,7 @@ const solarLab = {
       if (mode === 'planets') {
         const p = PLANETS.find((q) => q[0] === pick), q = planetAt(p, day), P = periodDays(p), e = planetAt(PLANETS[2], day);
         st.set([[p[0], `${p[10]} planet`], ['Width', `${p[6].toLocaleString()} km (${num(p[6] / 12756)} × Earth)`], ['Distance from the Sun', `${num(q.r)} AU = ${num((q.r * AU_KM) / 1e6)} million km`], ['Year (once round the Sun)', P > 700 ? `${num(P / 365.25)} Earth years` : `${num(P)} Earth days`],
-          ['Day (one spin)', `${num(Math.abs(p[7]))} hours${p[7] < 0 ? ' — it spins backwards' : ''}${Math.abs(p[7]) > 48 ? ` (${num(Math.abs(p[7]) / 24)} Earth days)` : ''}`], ['Known moons', String(p[8])], ['Average temperature', `${p[9]} °C`], ...(p[0] !== 'Earth' ? [['Distance from Earth now', `${num(Math.hypot(q.x - e.x, q.y - e.y))} AU`]] : [])]);
+          ['Day (one spin)', `${num(Math.abs(p[7]))} hours${p[7] < 0 ? ' — it spins backwards' : ''}${Math.abs(p[7]) > 48 ? ` (${num(Math.abs(p[7]) / 24)} Earth days)` : ''}`], ['Known moons', p[8] > 2 ? `${p[8]} (as of ${MOONS_AS_OF})` : String(p[8])], ['Average temperature', `${p[9]} °C`], ...(p[0] !== 'Earth' ? [['Distance from Earth now', `${num(Math.hypot(q.x - e.x, q.y - e.y))} AU`]] : [])]);
       } else {
         const m = moonAt(day), nf = nextPhase(day, 180), nn = nextPhase(day, 0), se = nextEclipse(day, 'solar'), le = nextEclipse(day, 'lunar');
         st.set([['Phase', `${phaseName(m.elong)} — ${Math.round(m.lit * 100)}% lit`], ['Days since new moon', num((m.elong / 360) * 29.53)], ['Next full moon', nf ? fmtDate(nf) : '—'], ['Next new moon', nn ? fmtDate(nn) : '—'], ['Next solar eclipse', se ? fmtDate(se) : 'none in 5 years'], ['Next lunar eclipse', le ? fmtDate(le) : 'none in 5 years']]);

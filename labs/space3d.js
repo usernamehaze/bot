@@ -4,7 +4,7 @@
    scale opens the next one. */
 import { el, esc, num, group, seg, button, row, stats, overlay, premium, free3dView } from './kit.js';
 import { stage3d, webglOk, paintTexture, noise2 } from './three-kit.js';
-import { PLANETS, planetAt, periodDays } from './space.js';
+import { PLANETS, planetAt, periodDays, MOONS_AS_OF } from './space.js';
 import { planetLook } from './planet-look.js';
 
 const J2000 = Date.UTC(2000, 0, 1, 12), DAY = 86400000, AU_KM = 149597870.7, LY_KM = 9.4607e12;
@@ -20,7 +20,7 @@ const MORE = {
   Jupiter: [24.79, 317.8, 3.13, 'The biggest planet — more than 1,300 Earths would fit inside. The Great Red Spot is a storm wider than Earth.'],
   Saturn: [10.44, 95.2, 26.73, 'Its rings are mostly chunks of ice, hundreds of thousands of km wide but often only about 10 m thick. Saturn is less dense than water.'],
   Uranus: [8.69, 14.5, 97.77, 'It is tipped on its side, so each pole gets about 42 years of sunlight, then 42 years of darkness.'],
-  Neptune: [11.15, 17.1, 28.32, 'The windiest planet — winds over 2,000 km/h. It was found by maths (1846) before anyone had seen it.'],
+  Neptune: [11.15, 17.1, 28.32, 'The windiest planet — winds over 2,000 km/h. It was the first planet found by maths: its place was worked out, and it was spotted there in 1846. (Galileo saw it in 1612 but thought it was a star.)'],
 };
 const TILT = { Sun: 7.25, Moon: 6.7, Pluto: 122.5 };
 
@@ -28,7 +28,7 @@ const TILT = { Sun: 7.25, Moon: 6.7, Pluto: 122.5 };
 // galactic longitude l and latitude b (°) and distance tell where each thing is as seen from here
 const GALAXY_SPOTS = [
   ['Sun', 'You are here', 'Our Sun, in the Orion Arm (a smaller arm between two big ones), about 26,000 light-years from the centre. It goes round the Milky Way once every ~230 million years.', null],
-  ['Sagittarius A*', 'The centre of the Milky Way', 'A supermassive black hole 4 million times the mass of the Sun, about 26,700 light-years away. Its picture was taken in 2022 by the Event Horizon Telescope.', [0, 0, 26.7]],
+  ['Sagittarius A*', 'The centre of the Milky Way', 'A supermassive black hole 4 million times the mass of the Sun, about 26,700 light-years away. Its first picture, made by the Event Horizon Telescope from observations in 2017, was shown in 2022.', [0, 0, 26.7]],
   ['Orion Nebula', 'A star nursery', 'A cloud of gas and dust where new stars are being born, about 1,344 light-years away. You can see it with your eyes in Orion’s sword.', [209.0, -19.4, 1.344]],
   ['Pleiades', 'A star cluster', 'The “Seven Sisters”, a cluster of young blue stars about 444 light-years away.', [166.6, -23.5, 0.444]],
   ['Crab Nebula', 'What’s left of an exploded star', 'The remains of a supernova seen from Earth in the year 1054, about 6,500 light-years away. A spinning neutron star sits in the middle.', [184.6, -5.8, 6.5]],
@@ -38,8 +38,8 @@ const GALAXY_SPOTS = [
 const ARMS = [['Perseus Arm', 0.2], ['Scutum–Centaurus Arm', 0.2 + Math.PI / 2], ['Norma Arm', 0.2 + Math.PI], ['Sagittarius Arm', 0.2 + (3 * Math.PI) / 2]];
 // the Local Group (distances in millions of light-years)
 const LOCAL = [
-  ['Milky Way', 'Our galaxy', 'A barred spiral galaxy about 100,000 light-years across, with 100–400 billion stars. Everything you can see in the night sky without a telescope is in it.', [0, 0, 0], 100, 'spiral'],
-  ['Andromeda Galaxy (M31)', 'The nearest big galaxy', 'About 2.5 million light-years away and around 220,000 light-years across, with about a trillion stars. It is coming towards us and will merge with the Milky Way in about 4–5 billion years. You can see it with your eyes on a dark night.', [121.17, -21.57, 2.54], 220, 'spiral'],
+  ['Milky Way', 'Our galaxy', 'A barred spiral galaxy about 100,000 light-years across, with 100–400 billion stars. Almost every star you can see in the night sky without a telescope is in it. (A few other galaxies, like Andromeda and the Magellanic Clouds, can be seen with your eyes too.)', [0, 0, 0], 100, 'spiral'],
+  ['Andromeda Galaxy (M31)', 'The nearest big galaxy', 'About 2.5 million light-years away and around 220,000 light-years across, with about a trillion stars. It is coming towards us, and the two may merge in several billion years: a 2025 study puts the chance at about 50% within 10 billion years. You can see it with your eyes on a dark night.', [121.17, -21.57, 2.54], 220, 'spiral'],
   ['Triangulum Galaxy (M33)', 'The third big spiral', 'About 2.7 million light-years away and 60,000 light-years across.', [133.61, -31.33, 2.73], 60, 'spiral'],
   ['Large Magellanic Cloud', 'A small galaxy next to ours', 'About 160,000 light-years away; seen from the Southern Hemisphere as a cloudy patch. It goes round the Milky Way.', [280.47, -32.89, 0.163], 32, 'cloud'],
   ['Small Magellanic Cloud', 'A small galaxy next to ours', 'About 200,000 light-years away, next to the Large Magellanic Cloud in the southern sky.', [302.81, -44.33, 0.204], 19, 'cloud'],
@@ -348,7 +348,7 @@ export const space3dLab = {
         ...(name === 'Earth' ? [] : [['Distance from Earth now', `${big(fromEarth * AU_KM)} km (light takes ${num((fromEarth * AU_KM) / 299792.458 / 60, 3)} min)`]]),
         ['One year (orbit)', `${num(periodDays(p), 4)} Earth days${a > 1.5 ? ` (${num(periodDays(p) / 365.25, 3)} years)` : ''}`],
         ['One day (spin)', `${num(Math.abs(dayH), 3)} hours${dayH < 0 ? ' — backwards' : ''}`],
-        ['Moons', moons === 0 ? 'none' : name === 'Earth' ? '1 (the Moon)' : `${moons} known`],
+        ['Moons', moons === 0 ? 'none' : name === 'Earth' ? '1 (the Moon)' : `${moons} known (as of ${MOONS_AS_OF})`],
         ['Gravity', `${gr} m/s² (${num(gr / 9.81, 2)} × Earth’s)`], ['Mass', `${num(mass, 3)} × Earth`], ['Average temperature', `${temp} °C`], ['Fact', MORE[name][3]]];
     }
 

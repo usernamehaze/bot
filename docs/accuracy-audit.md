@@ -8,6 +8,8 @@ How it was checked:
 - Facts were checked against NASA, IAU, IUPAC, NIST/CODATA, PSA, NIDDK, Britannica and peer-reviewed sources. Direct access to some sites (nasa.gov) is blocked from this build machine, so those were confirmed through search results that quote them; the link given is the page the figure comes from.
 - "Unverified" means no reliable source was found. Nothing was guessed.
 
+**Status: all 14 rows fixed (step 2, approved "go all"). The calculations in section 3 and the corrected facts are now checked by the smoke test "Accuracy: the labs’ numbers match the textbook". Row 11: the Philippines now shows the PSA 2024 census; the other countries keep their labelled 2020 World Bank figures offline and fetch the newest one when online.**
+
 **Result: 11 rows need a change (section 1), 3 are optional wording fixes (section 2). Everything else checked is correct (sections 3 and 4).**
 
 ## 1. Needs a change
