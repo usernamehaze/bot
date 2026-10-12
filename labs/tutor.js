@@ -52,7 +52,23 @@ function collect(view, mounted) {
   return out;
 }
 
-export function tutor({ view, lab, mounted, described, ask, speak, hear, level }) {
+// Any screen (the 3D body and cells): every button, box and on-screen label, in order.
+export function collectAll(view) {
+  const out = [], seen = new Set();
+  const visible = (n) => { const r = n.getBoundingClientRect(); return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < innerHeight && getComputedStyle(n).visibility !== 'hidden' && n.offsetParent !== null; };
+  const text = (n) => String(n.getAttribute('aria-label') || n.placeholder || n.textContent || n.title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  view.querySelectorAll('button, input, select, .x3d-label').forEach((n) => {
+    if (out.length >= 80 || seen.has(n) || n.closest('.lab-tutor') || !visible(n)) return;
+    const t = text(n);
+    if (!t) return;
+    seen.add(n);
+    const on = n.getAttribute('aria-pressed') === 'true' || n.getAttribute('aria-selected') === 'true' || n.getAttribute('aria-checked') === 'true';
+    out.push({ el: n, what: n.matches('.x3d-label') ? `the label "${t}" on the model (that part of the 3D picture)` : n.matches('input[type=range]') ? `the "${t}" slider` : n.matches('input') ? `the box "${t}"` : `the "${t}" button${on ? ' (on now)' : ''}` });
+  });
+  return out;
+}
+
+export function tutor({ view, lab, mounted, described, ask, speak, hear, level, collect: collector }) {
   const box = el('div', 'lab-tutor');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Cassie teaches you');
@@ -147,7 +163,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level }
 
   function prompt(q) {
     const list = targets.map((t, i) => `${i + 1}. ${t.what}`).join('\n');
-    const kind = lab.subject === 'tools' ? 'study tool' : 'simulation';
+    const kind = lab.subject === 'tools' ? 'study tool' : lab.subject === 'games' ? 'game' : lab.subject === 'puzzles' ? 'daily puzzle' : lab.subject === 'explore' ? '3D explorer' : 'simulation';
     return `You are Cassie, a warm, patient tutor sitting next to a ${level || 'high school'} student who is using the "${lab.name}" ${kind} in Cassie's Labs (${lab.blurb || ''}).
 How it works: ${String(lab.about || '').slice(0, 900)}
 ${lab.tries && lab.tries.length ? `Goals the student can try: ${lab.tries.join(' / ')}\n` : ''}What is on the screen right now: ${described() || 'they have just opened it'}.
@@ -156,7 +172,7 @@ ${list || '(nothing to point at)'}
 
 The student says: "${q}"
 
-Teach them like a real tutor beside them: small steps, in the order they should do them, using what they can see. For each step, point at the exact thing on the screen it's about. If they ask about an idea or a part, explain it with what is on the screen and their own numbers. Be encouraging and brief; never do the whole task for them.
+Teach them like a real tutor beside them: small steps, in the order they should do them, using what they can see.${lab.subject === 'games' || lab.subject === 'puzzles' ? ' In a game or puzzle, teach the rules and a way to think about it, but never give away the answer.' : ''} For each step, point at the exact thing on the screen it's about. If they ask about an idea or a part, explain it with what is on the screen and their own numbers. Be encouraging and brief; never do the whole task for them.
 Reply with ONLY JSON, no other text: {"steps":[{"say":"one or two short, natural spoken sentences","point":3}]}
 Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 for none. Only use numbers from the list. No markdown, no emojis, no symbols that sound odd read aloud.`;
   }
@@ -179,7 +195,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     steps = []; $('.tut-nav').hidden = true;
     sayEl.textContent = 'Let me look at your screen…';
     box.classList.add('thinking');
-    targets = collect(view, mounted());
+    targets = (collector || collect)(view, mounted ? mounted() : null);
     try {
       const reply = await ask(prompt(q));
       if (!alive || me !== asking) return;

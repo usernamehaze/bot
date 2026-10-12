@@ -65,7 +65,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=10', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=11', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
@@ -82,7 +82,7 @@ function createView() {
       </header>
       <div class="labs-tabs" role="tablist" aria-label="Labs shelves">
         <button type="button" role="tab" data-section="learn" aria-selected="true">Learn <small>simulations · 3D · atlas</small></button>
-        <button type="button" role="tab" data-section="games" aria-selected="false">Games &amp; puzzles <small>daily puzzles · games</small></button>
+        <button type="button" role="tab" data-section="games" aria-selected="false" hidden>Games &amp; puzzles <small>daily puzzles · games</small></button>
         <button type="button" role="tab" data-section="tools" aria-selected="false">Study tools <small>notes · cards · essays · art</small></button>
       </div>
       <div class="labs-tools">
@@ -148,8 +148,15 @@ function createView() {
       <span class="labs-meta"><span class="labs-subj">${NAMES[lab.subject]}</span>${tag3d}${badge}</span></span>`;
     return b;
   }
+  // Labs is two shelves (Learn, Study tools); the games are their own place (the app's Games button)
   function setSection(sec) {
     section = sec === 'games' || sec === 'tools' ? sec : 'learn';
+    const games = section === 'games';
+    root.classList.toggle('games-mode', games);
+    $('.labs-title h2').innerHTML = `${CURSOR}${games ? 'Games' : 'Labs'}`;
+    $('.labs-title p').textContent = games ? 'Daily puzzles and games. Play, then ask Cassie how to think about them.' : 'Play with it, then ask Cassie why it works.';
+    search.placeholder = games ? 'Find a game or puzzle: sudoku, circuit, map blitz…' : 'Find a lab: pendulum, planets, timeline, Cornell notes…';
+    $('.lab-back span').textContent = games ? 'Games' : 'Labs';
     root.querySelectorAll('[data-section]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === section)));
     $('.labs-chips').hidden = section !== 'learn';
     shelf.dataset.shelf = section;
@@ -157,9 +164,9 @@ function createView() {
   }
   function renderShelf() {
     const q = search.value.trim().toLowerCase();
-    // searching looks on both shelves
+    // searching looks on Labs' two shelves (or, in Games, at the games)
     const list = [...EXPLORE, ...LABS].filter((l) => (q
-      ? (l.name + ' ' + l.blurb + ' ' + (l.words || '') + ' ' + (NAMES[l.subject] || '')).toLowerCase().includes(q)
+      ? (section === 'games') === (shelfOf(l) === 'games') && (l.name + ' ' + l.blurb + ' ' + (l.words || '') + ' ' + (NAMES[l.subject] || '')).toLowerCase().includes(q)
       : section !== 'learn' ? shelfOf(l) === section : shelfOf(l) === 'learn' && (subject === 'all' || (subject === '3d' ? is3d(l) : l.subject === subject))));
     grid.replaceChildren(...list.map(card));
     $('.labs-empty').hidden = list.length > 0;
@@ -238,7 +245,7 @@ function createView() {
     $('.lab-about').open = false;
     $('.lab-about p').textContent = lab.about || '';
     $('.lab-quiz').hidden = (lab.subject === 'puzzles' || lab.subject === 'games' || lab.subject === 'tools') && !lab.topic;
-    $('.lab-teach').hidden = lab.subject === 'puzzles' || lab.subject === 'games' || !opts.explain; // Learn and Study tools
+    $('.lab-teach').hidden = !opts.explain; // every lab, game and study tool
     labView.classList.toggle('lab-tool', !!lab.wide);
     renderTries();
     const api = {
