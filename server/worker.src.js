@@ -37,7 +37,8 @@
  *   MINUTE_LIMIT     questions per person per minute (default 12)
  *   IMAGE_LIMIT      backup pictures per person per day (default 20)
  *   Claude is for paid plans (rows in the plans table — see /admin/plan below):
- *   FREE_CLAUDE_LIMIT   Claude answers a day for free students (default 0 = none; Groq answers)
+ *   FREE_CLAUDE_LIMIT   Claude answers a day for free students (default 10, on Haiku: about $0.001 each;
+ *                       0 = none, Groq answers)
  *   PLUS_CLAUDE_LIMIT   Claude Haiku answers a day on Plus (default 100)
  *   PRO_CLAUDE_LIMIT    Claude Sonnet answers a day on Pro (default 15), then Haiku (PRO_HAIKU_LIMIT, 100)
  *   CLAUDE_MODEL     one Claude model for everyone (default: the newest Haiku / Sonnet for each
@@ -417,7 +418,7 @@ function limitsFor(env, plan) {
   const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v) ? +v : d);
   if (plan === 'pro') return { questions: n(env.PRO_DAILY_QUESTIONS, 150), all: n(env.PRO_DAILY_LIMIT, 600), claude: [['sonnet', n(env.PRO_CLAUDE_LIMIT, 15)], ['haiku', n(env.PRO_HAIKU_LIMIT, 100)]] };
   if (plan === 'plus') return { questions: n(env.PLUS_DAILY_QUESTIONS, 100), all: n(env.PLUS_DAILY_LIMIT, 400), claude: [['haiku', n(env.PLUS_CLAUDE_LIMIT, 100)]] };
-  return { questions: n(env.FREE_DAILY_QUESTIONS, 20), all: n(env.DAILY_LIMIT, 150), claude: [['haiku', n(env.FREE_CLAUDE_LIMIT, 0)]] };
+  return { questions: n(env.FREE_DAILY_QUESTIONS, 20), all: n(env.DAILY_LIMIT, 150), claude: [['haiku', n(env.FREE_CLAUDE_LIMIT, 10)]] };
 }
 // The owner gives (or ends) a plan: POST /admin/plan {"email": "...", "plan": "pro", "days": 30}
 // with the dashboard password; GET /admin/plan?email=... shows it.
@@ -587,8 +588,8 @@ async function chat(request, env, ctx) {
   }
   const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
 
-  // Claude first for the main chat, on paid plans (free students get Groq unless FREE_CLAUDE_LIMIT
-  // is set): Pro gets Sonnet for its first answers each day, then Haiku; Plus gets Haiku
+  // Claude first for the main chat: Free gets Haiku for its first answers each day (FREE_CLAUDE_LIMIT),
+  // then Groq; Pro gets Sonnet for its first answers each day, then Haiku; Plus gets Haiku
   if (env.ANTHROPIC_KEY && body.brain === 'claude' && uid !== 'anon') {
     let family = null;
     for (const [fam, max] of L.claude) {

@@ -106,7 +106,7 @@ export async function startFakeServer(port = 4630) {
   };
   const env = {
     DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, GOOGLE_CLIENT_ID: 'test-client-id',
-    get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 0 — Claude is for paid plans)
+    get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 10)
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     AI: { async run(model, input) {
