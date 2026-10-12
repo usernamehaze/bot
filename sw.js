@@ -17,7 +17,7 @@ const ASSETS = [
   'native.js',
   'listen.js',
   'study-room.js',
-  'boot3d.js',
+  'gradient.js',
   'start.js',
   'memory.js',
   'board.js',

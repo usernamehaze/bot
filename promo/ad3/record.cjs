@@ -207,7 +207,7 @@ function cursorAt(keys, t) {
     await ctx.addInitScript((s) => { window.CASSIE_SERVER = ''; try { localStorage.setItem('cassie.v2', s); } catch (e) { /* ignore */ } }, SEED);
     if (!sc.full) await ctx.addInitScript(cursorScript);
     if (sc.init) await ctx.addInitScript(sc.init);
-    await ctx.route(/cassie-3d\.js/, (r) => r.abort()); // the hero's moving marble (a still one shows instead)
+    await ctx.route(/gradient\.js/, (r) => r.abort()); // the hero’s moving marble (a still one shows instead)
     await ctx.route(/wikipedia\.org|worldbank\.org/, (r) => r.abort());
     const page = await ctx.newPage();
     const errs = []; page.on('pageerror', (e) => errs.push(e.message));

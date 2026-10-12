@@ -300,9 +300,6 @@ function applyAccent() {
     root.style.removeProperty('--accent');
     root.style.removeProperty('--accent-ink');
   }
-  // Tint the 3D bot to match (null = her default pink). Guarded because the
-  // mascot bundle loads lazily; if it isn't ready yet, the ready event re-applies.
-  try { if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(on ? color : null); } catch (e) { /* ignore */ }
   if (typeof updateBackdrop === 'function') updateBackdrop();
 }
 /* ---------- the living gradient behind the chat ---------- */
@@ -337,13 +334,9 @@ function startBackdrop() {
   } catch (e) { backdrop = null; }
 }
 function updateBackdrop() { try { if (backdrop) backdrop.update(backdropColors()); } catch (e) { /* ignore */ } }
-window.addEventListener('cassie3d-loaded', startBackdrop);
+// (gradient.js; Lite mode keeps the plain background)
+if (!window.CASSIE_LITE) { if (document.readyState === 'complete') setTimeout(startBackdrop, 300); else window.addEventListener('load', () => setTimeout(startBackdrop, 300)); }
 if (darkScheme && darkScheme.addEventListener) darkScheme.addEventListener('change', updateBackdrop);
-
-// When the lazy 3D bot finishes loading, apply the saved colour to it.
-window.addEventListener('cassie3d-ready', () => {
-  try { const c = (state.accent || '').trim(); if (window.CassieMascot && window.CassieMascot.setColor) window.CassieMascot.setColor(/^#[0-9a-fA-F]{6}$/.test(c) ? c : null); } catch (e) { /* ignore */ }
-});
 const hintBtn = document.getElementById('hint-btn');
 const quizBtn = document.getElementById('quiz-btn');
 const quizLabel = quizBtn ? quizBtn.querySelector('.chip-label') : null;
@@ -413,17 +406,13 @@ const mascotBubble = document.getElementById('mascot-bubble');
 let mascotHappyTimer = null;
 let mascotBubbleTimer = null;
 
-// Bridge the mascot's moods to the optional 3D Cassie (window.CassieMascot).
-// Falls back silently (SVG mascot) when the 3D bundle isn't loaded.
+// The mascot's moods (named after the old 3D Cassie's) → Cursor Cassie's states
 const EMOTE_TO_3D = {
   'emote-happy': 'encouraging', 'emote-love': 'encouraging', 'emote-star': 'celebratory',
   'emote-surprised': 'curious', 'emote-wink': 'neutral', 'emote-sleepy': 'neutral',
   'emote-focused': 'thinking', 'emote-cool': 'neutral', 'emote-sad': 'neutral', 'emote-dizzy': 'curious',
 };
 function set3D(name) {
-  try {
-    if (window.CassieMascot && window.CassieMascot.setEmotion) window.CassieMascot.setEmotion(name);
-  } catch (e) { /* ignore */ }
   if (name === 'walk') return; // walking over to an answer keeps her mood (e.g. proud)
   if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
@@ -452,7 +441,6 @@ function botMood(name, ms) {
 (function startCursorCassie() {
   const root = document.getElementById('cassie-2d-root');
   if (!root || !window.CassieBot || !wantsCursorCassie()) return;
-  document.getElementById('cassie-3d-root')?.remove(); // the 3D bundle still paints the background, but no 3D bot
   bot2d = window.CassieBot.create(root, { accent: state.accent || '#d8343c', accessory: window.CassieBot.seasonal() });
   if (mascot) mascot.classList.add('has2d');
   // her eyes follow your finger / mouse
@@ -552,7 +540,7 @@ let isleBusy = false; // one question at a time, whichever card asked it
 function makeIsleCard(doc, opts = {}) {
   const win = doc.defaultView || window;
   const card = doc.createElement('div');
-  card.className = 'isle-card' + (opts.pip ? ' isle-pip-card' : '');
+  card.className = 'isle-card';
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-label', 'Cassie');
   card.innerHTML = `
@@ -570,7 +558,7 @@ function makeIsleCard(doc, opts = {}) {
       <div class="isle-step isle-load"><div class="isle-file"><span class="isle-fname"></span><span class="isle-fsize"></span></div><div class="isle-bar"><i></i></div></div>
       <div class="isle-step isle-ready"><img class="isle-thumb" alt="" hidden><p class="isle-peek" hidden></p><p class="isle-q">What should I do with it?</p><div class="isle-acts"></div></div>
       <div class="isle-step isle-think"><div class="isle-bar isle-bar-wait"><i></i></div></div>
-      <div class="isle-step isle-ans"><div class="isle-ans-body"></div><div class="isle-ans-acts"><button type="button" class="isle-chip" data-act="open">${opts.pip ? 'Open in Cassie' : 'Open in chat'}</button><button type="button" class="isle-chip" data-act="more">Ask more</button></div></div>
+      <div class="isle-step isle-ans"><div class="isle-ans-body"></div><div class="isle-ans-acts"><button type="button" class="isle-chip" data-act="open">Open in chat</button><button type="button" class="isle-chip" data-act="more">Ask more</button></div></div>
       <div class="isle-step isle-err"><p class="isle-msg"></p><div class="isle-ans-acts"><button type="button" class="isle-chip" data-act="again">Try another</button></div></div>
       <form class="isle-ask" autocomplete="off">
         <input type="text" class="isle-input" placeholder="Ask Cassie…" aria-label="Ask Cassie">
@@ -584,7 +572,7 @@ function makeIsleCard(doc, opts = {}) {
   if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: state.accent || '#d8343c', win });
 
   const api = {
-    el: card, doc, pip: !!opts.pip,
+    el: card, doc,
     get step() { return card.dataset.step || ''; },
     mood(m, text) {
       if (bot) bot.setState(m);
@@ -648,7 +636,6 @@ function makeIsleCard(doc, opts = {}) {
     },
     error(msg) { $('.isle-msg').textContent = msg; api.go('err', 'Hmm, I can’t open that'); },
     close() {
-      if (opts.pip) { if (card.dataset.step === 'home') win.close(); else { item = null; api.go('home'); } return; } // × in the pop-out: back to the start, then close
       card.classList.remove('open');
       delete card.dataset.step;
       item = null;
@@ -659,7 +646,7 @@ function makeIsleCard(doc, opts = {}) {
   };
 
   $('.isle-x').addEventListener('click', () => api.close());
-  card.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !opts.pip) api.close(); });
+  card.addEventListener('keydown', (e) => { if (e.key === 'Escape') api.close(); });
   $('.isle-ask').addEventListener('submit', (e) => {
     e.preventDefault();
     const q = input.value.trim();
@@ -672,11 +659,10 @@ function makeIsleCard(doc, opts = {}) {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     if (b.dataset.act === 'open') {
-      if (opts.pip) { try { window.focus(); } catch (err) { /* ignore */ } }
       if (answerBubble) answerBubble.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      if (!opts.pip) api.close();
+      api.close();
     } else if (b.dataset.act === 'more') { item = null; api.go('ask', 'Ask me more'); }
-    else if (b.dataset.act === 'again') { item = null; opts.pip ? api.go('home') : api.go('drop'); }
+    else if (b.dataset.act === 'again') { item = null; api.go('drop'); }
   });
   isleCards.add(api);
   return api;
@@ -728,7 +714,7 @@ async function isleRun(card, prompt) {
   isleBusy = false;
   const all = chatLog.querySelectorAll('.bubble-assistant');
   const bubble = all.length > before ? all[all.length - 1] : null;
-  if (!bubble) { card.pip ? card.go('home') : card.close(); return; }
+  if (!bubble) { card.close(); return; }
   card.answer(bubble);
 }
 
@@ -790,11 +776,6 @@ if (isleMain) islandEl.after(isleMain.el);
   });
 })();
 
-// which way the 3D Cassie turns while she walks (-1 left, 1 right)
-function face3D(dir) {
-  try { if (window.CassieMascot && window.CassieMascot.setFacing) window.CassieMascot.setFacing(dir); } catch (e) { /* ignore */ }
-}
-
 // Cassie dresses for the job:
 //   Student (default) → her classic fluffy felt · Professional → the suit & beret
 //   Research / Web → cap & gown · Quiz me → thick glasses · Talk → the felt heart
@@ -802,10 +783,8 @@ let taskOutfit = null; // 'graduate' while a Research / Web answer is up; the ne
 function dressCassie() {
   const base = state.audience === 'pro' ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
-  try { if (window.CassieMascot && window.CassieMascot.setOutfit) window.CassieMascot.setOutfit(outfit); } catch (e) { /* ignore */ }
   if (typeof bot2d !== 'undefined' && bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
 }
-window.addEventListener('cassie3d-ready', () => dressCassie());
 
 // Student / Professional switch
 const audSwitch = document.getElementById('aud-switch');
@@ -909,14 +888,12 @@ function mascotWalk() {
   const step = 90 + Math.random() * 80;
   const tx = Math.min(Math.max(r.left + dir * step, b.minX), b.maxX);
   set3D('walk'); // a real waddle: feet stepping, body bobbing, arms swinging
-  face3D(dir);
   mascot.classList.add('walking');
   placeMascot(tx, r.top);
   setTimeout(() => {
     if (anticBusy()) { mascot.classList.remove('walking'); return; }
     const r2 = mascot.getBoundingClientRect();
     const back = Math.min(Math.max(r2.left - dir * (step * 0.6), b.minX), b.maxX);
-    face3D(-dir);
     placeMascot(back, r2.top);
     setTimeout(() => { mascot.classList.remove('walking'); if (!anticBusy()) set3D('neutral'); keepMascotClear(); }, 1100);
   }, 1200);
@@ -1116,18 +1093,6 @@ function maybeCelebrate(reply) {
 }
 
 // ---- Cassie stays put unless you drag her; she just shares tips in place ----
-const MASCOT_NUGGETS = [
-  'Highlight any word to ask about it!',
-  'Tap Hint for a nudge, not the whole answer.',
-  'You can upload a PDF or slides 📄',
-  'Use Research for real papers + an RRL.',
-  'Break big problems into small steps.',
-  'Quiz yourself — it helps memory stick!',
-  'Ask me to explain it simpler anytime.',
-  'Mistakes are how we learn 💡',
-];
-let mascotTipTimer = null;
-let nuggetIdx = Math.floor(Math.random() * MASCOT_NUGGETS.length);
 // The bottom "floor" for the mascot is the top of the Hint/Quiz row (or the
 // composer if the chips are hidden) so she rests right above it.
 function mascotFloorTop() {
@@ -4727,7 +4692,7 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
-  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; if (!state.highlightHelp) hideAskChip(); }
+  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; }
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
@@ -5228,7 +5193,6 @@ const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.suppor
 // the studio voice (ElevenLabs, through Cassie's server) goes first when the server has it
 if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId() });
 const studioVoice = () => !!window.CassieVoice && window.CassieVoice.studio.ready();
-const humanVoiceReady = () => humanVoiceWanted() && window.CassieVoice.status() === 'ready';
 let voiceUI = null;
 
 // Turn an answer into something that sounds right read aloud.
@@ -5987,7 +5951,6 @@ document.addEventListener('keydown', (e) => {
    highlighting, to copy and paste. Debounced so it waits for the selection to settle
    (mobile selection-handle dragging fires many selectionchange events). */
 let selPopoverTimer = null;
-function hideAskChip() { /* (the old "Ask Cassie" button is gone: highlighting is simply on or off) */ }
 function trySelectionPopover() {
   if (!highlightPopover) return;
   if (state.highlightHelp === false) return; // switched off: just highlighting
@@ -6549,7 +6512,7 @@ function openReader(doc) {
   track('feature', 'reader');
   islandShow('reading', 'Select any words to ask me', 2600);
 }
-function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); hideAskChip(); }
+function closeReader() { if (readerEl) readerEl.hidden = true; document.body.classList.remove('reader-open'); hideHighlightPopover(); }
 
 document.getElementById('reader-close')?.addEventListener('click', closeReader);
 
@@ -6656,7 +6619,6 @@ updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
 if (!state.profile) {
-  state.seenVersion = APP_VERSION;
   // with Cassie's server: the sign-in page first (or "Continue without an account")
   setTimeout(() => (accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
 } else track('open');

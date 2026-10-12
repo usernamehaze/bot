@@ -1,5 +1,5 @@
 /* Cassie landing page — small, dependency-free behaviour.
- * - loads mascot3d/cassie-3d.js (the marble ShaderGradient) after first paint where
+ * - starts the living marble (gradient.js) after first paint where
  *   WebGL works; a CSS marble shows otherwise. Cassie herself is Cursor Cassie (play.js).
  * - pricing: ₱ / $ and monthly / yearly
  * - reveal-on-scroll, feature videos that play only while visible, the tour video
@@ -27,16 +27,11 @@
   const saveData = navigator.connection && navigator.connection.saveData;
   if (!saveData && webglOK()) {
     const start = () => {
-      const s = document.createElement('script');
-      s.src = 'mascot3d/cassie-3d.js'; s.async = true;
-      s.onload = () => {
-        try {
-          const bg = $('#hero-bg');
-          window.CassieGradient.mount(bg, { still: reduce, pixelDensity: Math.min(1.25, window.devicePixelRatio || 1) });
-          setTimeout(() => bg.classList.add('live'), 300);
-        } catch (e) { /* the CSS marble stays */ }
-      };
-      document.body.appendChild(s);
+      try {
+        const bg = $('#hero-bg');
+        window.CassieGradient.mount(bg, { still: reduce, pixelDensity: Math.min(1.25, window.devicePixelRatio || 1) }); // (gradient.js)
+        setTimeout(() => bg.classList.add('live'), 300);
+      } catch (e) { /* the CSS marble stays */ }
     };
     if (document.readyState === 'complete') setTimeout(start, 200); else addEventListener('load', () => setTimeout(start, 200));
   }

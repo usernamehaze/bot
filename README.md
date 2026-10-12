@@ -88,6 +88,12 @@ The simplest option is **GitHub Pages**:
 Any static host (Netlify, Vercel, Cloudflare Pages) works the same way —
 just point it at this folder.
 
+Cassie's own site is Cloudflare Pages with `bash scripts/build-site.sh` as the build command
+(output: `_site`). The build stamps every `?v=` and the offline cache's name with the commit,
+so there's nothing to bump by hand. `server/worker.js` is built from `server/worker.src.js` with
+`cd server && python3 build.py` (a test fails if you forget), and the extension's `board.js` and
+`sketch.js` are the app's own (a test fails if the copies differ).
+
 ## Browser extension (desktop only)
 
 There's also a [browser extension](extension/README.md) that brings the
@@ -109,14 +115,12 @@ you selected.
 
 ## Website layout
 
-- `index.html` — the landing page (marble ShaderGradient hero, features, pricing, FAQ).
-  Its background and the 3D Cassie come from `mascot3d/cassie-3d.js`.
+- `index.html` — the landing page (marble hero, features, pricing, FAQ). Its moving background
+  is `gradient.js`.
   Set `WAITLIST_URL` in `landing/landing.js` to turn the paid-plan buttons into a waitlist link.
 - `start.html` — the loading screen (cursor highlights “Cassie”, clicks) that opens the app.
   The installed app (PWA) starts here.
 - `app.html` — the app itself.
-- `mascot3d/cassie-3d.js` — one bundle with the living gradient (behind the landing hero and
-  the chat, following the student's colour) and the felt 3D Cassie with her outfits
-  (classic, professor, graduate, coder, heart). Built from `cassie-3d/` with
-  `npx vite build -c vite.bundle.config.js && cp dist-bundle/cassie-3d.js ../mascot3d/`
-  (uses [ShaderGradient](https://github.com/ruucm/shadergradient), MIT).
+- `gradient.js` — the living marble behind the landing hero and the chat (one small WebGL
+  shader; it follows the student's colour). Lite mode keeps the plain background.
+- `cassie-bot.js` — Cursor Cassie, the mascot everywhere.

@@ -93,6 +93,14 @@ async function ensureSchema(db) {
 }
 
 const dayOf = (ms) => new Date(ms + TZ_OFFSET_H * 3600e3).toISOString().slice(0, 10);
+// One more use of something counted per period (a day, an hour, a week, a month): adds `by` and
+// gives back the new total, in one query. A new period starts the count again.
+const QUOTA_SQL = `INSERT INTO quota (k, day, n) VALUES (?1, ?2, ?3)
+  ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + ?3 ELSE ?3 END, day = ?2 RETURNING n`;
+const countUseQuery = (db, key, period, by = 1) => db.prepare(QUOTA_SQL).bind(key, period, by);
+async function countUse(db, key, period, by = 1) { const r = await countUseQuery(db, key, period, by).first(); return (r && r.n) || 0; }
+// …and give uses back (one each) when what was counted didn't happen
+const uncountUses = (db, keys) => db.batch(keys.map((k) => db.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k)));
 const clean = (v, n = 40) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, '').slice(0, n);
 // feature and event names are short labels like "quiz" or "labs: pendulum" — anything else is dropped
 const label = (v, n = 40) => { const t = clean(v, n); return /^[\w .:/+&()'’-]*$/u.test(t) ? t : ''; };
@@ -469,9 +477,7 @@ async function transcribe(request, env, ctx) {
   if (n > (+env.TRANSCRIBE_MINUTE_LIMIT || 20)) return chatError('Lots of talking! Give me a few seconds.', 429, h, { 'retry-after': '20' });
   if (env.DB) {
     await ensureSchema(env.DB);
-    const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('t:' + ip, dayOf(now)).first();
-    if (row && row.n > (+env.TRANSCRIBE_DAILY_LIMIT || 3000)) return chatError('That’s a lot of voice for today — type for now, and voice comes back tomorrow.', 429, h);
+    if (await countUse(env.DB, 't:' + ip, dayOf(now)) > (+env.TRANSCRIBE_DAILY_LIMIT || 3000)) return chatError('That’s a lot of voice for today — type for now, and voice comes back tomorrow.', 429, h);
   }
   const lang = /^[a-z]{2}$/.test(String(form.get('language') || '')) ? String(form.get('language')) : '';
   const hint = String(form.get('prompt') || '').slice(0, 600); // words from the conversation, so Whisper spells them right
@@ -520,10 +526,9 @@ async function ask(request, env, ctx) {
   if (!text) return out('Select some words first, then Share → Ask Cassie.');
   const now = Date.now(), today = dayOf(now), ip = request.headers.get('cf-connecting-ip') || 'unknown';
   await ensureSchema(env.DB);
-  const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind('a:' + ip, today).first();
+  const used = await countUse(env.DB, 'a:' + ip, today);
   const limit = +env.ASK_LIMIT || 40;
-  if ((row && row.n || 0) > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
+  if (used > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
   const messages = [{ role: 'system', content: ASK_SYSTEM }, { role: 'user', content: text }];
   let reply = null, src = 'shortcut';
   if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }, 'haiku'); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
@@ -570,15 +575,14 @@ async function chat(request, env, ctx) {
   // the student's plan (free unless they're signed in to a paid account) sets their allowance
   const { plan, account } = await planOf(request, env), L = limitsFor(env, plan), perDay = L.all;
   const who = account ? 'a:' + account : uid; // a paid plan counts per account, across devices
-  const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
+  const bump = (k) => countUseQuery(env.DB, k, today);
   // no id → the allowance is per network ("anon" is never one shared pool)
   const question = body.q === 1 || body.q === true; // something the student asked (not a file section)
   const keys = [who === 'anon' ? 'an:' + ip : 'u:' + who, 'i:' + ip, ...(question ? ['q:' + (who === 'anon' ? 'an:' + ip : who)] : [])];
   const counts = (await env.DB.batch(keys.map(bump))).map((r) => r.results?.[0]?.n || 0);
   const [usedU, usedI, usedQ = 0] = counts;
   if (Math.random() < 0.01) ctx.waitUntil(env.DB.prepare('DELETE FROM quota WHERE day < ?').bind(today).run());
-  const refund = () => env.DB.batch(keys.map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k)));
+  const refund = () => uncountUses(env.DB, keys);
   if (usedU > perDay || usedI > Math.max(perDay, 150) * 25 || usedQ > L.questions) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
     if (question && usedQ > L.questions) ctx.waitUntil(refund().catch(() => {})); // a refused question isn't counted
@@ -743,29 +747,27 @@ async function image(request, env, ctx) {
     const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : '';
     const who = account ? 'a:' + account : uid ? 'u:' + uid : 'ip:' + (request.headers.get('cf-connecting-ip') || 'unknown');
     const period = allow.per === 'week' ? weekOf(Date.now()) : today, key = `gpic:${who}`;
-    const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-        ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(key, period).first();
-    if ((row?.n || 0) > allow.n) {
-      await env.DB.prepare('UPDATE quota SET n = n - 1 WHERE k = ?').bind(key).run();
+    const usedPics = await countUse(env.DB, key, period);
+    if (usedPics > allow.n) {
+      await uncountUses(env.DB, [key]);
       return no(allow.per === 'week' ? `You’ve made this week’s ${allow.n} Gemini pictures.` : `You’ve made today’s ${allow.n} Gemini pictures.`, { used: true, per: allow.per, plan });
     }
     const ref = typeof body.ref === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(body.ref) && body.ref.length < 7e6
       ? { mimeType: /^data:(image\/\w+)/.exec(body.ref)[1], data: body.ref.split(',')[1] } : null;
     const out = await geminiPicture(env, prompt, ref);
     if (!out.image) {
-      await env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(key).run();
+      await uncountUses(env.DB, [key]);
       ctx.waitUntil(logProblem(env, 'gemini-picture', out.detail || out.error));
       return no('Gemini couldn’t make that picture.');
     }
     ctx.waitUntil(countChat(env, today, ref ? 'gemini-picture-photo' : 'gemini-picture'));
-    return json({ image: out.image, mimeType: out.mimeType, source: 'gemini', left: Math.max(0, allow.n - row.n), per: allow.per }, 200, h);
+    return json({ image: out.image, mimeType: out.mimeType, source: 'gemini', left: Math.max(0, allow.n - usedPics), per: allow.per }, 200, h);
   }
   if (!env.AI) return chatError('Pictures aren’t set up on this server.', 503, h);
   const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : 'anon';
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const perDay = +env.IMAGE_LIMIT || 20;
-  const bump = (k) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(k, today);
+  const bump = (k) => countUseQuery(env.DB, k, today);
   const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'img:an:' + ip : 'img:u:' + uid), bump('img:i:' + ip)]);
   if ((u.results?.[0]?.n || 0) > perDay || (i.results?.[0]?.n || 0) > perDay * 25) {
     return chatError(`You've made today's ${perDay} pictures. More tomorrow — or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
@@ -777,7 +779,7 @@ async function image(request, env, ctx) {
     ctx.waitUntil(countChat(env, today, 'image'));
     return json({ image: b64, mimeType: 'image/jpeg' }, 200, h);
   } catch (e) {
-    ctx.waitUntil(env.DB.batch(['img:u:' + uid, 'img:i:' + ip].map((k) => env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(k))));
+    ctx.waitUntil(uncountUses(env.DB, ['img:u:' + uid, 'img:i:' + ip]));
     return chatError('Couldn’t make that picture right now — try again in a minute, or describe it more simply.', 503, h);
   }
 }
@@ -834,11 +836,9 @@ async function speak(request, env, ctx) {
   const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
   if (env.DB) {
     await ensureSchema(env.DB);
-    const add = (k, d) => env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, ?3)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + ?3 ELSE ?3 END, day = ?2 RETURNING n`).bind(k, d, text.length).first();
-    const [mine, all] = await Promise.all([add('sp:' + uid, day), add('SP:month', month)]);
-    if (all && all.n > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
-    if (mine && mine.n > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today — Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
+    const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
+    if (all > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
+    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today — Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively
@@ -1061,9 +1061,7 @@ async function accountFromRequest(request, env) {
 async function authAllowed(request, env, key, max = 100) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const hour = new Date().toISOString().slice(0, 13);
-  const r = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(key || 'auth:' + ip, hour).first();
-  return !r || r.n <= max;
+  return (await countUse(env.DB, key || 'auth:' + ip, hour)) <= max;
 }
 // Throwaway inboxes, used to make account after account for more free questions.
 const DISPOSABLE_RE = /@(mailinator|guerrillamail|guerrillamailblock|sharklasers|grr|10minutemail|10minemail|tempmail|temp-mail|tempmailo|tempail|yopmail|trashmail|getnada|nada|dispostable|maildrop|throwawaymail|mintemail|mohmal|emailondeck|fakeinbox|spamgourmet|moakt|tmpmail|tmail|burnermail|inboxkitten|mailnesia|mytemp|emailfake|fakemail|discard|mailcatch|spambox|33mail)\./i;
@@ -1236,8 +1234,7 @@ async function adminOk(request, env) {
   const tries = await env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind('adm:' + ip, hour).first();
   if (tries && tries.n >= 10) return { error: 'Too many wrong tries — wait an hour.', status: 429 };
   if (given && sameText(given, String(env.ADMIN_TOKEN))) return null;
-  await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
-      ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2`).bind('adm:' + ip, hour).run();
+  await countUse(env.DB, 'adm:' + ip, hour);
   return { error: 'wrong token', status: 401 };
 }
 async function health(request, env) {
