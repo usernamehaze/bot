@@ -20,13 +20,13 @@
 
   /* ---------- the tabs ---------- */
   const shown = () => {
-    if (root.classList.contains('labs-open')) return 'labs';
+    if (root.classList.contains('labs-open')) return $('.labs') && $('.labs').dataset.section === 'games' ? 'games' : 'labs';
     if (root.classList.contains('fc-open')) return 'cards';
     if (settings && !settings.hidden) return 'you';
     return base;
   };
   function closeOthers(keep) {
-    if (keep !== 'labs' && root.classList.contains('labs-open')) press('.labs .labs-x');
+    if (keep !== 'labs' && keep !== 'games' && root.classList.contains('labs-open')) press('.labs .labs-x');
     if (keep !== 'cards' && root.classList.contains('fc-open') && window.CassieCards) window.CassieCards.close();
     if (keep !== 'you' && settings && !settings.hidden) press('#settings-close-btn');
   }
@@ -36,7 +36,7 @@
       if (t === base && t === 'home') home.scrollTo({ top: 0, behavior: 'smooth' }); // tap Home again: back to the top
       base = t; state.tab = t; save();
       if (t === 'chat') requestAnimationFrame(() => { chatLog.scrollTop = chatLog.scrollHeight; });
-    } else if (t === 'labs') { closeOthers('labs'); if (!root.classList.contains('labs-open')) press('#labs-btn'); }
+    } else if (t === 'labs' || t === 'games') { closeOthers(t); press(t === 'games' ? '#games-btn' : '#labs-btn'); }
     else if (t === 'cards') { closeOthers('cards'); if (window.CassieCards) window.CassieCards.open(); }
     else if (t === 'you') { closeOthers('you'); if (settings.hidden) press('#settings-btn'); }
     sync();

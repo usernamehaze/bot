@@ -10,6 +10,7 @@
      import('./labs/labs.js').then((m) => m.open({ lab: 'projectile', onAsk, onQuiz, openExplore, explain, scores }));
 */
 import { el, esc, dayKey, setPremium } from './kit.js';
+import { tutor } from './tutor.js';
 import { MATH } from './math.js';
 import { MATH2 } from './math2.js';
 import { PHYSICS } from './physics.js';
@@ -64,7 +65,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=9', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=10', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
@@ -100,6 +101,7 @@ function createView() {
         <button type="button" class="lab-back" aria-label="Back to all labs">‹ <span>Labs</span></button>
         <div class="lab-name"><h2></h2><span class="lab-tag"></span></div>
         <div class="lab-acts">
+          <button type="button" class="lab-btn lab-teach" title="Cassie teaches you, out loud, and points at what to do">${CURSOR}Teach me</button>
           <button type="button" class="lab-btn lab-ask">${CURSOR}Ask Cassie</button>
           <button type="button" class="lab-btn lab-quiz">Quiz me</button>
         </div>
@@ -151,6 +153,7 @@ function createView() {
     root.querySelectorAll('[data-section]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === section)));
     $('.labs-chips').hidden = section !== 'learn';
     shelf.dataset.shelf = section;
+    root.dataset.section = section; // (the app's Games button shows as on while the games are open)
   }
   function renderShelf() {
     const q = search.value.trim().toLowerCase();
@@ -235,6 +238,7 @@ function createView() {
     $('.lab-about').open = false;
     $('.lab-about p').textContent = lab.about || '';
     $('.lab-quiz').hidden = (lab.subject === 'puzzles' || lab.subject === 'games' || lab.subject === 'tools') && !lab.topic;
+    $('.lab-teach').hidden = lab.subject === 'puzzles' || lab.subject === 'games' || !opts.explain; // Learn and Study tools
     labView.classList.toggle('lab-tool', !!lab.wide);
     renderTries();
     const api = {
@@ -322,7 +326,20 @@ function createView() {
         .finally(() => { n.disabled = false; });
     }
   });
+  // Teach me: Cassie as a tutor in this lab (labs/tutor.js)
+  let teacher = null;
+  function stopTeaching() { if (teacher) { teacher.stop(); teacher = null; } labView.classList.remove('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'false'); }
+  $('.lab-teach').addEventListener('click', () => {
+    if (!current || !opts.explain) return;
+    if (teacher && teacher.root.isConnected) { stopTeaching(); return; }
+    teacher = tutor({ view: labView, lab: current, mounted: () => mounted, described, ask: opts.explain, speak: opts.speak, hear: opts.hear, level: opts.level });
+    teacher.root.querySelector('.tut-x').addEventListener('click', () => stopTeaching());
+    labView.classList.add('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'true');
+    if (opts.onTeach) opts.onTeach(current.id);
+    teacher.teach('How do I use this? Teach me from the start.');
+  });
   function closeLab() {
+    stopTeaching();
     if (mounted && mounted.destroy) { try { mounted.destroy(); } catch (e) { /* ignore */ } }
     mounted = null; current = null;
   }
@@ -391,7 +408,10 @@ function createView() {
     document.documentElement.classList.add('labs-open');
     if (opts.lab && LABS.some((l) => l.id === opts.lab)) openLab(opts.lab);
     else {
+      // the Games button (or Labs) asks for a shelf: leave any lab that's open and show it
+      if (opts.section && !labView.hidden) backToShelf();
       if (opts.subject === 'puzzles' || opts.section === 'games') setSection('games');
+      else if (opts.section === 'learn' || opts.section === 'tools') setSection(opts.section);
       else if (opts.subject) { setSection('learn'); subject = opts.subject; root.querySelectorAll('[data-subject]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.subject === subject))); }
       if (labView.hidden) { renderShelf(); setTimeout(() => search.focus({ preventScroll: true }), 50); }
     }

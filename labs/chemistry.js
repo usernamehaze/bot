@@ -392,6 +392,17 @@ const atomLab = {
     report(); tick.start();
     return {
       state: () => { const e = ELEMENTS[Z]; return `${Z} protons, ${N} neutrons and ${E} electrons${e ? `: that's ${e[1].toLowerCase()}-${Z + N}${Z !== E ? `, an ion with charge ${Z - E > 0 ? '+' : ''}${Z - E}` : ''}, and its nucleus is ${e[3].includes(N) ? 'stable' : 'unstable'}` : ''}`; },
+      // parts of the picture the tutor can point at (page coordinates)
+      spots: () => {
+        const r = cv.c.getBoundingClientRect();
+        const at = (x, y) => (cv.c._toScreen ? cv.c._toScreen(x, y) : { x: r.left + x, y: r.top + y });
+        const out = tray.map((t) => ({ name: `the ${{ p: 'proton', n: 'neutron', e: 'electron' }[t.k]} in the tray (drag it into the atom)`, x: r.left + t.x, y: r.top + t.y }));
+        if (geoA) {
+          out.push({ name: 'the nucleus (drop protons and neutrons here)', ...at(geoA.cx, geoA.cy) });
+          out.push({ name: 'the electron shells (drop electrons around here)', ...at(geoA.cx + geoA.R * 0.75, geoA.cy) });
+        }
+        return out;
+      },
       destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },

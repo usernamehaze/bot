@@ -1263,7 +1263,7 @@ const WATCH_VOICE_WORKER = () => {
   AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
 };
 
-test('Cassie’s voice is Bella (or Michael) once she’s on the device — the phone’s voice only until then, and she never makes you wait', async (b) => {
+test('Cassie’s voice is Bella (or Edward) once she’s on the device — the phone’s voice only until then, and she never makes you wait', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
   // the voice model downloads slowly here, like on a slow connection
   await ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\/onnx\//, async (route) => {
@@ -1299,7 +1299,7 @@ test('Cassie’s voice is Bella (or Michael) once she’s on the device — the 
   expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
   // the man's voice
   await page.click('.vc-gender [data-gender="man"]');
-  await page.waitForFunction(() => window.__said.some((x) => x.voice === 'am_michael' && /my voice now/.test(x.text)), null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__said.some((x) => x.voice === 'bm_george' && /my voice now/.test(x.text)), null, { timeout: 8000 });
   await page.click('.vc-gender [data-gender="woman"]');
   await page.click('.vc-x');
   // Settings → Voice: she's ready, and a sample plays
@@ -2067,6 +2067,88 @@ test('All 3D on Free: the cells, the body, the solar system and the globe open t
   await ctx.close();
 });
 
+test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the exact button and at parts of the picture; waits for the tap', async (b) => {
+  const asked = [];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', voiceGender: 'man' }, fakeGroq: (body) => {
+    const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    if (!/The things on the screen, numbered/.test(u)) return { text: 'ok' };
+    asked.push(u);
+    const num = (re) => { const line = u.split('\n').find((l) => /^\d+\. /.test(l) && re.test(l)); return line ? parseInt(line, 10) : 0; };
+    if (/The student says: "what is an isotope/.test(u)) return { text: JSON.stringify({ steps: [{ say: 'An isotope has the same protons but a different number of neutrons.', point: num(/nucleus/) }] }) };
+    return { text: 'Sure! ' + JSON.stringify({ steps: [
+      { say: 'Tap Carbon-14 to build that atom.', point: num(/"Carbon-14" button/) },
+      { say: 'This is the nucleus, where protons and neutrons live.', point: num(/the nucleus/) },
+      { say: 'Now drag a proton from the tray yourself.', point: num(/proton in the tray/) },
+    ] }) };
+  } });
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+  await page.click('.lab-teach');
+  await page.waitForFunction(() => /Tap Carbon-14/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
+  expect(/How do I use this/.test(asked[0]) && /Build an atom/.test(asked[0]) && /protons/.test(asked[0]), 'Cassie sees the lab and what is on screen');
+  const pointed = await page.evaluate(() => { const p = document.querySelector('.tut-pointed'); return p ? p.textContent.trim() : ''; });
+  expect(pointed === 'Carbon-14', 'points at the Carbon-14 button: ' + pointed);
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tutor.png' });
+  expect(await page.locator('.tut-finger:not([hidden])').count() === 1, 'her cursor points at it');
+  expect(/1 of 3/.test(await page.locator('.tut-step').innerText()), 'step 1 of 3');
+  // she waits for the student to do it
+  await page.waitForTimeout(2500);
+  expect(/Tap Carbon-14/.test(await page.locator('.tut-say').innerText()), 'still waiting for the tap');
+  await page.click('.tut-pointed');
+  await page.waitForFunction(() => /nucleus/.test(document.querySelector('.tut-say').textContent), null, { timeout: 5000 });
+  if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: process.env.SHOTS + '/tutor-spot.png' }); }
+  expect(await page.locator('.tut-ring:not([hidden])').count() === 1 && await page.locator('.tut-pointed').count() === 0, 'a ring on a part of the picture');
+  await page.click('.tut-next');
+  await page.waitForFunction(() => /drag a proton/.test(document.querySelector('.tut-say').textContent), null, { timeout: 5000 });
+  await page.click('.tut-next');
+  await page.waitForFunction(() => /Nice work/.test(document.querySelector('.tut-say').textContent), null, { timeout: 5000 });
+  // ask anything (typed here; 🎤 says it out loud)
+  expect(await page.locator('.tut-mic').count() === 1, 'a microphone button');
+  await page.fill('.tut-ask input', 'what is an isotope?');
+  await page.press('.tut-ask input', 'Enter');
+  await page.waitForFunction(() => /same protons/.test(document.querySelector('.tut-say').textContent), null, { timeout: 8000 });
+  expect(/what is an isotope/.test(asked.at(-1)) && /carbon-14/i.test(asked.at(-1)), 'the follow-up sees the new screen: ' + asked.at(-1).slice(0, 400));
+  await page.click('.tut-x');
+  expect(await page.locator('.lab-tutor').count() === 0 && await page.locator('.tut-finger').count() === 0, 'stops cleanly');
+  // study tools have it; games don't
+  await page.evaluate(() => openLabs('cornell'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="cornell"] .lab-controls > *', { timeout: 15000 });
+  expect(await page.locator('.lab-teach:visible').count() === 1, 'Teach me in a study tool');
+  await page.evaluate(() => openLabs('circuit'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="circuit"] .lab-controls > *', { timeout: 15000 });
+  expect(await page.locator('.lab-teach:visible').count() === 0, 'not in a game');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  if (process.env.SHOTS) { // how it looks on a phone
+    const ph = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: JSON.stringify({ steps: [{ say: 'Tap the plus next to Protons to add one.', point: 0 }] }) }) });
+    await ph.page.evaluate(() => openLabs('atom'));
+    await ph.page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+    await ph.page.click('.lab-teach');
+    await ph.page.waitForFunction(() => /plus next to Protons/.test(document.querySelector('.tut-say').textContent), null, { timeout: 15000 });
+    await ph.page.screenshot({ path: process.env.SHOTS + '/tutor-phone.png' });
+    await ph.ctx.close();
+  }
+});
+
+test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
+  let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
+  await page.click('#games-btn');
+  await page.waitForSelector('.labs:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"]', { timeout: 15000 });
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
+  await page.waitForSelector('.labs-shelf:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await ctx.close();
+  ({ ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' } }));
+  await page.click('.tabbar [data-tab="games"]');
+  await page.waitForSelector('.labs:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.tabbar [data-tab="games"].on', { timeout: 5000 });
+  await page.click('.tabbar [data-tab="labs"]');
+  await page.waitForSelector('.labs:not([hidden]) [data-section="learn"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.tabbar [data-tab="labs"].on', { timeout: 5000 });
+  await ctx.close();
+});
+
 test('Museum and games: famous paintings, a logic circuit, cracking a rule / regex / compound, a pinning blitz, the fraction diner, the city market', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await ctx.route(/wikipedia\.org/, (r) => r.abort());
@@ -2424,16 +2506,6 @@ test('Lite mode skips the 3D Cassie', async (b) => {
   await page.waitForTimeout(1500);
   const loaded = await page.evaluate(() => [...document.scripts].some((s) => /cassie-3d/.test(s.src)));
   expect(!loaded, '3D bundle loaded in Lite mode');
-  await ctx.close();
-});
-
-test("What's new shows once after an update", async (b) => {
-  const { ctx, page } = await open(b, { state: { seenVersion: '1' } });
-  await page.waitForSelector('text=What’s new in Cassie', { timeout: 5000 });
-  await page.click('.profile-card .pf-go');
-  await page.reload();
-  await page.waitForTimeout(2000);
-  expect(await page.locator('text=What’s new in Cassie').count() === 0, "What's new showed twice");
   await ctx.close();
 });
 

@@ -510,3 +510,39 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 
 .labs-card.opening { opacity: .6; pointer-events: none; }
 .labs-card.opening .labs-card-text b::after { content: " · Opening…"; font-weight: 500; opacity: .7; }
+
+/* Teach me: Cassie the tutor (labs/tutor.js) */
+.lab-teach[aria-pressed="true"] { background: #fff; color: #111; }
+.lab-tutor { position: fixed; z-index: 260; left: 16px; bottom: 16px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 12px 14px; border-radius: 18px;
+  background: rgba(16, 17, 22, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); color: #f2f2f4; }
+.tut-head { display: flex; align-items: center; gap: 8px; }
+.tut-who { display: inline-flex; align-items: center; gap: 6px; flex: 1; font-size: .82rem; letter-spacing: .02em; }
+.tut-who svg, .tut-finger svg { width: 16px; height: 16px; fill: #fff; stroke: #111; stroke-width: 1.2; }
+.tut-icon { border: 1px solid rgba(255, 255, 255, .18); background: transparent; color: inherit; border-radius: 99px; padding: 4px 10px; font-size: .74rem; cursor: pointer; }
+.tut-icon[aria-pressed="false"] { opacity: .6; }
+.tut-say { margin: 10px 0; font-size: 1rem; line-height: 1.45; min-height: 1.45em; }
+.lab-tutor.thinking .tut-say { opacity: .7; animation: tut-think 1.2s ease-in-out infinite; }
+@keyframes tut-think { 50% { opacity: .35; } }
+.tut-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tut-step { flex: 1; text-align: center; font-size: .78rem; opacity: .65; }
+.tut-btn { border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .08); color: inherit; border-radius: 99px; padding: 7px 13px; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.lab-tutor .tut-next, .lab-tutor .tut-go { background: #fff; color: #111; border-color: transparent; }
+.lab-tutor.tut-top { bottom: auto; top: 66px; }
+.tut-btn:disabled { opacity: .35; cursor: default; }
+.tut-ask { display: flex; gap: 6px; }
+.tut-ask input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; font-size: .9rem; }
+.lab-tutor .tut-mic.on { background: #fff; color: #111; }
+/* what Cassie is pointing at */
+.tut-pointed { outline: 3px solid #fff !important; outline-offset: 3px; border-radius: 10px; animation: tut-glow 1.4s ease-in-out infinite; position: relative; z-index: 3; }
+@keyframes tut-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .55); } 50% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); } }
+.tut-finger { position: fixed; left: 0; top: 0; z-index: 262; pointer-events: none; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .5)); animation: tut-tap 1.1s ease-in-out infinite; }
+.tut-finger svg { width: 30px; height: 30px; display: block; }
+@keyframes tut-tap { 50% { margin: -5px 0 0 -5px; } }
+.tut-ring { position: fixed; left: 0; top: 0; z-index: 261; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; pointer-events: none; animation: tut-glow 1.4s ease-in-out infinite; }
+.lab-view.tutoring .lab-panel { padding-bottom: 230px; }
+@media (max-width: 760px) {
+  .lab-tutor { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: auto; padding: 10px 12px; }
+  .tut-say { font-size: .95rem; margin: 8px 0; }
+  .lab-view.tutoring .lab-body { padding-bottom: 210px; }
+}
+@media (prefers-reduced-motion: reduce) { .tut-pointed, .tut-finger, .tut-ring, .lab-tutor.thinking .tut-say { animation: none; } }
