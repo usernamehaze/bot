@@ -2472,9 +2472,8 @@ test('Teach me card: "where is the heart", made small, the heart still tappable,
   const target = page.locator('.tut-pointed');
   expect(/Circulatory/.test(await target.innerText()), 'she points at the Circulatory switch: ' + await target.innerText());
   // the card moves off what she points at
-  await page.waitForTimeout(700);
-  const overlap = () => page.evaluate(() => { const a = document.querySelector('.lab-tutor').getBoundingClientRect(), t = document.querySelector('.tut-pointed').getBoundingClientRect(); return a.left < t.right && a.right > t.left && a.top < t.bottom && a.bottom > t.top; });
-  expect(!(await overlap()), 'the card is not on top of what she points at');
+  await page.waitForFunction(() => { const a = document.querySelector('.lab-tutor').getBoundingClientRect(), t = document.querySelector('.tut-pointed').getBoundingClientRect(); return !(a.left < t.right && a.right > t.left && a.top < t.bottom && a.bottom > t.top); }, null, { timeout: 8000, polling: 250 })
+    .catch(() => { throw new Error('the card is still on top of what she points at'); });
   // made small: a pill with the step, and she keeps pointing
   await page.tap('.tut-min');
   await seen(page, '.tut-pill', 'Step 1 of 3');
