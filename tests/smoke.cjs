@@ -2446,6 +2446,85 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   await ctx.close();
 });
 
+test('Teach me card: "where is the heart", made small, the heart still tappable, dragged, closed and carried on from the same step (no new question to Cassie)', async (b) => {
+  const asked = [];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    if (!/The things on the screen, numbered/.test(u)) return { text: 'ok' };
+    asked.push(u);
+    const num = (re) => { const line = u.split('\n').find((l) => /^\d+\. /.test(l) && re.test(l)); return line ? parseInt(line, 10) : 0; };
+    if (/The student says: "where is the heart/.test(u)) return { text: JSON.stringify({ steps: [
+      { say: 'The heart is part of the circulatory system. Tap Circulatory to show it.', point: num(/"Circulatory/) },
+      { say: 'Now type heart in the Find a part box.', point: num(/Find a part/) },
+      { say: 'It sits in the middle of your chest, tipped a little to the left.', point: 0 },
+    ] }) };
+    return { text: JSON.stringify({ steps: [{ say: 'Welcome! Pick Boy or Girl here.', point: num(/"Girl"/) }] }) };
+  } });
+  await page.evaluate(() => openExplore('body'));
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
+  await seen(page, '.x3d', 'parts showing', 60000);
+  await page.tap('[data-tool="teach"]');
+  await seen(page, '.tut-say', 'Pick Boy or Girl');
+  await page.fill('.tut-ask input', 'where is the heart?');
+  await page.press('.tut-ask input', 'Enter');
+  await seen(page, '.tut-say', 'Tap Circulatory');
+  expect(asked.length === 2, 'two questions to Cassie so far: ' + asked.length);
+  const target = page.locator('.tut-pointed');
+  expect(/Circulatory/.test(await target.innerText()), 'she points at the Circulatory switch: ' + await target.innerText());
+  // the card moves off what she points at
+  await page.waitForTimeout(700);
+  const overlap = () => page.evaluate(() => { const a = document.querySelector('.lab-tutor').getBoundingClientRect(), t = document.querySelector('.tut-pointed').getBoundingClientRect(); return a.left < t.right && a.right > t.left && a.top < t.bottom && a.bottom > t.top; });
+  expect(!(await overlap()), 'the card is not on top of what she points at');
+  // made small: a pill with the step, and she keeps pointing
+  await page.tap('.tut-min');
+  await seen(page, '.tut-pill', 'Step 1 of 3');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tutor-pill.png' });
+  expect(await page.locator('.lab-tutor.tut-mini').count() === 1 && await page.locator('.tut-say').isHidden(), 'the card is a small pill');
+  expect(await page.locator('.tut-finger:not([hidden])').count() === 1 && await page.locator('.tut-pointed').count() === 1, 'she still points at it');
+  const reach = await page.evaluate(() => { const t = document.querySelector('.tut-pointed'), r = t.getBoundingClientRect(), h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.width > 0 && r.bottom > 0 && r.top < innerHeight && t.contains(h); });
+  expect(reach, 'the heart’s switch is on screen and nothing covers it');
+  await target.tap();
+  await seen(page, '.tut-pill', 'Step 2 of 3'); // (tapping it is the step: she goes on, still small)
+  expect(await page.locator('.x3d-sys[aria-pressed="true"]:has-text("Circulatory")').count() === 1, 'the tap reached the switch: the circulatory system is on');
+  // the pill can be dragged, and stays on the screen
+  let pb = await page.locator('.tut-pill').boundingBox();
+  await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2); await page.mouse.down();
+  await page.mouse.move(pb.x + 30, -400, { steps: 6 }); await page.mouse.up();
+  pb = await page.locator('.lab-tutor').boundingBox();
+  expect(pb.y >= 0 && pb.y < 60, 'dragged to the top, and kept on the screen: ' + JSON.stringify(pb));
+  expect(await page.locator('.lab-tutor.tut-mini').count() === 1, 'a drag does not open it');
+  // a tap opens it again where it is; its top drags it too
+  await page.tap('.tut-pill');
+  await seen(page, '.tut-say', 'type heart');
+  expect(/2 of 3/.test(await page.locator('.tut-step').innerText()), 'step 2 of 3');
+  const hb = await page.locator('.tut-head .tut-who').boundingBox();
+  await page.mouse.move(hb.x + 10, hb.y + 10); await page.mouse.down();
+  await page.mouse.move(hb.x + 10, hb.y + 260, { steps: 6 }); await page.mouse.up();
+  const cb = await page.locator('.lab-tutor').boundingBox();
+  expect(cb.y > hb.y + 150 && cb.y + cb.height <= 844 && cb.x >= 0 && cb.x + cb.width <= 390, 'dragged by its top, inside the screen: ' + JSON.stringify(cb));
+  // closed, then Teach me again: carry on from step 2, without asking Cassie again
+  await page.tap('.tut-x');
+  expect(await page.locator('.lab-tutor').count() === 0, 'closed');
+  await page.tap('[data-tool="teach"]');
+  await seen(page, '.tut-continue', 'Continue from step 2');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tutor-resume.png' });
+  expect(await page.locator('.tut-restart').isVisible(), 'or start over');
+  expect(await page.locator('.tut-nav').isHidden(), 'no Back and Next before choosing');
+  await page.tap('.tut-continue');
+  await seen(page, '.tut-say', 'type heart');
+  expect(/2 of 3/.test(await page.locator('.tut-step').innerText()), 'back at step 2 of 3');
+  expect(/Find a part/.test(await page.evaluate(() => (document.querySelector('.tut-pointed') || {}).placeholder || '')), 'and pointing at the Find a part box again');
+  expect(asked.length === 2, 'no new question to Cassie: ' + asked.length);
+  // start over: step 1, still no new question
+  await page.tap('.tut-x');
+  await page.tap('[data-tool="teach"]');
+  await page.tap('.tut-restart');
+  await seen(page, '.tut-step', '1 of 3');
+  expect(asked.length === 2, 'start over replays the lesson');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
   let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await page.click('#games-btn');

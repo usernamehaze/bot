@@ -5,7 +5,11 @@
    tap something, she waits until they do; otherwise she goes on after she's said it.
    She sees what is on the screen: every control and part is numbered and described to her, with
    what the lab says is happening now. A lab can name parts of its picture with spots() →
-   [{ name, x, y }] (page coordinates), so she can point inside the picture too. */
+   [{ name, x, y }] (page coordinates), so she can point inside the picture too.
+   The card never hides what she points at: it moves out of the way by itself, can be dragged by its
+   top, and "–" makes it a small pill ("Step 3 of 7") while she keeps talking and pointing. Closing it
+   keeps the lesson: lesson() is where the student stopped, and offer(lesson) lets them carry on from
+   there (or start it over) without asking her again. */
 import { el } from './kit.js';
 
 const CURSOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>';
@@ -76,8 +80,11 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
   box.innerHTML = `
     <div class="tut-head"><span class="tut-who">${CURSOR}<b>Cassie is teaching</b></span>
       <button type="button" class="tut-icon tut-voice" aria-pressed="${voiceOn}" title="Cassie’s voice on or off">${voiceOn ? 'Voice on' : 'Voice off'}</button>
+      <button type="button" class="tut-icon tut-min" aria-label="Make the card small" title="Make it small (Cassie keeps teaching)">–</button>
       <button type="button" class="tut-icon tut-x" aria-label="Stop teaching">✕</button></div>
+    <button type="button" class="tut-pill" aria-label="Show Cassie’s card again">${CURSOR}<span class="tut-pill-text">Cassie is teaching</span></button>
     <p class="tut-say" aria-live="polite"></p>
+    <div class="tut-resume" hidden><button type="button" class="tut-btn tut-go tut-continue">Continue</button><button type="button" class="tut-btn tut-restart">Start over</button></div>
     <div class="tut-nav" hidden><button type="button" class="tut-btn tut-prev" aria-label="Back a step">‹ Back</button><span class="tut-step"></span><button type="button" class="tut-btn tut-next">Next ›</button></div>
     <form class="tut-ask"><input type="text" placeholder="Ask anything: “how do I use this?”" aria-label="Ask Cassie how to do something here" enterkeyhint="send">
       ${hear ? '<button type="button" class="tut-btn tut-mic" aria-label="Say it out loud" title="Say it out loud">🎤</button>' : ''}<button type="submit" class="tut-btn tut-go">Ask</button></form>`;
@@ -88,7 +95,65 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
   document.body.append(finger, ring);
   finger.hidden = ring.hidden = true;
 
-  let steps = [], at = 0, targets = [], pointed = null, talking = null, waitOff = null, raf = 0, alive = true, asking = 0;
+  let steps = [], at = 0, targets = [], pointed = null, talking = null, waitOff = null, raf = 0, alive = true, asking = 0, finished = false;
+  const pill = $('.tut-pill'), pillText = $('.tut-pill-text');
+
+  /* ---------- where the card sits: dragged, made small, or moved out of the way ---------- */
+  const EDGE = 10, cardWidth = () => Math.min(440, innerWidth - EDGE * 2);
+  function placeAt(x, y) {
+    if (!box.classList.contains('tut-mini')) box.style.width = cardWidth() + 'px';
+    const r = box.getBoundingClientRect();
+    x = Math.max(EDGE, Math.min(innerWidth - r.width - EDGE, x));
+    y = Math.max(EDGE, Math.min(innerHeight - r.height - EDGE, y));
+    Object.assign(box.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
+    box.classList.remove('tut-top');
+  }
+  const placed = () => !!box.style.top;
+  function dragBy(handle, onTap) {
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || (handle !== pill && e.target.closest('button'))) return;
+      const r = box.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+      let moved = false;
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      const move = (ev) => {
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (!moved && Math.hypot(dx, dy) < 6) return;
+        moved = true;
+        placeAt(r.left + dx, r.top + dy);
+      };
+      const up = () => {
+        handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up);
+        if (!moved && onTap) onTap();
+      };
+      handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+    });
+  }
+  function mini(yes) {
+    box.classList.toggle('tut-mini', yes);
+    box.style.width = '';
+    if (placed()) { const r = box.getBoundingClientRect(); placeAt(r.left, r.top); }
+    if (pointed) setTimeout(() => dodge(pointed), 50);
+    (yes ? pill : $('.tut-min')).focus({ preventScroll: true });
+  }
+  dragBy($('.tut-head'));
+  dragBy(pill, () => mini(false));
+  pill.addEventListener('click', (e) => { if (e.detail === 0) mini(false); }); // (the keyboard: Enter or Space)
+  $('.tut-min').addEventListener('click', () => mini(true));
+  const onResize = () => { if (placed()) { const r = box.getBoundingClientRect(); placeAt(r.left, r.top); } };
+  addEventListener('resize', onResize);
+  // the card moves off whatever she is pointing at: a free corner, or above or below it (else the old jump to the top)
+  function dodge(t) {
+    if (!alive || !t) return;
+    const r = t.spot ? { left: t.spot.x - 24, right: t.spot.x + 24, top: t.spot.y - 24, bottom: t.spot.y + 24 } : t.el.getBoundingClientRect();
+    const b = box.getBoundingClientRect(), w = b.width, h = b.height, gap = 8;
+    const covers = (x, y) => r.left < x + w + gap && r.right > x - gap && r.top < y + h + gap && r.bottom > y - gap;
+    if (!covers(b.left, b.top)) return;
+    const right = innerWidth - w - EDGE, low = innerHeight - h - EDGE - (innerWidth <= 760 ? 70 : 0), high = 66;
+    const spots = [[EDGE, low], [right, low], [EDGE, high], [right, high], [b.left, r.top - h - 14], [b.left, r.bottom + 14]];
+    const free = spots.find(([x, y]) => y >= EDGE && y + h <= innerHeight - EDGE && !covers(x, y));
+    if (free) placeAt(free[0], free[1]);
+    else box.classList.add('tut-top');
+  }
 
   function clearPoint() {
     if (pointed && pointed.el) pointed.el.classList.remove('tut-pointed');
@@ -119,13 +184,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
     finger.hidden = false;
     follow();
     // if the card is covering what she's pointing at, the card moves out of the way
-    setTimeout(() => {
-      if (!alive || pointed !== t) return;
-      box.classList.remove('tut-top');
-      const b = box.getBoundingClientRect();
-      const r = t.spot ? { left: t.spot.x - 24, right: t.spot.x + 24, top: t.spot.y - 24, bottom: t.spot.y + 24 } : t.el.getBoundingClientRect();
-      if (r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top) box.classList.add('tut-top');
-    }, 400);
+    setTimeout(() => { if (alive && pointed === t) dodge(t); }, 400);
     return t;
   }
   function voice(text) {
@@ -139,6 +198,8 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
     at = k;
     const s = steps[k];
     sayEl.textContent = s.say;
+    pillText.textContent = steps.length > 1 ? `Step ${k + 1} of ${steps.length}` : 'Cassie is teaching';
+    $('.tut-resume').hidden = true;
     $('.tut-nav').hidden = steps.length < 2;
     $('.tut-step').textContent = `${k + 1} of ${steps.length}`;
     $('.tut-prev').disabled = k === 0;
@@ -192,8 +253,9 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     const me = ++asking;
     clearPoint();
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } talking = null; }
-    steps = []; $('.tut-nav').hidden = true;
+    steps = []; finished = false; $('.tut-nav').hidden = true; $('.tut-resume').hidden = true;
     sayEl.textContent = 'Let me look at your screen…';
+    pillText.textContent = 'Cassie is thinking…';
     box.classList.add('thinking');
     targets = (collector || collect)(view, mounted ? mounted() : null);
     try {
@@ -208,7 +270,36 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     } finally { box.classList.remove('thinking'); }
   }
 
-  $('.tut-next').addEventListener('click', () => { if (at < steps.length - 1) show(at + 1); else { clearPoint(); sayEl.textContent = 'Nice work! Ask me anything else about this, any time.'; $('.tut-nav').hidden = true; } });
+  $('.tut-next').addEventListener('click', () => { if (at < steps.length - 1) show(at + 1); else { finished = true; clearPoint(); sayEl.textContent = 'Nice work! Ask me anything else about this, any time.'; pillText.textContent = 'Cassie is teaching'; $('.tut-nav').hidden = true; } });
+  /* ---------- carrying on after the card was closed ---------- */
+  // what she points at is matched again by what it is (the screen may have changed a little)
+  const same = (what) => String(what || '').replace(/,? ?\(?(chosen now|on now)\)?/g, '').trim();
+  function lesson() {
+    return steps.length && !finished ? { steps: steps.map((x) => ({ ...x })), at, targets: targets.map((t) => t.what) } : null;
+  }
+  function resume(saved, k) {
+    asking++;
+    targets = (collector || collect)(view, mounted ? mounted() : null);
+    steps = saved.steps.map((x) => {
+      const want = x.point ? same(saved.targets[x.point - 1]) : '';
+      return { say: x.say, point: want ? targets.findIndex((t) => same(t.what) === want) + 1 : 0 };
+    });
+    finished = false;
+    show(Math.max(0, Math.min(steps.length - 1, k)));
+  }
+  function offer(saved) {
+    if (!saved || !saved.steps || !saved.steps.length) return teach('How do I use this? Teach me from the start.');
+    clearPoint();
+    const n = saved.at + 1;
+    sayEl.textContent = `You stopped at step ${n} of ${saved.steps.length}. Do you want to carry on from there?`;
+    pillText.textContent = `Step ${n} of ${saved.steps.length}`;
+    $('.tut-nav').hidden = true;
+    $('.tut-resume').hidden = false;
+    $('.tut-continue').textContent = `Continue from step ${n}`;
+    $('.tut-continue').onclick = () => resume(saved, saved.at);
+    $('.tut-restart').onclick = () => resume(saved, 0);
+    $('.tut-continue').focus({ preventScroll: true });
+  }
   $('.tut-prev').addEventListener('click', () => { if (at > 0) show(at - 1); });
   $('.tut-ask').addEventListener('submit', (e) => { e.preventDefault(); const q = input.value; input.value = ''; teach(q); });
   $('.tut-voice').addEventListener('click', (e) => {
@@ -236,7 +327,8 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } }
     if (listening) { try { listening.stop(); } catch (e) { /* ignore */ } }
     box.remove(); finger.remove(); ring.remove();
+    removeEventListener('resize', onResize);
   }
   $('.tut-x').addEventListener('click', () => stop());
-  return { teach, stop, get steps() { return steps; }, get at() { return at; }, root: box };
+  return { teach, stop, lesson, offer, get steps() { return steps; }, get at() { return at; }, root: box };
 }
