@@ -4082,14 +4082,16 @@ function boardDecks() {
   };
 }
 // a quiz for the whole room: Cassie writes 5 multiple-choice questions as data
-async function roomQuiz(topic) {
+const roomQuiz = (topic) => quizQuestions(topic, 5);
+// a multiple-choice quiz as data (the study room's quiz, and Quiz me inside Labs and the 3D views)
+async function quizQuestions(topic, n = 5) {
   const p = state.profile || {};
   const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
-  const reply = await askCassie([{ role: 'user', content: `Write a 5-question multiple-choice quiz about "${topic}" for a ${level} student. Each question has 4 options and exactly one right answer; the wrong options should be believable. Reply with ONLY a JSON array, no other text: [{"q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "one short sentence on why the answer is right"}] — "a" is the index (0–3) of the right option.` }]);
+  const reply = await askCassie([{ role: 'user', content: `Write a ${n}-question multiple-choice quiz about "${topic}" for a ${level} student. Each question has 4 options and exactly one right answer; the wrong options should be believable. Reply with ONLY a JSON array, no other text: [{"q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "one short sentence on why the answer is right"}] — "a" is the index (0–3) of the right option.` }]);
   const s = String(reply || ''), i = s.indexOf('['), j = s.lastIndexOf(']');
   if (i < 0 || j <= i) return [];
   try {
-    return JSON.parse(s.slice(i, j + 1)).filter((q) => q && q.q && Array.isArray(q.o) && q.o.length >= 2 && Number.isInteger(+q.a) && +q.a < q.o.length).slice(0, 10).map((q) => ({ q: String(q.q), o: q.o.map(String), a: +q.a, why: String(q.why || '') }));
+    return JSON.parse(s.slice(i, j + 1)).filter((q) => q && q.q && Array.isArray(q.o) && q.o.length >= 2 && Number.isInteger(+q.a) && +q.a < q.o.length).slice(0, Math.max(n, 1)).map((q) => ({ q: String(q.q), o: q.o.map(String), a: +q.a, why: String(q.why || '') }));
   } catch (e) { return []; }
 }
 async function startRoom(code, title) {
@@ -4393,6 +4395,31 @@ if (hintBtn) {
    The viewer (explore/cell3d.js, with three.js) only loads when it's opened, so the app
    stays light. Tapping "Ask Cassie" or "Quiz me" in it brings the question back here. */
 let exploreMod = null;
+/* Ask Cassie and Quiz me inside Labs and the 3D views (labs/helper.js): the same path to Cassie as the
+   chat (askCassie), her answers drawn like the chat's, a quiz written as data, missed questions kept
+   for "Review my mistakes". */
+const IN_LAB = {
+  converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(new Error('Cassie isn’t set up yet. Open Settings to connect her, then try again.'))),
+  format: (node, text) => renderFormatted(node, text),
+  makeQuiz: (topic) => (canChat() ? quizQuestions(topic, 5) : Promise.reject(new Error('Cassie isn’t set up yet. Open Settings to connect her, then try again.'))),
+  onMark: (q, a, right) => { captureQuizMarks(`[[${right ? 'GOT' : 'MISSED'}: ${q} || ${a}]]`); },
+  speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+};
+function labsCss() {
+  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=11'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+}
+// the panel for one 3D view (made when first needed, gone when the view closes)
+let help3d = null;
+async function help3dFor(view) {
+  if (help3d && help3d.view === view) return help3d.h;
+  if (help3d) help3d.h.destroy();
+  labsCss();
+  const { helper } = await import('./labs/helper.js');
+  const h = helper({ view: view.root, name: X3D_NAMES[view.kind] ? X3D_NAMES[view.kind].replace(/^The /, 'the ') : 'the 3D model', described: () => describe3d(view), ask: IN_LAB.converse, format: IN_LAB.format, speak: IN_LAB.speak, quiz: IN_LAB.makeQuiz, onMark: IN_LAB.onMark });
+  help3d = { view, h };
+  return h;
+}
+function dropHelp3d() { if (help3d) { help3d.h.destroy(); help3d = null; } }
 function startQuizOn(topic) {
   if (!canChat()) { openSettings(); return; }
   quizMode = true;
@@ -4413,7 +4440,8 @@ let teacher3d = null;
 function stopTeach3d() { if (teacher3d) { teacher3d.stop(); teacher3d = null; } }
 async function teach3d(view) {
   if (teacher3d && teacher3d.root.isConnected) { stopTeach3d(); return; }
-  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=11'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+  if (help3d && help3d.view === view && help3d.h.open) help3d.h.close();
+  labsCss();
   const { tutor, collectAll } = await import('./labs/tutor.js');
   const body = view.kind === 'body';
   const lab = body
@@ -4445,20 +4473,21 @@ async function openExplore(cell, ret) {
       renderMessage('assistant', 'This browser can’t show 3D right now (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.');
       return;
     }
-    let leaving = false;
+    // Ask Cassie and Quiz me open a panel right here (labs/helper.js): the 3D view stays where it was
     const view = exploreMod.open({
       cell: want,
       allow: (k) => free3d(k, seen),
-      onAsk: (q) => { leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); handleSend(q); },
-      onQuiz: (topic) => { leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); startQuizOn(topic); },
+      onAsk: async (q, about) => { stopTeach3d(); (await help3dFor(view)).ask(q, about && about.part ? `Tell me about the ${String(about.part).toLowerCase()}.` : 'Tell me about this.'); },
+      onQuiz: async (topic) => { stopTeach3d(); (await help3dFor(view)).quiz(topic); },
       // Teach me: Cassie tutors here too (labs/tutor.js); Ask Cassie: about what's on the screen
       onTeach: () => teach3d(view),
-      onAskHere: () => { const q = `I'm exploring the ${X3D_NAMES[view.kind] ? X3D_NAMES[view.kind].replace(/^The /, '') : '3D model'} in Cassie. Right now: ${describe3d(view)}. Explain what I'm looking at simply, then ask me one quick question to check I understood.`; leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); handleSend(q); },
+      onAskHere: async () => { stopTeach3d(); (await help3dFor(view)).ask('Explain what I\'m looking at simply, then ask me one quick question to check I understood.', 'What am I looking at?'); },
       // a short explanation of a tapped part of the body, without leaving the 3D view
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       onClose: () => {
         stopTeach3d();
-        if (ret && !leaving) { ret.back(); return; }
+        dropHelp3d();
+        if (ret) { ret.back(); return; }
         try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ }
       },
     });
@@ -4491,6 +4520,8 @@ async function openLabs(lab, more = {}) {
       ...more,
       onAsk: (q) => handleSend(q),
       onQuiz: (topic) => startQuizOn(topic),
+      // Ask Cassie and Quiz me stay inside the lab
+      converse: IN_LAB.converse, format: IN_LAB.format, makeQuiz: IN_LAB.makeQuiz, onMark: IN_LAB.onMark,
       openExplore: (cell, ret) => openExplore(cell, ret),
       premium: PREMIUM,
       // a short hint from Cassie inside the lab, without leaving it
