@@ -1141,18 +1141,6 @@
   const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('picture failed to load')); i.src = src; });
   const nap = (ms) => new Promise((res) => setTimeout(res, ms));
 
-  // Ask the background for a screenshot of the visible tab (our own overlay hidden).
-  async function grabScreen(hideHost = true) {
-    if (hideHost) host.style.visibility = 'hidden';
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(res, 70))));
-    let shot;
-    try { shot = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP' }); }
-    catch (e) { throw new Error('reload'); }
-    finally { host.style.visibility = ''; }
-    if (!shot || !shot.dataUrl) throw new Error((shot && shot.error) || 'capture failed');
-    return loadImg(shot.dataUrl);
-  }
-
   // Average brightness + spread of a picture (tiny 40x40 sample).
   function lumStats(src) {
     return (typeof src === 'string' ? loadImg(src) : Promise.resolve(src)).then((i) => {

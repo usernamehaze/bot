@@ -468,7 +468,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
   will-change: left, top;
 }
 #mascot.dragging { transition: none; cursor: grabbing; }
-#mascot.dragging .mascot-face { animation: none; }
 /* playful antics: a waddle while walking, hops while playing, and ducking
    behind the chat bubbles to peek */
 #mascot.walking { transition: left 1.15s ease-in-out, top 1.15s ease-in-out; }
@@ -481,92 +480,15 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 /* 3D Cassie canvas mount — larger than the button and centred on it so raised
    arms are never clipped by the canvas edge. Transparent + pointer-events:none,
    so the extra area doesn't block anything. */
-.mascot-3d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 150px; height: 150px; display: none; pointer-events: none; }
-#mascot.has3d .mascot-3d { display: block; }
 /* emoji shown only when WebGL / the 3D bundle isn't available */
 .mascot-fallback { display: flex; align-items: center; justify-content: center; width: 58px; height: 68px; font-size: 38px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.28)); }
-#mascot.has3d .mascot-fallback { display: none; }
 /* Cursor Cassie (2D, cassie-bot.js) */
 .mascot-2d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%); width: 104px; height: 116px; display: none; pointer-events: none; }
 .mascot-2d svg { width: 100%; height: 100%; display: block; }
 #mascot.has2d .mascot-2d { display: block; }
 #mascot.has2d .mascot-fallback { display: none; }
-@media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } .mascot-3d { width: 124px; height: 124px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
+@media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
 #mascot.dragging #mascot-btn { cursor: grabbing; }
-.mascot-face { width: 58px; height: 68px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); animation: mascotFloat 4.5s ease-in-out infinite; }
-/* cute glossy white robot */
-.r-head, .r-ear, .r-body, .r-arm { fill: #f4f5fb; stroke: rgba(28,30,46,.14); stroke-width: 1; }
-.r-ant { stroke: #b7bacb; stroke-width: 2.6; stroke-linecap: round; }
-.r-ant-tip { fill: #ffb24d; animation: antPulse 2s ease-in-out infinite; }
-.r-ear-dot { fill: #ffb24d; }
-.r-screen { fill: #10131f; }
-/* glowing amber chest core */
-.r-core { animation: corePulse 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.r-core-glow { fill: #ffb24d; opacity: .32; }
-.r-core-ring { fill: #e08a2a; }
-.r-core-dot { fill: #fff2d6; }
-@keyframes corePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
-.r-eye { fill: var(--bot-glow); transform-box: fill-box; transform-origin: center; animation: mascotBlink 5.5s infinite; }
-/* every non-default eye group is hidden until a state turns it on */
-.r-eyes-happy, .r-eyes-wink, .r-eyes-love, .r-eyes-surprised, .r-eyes-sleepy,
-.r-eyes-star, .r-eyes-cool, .r-eyes-sad, .r-eyes-focused, .r-eyes-dizzy, .r-think { display: none; }
-.r-eyes-happy path, .r-eyes-wink path, .r-eyes-sleepy path { fill: none; stroke: var(--bot-glow); stroke-width: 3.2; stroke-linecap: round; }
-.r-eyes-wink rect { fill: var(--bot-glow); }
-.r-eyes-love path { fill: var(--bot-glow); }
-.r-eyes-surprised circle { fill: var(--bot-glow); }
-.r-eyes-star path { fill: var(--bot-glow); }
-.r-eyes-cool path { fill: var(--bot-glow); }
-.r-eyes-cool .r-cool-glass { fill: #0e1626; }
-.r-eyes-cool .r-cool-bar { fill: none; stroke: var(--bot-glow); stroke-width: 2; }
-.r-eyes-sad rect { fill: var(--bot-glow); }
-.r-eyes-sad .r-brow { fill: none; stroke: var(--bot-glow); stroke-width: 2.6; stroke-linecap: round; }
-.r-eyes-focused rect { fill: var(--bot-glow); }
-.r-eyes-dizzy path { fill: none; stroke: var(--bot-glow); stroke-width: 2.4; stroke-linecap: round; }
-.r-think circle { fill: var(--bot-glow); }
-#mascot-btn:hover .mascot-face { transform: scale(1.06); }
-@keyframes mascotFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes mascotBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.12); } }
-@keyframes antPulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-/* thinking: eyes off, bouncing dots on the screen */
-#mascot.thinking .r-eyes { display: none; }
-#mascot.thinking .r-think { display: block; }
-#mascot.thinking .r-think circle { animation: mascotDots 1s infinite; }
-#mascot.thinking .r-think circle:nth-child(2) { animation-delay: .15s; }
-#mascot.thinking .r-think circle:nth-child(3) { animation-delay: .3s; }
-@keyframes mascotDots { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
-/* emotions: swap which eye group shows (thinking always wins, handled above) */
-#mascot.emote-happy .r-eyes, #mascot.happy .r-eyes,
-#mascot.emote-wink .r-eyes,
-#mascot.emote-love .r-eyes,
-#mascot.emote-surprised .r-eyes,
-#mascot.emote-sleepy .r-eyes,
-#mascot.emote-star .r-eyes,
-#mascot.emote-cool .r-eyes,
-#mascot.emote-sad .r-eyes,
-#mascot.emote-focused .r-eyes,
-#mascot.emote-dizzy .r-eyes { display: none; }
-#mascot.emote-happy .r-eyes-happy, #mascot.happy .r-eyes-happy { display: block; }
-#mascot.emote-wink .r-eyes-wink { display: block; }
-#mascot.emote-love .r-eyes-love { display: block; }
-#mascot.emote-surprised .r-eyes-surprised { display: block; }
-#mascot.emote-sleepy .r-eyes-sleepy { display: block; }
-#mascot.emote-star .r-eyes-star { display: block; }
-#mascot.emote-cool .r-eyes-cool { display: block; }
-#mascot.emote-sad .r-eyes-sad { display: block; }
-#mascot.emote-focused .r-eyes-focused { display: block; }
-#mascot.emote-dizzy .r-eyes-dizzy { display: block; }
-#mascot.emote-love .mascot-face { animation: mascotFloat 4.5s ease-in-out infinite, mascotLove 1.4s ease-in-out infinite; }
-#mascot.emote-surprised .mascot-face { animation: mascotSurprise .5s ease; }
-#mascot.emote-star .mascot-face { animation: mascotFloat 4.5s ease-in-out infinite, mascotLove 1s ease-in-out infinite; }
-#mascot.emote-dizzy .mascot-face { animation: mascotDizzy .8s ease; }
-#mascot.emote-sad .mascot-face { animation: mascotSad 1.2s ease; }
-@keyframes mascotLove { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-@keyframes mascotSurprise { 0% { transform: translateY(0) scale(1); } 40% { transform: translateY(-6px) scale(1.1); } 100% { transform: translateY(0) scale(1); } }
-@keyframes mascotDizzy { 0% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } 100% { transform: rotate(0); } }
-@keyframes mascotSad { 0% { transform: translateY(0); } 50% { transform: translateY(4px); } 100% { transform: translateY(0); } }
-/* happy: smiley eyes + a celebratory bounce */
-#mascot.happy .mascot-face { animation: mascotHappy .7s ease; }
-@keyframes mascotHappy { 0% { transform: translateY(0) scale(1); } 30% { transform: translateY(-10px) scale(1.08); } 60% { transform: translateY(0) scale(1); } 80% { transform: translateY(-4px); } 100% { transform: translateY(0); } }
 #confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
 #prompt-input.nudge { animation: inputNudge .9s ease; }
 @keyframes inputNudge { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px var(--muted); } 60% { box-shadow: 0 0 0 3px var(--muted); } }
@@ -587,33 +509,8 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 }
 .mascot-bubble[hidden] { display: none; }
 
-/* sleeping: eyes shut, gentle breathing, dozing 'z's */
-#mascot.sleeping .r-eyes,
-#mascot.sleeping .r-think { display: none; }
-#mascot.sleeping .r-eyes-sleepy { display: block; }
-#mascot.sleeping .r-ant-tip { animation: none; opacity: .3; }
-#mascot.sleeping .mascot-face { animation: mascotBreathe 4.2s ease-in-out infinite; }
 #mascot.sleeping #mascot-btn { cursor: pointer; }
-@keyframes mascotBreathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(1px) scale(.985); } }
-.mascot-z {
-  position: absolute;
-  bottom: 78%;
-  right: -4px;
-  font-size: .8rem;
-  font-weight: 700;
-  color: var(--bot-glow);
-  pointer-events: none;
-  opacity: 0;
-}
-#mascot.sleeping .mascot-z { animation: mascotZ 2.6s ease-in-out infinite; }
-#mascot.sleeping .mascot-z:nth-of-type(2) { animation-delay: .8s; font-size: .95rem; right: 4px; }
-#mascot.sleeping .mascot-z:nth-of-type(3) { animation-delay: 1.6s; font-size: 1.1rem; right: 12px; }
-@keyframes mascotZ {
-  0% { opacity: 0; transform: translateY(6px) scale(.7); }
-  30% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-16px) scale(1.1); }
-}
-@media (max-width: 480px) { #mascot-btn, .mascot-face { width: 48px; height: 48px; } }
+@media (max-width: 480px) { #mascot-btn { width: 48px; height: 48px; } }
 
 /* home / empty state — intro on the left, a 3D options bar on the right */
 .home { display: flex; flex-wrap: wrap; gap: 30px; align-items: center; justify-content: space-between; padding: 48px clamp(20px, 5vw, 72px); width: 100%; box-sizing: border-box; min-height: 60%; }
@@ -734,7 +631,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 }
 .bubble-tools button.suggest:hover { text-decoration: none; }
 .bubble-tools button:disabled { opacity: .7; cursor: default; }
-.save-hint { margin-top: 4px; font-size: .74rem; color: var(--muted); }
 .file-card {
   display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: 12px; background: var(--surface, transparent); max-width: 420px;
@@ -1206,7 +1102,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
   .topbar-actions .aud-switch button { padding: 6px 10px; }
 }
 /* the 3D Cassie walks for real, so the flat waddle isn't needed */
-#mascot.has3d.walking #mascot-btn { animation: none; }
 .quick-actions .chip.active { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); }
 
 /* ---------- first-run profile (sign-up) ---------- */
@@ -1221,9 +1116,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .pf-seg.pf-seg3 { grid-template-columns: 1fr 1fr 1.4fr; }
 .pf-seg button { font: inherit; font-weight: 650; padding: 11px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
 .pf-seg button.on { background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); border-color: transparent; }
-.pf-check { display: flex; gap: 10px; align-items: flex-start; font-size: .82rem; color: var(--muted); line-height: 1.4; }
-.pf-check[hidden] { display: none; }
-.pf-check input { margin-top: 2px; width: 18px; height: 18px; flex: none; accent-color: var(--accent, var(--primary)); }
 .pf-err { margin: 0; color: #d93838; font-size: .85rem; font-weight: 600; }
 .pf-go { margin-top: 4px; font: inherit; font-weight: 750; font-size: 1rem; padding: 13px; border-radius: 14px; border: 0; background: var(--accent, var(--primary)); color: var(--accent-ink, #fff); cursor: pointer; }
 .field-toggle { flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1246,7 +1138,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
 .auth-google { display: flex; justify-content: center; min-height: 44px; }
 .auth-gbtn { width: 100%; display: flex; justify-content: center; }
-.auth-google[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden], .auth-age[hidden], .pf-check[hidden] { display: none; }
+.auth-google[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden], .auth-age[hidden] { display: none; }
 .auth-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
 .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .auth-field { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 600; }
@@ -1377,17 +1269,8 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .isle-input:focus { outline: none; border-color: rgba(255, 255, 255, .55); }
 .isle-send { width: 38px; height: 38px; border: 0; border-radius: 50%; background: #fff; color: #131317; font-size: 1.1rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
 /* the pop-out Cassie window: the whole window is her card */
-html:has(body.isle-pip), body.isle-pip { height: 100%; margin: 0; background: #131317; overflow: hidden; }
-.isle-pip .isle-card {
-  position: static; width: 100%; height: 100%; border-radius: 0; transform: none; opacity: 1; pointer-events: auto;
-  display: flex; flex-direction: column; box-shadow: inset 0 0 40px color-mix(in srgb, var(--mood) 14%, transparent);
-}
-.isle-pip .isle-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
-.isle-pip .isle-ans-body { max-height: none; flex: 1; }
-.isle-pip .isle-card[data-step="ans"] .isle-ans { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.isle-pip .isle-card[data-step="drop"] .isle-drop { flex: 1; justify-content: center; }
-@media (prefers-reduced-motion: reduce) { .isle-card { transition: opacity .2s; } .isle-title.swap { animation: none; } .isle-bar-wait i { animation: none; width: 100%; opacity: .5; } }
 
+@media (prefers-reduced-motion: reduce) { .isle-card { transition: opacity .2s; } .isle-title.swap { animation: none; } .isle-bar-wait i { animation: none; width: 100%; opacity: .5; } }
 
 /* ---------- shared from another app: "What should I do with this?" ---------- */
 .share-card { margin: 64px auto 0; max-width: 620px; width: 100%; padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.08); }
@@ -1517,8 +1400,6 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .vc-modes { display: inline-flex; flex: 1; min-width: 0; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
 .vc-modes button { flex: 1; border: 0; background: transparent; color: var(--text); font: inherit; font-size: .86rem; font-weight: 600; padding: 8px 10px; border-radius: 99px; cursor: pointer; white-space: nowrap; }
 .vc-modes button[aria-selected="true"] { background: var(--primary); color: #fff; }
-.vc-voice-pick[hidden] { display: none; }
-.vc-voice { max-width: 150px; font: inherit; font-size: .82rem; padding: 8px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .vc-stage { position: relative; width: 210px; height: 210px; margin: clamp(18px, 7vh, 64px) 0 10px; border: 0; padding: 0; background: transparent; cursor: default; flex-shrink: 0; }
 .vc[data-phase="speaking"] .vc-stage { cursor: pointer; }
 .vc-ring { position: absolute; inset: 12px; border-radius: 50%; border: 2px solid var(--border); transition: transform .4s, border-color .3s; }
@@ -1542,7 +1423,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .vc[data-phase="paused"] .vc-mic { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 .vc-tip { margin: 12px 0 0; max-width: 460px; text-align: center; font-size: .82rem; color: var(--muted); }
 .vc button:focus-visible, .vc select:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-@media (max-width: 480px) { .vc-stage { width: 170px; height: 170px; } .vc-voice { max-width: 110px; } .vc-modes button { padding: 8px 6px; font-size: .8rem; } }
+@media (max-width: 480px) { .vc-stage { width: 170px; height: 170px; } .vc-modes button { padding: 8px 6px; font-size: .8rem; } }
 @media (prefers-reduced-motion: reduce) { .vc-ring { animation: none !important; } }
 
 /* ---------- a clean chat canvas ----------
@@ -1805,8 +1686,7 @@ html.native .fc { padding-bottom: calc(86px + var(--safe-bottom)); }
 html.native .settings-panel { padding-bottom: calc(76px + var(--safe-bottom)); }
 
 /* --- Home --- */
-html.native.tab-home .topbar, html.native.tab-home #chat-log, html.native.tab-home #quick-actions, html.native.tab-home .composer,
-html.native.tab-home #attach-preview, html.native.tab-home #mascot, html.native.tab-home #cassie-cursor, html.native.tab-home .ideas-fab { display: none !important; }
+html.native.tab-home .topbar, html.native.tab-home #chat-log, html.native.tab-home #quick-actions, html.native.tab-home .composer, html.native.tab-home #attach-preview, html.native.tab-home #mascot, html.native.tab-home #cassie-cursor { display: none !important; }
 html.native .home:not([hidden]) {
   display: block; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   padding: calc(20px + var(--safe-top)) 20px calc(104px + var(--safe-bottom));

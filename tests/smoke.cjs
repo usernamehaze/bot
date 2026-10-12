@@ -2543,11 +2543,17 @@ test('a reflection paper is written as the student, not as Cassie', async (b) =>
   await ctx.close();
 });
 
-test('Lite mode skips the 3D Cassie', async (b) => {
-  const { ctx, page } = await open(b, { lite: 'on' });
+test('the living marble: it moves behind the chat (a small shader), and Lite mode keeps the plain background', async (b) => {
+  let { ctx, page } = await open(b, { lite: 'on' });
   await page.waitForTimeout(1500);
-  const loaded = await page.evaluate(() => [...document.scripts].some((s) => /cassie-3d/.test(s.src)));
-  expect(!loaded, '3D bundle loaded in Lite mode');
+  expect(await page.locator('#app-bg canvas').count() === 0, 'no moving background in Lite mode');
+  await ctx.close();
+  ({ ctx, page } = await open(b, { lite: 'off', device: 'Desktop Chrome' }));
+  await page.waitForSelector('#app-bg canvas', { state: 'attached', timeout: 8000 });
+  // picking a colour makes the marble flow to it (no errors)
+  await page.evaluate(() => { state.accent = '#2f7d5b'; updateBackdrop(); });
+  await page.waitForTimeout(900);
+  expect(await page.evaluate(() => [...document.scripts].every((s) => !/cassie-3d|mascot3d/.test(s.src))), 'no 3D mascot bundle');
   await ctx.close();
 });
 
@@ -2744,6 +2750,13 @@ test('Gemini pictures on the server: “a photo of the answer” redraws the stu
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
   } finally { await serverMode({ gemini: 'off', geminiPictures: 'ok' }); await fetch(SERVER + '/__reset'); }
+});
+
+test('one copy of the truth: the extension’s board is the app’s, and the server file you paste matches its source', async () => {
+  for (const f of ['board.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, f), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  const html = fs.readFileSync(path.join(ROOT, 'server/dashboard.html'), 'utf8').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  const built = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8').replace('__DASHBOARD_HTML__', () => html);
+  expect(built === fs.readFileSync(path.join(ROOT, 'server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
 });
 
 test('Claude on the server: the main chat and photos use Claude, Groq covers when it fails', async (b) => {

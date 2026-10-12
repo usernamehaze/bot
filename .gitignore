@@ -14,3 +14,9 @@ _site/
 *.pem
 *.key
 promo/hero/raw/
+
+# promo videos and voice-overs live outside git (the site ships only promo/cassie-ad-60s.mp4, already tracked);
+# new renders and recordings stay on your computer or in Drive instead of growing the repository
+promo/**/*.mp4
+promo/**/*.wav
+promo/**/*.mov

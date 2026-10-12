@@ -32,3 +32,5 @@ node render.cjs 0 1800 30 frames                         # or 3 chunks in parall
 > 🔗 link in bio
 >
 > #studytok #studygram #studywithme #studytips #reviewer #college #studentlife #ai #studybuddy #philippines
+
+> The 3D stage source (`cassie-3d/`) was removed from the repository in the code cleanup; the finished videos don't need it. To re-render, bring it back first: `git checkout 2a76c82 -- cassie-3d`.
