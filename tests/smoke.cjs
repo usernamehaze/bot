@@ -2591,6 +2591,47 @@ test('a busy Gemini never ends a photo answer: Groq reads it instead, and can gr
   await ctx.close();
 });
 
+test('Gemini pictures on the server: “a photo of the answer” redraws the student’s photo with the answer; a plan’s allowance, then the free picture maker', async (b) => {
+  await fetch(SERVER + '/__reset');
+  await serverMode({ gemini: 'ok', geminiPictures: 'ok', geminiPics: [] });
+  try {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: '**Answer: No, this map is not 2-colorable.** Three regions meet at one point: an odd circuit of 3.' }) });
+    const made = [];
+    await ctx.route(/pollinations\.ai/, (route) => { made.push(route.request().url()); return route.fulfill({ body: PNG, contentType: 'image/png' }); });
+    await page.waitForFunction(() => serverPictures === true, null, { timeout: 8000 });
+    // the student sends a photo of the problem, then asks for a photo of the answer
+    const red = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 60; const g = c.getContext('2d'); g.fillStyle = '#ccc'; g.fillRect(0, 0, 60, 60); return c.toDataURL('image/png').split(',')[1]; });
+    await page.setInputFiles('#file-input', { name: 'slide.png', mimeType: 'image/png', buffer: Buffer.from(red, 'base64') });
+    await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+    await ask(page, 'Is this map 2-colorable?');
+    await ask(page, 'generate a photo of the answer');
+    let last = await page.locator('#chat-log .bubble-assistant').last().innerText();
+    expect(/answer as a picture/.test(last) && /check the labels/.test(last), 'a Gemini answer picture: ' + last);
+    let m = await (await fetch(SERVER + '/__mode')).json();
+    const pic = m.geminiPics.at(-1);
+    expect(pic && pic.ref && /Answer:/.test(pic.prompt) && /not 2-colorable/.test(pic.prompt) && /No people/.test(pic.prompt) && /attached photo/.test(pic.prompt), 'drawn from the photo and the answer: ' + JSON.stringify(pic).slice(0, 300));
+    expect(/gemini-9\.0-flash-image/.test(pic.model), 'the newest Flash image model: ' + pic.model);
+    // an everyday picture goes to Gemini too (no photo), until the free week's 3 are used
+    await ask(page, 'make me a picture of a volcano');
+    await ask(page, 'make me a picture of a rice terrace');
+    m = await (await fetch(SERVER + '/__mode')).json();
+    expect(m.geminiPics.length === 3 && !m.geminiPics.at(-1).ref && made.length === 0, 'three Gemini pictures: ' + m.geminiPics.length + ' / free ' + made.length);
+    last = await page.locator('#chat-log .bubble-assistant').last().innerText();
+    expect(/last Gemini picture this week/.test(last), 'says it was the last one: ' + last);
+    await ask(page, 'make me a picture of a carabao');
+    m = await (await fetch(SERVER + '/__mode')).json();
+    const freeNow = new Set(made).size;
+    expect(m.geminiPics.length === 3 && freeNow === 1, 'the 4th goes to the free picture maker: ' + m.geminiPics.length + ' / ' + freeNow);
+    // a key without billing: the free picture maker, quietly
+    await fetch(SERVER + '/__reset');
+    await serverMode({ geminiPictures: 'nobilling' });
+    await ask(page, 'make me a picture of a mango tree');
+    expect(new Set(made).size === 2, 'no billing → the free picture maker: ' + new Set(made).size);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  } finally { await serverMode({ gemini: 'off', geminiPictures: 'ok' }); await fetch(SERVER + '/__reset'); }
+});
+
 test('Claude on the server: the main chat and photos use Claude, Groq covers when it fails', async (b) => {
   await serverMode({ claude: 'ok', claudeReply: 'Claude here: plants turn light into food.', claudeCalls: [] });
   try {
