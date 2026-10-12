@@ -93,6 +93,9 @@ async function open3d(page, id) {
   await page.click('.labs-chips [data-subject="3d"]');
   await page.click(`.labs-grid [data-lab="${id}"]`);
 }
+// waits for some text in a part of the page, checking on a timer (a page busy drawing 3D in
+// software barely gets to draw a frame, and the usual frame-by-frame check then times out)
+const seen = (page, sel, text = '', timeout = 30000) => page.waitForFunction(([s, t]) => [...document.querySelectorAll(s)].some((e) => e.offsetParent !== null && e.textContent.includes(t)), [sel, text], { timeout, polling: 250 });
 async function ask(page, text) {
   const before = await page.locator('#chat-log .bubble-assistant').count();
   await page.fill('#prompt-input', text);
@@ -1135,7 +1138,7 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   expect(/Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()) && /post office/.test(await page.locator('.x3d-sheet').innerText()), 'the Golgi card should show');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/explore-golgi.png' });
   await page.click('.x3d-act[data-act="ask"]');
-  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=post office', { timeout: 15000 });
+  await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a', 'post office');
   expect(await page.locator('.x3d').isVisible() && /Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()), 'the answer shows in the 3D view, which stays where it was');
   await page.click('.lab-helper .hp-x');
   expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
@@ -1148,8 +1151,8 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.click('.x3d-chip[data-part="chloroplast"]');
   expect(/photosynthesis/.test(await page.locator('.x3d-sheet').innerText()) && /Only in plant cells/.test(await page.locator('.x3d-sheet').innerText()), 'the chloroplast card');
   await page.click('.x3d-act[data-act="quiz"]');
-  await page.waitForFunction(() => { const t = document.querySelector('.x3d .lab-helper:not([hidden]) .hp-title'); return t && t.textContent === 'Quiz me'; }, null, { timeout: 5000 });
-  await page.waitForSelector('.lab-helper .hp-quiz .hp-err, .lab-helper .hp-quiz .hp-q', { timeout: 8000 });
+  await seen(page, '.x3d .lab-helper:not([hidden]) .hp-title', 'Quiz me');
+  await seen(page, '.lab-helper .hp-quiz .hp-err, .lab-helper .hp-quiz .hp-q');
   expect(/multiple-choice quiz about \\"the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell: ' + JSON.stringify(groqCalls.at(-1)).slice(0, 300));
   expect(await page.locator('#quiz-btn.active').count() === 0, 'the chat quiz did not start');
   // a link opens it straight away
@@ -1431,7 +1434,7 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await page.click('.x3d-results button >> nth=0');
   await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
   await page.click('.x3d-act[data-act="ask"]');
-  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=thigh bone', { timeout: 15000 });
+  await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a', 'thigh bone');
   expect(/Explain the Femur.*Os femoris.*musculoskeletal system/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
@@ -2156,7 +2159,7 @@ test('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, point
   expect(await page.locator('.lab-tutor').count() === 0, 'stops');
   // Ask Cassie: about what's on the screen, right here
   await page.click('[data-tool="ask"]');
-  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=holds the DNA', { timeout: 15000 });
+  await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a', 'holds the DNA');
   expect(/What's on my screen right now: looking at the (animal|plant) cell/.test(asked.at(-1)), 'Cassie sees the 3D screen: ' + asked.at(-1).slice(0, 300));
   expect(await page.locator('.x3d').isVisible() && await page.locator('#chat-log .bubble-user').count() === 0, 'no trip to the chat');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
@@ -2348,20 +2351,20 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
   await page.waitForSelector('.labs', { state: 'hidden' });
   await page.click('[data-tool="ask"]');
-  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a', { timeout: 15000 });
+  await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a');
   expect(/the 3D human body in Cassie\. What's on my screen right now: looking at the human body/.test(asked.at(-1)), 'Cassie sees the body view: ' + asked.at(-1).slice(0, 300));
   await page.fill('.x3d-search', 'heart');
   await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
   await page.click('.x3d-results button >> nth=0');
   await page.waitForFunction(() => /Heart/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
   await page.click('.x3d-act[data-act="quiz"]');
-  await page.waitForSelector('.x3d .lab-helper .hp-q >> text=Which planet is the biggest?', { timeout: 15000 });
+  await seen(page, '.x3d .lab-helper .hp-q', 'Which planet is the biggest?');
   expect(/multiple-choice quiz about "the circulatory/i.test(asked.at(-1)), 'the quiz is about the heart’s system: ' + asked.at(-1).slice(0, 200));
   await page.click('.x3d .lab-helper .hp-opt:has-text("Jupiter")');
   await page.click('.x3d .lab-helper .hp-next');
   await page.click('.x3d .lab-helper .hp-opt:has-text("Mercury")');
   await page.click('.x3d .lab-helper .hp-next:has-text("See my score")');
-  await page.waitForSelector('.x3d .lab-helper .hp-score >> text=2 of 2');
+  await seen(page, '.x3d .lab-helper .hp-score', '2 of 2');
   await page.click('.x3d .lab-helper .hp-x');
   expect(await page.locator('.x3d').isVisible() && /Heart/.test(await page.locator('.x3d-sheet h3').innerText()), 'the body view is as it was');
   // the chat never showed
