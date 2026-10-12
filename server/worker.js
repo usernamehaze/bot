@@ -23,7 +23,10 @@
  *   AI           Workers AI binding — the backup brain (optional but recommended)
  *   GOOGLE_CLIENT_ID  (optional) turns on "Continue with Google" — see server/README.md
  *   GEMINI_KEY        (optional) secret — your Google AI Studio key: a second brain for photos and
- *                     text when Groq can't (aistudio.google.com/apikey)
+ *                     text when Groq can't (aistudio.google.com/apikey). With billing on for the key,
+ *                     it also makes Cassie's pictures (Gemini's image model; ~$0.07 a picture).
+ *                     FREE_PICTURES_WEEK (3) / PLUS_PICTURES_DAY (5) / PRO_PICTURES_DAY (20) set how many;
+ *                     GEMINI_PICTURES=off turns pictures off; GEMINI_IMAGE_MODEL picks the model.
  *   ANTHROPIC_KEY     (optional) secret — makes Claude Cassie's brain for the main chat and
  *                     photos (console.anthropic.com → API keys). Groq and Workers AI stay as backup.
  * Optional variables:
@@ -440,7 +443,7 @@ async function adminPlan(request, env, url) {
 async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  return json({ claude: !!env.ANTHROPIC_KEY }, 200, { ...h, 'cache-control': 'max-age=300' });
+  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env) }, 200, { ...h, 'cache-control': 'max-age=300' });
 }
 
 /* ---------------------------------------------------------------- talking with Cassie
@@ -674,15 +677,89 @@ async function chat(request, env, ctx) {
 
 /* ------------------------------------------------------------------ pictures */
 const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell'; // Workers AI, fast and free-tier friendly
+/* Gemini pictures (Google's image model, "Nano Banana"), with the owner's GEMINI_KEY. Google only
+   makes pictures for a key with billing on, so this is tried first and anything else falls back.
+   It can start from the student's own photo ("a photo of the answer": their slide, redrawn with the
+   answer marked on it). A plan gets so many: Free a few a week, Plus and Pro a few a day.
+   GEMINI_PICTURES=off turns it off; GEMINI_IMAGE_MODEL picks the model;
+   FREE_PICTURES_WEEK / PLUS_PICTURES_DAY / PRO_PICTURES_DAY set the numbers. */
+const geminiPicturesOn = (env) => !!env.GEMINI_KEY && env.GEMINI_PICTURES !== 'off';
+let geminiPicGone = false, geminiPicGoneAt = 0; // a key without billing: don't ask again for a while
+function pictureAllowance(env, plan) {
+  const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v) ? +v : d);
+  if (plan === 'pro') return { per: 'day', n: n(env.PRO_PICTURES_DAY, 20) };
+  if (plan === 'plus') return { per: 'day', n: n(env.PLUS_PICTURES_DAY, 5) };
+  return { per: 'week', n: n(env.FREE_PICTURES_WEEK, 3) };
+}
+const weekOf = (ms) => { const d = new Date(ms + TZ_OFFSET_H * 3600e3); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+function geminiImageModels(env) {
+  if (env.GEMINI_IMAGE_MODEL) return [env.GEMINI_IMAGE_MODEL];
+  const ver = (id) => parseFloat((/gemini-(\d+(?:\.\d+)?)/.exec(id) || [0, 0])[1]) || 0;
+  const found = (gemini.all || []).filter((id) => /^gemini-.*image/.test(id) && !/pro|tts|audio/.test(id))
+    .sort((a, b) => ver(b) - ver(a) || (/preview/.test(a) ? 1 : 0) - (/preview/.test(b) ? 1 : 0) || (/lite/.test(a) ? 1 : 0) - (/lite/.test(b) ? 1 : 0));
+  return [...new Set([...found, 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'])].slice(0, 3);
+}
+async function geminiPicture(env, prompt, ref) {
+  await geminiModels(env); // learns the model names this key can use
+  const parts = [];
+  if (ref) parts.push({ inlineData: { mimeType: ref.mimeType, data: ref.data } });
+  parts.push({ text: prompt });
+  let last = '';
+  for (const model of geminiImageModels(env)) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY }, signal: AbortSignal.timeout(90000),
+        body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '4:3' } } }),
+      });
+      if (!r.ok) {
+        let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+        last = `${model}: ${r.status} ${m}`.slice(0, 200);
+        if (r.status === 429 && /limit:\s*0|billing|free tier/i.test(m)) { geminiPicGone = true; geminiPicGoneAt = Date.now(); return { error: 'no-billing', detail: last }; }
+        continue;
+      }
+      const got = ((await r.json()).candidates?.[0]?.content?.parts || []).find((p) => p.inlineData && p.inlineData.data);
+      if (got) return { image: got.inlineData.data, mimeType: got.inlineData.mimeType || 'image/png', model };
+      last = `${model}: no picture came back`;
+    } catch (e) { last = `${model}: ${e.message}`.slice(0, 200); }
+  }
+  return { error: 'failed', detail: last };
+}
+
 async function image(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  if (!env.AI) return chatError('Pictures aren’t set up on this server.', 503, h);
   let body; try { body = JSON.parse(await request.text()); } catch (e) { return chatError('Bad request.', 400, h); }
-  const prompt = String(body.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+  const prompt = String(body.prompt || '').replace(/\s+/g, ' ').trim().slice(0, body.gemini ? 6000 : 1500);
   if (prompt.length < 2) return chatError('What should the picture show?', 400, h);
   await ensureSchema(env.DB);
   const today = dayOf(Date.now());
+  // Gemini first, when asked ("gemini": true). If it can't (no billing, none left, a hiccup), say so: the app has other ways.
+  if (body.gemini) {
+    const no = (msg, extra = {}) => json({ error: { message: msg }, fallback: true, ...extra }, 503, { ...h, 'access-control-expose-headers': 'x-cassie-left' });
+    if (!geminiPicturesOn(env) || (geminiPicGone && Date.now() - geminiPicGoneAt < 30 * 60e3)) return no('Gemini pictures aren’t on.');
+    const { plan, account } = await planOf(request, env);
+    const allow = pictureAllowance(env, plan);
+    const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : '';
+    const who = account ? 'a:' + account : uid ? 'u:' + uid : 'ip:' + (request.headers.get('cf-connecting-ip') || 'unknown');
+    const period = allow.per === 'week' ? weekOf(Date.now()) : today, key = `gpic:${who}`;
+    const row = await env.DB.prepare(`INSERT INTO quota (k, day, n) VALUES (?1, ?2, 1)
+        ON CONFLICT(k) DO UPDATE SET n = CASE WHEN day = ?2 THEN n + 1 ELSE 1 END, day = ?2 RETURNING n`).bind(key, period).first();
+    if ((row?.n || 0) > allow.n) {
+      await env.DB.prepare('UPDATE quota SET n = n - 1 WHERE k = ?').bind(key).run();
+      return no(allow.per === 'week' ? `You’ve made this week’s ${allow.n} Gemini pictures.` : `You’ve made today’s ${allow.n} Gemini pictures.`, { used: true, per: allow.per, plan });
+    }
+    const ref = typeof body.ref === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(body.ref) && body.ref.length < 7e6
+      ? { mimeType: /^data:(image\/\w+)/.exec(body.ref)[1], data: body.ref.split(',')[1] } : null;
+    const out = await geminiPicture(env, prompt, ref);
+    if (!out.image) {
+      await env.DB.prepare('UPDATE quota SET n = MAX(0, n - 1) WHERE k = ?').bind(key).run();
+      ctx.waitUntil(logProblem(env, 'gemini-picture', out.detail || out.error));
+      return no('Gemini couldn’t make that picture.');
+    }
+    ctx.waitUntil(countChat(env, today, ref ? 'gemini-picture-photo' : 'gemini-picture'));
+    return json({ image: out.image, mimeType: out.mimeType, source: 'gemini', left: Math.max(0, allow.n - row.n), per: allow.per }, 200, h);
+  }
+  if (!env.AI) return chatError('Pictures aren’t set up on this server.', 503, h);
   const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : 'anon';
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const perDay = +env.IMAGE_LIMIT || 20;
@@ -1481,7 +1558,7 @@ const DASHBOARD = `<!doctype html>
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)', 'gemini-picture': 'Pictures (Gemini)', 'gemini-picture-photo': 'Answer pictures from a photo (Gemini)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           \${(d.reports || []).length ? \`<div class="reports">\${d.reports.map((r) => \`<div class="rep"><div class="meta">\${esc(new Date(r.ts).toLocaleString())} · \${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : r.kind === 'error' ? '⚠️ ' + esc(r.feature || 'Server problem') : r.kind === 'auto' ? '⚠️ App error · ' + esc(fname(r.feature)) : esc(r.kind)}\${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">\${esc(r.text)}</div></div>\`).join('')}</div>\` : '<div class="empty">No reports yet</div>'}</div>
       </div>

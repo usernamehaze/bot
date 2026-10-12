@@ -64,6 +64,12 @@ export async function startFakeServer(port = 4630) {
       const body = JSON.parse(init.body);
       if (/gemini-2\.5-flash:/.test(u)) return Response.json({ error: { code: 404, message: 'This model models/gemini-2.5-flash is no longer available to new users.' } }, { status: 404 });
       mode.geminiCalls.push(u.match(/models\/([^:]+)/)[1]);
+      if (/image/.test(u.match(/models\/([^:]+)/)[1])) { // Gemini pictures: mode.geminiPictures 'ok' | 'nobilling'
+        const parts = body.contents.at(-1).parts;
+        mode.geminiPics = [...(mode.geminiPics || []), { model: u.match(/models\/([^:]+)/)[1], ref: parts.some((p) => p.inlineData), prompt: (parts.find((p) => p.text) || {}).text || '' }].slice(-5);
+        if (mode.geminiPictures === 'nobilling') return Response.json({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0' } }, { status: 429 });
+        return Response.json({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' } }] } }] });
+      }
       if (mode.gemini !== 'ok') return Response.json({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }, { status: 503 });
       const parts = body.contents.at(-1).parts;
       const asMsgs = [{ role: 'user', content: parts.map((p) => (p.inlineData ? { type: 'image_url' } : { type: 'text', text: p.text })) }];

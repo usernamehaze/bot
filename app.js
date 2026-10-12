@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '139';
+const APP_VERSION = '140';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -2210,12 +2210,13 @@ async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } 
 
 /* Claude through Cassie's server: when the owner turned it on (ANTHROPIC_KEY on the server),
    the main chat and photos go to Claude first. Anything that fails falls back below. */
-let serverClaude = false;
-try { serverClaude = sessionStorage.getItem('cassie.claude') === '1'; } catch (e) { /* storage blocked */ }
+let serverClaude = false, serverPictures = false; // (serverPictures: Gemini pictures with the owner's key)
+let lastPhoto = null;
+try { serverClaude = sessionStorage.getItem('cassie.claude') === '1'; serverPictures = sessionStorage.getItem('cassie.pictures') === '1'; } catch (e) { /* storage blocked */ }
 if (SERVER) {
   fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
-    serverClaude = !!(c && c.claude);
-    try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); } catch (e) { /* storage blocked */ }
+    serverClaude = !!(c && c.claude); serverPictures = !!(c && c.pictures);
+    try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); sessionStorage.setItem('cassie.pictures', serverPictures ? '1' : '0'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline: the usual brains answer */ });
 }
 async function askClaudeViaServer(msgs, images, opts = {}) {
@@ -3285,6 +3286,8 @@ async function handleSend(text, opts = {}) {
   const images = readyImages(), docs = readyDocs(), many = images.length + docs.length > 1;
   const image = !many && images.length ? images[0] : null;
   const attachedDoc = !many && docs.length ? docs[0] : null;
+  // the newest photo the student sent: "a photo of the answer" redraws it with the answer marked on it
+  if (images.length && images[0].base64 && /image\/(jpeg|png|webp)/.test(images[0].mimeType || '')) lastPhoto = { chatId: state.currentId, url: `data:${images[0].mimeType};base64,${images[0].base64}` };
   let doc = attachedDoc;
   if (!text.trim() && !images.length && !docs.length) return;
   if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
@@ -3562,6 +3565,20 @@ function freeImageUrl(prompt, seed, simple = false) {
   const enhance = !simple && imageKind(prompt) !== 'photo';
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(p)}?width=${simple ? 896 : 1024}&height=${simple ? 672 : 768}&seed=${seed}&model=flux${enhance ? '&enhance=true' : ''}&nologo=true&safe=true`;
 }
+// Gemini through Cassie's server (the owner's key, with billing on): the best pictures, and it can start
+// from the student's own photo. null when it can't (not on, none left, a hiccup) — the app has other ways.
+let geminiPicNote = '';
+async function serverGeminiImage(prompt, ref) {
+  geminiPicNote = '';
+  if (!SERVER || !serverPictures) return null;
+  try {
+    const res = await fetch(SERVER + '/image', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ uid: installId(), gemini: true, prompt, ...(ref ? { ref } : {}) }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.image) { if (d.used) geminiPicNote = (d.error && d.error.message) || ''; return null; }
+    geminiPicNote = d.left === 0 ? (d.per === 'week' ? 'That was your last Gemini picture this week.' : 'That was your last Gemini picture today.') : '';
+    return `data:${d.mimeType || 'image/png'};base64,${d.image}`;
+  } catch (e) { return null; }
+}
 // Backup: Cassie's own server makes the picture (Workers AI).
 async function serverImage(prompt) {
   const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }) });
@@ -3580,6 +3597,8 @@ function loadImageUrl(url, ms = 90000) {
   });
 }
 async function generateImage(prompt) {
+  const g = await serverGeminiImage(picturePrompt(prompt));
+  if (g) return { src: g, keep: false, gemini: true };
   if (state.geminiKey && !geminiImageOff) {
     try { return { src: await geminiImage(prompt), keep: false }; } catch (e) { /* fall back to the free service */ }
   }
@@ -3608,6 +3627,19 @@ function lastAnswer() {
   }
   return null;
 }
+function answerPicturePrompt(ans, withPhoto) {
+  const p = state.profile || {};
+  const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
+  const plain = String(ans.content || '').replace(/```[\s\S]*?```/g, '').replace(/[*_#>`]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 3000);
+  return [
+    `Make ONE clear study picture that shows this answer, for a ${level} student.`,
+    withPhoto ? 'Start from the attached photo of the problem: redraw it neatly as a clean, flat diagram (not a photo of paper), keep its shapes, regions and labels where they are, and mark the answer on it with colour, arrows and short labels.' : 'Draw the problem as a clean diagram and mark the answer on it with colour, arrows and short labels.',
+    'At the top, a short title that states the answer. Add 2 to 4 short labelled notes that explain why.',
+    'Use only facts from the answer below; never invent numbers or steps. Every word spelled correctly. Flat white background, like a teacher’s worked example on a handout. No people, no faces.',
+    ans.question ? `Question: ${ans.question.slice(0, 400)}` : '',
+    `Answer:\n${plain}`,
+  ].filter(Boolean).join('\n\n');
+}
 async function answerPicture(label) {
   const ans = lastAnswer();
   if (!state.messages.length) chatLog.innerHTML = '';
@@ -3621,10 +3653,26 @@ async function answerPicture(label) {
     return;
   }
   track('feature', 'answer-picture');
+  // Gemini (when the server has it): the answer drawn as a study picture, on the student's own photo if they sent one
+  if (SERVER && serverPictures) {
+    const typing = renderTyping();
+    setTypingStatus(typing, 'Drawing your answer…');
+    const ref = lastPhoto && lastPhoto.chatId === state.currentId ? lastPhoto.url : null;
+    const src = await serverGeminiImage(answerPicturePrompt(ans, !!ref), ref);
+    typing.remove();
+    if (src) {
+      const caption = 'Here’s the answer as a picture. ' + (geminiPicNote ? geminiPicNote + ' ' : '') + '(A picture maker drew it: check the labels against my answer.)';
+      const b = renderMessage('assistant', caption);
+      addImageToBubble(b, src, { download: true, name: 'cassie-answer' });
+      state.messages.push({ role: 'assistant', content: '[I made a picture of my answer]', display: caption });
+      save(); mascotCelebrate();
+      return;
+    }
+  }
   // the student's question is the title (the answer's own first line would just repeat itself)
   const q = ans.question && !/^(?:answer|solve|explain)\b.{0,30}$/i.test(ans.question) ? ans.question : '';
   const title = q ? (q.length > 90 ? q.slice(0, 87).replace(/\s+\S*$/, '') + '…' : q) : 'Cassie’s answer';
-  const caption = 'Here’s my answer as a picture you can save or share. (Want a drawing instead? Tell me exactly what it should show.)';
+  const caption = (geminiPicNote && SERVER && serverPictures ? geminiPicNote + ' So here’s my answer as a picture card you can save or share.' : 'Here’s my answer as a picture you can save or share. (Want a drawing instead? Tell me exactly what it should show.)');
   const bubble = renderMessage('assistant', caption);
   try {
     const blob = await window.CassieExport.toPng(ans.content, title);
@@ -3672,9 +3720,9 @@ async function pictureReply(subject, typingBubble) {
   setTypingStatus(typingBubble, 'Making your picture…');
   sendBtn.disabled = true;
   try {
-    const { src, keep } = await generateImage(subject);
+    const { src, keep, gemini } = await generateImage(subject);
     typingBubble.remove();
-    const caption = `Here’s your picture of ${subject}.`;
+    const caption = `Here’s your picture of ${subject}.` + (gemini && geminiPicNote ? ' ' + geminiPicNote : '');
     const bubble = renderMessage('assistant', caption);
     addImageToBubble(bubble, src, { download: true, name: imageFileName(subject) });
     // free-service links are stable, so the picture comes back when the chat reopens
