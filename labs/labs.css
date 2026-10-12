@@ -551,7 +551,7 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 
 /* Ask Cassie and Quiz me inside the lab (labs/helper.js): a panel over the lab, which keeps working behind it */
 .lab-helper { position: fixed; z-index: 258; right: 16px; top: 70px; width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 18px;
-  background: rgba(16, 17, 22, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); color: #f2f2f4; }
+  background: rgba(16, 17, 22, .96); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); color: #f2f2f4; } /* (no backdrop blur: over a 3D picture that redraws every frame it makes slow phones crawl) */
 .lab-helper[hidden] { display: none !important; }
 .hp-head { display: flex; align-items: center; gap: 8px; }
 .hp-title { flex: 1; font-size: .95rem; }
