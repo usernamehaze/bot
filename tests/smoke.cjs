@@ -2157,6 +2157,20 @@ test('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, point
   await ctx.close();
 });
 
+test('a pinch in Labs or the 3D body never zooms the whole page (in the chat it still can, for reading)', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
+  const pinch = () => page.evaluate(() => { const e = new Event('gesturestart', { cancelable: true, bubbles: true }); document.body.dispatchEvent(e); return e.defaultPrevented; });
+  expect(await pinch() === false, 'the chat can still be zoomed');
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"]', { timeout: 15000 });
+  expect(await pinch() === true, 'no page zoom in a lab');
+  await page.evaluate(() => document.querySelector('.labs .labs-x').click());
+  await page.evaluate(() => openExplore('animal'));
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
+  expect(await pinch() === true, 'no page zoom in the 3D viewer');
+  await ctx.close();
+});
+
 test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
   let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await page.click('#games-btn');
