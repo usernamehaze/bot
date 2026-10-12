@@ -381,6 +381,8 @@ function createView() {
         <button type="button" class="x3d-btn" data-tool="cut" aria-pressed="true" title="Cut the cell open, or see it whole">Cut open</button>
         <button type="button" class="x3d-btn" data-tool="view" aria-pressed="false" title="Turn the body to a side, or pull its parts apart" hidden>Look around</button>
         <button type="button" class="x3d-btn" data-tool="reset" title="Back to the start">Reset</button>
+        <button type="button" class="x3d-btn x3d-teach" data-tool="teach" title="Cassie teaches you, out loud, and points at what to do" hidden>Teach me</button>
+        <button type="button" class="x3d-btn" data-tool="ask" title="Ask Cassie about what you're looking at" hidden>Ask Cassie</button>
       </div>
     </div>
     <p class="x3d-hint"></p>
@@ -766,6 +768,8 @@ function createView() {
     if (b.dataset.tool === 'cut') setCut(!cut);
     if (b.dataset.tool === 'reset') { if (inBody) { body.select(-1); spreadTo(0); markLook('perspective'); } else select(null); resetView(); }
     if (b.dataset.tool === 'view') showViewPanel(!viewOpen);
+    if (b.dataset.tool === 'teach' && opts.onTeach) opts.onTeach();
+    if (b.dataset.tool === 'ask' && opts.onAskHere) opts.onAskHere();
   });
   sheet.querySelector('.x3d-sheet-x').addEventListener('click', () => (inBody ? body.select(-1) : select(null)));
   sheet.addEventListener('click', (e) => {
@@ -969,6 +973,7 @@ function createView() {
 
   function open(o) {
     opts = o || {};
+    $('[data-tool="teach"]').hidden = !opts.onTeach; $('[data-tool="ask"]').hidden = !opts.onAskHere;
     root.hidden = false;
     document.documentElement.classList.add('x3d-open');
     resize();

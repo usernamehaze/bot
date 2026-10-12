@@ -1522,7 +1522,7 @@ test('score board: everyone’s points in every game and their total, today and 
   expect(d.week && d.week.table.some((r) => r.name === 'Ana' && r.total >= 180 && r.played >= 2), 'the week adds them up: ' + JSON.stringify(d.week));
   await tapLabs(page);
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
-  await page.click('.labs-tabs [data-section="games"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   await page.waitForSelector('.board-table td', { timeout: 10000 });
   const head = await page.$$eval('.board-table th', (t) => t.map((x) => x.textContent));
   expect(head.includes('Sudoku') && head.includes('Mirrors') && head.includes('Total'), 'a column for every game and the total: ' + head);
@@ -1543,11 +1543,11 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   // two shelves: Learn (simulations, 3D, atlas) and Games & puzzles
   const learn = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(!learn.includes('sudoku') && learn.includes('pendulum'), 'Learn has the simulations, not the puzzles: ' + learn);
-  await page.click('.labs-tabs [data-section="games"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   const games = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(games.includes('sudoku') && !games.includes('pendulum'), 'Games has the puzzles: ' + games);
   expect(await page.locator('.labs-chips').isHidden(), 'the subject chips are for the Learn shelf');
-  await page.click('.labs-tabs [data-section="learn"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
   const ids = [...learn, ...games];
   for (const id of ['function', 'fractions', 'chance', 'units', 'interest', 'square-proof', 'hanoi', 'projectile', 'pendulum', 'waves', 'refraction', 'balance', 'ph', 'atom', 'punnett', 'body3d',
     'solar', 'colour', 'vectors', 'magnets', 'optics', 'logic', 'ice-steam', 'metals', 'rocket', 'solids', 'recursion', 'build-cell', 'sudoku', 'nonogram', 'hashi', 'pipes', 'mirrors', 'equation', 'geography']) expect(ids.includes(id), 'the shelf has ' + id + ': ' + ids);
@@ -1562,7 +1562,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await page.fill('.labs-search', '');
   // every lab opens, draws, says how its model works, and closes without an error
   for (const id of ids.filter((x) => !/3d$/.test(x))) {
-    await page.click(`.labs-tabs [data-section="${games.includes(id) ? 'games' : 'learn'}"]`);
+    await page.evaluate((sec) => openLabs(undefined, { section: sec }), games.includes(id) ? 'games' : 'learn');
     await page.click(`.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
     expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet').count() >= 1, id + ' draws something');
@@ -1575,7 +1575,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
     await page.click('.lab-back');
   }
   // “Try this” goals are buttons: a tap shows the hint
-  await page.click('.labs-tabs [data-section="learn"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
   await page.click('.labs-grid [data-lab="pendulum"]');
   await page.click('.lab-try >> nth=0');
   expect(await page.locator('.lab-hint >> nth=0').isVisible() && /1 m/.test(await page.locator('.lab-hint >> nth=0').innerText()), 'tapping a goal shows its hint');
@@ -1665,7 +1665,7 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await tapLabs(page);
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
-  await page.click('.labs-tabs [data-section="games"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   await page.waitForSelector('.labs-board:not([hidden])', { timeout: 5000 });
   expect(/Be the first today|playing today/.test(await page.locator('.labs-board').innerText()), 'the score board shows on the shelf');
   // solve today's Laser mirrors puzzle by trying mirror turns (the real path exists)
@@ -1785,7 +1785,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await shot('lab-torus');
   await page.click('.lab-back');
   // puzzles: more sizes, and a new puzzle any time
-  await page.click('.labs-tabs [data-section="games"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   await page.click('.labs-grid [data-lab="sudoku"]');
   await page.click('.lab-seg button:has-text("12 × 12")');
   expect(await page.locator('.sdk-c').count() === 144 && await page.locator('.sdk-pad [data-d="12"]').count() === 1, 'a 12 × 12 sudoku with 1–12');
@@ -1837,10 +1837,10 @@ test('Study tools: vocabulary chain, timeline, essay structure, flashcards from 
   const msg = (t) => page.waitForSelector(`.lab-panel .tl-msg >> text=${t}`, { timeout: 8000 });
   // a Study tools shelf, and the new games on the Games shelf
   await page.evaluate(() => openLabs());
-  await page.click('.labs-tabs [data-section="tools"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'tools' }));
   const tools = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(['vocab', 'timeline', 'essay', 'cardmatrix', 'cornell', 'thesis', 'museum'].every((t) => tools.includes(t)) && !tools.includes('pendulum') && !tools.includes('sudoku'), 'the Study tools shelf: ' + tools);
-  await page.click('.labs-tabs [data-section="games"]');
+  await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   const games = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(['circuit', 'cracker', 'blitz', 'diner', 'economy', 'sudoku'].every((t) => games.includes(t)), 'the Games shelf: ' + games);
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/labs-games-shelf.png' });
@@ -2110,13 +2110,13 @@ test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the e
   expect(/what is an isotope/.test(asked.at(-1)) && /carbon-14/i.test(asked.at(-1)), 'the follow-up sees the new screen: ' + asked.at(-1).slice(0, 400));
   await page.click('.tut-x');
   expect(await page.locator('.lab-tutor').count() === 0 && await page.locator('.tut-finger').count() === 0, 'stops cleanly');
-  // study tools have it; games don't
+  // every lab has it: study tools and games too
   await page.evaluate(() => openLabs('cornell'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="cornell"] .lab-controls > *', { timeout: 15000 });
   expect(await page.locator('.lab-teach:visible').count() === 1, 'Teach me in a study tool');
   await page.evaluate(() => openLabs('circuit'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="circuit"] .lab-controls > *', { timeout: 15000 });
-  expect(await page.locator('.lab-teach:visible').count() === 0, 'not in a game');
+  expect(await page.locator('.lab-teach:visible').count() === 1, 'and in a game');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
   if (process.env.SHOTS) { // how it looks on a phone
@@ -2130,21 +2130,49 @@ test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the e
   }
 });
 
+test('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
+  const asked = [];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    asked.push(u);
+    if (!/The things on the screen, numbered/.test(u)) return { text: 'The nucleus holds the DNA.' };
+    const num = (re) => { const line = u.split('\n').find((l) => /^\d+\. /.test(l) && re.test(l)); return line ? parseInt(line, 10) : 0; };
+    return { text: JSON.stringify({ steps: [{ say: 'Tap Plant cell to compare it.', point: num(/"Plant cell" button/) }, { say: 'This label is the nucleus.', point: num(/label "Nucleus"/) }] }) };
+  } });
+  await page.evaluate(() => openExplore('animal'));
+  await page.waitForSelector('.x3d:not([hidden]) [data-tool="teach"]:visible', { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelectorAll('.x3d-label').length > 3, null, { timeout: 30000 });
+  await page.click('[data-tool="teach"]');
+  await page.waitForFunction(() => /Tap Plant cell/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
+  expect(/Animal cell 3D/.test(asked.at(-1)) && /looking at the animal cell/.test(asked.at(-1)), 'Cassie knows where the student is');
+  expect((await page.evaluate(() => (document.querySelector('.tut-pointed') || {}).textContent || '')).trim() === 'Plant cell', 'points at the Plant cell tab');
+  await page.click('.tut-pointed');
+  await page.waitForFunction(() => /nucleus/.test(document.querySelector('.tut-say').textContent), null, { timeout: 15000 });
+  await page.click('.tut-x');
+  expect(await page.locator('.lab-tutor').count() === 0, 'stops');
+  // Ask Cassie: about what's on the screen, in the chat
+  await page.click('[data-tool="ask"]');
+  await page.waitForFunction(() => /I'm exploring/.test(document.querySelector('#chat-log').textContent), null, { timeout: 15000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Games button: the top bar on a computer and a Games tab on phones open Labs straight on the games', async (b) => {
   let { ctx, page } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   await page.click('#games-btn');
-  await page.waitForSelector('.labs:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.labs.games-mode:not([hidden]) .labs-title >> text=Games', { timeout: 10000 });
   await page.evaluate(() => openLabs('atom'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"]', { timeout: 15000 });
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
-  await page.waitForSelector('.labs-shelf:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.labs.games-mode .labs-shelf:not([hidden])', { timeout: 10000 });
   await ctx.close();
   ({ ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' } }));
   await page.click('.tabbar [data-tab="games"]');
-  await page.waitForSelector('.labs:not([hidden]) [data-section="games"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.labs.games-mode:not([hidden]) .labs-title >> text=Games', { timeout: 10000 });
   await page.waitForSelector('.tabbar [data-tab="games"].on', { timeout: 5000 });
   await page.click('.tabbar [data-tab="labs"]');
-  await page.waitForSelector('.labs:not([hidden]) [data-section="learn"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.labs:not(.games-mode):not([hidden]) [data-section="learn"][aria-selected="true"]', { timeout: 10000 });
+  expect(await page.locator('.labs-tabs [data-section="games"]:visible').count() === 0, 'no Games shelf inside Labs');
   await page.waitForSelector('.tabbar [data-tab="labs"].on', { timeout: 5000 });
   await ctx.close();
 });

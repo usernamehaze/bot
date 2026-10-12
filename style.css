@@ -1939,3 +1939,5 @@ html.native .tabbar { background: var(--lg-fill); }
 .plus-actions > * { flex: 1 1 auto; min-height: 40px; padding: 8px 14px; border-radius: 99px; font: inherit; font-size: .88rem; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border, rgba(0,0,0,.15)); background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; }
 .plus-actions .plus-go { background: var(--text, #1b1b1d); color: var(--surface, #fff); border-color: transparent; }
 .x3d-toast { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); z-index: 20; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 99px; background: rgba(10, 11, 16, .82); color: #fff; font-size: .82rem; text-align: center; pointer-events: none; }
+.x3d-tools .x3d-btn { white-space: nowrap; }
+@media (max-width: 430px) { .x3d-tools { gap: 6px; } .x3d-tools .x3d-btn { padding-left: 11px; padding-right: 11px; font-size: .84rem; } }

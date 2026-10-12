@@ -38,7 +38,7 @@ const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 const canChat = () => !!(state.groqKey || SERVER || state.geminiKey);
 // Only a Gemini key (no Groq key, no Cassie server): Gemini answers everything.
 const geminiOnly = () => !state.groqKey && !SERVER && !!state.geminiKey;
-const APP_VERSION = '141';
+const APP_VERSION = '142';
 
 /* ---------- Lite mode: skip the 3D Cassie on slow phones / Data Saver ---------- */
 function slowDevice() {
@@ -4437,6 +4437,32 @@ function startQuizOn(topic) {
   handleSend(`Quiz me on: ${topic}. Ask the first question.`, {});
 }
 // ret: { back(), leave() } when it was opened from Labs — closing goes back to Labs, asking Cassie leaves it
+// what's on the 3D screen, in words, for Cassie
+function describe3d(view) {
+  const r = view.root, sheet = r.querySelector('.x3d-sheet');
+  const part = sheet && !sheet.hidden ? (sheet.querySelector('h3') || {}).textContent : '';
+  const sys = [...r.querySelectorAll('.x3d-sys[aria-pressed="true"]')].map((b) => b.textContent.trim());
+  return [`looking at the ${view.kind === 'body' ? 'human body' : view.kind + ' cell'}`, sys.length ? `body systems showing: ${sys.join(', ')}` : '', part ? `the part open now: ${part}` : ''].filter(Boolean).join('; ');
+}
+let teacher3d = null;
+function stopTeach3d() { if (teacher3d) { teacher3d.stop(); teacher3d = null; } }
+async function teach3d(view) {
+  if (teacher3d && teacher3d.root.isConnected) { stopTeach3d(); return; }
+  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=11'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+  const { tutor, collectAll } = await import('./labs/tutor.js');
+  const body = view.kind === 'body';
+  const lab = body
+    ? { id: 'body3d', name: 'Human body 3D', subject: 'explore', blurb: 'a real 3D human body', about: 'The chips at the bottom turn each body system on or off (bones, muscles, organs…). Boy or Girl picks the body. "Find a part" searches any part by name. Tap any part on the model to see what it is and does, then Ask Cassie or Quiz me about it. "Look around" turns the body to the front, back or side, and its slider pulls every part apart and sorts it. Drag to turn, pinch or scroll to zoom, two fingers to move.' }
+    : { id: view.kind + 'cell', name: view.kind === 'plant' ? 'Plant cell 3D' : 'Animal cell 3D', subject: 'explore', blurb: 'a 3D cell, cut open', about: 'Tap any organelle (or its name in the list at the bottom) to see what it does. Labels shows or hides the names; Cut open shows the inside or the whole cell. The tabs at the top switch between the human body, the animal cell and the plant cell. Drag to turn, pinch or scroll to zoom.' };
+  teacher3d = tutor({ view: view.root, lab, collect: collectAll, described: () => describe3d(view),
+    ask: (q) => askCassie([{ role: 'user', content: q }]),
+    speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+    hear: canHear() ? hearOnce : null,
+    level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' ') });
+  teacher3d.root.querySelector('.tut-x').addEventListener('click', () => { teacher3d = null; });
+  track('feature', 'teach-' + lab.id);
+  teacher3d.teach('How do I use this? Teach me from the start.');
+}
 async function openExplore(cell, ret) {
   track('feature', 'explore');
   // free: 2 views a week of each (the body, the animal cell, the plant cell); Plus has them always
@@ -4458,11 +4484,15 @@ async function openExplore(cell, ret) {
     const view = exploreMod.open({
       cell: want,
       allow: (k) => free3d(k, seen),
-      onAsk: (q) => { leaving = true; view.close(); if (ret) ret.leave(); handleSend(q); },
-      onQuiz: (topic) => { leaving = true; view.close(); if (ret) ret.leave(); startQuizOn(topic); },
+      onAsk: (q) => { leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); handleSend(q); },
+      onQuiz: (topic) => { leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); startQuizOn(topic); },
+      // Teach me: Cassie tutors here too (labs/tutor.js); Ask Cassie: about what's on the screen
+      onTeach: () => teach3d(view),
+      onAskHere: () => { const q = `I'm exploring the ${X3D_NAMES[view.kind] ? X3D_NAMES[view.kind].replace(/^The /, '') : '3D model'} in Cassie. Right now: ${describe3d(view)}. Explain what I'm looking at simply, then ask me one quick question to check I understood.`; leaving = true; stopTeach3d(); view.close(); if (ret) ret.leave(); handleSend(q); },
       // a short explanation of a tapped part of the body, without leaving the 3D view
       explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
       onClose: () => {
+        stopTeach3d();
         if (ret && !leaving) { ret.back(); return; }
         try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ }
       },
