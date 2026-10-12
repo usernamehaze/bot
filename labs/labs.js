@@ -7,10 +7,13 @@
    when you reach them. "How this model works" says what the simulation leaves out, so
    nothing is passed off as more exact than it is.
 
-     import('./labs/labs.js').then((m) => m.open({ lab: 'projectile', onAsk, onQuiz, openExplore, explain, scores }));
+     import('./labs/labs.js').then((m) => m.open({ lab: 'projectile', converse, makeQuiz, format, onAsk, onQuiz, openExplore, explain, scores }));
+   With converse (and makeQuiz) Ask Cassie and Quiz me stay inside the lab (labs/helper.js);
+   without them they hand the question to onAsk / onQuiz.
 */
 import { el, esc, dayKey, setPremium } from './kit.js';
 import { tutor } from './tutor.js';
+import { helper } from './helper.js';
 import { MATH } from './math.js';
 import { MATH2 } from './math2.js';
 import { PHYSICS } from './physics.js';
@@ -339,13 +342,32 @@ function createView() {
   $('.lab-teach').addEventListener('click', () => {
     if (!current || !opts.explain) return;
     if (teacher && teacher.root.isConnected) { stopTeaching(); return; }
+    closeHelp();
     teacher = tutor({ view: labView, lab: current, mounted: () => mounted, described, ask: opts.explain, speak: opts.speak, hear: opts.hear, level: opts.level });
     teacher.root.querySelector('.tut-x').addEventListener('click', () => stopTeaching());
     labView.classList.add('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'true');
     if (opts.onTeach) opts.onTeach(current.id);
     teacher.teach('How do I use this? Teach me from the start.');
   });
+  // Ask Cassie and Quiz me: a panel inside the lab (labs/helper.js); the lab keeps working behind it
+  let help = null;
+  function helpFor() {
+    if (!help) {
+      const lab = current;
+      help = helper({ view: labView, name: `the ${lab.name} ${lab.subject === 'tools' ? 'study tool' : lab.subject === 'games' ? 'game' : lab.subject === 'puzzles' ? 'puzzle' : 'lab'}`, described,
+        ask: opts.converse, format: opts.format, speak: opts.speak, quiz: opts.makeQuiz, onMark: opts.onMark, onClose: pressHelp });
+    }
+    return help;
+  }
+  function pressHelp() {
+    const on = help && help.open, quiz = on && help.root.getAttribute('aria-label') === 'Quiz me';
+    $('.lab-ask').setAttribute('aria-pressed', String(!!on && !quiz));
+    $('.lab-quiz').setAttribute('aria-pressed', String(!!quiz));
+  }
+  function closeHelp() { if (help && help.open) help.close(); }
+  function dropHelp() { if (help) { help.destroy(); help = null; } pressHelp(); }
   function closeLab() {
+    dropHelp();
     stopTeaching();
     if (mounted && mounted.destroy) { try { mounted.destroy(); } catch (e) { /* ignore */ } }
     mounted = null; current = null;
@@ -371,6 +393,14 @@ function createView() {
         : current.subject === 'puzzles'
       ? `I'm doing the daily ${current.name} puzzle in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Give me a strategy tip for this kind of puzzle — don't solve it for me.`
       : `I'm playing with the ${current.name} lab in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain what is happening and why, simply, using my numbers. Then ask me one quick question to check I understood.`;
+    if (opts.converse) {
+      stopTeaching();
+      const h = helpFor();
+      if (h.open && $('.lab-ask').getAttribute('aria-pressed') === 'true') { h.close(); return; }
+      h.ask(q, current.subject === 'tools' ? 'How is my work so far?' : current.subject === 'games' || current.subject === 'puzzles' ? 'Give me a tip for this.' : 'What is happening on my screen?');
+      pressHelp();
+      return;
+    }
     const name = current.name;
     close();
     if (opts.onAsk) opts.onAsk(q, { lab: name });
@@ -378,6 +408,14 @@ function createView() {
   $('.lab-quiz').addEventListener('click', () => {
     if (!current) return;
     const topic = current.topic || current.name;
+    if (opts.converse && opts.makeQuiz) {
+      stopTeaching();
+      const h = helpFor();
+      if (h.open && $('.lab-quiz').getAttribute('aria-pressed') === 'true') { h.close(); return; }
+      h.quiz(topic);
+      pressHelp();
+      return;
+    }
     close();
     if (opts.onQuiz) opts.onQuiz(topic);
   });

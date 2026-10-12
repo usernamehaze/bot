@@ -1135,8 +1135,9 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   expect(/Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()) && /post office/.test(await page.locator('.x3d-sheet').innerText()), 'the Golgi card should show');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/explore-golgi.png' });
   await page.click('.x3d-act[data-act="ask"]');
-  await page.waitForSelector('#chat-log .bubble-assistant >> text=post office', { timeout: 15000 });
-  expect(await page.locator('.x3d').isHidden(), 'the viewer closes so the answer shows');
+  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=post office', { timeout: 15000 });
+  expect(await page.locator('.x3d').isVisible() && /Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()), 'the answer shows in the 3D view, which stays where it was');
+  await page.click('.lab-helper .hp-x');
   expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
   // plant cell → quiz
   await open3d(page, 'cells3d');
@@ -1148,8 +1149,10 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.click('.x3d-chip[data-part="chloroplast"]');
   expect(/photosynthesis/.test(await page.locator('.x3d-sheet').innerText()) && /Only in plant cells/.test(await page.locator('.x3d-sheet').innerText()), 'the chloroplast card');
   await page.click('.x3d-act[data-act="quiz"]');
-  await page.waitForFunction(() => document.getElementById('quiz-btn').classList.contains('active'), null, { timeout: 5000 });
-  expect(/Quiz me on: the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell');
+  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-title >> text=Quiz me', { timeout: 5000 });
+  await page.waitForSelector('.lab-helper .hp-quiz .hp-err, .lab-helper .hp-quiz .hp-q', { timeout: 8000 });
+  expect(/multiple-choice quiz about \\"the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell: ' + JSON.stringify(groqCalls.at(-1)).slice(0, 300));
+  expect(await page.locator('#quiz-btn.active').count() === 0, 'the chat quiz did not start');
   // a link opens it straight away
   await page.goto(APP + '?explore=plant');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="wall"]', { timeout: 20000 });
@@ -1429,7 +1432,7 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await page.click('.x3d-results button >> nth=0');
   await page.waitForFunction(() => /^Femur/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
   await page.click('.x3d-act[data-act="ask"]');
-  await page.waitForSelector('#chat-log .bubble-assistant >> text=thigh bone', { timeout: 15000 });
+  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=thigh bone', { timeout: 15000 });
   expect(/Explain the Femur.*Os femoris.*musculoskeletal system/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
@@ -1643,8 +1646,10 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), '45° from the ground ticks the farthest-angle goal');
   await shot('lab-projectile');
   await page.click('.lab-ask');
-  await page.waitForSelector('#chat-log .bubble-assistant >> text=45 degrees', { timeout: 15000 });
-  expect(await page.locator('.labs').isHidden(), 'Labs closes so the answer shows');
+  await page.waitForSelector('.lab-helper:not([hidden]) .hp-a >> text=45 degrees', { timeout: 15000 });
+  expect(await page.locator('.lab-view[data-lab="projectile"]').isVisible(), 'the answer shows inside the lab, which stays open');
+  await page.click('.lab-helper .hp-x');
+  await page.click('.lab-back');
   const asked = JSON.stringify(groqCalls.at(-1));
   expect(/Launch lab/.test(asked) && /45°/.test(asked) && /m\/s/.test(asked) && /flies/.test(asked), 'Cassie is told what is on the screen: ' + asked.slice(0, 400));
   // goals are remembered on the shelf
@@ -2150,9 +2155,11 @@ test('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, point
   await page.waitForFunction(() => /nucleus/.test(document.querySelector('.tut-say').textContent), null, { timeout: 15000 });
   await page.click('.tut-x');
   expect(await page.locator('.lab-tutor').count() === 0, 'stops');
-  // Ask Cassie: about what's on the screen, in the chat
+  // Ask Cassie: about what's on the screen, right here
   await page.click('[data-tool="ask"]');
-  await page.waitForFunction(() => /I'm exploring/.test(document.querySelector('#chat-log').textContent), null, { timeout: 15000 });
+  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a >> text=holds the DNA', { timeout: 15000 });
+  expect(/What's on my screen right now: looking at the (animal|plant) cell/.test(asked.at(-1)), 'Cassie sees the 3D screen: ' + asked.at(-1).slice(0, 300));
+  expect(await page.locator('.x3d').isVisible() && await page.locator('#chat-log .bubble-user').count() === 0, 'no trip to the chat');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -2203,14 +2210,15 @@ test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze
   expect(await page.locator('.lab-tutor, .tut-finger, .tut-ring').count() === 0, 'the tutor leaves nothing behind');
   for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', 'after Teach me: ' + r); }
   await page.locator(today).scrollIntoViewIfNeeded(); await page.locator(today).tap();
-  // Ask Cassie and Quiz me take the question to the chat; the lab opens again and works
-  await page.tap('.lab-ask');
-  await page.waitForFunction(() => document.querySelector('.labs').hidden && /Solar system/.test(document.querySelector('#chat-log').textContent), null, { timeout: 10000 });
-  expect(await reachable('#prompt-input') === 'ok', 'the chat works after Ask Cassie: ' + await reachable('#prompt-input'));
-  await openSpace();
-  await page.tap('.lab-quiz');
-  await page.waitForFunction(() => document.querySelector('.labs').hidden && /Quiz me on/.test(document.querySelector('#chat-log').textContent), null, { timeout: 10000 });
-  await openSpace();
+  // Ask Cassie and Quiz me open a panel inside the lab; closing it leaves every button working
+  for (const btn of ['.lab-ask', '.lab-quiz']) {
+    await page.tap(btn);
+    await page.waitForSelector('.lab-helper:not([hidden])', { timeout: 10000 });
+    await page.waitForSelector('.lab-helper .hp-a, .lab-helper .hp-err, .lab-helper .hp-q', { timeout: 10000 });
+    await page.tap('.lab-helper .hp-x');
+    expect(await page.locator('.lab-helper:not([hidden])').count() === 0, 'the panel closes');
+    for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', `after ${btn}: ` + r); }
+  }
   // a pinch on the 3D zooms the planets, never the page; nor on the buttons or the panel
   const sunAt = () => page.evaluate(() => { const l = [...document.querySelectorAll('.lab3d-label')].find((x) => x.textContent === 'Saturn'); return l ? l.style.transform : ''; });
   const before = await sunAt(), c = await page.locator('canvas.lab-3d').boundingBox();
@@ -2271,6 +2279,96 @@ test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
   await check('3D explorer');
   expect(small.size === 0, 'boxes smaller than 16px: ' + [...small].join(' | '));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question quiz in the Solar System and the Body System, and the chat never shows', async (b) => {
+  const asked = [], bodies = [];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    asked.push(u); bodies.push(body);
+    if (/multiple-choice quiz about/.test(u)) return { text: JSON.stringify([
+      { q: 'Which planet is the biggest?', o: ['Mars', 'Jupiter', 'Venus', 'Mercury'], a: 1, why: 'Jupiter is more than 300 times as massive as Earth.' },
+      { q: 'Which planet is closest to the Sun?', o: ['Mercury', 'Earth', 'Neptune', 'Saturn'], a: 0, why: 'Mercury orbits closest to the Sun.' },
+    ]) };
+    if (/what about its moons/i.test(u)) return { text: 'Jupiter has **95 known moons**.' };
+    return { text: 'You are looking at Jupiter, the biggest planet.' };
+  } });
+  // anything that sends the student to the chat is a failure
+  await page.evaluate(() => {
+    window.__wentToChat = [];
+    new MutationObserver(() => { const l = document.querySelector('.labs'); if (l && l.hidden && document.documentElement.classList.contains('watch-labs')) window.__wentToChat.push('Labs closed'); }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['hidden'] });
+  });
+  const chatBubbles = () => page.locator('#chat-log .bubble').count();
+  const before = await chatBubbles();
+  // the Solar System: tap Jupiter, then ask
+  await page.evaluate(() => openLabs('space3d'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="space3d"] .lab3d-label:not([hidden])', { timeout: 30000 });
+  await page.evaluate(() => document.documentElement.classList.add('watch-labs'));
+  await page.locator('.lab3d-label:not([hidden]):text-is("Jupiter")').click({ force: true });
+  await page.waitForSelector('.space-card h3:text-is("Jupiter")');
+  await page.click('.lab-ask');
+  await page.waitForSelector('.lab-helper:not([hidden]) .hp-a >> text=biggest planet', { timeout: 15000 });
+  expect(/the Solar system & beyond \(3D\) lab in Cassie\. What's on my screen right now: .*Jupiter/s.test(asked.at(-1)), 'Cassie sees the screen: ' + asked.at(-1).slice(0, 300));
+  expect(await page.locator('.lab-ask[aria-pressed="true"]').count() === 1, 'Ask Cassie shows as on');
+  // a follow-up typed in the panel (she remembers the talk), and the answer can be read out loud
+  await page.fill('.lab-helper .hp-ask input', 'what about its moons?');
+  await page.press('.lab-helper .hp-ask input', 'Enter');
+  await page.waitForSelector('.lab-helper .hp-a >> text=95 known moons', { timeout: 15000 });
+  expect(bodies.at(-1).messages.some((m) => m.role === 'assistant' && /You are looking at Jupiter/.test(m.content)), 'the follow-up carries the talk so far');
+  expect(await page.locator('.lab-helper .hp-a strong, .lab-helper .hp-a b').count() >= 1, 'her answer is formatted like the chat');
+  expect(await page.locator('.lab-helper .hp-a .hp-listen').count() === 2, 'every answer has Listen');
+  // the lab still works behind the panel
+  await page.click('.lab-seg button:has-text("1 week / s")');
+  expect(await page.locator('.lab-seg button:has-text("1 week / s")[aria-pressed="true"], .lab-seg button:has-text("1 week / s").on, .lab-seg button:has-text("1 week / s")[aria-checked="true"]').count() === 1, 'the lab’s controls work with the panel open');
+  // Quiz me: two questions, one at a time, then the score
+  await page.click('.lab-quiz');
+  await page.waitForSelector('.lab-helper .hp-title >> text=Quiz me');
+  await page.waitForSelector('.lab-helper .hp-q >> text=Which planet is the biggest?', { timeout: 15000 });
+  expect(/multiple-choice quiz about "the solar system/.test(asked.at(-1)), 'the quiz is about the lab’s topic');
+  expect(await page.locator('.lab-helper .hp-qn').innerText().then((t) => /Question 1 of 2/i.test(t)), 'question 1 of 2');
+  await page.click('.lab-helper .hp-opt:has-text("Jupiter")');
+  await page.waitForSelector('.lab-helper .hp-why >> text=Right!');
+  await page.click('.lab-helper .hp-next');
+  await page.waitForSelector('.lab-helper .hp-q >> text=closest to the Sun');
+  await page.click('.lab-helper .hp-opt:has-text("Earth")');
+  await page.waitForSelector('.lab-helper .hp-why >> text=Not quite. The answer is Mercury.');
+  await page.click('.lab-helper .hp-next:has-text("See my score")');
+  await page.waitForSelector('.lab-helper .hp-score >> text=1 of 2');
+  const missed = await page.evaluate(() => (JSON.parse(localStorage.getItem('cassie.v2')).mistakes || []).map((m) => m.q));
+  expect(missed.includes('Which planet is closest to the Sun?') && !missed.includes('Which planet is the biggest?'), 'the missed question is kept for Review my mistakes: ' + missed.join(' | '));
+  // closing goes back to exactly where the student was
+  await page.click('.lab-helper .hp-x');
+  expect(await page.locator('.lab-helper:not([hidden])').count() === 0 && /Jupiter/.test(await page.locator('.space-card h3').innerText()) && await page.locator('.lab-seg button:has-text("1 week / s")[aria-pressed="true"]').count() === 1, 'the lab is as it was');
+  await page.click('.lab-back');
+  await page.waitForSelector('.labs-shelf:not([hidden])');
+  await page.evaluate(() => document.documentElement.classList.remove('watch-labs'));
+  // the Body System: ask about what's on screen, then find the heart and take its quiz
+  await page.click('.labs-grid [data-lab="body3d"]');
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
+  await page.waitForSelector('.labs', { state: 'hidden' });
+  await page.click('[data-tool="ask"]');
+  await page.waitForSelector('.x3d .lab-helper:not([hidden]) .hp-a', { timeout: 15000 });
+  expect(/the 3D human body in Cassie\. What's on my screen right now: looking at the human body/.test(asked.at(-1)), 'Cassie sees the body view: ' + asked.at(-1).slice(0, 300));
+  await page.fill('.x3d-search', 'heart');
+  await page.waitForSelector('.x3d-results:not([hidden]) button', { timeout: 20000 });
+  await page.click('.x3d-results button >> nth=0');
+  await page.waitForFunction(() => /Heart/.test(document.querySelector('.x3d-sheet h3').textContent), null, { timeout: 10000 });
+  await page.click('.x3d-act[data-act="quiz"]');
+  await page.waitForSelector('.x3d .lab-helper .hp-q >> text=Which planet is the biggest?', { timeout: 15000 });
+  expect(/multiple-choice quiz about "the circulatory/i.test(asked.at(-1)), 'the quiz is about the heart’s system: ' + asked.at(-1).slice(0, 200));
+  await page.click('.x3d .lab-helper .hp-opt:has-text("Jupiter")');
+  await page.click('.x3d .lab-helper .hp-next');
+  await page.click('.x3d .lab-helper .hp-opt:has-text("Mercury")');
+  await page.click('.x3d .lab-helper .hp-next:has-text("See my score")');
+  await page.waitForSelector('.x3d .lab-helper .hp-score >> text=2 of 2');
+  await page.click('.x3d .lab-helper .hp-x');
+  expect(await page.locator('.x3d').isVisible() && /Heart/.test(await page.locator('.x3d-sheet h3').innerText()), 'the body view is as it was');
+  // the chat never showed
+  expect(await chatBubbles() === before, 'nothing was sent to the chat');
+  expect((await page.evaluate(() => window.__wentToChat)).length === 0, 'Labs never closed for the chat');
+  expect(await page.locator('#quiz-btn.active').count() === 0, 'the chat quiz never started');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -3540,6 +3638,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 3000 });
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
+
 
 
 /* ---------- run ---------- */
