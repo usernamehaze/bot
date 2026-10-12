@@ -165,6 +165,12 @@ const FACTS = [
   [/muscle|musculus/, 'A skeletal muscle.', 'Muscles move the body by shortening (contracting) and pulling on bones. They work in pairs: one pulls, the other pulls back.', { layer: 'muscular', general: true }],
 
   // ---------- skin ----------
+  // the eyes as seen from outside (modelled on the skin view, for both bodies)
+  [/^eye$/, 'The eye, the organ of sight. The eyeball is about 2.4 cm across and sits in a bony socket of the skull, protected by the eyelids and eyelashes.', 'Light comes in through the clear cornea and the pupil, the lens focuses it on the retina at the back, and the retina sends the picture to the brain through the optic nerve.', { layer: 'regions' }],
+  [/^white_of_eye$/, 'The sclera, the white of the eye: a tough outer coat that covers most of the eyeball.', 'It protects the eye and keeps its round shape. The six small muscles that move the eye are attached to it.', { layer: 'regions' }],
+  [/^iris_of_eye$/, 'The iris, the coloured ring of the eye. Its colour (brown, blue, green or grey) comes from a pigment called melanin; most people in the Philippines have brown eyes.', 'Its tiny muscles make the pupil smaller in bright light and bigger in the dark, so the right amount of light gets in.', { layer: 'regions' }],
+  [/^pupil_of_eye$/, 'The pupil, the round opening in the middle of the iris. It looks black because the light that goes in is taken in by the inside of the eye.', 'Light passes through it into the eye. It narrows to about 2 mm in bright light and widens to about 8 mm in the dark.', { layer: 'regions' }],
+  [/^long_hair$|^hairs_of_head$/, 'The hair of the head: strands of keratin (the same protein as nails) growing from about 100,000 follicles in the scalp.', 'It protects the scalp from the sun and helps keep the head warm. It grows about 1 to 1.5 cm a month.', { layer: 'regions' }],
   [/hair/, 'Hair.', 'Hair keeps you warm and protects the skin; eyelashes and eyebrows keep dust and sweat out of the eyes.', { layer: 'regions', general: true }],
   [/nail/, 'A nail — a plate of hard keratin.', 'Nails protect the tips of the fingers and toes and help you pick up small things.', { layer: 'regions' }],
   [/region|skin/, 'An area of the skin — the body’s largest organ.', 'Skin keeps germs out and water in, controls body temperature with sweat, makes vitamin D in sunlight and feels touch, heat and pain.', { layer: 'regions', general: true }],

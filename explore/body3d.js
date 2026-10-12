@@ -30,7 +30,7 @@ export const SYSTEMS = [
   { id: 'reproductive', name: 'Reproductive', on: true, parts: [['visceral', 'genital_systems']] },
 ];
 // the organs a first tap picks (a tap again inside one picks the exact part): whole organs, and whole muscles
-const MAIN_ORGAN = /^(heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
+const MAIN_ORGAN = /^(heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|eye_[lr]|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
 // parts only a boy's body has (a girl's body shows the female organs instead)
 const MALE_ONLY = /^(male_genital_system|urogenital_region_[lr]|urethra)$|penis|scrot|testicular|ductus_deferens|prostat|seminal/;
 const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#e6d8bd', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
@@ -109,7 +109,30 @@ const FEMALE = [
   ['nipple_r', 'Nipple', 'Papilla mammaria', 'breast_r', 'regions', 'r', '#a8665e'],
   ['areola_l', 'Areola', 'Areola mammae', 'breast_l', 'regions', 'l', '#b9776c'],
   ['areola_r', 'Areola', 'Areola mammae', 'breast_r', 'regions', 'r', '#b9776c'],
+  ['long_hair', 'Long hair', 'Capilli', 'hairs', 'regions', '', '#2b231f'],
 ];
+// The eyes as you see them from outside, for both bodies (the scan's eyeballs belong to the nervous
+// system, which starts switched off): the white, the iris and the pupil, at textbook sizes, placed
+// in the skin's own eye areas. Row: as FEMALE.
+const EYES = ['l', 'r'].flatMap((x) => [
+  [`eye_${x}`, 'Eye', 'Oculus', `orbital_region_${x}`, 'regions', x, ''],
+  [`white_of_eye_${x}`, 'White of the eye (sclera)', 'Sclera', `eye_${x}`, 'regions', x, '#f1eee8'],
+  [`iris_of_eye_${x}`, 'Iris', 'Iris', `eye_${x}`, 'regions', x, '#4a3527'],
+  [`pupil_of_eye_${x}`, 'Pupil', 'Pupilla', `eye_${x}`, 'regions', x, '#0b0b0c'],
+]);
+// A girl's shape: the scan is a man's body, so for a girl it is gently narrowed at the shoulders
+// and waist and widened at the hips. Side to side only, and every layer alike, so the bones,
+// organs and skin still fit together. [height as a share of the body's, width factor]
+const GIRL_WIDTH = [[0, 1], [0.3, 1], [0.42, 1.03], [0.52, 1.06], [0.6, 1], [0.64, 0.96], [0.72, 0.95], [0.8, 0.91], [0.86, 0.98], [0.89, 1], [1, 1]];
+function girlWidth(t) {
+  for (let k = 1; k < GIRL_WIDTH.length; k++) {
+    const [t1, s1] = GIRL_WIDTH[k];
+    if (t > t1) continue;
+    const [t0, s0] = GIRL_WIDTH[k - 1], u = (t - t0) / (t1 - t0);
+    return s0 + (s1 - s0) * u * u * (3 - 2 * u);
+  }
+  return 1;
+}
 
 export function createBody(ctx) {
   // ctx: { scene, camera, controls, setLoading(text|null), showPart(info|null), invalidate(), base } — base = folder url of explore/
@@ -126,7 +149,7 @@ export function createBody(ctx) {
   let sex = 'boy';
   const hidden = new Set(); // structure indexes the student hid
   const rootParts = new Map(); // group id -> its parts (cached)
-  let maleParts = new Set(), femaleParts = new Set(), femaleColor = new Map();
+  let maleParts = new Set(), femaleParts = new Set(), femaleColor = new Map(); // (femaleColor: the colour of every part modelled here, the girl's and the eyes)
   // pieces the atlas also has as one whole (the liver comes whole AND cut into its 8 segments,
   // which sit on top of each other and flicker): the whole organ is drawn, not its pieces too
   const overlap = new Set();
@@ -148,7 +171,7 @@ export function createBody(ctx) {
       index.byId = new Map();
       index.s.forEach((r, i) => { if (!index.byId.has(r[0])) index.byId.set(r[0], i); });
       // the girl's parts join the list of structures (and get mesh numbers of their own)
-      FEMALE.forEach(([id, en, la, parent, layer, side, color]) => {
+      [...FEMALE, ...EYES].forEach(([id, en, la, parent, layer, side, color]) => {
         const i = index.s.length;
         index.s.push([id, en, la, index.byId.get(parent), index.systems.indexOf(layer), side]);
         index.byId.set(id, i);
@@ -166,7 +189,7 @@ export function createBody(ctx) {
       index.size = index.s.map(() => 0);
       const count = (i) => { let n = index.hasMesh.has(i) ? 1 : 0; for (const k of index.kids[i]) n += count(k); index.size[i] = n; return n; };
       index.s.forEach((r, i) => { if (r[3] < 0) count(i); });
-      femaleParts = new Set(femaleColor.keys());
+      femaleParts = new Set(FEMALE.map(([id]) => index.byId.get(id)).filter((i) => femaleColor.has(i)));
       index.s.forEach((r, i) => { if (MALE_ONLY.test(r[0])) partsOf(i).forEach((k) => maleParts.add(k)); });
       index.s.forEach((r, i) => {
         if (!index.hasMesh.has(i) || !MAIN_ORGAN.test(r[0])) return;
@@ -252,7 +275,7 @@ export function createBody(ctx) {
         group.add(gltf.scene);
         gltf.scene.visible = false;
         L.scenes.push(gltf.scene);
-      })).then(() => { if (sex === 'girl') buildFemale(); ctx.setLoading(null); }).catch((e) => { L.loading = null; ctx.setLoading('Couldn’t load it — check your internet and tap again.'); throw e; });
+      })).then(() => { shapeBody(); buildEyes(); if (sex === 'girl') buildFemale(); ctx.setLoading(null); }).catch((e) => { L.loading = null; ctx.setLoading('Couldn’t load it — check your internet and tap again.'); throw e; });
     }
     return L.loading;
   }
@@ -311,6 +334,7 @@ export function createBody(ctx) {
   async function setMuscles(yes) { muscles = yes; if (yes) on.add('musculoskeletal'); await refresh(); }
   async function setSex(s) {
     sex = s === 'girl' ? 'girl' : 'boy';
+    shapeBody();
     if (sex === 'girl') buildFemale();
     applyFilter();
     await refresh();
@@ -324,7 +348,7 @@ export function createBody(ctx) {
     group.updateWorldMatrix(true, true);
     const toLocal = group.matrixWorld.clone().invert();
     layers.forEach((L) => L.meshes.forEach((o) => {
-      if (o.userData.female) return;
+      if (o.userData.made) return;
       const g = o.geometry, ids = g.attributes._id, pos = g.attributes.position, base = o.userData.base; // (where it is when the body is whole)
       const m = o.matrixWorld.clone().premultiply(toLocal);
       for (let i = 0; i < ids.count; i++) if (want.has(index.mesh[ids.getX(i)])) box.expandByPoint((base ? v.fromArray(base, i * 3) : v.fromBufferAttribute(pos, i)).applyMatrix4(m));
@@ -345,12 +369,64 @@ export function createBody(ctx) {
     geo.computeVertexNormals();
     geo.userData.fullIndex = geo.index.array.slice();
     const skin = !!look.skin;
-    const o = new THREE.Mesh(geo, tissueMaterial(THREE, skin ? 'regions' : layer, { transparent: skin, opacity: skin ? 0.3 : 1, depthWrite: !skin, side: skin ? THREE.FrontSide : THREE.DoubleSide }));
-    o.userData = { system: layer, pickable: true, skin, female: true };
+    const o = new THREE.Mesh(geo, tissueMaterial(THREE, skin ? 'regions' : layer, { transparent: skin, opacity: skin ? look.opacity || 0.3 : 1, depthWrite: !skin, side: look.side || (skin ? THREE.FrontSide : THREE.DoubleSide) }));
+    o.userData = { system: layer, pickable: true, skin, made: true };
     o.renderOrder = skin ? 2 : 0;
     return o;
   }
   const tube = (pts, r, seg = 40) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, r, 10, false);
+  /* ---------- the eyes, seen from outside (both bodies) ---------- */
+  let eyesBuilt = false;
+  function buildEyes() {
+    if (eyesBuilt || !index || !layers.get('regions') || !layers.get('regions').meshes.length) return;
+    const front = 1, root = new THREE.Group();
+    for (const side of ['l', 'r']) {
+      const box = boxOf(index.byId.get('orbital_region_' + side));
+      if (!box) continue;
+      // an adult eyeball is about 24 mm across; its front sits just behind the eyelids
+      const R = 0.012, at = box.getCenter(new THREE.Vector3());
+      at.z = box.max.z - 0.005 * front - R;
+      const white = partMesh('white_of_eye_' + side, new THREE.SphereGeometry(R, 20, 14), 'regions');
+      // the iris (about 12 mm across) and the pupil (about 4 mm) in its middle: thin caps on the front of the eyeball
+      const cap = (r, across, seg) => new THREE.SphereGeometry(r, seg, 6, 0, Math.PI * 2, 0, Math.asin(across / 2 / R)).rotateX(Math.PI / 2 * front);
+      const iris = partMesh('iris_of_eye_' + side, cap(R * 1.004, 0.012, 24), 'regions');
+      const pupil = partMesh('pupil_of_eye_' + side, cap(R * 1.008, 0.004, 16), 'regions');
+      white.position.copy(at); iris.position.copy(at); pupil.position.copy(at);
+      root.add(white, iris, pupil);
+    }
+    if (!root.children.length) return;
+    eyesBuilt = true;
+    addMade(layers.get('regions'), root);
+  }
+  /* ---------- a girl's shape ---------- */
+  // every point moves side to side only, by how high it is (see GIRL_WIDTH); a boy's body is the scan as it is
+  function shapeBody() {
+    if (!index) return;
+    const girl = sex === 'girl', y0 = index.bounds.min[1], H = index.bounds.max[1] - y0, v = new THREE.Vector3();
+    let changed = false;
+    layers.forEach((L) => L.meshes.forEach((o) => {
+      if (o.userData.made || !!o.userData.girl === girl) return;
+      measure(o);
+      const base = o.userData.base, m = o.userData.toBody, back = o.userData.fromBody || (o.userData.fromBody = m.clone().invert());
+      for (let i = 0, n = base.length; i < n; i += 3) {
+        v.fromArray(base, i).applyMatrix4(m);
+        const k = girlWidth((v.y - y0) / H);
+        v.x *= girl ? k : 1 / k;
+        v.applyMatrix4(back).toArray(base, i);
+      }
+      o.userData.girl = girl;
+      changed = true;
+    }));
+    if (!changed) return;
+    partBox.clear();
+    layers.forEach((L) => L.meshes.forEach((o) => { if (o.userData.base) boxParts(o); }));
+    layers.forEach((L) => L.meshes.forEach((o) => {
+      if (!o.userData.base || o.userData.moved) return;
+      const pos = o.geometry.attributes.position;
+      pos.array.set(o.userData.base); pos.needsUpdate = true;
+    }));
+    if (spread > 0) { layout = null; layoutSpread(); } else settled();
+  }
   function buildFemale() {
     if (!index) return;
     const front = 1; // the body faces +z
@@ -395,7 +471,7 @@ export function createBody(ctx) {
         // a girl's urethra: short (about 4 cm), from the bottom of the bladder, just in front of the vagina
         const neck = new THREE.Vector3(c.x, bl.min.y + 0.004, bl.min.z + size.z * 0.35);
         root.add(partMesh('female_urethra', tube([neck, neck.clone().add(new THREE.Vector3(0, -0.02, 0.004 * front)), neck.clone().add(new THREE.Vector3(0, -0.04, 0.012 * front))], 0.0035, 16), 'visceral'));
-        addFemale(L, root);
+        addMade(L, root);
       }
     }
     // the breasts, on the chest's mammary regions
@@ -430,7 +506,22 @@ export function createBody(ctx) {
         gland.position.copy(at); duct.position.copy(at);
         root.add(breast, gland, duct, nipple, areola);
       }
-      if (made) { femaleBuilt.add('regions'); addFemale(L, root); }
+      // long hair: a cap over the scalp and a fall of hair down the back to between the shoulder blades
+      const head = boxOf(index.byId.get('hairs_of_head'));
+      if (head) {
+        const c = head.getCenter(new THREE.Vector3()), size = head.getSize(new THREE.Vector3());
+        const rx = size.x / 2 + 0.008, ry = size.y / 2 + 0.006, rz = size.z / 2 + 0.008;
+        const cap = new THREE.SphereGeometry(1, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.56).scale(rx, ry, rz).rotateX(-0.42 * front).translate(c.x, c.y, c.z - 0.006 * front);
+        // the fall: a curved sheet round the back and sides of the head, getting a little wider as it reaches the shoulders
+        const top = c.y + ry * 0.15, prof = [[1.0, 0], [1.02, -0.06], [0.98, -0.12], [1.12, -0.2], [1.3, -0.27], [1.38, -0.34], [1.36, -0.42], [1.28, -0.48]];
+        const pts = prof.map(([w, dy]) => new THREE.Vector2(w, top + dy - c.y));
+        const fall = new THREE.LatheGeometry(pts, 16, Math.PI * 0.55, Math.PI * 0.9).scale(rx * 0.98, 1, rz * 0.98).translate(c.x, c.y, c.z - 0.012 * front);
+        const hair = partMesh('long_hair', mergeIndexed(mergeGeometries([cap.toNonIndexed(), fall.toNonIndexed()])), 'regions', { skin: true, opacity: 0.62, side: THREE.DoubleSide });
+        hair.renderOrder = 3;
+        root.add(hair);
+        made++;
+      }
+      if (made) { femaleBuilt.add('regions'); addMade(L, root); }
     }
   }
   function mergeIndexed(geo) { // index a non-indexed geometry (each triangle keeps its own corners)
@@ -439,7 +530,7 @@ export function createBody(ctx) {
     geo.setIndex(new THREE.BufferAttribute(ix, 1));
     return geo;
   }
-  function addFemale(L, root) {
+  function addMade(L, root) {
     root.traverse((o) => { if (o.isMesh) L.meshes.push(o); });
     group.add(root);
     L.scenes.push(root);
@@ -463,18 +554,24 @@ export function createBody(ctx) {
     g.setAttribute('position', new THREE.BufferAttribute(base.slice(), 3));
     group.updateWorldMatrix(true, true);
     const m = o.matrixWorld.clone().premultiply(group.matrixWorld.clone().invert());
-    const v = new THREE.Vector3(), mis = new Set();
-    for (let i = 0; i < n; i++) {
-      const mi = ids.getX(i), si = index.mesh[mi];
-      mis.add(mi);
+    const mis = new Set();
+    for (let i = 0; i < n; i++) mis.add(ids.getX(i));
+    o.userData.base = base;
+    o.userData.mis = [...mis];
+    o.userData.toBody = m;
+    o.userData.toLocal = new THREE.Matrix3().setFromMatrix4(m).invert(); // body-space moves -> the mesh's own space
+    boxParts(o);
+  }
+  // each part's box in the body, put together
+  function boxParts(o) {
+    const base = o.userData.base, m = o.userData.toBody, ids = o.geometry.attributes._id, v = new THREE.Vector3();
+    for (let i = 0, n = ids.count; i < n; i++) {
+      const si = index.mesh[ids.getX(i)];
       if (si < 0) continue;
       let b = partBox.get(si);
       if (!b) partBox.set(si, (b = new THREE.Box3()));
-      b.expandByPoint(v.set(base[i * 3], base[i * 3 + 1], base[i * 3 + 2]).applyMatrix4(m));
+      b.expandByPoint(v.fromArray(base, i * 3).applyMatrix4(m));
     }
-    o.userData.base = base;
-    o.userData.mis = [...mis];
-    o.userData.toLocal = new THREE.Matrix3().setFromMatrix4(m).invert(); // body-space moves -> the mesh's own space
   }
   // the trays, in the order a biology book goes
   const TRAYS = ['Bones', 'Muscles', 'Heart & blood vessels', 'Respiratory', 'Digestive', 'Urinary', 'Reproductive', 'Endocrine glands', 'Brain & nerves', 'Lymph & immune', 'Skin', 'Other'];
@@ -729,8 +826,9 @@ export function createBody(ctx) {
   async function goTo(si) {
     // a girl's part shows the girl's body, a boy's part the boy's
     const parts = [...partsOf(si)];
-    if (parts.length && parts.every((i) => femaleParts.has(i)) && sex !== 'girl') { sex = 'girl'; buildFemale(); }
+    if (parts.length && parts.every((i) => femaleParts.has(i)) && sex !== 'girl') sex = 'girl';
     if (parts.length && parts.every((i) => maleParts.has(i)) && sex !== 'boy') sex = 'boy';
+    shapeBody();
     const sys = systemsOf(si);
     if (!sys.some((x) => on.has(x.id)) && sys[0]) on.add(sys[0].id);
     if (layerOf(si) === 'muscular') { muscles = true; on.add('musculoskeletal'); }

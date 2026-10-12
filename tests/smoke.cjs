@@ -95,7 +95,7 @@ async function open3d(page, id) {
 }
 // waits for some text in a part of the page, checking on a timer (a page busy drawing 3D in
 // software barely gets to draw a frame, and the usual frame-by-frame check then times out)
-const seen = (page, sel, text = '', timeout = 30000) => page.waitForFunction(([s, t]) => [...document.querySelectorAll(s)].some((e) => e.offsetParent !== null && e.textContent.includes(t)), [sel, text], { timeout, polling: 250 });
+const seen = (page, sel, text = '', timeout = 30000) => page.waitForFunction(([s, t]) => [...document.querySelectorAll(s)].some((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && e.textContent.includes(t)), [sel, text], { timeout, polling: 250 });
 async function ask(page, text) {
   const before = await page.locator('#chat-log .bubble-assistant').count();
   await page.fill('#prompt-input', text);
@@ -1436,6 +1436,76 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await page.click('.x3d-act[data-act="ask"]');
   await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a', 'thigh bone');
   expect(/Explain the Femur.*Os femoris.*musculoskeletal system/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the femur by its real name');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Body 3D: eyes on both bodies (tap one for its card), and the girl has long hair and her own shape', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
+  const dir = process.env.SHOTS || '';
+  await open3d(page, 'body3d');
+  await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
+  await seen(page, '.x3d', 'parts showing', 60000);
+  await page.waitForTimeout(2500);
+  // the canvas, as pixels: the middle of the screen, and a ring around it
+  const pixels = async () => {
+    const box = await page.locator('.x3d-canvas').boundingBox(), png = await page.screenshot({ clip: { x: box.x + box.width / 2 - 20, y: box.y + box.height / 2 - 20, width: 40, height: 40 } });
+    return page.evaluate(async (b64) => {
+      const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const lum = (x, y) => { const d = g.getImageData(x, y, 1, 1).data; return 0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]; };
+      const mid = Math.round(img.width / 2), around = [];
+      for (let a = 0; a < 16; a++) around.push(lum(Math.round(mid + Math.cos(a / 16 * Math.PI * 2) * mid * 0.9), Math.round(mid + Math.sin(a / 16 * Math.PI * 2) * mid * 0.9)));
+      return { mid: lum(mid, mid), brightest: Math.max(...around) };
+    }, png.toString('base64'));
+  };
+  // fly to an eye from the front (search for the pupil, then close the card): the pupil sits dark in the white of the eye
+  const toEye = async () => {
+    if (await page.locator('.x3d-view').isHidden()) await page.click('.x3d-tools button:has-text("Look around")');
+    await page.click('[data-look="front"]'); await page.waitForTimeout(2500);
+    await page.fill('.x3d-search', 'pupil');
+    await seen(page, '.x3d-results button', 'Pupil');
+    await page.click('.x3d-results button >> nth=0');
+    await seen(page, '.x3d-sheet h3', 'Pupil');
+    await page.click('.x3d-sheet .x3d-sheet-x:not(.x3d-sheet-min)');
+    await page.waitForTimeout(2500);
+  };
+  for (const sex of ['boy', 'girl']) {
+    await page.click(`.x3d-sex [data-sex="${sex}"]`);
+    await page.waitForTimeout(2500);
+    if (dir) { await page.click('[data-look="front"]').catch(() => {}); await page.waitForTimeout(2000); await page.screenshot({ path: `${dir}/body-${sex}-front.png` }); }
+    await toEye();
+    if (dir) await page.screenshot({ path: `${dir}/body-${sex}-eye.png` });
+    const px = await pixels();
+    expect(px.mid < 60 && px.brightest > 150, `${sex}: a dark pupil in a light eye at the middle of the screen: ` + JSON.stringify(px));
+    // a tap on the eye opens its card; a tap again picks the exact part
+    const cb = await page.locator('.x3d-canvas').boundingBox();
+    await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 2);
+    await seen(page, '.x3d-sheet h3', 'Eye', 15000).catch(async () => { throw new Error(sex + ': the tap opened ' + await page.evaluate(() => { const h = document.querySelector('.x3d-sheet'); return h.hidden ? 'nothing' : h.querySelector('h3').textContent; })); });
+    const card = await page.locator('.x3d-sheet').textContent();
+    expect(/organ of sight/.test(card) && /2\.4 cm/.test(card), sex + ': the eye’s card says what it is');
+    await page.waitForTimeout(2500); // (the camera settles on the eye, above the card)
+    // a tap again where the eye is now (its name label sits on it) picks the exact part under the finger
+    const at = await page.evaluate(() => { const l = [...document.querySelectorAll('.x3d-label.on')].find((x) => !x.hidden && !x.dataset.part); const m = l && /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(l.style.transform); const r = l.parentElement.getBoundingClientRect(); return m ? { x: r.left + +m[1], y: r.top + +m[2] } : null; });
+    expect(at, 'the eye’s label shows where it is');
+    if (await page.locator('.x3d-sheet-min[aria-expanded="true"]:visible').count()) { await page.click('.x3d-sheet-min'); await page.waitForTimeout(500); } // (the card moves out of the way)
+    await page.mouse.click(at.x, at.y);
+    await seen(page, '.x3d-sheet h3', 'Pupil', 15000).catch(async () => { throw new Error(sex + ': a tap again opened ' + await page.evaluate(() => { const h = document.querySelector('.x3d-sheet'); return h.hidden ? 'nothing' : h.querySelector('h3').textContent; })); });
+    expect(/opening in the middle of the iris/.test(await page.locator('.x3d-sheet').textContent()), sex + ': a tap again picks the pupil');
+    await page.click('.x3d-sheet .x3d-sheet-x:not(.x3d-sheet-min)');
+  }
+  // the girl's long hair: a part of her skin view, with its own card (not on the boy)
+  await page.fill('.x3d-search', 'long hair');
+  await seen(page, '.x3d-results button', 'Long hair');
+  await page.click('.x3d-results button >> nth=0');
+  await seen(page, '.x3d-sheet h3', 'Long hair');
+  expect(/keratin/.test(await page.locator('.x3d-sheet').textContent()), 'the hair’s card');
+  if (dir) { await page.click('.x3d-sheet .x3d-sheet-x:not(.x3d-sheet-min)'); await page.click('[data-look="back"]').catch(() => {}); await page.waitForTimeout(2500); await page.screenshot({ path: `${dir}/body-girl-back.png` }); }
+  await page.click('.x3d-sex [data-sex="boy"]');
+  await page.waitForTimeout(1500);
+  await page.fill('.x3d-search', 'long hair');
+  await page.waitForTimeout(1500);
+  expect(await page.locator('.x3d-sheet:not([hidden]) h3:text-is("Long hair")').count() === 0, 'the boy has no long hair on show');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -3640,6 +3710,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 3000 });
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
+
 
 
 
