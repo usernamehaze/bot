@@ -2373,12 +2373,12 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   await ctx.close();
 });
 
-test('phone app: Home and the floating tab bar (Home, Chat, Labs, Cards, You)', async (b) => {
+test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, You)', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { tab: 'home', groqKey: 'gsk_test' } });
   await page.goto(APP);
   await page.waitForSelector('#home:not([hidden])');
   expect(/Hello, Test/.test(await page.locator('.home-hi h1').innerText()), 'Home greets you by name');
-  expect(await page.locator('.home-tiles .tile').count() === 6 && await page.locator('#tabbar .tab').count() === 5, 'six tiles and five tabs');
+  expect(await page.locator('.home-tiles .tile').count() === 6 && await page.locator('#tabbar .tab').count() === 6, 'six tiles and six tabs');
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'home' && !(await page.locator('#prompt-input').isVisible()), 'Home is open and the chat is out of the way');
   await page.click('.tab[data-tab="labs"]');
   await page.waitForSelector('.labs:not([hidden]) .labs-card');
