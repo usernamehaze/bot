@@ -125,14 +125,14 @@ test('sign-up shows on first open and saves the profile', async (b) => {
   await page.click('.auth-skip');
   await page.waitForSelector('.profile-overlay', { timeout: 5000 });
   // just four questions: name (nickname), age, level, gender
-  expect(await page.locator('.profile-card input, .profile-card select').count() === 3 && await page.locator('.profile-card [data-gender]').count() === 3, 'the profile should ask only name, age, level and gender');
+  expect(await page.locator('.profile-card input:not([type=hidden]), .profile-card select').count() === 3 && await page.locator('.profile-card [data-gender]').count() === 3, 'the profile should ask only name, age, level and gender');
   expect(!(await page.locator('.profile-card [data-role], .profile-card input[name=field]').count()), 'no student/professional or job questions');
   await page.fill('.profile-card input[name=name]', 'Hazel');
   await page.fill('.profile-card input[name=age]', '15');
   await page.selectOption('.profile-card select[name=grade]', 'Grade 10');
   await page.click('.profile-card .pf-go');
-  const pfErr = await page.locator('.pf-err').textContent();
-  expect(/gender/.test(pfErr), 'gender is asked for: ' + pfErr);
+  const pfErr = await page.locator('.profile-card .field-err:not([hidden])').textContent();
+  expect(/Prefer not to say/.test(pfErr), 'gender is asked for, under the gender buttons: ' + pfErr);
   await page.click('.profile-card [data-gender=female]');
   await page.click('.profile-card .pf-go');
   await page.waitForSelector('.profile-overlay', { state: 'detached' });
@@ -184,7 +184,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.fill('.auth-form input[name=age]', '16');
   await page.fill('.auth-form input[name=password]', 'short');
   await page.click('.auth-go');
-  expect(/8 characters/.test(await page.locator('.auth-err').textContent()), 'short password not caught');
+  expect(/at least 8 letters or numbers.*Add 3 more/.test(await page.locator('.auth-pw ~ .field-err, .auth-field .field-err:not([hidden])').last().textContent()), 'short password not caught under its field');
   await page.fill('.auth-form input[name=password]', 'secret-pass-1');
   await page.click('.auth-go');
   await page.waitForSelector('.profile-overlay', { timeout: 5000 });
@@ -203,8 +203,8 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.fill('.auth-form input[name=email]', email);
   await page.fill('.auth-form input[name=password]', 'wrong-password');
   await page.click('.auth-go');
-  await page.waitForSelector('.auth-err:not([hidden])');
-  expect(/don’t match/.test(await page.locator('.auth-err').textContent()), 'wrong password not caught');
+  await page.waitForSelector('.auth-form .field-err:not([hidden])');
+  expect(/don’t match/.test(await page.locator('.auth-form .field-err:not([hidden])').textContent()), 'wrong password not shown under the password');
   await page.fill('.auth-form input[name=password]', 'secret-pass-1');
   await page.click('.auth-go');
   await page.waitForSelector('.auth-page', { state: 'detached' });
@@ -482,7 +482,7 @@ test('study room: two students draw on the same board, live (code, link, undo on
     await A.page.evaluate(() => openRoomChooser());
     await A.page.fill('.room-join input', 'ZZZZZZ');
     await A.page.click('.room-join button');
-    await A.page.waitForSelector('.room-err:not([hidden]) >> text=No room with that code', { timeout: 5000 });
+    await A.page.waitForSelector('.room-err:not([hidden]) >> text=There’s no room with that code. Rooms last one day', { timeout: 5000 });
     expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
   } finally { await A.ctx.close(); await B.ctx.close(); }
 });
@@ -3621,6 +3621,68 @@ test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce
   ({ ctx, page } = await open(b, { lite: 'on', server: false, state: { groqKey: 'gsk_test' } }));
   g = await glass(page);
   expect(!/blur/.test(g.blur) && /none/.test(g.bg), 'Lite mode makes the chat box solid: ' + JSON.stringify(g));
+  await ctx.close();
+});
+
+test('forms check each field as you type: the reason shows under the field in plain words, from one map of messages', async (b) => {
+  const src = fs.readFileSync(path.join(ROOT, 'errors.js'), 'utf8');
+  expect(/window\.CassieErrors = \{ STRINGS, say, explain, form \}/.test(src), 'one map of messages and one helper (errors.js)');
+  // the app shows no raw error text: messages go through the helper
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const raw = app.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /(showErr|alert|textContent\s*=)\s*\(?\s*e\d?\.message|err\.textContent = e\.message/.test(l));
+  expect(!raw.length, 'raw error text shown at app.js:' + raw.map(([n]) => n).join(', '));
+  const taken = `taken${Date.now()}@example.com`;
+  let { ctx, page } = await open(b, { state: null });
+  await page.waitForSelector('.auth-page');
+  await page.evaluate(async ([srv, email]) => fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'secret-pass-1', age: 15 }) }), [SERVER, taken]);
+  const under = (name) => page.locator(`.auth-form [name=${name}]`).locator('xpath=ancestor::label[1]').locator('.field-err');
+  const shown = async (name) => ((await under(name).isVisible()) ? (await under(name).textContent()) : '');
+  // typing: after a short pause the reason shows under the field, and goes away once it's fixed
+  await page.type('.auth-form [name=email]', 'hazel@', { delay: 20 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.auth-form .field-err')].some((p) => !p.hidden && /@ and a dot/.test(p.textContent)), null, { timeout: 4000, polling: 100 });
+  expect((await page.locator('.auth-form [name=email]').getAttribute('aria-invalid')) === 'true', 'the email box is marked as needing a fix');
+  await page.type('.auth-form [name=email]', 'example.com', { delay: 10 });
+  expect(!(await shown('email')), 'the reason goes away as soon as the email is right');
+  await page.fill('.auth-form [name=age]', '150'); await page.locator('.auth-form [name=age]').blur();
+  expect(/Ages go from 2 to 100/.test(await shown('age')), 'a wrong age says why: ' + await shown('age'));
+  await page.fill('.auth-form [name=age]', '15');
+  await page.fill('.auth-form [name=password]', 'abc'); await page.locator('.auth-form [name=password]').blur();
+  expect(/at least 8 letters or numbers.*Add 5 more/.test(await shown('password')), 'a short password says how many more: ' + await shown('password'));
+  await page.fill('.auth-form [name=password]', 'secret-pass-1');
+  expect(!(await shown('password')), 'fixed password: no reason left');
+  // the server's answer lands under the right field, in the map's words
+  await page.fill('.auth-form [name=email]', taken);
+  await page.click('.auth-go');
+  await page.waitForFunction(() => [...document.querySelectorAll('.auth-form .field-err')].some((p) => !p.hidden && p.textContent), null, { timeout: 8000, polling: 100 });
+  expect(await shown('email') === 'That email is already signed up. Try signing in instead.', 'taken email: ' + await shown('email'));
+  // a whole empty form: every reason at once, the first box focused
+  await page.click('.auth-switch [data-to=signin]');
+  await page.fill('.auth-form [name=email]', ''); await page.fill('.auth-form [name=password]', '');
+  await page.click('.auth-go');
+  expect(/Type your email/.test(await shown('email')) && /Type your password/.test(await shown('password')), 'empty sign-in says what to type');
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.name) === 'email', 'the first box to fix gets the focus');
+  await ctx.close();
+  // the profile questions, Report a problem and a pasted API key
+  ({ ctx, page } = await open(b, { server: true, state: { groqKey: '' } }));
+  await page.evaluate(() => openProfile(false));
+  await page.fill('.profile-card [name=name]', ''); await page.click('.profile-card .pf-go');
+  expect(await page.locator('.profile-card .field-err:not([hidden])').first().textContent() === await page.evaluate(() => CassieErrors.say('need_name')), 'the profile says what’s missing under the name');
+  await page.fill('.profile-card [name=name]', 'Hazel');
+  expect(await page.locator('.profile-card label:has([name=name]) .field-err').isHidden(), 'typing the name clears its reason');
+  await page.evaluate(() => document.querySelector('.profile-overlay').remove());
+  await page.evaluate(() => openReport());
+  await page.type('.profile-card [name=text]', 'ab'); await page.locator('.profile-card [name=text]').blur();
+  expect(/few words/.test(await page.locator('.profile-card .field-err:not([hidden])').textContent()), 'Report a problem asks for a few words');
+  await page.evaluate(() => document.querySelector('.profile-overlay').remove());
+  await tapSettings(page);
+  await page.evaluate(() => { const d = document.querySelector('#groq-key-input').closest('details'); if (d) d.open = true; });
+  await page.type('#groq-key-input', 'abc123');
+  await page.waitForFunction(() => /start with “gsk_”/.test(document.querySelector('#groq-key-input').closest('label').querySelector('.field-err').textContent), null, { timeout: 4000, polling: 100 });
+  // every message: plain words, no codes, no dashes, ends like a sentence
+  const all = await page.evaluate(() => Object.entries(window.CassieErrors.STRINGS));
+  const bad = all.filter(([, t]) => !/[.!?”]$/.test(t) || /[—–]|\b(error|undefined|null|status|error code)\b|\b[45]\d\d\b/i.test(t));
+  expect(!bad.length, 'messages that aren’t plain: ' + bad.map(([k]) => k).join(', '));
+  expect(await page.evaluate(() => CassieErrors.explain(new Error('Failed to fetch')) === CassieErrors.say('network') && CassieErrors.explain(Object.assign(new Error('x'), { status: 500 })) === CassieErrors.say('unknown')), 'raw failures become plain words');
   await ctx.close();
 });
 

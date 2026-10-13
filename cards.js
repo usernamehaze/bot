@@ -159,13 +159,16 @@
         ${mistakes ? `<button type="button" class="fc-btn" data-mistakes="1">Turn my ${mistakes} quiz mistake${mistakes === 1 ? '' : 's'} into cards</button>` : ''}
         <details class="fc-new"><summary class="fc-btn">＋ Write a card</summary>
           <form class="fc-form"><input name="deck" placeholder="Deck (e.g. Biology)" maxlength="60" value="${esc((ds[0] && ds[0].name) || '')}">
-          <input name="f" placeholder="Front, a question or term" maxlength="300" required><input name="b" placeholder="Back, the answer" maxlength="600" required>
+          <label class="fc-field"><input name="f" placeholder="Front, a question or term" aria-label="Front of the card" maxlength="300"></label><label class="fc-field"><input name="b" placeholder="Back, the answer" aria-label="Back of the card" maxlength="600"></label>
           <button type="submit" class="fc-btn main">Add card</button></form></details>
       </div>
       <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days, so you remember them for the exam, not just tonight.</p>`;
     const form = body().querySelector('.fc-form');
+    const check = window.CassieErrors ? window.CassieErrors.form(form, { f: (v) => (!v.trim() ? 'card_front' : ''), b: (v) => (!v.trim() ? 'card_back' : '') }) : { check: () => true };
+    form.noValidate = true;
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      if (!check.check()) return;
       const fd = new FormData(form);
       const n = add([{ front: fd.get('f'), back: fd.get('b') }], fd.get('deck') || 'My cards', 'hand');
       renderHome(n ? 'Card added.' : 'That card is already in the deck.');

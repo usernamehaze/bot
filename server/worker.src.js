@@ -874,7 +874,7 @@ const STUDY_OPS = ['msg', 'share', 'deck', 'card', 'grade', 'quiz', 'ans', 'note
 async function room(request, env, url) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  if (!env.DB) return json({ error: 'Rooms need the server database.' }, 503, h);
+  if (!env.DB) return json({ error: 'Study rooms can’t open right now because Cassie’s server isn’t answering. Try again in a moment.', code: 'room_unavailable' }, 503, h);
   await ensureSchema(env.DB);
   const db = env.DB, now = Date.now();
   const okUid = (u) => /^[\w-]{8,64}$/.test(u);
@@ -886,7 +886,7 @@ async function room(request, env, url) {
     const code = clean(url.searchParams.get('code'), 6).toUpperCase(), uid = clean(url.searchParams.get('uid'), 64);
     const since = Math.max(0, parseInt(url.searchParams.get('since'), 10) || 0);
     if (!okCode(code) || !okUid(uid)) return json({ error: 'bad request' }, 400, h);
-    if (!(await live(code))) return json({ error: 'This room has ended.', gone: true }, 404, h);
+    if (!(await live(code))) return json({ error: 'That room has ended, so it can’t be joined. Rooms last one day. Ask for a new code.', code: 'room_gone', gone: true }, 404, h);
     // "I'm still here" at most every 10 s (a write only when it's due)
     await db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000).run();
     // the pointer: where you are and what you're doing (a cursor, a laser trail), replaced each time
@@ -913,13 +913,13 @@ async function room(request, env, url) {
       db.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
     ]);
     const mine = await db.prepare('SELECT COUNT(*) AS n FROM rooms WHERE owner = ? AND created > ?').bind(uid, old).first();
-    if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today. Use one of those, or try again tomorrow.' }, 429, h);
+    if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today, which is the most for one day. Use one of those, or make a new one tomorrow.', code: 'room_limit' }, 429, h);
     let code = '';
     for (let i = 0; i < 5 && !code; i++) {
       const c = Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => ROOM_LETTERS[x % ROOM_LETTERS.length]).join('');
       if (!(await db.prepare('SELECT 1 FROM rooms WHERE code = ?').bind(c).first())) code = c;
     }
-    if (!code) return json({ error: 'Try again.' }, 503, h);
+    if (!code) return json({ error: 'Study rooms can’t open right now because Cassie’s server isn’t answering. Try again in a moment.', code: 'room_unavailable' }, 503, h);
     await db.batch([
       db.prepare('INSERT INTO rooms (code, created, owner, title) VALUES (?, ?, ?, ?)').bind(code, now, uid, clean(b.title, 60) || `${name}’s study room`),
       db.prepare('INSERT INTO room_members (code, uid, name, seen) VALUES (?, ?, ?, ?)').bind(code, uid, name, now),
@@ -927,9 +927,9 @@ async function room(request, env, url) {
     return json({ code, title: clean(b.title, 60) || `${name}’s study room` }, 200, h);
   }
   const code = clean(b.code, 6).toUpperCase();
-  if (!okCode(code)) return json({ error: 'That code isn’t right. It’s 6 letters and numbers.' }, 400, h);
+  if (!okCode(code)) return json({ error: 'Room codes have 6 letters and numbers, like K7M2QX. Check the code your classmate shared.', code: 'room_code' }, 400, h);
   const r = await live(code);
-  if (!r) return json({ error: 'No room with that code (rooms last a day).', gone: true }, 404, h);
+  if (!r) return json({ error: 'There’s no room with that code. Rooms last one day, so it may have ended. Check the code, or ask for a new one.', code: 'room_none', gone: true }, 404, h);
 
   if (url.pathname === '/room/join') {
     const here = await members(code);
@@ -940,9 +940,9 @@ async function room(request, env, url) {
   if (url.pathname === '/room/ops') {
     const ops = Array.isArray(b.ops) ? b.ops.slice(0, 40) : [];
     if (!ops.length) return json({ ok: true }, 200, h);
-    if (!(await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) return json({ error: 'Join the room first.' }, 403, h);
+    if (!(await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) return json({ error: 'You aren’t in this room yet, so you can’t draw here. Join with the room code first.', code: 'room_join_first' }, 403, h);
     const count = await db.prepare('SELECT COUNT(*) AS n FROM room_ops WHERE code = ?').bind(code).first();
-    if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full. Save it and start a new room.', full: true }, 409, h);
+    if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full, so nothing more fits. Save it, then start a new room.', code: 'room_full_board', full: true }, 409, h);
     const rows = [];
     for (const op of ops) {
       if (!op || !(['add', 'del', 'clearmine'].includes(op.t) || STUDY_OPS.includes(op.t))) continue;
@@ -1078,20 +1078,20 @@ async function auth(request, env, path) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   await ensureSchema(env.DB);
-  const fail = (message, status = 400) => json({ error: message }, status, h);
+  const fail = (message, status = 400, code = '') => json(code ? { error: message, code } : { error: message }, status, h);
   const ok = (data) => json(data, 200, h);
   let body = {};
   if (request.method === 'POST') {
     const text = await request.text();
-    if (text.length > 300000) return fail('That’s too much to save.', 413);
-    try { body = JSON.parse(text || '{}'); } catch (e) { return fail('Bad request.'); }
+    if (text.length > 300000) return fail('That is too big to save. Make it shorter, then try again.', 413, 'too_big');
+    try { body = JSON.parse(text || '{}'); } catch (e) { return fail('Cassie didn’t understand that request. Close this and try again.', 400, 'bad_request'); }
   }
 
   if (path === '/auth/signup' || path === '/auth/login' || path === '/auth/google') {
-    if (!(await authAllowed(request, env))) return fail('Too many tries. Please wait an hour and try again.', 429);
+    if (!(await authAllowed(request, env))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
     const now = Date.now();
     if (path === '/auth/google') {
-      let g; try { g = await verifyGoogle(String(body.credential || ''), env); } catch (e) { return fail(e.message, 401); }
+      let g; try { g = await verifyGoogle(String(body.credential || ''), env); } catch (e) { return fail('Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.', 401, 'google_failed'); }
       let acc = await env.DB.prepare('SELECT * FROM accounts WHERE google = ?').bind(g.sub).first();
       if (!acc && g.verified && g.email) { // same email signed up with a password before → link them
         acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(g.email).first();
@@ -1113,34 +1113,34 @@ async function auth(request, env, path) {
     }
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
-    if (!EMAIL_RE.test(email)) return fail('Please type a valid email address.');
+    if (!EMAIL_RE.test(email)) return fail('That doesn’t look like an email yet. It needs an @ and a dot, like name@gmail.com.', 400, 'email_bad');
     if (path === '/auth/signup') {
-      if (!(+body.age >= 2 && +body.age <= 100)) return fail('Please enter your age.'); // every age is welcome
-      if (DISPOSABLE_RE.test(email)) return fail('Please use your real email address. Throwaway emails can’t make accounts.');
-      if (password.length < 8) return fail('Use at least 8 characters for your password.');
-      if (password.length > 200) return fail('That password is too long.');
+      if (!(+body.age >= 2 && +body.age <= 100)) return fail('Ages go from 2 to 100. Check the number you typed.', 400, 'age_range'); // every age is welcome
+      if (DISPOSABLE_RE.test(email)) return fail('That looks like a throwaway email, and those can’t make accounts. Use the email you check every day.', 400, 'email_disposable');
+      if (password.length < 8) return fail('Your password needs at least 8 letters or numbers so it’s hard to guess.', 400, 'password_short');
+      if (password.length > 200) return fail('That password is too long. Use one with fewer than 200 letters and numbers.', 400, 'password_long');
       const exists = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first();
-      if (exists) return fail('There’s already an account with that email. Sign in instead.', 409);
+      if (exists) return fail('That email is already signed up. Try signing in instead.', 409, 'email_taken');
       const salt = randomToken(16);
       const acc = { id: randomToken(12), email, name: String(body.name || '').trim().slice(0, 40), data: null };
       await env.DB.prepare('INSERT INTO accounts (id, email, pass, salt, name, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .bind(acc.id, email, await hashPassword(password, salt), salt, acc.name, now, now).run();
       return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: true });
     }
-    if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('Too many tries for this account. Please wait an hour and try again.', 429);
-    if (password.length > 200) return fail('That email and password don’t match. Check them and try again.', 401);
+    if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
+    if (password.length > 200) return fail('That email and password don’t match. Check both for typos, then try again.', 401, 'wrong_password');
     const acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(email).first();
     const tried = await hashPassword(password, (acc && acc.salt) || 'no-account-salt'); // always hash, so a wrong email takes as long as a wrong password
     const good = !!(acc && acc.pass && sameText(tried, acc.pass));
     if (!good) {
-      if (acc && !acc.pass && acc.google) return fail('This account uses Google. Tap “Continue with Google”.', 401);
-      return fail('That email and password don’t match. Check them and try again.', 401);
+      if (acc && !acc.pass && acc.google) return fail('This account was made with Google, so it has no password. Tap “Continue with Google” instead.', 401, 'google_account');
+      return fail('That email and password don’t match. Check both for typos, then try again.', 401, 'wrong_password');
     }
     return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
   }
 
   const acc = await accountFromRequest(request, env);
-  if (!acc) return fail('Please sign in again.', 401);
+  if (!acc) return fail('You’ve been signed out, so Cassie can’t save to your account. Sign in again to keep going.', 401, 'signed_out');
   if (path === '/auth/me') {
     await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
     let plan = { plan: 'free', until: 0 };
@@ -1149,7 +1149,7 @@ async function auth(request, env, path) {
   }
   if (path === '/auth/save') {
     const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;
-    if (!data || data.length > 250000) return fail('Nothing to save.');
+    if (!data || data.length > 250000) return fail('There was nothing to save yet. Change something first, then save.', 400, 'nothing_to_save');
     const name = String((body.data.profile && body.data.profile.name) || acc.name || '').slice(0, 40);
     await env.DB.prepare('UPDATE accounts SET data = ?, name = ?, updated = ? WHERE id = ?').bind(data, name, Date.now(), acc.id).run();
     return ok({ saved: true });
@@ -1162,7 +1162,7 @@ async function auth(request, env, path) {
     await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
     return ok({ deleted: true });
   }
-  return fail('Not found.', 404);
+  return fail('Cassie couldn’t find that. It may have been removed. Go back and try again.', 404, 'not_found');
 }
 
 /* ------------------------------------------------------------------ brain check
@@ -1290,7 +1290,7 @@ export default {
     if (request.cf && request.cf.colo) lastColo = request.cf.colo;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
-      if (tooFast(request, url.pathname)) return json({ error: 'Too many requests. Please wait a minute.' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
+      if (tooFast(request, url.pathname)) return json({ error: 'Cassie is very busy right now because lots of people are asking at once. Wait a minute, then try again.', code: 'busy' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
       if (url.pathname === '/admin/plan' && (request.method === 'GET' || request.method === 'POST')) return await adminPlan(request, env, url);
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
