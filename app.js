@@ -6207,7 +6207,6 @@ function openProfile(first) {
 /* ---------- Cassie accounts: sign in once, and your profile follows you ---------- */
 // Only with Cassie's server (config.js). What syncs: profile, settings and saved quiz
 // mistakes — never chats or API keys. Without an account everything stays on the device.
-const GOOGLE_CLIENT_ID = String(window.CASSIE_GOOGLE_CLIENT_ID || '').trim();
 // (var/function, not const: save() can run before this part of the file has loaded)
 function accountsOn() { return !!SERVER; }
 var AUTH_KEY = 'cassie.auth';
@@ -6260,9 +6259,14 @@ function applyAccountData(d) {
 }
 function signedIn(token, account, plan) {
   try { localStorage.setItem(AUTH_KEY, token); } catch (e) { /* ignore */ }
-  state.account = { email: account.email || '', name: account.name || '', google: !!account.google };
+  state.account = accountOf(account);
   if (plan) state.plan = plan;
   save();
+}
+// what the app keeps about the account: who, and which ways in it has (Google, Apple)
+function accountOf(a) {
+  const providers = Array.isArray(a.providers) ? a.providers.filter((p) => p === 'google' || p === 'apple') : a.google ? ['google'] : [];
+  return { email: a.email || '', name: a.name || '', providers, google: providers.includes('google') };
 }
 function signedOutLocally() {
   try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
@@ -6368,7 +6372,37 @@ function loadGoogle() {
   return new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = bad; document.head.appendChild(sc); });
 }
 
-function openAuth({ first = false, mode = 'signin' } = {}) {
+// Which sign-in buttons to show: the server says which providers have a client ID set (asked once a visit)
+var providersAsk = null;
+function authProviders() {
+  if (!accountsOn()) return Promise.resolve({});
+  if (!providersAsk) providersAsk = authCall('/auth/providers', null, 'GET').catch(() => { providersAsk = null; return {}; });
+  return providersAsk;
+}
+const PROVIDER_NAME = { google: 'Google', apple: 'Apple' };
+// Sign in with Apple: the whole page goes to Apple, Apple posts back to Cassie's server, and the
+// server sends the answer back here in the address (#cassie-auth=...). Not a popup: this site keeps
+// other windows apart (so the voice can use several cores), and a popup couldn't answer back.
+var APPLE_KEY = 'cassie.apple';
+function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function appleStart(apple) {
+  const n = b64url(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))));
+  try { sessionStorage.setItem(APPLE_KEY, n); } catch (e) { /* the answer is then ignored, and the button just works again */ }
+  const st = b64url(JSON.stringify({ o: location.origin, p: location.pathname, n }));
+  location.assign('https://appleid.apple.com/auth/authorize?' + new URLSearchParams({ client_id: apple.clientId, redirect_uri: apple.redirectURI, response_type: 'code id_token', scope: 'name email', response_mode: 'form_post', state: st, nonce: n }));
+}
+// back from Apple: read the answer, take it out of the address, and keep it only if this tab asked
+function appleReturned() {
+  const m = location.hash.match(/^#cassie-auth=(.+)$/);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  let msg = null, mine = '';
+  try { msg = JSON.parse(decodeURIComponent(m[1])); } catch (e) { return null; }
+  try { mine = sessionStorage.getItem(APPLE_KEY) || ''; sessionStorage.removeItem(APPLE_KEY); } catch (e) { /* none */ }
+  return msg && msg.type === 'cassie-auth' && msg.provider === 'apple' && mine && msg.nonce === mine ? msg : null;
+}
+
+function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   document.querySelector('.auth-page')?.remove();
   const page = document.createElement('div');
   page.className = 'auth-page';
@@ -6378,8 +6412,11 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
       <form class="auth-form" novalidate>
         <h1 class="auth-title"></h1>
         <p class="auth-sub"></p>
-        <div class="auth-google" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><div class="auth-gbtn"></div></div>
-        <div class="auth-or" ${GOOGLE_CLIENT_ID ? '' : 'hidden'}><span>or</span></div>
+        <div class="auth-providers">
+          <div class="auth-google" hidden><div class="auth-gbtn"></div></div>
+          <button type="button" class="auth-apple" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span>Sign in with Apple</span></button>
+        </div>
+        <div class="auth-or" hidden><span>or</span></div>
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
         <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
         <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
@@ -6414,9 +6451,21 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     password: (v) => (!v ? 'need_password' : signup() && v.length < 8 ? ['password_short', { n: 8 - v.length }] : ''),
   });
   // where the server's answer belongs: under a field, or above the button
-  const FIELD_OF = { email_taken: 'email', email_bad: 'email', email_disposable: 'email', no_account: 'email', wrong_password: 'password', password_short: 'password', password_long: 'password', age_range: 'age' };
+  const FIELD_OF = { email_taken: 'email', email_bad: 'email', email_disposable: 'email', no_account: 'email', wrong_password: 'password', password_short: 'password', password_long: 'password', age_range: 'age', link_wrong_password: 'password' };
+  // the providers the server reports (a button shows only for those), and a link waiting for its password
+  const prov = { google: null, apple: null };
+  let linking = null;
+  const showProviders = () => {
+    const g = !!prov.google && !linking, a = !!prov.apple && !linking;
+    page.querySelector('.auth-google').hidden = !g;
+    page.querySelector('.auth-apple').hidden = !a;
+    page.querySelector('.auth-or').hidden = !(g || a);
+  };
   const setMode = (m) => {
     mode = m;
+    linking = null;
+    f.email.readOnly = false;
+    showProviders();
     f.querySelector('.auth-title').textContent = m === 'signup' ? 'Create your Cassie account' : 'Sign in to Cassie';
     f.querySelector('.auth-sub').textContent = m === 'signup' ? 'Free. Keeps your profile and progress on every device.' : 'Welcome back! Pick up right where you left off.';
     go.textContent = m === 'signup' ? 'Create account' : 'Sign in';
@@ -6433,10 +6482,12 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
   f.querySelector('.auth-switch').addEventListener('click', (e) => {
     const to = e.target.closest('[data-to]')?.dataset.to;
     if (!to) return;
+    if (to === 'forget') { linkWith({ forget: true }); return; }
     if (to === 'forgot') {
       const fp = f.querySelector('.auth-forgot');
-      fp.textContent = GOOGLE_CLIENT_ID
-        ? 'If your account uses the same email as your Google account, tap “Continue with Google” to get back in. No password needed.'
+      const ways = [prov.google && '“Continue with Google”', prov.apple && '“Sign in with Apple”'].filter(Boolean);
+      fp.textContent = ways.length
+        ? `If your account’s email is also your ${prov.google && prov.apple ? 'Google or Apple' : prov.google ? 'Google' : 'Apple'} email, tap ${ways.join(' or ')} to get back in. When Cassie asks for the old password, tap “I don’t know this password”.`
         : 'Password resets aren’t available yet. Tap “Report a problem” in Settings with your email and we’ll help, or create a new account.';
       fp.hidden = false; return;
     }
@@ -6446,11 +6497,48 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
   f.addEventListener('input', () => showErr(''));
   const close = () => page.remove();
   const done = (res) => { close(); afterSignIn(res); };
+  // An answer from Google or Apple: signed in, or (the first time on an email account with a
+  // password) ask for that password once, so nobody else's Google or Apple can take the account.
+  const providerResult = (provider, res, extra) => {
+    if (res.code) { showErr(CassieErrors.STRINGS[res.code] ? CassieErrors.say(res.code) : CassieErrors.say(provider + '_failed')); return; }
+    if (!res.needsPassword) { done(res); return; }
+    const P = PROVIDER_NAME[provider];
+    setMode('signin');
+    linking = { provider, ...extra };
+    showProviders();
+    f.email.value = res.email || ''; f.email.readOnly = true;
+    f.password.value = '';
+    f.querySelector('.auth-title').textContent = `Link ${P} to your Cassie account`;
+    f.querySelector('.auth-sub').textContent = `There’s already a Cassie account for ${res.email || 'this email'}. Type its password once to link ${P}. After that, you can sign in with ${P} or your password.`;
+    go.textContent = 'Link and sign in';
+    f.querySelector('.auth-switch').innerHTML = '<button type="button" data-to="forget">I don’t know this password</button> · <button type="button" data-to="signin">Back</button>';
+    const fp = f.querySelector('.auth-forgot');
+    fp.textContent = `Don’t know it? Tap “I don’t know this password”. Cassie removes the old password and signs out other devices, then signs you in with ${P}.`;
+    fp.hidden = false;
+    setTimeout(() => f.password.focus(), 30);
+  };
+  const providerCall = async (provider, body) => {
+    try { providerResult(provider, await authCall('/auth/' + provider, body), { credential: body.credential, nonce: body.nonce, name: body.name }); }
+    catch (e) { showErr(CassieErrors.explain(e, provider + '_failed')); }
+  };
+  const linkWith = async (how) => {
+    const l = linking;
+    if (!l) return;
+    showErr('');
+    go.disabled = true; go.setAttribute('aria-busy', 'true');
+    try { done(await authCall('/auth/' + l.provider, { credential: l.credential, nonce: l.nonce, name: l.name, ...how })); }
+    catch (e) {
+      go.disabled = false; go.removeAttribute('aria-busy');
+      if (FIELD_OF[e.code] === 'password' && !how.forget) check.show('password', e.code);
+      else showErr(CassieErrors.explain(e, l.provider + '_failed'));
+    }
+  };
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = f.email.value.trim(), password = f.password.value, age = Math.round(+f.age.value);
     showErr('');
     if (!check.check()) return;
+    if (linking) { linkWith({ password }); return; }
     go.disabled = true; go.setAttribute('aria-busy', 'true');
     try { done(await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password })); }
     catch (e2) {
@@ -6466,19 +6554,25 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     if (!state.profile) openProfile(true);
   });
   if (!first) page.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  if (GOOGLE_CLIENT_ID) {
+  page.querySelector('.auth-apple').addEventListener('click', () => { if (prov.apple) appleStart(prov.apple); });
+  authProviders().then((p) => {
+    if (!page.isConnected) return;
+    prov.google = p.google && p.google.clientId ? p.google : null;
+    prov.apple = p.apple && p.apple.clientId && p.apple.redirectURI ? p.apple : null;
+    showProviders();
+    if (!prov.google) return;
     loadGoogle().then(() => {
       window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: async ({ credential }) => {
-          try { done(await authCall('/auth/google', { credential })); } catch (e) { showErr(CassieErrors.explain(e, 'google_failed')); }
-        },
+        client_id: prov.google.clientId,
+        use_fedcm_for_button: true, // Chrome signs in without a popup (popups can't answer back on this site)
+        callback: ({ credential }) => providerCall('google', { credential }),
       });
       const box = page.querySelector('.auth-gbtn');
       window.google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', width: Math.min(360, box.clientWidth || 320) });
-    }).catch(() => { page.querySelector('.auth-google').hidden = true; page.querySelector('.auth-or').hidden = true; });
-  }
+    }).catch(() => { prov.google = null; showProviders(); }); // Google didn't load: no broken button
+  });
   setMode(mode);
+  if (returned) providerResult('apple', returned, { credential: returned.credential, nonce: returned.nonce, name: returned.name });
   setTimeout(() => f.email.focus(), 60);
 }
 
@@ -6488,7 +6582,7 @@ function renderAccountRow() {
   row.hidden = !accountsOn();
   const a = state.account && authToken() ? state.account : null;
   row.innerHTML = a
-    ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${a.google ? ' (Google)' : ''}. Your profile and saved mistakes sync to your account. Plan: <b>${{ plus: 'Plus', pro: 'Pro' }[planName()] || 'Free'}</b>.</p>
+    ? `<p class="field-hint">Signed in as <b>${escapeHtml(a.email || a.name || 'you')}</b>${(a.providers || (a.google ? ['google'] : [])).length ? ` (${(a.providers || ['google']).map((p) => PROVIDER_NAME[p]).join(' and ')})` : ''}. Your profile and saved mistakes sync to your account. Plan: <b>${{ plus: 'Plus', pro: 'Pro' }[planName()] || 'Free'}</b>.</p>
        <div class="acct-btns"><button type="button" class="new-chat-btn" data-act="signout">Sign out</button><button type="button" class="new-chat-btn acct-del" data-act="delete">Delete account</button></div>`
     : `<p class="field-hint">Sign in to keep your profile and progress on every device.</p>
        <button type="button" class="new-chat-btn" data-act="signin">Sign in or create an account</button>`;
@@ -6725,13 +6819,17 @@ renderHistory();
 updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
+const appleBack = accountsOn() ? appleReturned() : null; // back from Sign in with Apple
 if (!state.profile) {
   // with Cassie's server: the sign-in page first (or "Continue without an account")
-  setTimeout(() => (accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
-} else track('open');
+  setTimeout(() => (appleBack ? openAuth({ first: true, mode: 'signup', returned: appleBack }) : accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
+} else {
+  track('open');
+  if (appleBack) setTimeout(() => openAuth({ mode: 'signin', returned: appleBack }), 300);
+}
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
-  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = { email: r.account.email, name: r.account.name, google: r.account.google }; if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
+  authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = accountOf(r.account); if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
 requestAnimationFrame(() => {

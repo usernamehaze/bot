@@ -84,6 +84,10 @@ const SCHEMA = [
   // daily puzzles: each student's first finish of each puzzle, each day (lower value = better)
   `CREATE TABLE IF NOT EXISTS scores (day TEXT, game TEXT, uid TEXT, name TEXT, value REAL, shown TEXT, ts INTEGER, PRIMARY KEY (day, game, uid))`,
   `CREATE INDEX IF NOT EXISTS room_ops_code ON room_ops(code, id)`,
+  // sign-in with Google or Apple: which provider and its id for the person (nothing else is kept)
+  `CREATE TABLE IF NOT EXISTS identities (provider TEXT, sub TEXT, account TEXT, PRIMARY KEY (provider, sub))`,
+  `CREATE INDEX IF NOT EXISTS identities_account ON identities(account)`,
+  `INSERT OR IGNORE INTO identities (provider, sub, account) SELECT 'google', google, id FROM accounts WHERE google IS NOT NULL`,
 ];
 let schemaReady = false;
 async function ensureSchema(db) {
@@ -1040,7 +1044,19 @@ function sameText(a, b) { // compare without leaking timing
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;
 }
-const publicAccount = (a) => ({ email: a.email || '', name: a.name || '', google: !!a.google, data: a.data ? JSON.parse(a.data) : null });
+// an account as the app sees it, with the ways it can sign in
+async function providersOf(env, id) {
+  const r = await env.DB.prepare('SELECT provider FROM identities WHERE account = ?').bind(id).all();
+  return ((r && r.results) || []).map((x) => x.provider).sort();
+}
+async function publicAccount(env, a) {
+  const providers = await providersOf(env, a.id);
+  return { email: a.email || '', name: a.name || '', password: !!a.pass, providers, google: providers.includes('google'), apple: providers.includes('apple'), data: a.data ? JSON.parse(a.data) : null };
+}
+const freePlan = { plan: 'free', until: 0 };
+async function signedInReply(env, acc, isNew) {
+  return { token: await newSession(env, acc.id), account: await publicAccount(env, acc), isNew, plan: await accountPlan(env, acc.id).catch(() => freePlan) };
+}
 
 async function newSession(env, accountId) {
   const token = randomToken();
@@ -1066,15 +1082,114 @@ async function authAllowed(request, env, key, max = 100) {
 // Throwaway inboxes, used to make account after account for more free questions.
 const DISPOSABLE_RE = /@(mailinator|guerrillamail|guerrillamailblock|sharklasers|grr|10minutemail|10minemail|tempmail|temp-mail|tempmailo|tempail|yopmail|trashmail|getnada|nada|dispostable|maildrop|throwawaymail|mintemail|mohmal|emailondeck|fakeinbox|spamgourmet|moakt|tmpmail|tmail|burnermail|inboxkitten|mailnesia|mytemp|emailfake|fakemail|discard|mailcatch|spambox|33mail)\./i;
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
-async function verifyGoogle(credential, env) {
-  if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in isn’t set up on this server yet.');
-  const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
-  const t = r.ok ? await r.json() : null;
-  if (!t || t.aud !== env.GOOGLE_CLIENT_ID || !/^(https:\/\/)?accounts\.google\.com$/.test(t.iss || '') || +t.exp * 1000 < Date.now() || !t.sub) throw new Error('Google sign-in didn’t work. Please try again.');
-  return { sub: String(t.sub), email: String(t.email || '').toLowerCase(), verified: t.email_verified === true || t.email_verified === 'true', name: String(t.given_name || t.name || '').slice(0, 40) };
+/* Sign in with Google and Apple. Their ID tokens are checked here against their own public keys
+   (signature, who it's for, who made it, when it ends); the client IDs come from the server's
+   variables GOOGLE_CLIENT_ID and APPLE_SERVICES_ID, and a provider without one is simply off. */
+const IDP = {
+  google: { keys: 'https://www.googleapis.com/oauth2/v3/certs', iss: ['https://accounts.google.com', 'accounts.google.com'], aud: (env) => env.GOOGLE_CLIENT_ID },
+  apple: { keys: 'https://appleid.apple.com/auth/keys', iss: ['https://appleid.apple.com'], aud: (env) => env.APPLE_SERVICES_ID },
+};
+const idpKeys = {}; // provider → { at, keys }, kept for an hour (fetched again when a new key id shows up)
+const b64urlBytes = (t) => { const s2 = String(t).replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(s2 + '='.repeat((4 - (s2.length % 4)) % 4)), (c) => c.charCodeAt(0)); };
+const b64urlJson = (t) => JSON.parse(new TextDecoder().decode(b64urlBytes(t)));
+async function providerKeys(name, fresh) {
+  const c = idpKeys[name];
+  if (!fresh && c && Date.now() - c.at < 3600e3) return c.keys;
+  const r = await fetch(IDP[name].keys, { signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error('no keys');
+  const keys = ((await r.json()).keys || []).filter((k) => k.kty === 'RSA');
+  idpKeys[name] = { at: Date.now(), keys };
+  return keys;
+}
+async function verifyIdToken(name, token, env, nonce) {
+  const aud = IDP[name].aud(env);
+  if (!aud) throw new Error('off');
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3 || token.length > 8000) throw new Error('shape');
+  let head, claims;
+  try { head = b64urlJson(parts[0]); claims = b64urlJson(parts[1]); } catch (e) { throw new Error('shape'); }
+  if (head.alg !== 'RS256' || !head.kid) throw new Error('alg');
+  let jwk = (await providerKeys(name)).find((k) => k.kid === head.kid);
+  if (!jwk) jwk = (await providerKeys(name, true)).find((k) => k.kid === head.kid); // keys rotate
+  if (!jwk) throw new Error('key');
+  const key = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlBytes(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1])))) throw new Error('signature');
+  const now = Date.now() / 1000, auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!auds.includes(aud) || !IDP[name].iss.includes(claims.iss) || !(+claims.exp > now - 60) || (claims.iat && +claims.iat > now + 300) || !claims.sub) throw new Error('claims');
+  if (nonce !== undefined && claims.nonce !== nonce) throw new Error('nonce');
+  return { sub: String(claims.sub).slice(0, 255), email: String(claims.email || '').toLowerCase().slice(0, 254), verified: claims.email_verified === true || claims.email_verified === 'true', name: String(claims.given_name || claims.name || '').slice(0, 40) };
+}
+// Who this Google or Apple person is in Cassie: their linked account, or the account with the same
+// email (only when the provider says the email is verified), or a new account. Linking to an account
+// that has a password asks for that password once, so someone who signed up with another person's
+// email can't keep a way in; a person who doesn't know it can let it go ({ forget: true }).
+async function signInWith(env, provider, id, { password = '', forget = false, name = '' } = {}) {
+  const now = Date.now();
+  const linked = await env.DB.prepare('SELECT a.* FROM identities i JOIN accounts a ON a.id = i.account WHERE i.provider = ? AND i.sub = ?').bind(provider, id.sub).first();
+  let acc = linked, isNew = false;
+  if (!acc && id.verified && id.email) {
+    const same = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(id.email).first();
+    if (same && same.pass && forget) {
+      await env.DB.batch([
+        env.DB.prepare('UPDATE accounts SET pass = NULL, salt = NULL, updated = ? WHERE id = ?').bind(now, same.id),
+        env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(same.id),
+      ]);
+      same.pass = null;
+    } else if (same && same.pass) {
+      if (!password) return { needsPassword: true, email: same.email };
+      const tried = await hashPassword(String(password).slice(0, 200), same.salt);
+      if (!sameText(tried, same.pass)) return { wrongPassword: true };
+    }
+    acc = same;
+  }
+  if (!acc) {
+    acc = { id: randomToken(12), email: id.verified && id.email ? id.email : null, name: String(name || id.name || '').slice(0, 40), data: null };
+    await env.DB.prepare('INSERT INTO accounts (id, email, name, created, updated) VALUES (?, ?, ?, ?, ?)').bind(acc.id, acc.email, acc.name, now, now).run();
+    isNew = true;
+  }
+  if (!linked) await env.DB.prepare('INSERT OR IGNORE INTO identities (provider, sub, account) VALUES (?, ?, ?)').bind(provider, id.sub, acc.id).run();
+  return signedInReply(env, acc, isNew || !acc.data);
+}
+// Apple sends its answer here (a form post from appleid.apple.com), and this page hands it to the
+// app: to the window that opened it, or back to the app's page when there's no such window. Only an
+// app address this server already allows can receive it, and the app checks its own one-time nonce.
+async function appleReturn(request, env) {
+  await ensureSchema(env.DB);
+  const form = await request.formData().catch(() => null);
+  const get = (k) => String((form && form.get(k)) || '');
+  let st = {};
+  try { st = b64urlJson(get('state')); } catch (e) { /* no state */ }
+  const origin = String(st.o || ''), back = /^\/[\w/.-]{0,80}$/.test(String(st.p || '')) ? st.p : '/app.html', nonce = String(st.n || '');
+  const okOrigin = !!cors(origin, env)['access-control-allow-origin'] && !origin.startsWith('chrome-extension:') && /^[\w-]{16,64}$/.test(nonce);
+  let out = { code: 'apple_failed' };
+  if (okOrigin) {
+    if (get('error')) out = { code: get('error') === 'user_cancelled_authorize' ? 'apple_cancelled' : 'apple_failed' };
+    else if (!(await authAllowed(request, env))) out = { code: 'too_many_tries' };
+    else {
+      try {
+        const id = await verifyIdToken('apple', get('id_token'), env, nonce);
+        let name = '';
+        try { const u = JSON.parse(get('user') || '{}'); name = String((u.name && u.name.firstName) || '').slice(0, 40); } catch (e) { /* no name */ }
+        const r = await signInWith(env, 'apple', id, { name });
+        out = r.needsPassword ? { needsPassword: true, email: r.email, credential: get('id_token'), name } : r;
+      } catch (e) { out = { code: 'apple_failed' }; }
+    }
+  }
+  const msg = JSON.stringify({ type: 'cassie-auth', provider: 'apple', nonce, ...out }).replace(/</g, '\\u003c');
+  const to = okOrigin ? JSON.stringify(origin).replace(/</g, '\\u003c') : 'null', home = okOrigin ? JSON.stringify(origin + back).replace(/</g, '\\u003c') : 'null';
+  const sn = randomToken(16);
+  const page = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cassie</title>
+<body style="font:17px -apple-system,system-ui,sans-serif;margin:0;padding:32px;background:#f2f0ec;color:#1b1b1d"><p>Going back to Cassie…</p>
+<script nonce="${sn}">(function () { var to = ${to}, home = ${home}, msg = ${msg};
+if (!to) { document.body.innerHTML = '<p>Apple sign-in didn’t finish, so you aren’t signed in yet. Close this window and try again.</p>'; return; }
+if (window.opener) { window.opener.postMessage(msg, to); setTimeout(function () { window.close(); }, 60); }
+else location.replace(home + '#cassie-auth=' + encodeURIComponent(JSON.stringify(msg))); })();</script></body></html>`;
+  return new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY',
+    'content-security-policy': `default-src 'none'; script-src 'nonce-${sn}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` } });
 }
 
 async function auth(request, env, path) {
+  if (path === '/auth/apple/callback' && request.method === 'POST') return appleReturn(request, env);
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   await ensureSchema(env.DB);
@@ -1087,30 +1202,27 @@ async function auth(request, env, path) {
     try { body = JSON.parse(text || '{}'); } catch (e) { return fail('Cassie didn’t understand that request. Close this and try again.', 400, 'bad_request'); }
   }
 
-  if (path === '/auth/signup' || path === '/auth/login' || path === '/auth/google') {
+  // which sign-in buttons the app shows: only providers with a client ID set on this server
+  if (path === '/auth/providers') {
+    return ok({
+      google: env.GOOGLE_CLIENT_ID ? { clientId: env.GOOGLE_CLIENT_ID } : null,
+      apple: env.APPLE_SERVICES_ID ? { clientId: env.APPLE_SERVICES_ID, redirectURI: new URL('/auth/apple/callback', request.url).href } : null,
+    });
+  }
+  if (path === '/auth/google' || path === '/auth/apple') {
+    if (!(await authAllowed(request, env))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
+    const provider = path.slice(6), code = provider + '_failed';
+    const words = provider === 'google' ? 'Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.' : 'Apple sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.';
+    let id;
+    try { id = await verifyIdToken(provider, String(body.credential || ''), env, provider === 'apple' ? String(body.nonce || '') : undefined); } catch (e) { return fail(words, 401, code); }
+    if (body.password && id.email && !(await authAllowed(request, env, 'authm:' + (await sha256(id.email)), 15))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
+    const r = await signInWith(env, provider, id, { password: String(body.password || ''), forget: body.forget === true, name: String(body.name || '') });
+    if (r.wrongPassword) return fail('That password doesn’t match this email’s Cassie account. Check it for typos, or tap “I don’t know this password”.', 401, 'link_wrong_password');
+    return ok(r);
+  }
+  if (path === '/auth/signup' || path === '/auth/login') {
     if (!(await authAllowed(request, env))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
     const now = Date.now();
-    if (path === '/auth/google') {
-      let g; try { g = await verifyGoogle(String(body.credential || ''), env); } catch (e) { return fail('Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.', 401, 'google_failed'); }
-      let acc = await env.DB.prepare('SELECT * FROM accounts WHERE google = ?').bind(g.sub).first();
-      if (!acc && g.verified && g.email) { // same email signed up with a password before → link them
-        acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(g.email).first();
-        if (acc) {
-          // Google has just proved this email is theirs. Whoever made the password account may not
-          // have been them (anyone can type any email), so that password and its sign-ins stop working.
-          await env.DB.batch([
-            env.DB.prepare('UPDATE accounts SET google = ?, pass = NULL, salt = NULL, updated = ? WHERE id = ?').bind(g.sub, now, acc.id),
-            env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id),
-          ]);
-          acc.google = g.sub; acc.pass = null;
-        }
-      }
-      if (!acc) {
-        acc = { id: randomToken(12), email: g.verified ? g.email : null, google: g.sub, name: g.name, data: null };
-        await env.DB.prepare('INSERT INTO accounts (id, email, google, name, created, updated) VALUES (?, ?, ?, ?, ?, ?)').bind(acc.id, acc.email, acc.google, acc.name, now, now).run();
-      }
-      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
-    }
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
     if (!EMAIL_RE.test(email)) return fail('That doesn’t look like an email yet. It needs an @ and a dot, like name@gmail.com.', 400, 'email_bad');
@@ -1125,7 +1237,7 @@ async function auth(request, env, path) {
       const acc = { id: randomToken(12), email, name: String(body.name || '').trim().slice(0, 40), data: null };
       await env.DB.prepare('INSERT INTO accounts (id, email, pass, salt, name, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .bind(acc.id, email, await hashPassword(password, salt), salt, acc.name, now, now).run();
-      return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: true });
+      return ok({ token: await newSession(env, acc.id), account: await publicAccount(env, acc), isNew: true, plan: freePlan });
     }
     if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
     if (password.length > 200) return fail('That email and password don’t match. Check both for typos, then try again.', 401, 'wrong_password');
@@ -1133,10 +1245,14 @@ async function auth(request, env, path) {
     const tried = await hashPassword(password, (acc && acc.salt) || 'no-account-salt'); // always hash, so a wrong email takes as long as a wrong password
     const good = !!(acc && acc.pass && sameText(tried, acc.pass));
     if (!good) {
-      if (acc && !acc.pass && acc.google) return fail('This account was made with Google, so it has no password. Tap “Continue with Google” instead.', 401, 'google_account');
+      if (acc && !acc.pass) { // made with Google or Apple: point to the right button
+        const ways = await providersOf(env, acc.id);
+        if (ways.includes('google')) return fail('This account was made with Google, so it has no password. Tap “Continue with Google” instead.', 401, 'google_account');
+        if (ways.includes('apple')) return fail('This account was made with Apple, so it has no password. Tap “Sign in with Apple” instead.', 401, 'apple_account');
+      }
       return fail('That email and password don’t match. Check both for typos, then try again.', 401, 'wrong_password');
     }
-    return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
+    return ok(await signedInReply(env, acc, !acc.data));
   }
 
   const acc = await accountFromRequest(request, env);
@@ -1145,7 +1261,7 @@ async function auth(request, env, path) {
     await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
     let plan = { plan: 'free', until: 0 };
     try { plan = await accountPlan(env, acc.id); } catch (e) { /* free */ }
-    return ok({ account: publicAccount(acc), plan });
+    return ok({ account: await publicAccount(env, acc), plan });
   }
   if (path === '/auth/save') {
     const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;
@@ -1159,7 +1275,7 @@ async function auth(request, env, path) {
     return ok({ signedOut: true });
   }
   if (path === '/auth/delete') { // "Delete my account" — removes everything about it
-    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
     return ok({ deleted: true });
   }
   return fail('Cassie couldn’t find that. It may have been removed. Go back and try again.', 404, 'not_found');
@@ -1272,7 +1388,7 @@ async function stats(request, env) {
     all(`SELECT COALESCE(NULLIF(feature,''),'chat') AS name, SUM(kind = 'up') AS up, SUM(kind = 'down') AS down FROM feedback WHERE day >= ? AND kind IN ('up','down') GROUP BY name ORDER BY up + down DESC LIMIT 20`, since),
     all(`SELECT ts, kind, feature, text, ctx FROM feedback WHERE day >= ? AND text != '' ORDER BY ts DESC LIMIT 60`, since),
     all(`SELECT src, SUM(n) AS n FROM chats WHERE day >= ? GROUP BY src ORDER BY n DESC`, since),
-    one(`SELECT COUNT(*) AS n, SUM(google IS NOT NULL) AS google FROM accounts`),
+    one(`SELECT (SELECT COUNT(*) FROM accounts) AS n, (SELECT COUNT(DISTINCT account) FROM identities WHERE provider = 'google') AS google, (SELECT COUNT(DISTINCT account) FROM identities WHERE provider = 'apple') AS apple`),
   ]);
   const [healthRow, problems] = await Promise.all([
     one(`SELECT data FROM health WHERE k = 'last'`),

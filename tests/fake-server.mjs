@@ -23,16 +23,30 @@ export async function startFakeServer(port = 4630) {
       return out;
     },
   };
+  // a test signing key for "Google" and one for "Apple" (their real keys are never used in tests)
+  const idp = {};
+  for (const name of ['google', 'apple']) {
+    const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+    const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+    idp[name] = { kid: 'test-' + name, priv: pair.privateKey, pub: { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', use: 'sig', kid: 'test-' + name } };
+  }
+  const b64u = (buf) => Buffer.from(buf).toString('base64url');
+  // an ID token like Google's or Apple's: { provider, sub, email, verified, nonce, aud, iss, exp, badSig }
+  async function idToken(o) {
+    const p = idp[o.provider === 'apple' ? 'apple' : 'google'], now = Math.floor(Date.now() / 1000);
+    const claims = { iss: o.iss || (o.provider === 'apple' ? 'https://appleid.apple.com' : 'https://accounts.google.com'), aud: o.aud || (o.provider === 'apple' ? 'test.apple.services' : 'test-client-id'),
+      sub: o.sub || 'sub1', email: o.email, email_verified: o.verified === false ? 'false' : 'true', iat: now, exp: o.exp || now + 600, ...(o.nonce ? { nonce: o.nonce } : {}), ...(o.provider === 'apple' ? {} : { given_name: 'Gia' }) };
+    const head = b64u(JSON.stringify({ alg: 'RS256', kid: p.kid, typ: 'JWT' })), body = b64u(JSON.stringify(claims));
+    const sig = b64u(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', p.priv, Buffer.from(head + '.' + body)));
+    return `${head}.${body}.${o.badSig ? sig.slice(0, -6) + 'AAAAAA' : sig}`;
+  }
   const mode = { groq: 'ok', ai: 'ok', aiVision: 'ok', claude: 'off', gemini: 'off', groqVision: 'ok', calls: [], claudeCalls: [], geminiCalls: [] };
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
-    if (u.startsWith('https://oauth2.googleapis.com/tokeninfo')) { // fake Google: credential "good-<sub>-<email>"
-      const cred = decodeURIComponent(u.split('id_token=')[1] || '');
-      const m = /^good-(\w+)-(.+)$/.exec(cred);
-      if (!m) return Response.json({ error: 'invalid_token' }, { status: 400 });
-      return Response.json({ aud: 'test-client-id', iss: 'https://accounts.google.com', exp: String(Math.floor(Date.now() / 1000) + 600), sub: m[1], email: m[2], email_verified: 'true', given_name: 'Gia' });
-    }
+    // fake Google and Apple public keys: ID tokens are made by POST /__idtoken with the test keys below
+    if (u === 'https://www.googleapis.com/oauth2/v3/certs') return Response.json({ keys: [idp.google.pub] });
+    if (u === 'https://appleid.apple.com/auth/keys') return Response.json({ keys: [idp.apple.pub] });
     if (u.startsWith('https://api.anthropic.com/')) { // fake Claude: mode.claude 'ok' | 'down' | 'refuse'
       if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-haiku' }, { id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
       const body = JSON.parse(init.body);
@@ -105,7 +119,7 @@ export async function startFakeServer(port = 4630) {
     return Response.json({ choices: [{ message: { role: 'assistant', content: answer } }] });
   };
   const env = {
-    DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, GOOGLE_CLIENT_ID: 'test-client-id',
+    DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, get GOOGLE_CLIENT_ID() { return mode.noGoogle ? undefined : 'test-client-id'; }, get APPLE_SERVICES_ID() { return mode.noApple ? undefined : 'test.apple.services'; },
     get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 10)
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
@@ -129,6 +143,10 @@ export async function startFakeServer(port = 4630) {
       if (req.method === 'POST') Object.assign(mode, JSON.parse(body.toString() || '{}'));
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
       return res.end(JSON.stringify({ ...mode, calls: mode.calls.length, lastCalls: mode.calls.slice(-6).map((c) => c.model), claudeCalls: mode.claudeCalls.slice(-5), claudeCount: mode.claudeCalls.length, geminiCalls: mode.geminiCalls.slice(-6) }));
+    }
+    if (req.url === '/__idtoken' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
+      return res.end(await idToken(JSON.parse(body.toString() || '{}')));
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }

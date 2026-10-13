@@ -80,11 +80,26 @@ To add **Continue with Google**:
      `.apps.googleusercontent.com`.
 4. In this Worker → **Settings** → **Variables and Secrets** → add a **Text**
    variable named `GOOGLE_CLIENT_ID` with that Client ID.
-5. Send the Client ID to be put in `config.js`, or paste it there yourself.
+The app asks the Worker which sign-in buttons to show (`/auth/providers`), so
+nothing goes in `config.js`. With no `GOOGLE_CLIENT_ID`, the Google button stays hidden.
 
-There's no "reset password" email yet. People who forget their password can
-use Continue with Google with the same email, which signs them into the same
-account.
+To add **Sign in with Apple** (the button stays hidden until this is set):
+
+1. On **developer.apple.com** → **Certificates, Identifiers & Profiles** →
+   **Identifiers**: make an **App ID** with **Sign in with Apple** turned on.
+2. Make a **Services ID** (for example `dev.askcassie.signin`), turn on
+   **Sign in with Apple**, click **Configure**, pick that App ID as the
+   **Primary App ID**, and add:
+   - **Domains and Subdomains**: `cassie.failanzahazel.workers.dev` and `askcassie.pages.dev`
+   - **Return URLs**: `https://cassie.failanzahazel.workers.dev/auth/apple/callback`
+3. In this Worker → **Settings** → **Variables and Secrets** → add a **Text**
+   variable named `APPLE_SERVICES_ID` with that Services ID. No key file is needed.
+
+One account can sign in with email, Google and Apple. The first time someone
+uses Google or Apple with the email of an account that has a password, Cassie
+asks for that password once. If they don't know it, Cassie removes the old
+password and signs out other devices, which is also how a forgotten password
+is recovered for now (there's no "reset password" email yet).
 
 ## Make pictures reliable: add your Gemini key (free, recommended)
 
