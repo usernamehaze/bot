@@ -106,6 +106,18 @@
     font: 600 16px/1.25 system-ui, sans-serif; overflow: auto; white-space: pre-wrap; }
   .csk-toast { position: absolute; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(27,27,29,.9); color: #fff; padding: 8px 14px; border-radius: 99px;
     font-size: 13px; pointer-events: none; transition: opacity .3s; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+  /* Touch screens: every tool is 44px to touch; colour and size dots sit inside 44px buttons. */
+  @media (pointer: coarse) {
+    .csk-tools, .csk-head, .csk-ask { gap: 4px !important; }
+    .csk-btn { height: 44px !important; min-width: 44px !important; }
+    .csk-sw { width: 44px; height: 44px; padding: 11px; border: 0; background-clip: content-box; box-shadow: inset 0 0 0 9px #f6f5f2, inset 0 0 0 11px rgba(127,127,127,.35); }
+    .csk-dark .csk-sw { box-shadow: inset 0 0 0 9px #1d1d20, inset 0 0 0 11px rgba(127,127,127,.35); }
+    .csk-sw.on { outline: none; box-shadow: inset 0 0 0 7px #f6f5f2, inset 0 0 0 9px currentColor; padding: 9px; }
+    .csk-dark .csk-sw.on { box-shadow: inset 0 0 0 7px #1d1d20, inset 0 0 0 9px currentColor; }
+    .csk-size { width: 44px; height: 44px; }
+    .csk-ask input { min-height: 44px; }
+    .csk-ask .csk-btn { height: 44px; }
+  }
   /* Phones: keep the header below the status bar / notch (clock, signal, battery)
      and the board above the home indicator, so × and every tool can be tapped. */
   @media (max-width: 700px), (max-height: 500px) {

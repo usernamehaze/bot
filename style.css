@@ -1968,3 +1968,32 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 
 /* the 3D explorer's buttons and chips: 44px to touch */
 @media (pointer: coarse) { .x3d-btn, .x3d-chip, .x3d .listen-btn, .x3d-switch button { min-height: 44px; } .x3d-close { width: 44px; height: 44px; } }
+
+/* The Plus sheet: thick glass, what you tapped, why, what Plus adds, two clear buttons */
+.plus-card { padding: var(--sp-5); text-align: left; }
+.plus-kicker { display: inline-block; margin-bottom: var(--sp-2); padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--lg-line); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.plus-card h3 { font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--sp-3); }
+.plus-card p { opacity: 1; color: var(--text); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.plus-why { padding: var(--sp-3); border-radius: var(--r-md); background: var(--lg-pick); margin: 0 0 var(--sp-3) !important; font-weight: 600; }
+.plus-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm); line-height: 1.4; }
+.plus-list li { display: flex; gap: var(--sp-2); align-items: flex-start; }
+.plus-list li::before { content: "✓"; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; margin-top: 1px; }
+.plus-foot { margin-bottom: var(--sp-4) !important; }
+.plus-actions > * { font-size: var(--fs-md); }
+.plus-actions .plus-ok, .plus-actions .plus-in { background: var(--lg-fill); border-color: var(--lg-line); }
+
+/* Offline: a glass note across the top */
+.offline-note { position: fixed; z-index: 2147483000; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); box-sizing: border-box; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
+.offline-note[hidden] { display: none; }
+
+/* Flashcards on touch screens: 44px to touch */
+@media (pointer: coarse) {
+  .fc-x, .fc-back { width: var(--tap); height: var(--tap); }
+  .fc-btn, .fc-field input, .fc-form input, .fc-mini { min-height: var(--tap); }
+  summary.fc-btn { display: inline-flex; align-items: center; }
+}
+/* An empty chat on a computer shows Cassie's welcome with its next steps (the phone app has its own
+   Home screen; the rule that hides that one must not hide this one) */
+html:not(.native) #chat-log > .home { display: flex; }
+/* a study room problem in plain monochrome, like every other error */
+.room-err { color: var(--text) !important; font-weight: 600; }

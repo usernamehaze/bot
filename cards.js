@@ -154,7 +154,7 @@
             <button type="button" data-csv="${esc(d.name)}">Download CSV</button>
             <button type="button" data-del="${esc(d.name)}" class="danger">Delete deck</button>
           </div></details></div></li>`).join('')}</ul>`
-        : '<p class="fc-empty">No flashcards yet. Tap <b>＋ Flashcards</b> under any of Cassie’s answers and she’ll make cards from it, or turn your quiz mistakes into cards below.</p>'}
+        : '<div class="fc-empty"></div>'}
       <div class="fc-tools">
         ${mistakes ? `<button type="button" class="fc-btn" data-mistakes="1">Turn my ${mistakes} quiz mistake${mistakes === 1 ? '' : 's'} into cards</button>` : ''}
         <details class="fc-new"><summary class="fc-btn">＋ Write a card</summary>
@@ -163,6 +163,14 @@
           <button type="submit" class="fc-btn main">Add card</button></form></details>
       </div>
       <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days, so you remember them for the exam, not just tonight.</p>`;
+    // no cards yet: why, and one next step (write the first one here)
+    const none = body().querySelector('.fc-empty');
+    if (none && window.CassieErrors) none.replaceWith(window.CassieErrors.empty({
+      title: 'No flashcards yet',
+      text: 'Tap ＋ Flashcards under any of Cassie’s answers and she’ll make cards from it. Or write your own.',
+      action: 'Write a card',
+      onAction: () => { const d = body().querySelector('.fc-new'); d.open = true; d.querySelector('[name=f]').focus(); },
+    }));
     const form = body().querySelector('.fc-form');
     const check = window.CassieErrors ? window.CassieErrors.form(form, { f: (v) => (!v.trim() ? 'card_front' : ''), b: (v) => (!v.trim() ? 'card_back' : '') }) : { check: () => true };
     form.noValidate = true;

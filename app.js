@@ -1333,6 +1333,12 @@ function scrollToBottom() {
   chatLog.scrollTop = chatLog.scrollHeight;
   if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
+// Offline: a calm note at the top that says what still works (it goes away when the internet is back)
+const offlineNote = document.getElementById('offline-note');
+function showOnline() { if (offlineNote) offlineNote.hidden = navigator.onLine !== false; }
+window.addEventListener('online', showOnline);
+window.addEventListener('offline', showOnline);
+showOnline();
 // While you're at the latest message, stay there when something is added under it a moment later
 // (the Listen row, the follow-up chips). Scroll up to read, and the chat stays where you are.
 let chatPinned = true;
@@ -6288,9 +6294,15 @@ function plusSheet(what, why) {
   const w = document.createElement('div');
   w.className = 'plus-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'plus-sheet-h');
   w.innerHTML = `<div class="plus-card">
-    <h3 id="plus-sheet-h">${escapeHtml(what)} is a Plus extra</h3>
-    ${why ? `<p><b>${escapeHtml(why)}</b></p>` : ''}
-    <p>Plus and Pro open all the 3D any time (the body, the cells, the solar system, the globe and Real 3D in Labs), the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
+    <span class="plus-kicker">Plus</span>
+    <h3 id="plus-sheet-h">${escapeHtml(what)} comes with Plus</h3>
+    ${why ? `<p class="plus-why">${escapeHtml(why)}</p>` : ''}
+    <ul class="plus-list">
+      <li>All the 3D, any time: the body, the cells, the solar system and the globe</li>
+      <li>Real 3D in every lab, and the Museum quiz</li>
+      <li>Save or print your notes, maps and boards</li>
+    </ul>
+    <p class="plus-foot">Paid plans are almost here. Everything else in Cassie stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
@@ -6300,7 +6312,7 @@ function plusSheet(what, why) {
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   // signed in: the plan may have just been given — check, and say so
-  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('p').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelector('.plus-go').remove(); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelector('.plus-go').remove(); w.querySelector('.plus-ok').textContent = 'OK'; } });
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
     else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
