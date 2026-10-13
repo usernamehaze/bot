@@ -3698,7 +3698,7 @@ test('chat: when something fails Cassie says what happened, why and what to do, 
   // every way the chat words an error goes through the one helper
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   expect(/function errorText\(err, fallback = 'unknown'\) \{ return CassieErrors\.explain\(err, fallback\); \}/.test(app), 'chat errors go through CassieErrors.explain');
-  expect(!/friendlyError\(detail|\$\{CV\.error\(\)|data\.error\.message\) \|\|/.test(app), 'no raw service text is shown');
+  expect(!/detail\.slice\(0, 140\)|\$\{CV\.error\(\)|data\.error\.message\) \|\||\(\$\{m\.slice\(0, 120\)\}\)/.test(app), 'no raw service text is shown (Groq, Gemini, the voice download, the picture makers)');
   // empty lists: the side menu with no chats, the memory panel, nothing to review
   await page.evaluate(() => { state.chats = []; renderChatList(); openSidebar(); });
   const es = page.locator('#chat-list .empty-state');
