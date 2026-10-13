@@ -63,20 +63,20 @@
     } catch (e) { return []; }
   }
   async function fromText(text, deck) {
-    const prompt = 'Make flashcards for studying from the text below — the important facts, terms, definitions, '
+    const prompt = 'Make flashcards for studying from the text below, the important facts, terms, definitions, '
       + 'steps and formulas a student must remember. Return ONLY a JSON array, no other words: '
       + '[{"front": "a short question or term", "back": "the answer, at most 30 words"}]. '
       + 'Make 6 to 15 cards. Plain text only: no markdown, no LaTeX. Use only what the text says.\n\nTEXT:\n'
       + String(text || '').slice(0, 9000);
     const list = parseCards(await ctx.ask(prompt));
-    if (!list.length) throw new Error('Cassie couldn’t make cards from that — try a longer answer.');
+    if (!list.length) throw new Error('Cassie couldn’t make cards from that. Try a longer answer.');
     const n = add(list, deck, 'cassie');
     if (ctx.track) ctx.track('feature', 'flashcards:make');
     return { made: list.length, added: n, deck: clean(deck, 60) || 'My cards' };
   }
   function fromMistakes() {
     const m = (ctx.state().mistakes || []).filter((x) => x && x.q);
-    const n = add(m.map((x) => ({ front: x.q, back: x.a || 'Look it up in the quiz — ask Cassie to explain it.' })), 'My quiz mistakes', 'mistakes');
+    const n = add(m.map((x) => ({ front: x.q, back: x.a || 'Look it up in the quiz. Ask Cassie to explain it.' })), 'My quiz mistakes', 'mistakes');
     if (ctx.track) ctx.track('feature', 'flashcards:mistakes');
     return n;
   }
@@ -154,15 +154,15 @@
             <button type="button" data-csv="${esc(d.name)}">Download CSV</button>
             <button type="button" data-del="${esc(d.name)}" class="danger">Delete deck</button>
           </div></details></div></li>`).join('')}</ul>`
-        : '<p class="fc-empty">No flashcards yet. Tap <b>＋ Flashcards</b> under any of Cassie’s answers and she’ll make cards from it — or turn your quiz mistakes into cards below.</p>'}
+        : '<p class="fc-empty">No flashcards yet. Tap <b>＋ Flashcards</b> under any of Cassie’s answers and she’ll make cards from it, or turn your quiz mistakes into cards below.</p>'}
       <div class="fc-tools">
         ${mistakes ? `<button type="button" class="fc-btn" data-mistakes="1">Turn my ${mistakes} quiz mistake${mistakes === 1 ? '' : 's'} into cards</button>` : ''}
         <details class="fc-new"><summary class="fc-btn">＋ Write a card</summary>
           <form class="fc-form"><input name="deck" placeholder="Deck (e.g. Biology)" maxlength="60" value="${esc((ds[0] && ds[0].name) || '')}">
-          <input name="f" placeholder="Front — a question or term" maxlength="300" required><input name="b" placeholder="Back — the answer" maxlength="600" required>
+          <input name="f" placeholder="Front, a question or term" maxlength="300" required><input name="b" placeholder="Back, the answer" maxlength="600" required>
           <button type="submit" class="fc-btn main">Add card</button></form></details>
       </div>
-      <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days — so you remember them for the exam, not just tonight.</p>`;
+      <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days, so you remember them for the exam, not just tonight.</p>`;
     const form = body().querySelector('.fc-form');
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -225,7 +225,7 @@
     if (session.i >= session.list.length) {
       const left = dueOf(session.deck).length;
       body().innerHTML = `<div class="fc-done"><div class="fc-big">🎉</div><h3>Done! ${session.done} card${session.done === 1 ? '' : 's'} reviewed.</h3>
-        <p>${left ? `${left} more ${left === 1 ? 'is' : 'are'} due — keep going, or come back later.` : 'Nothing else is due in this deck. Cassie will bring the cards back right when you’re about to forget them.'}</p>
+        <p>${left ? `${left} more ${left === 1 ? 'is' : 'are'} due. Keep going, or come back later.` : 'Nothing else is due in this deck. Cassie will bring the cards back right when you’re about to forget them.'}</p>
         <div class="fc-row"><button type="button" class="fc-btn" data-back-home="1">All decks</button>${left ? `<button type="button" class="fc-btn main" data-study="${esc(session.deck)}">Keep going</button>` : ''}</div></div>`;
       body().querySelector('[data-back-home]').addEventListener('click', () => { session = null; renderHome(); });
       session = { ...session, list: [], card: null };

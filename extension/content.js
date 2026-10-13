@@ -111,7 +111,7 @@
     .body .frac { display: inline-flex; flex-direction: column; text-align: center; vertical-align: -0.55em; margin: 0 2px; font-size: .95em; }
     .body .frac-n { border-bottom: 1px solid currentColor; padding: 0 4px; line-height: 1.25; }
     .body .frac-d { padding: 0 4px; line-height: 1.25; }
-    /* dark theme — applied when the page it sits on has a dark background */
+    /* dark theme: applied when the page it sits on has a dark background */
     .popover.dark { background: #1e1f26; color: #e9e9ef; border-color: #3a3b44; }
     .popover.dark .header { background: #0f0f14; }
     .popover.dark .body.muted { color: #a0a3b8; }
@@ -142,7 +142,7 @@
       background: rgba(28,28,36,.42); cursor: grab; touch-action: none;
       display: flex; align-items: center; justify-content: center; transition: background .15s, width .15s;
     }
-    .dock-handle::before { content: ""; width: 3px; height: 22px; border-radius: 2px; background: rgba(255,255,255,.75); }
+    .dock-handle:before { content: ""; width: 3px; height: 22px; border-radius: 2px; background: rgba(255,255,255,.75); }
     .dock-handle:hover { background: rgba(28,28,36,.8); width: 16px; }
     .dock.dragging .dock-handle { cursor: grabbing; background: rgba(28,28,36,.9); }
     .dock-tray {
@@ -159,17 +159,17 @@
     .fab svg { width: 20px; height: 20px; fill: #fff; }
     .annotate-fab svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 2.4; }
     .dock-grip { width: 26px; height: 10px; cursor: grab; touch-action: none; display: flex; align-items: center; justify-content: center; }
-    .dock-grip::before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.45); }
-    .dock-grip:hover::before { background: rgba(255,255,255,.8); }
+    .dock-grip:before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.45); }
+    .dock-grip:hover:before { background: rgba(255,255,255,.8); }
     /* the highlight switch: ON = highlighting shows Ask Cassie, OFF = highlight and copy like normal */
     .dock-hl { width: 40px; border: none; border-radius: 12px; background: #34343e; color: #fff; cursor: pointer; padding: 6px 0 5px;
       display: flex; flex-direction: column; align-items: center; gap: 3px; font: 700 9px/1 system-ui, sans-serif; letter-spacing: .04em; transition: background .15s; }
     .dock-hl:hover { background: #4a4a56; }
     .dock-hl svg { width: 19px; height: 19px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .dock-hl i { display: block; width: 24px; height: 12px; border-radius: 6px; background: rgba(255,255,255,.25); position: relative; transition: background .15s; }
-    .dock-hl i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .dock-hl i:after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: #fff; transition: transform .15s; }
     .dock-hl[aria-pressed="true"] i { background: #4cc38a; }
-    .dock-hl[aria-pressed="true"] i::after { transform: translateX(12px); }
+    .dock-hl[aria-pressed="true"] i:after { transform: translateX(12px); }
     .dock-hl[aria-pressed="false"] svg { opacity: .55; }
     .dock-hide { background: none; border: none; color: rgba(255,255,255,.6); font: 600 10px/1.2 system-ui, sans-serif; cursor: pointer; padding: 2px 0 0; text-align: center; }
     .dock-hide:hover { color: #fff; }
@@ -255,14 +255,14 @@
       transition: opacity .35s ease, transform .35s ease;
     }
     .board-steps li.show { opacity: 1; transform: none; }
-    .board-steps li::before {
+    .board-steps li:before {
       counter-increment: bs; content: counter(bs); position: absolute; left: 8px; top: 7px;
       width: 19px; height: 19px; border-radius: 50%; background: #2a2836; border: 1px solid rgba(255,255,255,.15);
       color: #b9b7c9; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
     }
     .board-steps li.done { opacity: .62; }
     .board-steps li.active { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); }
-    .board-steps li.active::before { background: #e0e0e0; color: #1c1a26; border-color: #e0e0e0; }
+    .board-steps li.active:before { background: #e0e0e0; color: #1c1a26; border-color: #e0e0e0; }
 
     /* --- draggable header + emotional mini-bot avatar --- */
     .header { cursor: grab; touch-action: none; }
@@ -391,7 +391,7 @@
         if (r && r.error) throw new Error(r.error);
         return '';
       }
-      if (buf.byteLength > 30 * 1024 * 1024) return 'That file is over 30 MB — download it and attach it in the Cassie app instead.';
+      if (buf.byteLength > 30 * 1024 * 1024) return 'That file is over 30 MB. Download it and attach it in the Cassie app instead.';
       let bin = '';
       const bytes = new Uint8Array(buf);
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -399,7 +399,7 @@
       if (r && r.error) throw new Error(r.error);
       return '';
     } catch (e) {
-      if (location.protocol === 'file:') return 'To read files from your computer, turn on “Allow access to file URLs” for Cassie in chrome://extensions — or attach the file in the Cassie app.';
+      if (location.protocol === 'file:') return 'To read files from your computer, turn on “Allow access to file URLs” for Cassie in chrome://extensions, or attach the file in the Cassie app.';
       return 'I couldn’t download this file from the tab. Download it and attach it with the paperclip in the Cassie app.';
     }
   }
@@ -416,7 +416,7 @@
   if (window.top === window) {
     dock = document.createElement('div');
     dock.className = 'dock';
-    dock.innerHTML = '<button type="button" class="dock-handle" title="Cassie — hover or tap. Drag to move." aria-label="Open Cassie tools"></button><div class="dock-tray"></div>';
+    dock.innerHTML = '<button type="button" class="dock-handle" title="Cassie: hover or tap. Drag to move." aria-label="Open Cassie tools"></button><div class="dock-tray"></div>';
     const handle = dock.querySelector('.dock-handle');
     const tray = dock.querySelector('.dock-tray');
 
@@ -444,7 +444,7 @@
       const on = (mode || 'button') !== 'off';
       hlBtn.setAttribute('aria-pressed', String(on));
       hlBtn.querySelector('b').textContent = on ? 'ON' : 'OFF';
-      hlBtn.title = on ? 'Highlight help is ON — highlighting shows an Ask Cassie button. Tap to turn it off.' : 'Highlight help is OFF — highlight and copy like normal. Tap to turn it on.';
+      hlBtn.title = on ? 'Highlight help is ON. Highlighting shows an Ask Cassie button. Tap to turn it off.' : 'Highlight help is OFF, highlight and copy like normal. Tap to turn it on.';
       hlBtn.setAttribute('aria-label', 'Highlight help ' + (on ? 'on' : 'off'));
     };
     try {
@@ -493,7 +493,7 @@
         setContent('Opening the whole file in Cassie…', { muted: true });
         positionPopover(at);
         const err = await openFileInCassie();
-        setContent(err || 'Opened in a new Cassie tab — she’s reading the whole file and writing your reviewer there.', { muted: true });
+        setContent(err || 'Opened in a new Cassie tab. She’s reading the whole file and writing your reviewer there.', { muted: true });
         positionPopover(at);
       });
     }
@@ -834,7 +834,7 @@
             : { '--surface': '#ffffff', '--border': '#e6e6ea', '--muted': '#6d6f7c', '--text': '#1c1d2b', '--cb-accent': '#1c1c24' } });
         } else {
           const p = document.createElement('p'); p.className = 'cb-drawing';
-          p.textContent = closed ? 'I couldn’t draw that graph — ask me again.' : 'Drawing the graph…';
+          p.textContent = closed ? 'I couldn’t draw that graph. Ask me again.' : 'Drawing the graph…';
           body.appendChild(p);
         }
         return;
@@ -1046,7 +1046,7 @@
       convo = [{ role: 'user', content: `About the page on my screen: ${q}` }, { role: 'assistant', content: reply }];
       convoLabel = q;
       setEmotion('happy');
-      const extra = fileTab() ? '\n\n*I can only see the part on your screen. For the whole file, open the right-edge tab and tap the page icon — I’ll read all of it in the Cassie app.*' : '';
+      const extra = fileTab() ? '\n\n*I can only see the part on your screen. For the whole file, open the right-edge tab and tap the page icon. I’ll read all of it in the Cassie app.*' : '';
       renderAnswerView(reply + extra, rect);
     } catch (e) {
       if (myGen !== gen) return;
@@ -1066,7 +1066,7 @@
     if (ptBackdrop) return;
     ptBackdrop = document.createElement('div'); ptBackdrop.className = 'pt-backdrop'; ptBackdrop.hidden = true;
     ptHint = document.createElement('div'); ptHint.className = 'pt-hint'; ptHint.hidden = true;
-    ptHint.innerHTML = '<span>Drag to snip a graph, picture or question — or tap one</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
+    ptHint.innerHTML = '<span>Drag to snip a graph, picture or question, or tap one</span><span class="x" role="button" aria-label="Cancel">&times;</span>';
     snipRect = document.createElement('div'); snipRect.className = 'snip-rect'; snipRect.hidden = true;
     annSvg = document.createElementNS(SVGNS, 'svg'); annSvg.setAttribute('class', 'ann-svg'); annSvg.style.display = 'none';
     boardCard = document.createElement('div'); boardCard.className = 'board-card'; boardCard.hidden = true;
@@ -1332,7 +1332,7 @@
     if (c.status === 'broken') throw new Error(BLANK_SHOT_MSG);
     return c.image;
   }
-  const BLANK_SHOT_MSG = 'Chrome gave Cassie a blank (black) screenshot of this tab, so I can’t see the page. Tip: press Win+Shift+S (Cmd+Shift+4 on Mac) to snip, then open Cassie’s board and press Ctrl+V — I’ll read it.';
+  const BLANK_SHOT_MSG = 'Chrome gave Cassie a blank (black) screenshot of this tab, so I can’t see the page. Tip: press Win+Shift+S (Cmd+Shift+4 on Mac) to snip, then open Cassie’s board and press Ctrl+V. I’ll read it.';
 
   // When the screenshot is unusable: read what's inside the box straight from the page —
   // the text, plus any SVG / canvas / image there (graphs are often SVG or canvas).
@@ -1389,17 +1389,17 @@
   // Turn any failure code/message into a sentence a student can act on.
   function errorText(err) {
     const m = String((err && err.message) || err || '');
-    if (m === 'no-key') return 'Add a free Groq or Gemini key first — click the Cassie icon in the toolbar.';
+    if (m === 'no-key') return 'Add a free Groq or Gemini key first. Click the Cassie icon in the toolbar.';
     if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup and I can read snips.';
-    if (m === 'reload' || /context invalidated|receiving end does not exist|Could not establish connection/i.test(m)) return 'Cassie was just updated — refresh this tab (F5) and try again.';
-    return m || 'Something went wrong — please try again.';
+    if (m === 'reload' || /context invalidated|receiving end does not exist|Could not establish connection/i.test(m)) return 'Cassie was just updated. Refresh this tab (F5) and try again.';
+    return m || 'Something went wrong. Please try again.';
   }
 
   async function askVision(image, prompt, system, maxTokens, board, log) {
     let r;
     try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, system, maxTokens, board, log }); }
     catch (e) { throw new Error('reload'); }
-    if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — please try again.');
+    if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer. Please try again.');
     return r.reply;
   }
 
@@ -1413,7 +1413,7 @@
     if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
     return draw ? { reply: clean, draw } : clean;
   };
-  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 
   // The words inside the snipped box, sent along with the picture: if a model
   // struggles to read the screenshot, Cassie still knows the question.
@@ -1453,7 +1453,7 @@
     const at = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height, width: r.width, height: r.height };
     try {
       cap = await captureSnip(r, {
-        onNeedShare: () => { manualOpen = true; popover.hidden = false; setContent('Chrome blocked Cassie’s quick screenshot. In the box Chrome shows next, choose “This tab” and press Share — I take one picture and stop sharing.', { muted: true }); positionPopover(at); },
+        onNeedShare: () => { manualOpen = true; popover.hidden = false; setContent('Chrome blocked Cassie’s quick screenshot. In the box Chrome shows next, choose “This tab” and press Share. I take one picture and stop sharing.', { muted: true }); positionPopover(at); },
         onShareDone: () => { hidePopover(); },
       });
     } catch (e) { capErr = errorText(e); }
@@ -1465,7 +1465,7 @@
       const dom = await domRegion(r);
       const sess = await openSnipBoard(dom.pics[0] || null, { headline: 'Your snip', steps: [] }, { loading: true });
       const why = capErr ? `I couldn’t capture the screen (${capErr}).` : 'Chrome gave me a blank screenshot of this tab.';
-      const tip = 'Tip: press Win+Shift+S (Cmd+Shift+4 on Mac), snip, then click here and press Ctrl+V — I’ll read your screenshot.';
+      const tip = 'Tip: press Win+Shift+S (Cmd+Shift+4 on Mac), snip, then click here and press Ctrl+V. I’ll read your screenshot.';
       const diag = cap.diag.length ? `(capture: ${cap.diag.join(', ')})` : '';
       if (dom.pics[0]) { sess.showNote({ reply: `${why} I found a picture in your box and I’m reading that instead…` }); explainPicture(sess, dom.pics[0], dom.text); }
       else if (dom.text.length >= 25) explainFromText(sess, dom.text, `${tip}\n${diag}`.trim(), `${why} I read the text in your box instead.`);
@@ -1474,7 +1474,7 @@
     }
     if (cap.status === 'empty') {
       const sess = await openSnipBoard(null, { headline: 'Your board', steps: [] }, { loading: true });
-      sess.showNote({ reply: `That box looks empty. Close this and drag a box around the question, graph or picture you want me to read — or press Ctrl+V to paste a screenshot here.\n(capture: ${cap.diag.join(', ')})` });
+      sess.showNote({ reply: `That box looks empty. Close this and drag a box around the question, graph or picture you want me to read, or press Ctrl+V to paste a screenshot here.\n(capture: ${cap.diag.join(', ')})` });
       return;
     }
     // The snip and Cassie's explanation open TOGETHER in the side board.
@@ -1510,7 +1510,7 @@
     rect = rect || el.getBoundingClientRect();
     const ctx = el ? gatherContext(el) : (document.title || '');
     if (!image) openBoardLoading(rect, x, y, null);
-    const prompt = `A student is viewing a webpage and pointed at one specific graphic on it (a graph, diagram, shape, equation, or illustration). Surrounding context:\n\n"""\n${ctx}\n"""\n\nExplain what this graphic shows and how to read it, like a friendly step-by-step tutor. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~14 words each. If context is thin, still give your best explanation of that kind of graphic.`;
+    const prompt = `A student is viewing a webpage and pointed at one specific graphic on it (a graph, diagram, shape, equation, or illustration). Surrounding context:\n\n"""\n${ctx}\n"""\n\nExplain what this graphic shows and how to read it, like a friendly step-by-step tutor. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~14 words each. If context is thin, still give your best explanation of that kind of graphic.`;
     askStream([{ role: 'user', content: prompt }], {
       onDelta() {},
       onDone(full) { renderBoard(rect, x, y, parseBoardJSON(full), image); },
@@ -1711,7 +1711,7 @@
   function runExplainOrAnswer(text, rect, mode) {
     let prompt;
     if (mode === 'answer') {
-      prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer — no explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
+      prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer. No explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
     } else if (mode === 'code') {
       prompt = `Write clean, well-commented code that correctly solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, make sure it actually works, and briefly explain how it works:\n\n"${text}"`;
     } else {

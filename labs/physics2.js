@@ -27,7 +27,7 @@ function rgb2cmyk(r, g, b) {
 }
 const colourLab = {
   id: 'colour', name: 'Colour mixer', subject: 'physics', topic: 'colour: additive mixing of light (RGB), subtractive mixing of ink (CMYK), and hue, saturation and value',
-  blurb: 'Mix coloured light, mix inks, or pick from the wheel — and see the same colour in RGB, CMYK and HSV.',
+  blurb: 'Mix coloured light, mix inks, or pick from the wheel, and see the same colour in RGB, CMYK and HSV.',
   words: 'colour color rgb cmyk hsv light ink pigment additive subtractive hue screen printer',
   icon: '<circle cx="18" cy="18" r="10"/><circle cx="30" cy="18" r="10"/><circle cx="24" cy="29" r="10"/>',
   tries: ['Make yellow using only red and green light', 'Make white light', 'Find the hue (in degrees) of pure blue'],
@@ -137,9 +137,9 @@ const magnetLab = {
   blurb: 'Drag magnets and wires around, watch the field lines, and read the field with a compass.',
   words: 'magnet magnetic field lines compass north south pole electromagnetism wire current right hand rule',
   icon: '<path d="M10 30V18a14 14 0 0 1 28 0v12"/><rect x="6" y="30" width="8" height="10"/><rect x="34" y="30" width="8" height="10"/><path d="M24 8v-4M18 10l-2-3M30 10l2-3"/>',
-  tries: ['Line up two magnets, N facing S — watch the lines join', 'Put two wires side by side with currents in opposite directions', 'Move the compass in a circle round a wire'],
+  tries: ['Line up two magnets, N facing S. Watch the lines join', 'Put two wires side by side with currents in opposite directions', 'Move the compass in a circle round a wire'],
   hints: ['Tap “+ Magnet”, then drag the second magnet so its N end nearly touches the first one’s S end. Tap a magnet to turn it.', 'Tap “+ Wire” twice, then tap one wire to flip its current (⊙ ↔ ⊗).', 'Drag the compass close to a wire and move it round. Watch which way its red end points.'],
-  about: 'A flat (2D) slice through a 3D field. Each bar magnet is modelled as a north pole and a south pole at its ends (the field strength falls with the square of the distance from each pole) — a good picture outside the magnet.\nWires are long, straight and go straight through the screen: ⊙ means current coming out towards you, ⊗ going in. The field circles the wire (right-hand grip rule) and weakens with distance (B = μ₀I ÷ 2πr).\nField lines go from N to S outside a magnet and never cross; where they bunch up the field is stronger. The compass’s red end points along the field. Earth’s own field is left out.',
+  about: 'A flat (2D) slice through a 3D field. Each bar magnet is modelled as a north pole and a south pole at its ends (the field strength falls with the square of the distance from each pole), a good picture outside the magnet.\nWires are long, straight and go straight through the screen: ⊙ means current coming out towards you, ⊗ going in. The field circles the wire (right-hand grip rule) and weakens with distance (B = μ₀I ÷ 2πr).\nField lines go from N to S outside a magnet and never cross; where they bunch up the field is stronger. The compass’s red end points along the field. Earth’s own field is left out.',
   mount({ stage, panel, api }) {
     let view = 'lines';
     const mags = [{ x: 0, y: 0, a: 0 }], wires = [], compass = { x: 0, y: 0 };
@@ -280,7 +280,7 @@ const opticsLab = {
   blurb: 'Drag the object along the bench. Three rays find the image: real or virtual, upright or upside down.',
   words: 'lens mirror optics ray diagram focal length image real virtual magnification convex concave',
   icon: '<path d="M4 26h40"/><path d="M24 8c4 6 4 30 0 36M24 8c-4 6-4 30 0 36"/><path d="M8 26V14M8 14l-2 3M8 14l2 3"/><path d="M8 14l16 4 14 14" stroke-dasharray="3 3"/>',
-  tries: ['Make a real image exactly the same size as the object', 'Make a magnifying glass: a bigger, upright image', 'Try a convex mirror — can it ever make a real image?'],
+  tries: ['Make a real image exactly the same size as the object', 'Make a magnifying glass: a bigger, upright image', 'Try a convex mirror: can it ever make a real image?'],
   hints: ['Use the convex lens and put the object at 2F (twice the focal length from the lens).', 'Use the convex lens and put the object closer to the lens than F.', 'Choose “Convex mirror” and drag the object both close to and far from the mirror. Watch the image.'],
   about: 'Uses the thin-lens and mirror equation 1/f = 1/u + 1/v with the “real is positive” convention: distances to real objects and real images are positive, to virtual images negative; f is negative for a concave (diverging) lens and a convex mirror. Magnification m = −v ÷ u (negative means upside down).\nRays are drawn for an ideal thin lens or mirror close to the axis (paraxial rays), using the three principal rays. Real lenses and mirrors blur a little (aberrations), which is left out.\nFor mirrors the reflected light comes back to the left, so a real image forms in front of the mirror and a virtual one appears behind it.',
   mount({ stage, panel, api }) {
@@ -319,7 +319,7 @@ const opticsLab = {
         if (!real && Number.isFinite(k.v)) segs.push({ a: [X(0), Y(yl)], b: [X(ix), Y(hi)], col: col.replace('.9', '.45'), hex, dashed: true });
       });
       const showImage = Number.isFinite(k.v) && Math.abs(hi) < 60;
-      const note = showImage ? '' : Number.isFinite(k.v) ? 'The image is very far away' : 'At F: the rays come out parallel — no image forms';
+      const note = showImage ? '' : Number.isFinite(k.v) ? 'The image is very far away' : 'At F: the rays come out parallel. No image forms';
       if (V && V.scene && V.scene.update) {
         // in 3D: a real lens (or mirror) on an optical bench, with light rays
         V.scene.update({ X, Y, ax, ox, hh, w, h, kind, mirror, u, ho, hi, ix, real, showImage, note, marks, segs: segs.map((g) => ({ ...g, col: g.hex })) });
@@ -364,7 +364,7 @@ const opticsLab = {
     V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.optics3d(B)), { pitch: 8 });
     function report() {
       const k = calc(), mirror = KINDS[kind][2];
-      if (!Number.isFinite(k.v)) st.set([['Image', 'none — the object is at the focal point']]);
+      if (!Number.isFinite(k.v)) st.set([['Image', 'none: the object is at the focal point']]);
       else {
         const real = k.v > 0, side = mirror ? (real ? 'in front of the mirror' : 'behind the mirror') : (real ? 'on the far side of the lens' : 'on the same side as the object');
         st.set([['Object distance u', `${num(u)} cm`], ['Image distance v', `${num(Math.abs(k.v))} cm ${side}`], ['Magnification', `${num(k.m)} ×`], ['The image is', `${real ? 'real' : 'virtual'}, ${k.m < 0 ? 'upside down' : 'upright'}, ${Math.abs(Math.abs(k.m) - 1) < 0.02 ? 'the same size' : Math.abs(k.m) > 1 ? 'bigger' : 'smaller'}`]]);
@@ -421,12 +421,12 @@ function drawGate(ctx, type, x, y, s, on) {
 }
 const logicLab = {
   id: 'logic', name: 'Logic gates', subject: 'physics', topic: 'logic gates (AND, OR, NOT, NAND, NOR, XOR) and truth tables',
-  blurb: 'Flip switches into AND, OR, NOT and friends — then solve circuit puzzles in as few moves as you can.',
+  blurb: 'Flip switches into AND, OR, NOT and friends. Then solve circuit puzzles in as few moves as you can.',
   words: 'logic gates and or not nand nor xor truth table boolean circuit digital electronics computer science',
   icon: '<path d="M8 14h8M8 34h8M16 8h10a16 16 0 0 1 0 32H16z"/><path d="M42 24h-6"/>',
   tries: ['Find the inputs that make NAND output 0', 'Solve puzzle 3', 'Solve all 6 puzzles'],
   hints: ['Pick NAND. It is “NOT AND”: its output is 0 only when the AND would be 1.', 'Lamp 1 needs A on and B off (B goes through a NOT). Lamp 2 needs B or C on.', 'Work backwards from each lamp: what must its gate’s inputs be? Fewest moves = fewest switches you need on.'],
-  about: 'A gate’s output is 1 (on) or 0 (off) depending only on its inputs: AND needs both inputs on, OR needs at least one, NOT flips its input, XOR needs exactly one. NAND, NOR and XNOR are AND, OR and XOR followed by NOT (the little circle on the symbol).\nThe symbols are the standard (ANSI/IEEE) shapes used in most textbooks. Every computer chip is built from millions of gates like these — NAND alone can build all the others.',
+  about: 'A gate’s output is 1 (on) or 0 (off) depending only on its inputs: AND needs both inputs on, OR needs at least one, NOT flips its input, XOR needs exactly one. NAND, NOR and XNOR are AND, OR and XOR followed by NOT (the little circle on the symbol).\nThe symbols are the standard (ANSI/IEEE) shapes used in most textbooks. Every computer chip is built from millions of gates like these, NAND alone can build all the others.',
   mount({ stage, panel, api }) {
     let mode = 'gates', type = 'AND', A = 0, Bv = 0, lvl = 0, sw = [], moves = 0;
     const solved = new Set(JSON.parse((() => { try { return localStorage.getItem('cassie.logic') || '[]'; } catch (e) { return '[]'; } })()));
@@ -472,7 +472,7 @@ const logicLab = {
       L.l.forEach(([src, want], k) => { const [x, y] = pos[src], lx = w - 110, ly = (h * (k + 1)) / (L.l.length + 1); wire(pos[src].out, y, lx - 14, ly, v[src]); lamp(lx, ly, v[src], want); });
       for (let i = 0; i < L.s; i++) sw2(pos['S' + i][0], pos['S' + i][1], sw[i], 'ABCD'[i], 'S' + i);
       const done = L.l.every(([src, want]) => v[src] === want);
-      text(ctx, done ? `Solved in ${moves} move${moves === 1 ? '' : 's'}${moves === fewest(L) ? ' — the fewest possible!' : ` (fewest: ${fewest(L)})`}` : `Puzzle ${lvl + 1} of ${LEVELS.length} · moves ${moves}`, w / 2, 22, done ? C.green : INK, 'center');
+      text(ctx, done ? `Solved in ${moves} move${moves === 1 ? '' : 's'}${moves === fewest(L) ? ': the fewest possible!' : ` (fewest: ${fewest(L)})`}` : `Puzzle ${lvl + 1} of ${LEVELS.length} · moves ${moves}`, w / 2, 22, done ? C.green : INK, 'center');
     });
     cv.c.addEventListener('click', (e) => {
       const p = at(cv.c, e), hh = hit.find((q) => Math.abs(p.x - q.x) < 30 && Math.abs(p.y - q.y) < 22);
@@ -524,11 +524,11 @@ const ENGINES = { solid: ['Solid fuel', 260], kerosene: ['Kerosene + oxygen', 31
 const G0 = 9.80665, R_EARTH = 6371e3;
 const rocketLab = {
   id: 'rocket', name: 'Rocket workshop', subject: 'physics', topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
-  blurb: 'Build a 3D rocket — engines, fuel, stages — and launch it from the pad. Can it lift off, reach space, or have enough Δv for orbit?',
+  blurb: 'Build a 3D rocket, engines, fuel, stages, and launch it from the pad. Can it lift off, reach space, or have enough Δv for orbit?',
   words: 'rocket launch thrust weight stages delta v orbit space newton tsiolkovsky fuel',
   icon: '<path d="M24 4c6 6 8 14 8 22v8H16v-8c0-8 2-16 8-22z"/><circle cx="24" cy="18" r="3"/><path d="M16 28l-6 8v4l6-4M32 28l6 8v4l-6-4M20 40l4 6 4-6"/>',
   three: true,
-  tries: ['Lift off: the thrust must beat the weight', 'Reach space — 100 km up', 'Get enough Δv for orbit (about 9.4 km/s)'],
+  tries: ['Lift off: the thrust must beat the weight', 'Reach space: 100 km up', 'Get enough Δv for orbit (about 9.4 km/s)'],
   hints: ['At the start this rocket is too heavy for its engine. Raise the thrust, or use less fuel.', 'More fuel burns for longer. Keep the thrust well above the weight (thrust ÷ weight above about 1.3).', 'One stage can’t carry its empty tanks all the way. Try 2 or 3 stages and the hydrogen engine.'],
   about: 'Newton’s second law each tenth of a second: acceleration = (thrust − weight − air drag) ÷ mass. Gravity weakens with height; air thins with height (density halves about every 6 km).\nThe rocket flies straight up, which is the quickest way to reach space (100 km, the Kármán line). Getting into orbit is much harder: it needs a sideways speed of about 7.8 km/s, so this checks the rocket’s total Δv from the rocket equation, Δv = Isp × g₀ × ln(full mass ÷ empty mass), against the ~9.4 km/s a real launch needs (including losses to gravity and air).\nAssumptions: each stage’s empty tanks and engines weigh 10% of its fuel; every engine uses its vacuum efficiency (Isp: solid 260 s, kerosene 311 s, hydrogen 450 s); upper stages get an engine strong enough to push 1.2 g.',
   mount({ stage, panel, api }) {
@@ -559,7 +559,7 @@ const rocketLab = {
       const g = G0 * (R_EARTH / (R_EARTH + F.h)) ** 2, rho = 1.225 * Math.exp(-F.h / 8500), drag = 0.5 * rho * F.v * Math.abs(F.v) * 0.5 * 10;
       let T = 0;
       if (s && F.fuelLeft > 0) { T = s.T; const burn = Math.min(F.fuelLeft, s.mdot * dt); F.fuelLeft -= burn; F.mass -= burn; }
-      else if (s && F.i < F.D.st.length - 1) { F.i++; F.mass = F.D.st[F.i].m0; F.fuelLeft = F.D.st[F.i].f; F.msg = `Stage ${F.i} dropped — stage ${F.i + 1} fires`; }
+      else if (s && F.i < F.D.st.length - 1) { F.i++; F.mass = F.D.st[F.i].m0; F.fuelLeft = F.D.st[F.i].f; F.msg = `Stage ${F.i} dropped: stage ${F.i + 1} fires`; }
       F.v += (T / F.mass - g - drag / F.mass) * dt;
       F.h = Math.max(0, F.h + F.v * dt); F.t += dt;
       F.maxH = Math.max(F.maxH, F.h); F.maxV = Math.max(F.maxV, F.v);
@@ -581,7 +581,7 @@ const rocketLab = {
       const top = 30, bottom = h - 40, sx = 70;
       // the height scale (stretched so the ground and space both fit)
       line(ctx, [[sx, top], [sx, bottom]], DIM, 1);
-      [[0, 'ground'], [1e3, '1 km'], [10e3, '10 km (airliners)'], [100e3, '100 km — space'], [400e3, '400 km (space station)'], [2e6, '2,000 km']].forEach(([hm, lab]) => {
+      [[0, 'ground'], [1e3, '1 km'], [10e3, '10 km (airliners)'], [100e3, '100 km: space'], [400e3, '400 km (space station)'], [2e6, '2,000 km']].forEach(([hm, lab]) => {
         const y = altY(hm, top, bottom); line(ctx, [[sx - 5, y], [sx + 5, y]], hm === 100e3 ? C.gold : DIM, hm === 100e3 ? 2 : 1); text(ctx, lab, sx + 10, y + 4, hm === 100e3 ? C.gold : DIM);
         if (hm === 100e3) { ctx.setLineDash([4, 6]); line(ctx, [[sx, y], [w, y]], 'rgba(255,207,90,.3)', 1); ctx.setLineDash([]); }
       });
@@ -629,7 +629,7 @@ const rocketLab = {
     function report(soft) {
       const now = performance.now(); if (soft && now - shown < 200) { cv.redraw(); return; } shown = now;
       const D = design();
-      const list = [['Mass at lift-off', `${num(D.m0 / 1000)} t`], ['Thrust ÷ weight', `${num(D.twr)}${D.twr <= 1 ? ' — too heavy to lift off' : ''}`], ['Total Δv', `${num(D.dv / 1000)} km/s${D.dv >= 9400 ? ' — enough for orbit' : ` (orbit needs about 9.4)`}`]];
+      const list = [['Mass at lift-off', `${num(D.m0 / 1000)} t`], ['Thrust ÷ weight', `${num(D.twr)}${D.twr <= 1 ? ': too heavy to lift off' : ''}`], ['Total Δv', `${num(D.dv / 1000)} km/s${D.dv >= 9400 ? ': enough for orbit' : ` (orbit needs about 9.4)`}`]];
       if (flight) list.push(['Height now', `${num(flight.h / 1000)} km`], ['Speed now', `${num(flight.v)} m/s`], ['Highest so far', `${num(flight.maxH / 1000)} km`]);
       st.set(list);
       if (D.dv >= 9400) api.check(2);

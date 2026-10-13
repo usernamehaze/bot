@@ -196,7 +196,7 @@
   const pdfSafe = (s) => String(s).replace(/./gu, (ch) => {
     if (PDF_SUBS[ch]) return PDF_SUBS[ch];
     const c = ch.codePointAt(0);
-    if (c < 256 || '•–—‘’“”…€™'.includes(ch)) return ch;
+    if (c < 256 || '•, ‘’“”…€™'.includes(ch)) return ch;
     return '';
   });
   const pdfRuns = (rs) => rs.map((r) => ({ ...r, text: pdfSafe(r.text) }));

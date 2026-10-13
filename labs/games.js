@@ -32,10 +32,10 @@ const CONDS = {
 const LEVELS = { easy: { n: 5, gates: 2, vars: ['A', 'B'], pools: ['bool'] }, medium: { n: 6, gates: 3, vars: ['A', 'B', 'C'], pools: ['bool', 'bool3'] }, hard: { n: 7, gates: 4, vars: ['A', 'B', 'C', 'x'], pools: ['bool', 'bool3', 'num'] } };
 const circuitLab = {
   id: 'circuit', name: 'Logic Circuit', subject: 'games',
-  blurb: 'Turn the wires so current flows from the battery to the bulb — but each gate only opens when its logic (AND, OR, NOT, XOR, if x > 4…) is TRUE. Set the switches to power them all.',
+  blurb: 'Turn the wires so current flows from the battery to the bulb, but each gate only opens when its logic (AND, OR, NOT, XOR, if x > 4…) is TRUE. Set the switches to power them all.',
   words: 'logic gates boolean and or not xor circuit wires pipes coding programming if else conditions electricity puzzle',
   icon: '<rect x="4" y="18" width="7" height="12" rx="1"/><path d="M11 24h8M29 24h7"/><path d="M19 16h5a8 8 0 0 1 0 16h-5z"/><circle cx="40" cy="24" r="4"/><path d="M40 16v4M46 24h-2"/>',
-  about: 'Tap a tile to turn it. Current starts at the battery (left) and must reach the bulb (right). The labelled tiles are gates: current passes a gate only while its condition is TRUE for your switches (A, B, C) and number x — a green gate is open, a red one is closed. Light the bulb with every gate on the circuit powered. “Code” shows the same conditions the way programmers write them (&& means AND, || means OR, ! means NOT). Every puzzle is built from a real working circuit, so there is always a solution.',
+  about: 'Tap a tile to turn it. Current starts at the battery (left) and must reach the bulb (right). The labelled tiles are gates: current passes a gate only while its condition is TRUE for your switches (A, B, C) and number x, a green gate is open, a red one is closed. Light the bulb with every gate on the circuit powered. “Code” shows the same conditions the way programmers write them (&& means AND, || means OR, ! means NOT). Every puzzle is built from a real working circuit, so there is always a solution.',
   mount({ stage, panel, api }) {
     let level = 'easy', notation = 'words', n = 5, tiles = [], gates = new Map(), vars = {}, start = 0, goal = 0, moves = 0, t0 = 0, done = false, geo = null, sim = { lit: new Set(), blocked: new Set(), bulb: false, powered: 0 };
     const hud = overlay(stage, 'tl'), msgBox = el('p', 'gm-msg'); msgBox.hidden = true;
@@ -119,7 +119,7 @@ const circuitLab = {
         const secs = (performance.now() - t0) / 1000;
         api.check(0); if (level !== 'easy') api.check(1); if (level === 'hard') api.check(2);
         const b = api.best(-Math.round(secs), `${level} in ${fmtTime(secs)}`);
-        tag(msgBox, `Lit! The bulb glows with all ${gates.size} gates powered — ${moves} turns in ${fmtTime(secs)}.${b && b.isNew ? ' New best!' : ''}`, 'good');
+        tag(msgBox, `Lit! The bulb glows with all ${gates.size} gates powered: ${moves} turns in ${fmtTime(secs)}.${b && b.isNew ? ' New best!' : ''}`, 'good');
       }
       st.set([['Gates powered', `${open}/${gates.size}`], ['Turns', String(moves)], ['Bulb', sim.bulb ? 'ON' : 'off']]);
     }
@@ -216,7 +216,7 @@ const PATTERNS = [
   ['\\d+%$', '', ['50%', '100%', '%50', '7 %', '99%', 'fifty%', '3.5%', '0%'], 'Percentages…'],
   ['^#[0-9a-f]{6}$', 'i', ['#ff00aa', '#FFF', '#12345g', '#A1B2C3', 'ff00aa', '#000000', '#abc1234'], 'Web colours.'],
   ['^\\w+@\\w+\\.com$', '', ['ana@mail.com', 'ben@site.org', '@mail.com', 'cara@x.com', 'dan.mail.com', 'e_f@gmail.com', 'g@h.co'], 'Simple e-mail addresses.'],
-  ['^\\d+(\\.\\d+)?$', '', ['3', '3.14', '.5', '10.', '42', '7.0', 'a1', '1.2.3'], 'Numbers — with or without a decimal part.'],
+  ['^\\d+(\\.\\d+)?$', '', ['3', '3.14', '.5', '10.', '42', '7.0', 'a1', '1.2.3'], 'Numbers, with or without a decimal part.'],
   ['^(\\w)\\w*\\1$', '', ['level', 'noon', 'apple', 'abca', 'xyz', 'radar', 'bob', 'ok'], 'Compare the first letter with the last.'],
 ];
 const MASS = { H: 1.008, He: 4.003, Li: 6.94, Be: 9.012, B: 10.81, C: 12.011, N: 14.007, O: 15.999, F: 18.998, Ne: 20.18, Na: 22.99, Mg: 24.305, Al: 26.982, Si: 28.085, P: 30.974, S: 32.06, Cl: 35.45, Ar: 39.948, K: 39.098, Ca: 40.078, Cr: 51.996, Mn: 54.938, Fe: 55.845, Co: 58.933, Ni: 58.693, Cu: 63.546, Zn: 65.38, Br: 79.904, Ag: 107.868, Sn: 118.71, I: 126.904, Ba: 137.327, Au: 196.967, Hg: 200.59, Pb: 207.2 };
@@ -247,7 +247,7 @@ const crackerLab = {
   blurb: 'A Wordle for maths, code and chemistry: crack the hidden function rule, regular expression or chemical compound in six guesses, using what it does as clues.',
   words: 'wordle guess formula equation function rule regex regular expression pattern chemical compound molar mass algebra puzzle',
   icon: '<rect x="4" y="10" width="8" height="8" rx="1"/><rect x="14" y="10" width="8" height="8" rx="1"/><rect x="24" y="10" width="8" height="8" rx="1"/><rect x="34" y="10" width="8" height="8" rx="1"/><rect x="4" y="22" width="8" height="8" rx="1"/><rect x="14" y="22" width="8" height="8" rx="1"/><path d="M27 34l5 5 9-12"/>',
-  about: 'Rule: a hidden f(x). You see a few of its outputs and can test 3 more x values; each guess is checked at x = −3…5 — green where your formula gives the same number, ↑ or ↓ where the hidden one is higher or lower. Pattern: a hidden regular expression; you see which strings it matches; each guess shows which strings YOUR pattern matches — green where you agree. Compound: a hidden chemical formula; you know its molar mass; each element you guess turns green (in it, right number), gold (in it, wrong number — with ↑ or ↓) or grey (not in it). Today’s puzzles are the same for everyone; “New one” makes more.',
+  about: 'Rule: a hidden f(x). You see a few of its outputs and can test 3 more x values; each guess is checked at x = −3…5, green where your formula gives the same number, ↑ or ↓ where the hidden one is higher or lower. Pattern: a hidden regular expression; you see which strings it matches; each guess shows which strings YOUR pattern matches, green where you agree. Compound: a hidden chemical formula; you know its molar mass; each element you guess turns green (in it, right number), gold (in it, wrong number, with ↑ or ↓) or grey (not in it). Today’s puzzles are the same for everyone; “New one” makes more.',
   mount({ stage, panel, api }) {
     let mode = 'rule', practice = false, hidden = null, guesses = [], probes = [], over = false, fixedXs = [0, 1, 2];
     const MAX = 6, TESTX = [-3, -2, -1, 0, 1, 2, 3, 4, 5];
@@ -267,7 +267,7 @@ const crackerLab = {
       backBtn.hidden = !practice;
       draw();
     }
-    const fmt = (v) => (Number.isFinite(v) ? String(+v.toFixed(3)) : '—');
+    const fmt = (v) => (Number.isFinite(v) ? String(+v.toFixed(3)) : '-');
     function draw() {
       let body = '';
       const left = MAX - guesses.length;
@@ -298,7 +298,7 @@ const crackerLab = {
       if (!t || over) return;
       let g;
       try {
-        if (mode === 'rule') { const f = formula(t); g = { text: t, ys: TESTX.map((x) => f(x)) }; if (g.ys.some((y) => !Number.isFinite(y))) throw new Error('That formula breaks at some x — try another.'); }
+        if (mode === 'rule') { const f = formula(t); g = { text: t, ys: TESTX.map((x) => f(x)) }; if (g.ys.some((y) => !Number.isFinite(y))) throw new Error('That formula breaks at some x. Try another.'); }
         else if (mode === 'regex') { const m = t.match(/^\/(.*)\/([gimsuy]*)$/); const src = m ? m[1] : t; if (src.length > 60) throw new Error('Keep it under 60 characters.'); g = { text: src, re: new RegExp(src, (m ? m[2] : '').replace(/[gy]/g, '')) }; }
         else { const atoms = atomsOf(t); g = { text: t, atoms, mass: massOf(atoms) }; }
       } catch (e) { tag(msg, e.message.startsWith('Invalid') ? 'That isn’t a valid pattern: ' + e.message : e.message, 'bad'); return; }
@@ -312,7 +312,7 @@ const crackerLab = {
         const b = api.best(-guesses.length, `cracked in ${guesses.length}`);
         tag(msg, `Cracked in ${guesses.length}! ${mode === 'rule' ? `f(x) = ${hidden.shown}` : mode === 'regex' ? `The pattern was /${hidden.src}/${hidden.flags}` : `${hidden.f} is ${hidden.name}.`}${b && b.isNew ? ' New best!' : ''}`, 'good');
         api.check(mode === 'rule' ? 1 : 2);
-      } else if (guesses.length >= MAX) { over = true; tag(msg, `Out of guesses — it was ${mode === 'rule' ? 'f(x) = ' + hidden.shown : mode === 'regex' ? '/' + hidden.src + '/' + hidden.flags : hidden.f + ' (' + hidden.name + ')'}. Tap “New one” to try another.`, ''); }
+      } else if (guesses.length >= MAX) { over = true; tag(msg, `Out of guesses. It was ${mode === 'rule' ? 'f(x) = ' + hidden.shown : mode === 'regex' ? '/' + hidden.src + '/' + hidden.flags : hidden.f + ' (' + hidden.name + ')'}. Tap “New one” to try another.`, ''); }
       draw();
     }
     page.addEventListener('submit', (e) => {
@@ -325,7 +325,7 @@ const crackerLab = {
     return { state: () => `cracking a ${mode}: ${guesses.length} guesses so far (${guesses.map((g) => g.text).join(', ') || 'none'})${mode === 'compound' ? `; hidden molar mass ${hidden.mass.toFixed(2)} g/mol` : ''}`, destroy() {} };
   },
   tries: ['Make a guess', 'Crack a function rule', 'Crack a regex or a compound'],
-  hints: ['Type any guess — even a wrong one shows you clues.', 'Look at how f(x) changes when x goes up by 1: the same jump each time means a straight line (ax + b).', 'Regex: start simple (like ^\\d+$), then fix the red rows. Compound: match the molar mass.'],
+  hints: ['Type any guess: even a wrong one shows you clues.', 'Look at how f(x) changes when x goes up by 1: the same jump each time means a straight line (ax + b).', 'Regex: start simple (like ^\\d+$), then fix the red rows. Compound: match the molar mass.'],
 };
 
 /* ================= 3. Pinning Blitz (countries, cell parts, organs — against the clock) ================= */
@@ -382,10 +382,10 @@ const DIAGRAMS = {
 };
 const blitzLab = {
   id: 'blitz', name: 'Pinning Blitz', subject: 'games',
-  blurb: 'Rapid fire: countries on the world map, parts of a cell or organs of the body flash up — pin each one before the clock runs out.',
+  blurb: 'Rapid fire: countries on the world map, parts of a cell or organs of the body flash up, pin each one before the clock runs out.',
   words: 'geography map countries anatomy organs cell organelles memory speed quiz pin drag label timer blitz',
   icon: '<circle cx="24" cy="24" r="17"/><path d="M24 7v4M24 37v4M7 24h4M37 24h4"/><path d="M24 15c-4 0-7 3-7 7 0 5 7 12 7 12s7-7 7-12c0-4-3-7-7-7z"/><circle cx="24" cy="22" r="2"/>',
-  about: 'Find it: a name appears — tap where it is (or drag the name onto the spot). Name it: a place lights up — pick its name. You have 60 seconds. A right answer is worth 100 points plus a speed bonus, and every right answer in a row raises your combo (×2, ×3…). A wrong tap costs 20 points and resets the combo. The organs are drawn as seen from the front, so the body’s right side (the liver) is on your left. The diagrams are simplified for learning.',
+  about: 'Find it: a name appears. Tap where it is (or drag the name onto the spot). Name it: a place lights up. Pick its name. You have 60 seconds. A right answer is worth 100 points plus a speed bonus, and every right answer in a row raises your combo (×2, ×3…). A wrong tap costs 20 points and resets the combo. The organs are drawn as seen from the front, so the body’s right side (the liver) is on your left. The diagrams are simplified for learning.',
   mount({ stage, panel, api }) {
     let map = 'world', style = 'find', world = null, proj = null, items = [], ask = null, opts = [], score = 0, combo = 0, right = 0, wrong = 0, endAt = 0, running = false, askedAt = 0, flash = null, timer = 0, last = null;
     const hud = el('div', 'gm-blitz'); stage.appendChild(hud);
@@ -491,7 +491,7 @@ const blitzLab = {
       } else {
         combo = 0; wrong++; score = Math.max(0, score - 20);
         last = { ok: false, it: map === 'world' ? null : it, c: map === 'world' && it ? it.c : null };
-        tag(msg, it ? `That’s ${it.name}.` : 'Not quite — try again.', 'bad');
+        tag(msg, it ? `That’s ${it.name}.` : 'Not quite. Try again.', 'bad');
         setTimeout(() => tag(msg, ''), 1200);
       }
       draw(); cv.redraw();
@@ -548,7 +548,7 @@ const blitzLab = {
     return { state: () => `Pinning Blitz on ${map === 'world' ? 'the world map' : DIAGRAMS[map].name} (${style === 'find' ? 'find it' : 'name it'}): score ${score}, ${right} right, ${wrong} wrong${ask ? `; now looking for ${ask.name}` : ''}`, destroy: () => { clearInterval(timer); if (dragEl) dragEl.remove(); cv.destroy(); } };
   },
   tries: ['Pin one right', 'Get a combo of 5', 'Score 1500 points in one round'],
-  hints: ['Tap Start, then tap where the name is — or drag the name onto it.', 'Start with the ones you know; speed matters less than not breaking the combo.', 'Learn the map first: Name it mode is a good warm-up.'],
+  hints: ['Tap Start, then tap where the name is, or drag the name onto it.', 'Start with the ones you know; speed matters less than not breaking the combo.', 'Learn the map first: Name it mode is a good warm-up.'],
 };
 
 /* ================= 4. Fraction Diner (fractions and ratios) ================= */
@@ -573,10 +573,10 @@ const RECIPES = [
 ];
 const dinerLab = {
   id: 'diner', name: 'Fraction Diner', subject: 'games',
-  blurb: 'Run a carinderia: slice pizzas into the right fractions, mix drinks in the right ratio and scale recipes for the crowd — before your customers lose patience.',
+  blurb: 'Run a carinderia: slice pizzas into the right fractions, mix drinks in the right ratio and scale recipes for the crowd, before your customers lose patience.',
   words: 'fractions ratios proportion pizza slices equivalent fractions mixing ratio recipe scaling math game restaurant carinderia',
   icon: '<circle cx="18" cy="26" r="13"/><path d="M18 26V13M18 26l11 6"/><path d="M34 12h9l-2 28h-5z"/><path d="M34.5 22h8"/>',
-  about: 'Pizza orders ask for a fraction of a pizza: cut it into slices (+ and −), tap slices to pick them, and serve. Any equal fraction counts — 2/4 is the same as 1/2. Drink orders give a total and a ratio (like 1 part syrup to 3 parts water): pour each part with the sliders. Recipe orders give a recipe for some people: type how much you need for the new number (1 1/2, 3/4 and 1.5 all work). Faster service earns bigger tips; a wrong order costs a heart. A shift is 8 orders.',
+  about: 'Pizza orders ask for a fraction of a pizza: cut it into slices (+ and −), tap slices to pick them, and serve. Any equal fraction counts: 2/4 is the same as 1/2. Drink orders give a total and a ratio (like 1 part syrup to 3 parts water): pour each part with the sliders. Recipe orders give a recipe for some people: type how much you need for the new number (1 1/2, 3/4 and 1.5 all work). Faster service earns bigger tips; a wrong order costs a heart. A shift is 8 orders.',
   mount({ stage, panel, api }) {
     let order = null, served = 0, hearts = 3, coins = 0, slices = 4, picked = new Set(), syrup = 0, water = 0, level = 1, tLeft = 0, tMax = 0, tick = 0, over = false;
     const card = el('div', 'gm-order'); stage.appendChild(card);
@@ -594,7 +594,7 @@ const dinerLab = {
         slices = 4; picked = new Set();
       } else if (kind === 'drink') {
         const a = 1 + Math.floor(Math.random() * 2), b = a + 1 + Math.floor(Math.random() * 3), unit = 25 * (1 + Math.floor(Math.random() * 3)), total = (a + b) * unit * (a + b > 6 ? 1 : 2);
-        order = { kind, who, a, b, total, text: `${who}: “${total} mL of calamansi juice — ${a} part${a > 1 ? 's' : ''} syrup to ${b} parts water.”` };
+        order = { kind, who, a, b, total, text: `${who}: “${total} mL of calamansi juice: ${a} part${a > 1 ? 's' : ''} syrup to ${b} parts water.”` };
         syrup = 0; water = 0;
       } else {
         const R = RECIPES[Math.floor(Math.random() * RECIPES.length)], to = [R[1] / 2, R[1] * 3 / 2, R[1] * 2, R[1] * 3 / 4].filter((x) => Number.isInteger(x) && x !== R[1])[Math.floor(Math.random() * 3)] || R[1] * 2;
@@ -605,7 +605,7 @@ const dinerLab = {
       draw(); cv.redraw();
     }
     function draw() {
-      st.set([['Served', `${served}/8`], ['Hearts', '❤'.repeat(hearts) || '—'], ['Tips', '₱' + coins]]);
+      st.set([['Served', `${served}/8`], ['Hearts', '❤'.repeat(hearts) || '-'], ['Tips', '₱' + coins]]);
       if (!order) { card.innerHTML = '<p class="gm-q">Welcome to the Fraction Diner! Tap “Start a shift”.</p>'; return; }
       if (over) return;
       const o = order;
@@ -665,12 +665,12 @@ const dinerLab = {
     function serve() {
       const o = order; if (!o || over) return;
       let ok = false, why = '';
-      if (o.kind === 'pizza') { ok = picked.size * o.d === o.n * slices && slices > 0; why = ok ? `${picked.size}/${slices}${picked.size / slices === o.n / o.d && slices !== o.d ? ` = ${frac(o.n, o.d)}` : ''} — exactly right!` : `That’s ${picked.size}/${slices} of a pizza, not ${frac(o.n, o.d)}. Cut it into ${o.d} (or ${o.d * 2}) slices and count.`; if (ok && slices !== o.d) api.check(1); }
-      else if (o.kind === 'drink') { const unit = o.total / (o.a + o.b); ok = syrup === o.a * unit && water === o.b * unit; why = ok ? `${syrup} : ${water} = ${o.a} : ${o.b}, and ${o.total} mL in all. Perfect!` : `Each “part” is ${o.total} ÷ ${o.a + o.b} = ${unit} mL — so ${o.a * unit} mL syrup and ${o.b * unit} mL water.`; }
+      if (o.kind === 'pizza') { ok = picked.size * o.d === o.n * slices && slices > 0; why = ok ? `${picked.size}/${slices}${picked.size / slices === o.n / o.d && slices !== o.d ? ` = ${frac(o.n, o.d)}` : ''}: exactly right!` : `That’s ${picked.size}/${slices} of a pizza, not ${frac(o.n, o.d)}. Cut it into ${o.d} (or ${o.d * 2}) slices and count.`; if (ok && slices !== o.d) api.check(1); }
+      else if (o.kind === 'drink') { const unit = o.total / (o.a + o.b); ok = syrup === o.a * unit && water === o.b * unit; why = ok ? `${syrup} : ${water} = ${o.a} : ${o.b}, and ${o.total} mL in all. Perfect!` : `Each “part” is ${o.total} ÷ ${o.a + o.b} = ${unit} mL: so ${o.a * unit} mL syrup and ${o.b * unit} mL water.`; }
       else {
         const k = o.to / o.R[1], vals = [...card.querySelectorAll('.gm-recipe input')].map((i) => readAmount(i.value));
         ok = vals.every((v, i) => Math.abs(v - o.R[2][i][1] * k) < 1e-6);
-        why = ok ? `Everything × ${showAmt(k)} — the recipe is scaled just right.` : `Multiply each amount by ${o.to} ÷ ${o.R[1]} = ${showAmt(k)}. ${o.R[2].map(([n, q]) => `${n}: ${showAmt(q * k)}`).join(', ')}.`;
+        why = ok ? `Everything × ${showAmt(k)}: the recipe is scaled just right.` : `Multiply each amount by ${o.to} ÷ ${o.R[1]} = ${showAmt(k)}. ${o.R[2].map(([n, q]) => `${n}: ${showAmt(q * k)}`).join(', ')}.`;
         if (ok) api.check(2);
       }
       if (ok) { const tip = 20 + Math.round((tLeft / tMax) * 30); coins += tip; served++; level = 1 + Math.floor(served / 3); api.check(0); tag(msg, `${why} +₱${tip} tip.`, 'good'); clearInterval(tick); setTimeout(() => !over && nextOrder(), 1400); draw(); }
@@ -686,24 +686,24 @@ const dinerLab = {
       over = true; clearInterval(tick);
       const b = api.best(coins, `₱${coins} in tips`);
       card.innerHTML = `<p class="gm-q">Shift over! You earned <b>₱${coins}</b> in tips${hearts ? ` with ${hearts} heart${hearts === 1 ? '' : 's'} left` : ''}.${b && b.isNew ? ' New best!' : ''}</p>`;
-      order = null; cv.redraw(); st.set([['Served', '8/8'], ['Hearts', '❤'.repeat(Math.max(0, hearts)) || '—'], ['Tips', '₱' + coins]]);
+      order = null; cv.redraw(); st.set([['Served', '8/8'], ['Hearts', '❤'.repeat(Math.max(0, hearts)) || '-'], ['Tips', '₱' + coins]]);
     }
     draw();
-    return { state: () => (order ? `serving an order: ${order.text}${order.kind === 'pizza' ? ` — I cut ${slices} slices and picked ${picked.size}` : order.kind === 'drink' ? ` — I poured ${syrup} mL syrup and ${water} mL water` : ''}` : `Fraction Diner: ₱${coins} in tips`), destroy: () => { clearInterval(tick); cv.destroy(); } };
+    return { state: () => (order ? `serving an order: ${order.text}${order.kind === 'pizza' ? `: I cut ${slices} slices and picked ${picked.size}` : order.kind === 'drink' ? `: I poured ${syrup} mL syrup and ${water} mL water` : ''}` : `Fraction Diner: ₱${coins} in tips`), destroy: () => { clearInterval(tick); cv.destroy(); } };
   },
   tries: ['Serve an order right', 'Serve a fraction using an equal fraction (like 2/4 for 1/2)', 'Scale a recipe correctly'],
-  hints: ['Read the order, then cut, pour or type — and tap Serve.', 'Cut the pizza into twice as many slices and pick twice as many.', 'New amount = old amount × (new people ÷ old people).'],
+  hints: ['Read the order, then cut, pour or type, and tap Serve.', 'Cut the pizza into twice as many slices and pick twice as many.', 'New amount = old amount × (new people ÷ old people).'],
 };
 
 /* ================= 5. City Market (supply, demand, taxes, a budget) ================= */
 // a simple straight-line market for rice, in thousands of kilos a day
 const EVENTS = [
   ['Calm month', 'Nothing unusual happens.', 0, 0],
-  ['Typhoon!', 'A typhoon floods farms — farmers can supply 30% less.', 0, -0.3],
-  ['Good harvest', 'Great weather — farmers can supply 25% more.', 0, 0.25],
-  ['Fiesta season', 'Fiestas everywhere — people want 20% more rice.', 0.2, 0],
-  ['Fuel prices up', 'Trucking costs more — supply falls 10%.', 0, -0.1],
-  ['New factory jobs', 'More people earn more — demand rises 10%.', 0.1, 0],
+  ['Typhoon!', 'A typhoon floods farms: farmers can supply 30% less.', 0, -0.3],
+  ['Good harvest', 'Great weather: farmers can supply 25% more.', 0, 0.25],
+  ['Fiesta season', 'Fiestas everywhere: people want 20% more rice.', 0.2, 0],
+  ['Fuel prices up', 'Trucking costs more: supply falls 10%.', 0, -0.1],
+  ['New factory jobs', 'More people earn more: demand rises 10%.', 0.1, 0],
   ['Calm month', 'Nothing unusual happens.', 0, 0],
 ];
 const demandAt = (p, dShock) => Math.max(0, 200 * (1 + dShock) - 2 * p); // buyers want less as the price rises
@@ -713,7 +713,7 @@ const marketLab = {
   blurb: 'Run your city’s rice market for a year: set the price, the sales tax and public spending. Avoid shortages and surpluses, keep people happy and the budget healthy through typhoons and fiestas.',
   words: 'economics supply demand equilibrium price ceiling tax budget shortage surplus market simulation government city money',
   icon: '<path d="M6 42V6M6 42h36"/><path d="M10 10c10 6 18 18 28 28" stroke-dasharray="3 3"/><path d="M10 38c10-6 18-18 28-28"/><circle cx="24" cy="24" r="3"/>',
-  about: 'Demand: buyers want 200 − 2 × (price they pay) thousand kg a day. Supply: farmers offer 2 × (price they get) thousand kg. Where the lines cross is the market (equilibrium) price — ₱50 in a calm month with no tax. If you set the price lower, buyers want more than farmers sell: a shortage (long lines, anger). Higher, and rice piles up unsold: a surplus (farmers lose money). A sales tax adds to what buyers pay, so they buy less — but it pays for public services, which make people happier. Events shift the lines. The numbers are made simple to show the idea, not to forecast real prices.',
+  about: 'Demand: buyers want 200 − 2 × (price they pay) thousand kg a day. Supply: farmers offer 2 × (price they get) thousand kg. Where the lines cross is the market (equilibrium) price, ₱50 in a calm month with no tax. If you set the price lower, buyers want more than farmers sell: a shortage (long lines, anger). Higher, and rice piles up unsold: a surplus (farmers lose money). A sales tax adds to what buyers pay, so they buy less, but it pays for public services, which make people happier. Events shift the lines. The numbers are made simple to show the idea, not to forecast real prices.',
   mount({ stage, panel, api }) {
     let month = 0, happy = 70, budget = 20, price = 50, tax = 5, spend = 4, ev = EVENTS[0], hist = [], over = false, outcome = null;
     const head = el('div', 'gm-market'); stage.appendChild(head);
@@ -746,16 +746,16 @@ const marketLab = {
       month++;
       api.check(0);
       if (o.shortage < 0.03 && o.surplus < 0.03) api.check(1);
-      const lesson = o.shortage > 0.05 ? `Shortage: buyers wanted ${Math.round(o.qd)}k kg but farmers sold only ${Math.round(o.qs)}k — the price was below the market price (about ₱${Math.round(o.eq)}).`
-        : o.surplus > 0.05 ? `Surplus: farmers brought ${Math.round(o.qs)}k kg but buyers took only ${Math.round(o.qd)}k — the price was above the market price (about ₱${Math.round(o.eq)}).`
+      const lesson = o.shortage > 0.05 ? `Shortage: buyers wanted ${Math.round(o.qd)}k kg but farmers sold only ${Math.round(o.qs)}k: the price was below the market price (about ₱${Math.round(o.eq)}).`
+        : o.surplus > 0.05 ? `Surplus: farmers brought ${Math.round(o.qs)}k kg but buyers took only ${Math.round(o.qd)}k: the price was above the market price (about ₱${Math.round(o.eq)}).`
           : `Balanced: supply and demand met at about ${Math.round(o.q)}k kg a day.`;
-      if (happy < 20 || budget < -20) { over = true; tag(msg, `${lesson} ${happy < 20 ? 'The people protest — happiness fell too low.' : 'The city ran out of money.'} Game over after ${month} months.`, 'bad'); goBtn.disabled = true; }
+      if (happy < 20 || budget < -20) { over = true; tag(msg, `${lesson} ${happy < 20 ? 'The people protest: happiness fell too low.' : 'The city ran out of money.'} Game over after ${month} months.`, 'bad'); goBtn.disabled = true; }
       else if (month >= 12) {
         over = true; goBtn.disabled = true;
         const score = Math.round(happy * 10 + budget * 5);
         const b = api.best(score, `${score} points (a full year)`);
         if (happy >= 60 && budget >= 0) api.check(2);
-        tag(msg, `${lesson} A whole year! Happiness ${Math.round(happy)}, budget ₱${budget.toFixed(1)}M — score ${score}.${b && b.isNew ? ' New best!' : ''}`, 'good');
+        tag(msg, `${lesson} A whole year! Happiness ${Math.round(happy)}, budget ₱${budget.toFixed(1)}M: score ${score}.${b && b.isNew ? ' New best!' : ''}`, 'good');
       } else {
         ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
         tag(msg, `${lesson} Next month: ${ev[0]} ${ev[1]}`, o.shortage > 0.05 || o.surplus > 0.05 ? '' : 'good');
@@ -797,7 +797,7 @@ const marketLab = {
     return { state: () => `month ${month + 1} of 12 (${ev[0]}); price ₱${price}/kg, tax ${tax}%, spending ₱${spend}M; market price about ₱${Math.round(outcome.eq)}; ${outcome.shortage > 0.03 ? 'shortage' : outcome.surplus > 0.03 ? 'surplus' : 'balanced'}; happiness ${Math.round(happy)}, budget ₱${budget.toFixed(1)}M`, destroy: () => cv.destroy() };
   },
   tries: ['Run your first month', 'Have a month with no shortage or surplus', 'Finish the year with happiness 60+ and a budget of ₱0 or more'],
-  hints: ['Set the three sliders, then tap “Run the month”.', 'Move your price to where the lines cross — the gold “market” point.', 'A small tax pays for services; too much makes buyers pay more and buy less.'],
+  hints: ['Set the three sliders, then tap “Run the month”.', 'Move your price to where the lines cross, the gold “market” point.', 'A small tax pays for services; too much makes buyers pay more and buy less.'],
 };
 
 export const GAMES = [circuitLab, crackerLab, blitzLab, dinerLab, marketLab];

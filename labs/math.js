@@ -10,9 +10,9 @@ const fnLab = {
   blurb: 'Type any function. Slide along it to see the slope, the bend and the area under it.',
   words: 'graph graphing derivative tangent slope integral area calculus curve',
   icon: '<path d="M6 40h36M10 44V6"/><path d="M12 36c6-2 8-22 14-22s8 14 14 12"/><path d="M20 30l16-10" stroke-dasharray="3 3"/><circle cx="28" cy="25" r="2.5"/>',
-  tries: ['Find a flat spot: slide until the slope is 0', 'Make the area from a to b exactly 0 (try sin(x) from −π to π)', 'Find an inflection point — where f″ (the bend) is 0'],
+  tries: ['Find a flat spot: slide until the slope is 0', 'Make the area from a to b exactly 0 (try sin(x) from −π to π)', 'Find an inflection point, where f″ (the bend) is 0'],
   hints: ['Drag along the curve and watch the slope number. Flat spots are at the tops of hills and bottoms of valleys.', 'Turn on “Area ∫”. Area below the x-axis counts as negative, so equal parts above and below cancel out.', 'Turn on “Bend f″”. An inflection point is where the curve changes from bending up (like a cup) to bending down (like a cap). Try x^3 − 3x.'],
-  about: 'The slope is worked out as (f(x+h) − f(x−h)) ÷ 2h with a tiny h, and the bend (second derivative, concavity) in the same way — for smooth functions this matches the exact derivative to many decimal places.\nAreas use Simpson’s rule with 600 slices. Area below the x-axis counts as negative — that is what a definite integral means.\nWhere a function jumps or is undefined (like 1/x at 0, or sqrt(x) for x < 0) the graph leaves a gap and no area is given.\nlog means log base 10; ln is the natural log.',
+  about: 'The slope is worked out as (f(x+h) − f(x−h)) ÷ 2h with a tiny h, and the bend (second derivative, concavity) in the same way, for smooth functions this matches the exact derivative to many decimal places.\nAreas use Simpson’s rule with 600 slices. Area below the x-axis counts as negative. That is what a definite integral means.\nWhere a function jumps or is undefined (like 1/x at 0, or sqrt(x) for x < 0) the graph leaves a gap and no area is given.\nlog means log base 10; ln is the natural log.',
   mount({ stage, panel, api }) {
     let src = 'sin(x) + x/3', f = formula(src), err = '';
     const view = { cx: 0, cy: 0, s: 50 };
@@ -274,9 +274,9 @@ const chanceLab = {
   blurb: 'Flip, roll and spin thousands of times and watch real results creep toward the theory.',
   words: 'probability coin dice spinner random statistics experiment',
   icon: '<rect x="6" y="14" width="20" height="20" rx="4"/><circle cx="12" cy="20" r="1.6"/><circle cx="20" cy="28" r="1.6"/><circle cx="16" cy="24" r="1.6"/><circle cx="35" cy="24" r="9"/><path d="M35 15v18M31 19l4-4 4 4"/>',
-  tries: ['Flip 5 heads in a row', 'Roll two dice 1,000 times — which total comes up most?', 'After 500 flips, get heads within 2% of half'],
-  hints: ['Use the Coin and flip one at a time (tap the coin or “× 1”). Any run of 5 heads has a 1 in 32 chance, so keep going.', 'Pick “Two dice” and tap “× 1,000”. Count how many ways each total can be made: 7 can be made 6 ways (1+6, 2+5, 3+4, 4+3, 5+2, 6+1).', 'Choose Coin and flip at least 500 times. If you are not within 2% yet, flip more — big numbers of flips tend to land closer to half.'],
-  about: 'Every flip, roll and spin uses the browser’s random-number generator, so each outcome has exactly the theoretical probability shown. (Real coins and dice are very slightly imperfect; these are ideal ones.)\nThe dashed lines are the theoretical probabilities; the bars are what actually happened. The law of large numbers says the bars tend to get closer to the lines as the number of trials grows — but any single run can still wander.',
+  tries: ['Flip 5 heads in a row', 'Roll two dice 1,000 times. Which total comes up most?', 'After 500 flips, get heads within 2% of half'],
+  hints: ['Use the Coin and flip one at a time (tap the coin or “× 1”). Any run of 5 heads has a 1 in 32 chance, so keep going.', 'Pick “Two dice” and tap “× 1,000”. Count how many ways each total can be made: 7 can be made 6 ways (1+6, 2+5, 3+4, 4+3, 5+2, 6+1).', 'Choose Coin and flip at least 500 times. If you are not within 2% yet, flip more. Big numbers of flips tend to land closer to half.'],
+  about: 'Every flip, roll and spin uses the browser’s random-number generator, so each outcome has exactly the theoretical probability shown. (Real coins and dice are very slightly imperfect; these are ideal ones.)\nThe dashed lines are the theoretical probabilities; the bars are what actually happened. The law of large numbers says the bars tend to get closer to the lines as the number of trials grows, but any single run can still wander.',
   mount({ stage, panel, api }) {
     let mode = 'coin', counts = [], n = 0, last = null, streak = 0, spin = 0;
     let shown = { counts: [], n: 0 }; // what the bars show (they catch up when the coin lands)
@@ -389,7 +389,7 @@ const chanceLab = {
     const st = stats(panel);
     report();
     return {
-      state: () => { const M = MODES[mode]; return `${M.name} — ${n} trials so far: ${M.out.map((o, i) => `${o} ${n ? num((counts[i] / n) * 100) : 0}% (theory ${num(M.p[i] * 100)}%)`).join(', ')}`; },
+      state: () => { const M = MODES[mode]; return `${M.name} - ${n} trials so far: ${M.out.map((o, i) => `${o} ${n ? num((counts[i] / n) * 100) : 0}% (theory ${num(M.p[i] * 100)}%)`).join(', ')}`; },
       destroy: () => { ticker.stop(); cv.destroy(); },
     };
   },
@@ -410,12 +410,12 @@ const toC = (v, u) => (u === '°C' ? v : u === '°F' ? ((v - 32) * 5) / 9 : v - 
 const fromC = (c, u) => (u === '°C' ? c : u === '°F' ? (c * 9) / 5 + 32 : c + 273.15);
 const unitsLab = {
   id: 'units', name: 'Unit converter', subject: 'math', topic: 'unit conversion and the metric system',
-  blurb: 'Length, mass, time, temperature, speed, area, volume and data — with the working shown.',
+  blurb: 'Length, mass, time, temperature, speed, area, volume and data, with the working shown.',
   words: 'convert conversion metric imperial km miles celsius fahrenheit',
   icon: '<rect x="4" y="16" width="16" height="16" rx="4"/><rect x="28" y="16" width="16" height="16" rx="4"/><path d="M21 24h6M24 21l3 3-3 3"/><path d="M9 24h6M33 24h6"/>',
   tries: ['Find body temperature, 37 °C, in °F', 'How many seconds are in one day?', 'Find how many km/h is 100 mph'],
   hints: ['Kind: Temperature. Amount 37, from °C to °F. The formula is × 9 ÷ 5 + 32.', 'Kind: Time. Amount 1, from day to s. That is 24 × 60 × 60.', 'Kind: Speed. Amount 100, from mph to km/h. One mile is 1.609344 km.'],
-  about: 'Factors are the exact international definitions: 1 inch = 2.54 cm, 1 foot = 0.3048 m, 1 mile = 1609.344 m, 1 pound = 0.45359237 kg, 1 nautical mile = 1852 m.\nTemperatures need a formula, not just a factor, because the scales start at different zeros: °F = °C × 9/5 + 32, and K = °C + 273.15.\nA year here is 365.25 days (the average including leap years).\nkB = 1000 bytes, but KiB = 1024 bytes — computers often mix these up. Cups and gallons are US measures (UK ones are bigger).',
+  about: 'Factors are the exact international definitions: 1 inch = 2.54 cm, 1 foot = 0.3048 m, 1 mile = 1609.344 m, 1 pound = 0.45359237 kg, 1 nautical mile = 1852 m.\nTemperatures need a formula, not just a factor, because the scales start at different zeros: °F = °C × 9/5 + 32, and K = °C + 273.15.\nA year here is 365.25 days (the average including leap years).\nkB = 1000 bytes, but KiB = 1024 bytes, computers often mix these up. Cups and gallons are US measures (UK ones are bigger).',
   mount({ stage, panel, api }) {
     let cat = 'Length', from = 'km', to = 'mi', value = 1;
     const card = el('div', 'lab-units');
@@ -482,7 +482,7 @@ const interestLab = {
   words: 'interest compound simple savings bank money exponential growth',
   icon: '<path d="M6 42h36"/><rect x="9" y="30" width="6" height="12"/><rect x="21" y="22" width="6" height="20"/><rect x="33" y="10" width="6" height="32"/><path d="M8 26l12-8 8 4 12-14"/>',
   tries: ['Find a rate that doubles your money in about 10 years', 'Make compound interest earn at least ₱10,000 more than simple', 'Compare yearly and daily compounding'],
-  hints: ['The rule of 72: 72 ÷ rate ≈ years to double. What rate gives 10?', 'Raise the years and the rate — compounding pulls ahead more the longer it runs.', 'Switch “Compound” between Yearly and Daily and watch the compound amount.'],
+  hints: ['The rule of 72: 72 ÷ rate ≈ years to double. What rate gives 10?', 'Raise the years and the rate. Compounding pulls ahead more the longer it runs.', 'Switch “Compound” between Yearly and Daily and watch the compound amount.'],
   about: 'Simple interest pays the rate only on the money you put in. Compound interest also pays interest on the interest already earned, so it grows faster and faster.\nMonthly compounding adds rate ÷ 12 each month; daily adds rate ÷ 365 each day; yearly adds the full rate once a year. Money you add every month goes in at the end of the month.\nReal savings may be rounded, charged fees, or taxed (in the Philippines, bank interest has a 20% final tax), which this leaves out. Tap the chart to read any year.',
   mount({ stage, panel, api }) {
     let P = 10000, rate = 6, years = 20, add = 0, comp = 12;
@@ -561,12 +561,12 @@ const interestLab = {
 /* ---------------- (a + b)² as a picture ---------------- */
 const squareLab = {
   id: 'square-proof', name: 'Picture proofs', subject: 'math', topic: 'algebra identities: (a + b)², a² − b² = (a + b)(a − b)',
-  blurb: 'See why (a + b)² = a² + 2ab + b² — pull the square apart and let the areas prove it.',
+  blurb: 'See why (a + b)² = a² + 2ab + b², pull the square apart and let the areas prove it.',
   words: 'algebra identity square expand factor difference of squares proof',
   icon: '<rect x="6" y="6" width="22" height="22"/><rect x="31" y="6" width="11" height="22"/><rect x="6" y="31" width="22" height="11"/><rect x="31" y="31" width="11" height="11"/>',
   tries: ['Pull (a + b)² all the way apart', 'Make 2ab exactly equal to a² + b²', 'Turn a² − b² into a rectangle'],
-  hints: ['Drag the “Together → apart” slider all the way — or drag across the picture from left to right.', 'Try making a and b the same number. (When they differ, 2ab is always smaller than a² + b².)', 'Switch the picture to a² − b², then pull it apart all the way.'],
-  about: 'The pictures are drawn to scale: each square’s and rectangle’s area is exactly the number written on it.\n(a + b)² = a² + 2ab + b² is true for every a and b, not just these whole numbers — the picture shows why: the big square is made of exactly those four pieces.\na² − b² = (a + b)(a − b): cutting b² from the corner of a² leaves an L-shape that rearranges into an (a + b) by (a − b) rectangle. This picture needs b smaller than a, so b is kept at most a − 1.\nDrag across the picture to pull it apart.',
+  hints: ['Drag the “Together → apart” slider all the way, or drag across the picture from left to right.', 'Try making a and b the same number. (When they differ, 2ab is always smaller than a² + b².)', 'Switch the picture to a² − b², then pull it apart all the way.'],
+  about: 'The pictures are drawn to scale: each square’s and rectangle’s area is exactly the number written on it.\n(a + b)² = a² + 2ab + b² is true for every a and b, not just these whole numbers. The picture shows why: the big square is made of exactly those four pieces.\na² − b² = (a + b)(a − b): cutting b² from the corner of a² leaves an L-shape that rearranges into an (a + b) by (a − b) rectangle. This picture needs b smaller than a, so b is kept at most a − 1.\nDrag across the picture to pull it apart.',
   mount({ stage, panel, api }) {
     let mode = 'sum', a = 6, b = 3, t = 0;
     const ease = (x) => x * x * (3 - 2 * x);
@@ -608,7 +608,7 @@ const squareLab = {
     function report() {
       const bb = mode === 'sum' ? b : Math.min(b, a - 1);
       st.set(mode === 'sum'
-        ? [['(a + b)²', `${(a + b) ** 2}`], ['a² + 2ab + b²', `${a * a} + ${2 * a * b} + ${b * b} = ${a * a + 2 * a * b + b * b}`], ['Just a² + b² (a common mistake)', `${a * a + b * b} — missing 2ab`]]
+        ? [['(a + b)²', `${(a + b) ** 2}`], ['a² + 2ab + b²', `${a * a} + ${2 * a * b} + ${b * b} = ${a * a + 2 * a * b + b * b}`], ['Just a² + b² (a common mistake)', `${a * a + b * b}: missing 2ab`]]
         : [['a² − b²', `${a * a} − ${bb * bb} = ${a * a - bb * bb}`], ['(a + b)(a − b)', `${a + bb} × ${a - bb} = ${(a + bb) * (a - bb)}`]]);
       if (mode === 'sum' && t >= 0.99) api.check(0);
       if (mode === 'sum' && a === b) api.check(1);
@@ -635,12 +635,12 @@ const squareLab = {
 /* ---------------- Tower of Hanoi ---------------- */
 const hanoiLab = {
   id: 'hanoi', name: 'Tower of Hanoi', subject: 'math', topic: 'the Tower of Hanoi, recursion and powers of 2',
-  blurb: 'Move the whole tower to the last peg — one disk at a time, never a big one on a small one.',
+  blurb: 'Move the whole tower to the last peg, one disk at a time, never a big one on a small one.',
   words: 'puzzle recursion hanoi tower disks game',
   icon: '<path d="M4 42h40M12 42V14M24 42V14M36 42V14"/><rect x="5" y="34" width="14" height="5" rx="2"/><rect x="7" y="28" width="10" height="5" rx="2"/><rect x="31" y="34" width="10" height="5" rx="2"/>',
-  tries: ['Solve 3 disks in 7 moves', 'Solve 4 disks (the fewest is 15 moves)', 'Watch Cassie solve 6 disks — count the moves'],
+  tries: ['Solve 3 disks in 7 moves', 'Solve 4 disks (the fewest is 15 moves)', 'Watch Cassie solve 6 disks: count the moves'],
   hints: ['Move the smallest disk every other move, always round the pegs in the same direction (with 3 disks: A → C → B → A…).', 'To move 4 disks: move the top 3 to the middle peg, move the biggest to the end, then move the 3 on top of it.', 'Choose 6 disks and tap “Watch Cassie solve it”.'],
-  about: 'The fewest moves for n disks is 2ⁿ − 1. The reason is recursion: to move n disks, you must first move the n − 1 on top out of the way, then move the biggest, then move the n − 1 back on top — so each extra disk doubles the moves, plus one.\nCassie’s solution uses exactly that recursion, so it always takes the fewest moves.',
+  about: 'The fewest moves for n disks is 2ⁿ − 1. The reason is recursion: to move n disks, you must first move the n − 1 on top out of the way, then move the biggest, then move the n − 1 back on top, so each extra disk doubles the moves, plus one.\nCassie’s solution uses exactly that recursion, so it always takes the fewest moves.',
   mount({ stage, panel, api }) {
     let n = 3, pegs, pick = -1, moves = 0, msg = '', demo = null, won = false, byCassie = false;
     const reset = () => { pegs = [Array.from({ length: n }, (_, i) => n - i), [], []]; pick = -1; moves = 0; msg = ''; won = false; byCassie = false; stopDemo(); };
@@ -677,7 +677,7 @@ const hanoiLab = {
       to.push(from.pop()); moves++; msg = '';
       if (pegs[2].length === n) {
         won = true;
-        msg = moves === 2 ** n - 1 ? `Solved in ${moves} moves — the fewest possible!` : `Solved in ${moves} moves (the fewest is ${2 ** n - 1}).`;
+        msg = moves === 2 ** n - 1 ? `Solved in ${moves} moves: the fewest possible!` : `Solved in ${moves} moves (the fewest is ${2 ** n - 1}).`;
         if (!byCassie && n === 3 && moves === 7) api.check(0);
         if (!byCassie && n === 4) api.check(1);
         if (byCassie && n === 6) api.check(2);
@@ -711,14 +711,14 @@ const hanoiLab = {
     const r1 = row(g, 'lab-row-btns');
     button(r1, 'Start over', () => { reset(); report(); });
     button(r1, 'Watch Cassie solve it', watch, 'main');
-    group(panel).appendChild(el('p', 'lab-note', 'Drag a disk onto another peg — or tap a peg, then tap where its top disk goes.'));
+    group(panel).appendChild(el('p', 'lab-note', 'Drag a disk onto another peg, or tap a peg, then tap where its top disk goes.'));
     const st = stats(panel);
     V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.hanoi3d(B)), { pitch: 14 });
     function report() { st.set([['Moves', String(moves)], ['Fewest possible', `${2 ** n - 1} (2^${n} − 1)`]]); cv.redraw(); }
     reset(); report();
     // (the disks glide to their places in 3D)
     const glide = clock(() => { if (V && V.on) cv.redraw(); return true; }); glide.start();
-    return { state: () => `${n} disks, ${moves} moves so far${won ? ' — solved' : ''}; the fewest possible is ${2 ** n - 1}`, destroy: () => { glide.stop(); stopDemo(); V.destroy(); cv.destroy(); } };
+    return { state: () => `${n} disks, ${moves} moves so far${won ? ': solved' : ''}; the fewest possible is ${2 ** n - 1}`, destroy: () => { glide.stop(); stopDemo(); V.destroy(); cv.destroy(); } };
   },
 };
 

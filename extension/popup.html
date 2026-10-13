@@ -97,21 +97,21 @@
 
   <label for="hl-mode">Highlight help</label>
   <select id="hl-mode">
-    <option value="on">On — Cassie pops up when I highlight text</option>
-    <option value="off">Off — highlight and copy like normal</option>
+    <option value="on">On: Cassie pops up when I highlight text</option>
+    <option value="off">Off: highlight and copy like normal</option>
   </select>
   <p class="hint">The <b>ON/OFF</b> switch in Cassie's side buttons (with Snip) does the same. When it's off you can still double-tap <b>Ctrl</b>, or right-click → <b>Explain with Cassie</b>.</p>
 
-  <p class="hint" style="margin-top:0"><b>No key needed</b> — Cassie answers right away. Adding your own free key below is optional: it's a little faster and you never run out of questions.</p>
+  <p class="hint" style="margin-top:0"><b>No key needed</b>: Cassie answers right away. Adding your own free key below is optional: it's a little faster and you never run out of questions.</p>
 
-  <label for="groq-key">Groq API key — free (fastest answers)</label>
+  <label for="groq-key">Groq API key: free (fastest answers)</label>
   <input type="password" id="groq-key" placeholder="gsk_...">
   <p class="hint">
     Quick answers with high free limits. Stored only in this browser. Get a
     <strong>free</strong> key (no credit card) at console.groq.com/keys.
   </p>
 
-  <label for="gemini-key">Google (Gemini) API key — free (works on its own too)</label>
+  <label for="gemini-key">Google (Gemini) API key: free (works on its own too)</label>
   <input type="password" id="gemini-key" placeholder="AIza...">
   <p class="hint">
     Answers questions and reads snips, PDFs and pictures. Stored only in this
@@ -120,9 +120,9 @@
 
   <label for="model">Groq model</label>
   <select id="model">
-    <option value="openai/gpt-oss-120b">GPT-OSS 120B — smartest (best for hard problems)</option>
-    <option value="llama-3.3-70b-versatile">Llama 3.3 70B — balanced</option>
-    <option value="openai/gpt-oss-20b">GPT-OSS 20B — fast reasoning</option>
+    <option value="openai/gpt-oss-120b">GPT-OSS 120B: smartest (best for hard problems)</option>
+    <option value="llama-3.3-70b-versatile">Llama 3.3 70B: balanced</option>
+    <option value="openai/gpt-oss-20b">GPT-OSS 20B: fast reasoning</option>
   </select>
 
   <button type="button" id="save">Save</button>
@@ -133,7 +133,7 @@
 
   <hr>
   <p class="section-title">Ask about this page</p>
-  <p class="hint" style="margin-top:0;">Cassie reads the page you're viewing in this tab — no need to highlight.</p>
+  <p class="hint" style="margin-top:0;">Cassie reads the page you're viewing in this tab. No need to highlight.</p>
   <input type="text" id="page-q" placeholder="e.g. Summarize this page">
   <button type="button" id="page-ask">Ask about this page</button>
   <div id="page-answer" hidden></div>

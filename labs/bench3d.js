@@ -275,7 +275,7 @@ export function viewSwitch(panel, stage, cv, make, { plane, look, pitch, yaw, mi
         // (the stage only draws for a moment after the lab changes something)
         if (v.scene.update) { const up = v.scene.update; v.scene.update = (st) => { B.wake(); up(st); }; }
         stage.classList.add('lab-is-3d');
-      } catch (e) { want = false; s.set('flat'); note3d.textContent = 'The 3D view couldn’t start on this device — showing the diagram.'; }
+      } catch (e) { want = false; s.set('flat'); note3d.textContent = 'The 3D view couldn’t start on this device, so here is the diagram instead.'; }
       busy = null;
       cv.redraw();
     })();

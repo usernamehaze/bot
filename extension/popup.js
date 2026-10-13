@@ -18,7 +18,7 @@ chrome.storage.local.get(['groqKey', 'groqModel', 'geminiKey'], ({ groqKey, groq
 // Test the keys (Groq / Google say whether they work) and say so plainly.
 const KEY_WORDS = {
   ok: (n) => `${n} key works ✓`,
-  invalid: (n) => `${n} key was rejected — copy it again from ${n === 'Groq' ? 'console.groq.com/keys' : 'aistudio.google.com/apikey'}`,
+  invalid: (n) => `${n} key was rejected. Copy it again from ${n === 'Groq' ? 'console.groq.com/keys' : 'aistudio.google.com/apikey'}`,
   missing: () => '',
   offline: (n) => `Couldn’t check the ${n} key (offline?)`,
   unknown: (n) => `Couldn’t check the ${n} key right now`,

@@ -77,7 +77,7 @@
 (() => {
   const app = document.getElementById('app'), tip = document.getElementById('tip');
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString());
+  const fmt = (n) => (n == null ? '-' : Number(n).toLocaleString());
   let token = ''; try { token = localStorage.getItem('cassie.stats.token') || ''; } catch (e) {}
   let days = 30;
 
@@ -236,7 +236,7 @@
         <div class="card"><h2>Most-used features</h2><p class="sub">Times used in the last ${d.days} days (people in brackets)</p>${bars(d.features.slice(0, 14), (r) => fname(r.name), (r) => r.n, (r) => `${fmt(r.n)} uses · ${fmt(r.users)} ${r.users === 1 ? 'person' : 'people'}`)}</div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Top topic words</h2><p class="sub">Single keywords from adults who allowed it — never full messages</p>${bars(d.words.slice(0, 20), (r) => r.word, (r) => r.n)}</div>
+        <div class="card"><h2>Top topic words</h2><p class="sub">Single keywords from adults who allowed it. Never full messages</p>${bars(d.words.slice(0, 20), (r) => r.word, (r) => r.n)}</div>
         <div class="card"><h2>Who uses Cassie</h2><p class="sub">From the sign-up (all users)</p>
           <p class="muted" style="margin:4px 0">Student or professional</p>${bars(d.roles, (r) => r.k === 'pro' ? 'Professional' : r.k === 'student' ? 'Student' : r.k, (r) => r.n)}
           <p class="muted" style="margin:12px 0 4px">Students by level</p>${bars(d.grades, (r) => r.k, (r) => r.n)}
@@ -249,14 +249,14 @@
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : r.kind === 'error' ? '⚠️ ' + esc(r.feature || 'Server problem') : r.kind === 'auto' ? '⚠️ App error · ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
       </div>
-      <div class="card"><h2>Most active users</h2><p class="sub">Anonymous — a random id per device, never a name</p><div class="scroll"><table>
+      <div class="card"><h2>Most active users</h2><p class="sub">Anonymous: a random id per device, never a name</p><div class="scroll"><table>
         <tr><th>User</th><th>Opens</th><th>Features used</th><th>First seen</th><th>Last seen</th><th>Who</th></tr>
         ${d.top.length ? d.top.map((u) => `<tr><td>#${esc(u.id)}</td><td>${fmt(u.opens)}</td><td>${fmt(u.uses)}</td><td>${esc(u.first_day)}</td><td>${esc(u.last_day)}</td><td>${esc([u.role === 'pro' ? 'Professional' : u.role === 'student' ? 'Student' : '', u.grade, u.age].filter(Boolean).join(' · '))}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">No users yet</td></tr>'}
       </table></div></div>`;
     document.getElementById('range').onchange = (e) => { days = +e.target.value; load(); };
     document.getElementById('refresh').onclick = load;
     document.getElementById('brain').onclick = async () => {
-      const m = document.getElementById('brain-msg'); m.textContent = 'Checking every AI… (about 10–45 seconds)';
+      const m = document.getElementById('brain-msg'); m.textContent = 'Checking every AI… (about 10 to 45 seconds)';
       try { const r = await fetch('health', { headers: { authorization: 'Bearer ' + token } }); if (!r.ok) throw new Error('HTTP ' + r.status); load(); }
       catch (e) { m.textContent = 'Could not run it: ' + e.message; }
     };

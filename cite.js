@@ -23,7 +23,7 @@
   const initials = (given) => given.map((g) => g.split('-').map((p) => p[0].toUpperCase() + '.').join('-')).join(' ');
   const doiUrl = (p) => (p.doi ? 'https://doi.org/' + String(p.doi).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '') : p.url || '');
   const bareDoi = (p) => (p.doi ? String(p.doi).replace(/^https?:\/\/(dx\.)?doi\.org\//i, '') : '');
-  const pages = (p) => (p.firstPage ? p.firstPage + (p.lastPage && p.lastPage !== p.firstPage ? '–' + p.lastPage : '') : '');
+  const pages = (p) => (p.firstPage ? p.firstPage + (p.lastPage && p.lastPage !== p.firstPage ? '-' + p.lastPage : '') : '');
   const end = (t) => (/[.?!]$/.test(t) ? t : t + '.');
 
   function apaOne(p) {

@@ -275,7 +275,7 @@ export function createBody(ctx) {
         group.add(gltf.scene);
         gltf.scene.visible = false;
         L.scenes.push(gltf.scene);
-      })).then(() => { shapeBody(); buildEyes(); if (sex === 'girl') buildFemale(); ctx.setLoading(null); }).catch((e) => { L.loading = null; ctx.setLoading('Couldn’t load it — check your internet and tap again.'); throw e; });
+      })).then(() => { shapeBody(); buildEyes(); if (sex === 'girl') buildFemale(); ctx.setLoading(null); }).catch((e) => { L.loading = null; ctx.setLoading('Couldn’t load it. Check your internet and tap again.'); throw e; });
     }
     return L.loading;
   }

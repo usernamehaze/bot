@@ -22,7 +22,7 @@
     ['listening', 'Listening', 'I’m listening…', 'While you type a question'],
     ['thinking', 'Thinking', 'Hmm, let me think.', 'Working out the answer'],
     ['upload', 'Upload', 'Got your file!', 'When you drop in a PDF, slides or a photo'],
-    ['reading', 'Reading', 'Reading pages 3–8…', 'Taking notes on every page'],
+    ['reading', 'Reading', 'Reading pages 3 to 8…', 'Taking notes on every page'],
     ['searching', 'Searching', 'Looking it up…', 'Research mode checks the web'],
     ['highlighting', 'Highlight', 'Ooh, this part matters.', 'When you highlight text on any site'],
     ['drawing', 'Drawing', 'Drawing your graph…', 'Graphs and pictures on the board'],

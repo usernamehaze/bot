@@ -16,12 +16,12 @@ function stateOf(m, Q) {
 }
 const iceLab = {
   id: 'ice-steam', name: 'Ice to steam', subject: 'chemistry', topic: 'changes of state: heating curves, melting and boiling points, specific heat and latent heat',
-  blurb: 'Heat ice until it melts and boils — the thermometer stops while it changes state. Watch the molecules too.',
+  blurb: 'Heat ice until it melts and boils. The thermometer stops while it changes state. Watch the molecules too.',
   words: 'heating curve melting boiling evaporation latent heat specific heat states of matter solid liquid gas particles',
   icon: '<path d="M18 6v24a7 7 0 1 0 6 0V6a3 3 0 0 0-6 0z"/><circle cx="21" cy="36" r="3"/><path d="M32 14c3 3 3 6 0 9M38 12c4 4 4 10 0 14"/>',
-  tries: ['Melt all the ice — what does the thermometer do while it melts?', 'Boil all the water away into steam', 'Cool the steam all the way back into ice'],
-  hints: ['Press Heat and watch the temperature when it reaches 0 °C. Speed up time if it’s slow.', 'Keep heating. Boiling takes much longer than melting — compare the flat parts of the graph.', 'Once it’s all steam, press Cool and wait for it to freeze completely.'],
-  about: 'Uses real values for water at normal air pressure: ice warms by 1 °C for every 2.09 kJ per kg, liquid water needs 4.18 kJ per kg (that is its specific heat capacity), steam 2.01 kJ.\nMelting needs 334 kJ per kg and boiling 2,257 kJ per kg (latent heats) — the temperature stays at 0 °C or 100 °C while that energy breaks the bonds between molecules.\nAssumes all the heater’s energy goes into the water (none is lost to the air or the container), and that the steam stays in a closed container. Water boils at 100 °C only at sea-level pressure; up a mountain it boils at a lower temperature.\nThe molecule picture is a cartoon: real molecules are far smaller and more numerous.',
+  tries: ['Melt all the ice: what does the thermometer do while it melts?', 'Boil all the water away into steam', 'Cool the steam all the way back into ice'],
+  hints: ['Press Heat and watch the temperature when it reaches 0 °C. Speed up time if it’s slow.', 'Keep heating. Boiling takes much longer than melting, compare the flat parts of the graph.', 'Once it’s all steam, press Cool and wait for it to freeze completely.'],
+  about: 'Uses real values for water at normal air pressure: ice warms by 1 °C for every 2.09 kJ per kg, liquid water needs 4.18 kJ per kg (that is its specific heat capacity), steam 2.01 kJ.\nMelting needs 334 kJ per kg and boiling 2,257 kJ per kg (latent heats), the temperature stays at 0 °C or 100 °C while that energy breaks the bonds between molecules.\nAssumes all the heater’s energy goes into the water (none is lost to the air or the container), and that the steam stays in a closed container. Water boils at 100 °C only at sea-level pressure; up a mountain it boils at a lower temperature.\nThe molecule picture is a cartoon: real molecules are far smaller and more numerous.',
   mount({ stage, panel, api }) {
     let m = 1, P = 1000, speed = 50, heating = 0, Q = 0, wasSteam = false;
     const N = 42, mol = Array.from({ length: N }, (_, i) => ({ i, x: Math.random(), y: Math.random(), vx: 0, vy: 0 }));
@@ -109,7 +109,7 @@ const iceLab = {
     function report(soft) {
       const now = performance.now(); if (soft && now - shown < 200) { cv.redraw(); return; } shown = now;
       const S = stateOf(m, Q);
-      const state = S.phase === 'melting' ? `melting — ${Math.round(S.f * 100)}% is water` : S.phase === 'boiling' ? `boiling — ${Math.round(S.f * 100)}% is steam` : S.phase;
+      const state = S.phase === 'melting' ? `melting: ${Math.round(S.f * 100)}% is water` : S.phase === 'boiling' ? `boiling: ${Math.round(S.f * 100)}% is steam` : S.phase;
       st.set([['Temperature', `${num(S.T)} °C`], ['State', state], ['Energy added', `${num(Q / 1000)} kJ`], ['Time with this heater', `${num(Q / P / 60)} minutes`], ['To melt it all', `${num((m * MELT) / 1000)} kJ`], ['To boil it all', `${num((m * BOIL) / 1000)} kJ`]]);
       cv.redraw();
     }
@@ -129,8 +129,8 @@ const METALS = [
   ['Magnesium', 'Mg', 1.74, 0.03, 0.85, '#ffffff', 'In cold water: only a few tiny bubbles, over hours or days. Heated in steam it burns with a dazzling white light, leaving white magnesium oxide.', 'Mg + 2H₂O → Mg(OH)₂ + H₂ (very slow)', 'Mg + H₂O → MgO + H₂'],
   ['Zinc', 'Zn', 7.14, 0, 0.3, null, 'No reaction with cold water. Heated in steam it reacts to make zinc oxide (yellow while hot, white when cool).', 'no reaction', 'Zn + H₂O → ZnO + H₂'],
   ['Iron', 'Fe', 7.87, 0, 0.2, null, 'No quick reaction with cold water (with oxygen it slowly rusts over days). Red-hot iron reacts with steam to make black iron oxide.', 'no quick reaction (rusts slowly with water and air)', '3Fe + 4H₂O → Fe₃O₄ + 4H₂'],
-  ['Copper', 'Cu', 8.96, 0, 0, null, 'No reaction with water or steam — that is why copper is used for water pipes.', 'no reaction', 'no reaction'],
-  ['Gold', 'Au', 19.3, 0, 0, null, 'No reaction at all — gold stays shiny for thousands of years.', 'no reaction', 'no reaction'],
+  ['Copper', 'Cu', 8.96, 0, 0, null, 'No reaction with water or steam. That is why copper is used for water pipes.', 'no reaction', 'no reaction'],
+  ['Gold', 'Au', 19.3, 0, 0, null, 'No reaction at all: gold stays shiny for thousands of years.', 'no reaction', 'no reaction'],
 ];
 const metalsLab = {
   id: 'metals', name: 'Metals in water', subject: 'chemistry', topic: 'the reactivity series: reactions of metals with water and steam',
@@ -227,7 +227,7 @@ const metalsLab = {
     });
     function drop() {
       const M = METALS[pick];
-      if (steam && M[4] == null) { msg.textContent = `${M[0]} already reacts with cold water — it would be far too dangerous in steam. Try it in cold water.`; return; }
+      if (steam && M[4] == null) { msg.textContent = `${M[0]} already reacts with cold water. It would be far too dangerous in steam. Try it in cold water.`; return; }
       run = { y: steam ? 0 : -1, x: 0.5, used: 0, progress: 0 };
       bubbles.length = 0;
       msg.textContent = '';
@@ -251,7 +251,7 @@ const metalsLab = {
     function report() {
       const M = METALS[pick];
       series.querySelectorAll('[data-i]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.i === pick)));
-      st.set([['What you see', run || steam ? (steam ? (M[4] == null ? '—' : M[4] ? (M[1] === 'Mg' ? 'A dazzling white flame; white powder (magnesium oxide) is left.' : M[1] === 'Zn' ? 'It glows and turns into zinc oxide: yellow while hot, white when cool.' : 'Slowly turns into black iron oxide.') : 'Nothing happens.') : M[6]) : 'Tap “Drop it in”.'], ['Equation', steam ? (M[8] || '—') : M[7]], ['Floats?', M[2] < 1 ? `yes (density ${M[2]} g/cm³, less than water)` : `no — sinks (density ${M[2]} g/cm³)`]]);
+      st.set([['What you see', run || steam ? (steam ? (M[4] == null ? '-' : M[4] ? (M[1] === 'Mg' ? 'A dazzling white flame; white powder (magnesium oxide) is left.' : M[1] === 'Zn' ? 'It glows and turns into zinc oxide: yellow while hot, white when cool.' : 'Slowly turns into black iron oxide.') : 'Nothing happens.') : M[6]) : 'Tap “Drop it in”.'], ['Equation', steam ? (M[8] || '-') : M[7]], ['Floats?', M[2] < 1 ? `yes (density ${M[2]} g/cm³, less than water)` : `no: sinks (density ${M[2]} g/cm³)`]]);
       cv.redraw();
     }
     report(); tick.start();

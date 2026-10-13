@@ -113,10 +113,10 @@ function sourcePanel(panel, api, { title, sets, value, onSet, paste, pastePlaceh
     const b = button(r, makeLabel, async () => {
       const t = input.value.trim();
       if (!t) { input.focus(); return; }
-      if (!api.canAsk()) { say(err, 'Cassie isn’t available right now — paste your own below, or pick a ready-made set.', 'bad'); return; }
+      if (!api.canAsk()) { say(err, 'Cassie isn’t available right now. Paste your own below, or pick a ready-made set.', 'bad'); return; }
       say(err, '');
       try { await busy(b, 'Cassie is writing it…', () => make(t)); input.value = ''; }
-      catch (e) { say(err, e.message || 'Cassie couldn’t make that — try another topic.', 'bad'); }
+      catch (e) { say(err, e.message || 'Cassie couldn’t make that. Try another topic.', 'bad'); }
     });
   }
   if (paste) {
@@ -185,18 +185,18 @@ const VOCAB = {
     ['Bail', 'Money or property given so an accused person can be released before trial'],
   ] },
   tech: { name: 'Tech acronyms', pairs: [
-    ['CPU', 'Central Processing Unit — the chip that carries out a program’s instructions'],
-    ['RAM', 'Random Access Memory — fast, temporary working memory'],
-    ['GPU', 'Graphics Processing Unit — a chip built for drawing images and parallel maths'],
-    ['URL', 'Uniform Resource Locator — a web address'],
-    ['HTML', 'HyperText Markup Language — the structure of a web page'],
-    ['HTTP', 'HyperText Transfer Protocol — the rules browsers and servers use to talk'],
-    ['DNS', 'Domain Name System — turns names like example.com into IP addresses'],
-    ['API', 'Application Programming Interface — a way for programs to talk to each other'],
-    ['SQL', 'Structured Query Language — used to ask questions of a database'],
-    ['VPN', 'Virtual Private Network — an encrypted tunnel for your internet traffic'],
-    ['IoT', 'Internet of Things — everyday devices connected to the internet'],
-    ['OS', 'Operating System — the software that runs the computer (Windows, Android…)'],
+    ['CPU', 'Central Processing Unit: the chip that carries out a program’s instructions'],
+    ['RAM', 'Random Access Memory: fast, temporary working memory'],
+    ['GPU', 'Graphics Processing Unit: a chip built for drawing images and parallel maths'],
+    ['URL', 'Uniform Resource Locator: a web address'],
+    ['HTML', 'HyperText Markup Language: the structure of a web page'],
+    ['HTTP', 'HyperText Transfer Protocol: the rules browsers and servers use to talk'],
+    ['DNS', 'Domain Name System: turns names like example.com into IP addresses'],
+    ['API', 'Application Programming Interface: a way for programs to talk to each other'],
+    ['SQL', 'Structured Query Language: used to ask questions of a database'],
+    ['VPN', 'Virtual Private Network: an encrypted tunnel for your internet traffic'],
+    ['IoT', 'Internet of Things: everyday devices connected to the internet'],
+    ['OS', 'Operating System: the software that runs the computer (Windows, Android…)'],
   ] },
   biology: { name: 'Biology terms', pairs: [
     ['Osmosis', 'Water moving across a membrane toward the side with more dissolved stuff'],
@@ -215,10 +215,10 @@ const VOCAB = {
 };
 const vocabLab = {
   id: 'vocab', name: 'Vocabulary Flash-Chain', subject: 'tools', wide: true,
-  blurb: 'Match terms to their meanings by dragging — literary devices, Tayutay, medical, legal, tech or your own words. Keep the chain going!',
+  blurb: 'Match terms to their meanings by dragging, literary devices, Tayutay, medical, legal, tech or your own words. Keep the chain going!',
   words: 'vocabulary terms definitions matching drag drop literary devices medical legal acronyms tayutay glossary',
   icon: '<rect x="5" y="9" width="15" height="9" rx="2"/><rect x="28" y="9" width="15" height="9" rx="2"/><rect x="5" y="30" width="15" height="9" rx="2"/><rect x="28" y="30" width="15" height="9" rx="2"/><path d="M20 13.5h8M20 34.5c4 0 4-21 8-21"/>',
-  about: 'Each round deals a few terms and their meanings. Drag a term (or tap it, then tap a meaning) onto the meaning it belongs to. Every right match in a row adds a link to your chain; a wrong one breaks it. Paste your own “term – meaning” lines, or give Cassie a topic and she writes a set.',
+  about: 'Each round deals a few terms and their meanings. Drag a term (or tap it, then tap a meaning) onto the meaning it belongs to. Every right match in a row adds a link to your chain; a wrong one breaks it. Paste your own “term: meaning” lines, or give Cassie a topic and she writes a set.',
   mount({ stage, panel, api }) {
     const sets = Object.fromEntries(Object.entries(VOCAB).map(([k, v]) => [k, { ...v }]));
     let setKey = 'literary', round = [], matched = 0, mistakes = 0, chain = 0, bestChain = 0, t0 = 0, done = false, perRound = 6;
@@ -226,12 +226,12 @@ const vocabLab = {
     const dd = dragDrop(page, { chip: '.tl-term', target: '.tl-def', drop: (c, t) => match(c, t) });
     const src = sourcePanel(panel, api, {
       title: 'Word set', sets, value: setKey, onSet: (k) => { setKey = k; deal(); },
-      paste: (text) => { const p = pairsIn(text); if (p.length < 3) throw new Error('Put at least 3 lines like “Osmosis – water moving across a membrane”.'); src.addSet('mine' + Date.now(), { name: 'My words (' + p.length + ')', pairs: p }); setKey = src.select.value; deal(); },
-      pastePlaceholder: 'Term – meaning\nOsmosis – water moving across a membrane\n…',
+      paste: (text) => { const p = pairsIn(text); if (p.length < 3) throw new Error('Put at least 3 lines like “Osmosis: water moving across a membrane”.'); src.addSet('mine' + Date.now(), { name: 'My words (' + p.length + ')', pairs: p }); setKey = src.select.value; deal(); },
+      pastePlaceholder: 'Term: meaning\nOsmosis: water moving across a membrane\n…',
       make: async (topic) => {
         const list = jsonIn(await api.ask(`Make 10 vocabulary items about "${topic}" for a student: key terms and short, clear definitions (at most 15 words each). Reply with ONLY a JSON array: [{"term": "…", "def": "…"}]`));
         const p = (list || []).filter((x) => x && x.term && x.def).map((x) => [String(x.term).slice(0, 80), String(x.def).slice(0, 200)]);
-        if (p.length < 3) throw new Error('Cassie couldn’t make a set for that — try another topic.');
+        if (p.length < 3) throw new Error('Cassie couldn’t make a set for that. Try another topic.');
         src.addSet('cassie' + Date.now(), { name: topic.slice(0, 40) + ' (by Cassie)', pairs: p }); setKey = src.select.value; deal();
       },
     });
@@ -249,7 +249,7 @@ const vocabLab = {
       page.innerHTML = `<div class="tl-chain" aria-live="polite"></div>
         <div class="tl-vgrid"><div class="tl-terms" role="list">${round.map((p) => `<button type="button" class="tl-term" data-i="${p.i}">${esc(p.t)}</button>`).join('')}</div>
         <div class="tl-defs">${defs.map((p) => `<div class="tl-def" data-i="${p.i}" role="button" tabindex="0"><span class="tl-slot"></span><p>${esc(p.d)}</p></div>`).join('')}</div></div>
-        <p class="tl-hint">Drag a term onto its meaning — or tap a term, then tap the meaning.</p>`;
+        <p class="tl-hint">Drag a term onto its meaning, or tap a term, then tap the meaning.</p>`;
       show();
     }
     function show() {
@@ -288,7 +288,7 @@ const vocabLab = {
     };
   },
   tries: ['Make your first match', 'Get a chain of 5 in a row', 'Finish a round with no mistakes'],
-  hints: ['Drag a term onto the meaning that fits — or tap the term, then tap the meaning.', 'Start with the terms you are sure of, so the chain keeps growing.', 'Read every meaning first, then match the easiest ones.'],
+  hints: ['Drag a term onto the meaning that fits, or tap the term, then tap the meaning.', 'Start with the terms you are sure of, so the chain keeps growing.', 'Read every meaning first, then match the easiest ones.'],
 };
 
 /* ================= 2. Timeline / Chronology Builder ================= */
@@ -296,7 +296,7 @@ const vocabLab = {
 const TIMELINES = {
   ph: { name: 'Philippine history', items: [
     [1521, '1521', 'Magellan’s expedition reaches the Philippines; Lapulapu wins the Battle of Mactan'],
-    [1565, '1565', 'Miguel López de Legazpi arrives in Cebu — Spanish colonisation begins'],
+    [1565, '1565', 'Miguel López de Legazpi arrives in Cebu. Spanish colonisation begins'],
     [1571, '1571', 'Legazpi makes Manila the capital of the Spanish colony'],
     [1872, '1872', 'The priests Gomez, Burgos and Zamora (Gomburza) are executed'],
     [1892, '1892', 'Andrés Bonifacio founds the Katipunan'],
@@ -335,28 +335,28 @@ const TIMELINES = {
     [2021, '2021', 'The James Webb Space Telescope is launched'],
   ] },
   sdlc: { name: 'Software development life cycle', items: [
-    [1, '', 'Planning — what problem, for whom, how much time and money'],
-    [2, '', 'Requirements analysis — what the software must do'],
-    [3, '', 'Design — the architecture, screens and data'],
-    [4, '', 'Implementation — writing the code'],
-    [5, '', 'Testing — finding and fixing bugs'],
-    [6, '', 'Deployment — releasing it to users'],
-    [7, '', 'Maintenance — updates and fixes after release'],
+    [1, '', 'Planning: what problem, for whom, how much time and money'],
+    [2, '', 'Requirements analysis: what the software must do'],
+    [3, '', 'Design: the architecture, screens and data'],
+    [4, '', 'Implementation: writing the code'],
+    [5, '', 'Testing: finding and fixing bugs'],
+    [6, '', 'Deployment: releasing it to users'],
+    [7, '', 'Maintenance: updates and fixes after release'],
   ] },
   mitosis: { name: 'Mitosis, step by step', items: [
-    [1, '', 'Interphase — the cell grows and copies its DNA'],
-    [2, '', 'Prophase — chromosomes condense; the nuclear envelope breaks down'],
-    [3, '', 'Metaphase — chromosomes line up in the middle'],
-    [4, '', 'Anaphase — sister chromatids are pulled to opposite ends'],
-    [5, '', 'Telophase — new nuclear envelopes form around each set'],
-    [6, '', 'Cytokinesis — the cytoplasm splits into two cells'],
+    [1, '', 'Interphase: the cell grows and copies its DNA'],
+    [2, '', 'Prophase: chromosomes condense; the nuclear envelope breaks down'],
+    [3, '', 'Metaphase: chromosomes line up in the middle'],
+    [4, '', 'Anaphase: sister chromatids are pulled to opposite ends'],
+    [5, '', 'Telophase: new nuclear envelopes form around each set'],
+    [6, '', 'Cytokinesis: the cytoplasm splits into two cells'],
   ] },
   plot: { name: 'Plot structure', items: [
-    [1, '', 'Exposition — meet the characters and the setting'],
-    [2, '', 'Rising action — the conflict builds'],
-    [3, '', 'Climax — the turning point, highest tension'],
-    [4, '', 'Falling action — the results of the climax unfold'],
-    [5, '', 'Resolution — the conflict ends; loose ends are tied'],
+    [1, '', 'Exposition: meet the characters and the setting'],
+    [2, '', 'Rising action: the conflict builds'],
+    [3, '', 'Climax: the turning point, highest tension'],
+    [4, '', 'Falling action: the results of the climax unfold'],
+    [5, '', 'Resolution: the conflict ends; loose ends are tied'],
   ] },
   science: { name: 'The scientific method', items: [
     [1, '', 'Observe and ask a question'],
@@ -370,7 +370,7 @@ const TIMELINES = {
 };
 const timelineLab = {
   id: 'timeline', name: 'Timeline Builder', subject: 'tools', wide: true,
-  blurb: 'Drag events, dates or process steps into the right order — history, a story’s plot, the SDLC, mitosis — then check it or let Cassie grade it.',
+  blurb: 'Drag events, dates or process steps into the right order, history, a story’s plot, the SDLC, mitosis, then check it or let Cassie grade it.',
   words: 'timeline chronology order sequence history dates events plot sdlc process steps mitosis rizal',
   icon: '<path d="M6 24h36"/><circle cx="12" cy="24" r="3"/><circle cx="24" cy="24" r="3"/><circle cx="36" cy="24" r="3"/><path d="M12 21v-9M24 27v9M36 21v-9"/><rect x="7" y="7" width="10" height="5" rx="1"/><rect x="19" y="36" width="10" height="5" rx="1"/><rect x="31" y="7" width="10" height="5" rx="1"/>',
   about: 'The events are dealt out in a random order. Drag one by its body (or tap it, then tap where it goes, or use the arrows) to put them in order, earliest first. “Check” marks each one right or wrong and tells you how many are in place. Ready-made sets have their dates; for your own steps, paste them in the right order and the tool shuffles them for you.',
@@ -389,11 +389,11 @@ const timelineLab = {
         if (items.some((x) => x[1]) && items.some((x) => !x[1])) throw new Error('Give every line a year, or none of them.');
         src.addSet('mine' + Date.now(), { name: 'My timeline (' + items.length + ')', items: items.map((x, i) => (x[1] ? x : [i + 1, '', x[2]])) }); key = src.select.value; deal();
       },
-      pastePlaceholder: 'One per line, in the right order (or start each with a year):\n1898 – Independence declared\n1946 – Independence recognised\n…',
+      pastePlaceholder: 'One per line, in the right order (or start each with a year):\n1898, Independence declared\n1946, Independence recognised\n…',
       make: async (topic) => {
         const list = jsonIn(await api.ask(`Make a timeline of 6 to 8 key events (or steps, if it's a process) for a student about "${topic}". In the correct order, earliest first. Use only events you are sure of. Reply with ONLY a JSON array: [{"when": "the year or date, or empty for steps", "sort": number to sort by (the year, or the step number), "event": "short description, at most 14 words"}]`));
         const items = (list || []).filter((x) => x && x.event).map((x, i) => [Number.isFinite(+x.sort) ? +x.sort : i + 1, String(x.when || '').slice(0, 20), String(x.event).slice(0, 200)]);
-        if (items.length < 3) throw new Error('Cassie couldn’t make a timeline for that — try another topic.');
+        if (items.length < 3) throw new Error('Cassie couldn’t make a timeline for that. Try another topic.');
         src.addSet('cassie' + Date.now(), { name: topic.slice(0, 40) + ' (by Cassie)', items }); key = src.select.value; deal();
       },
     });
@@ -403,13 +403,13 @@ const timelineLab = {
     button(r, 'Shuffle again', () => deal());
     const r2 = row(panel);
     const gradeBtn = button(r2, 'Cassie, grade my timeline', async () => {
-      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now — use “Check my order”.', 'bad'); return; }
-      const s = sets[key], mine = order.map((k, i) => `${i + 1}. ${s.items[k][2]}`).join('\n'), right = sortedIdx().map((k, i) => `${i + 1}. ${s.items[k][1] ? s.items[k][1] + ' — ' : ''}${s.items[k][2]}`).join('\n');
+      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now. Use “Check my order”.', 'bad'); return; }
+      const s = sets[key], mine = order.map((k, i) => `${i + 1}. ${s.items[k][2]}`).join('\n'), right = sortedIdx().map((k, i) => `${i + 1}. ${s.items[k][1] ? s.items[k][1] + ' - ' : ''}${s.items[k][2]}`).join('\n');
       say(fb, 'Cassie is reading your timeline…', 'muted');
       try {
         const t = await busy(gradeBtn, 'Cassie is grading…', () => api.ask(`A student put these events about "${s.name}" in this order:\n${mine}\n\nThe correct order is:\n${right}\n\nGrade their timeline out of ${s.items.length} (one point for each event in its right place). Then, for each one out of place, explain in one short sentence why it comes where it does (a cause, a date, or what must happen first). Be kind and brief. Plain text, no markdown.`));
         say(fb, String(t || '').replace(/[*#`_]/g, '').trim(), '');
-      } catch (e) { say(fb, 'Cassie couldn’t answer just now — use “Check my order”.', 'bad'); }
+      } catch (e) { say(fb, 'Cassie couldn’t answer just now. Use “Check my order”.', 'bad'); }
     });
     const fb = el('p', 'tl-msg'); fb.hidden = true; panel.appendChild(fb);
     const sortedIdx = () => sets[key].items.map((x, i) => i).sort((a, b) => sets[key].items[a][0] - sets[key].items[b][0]);
@@ -427,7 +427,7 @@ const timelineLab = {
     }
     function draw() {
       const s = sets[key], right = sortedIdx();
-      page.innerHTML = `<p class="tl-hint">Earliest at the top. Drag an event to where it belongs — or tap it, then tap the event it should go before.</p>
+      page.innerHTML = `<p class="tl-hint">Earliest at the top. Drag an event to where it belongs, or tap it, then tap the event it should go before.</p>
         <ol class="tl-track">${order.map((k, i) => {
           const ok = checked ? right[i] === k : null;
           return `<li class="tl-ev${ok === true ? ' tl-ok' : ok === false ? ' tl-bad' : ''}" data-k="${k}" role="button" tabindex="0">
@@ -435,14 +435,14 @@ const timelineLab = {
             <span class="tl-arrows"><button type="button" data-up="${i}" aria-label="Move up" ${i ? '' : 'disabled'}>▲</button><button type="button" data-down="${i}" aria-label="Move down" ${i < order.length - 1 ? '' : 'disabled'}>▼</button></span></li>`;
         }).join('')}<li class="tl-end">Drop here to put it last</li></ol>`;
       const inPlace = order.filter((k, i) => right[i] === k).length;
-      st.set([['Events', String(order.length)], ['Moves', String(moves)], ['In place', checked ? `${inPlace}/${order.length}` : '—']]);
+      st.set([['Events', String(order.length)], ['Moves', String(moves)], ['In place', checked ? `${inPlace}/${order.length}` : '-']]);
     }
     function check() {
       checked = true; draw();
       const right = sortedIdx(), inPlace = order.filter((k, i) => right[i] === k).length;
       api.check(1);
       if (inPlace === order.length) { api.check(2); say(fb, `All ${order.length} in the right order${moves ? ` in ${moves} moves` : ''}! ${sets[key].items.some((x) => x[1]) ? 'The dates are showing now.' : ''}`, 'good'); api.best(-moves, `${moves} moves`); }
-      else say(fb, `${inPlace} of ${order.length} are in the right place. The red ones say where they belong — fix them and check again.`, '');
+      else say(fb, `${inPlace} of ${order.length} are in the right place. The red ones say where they belong, fix them and check again.`, '');
     }
     page.addEventListener('click', (e) => {
       const u = e.target.closest('[data-up]'), d = e.target.closest('[data-down]');
@@ -456,7 +456,7 @@ const timelineLab = {
     };
   },
   tries: ['Move an event', 'Check your order', 'Get every event in the right place'],
-  hints: ['Drag an event up or down — or use its ▲ ▼ arrows.', 'Tap “Check my order” to see which ones are in place.', 'Start with the one you are sure is first, then the one you are sure is last.'],
+  hints: ['Drag an event up or down, or use its ▲ ▼ arrows.', 'Tap “Check my order” to see which ones are in place.', 'Start with the one you are sure is first, then the one you are sure is last.'],
 };
 
 /* ================= 3. Argument & Essay Deconstructor ================= */
@@ -495,9 +495,9 @@ function structureOf(roles) {
   const checks = [
     [has('claim'), 'There is a clear claim', 'Add one sentence that says what you want the reader to believe.'],
     [has('claim') && first('claim') <= 1, 'The claim comes early', 'Put your claim at or near the start so the reader knows your point.'],
-    [has('evidence'), 'There is evidence', 'Back the claim with a fact, number, example or quote — and say where it comes from.'],
+    [has('evidence'), 'There is evidence', 'Back the claim with a fact, number, example or quote, and say where it comes from.'],
     [has('evidence') && has('reasoning'), 'The evidence is explained', 'After the evidence, add a sentence on HOW it proves your claim.'],
-    [has('counter'), 'The other side is considered', 'Add a counter-argument (“Some argue…”) — it makes you more convincing.'],
+    [has('counter'), 'The other side is considered', 'Add a counter-argument (“Some argue…”). It makes you more convincing.'],
     [!has('counter') || roles.slice(first('counter') + 1).some((r) => r === 'counter' || r === 'reasoning' || r === 'evidence'), 'The counter-argument is answered', 'After the other side, answer it (“However, …”) so it doesn’t weaken you.'],
     [has('conclusion') && last('conclusion') >= roles.length - 2, 'It ends with a conclusion', 'Finish with what it all adds up to (“Therefore, …”).'],
   ];
@@ -505,7 +505,7 @@ function structureOf(roles) {
 }
 const essayLab = {
   id: 'essay', name: 'Argument & Essay Deconstructor', subject: 'tools', wide: true,
-  blurb: 'Paste a paragraph and see its Claim, Evidence, Reasoning, Counter-argument and Conclusion in colour — then test how well the argument holds together.',
+  blurb: 'Paste a paragraph and see its Claim, Evidence, Reasoning, Counter-argument and Conclusion in colour. Then test how well the argument holds together.',
   words: 'essay argument paragraph claim evidence counterargument rebuttal conclusion structure writing persuasive cer',
   icon: '<path d="M10 8h28M10 16h20M10 24h28M10 32h16M10 40h24"/><path d="M8 6v12M8 22v12" stroke-width="3.5"/>',
   about: 'Every sentence of an argument has a job. This tool splits your paragraph into sentences and colours each one by its job. With Cassie, she reads the paragraph and explains each choice; without her, simple word clues make a first guess (like “according to” → evidence, “some argue” → counter-argument). You can tap any sentence to change its job. The structure check looks for the parts a strong argument needs, in a sensible order.',
@@ -529,7 +529,7 @@ const essayLab = {
       sents = sentencesOf(area.value); why = [];
       roles = guessRoles(sents);
       mineRoles = mode === 'me' ? sents.map(() => null) : null;
-      say(fb, sents.length ? (mode === 'me' ? 'Tap each sentence to choose its job, then tap “Cassie, check the logic” (or “Compare”) to see how you did.' : 'A first guess from word clues — tap a sentence to change it, or ask Cassie to read it properly.') : '', '');
+      say(fb, sents.length ? (mode === 'me' ? 'Tap each sentence to choose its job, then tap “Cassie, check the logic” (or “Compare”) to see how you did.' : 'A first guess from word clues. Tap a sentence to change it, or ask Cassie to read it properly.') : '', '');
       draw();
       if (sents.length) api.check(0);
     }
@@ -541,7 +541,7 @@ const essayLab = {
         ${why.some(Boolean) ? `<ol class="tl-why">${sents.map((s, i) => why[i] ? `<li><b class="tl-r-${roles[i]}">${esc(ROLE_OF[roles[i]][1])}</b> ${esc(why[i])}</li>` : '').join('')}</ol>` : ''}
         ${sents.length && !mineRoles ? `<div class="tl-structure"><h4>Structure check · ${score}/100</h4><ul>${checks.map(([ok, good, fix]) => `<li class="${ok ? 'tl-ok' : 'tl-bad'}">${ok ? '✓ ' + esc(good) : '✗ ' + esc(fix)}</li>`).join('')}</ul></div>` : ''}`;
       const count = (k) => shown.filter((x) => x === k).length;
-      st.set([['Sentences', String(sents.length)], ['Claims', String(count('claim'))], ['Evidence', String(count('evidence'))], ['Score', sents.length && !mineRoles ? score + '/100' : '—']]);
+      st.set([['Sentences', String(sents.length)], ['Claims', String(count('claim'))], ['Evidence', String(count('evidence'))], ['Score', sents.length && !mineRoles ? score + '/100' : '-']]);
       if (sents.length && !mineRoles && score === 100) api.check(2);
     }
     page.addEventListener('click', (e) => {
@@ -556,7 +556,7 @@ const essayLab = {
       if (!sents.length) return;
       if (!api.canAsk()) {
         if (mineRoles) { compare(roles, 'the word-clue guess'); return; }
-        say(fb, 'Cassie isn’t available right now — the colours are a first guess from word clues.', 'bad'); return;
+        say(fb, 'Cassie isn’t available right now. The colours are a first guess from word clues.', 'bad'); return;
       }
       say(fb, 'Cassie is reading it…', 'muted');
       try {
@@ -570,7 +570,7 @@ const essayLab = {
         if (mineRoles) { compare(roles, 'Cassie'); return; }
         draw();
         say(fb, String(d.feedback || '').replace(/[*#`_]/g, '').slice(0, 800), '');
-      } catch (e) { say(fb, 'Cassie couldn’t read it just now — the colours are a first guess from word clues.', 'bad'); }
+      } catch (e) { say(fb, 'Cassie couldn’t read it just now. The colours are a first guess from word clues.', 'bad'); }
     }
     function compare(answer, who) {
       const same = mineRoles.filter((x, i) => x === answer[i]).length;
@@ -584,7 +584,7 @@ const essayLab = {
     };
   },
   tries: ['Deconstruct a paragraph', 'Let Cassie check the logic', 'Get a paragraph to 100/100 on the structure check'],
-  hints: ['Paste any paragraph (or tap a sample) and tap Deconstruct.', 'Tap “Cassie, check the logic” — she tags every sentence and says why.', 'Use the ✗ tips: add the missing part, then Deconstruct again.'],
+  hints: ['Paste any paragraph (or tap a sample) and tap Deconstruct.', 'Tap “Cassie, check the logic”. She tags every sentence and says why.', 'Use the ✗ tips: add the missing part, then Deconstruct again.'],
 };
 
 /* ================= 5. Smart Flashcard Matrix ================= */
@@ -602,10 +602,10 @@ function cardsByRule(text, n) {
 }
 const matrixLab = {
   id: 'cardmatrix', name: 'Smart Flashcard Matrix', subject: 'tools', wide: true,
-  blurb: 'Turn notes, a pasted passage or a PDF into a flashcard deck in seconds — edit it in a grid, study it here, and keep it with spaced repetition.',
+  blurb: 'Turn notes, a pasted passage or a PDF into a flashcard deck in seconds, edit it in a grid, study it here, and keep it with spaced repetition.',
   words: 'flashcards cards deck spaced repetition notes pdf text generate study review memory anki quizlet',
   icon: '<rect x="5" y="7" width="16" height="12" rx="2"/><rect x="27" y="7" width="16" height="12" rx="2"/><rect x="5" y="29" width="16" height="12" rx="2"/><rect x="27" y="29" width="16" height="12" rx="2"/><path d="M33 33l3 3 5-6"/>',
-  about: 'Give it text — type, paste, or open a PDF, Word or PowerPoint file — and Cassie picks out what is worth remembering and writes the cards. Without Cassie, sentences like “Osmosis is …” and term lists become cards. Check them in the grid (tap a card to flip it, ✎ to fix it, × to drop it), then study them here or save them to your Flashcards, where spaced repetition brings each card back just before you would forget it: soon after a miss, then 1, 3, 7, 16 and 35 days after you get it right.',
+  about: 'Give it text, type, paste, or open a PDF, Word or PowerPoint file, and Cassie picks out what is worth remembering and writes the cards. Without Cassie, sentences like “Osmosis is …” and term lists become cards. Check them in the grid (tap a card to flip it, ✎ to fix it, × to drop it), then study them here or save them to your Flashcards, where spaced repetition brings each card back just before you would forget it: soon after a miss, then 1, 3, 7, 16 and 35 days after you get it right.',
   mount({ stage, panel, api }) {
     let cards = keyed('cassie.tools.matrix') || [], deckName = 'Cards from my notes', study = null;
     const page = sheet(stage, 'tl-matrix');
@@ -621,7 +621,7 @@ const matrixLab = {
         if (!file) return;
         say(fb, 'Reading ' + file.name + '…', 'muted');
         try { const t = await api.readFile(file); area.value = String(t || '').slice(0, 12000); deckName = file.name.replace(/\.\w+$/, '').slice(0, 50); say(fb, area.value ? `Read ${file.name}. Now tap “Make the cards”.` : 'That file has no text I can read (a scanned page?). Paste the text instead.', area.value ? '' : 'bad'); }
-        catch (err) { say(fb, 'I couldn’t read that file — try a PDF, Word, PowerPoint or text file.', 'bad'); }
+        catch (err) { say(fb, 'I couldn’t read that file. Try a PDF, Word, PowerPoint or text file.', 'bad'); }
       });
     }
     let howMany = 10, kind = 'qa';
@@ -656,7 +656,7 @@ const matrixLab = {
       list = (list || []).filter((c) => c && c.f && c.b).map((c) => ({ f: String(c.f).slice(0, 300), b: String(c.b).slice(0, 600) }));
       if (!list.length) { list = cardsByRule(text, howMany); if (list.length) say(fb, 'Made these from the sentences’ wording (Cassie wasn’t available). Check them, then fix or drop any that read oddly.', ''); }
       else say(fb, `Cassie made ${list.length} cards. Tap one to flip it; ✎ fixes it, × drops it.`, 'good');
-      if (!list.length) { say(fb, 'I couldn’t find card-worthy lines. Try lines like “Osmosis – water moving across a membrane”.', 'bad'); return; }
+      if (!list.length) { say(fb, 'I couldn’t find card-worthy lines. Try lines like “Osmosis: water moving across a membrane”.', 'bad'); return; }
       cards = list; keep('cassie.tools.matrix', cards); study = null; draw(); api.check(0);
     }
     function draw() {
@@ -712,7 +712,7 @@ const matrixLab = {
     return { state: () => (cards.length ? `${cards.length} cards made: ${cards.slice(0, 8).map((c) => `${c.f} → ${c.b}`).join(' | ')}` : 'no cards made yet'), destroy() {} };
   },
   tries: ['Make a deck from your notes', 'Study a round here', 'Save the deck to your Flashcards'],
-  hints: ['Paste a paragraph (or open a PDF) and tap “Make the cards”.', 'Tap “Study here”, flip each card and say how well you knew it.', 'Tap “Save to my Flashcards” — spaced repetition then brings each card back on time.'],
+  hints: ['Paste a paragraph (or open a PDF) and tap “Make the cards”.', 'Tap “Study here”, flip each card and say how well you knew it.', 'Tap “Save to my Flashcards”: spaced repetition then brings each card back on time.'],
 };
 
 /* ================= 6. Cornell Notes ================= */
@@ -736,7 +736,7 @@ function cornellByRule(text) {
 }
 const cornellLab = {
   id: 'cornell', name: 'Cornell Notes', subject: 'tools', wide: true,
-  blurb: 'Paste messy lecture notes or slides and get a clean Cornell page: cue questions, notes, and a summary — then cover the notes and test yourself.',
+  blurb: 'Paste messy lecture notes or slides and get a clean Cornell page: cue questions, notes, and a summary. Then cover the notes and test yourself.',
   words: 'cornell notes note-taking summary summarize cues lecture slides study method review',
   icon: '<rect x="7" y="5" width="34" height="38" rx="2"/><path d="M7 13h34M18 13v20M7 33h34M22 19h14M22 24h14M22 29h10M11 38h26"/>',
   about: 'The Cornell method splits a page into three parts: notes on the right (the facts, in short lines), cues on the left (questions or key words that the notes answer), and a summary at the bottom (the whole page in a few sentences, in your own words). To review, cover the notes and answer each cue out loud. Cassie turns raw notes into this layout; without her, headings become cues and the first lines make the summary. Everything on the page can be edited.',
@@ -755,7 +755,7 @@ const cornellLab = {
         const file = e.target.files && e.target.files[0]; e.target.value = '';
         if (!file) return;
         say(fb, 'Reading ' + file.name + '…', 'muted');
-        try { area.value = String(await api.readFile(file) || '').slice(0, 12000); say(fb, area.value ? 'Read it — now tap “Make Cornell notes”.' : 'No text I can read in that file.', area.value ? '' : 'bad'); } catch (err) { say(fb, 'I couldn’t read that file.', 'bad'); }
+        try { area.value = String(await api.readFile(file) || '').slice(0, 12000); say(fb, area.value ? 'Read it. Now tap “Make Cornell notes”.' : 'No text I can read in that file.', area.value ? '' : 'bad'); } catch (err) { say(fb, 'I couldn’t read that file.', 'bad'); }
       });
     }
     const r = row(panel);
@@ -818,7 +818,7 @@ const cornellLab = {
       w.document.close(); w.focus(); setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 200);
     }
     draw();
-    return { state: () => (doc ? `Cornell notes "${doc.title}": ${doc.rows.map((x) => `${x.cue} — ${x.notes.join('; ')}`).join(' | ')}. Summary: ${doc.summary}` : 'no notes yet'), destroy() {} };
+    return { state: () => (doc ? `Cornell notes "${doc.title}": ${doc.rows.map((x) => `${x.cue} - ${x.notes.join('; ')}`).join(' | ')}. Summary: ${doc.summary}` : 'no notes yet'), destroy() {} };
   },
   tries: ['Make a Cornell page from notes', 'Cover the notes and test yourself', 'Rewrite the summary in your own words'],
   hints: ['Paste notes (or open a file) and tap “Make Cornell notes”.', 'Tap “Cover the notes”, answer each cue out loud, then tap to check.', 'Tap the summary at the bottom and type it your own way.'],
@@ -903,16 +903,16 @@ const SAMPLE_MAP = {
   thesis: 'Philippine high schools should start classes at 8:00 a.m. instead of 6:00 a.m. because teenagers sleep more and learn better with later start times.',
   counter: 'Some say later classes make traffic and family schedules harder. But staggered start times can spread out traffic, and students’ health should come first.',
   reasons: [
-    { text: 'Teenagers’ body clocks make them fall asleep later.', ev: [{ quote: 'During puberty, the body’s release of melatonin shifts later, so teens naturally fall asleep around 11 p.m.', type: 'article', authors: 'Carskadon, Mary A.', year: '2011', title: 'Sleep in adolescents: The perfect storm', container: 'Pediatric Clinics of North America', volume: '58', issue: '3', pages: '637–647', url: '' }] },
+    { text: 'Teenagers’ body clocks make them fall asleep later.', ev: [{ quote: 'During puberty, the body’s release of melatonin shifts later, so teens naturally fall asleep around 11 p.m.', type: 'article', authors: 'Carskadon, Mary A.', year: '2011', title: 'Sleep in adolescents: The perfect storm', container: 'Pediatric Clinics of North America', volume: '58', issue: '3', pages: '637 to 647', url: '' }] },
     { text: 'More sleep means better grades and attention.', ev: [] },
   ],
 };
 const thesisLab = {
   id: 'thesis', name: 'Citation & Thesis Mapper', subject: 'tools', wide: true,
-  blurb: 'Map your thesis, the reasons behind it and the evidence for each reason — with each source cited in APA, MLA, Chicago or IEEE — and test how strong the argument is before you write.',
+  blurb: 'Map your thesis, the reasons behind it and the evidence for each reason, with each source cited in APA, MLA, Chicago or IEEE, and test how strong the argument is before you write.',
   words: 'thesis statement citation apa mla chicago ieee bibliography references evidence argument map essay research paper sources',
   icon: '<rect x="15" y="4" width="18" height="9" rx="2"/><rect x="4" y="22" width="15" height="8" rx="2"/><rect x="29" y="22" width="15" height="8" rx="2"/><path d="M24 13v5M11.5 18h25M11.5 18v4M36.5 18v4M11.5 30v5M36.5 30v5"/><rect x="6" y="35" width="11" height="8" rx="1"/><rect x="31" y="35" width="11" height="8" rx="1"/>',
-  about: 'A strong essay is a thesis held up by reasons, and every reason is held up by evidence from a real source. The map shows the gaps: a reason with no evidence is a weak leg. The strength check looks at simple, honest signs — every reason has evidence, the sources are not all the same, they are recent, and the other side is answered. Citations follow APA 7th, MLA 9th, Chicago (author-date, 17th) and IEEE — always check them against your teacher’s guide.',
+  about: 'A strong essay is a thesis held up by reasons, and every reason is held up by evidence from a real source. The map shows the gaps: a reason with no evidence is a weak leg. The strength check looks at simple, honest signs. Every reason has evidence, the sources are not all the same, they are recent, and the other side is answered. Citations follow APA 7th, MLA 9th, Chicago (author-date, 17th) and IEEE. Always check them against your teacher’s guide.',
   mount({ stage, panel, api }) {
     let map = keyed('cassie.tools.thesis') || JSON.parse(JSON.stringify(SAMPLE_MAP)), style = keyed('cassie.tools.citestyle') || 'apa', editing = null;
     const page = sheet(stage, 'tl-thesis');
@@ -937,7 +937,7 @@ const thesisLab = {
         [map.reasons.filter((x) => x.text.trim()).every((x) => x.ev.length >= 1), 'Every reason has evidence'],
         [map.reasons.filter((x) => x.text.trim()).every((x) => x.ev.length >= 2), 'Every reason has two or more pieces of evidence'],
         [new Set(ev.map((e) => (authorsOf(e.authors)[0] || {}).last || e.title)).size >= Math.min(3, ev.length) && ev.length >= 2, 'Evidence comes from different sources'],
-        [ev.length && ev.every((e) => !+e.year || now - +e.year <= 15), 'Sources are recent (last 15 years) — or classics on purpose'],
+        [ev.length && ev.every((e) => !+e.year || now - +e.year <= 15), 'Sources are recent (last 15 years), or classics on purpose'],
         [ev.length && ev.every((e) => e.title && e.authors && e.year), 'Every source has an author, year and title'],
         [map.counter.trim().split(/\s+/).length >= 8, 'The other side is answered'],
       ];
@@ -946,12 +946,12 @@ const thesisLab = {
     function draw() {
       const { checks, score } = strength();
       page.innerHTML = `<div class="tl-tmap">
-        <section class="tl-thesisbox"><label>Thesis statement<textarea data-f="thesis" rows="2" placeholder="What you will prove, and why — e.g. “X should Y because A and B.”">${esc(map.thesis)}</textarea></label></section>
+        <section class="tl-thesisbox"><label>Thesis statement<textarea data-f="thesis" rows="2" placeholder="What you will prove, and why, e.g. “X should Y because A and B.”">${esc(map.thesis)}</textarea></label></section>
         <div class="tl-reasons">${map.reasons.map((rs, i) => `<section class="tl-reason${rs.ev.length ? '' : ' tl-weak'}">
           <div class="tl-rhead"><b>Reason ${i + 1}</b>${map.reasons.length > 1 ? `<button type="button" class="tl-x" data-delr="${i}" aria-label="Remove reason ${i + 1}">×</button>` : ''}</div>
           <textarea data-f="reason" data-i="${i}" rows="2" placeholder="A reason your thesis is true">${esc(rs.text)}</textarea>
           ${rs.ev.map((e, j) => `<div class="tl-ev2"><p>“${esc(e.quote || '…')}” <b>${esc(inText(style, e, numberOf(e)))}</b></p><small>${cite(style, e, numberOf(e))}</small><span><button type="button" data-edit="${i}.${j}">Edit</button><button type="button" data-dele="${i}.${j}">Remove</button></span></div>`).join('')}
-          ${rs.ev.length ? '' : '<p class="tl-gap">No evidence yet — this leg is weak.</p>'}
+          ${rs.ev.length ? '' : '<p class="tl-gap">No evidence yet. This leg is weak.</p>'}
           <button type="button" class="lab-btn" data-adde="${i}">＋ Evidence</button></section>`).join('')}
           <button type="button" class="tl-addr" data-addr>＋ Reason</button></div>
         <section class="tl-counterbox"><label>Counter-argument and your answer<textarea data-f="counter" rows="2" placeholder="Some may say… However…">${esc(map.counter)}</textarea></label></section>
@@ -977,7 +977,7 @@ const thesisLab = {
         ${f('authors', 'Author(s)', 'Last, First; Last, First', true)}
         ${f('title', 'Title', 'Title of the article, book or page', true)}
         ${f('container', 'Journal / publisher / website', 'e.g. Philippine Journal of Science', true)}
-        ${f('volume', 'Volume')}${f('issue', 'Issue')}${f('pages', 'Pages', '12–19')}
+        ${f('volume', 'Volume')}${f('issue', 'Issue')}${f('pages', 'Pages', '12 to 19')}
         ${f('url', 'Link (DOI or URL)', 'https://…', true)}
         <div class="tl-formbtns"><button type="button" class="lab-btn main" data-savee>Save</button><button type="button" class="lab-btn" data-cancel>Cancel</button></div></div>`;
     }
@@ -1016,18 +1016,18 @@ const thesisLab = {
       try {
         if (window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html.map((h) => `<p>${h}</p>`).join('')], { type: 'text/html' }), 'text/plain': new Blob([text.join('\n')], { type: 'text/plain' }) })]);
         else await navigator.clipboard.writeText(text.join('\n'));
-        say(fb, `Copied ${html.length} reference${html.length === 1 ? '' : 's'} (${style.toUpperCase()}) — titles stay in italics when you paste into Word or Google Docs.`, 'good');
+        say(fb, `Copied ${html.length} reference${html.length === 1 ? '' : 's'} (${style.toUpperCase()}): titles stay in italics when you paste into Word or Google Docs.`, 'good');
       } catch (err) { download('references.txt', text.join('\n')); say(fb, 'Saved the reference list as a file.', ''); }
     }
     async function test() {
       if (!map.thesis.trim()) { say(fb, 'Write your thesis first.', 'bad'); return; }
-      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now — use the strength check on the map.', 'bad'); return; }
-      const outline = `THESIS: ${map.thesis}\n${map.reasons.map((rs, i) => `REASON ${i + 1}: ${rs.text || '(empty)'}\n${rs.ev.map((e) => `  EVIDENCE: "${e.quote}" — ${authorsOf(e.authors).map((a) => a.last).join(', ') || 'no author'} (${e.year || 'n.d.'}), ${e.title}`).join('\n') || '  (no evidence)'}`).join('\n')}\nCOUNTER-ARGUMENT AND ANSWER: ${map.counter || '(none)'}`;
+      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now. Use the strength check on the map.', 'bad'); return; }
+      const outline = `THESIS: ${map.thesis}\n${map.reasons.map((rs, i) => `REASON ${i + 1}: ${rs.text || '(empty)'}\n${rs.ev.map((e) => `  EVIDENCE: "${e.quote}": ${authorsOf(e.authors).map((a) => a.last).join(', ') || 'no author'} (${e.year || 'n.d.'}), ${e.title}`).join('\n') || '  (no evidence)'}`).join('\n')}\nCOUNTER-ARGUMENT AND ANSWER: ${map.counter || '(none)'}`;
       say(fb, 'Cassie is testing it…', 'muted');
       try {
         const t = await busy(testBtn, 'Cassie is testing it…', () => api.ask(`Stress-test this argument plan for an essay, like a fair debate judge. Say: 1) is the thesis clear and arguable, 2) which reason is weakest and why, 3) whether each piece of evidence actually supports its reason (or is off-topic, too old, or not credible), 4) the strongest objection a critic would raise. End with the 2 most important fixes. Under 170 words, plain text, no markdown.\n\n${outline}`));
         say(fb, String(t || '').replace(/[*#`_]/g, '').trim(), ''); api.check(1);
-      } catch (e) { say(fb, 'Cassie couldn’t answer just now — use the strength check on the map.', 'bad'); }
+      } catch (e) { say(fb, 'Cassie couldn’t answer just now. Use the strength check on the map.', 'bad'); }
     }
     draw();
     return { state: () => `thesis: "${map.thesis}". ${map.reasons.map((rs, i) => `Reason ${i + 1}: ${rs.text} (${rs.ev.length} evidence)`).join('. ')}. Counter: ${map.counter || 'none'}. Citation style ${style.toUpperCase()}.`, destroy() {} };

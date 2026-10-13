@@ -23,7 +23,7 @@ const punnettLab = {
   words: 'genetics punnett square dominant recessive allele genotype phenotype mendel inheritance heredity',
   icon: '<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M24 8v32M8 24h32"/><circle cx="16" cy="16" r="3"/><circle cx="32" cy="16" r="3"/><circle cx="16" cy="32" r="3"/><circle cx="32" cy="32" r="2" />',
   tries: ['Find a cross that gives 3 : 1', 'Find the cross that gives 9 : 3 : 3 : 1', 'Make every offspring look the same'],
-  hints: ['One gene: make both parents heterozygous (one capital and one small letter each).', 'Two genes: make both parents heterozygous for both genes.', 'Cross a parent with two capital letters with any other parent — every child gets at least one dominant allele.'],
+  hints: ['One gene: make both parents heterozygous (one capital and one small letter each).', 'Two genes: make both parents heterozygous for both genes.', 'Cross a parent with two capital letters with any other parent. Every child gets at least one dominant allele.'],
   about: 'Follows Mendel’s laws. Each parent passes on one of its two alleles at random (segregation), and for two genes the alleles are inherited independently (true for genes on different chromosomes, like Mendel’s seed colour and seed shape in peas).\nCapital letters are dominant: Yy looks yellow. The square shows the probabilities; “Grow 100 offspring” picks each child at random, so real counts wobble around the prediction.\nMany human traits (like eye colour) depend on several genes, so they are not used here. Tap any box of the square to see which egg and pollen made it.',
   mount({ stage, panel, api }) {
     let two = false, gene = 'colour', p1 = 'Yy', p2 = 'Yy', p1b = 'Rr', p2b = 'Rr', field = null;
@@ -114,10 +114,10 @@ const punnettLab = {
       }
       const L = GENES[two ? 'colour' : gene].letter;
       const mk = (title, val, set, LL = L) => seg(group(box, title), { options: GTYPES(LL), value: val, onChange: (v) => { set(v); field = null; report(); } });
-      mk(two ? `Parent 1 — ${GENES.colour.name.toLowerCase()}` : 'Parent 1', p1, (v) => { p1 = v; });
-      if (two) mk(`Parent 1 — ${GENES.shape.name.toLowerCase()}`, p1b, (v) => { p1b = v; }, 'R');
-      mk(two ? `Parent 2 — ${GENES.colour.name.toLowerCase()}` : 'Parent 2', p2, (v) => { p2 = v; });
-      if (two) mk(`Parent 2 — ${GENES.shape.name.toLowerCase()}`, p2b, (v) => { p2b = v; }, 'R');
+      mk(two ? `Parent 1: ${GENES.colour.name.toLowerCase()}` : 'Parent 1', p1, (v) => { p1 = v; });
+      if (two) mk(`Parent 1: ${GENES.shape.name.toLowerCase()}`, p1b, (v) => { p1b = v; }, 'R');
+      mk(two ? `Parent 2: ${GENES.colour.name.toLowerCase()}` : 'Parent 2', p2, (v) => { p2 = v; });
+      if (two) mk(`Parent 2: ${GENES.shape.name.toLowerCase()}`, p2b, (v) => { p2b = v; }, 'R');
       const g = GENES[two ? 'colour' : gene];
       box.appendChild(el('p', 'lab-note', two ? 'Y = yellow beats y = green. R = round beats r = wrinkled.' : `${g.letter} = ${g.dom} beats ${g.letter.toLowerCase()} = ${g.rec}.`));
     }
@@ -127,7 +127,7 @@ const punnettLab = {
     const st = stats(panel);
     report();
     return {
-      state: () => { const X = cross(); return `crossing ${g1()} × ${g2()} (${genes().map((k) => `${GENES[k].letter} = ${GENES[k].dom}, ${GENES[k].letter.toLowerCase()} = ${GENES[k].rec}`).join('; ')}): the Punnett square gives ${Object.entries(X.pheno).map(([k, v]) => `${v}/${X.total} ${k}`).join(', ')} — ratio ${ratio(X.pheno)}${field ? `; growing 100 gave ${Object.entries(field.seen).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''}`; },
+      state: () => { const X = cross(); return `crossing ${g1()} × ${g2()} (${genes().map((k) => `${GENES[k].letter} = ${GENES[k].dom}, ${GENES[k].letter.toLowerCase()} = ${GENES[k].rec}`).join('; ')}): the Punnett square gives ${Object.entries(X.pheno).map(([k, v]) => `${v}/${X.total} ${k}`).join(', ')}: ratio ${ratio(X.pheno)}${field ? `; growing 100 gave ${Object.entries(field.seen).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''}`; },
       destroy: () => cv.destroy(),
     };
   },
@@ -136,7 +136,7 @@ const punnettLab = {
 /* ---------------- Build a cell ---------------- */
 // where each organelle belongs: in both kinds of cell, only plants, or (typically) only animals
 const PARTS = {
-  nucleus: ['Nucleus', 'both', 'Holds the DNA — the instructions for the cell — and controls what the cell does.'],
+  nucleus: ['Nucleus', 'both', 'Holds the DNA, the instructions for the cell, and controls what the cell does.'],
   mito: ['Mitochondrion', 'both', 'Releases energy from glucose by respiration. Plant cells have them too!'],
   ribo: ['Ribosomes', 'both', 'Tiny factories that build proteins.'],
   er: ['Rough ER', 'both', 'A folded network covered in ribosomes; it carries proteins through the cell.'],
@@ -167,7 +167,7 @@ const cellLab = {
   words: 'cell organelles nucleus mitochondria chloroplast vacuole cell wall ribosome animal plant biology build',
   icon: '<rect x="6" y="8" width="36" height="32" rx="6"/><circle cx="20" cy="22" r="6"/><ellipse cx="32" cy="30" rx="5" ry="3"/><path d="M30 14h6"/>',
   tries: ['Build a correct animal cell', 'Build a correct plant cell', 'Tap the organelle that makes food in a plant cell'],
-  hints: ['An animal cell needs a nucleus, mitochondria, ribosomes, rough ER and a Golgi apparatus — and none of the plant-only parts.', 'A plant cell has everything an animal cell has, plus chloroplasts, a large vacuole and a cell wall.', 'Food (glucose) is made by photosynthesis. Add it to a plant cell, then tap it.'],
+  hints: ['An animal cell needs a nucleus, mitochondria, ribosomes, rough ER and a Golgi apparatus, and none of the plant-only parts.', 'A plant cell has everything an animal cell has, plus chloroplasts, a large vacuole and a cell wall.', 'Food (glucose) is made by photosynthesis. Add it to a plant cell, then tap it.'],
   about: 'These are simplified diagrams of typical cells, the way most textbooks draw them; real cells are 3D and packed far more tightly.\nTypical animal cells: nucleus, cytoplasm, cell membrane, mitochondria, ribosomes, rough ER, Golgi apparatus, lysosomes and centrioles. Typical plant cells have the same (lysosomes and centrioles are rare or absent) plus a cellulose cell wall, a large permanent vacuole and chloroplasts.\nThere are exceptions: plant root cells have no chloroplasts (no light underground), and red blood cells have no nucleus.\nThe membrane and cytoplasm are already drawn. Drag a part to move it; drag it outside the cell to take it out.',
   mount({ stage, panel, api }) {
     let kind = 'animal', items = [], cell = null, held = null, moved = false, start = null, nextId = 1;
@@ -228,7 +228,7 @@ const cellLab = {
       const ok = !missing.length && !wrong.length;
       verdict.innerHTML = `<p class="${ok ? 'ok' : ''}"><b>${ok ? `A correct ${kind} cell!` : 'Not quite yet.'}</b></p>`
         + (missing.length ? `<p>Missing: ${missing.map((k) => esc(PARTS[k][0])).join(', ')}.</p>` : '')
-        + wrong.map((k) => `<p>✗ ${esc(PARTS[k][0])} — ${kind === 'animal' ? 'only plant cells have this' : 'plant cells don’t usually have this'}: ${esc(PARTS[k][2])}</p>`).join('')
+        + wrong.map((k) => `<p>✗ ${esc(PARTS[k][0])} - ${kind === 'animal' ? 'only plant cells have this' : 'plant cells don’t usually have this'}: ${esc(PARTS[k][2])}</p>`).join('')
         + (ok && extra.length ? `<p>To be complete, animal cells also usually have ${extra.map((k) => esc(PARTS[k][0].toLowerCase())).join(' and ')}.</p>` : '');
       if (ok) api.check(kind === 'animal' ? 0 : 1);
     }

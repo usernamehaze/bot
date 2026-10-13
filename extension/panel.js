@@ -22,9 +22,9 @@ async function activeTab() {
 }
 function errorText(m) {
   m = String((m && m.message) || m || '');
-  if (m === 'no-key') return 'Add a free Groq or Gemini key first — click the Cassie icon in the toolbar.';
+  if (m === 'no-key') return 'Add a free Groq or Gemini key first. Click the Cassie icon in the toolbar.';
   if (m === 'no-vision') return 'Your Groq key has no picture-reading model right now. Add a free Google (Gemini) key in the Cassie toolbar popup.';
-  return m || 'Something went wrong — please try again.';
+  return m || 'Something went wrong. Please try again.';
 }
 
 // "Invalid API Key" / no key → fix it right here in the panel, then try again.
@@ -32,9 +32,9 @@ const isKeyProblem = (m) => /^no-key$|key (saved in the Cassie extension )?was r
 function keyForm(onFixed) {
   const f = document.createElement('div');
   f.className = 'keyfix';
-  f.innerHTML = `<p class="hint">Paste your keys here — they’re saved only in this browser.</p>
+  f.innerHTML = `<p class="hint">Paste your keys here. They’re saved only in this browser.</p>
     <input type="password" data-k="groqKey" placeholder="Groq key (gsk_…)" autocomplete="off">
-    <input type="password" data-k="geminiKey" placeholder="Gemini key (AIza…) — optional" autocomplete="off">
+    <input type="password" data-k="geminiKey" placeholder="Gemini key (AIza…), optional" autocomplete="off">
     <div class="row"><button class="btn" type="button">Save &amp; try again</button></div>
     <p class="hint st"></p>`;
   const [gi, ki] = f.querySelectorAll('input'), st = f.querySelector('.st'), btn = f.querySelector('button');
@@ -45,7 +45,7 @@ function keyForm(onFixed) {
     try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_CHECK_KEYS', save: { groqKey: gi.value, geminiKey: ki.value } }); } catch (e) { /* ignore */ }
     btn.disabled = false;
     if (r && (r.groq === 'ok' || r.gemini === 'ok')) { st.textContent = `Groq: ${r.groq} · Gemini: ${r.gemini}`; onFixed(); return; }
-    st.textContent = !r ? 'Couldn’t check — reload the extension and try again.'
+    st.textContent = !r ? 'Couldn’t check. Reload the extension and try again.'
       : `Groq key: ${r.groq === 'invalid' ? 'rejected' : r.groq}. Gemini key: ${r.gemini === 'invalid' ? 'rejected' : r.gemini}. Copy a fresh key from console.groq.com/keys or aistudio.google.com/apikey.`;
   });
   return f;
@@ -54,10 +54,10 @@ function keyForm(onFixed) {
 function home(extra = '') {
   view.innerHTML = `<div class="help">
     ${extra ? `<div class="card">${extra}</div>` : ''}
-    <p><b>Highlighted text</b> — right-click it and choose <b>Explain with Cassie</b> or <b>Answer with Cassie</b>. This works inside PDFs too.</p>
-    <p><b>Snip</b> — take a picture of this tab, drag over the part you need, and Cassie explains it on her board.</p>
-    <p><b>Whole file</b> — on a PDF, Google Slides or Google Doc tab, Cassie reads every page and makes a reviewer.</p>
-    <p><b>Board</b> — draw, or paste any screenshot with <b>Ctrl+V</b> (Win+Shift+S makes one).</p>
+    <p><b>Highlighted text</b>: right-click it and choose <b>Explain with Cassie</b> or <b>Answer with Cassie</b>. This works inside PDFs too.</p>
+    <p><b>Snip</b>: take a picture of this tab, drag over the part you need, and Cassie explains it on her board.</p>
+    <p><b>Whole file</b>: on a PDF, Google Slides or Google Doc tab, Cassie reads every page and makes a reviewer.</p>
+    <p><b>Board</b>: draw, or paste any screenshot with <b>Ctrl+V</b> (Win+Shift+S makes one).</p>
   </div>`;
 }
 
@@ -100,7 +100,7 @@ function renderMd(el, text) {
 /* ---------- text answers (from the right-click menu) ---------- */
 const PROMPTS = {
   explain: (t) => `Work through this carefully step by step and double-check your result, then give the answer followed by a clear explanation of why/how:\n\n"${t}"`,
-  answer: (t) => `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer — no explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${t}"`,
+  answer: (t) => `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer. No explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${t}"`,
   code: (t) => `Write clean, well-commented code that correctly solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, make sure it actually works, and briefly explain how it works:\n\n"${t}"`,
 };
 let convo = [];
@@ -115,7 +115,7 @@ function ask(messages, outEl, onDone, log) {
     else if (m.error) {
       const keyIssue = isKeyProblem(m.error);
       outEl.innerHTML = `<p class="muted">${esc(keyIssue && m.error !== 'no-key'
-        ? 'Groq rejected the key saved in the Cassie extension (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — paste your key below.'
+        ? 'Groq rejected the key saved in the Cassie extension (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website, paste your key below.'
         : errorText(m.error))}</p>`;
       if (keyIssue) outEl.appendChild(keyForm(() => ask(messages, outEl, onDone, log)));
       try { port.disconnect(); } catch (e) { /* ignore */ }
@@ -151,7 +151,7 @@ function showTextJob(text, mode = 'explain') {
 }
 
 /* ---------- pictures → board + explanation ---------- */
-const SNIP_PROMPT = (ctx) => `A student snipped part of what they're studying (a graph, diagram, picture, equation, question, or a page of notes).${ctx ? ` Context: ${ctx}.` : ''}\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON — no prose, no code fence — exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+const SNIP_PROMPT = (ctx) => `A student snipped part of what they're studying (a graph, diagram, picture, equation, question, or a page of notes).${ctx ? ` Context: ${ctx}.` : ''}\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 function parseBoardJSON(text) {
   const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
   const clean = (d) => ({ headline: String(d.headline || '').trim(), steps: (Array.isArray(d.steps) ? d.steps : []).map((x) => String(x).trim()).filter(Boolean) });
@@ -179,7 +179,7 @@ const withDrawing = (q, reply) => {
 };
 async function vision(image, prompt, maxTokens = 800, board, log) {
   const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt, maxTokens, board, log });
-  if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer — try again.');
+  if (!r || r.error) throw new Error((r && r.error) || 'Cassie didn’t answer. Try again.');
   return r.reply;
 }
 async function explainOnBoard(sess, image, ctx = '', kind = 'snip') {
@@ -218,7 +218,7 @@ async function snip() {
     return;
   }
   if (out.full && out.full.std < 4) {
-    home('<b>Chrome gave Cassie a blank picture of this tab.</b> On some computers Chrome does this.<br><br>Press <b>Win+Shift+S</b> (Cmd+Shift+4 on Mac), snip what you need, then click <b>Board</b> and press <b>Ctrl+V</b> — Cassie reads it straight away.<br><br><span class="hint">If it keeps happening: Chrome Settings → System → turn off “Use graphics acceleration when available”, relaunch, and try again.</span>');
+    home('<b>Chrome gave Cassie a blank picture of this tab.</b> On some computers Chrome does this.<br><br>Press <b>Win+Shift+S</b> (Cmd+Shift+4 on Mac), snip what you need, then click <b>Board</b> and press <b>Ctrl+V</b>: Cassie reads it straight away.<br><br><span class="hint">If it keeps happening: Chrome Settings → System → turn off “Use graphics acceleration when available”, relaunch, and try again.</span>');
     return;
   }
   view.innerHTML = `<p class="hint">Drag over the part you want Cassie to read.</p>
@@ -314,7 +314,7 @@ async function popOut() {
       w.document.body.append(...parts);
       const note = document.createElement('div');
       note.className = 'popped';
-      note.innerHTML = '<p>Cassie is in her floating window — it stays on top of your other apps.</p><button type="button" class="btn">Bring her back here</button>';
+      note.innerHTML = '<p>Cassie is in her floating window. It stays on top of your other apps.</p><button type="button" class="btn">Bring her back here</button>';
       note.querySelector('button').addEventListener('click', () => w.close());
       document.body.appendChild(note);
       pipWin = w;

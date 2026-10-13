@@ -76,7 +76,7 @@
     const root = document.createElement('section');
     root.className = 'sr'; root.hidden = true; root.setAttribute('aria-label', 'Study together');
     root.innerHTML = `<div class="sr-head"><h3>Study together</h3><button type="button" class="sr-tm" data-act="timer" title="A focus timer for everyone in the room">⏱ Focus</button><button type="button" class="sr-x" data-act="close" aria-label="Close">×</button></div>
-      <p class="sr-warn" hidden>Group study needs the newest Cassie server — ask whoever runs Cassie to update it. Drawing together still works.</p>
+      <p class="sr-warn" hidden>Group study needs the newest Cassie server. Ask whoever runs Cassie to update it. Drawing together still works.</p>
       <div class="sr-tabs" role="tablist">${[['chat', 'Chat'], ['cards', 'Cards'], ['quiz', 'Quiz'], ['notes', 'Notes']].map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${l}</button>`).join('')}</div>
       <div class="sr-body"></div><div class="sr-foot"></div>`;
     o.panel.appendChild(root);
@@ -129,7 +129,7 @@
       body.innerHTML = S.msgs.length ? S.msgs.map((m, i) => (m.a != null
         ? `<div class="sr-share"><small>${esc(nameOf(m.uid, m.name))} asked Cassie for everyone</small><b>${esc(m.q)}</b><p>${esc(m.a)}</p><button type="button" class="sr-mini" data-say="${i}">🔊 Listen</button></div>`
         : `<div class="sr-msg${m.uid === o.me ? ' me' : ''}">${m.uid === o.me ? '' : `<b>${esc(nameOf(m.uid, m.name))}</b>`}<span>${esc(m.text)}</span></div>`)).join('')
-        : '<p class="sr-empty">Say hi to your study group! Ask Cassie something for everyone — her answer shows up for the whole room.</p>';
+        : '<p class="sr-empty">Say hi to your study group! Ask Cassie something for everyone: her answer shows up for the whole room.</p>';
       if (atEnd || body.dataset.view !== 'chat') body.scrollTop = body.scrollHeight;
       body.dataset.view = 'chat';
       if (foot.dataset.view !== 'chat') {
@@ -148,14 +148,14 @@
         const c = d.cards[S.card.i], g = S.grades.get(`${d.id}|${S.card.i}`) || new Map();
         const myGrade = g.get(o.me);
         html += `<p class="sr-tally">${esc(d.title)} · card ${S.card.i + 1} of ${d.cards.length} · shared by ${esc(d.by)}</p>
-          <button type="button" class="sr-card" data-act="flip"><small>${S.card.flip ? 'Answer' : 'Question — think, then tap'}</small><big>${esc(c.f)}</big>${S.card.flip ? `<span class="sr-ans">${esc(c.b)}</span>` : ''}</button>
+          <button type="button" class="sr-card" data-act="flip"><small>${S.card.flip ? 'Answer' : 'Question: think, then tap'}</small><big>${esc(c.f)}</big>${S.card.flip ? `<span class="sr-ans">${esc(c.b)}</span>` : ''}</button>
           <div class="sr-row"><button type="button" class="sr-btn soft" data-act="prev" ${S.card.i ? '' : 'disabled'}>‹ Back</button><button type="button" class="sr-btn soft" data-act="say">🔊 Listen</button><button type="button" class="sr-btn" data-act="next" ${S.card.i < d.cards.length - 1 ? '' : 'disabled'}>Next ›</button></div>
           ${S.card.flip ? `<div class="sr-row" style="margin-top:8px"><button type="button" class="sr-btn soft" data-act="got" ${myGrade && myGrade.ok ? 'disabled' : ''}>✓ Got it</button><button type="button" class="sr-btn soft" data-act="miss" ${myGrade && !myGrade.ok ? 'disabled' : ''}>✗ Not yet</button></div>` : ''}
           ${g.size ? `<p class="sr-tally">${[...g.values()].map((x) => `${esc(x.name)} ${x.ok ? '✓' : '✗'}`).join(' · ')}</p>` : ''}`;
         if (shared.length > 1) html += `<p class="sr-tally">Other decks: ${shared.filter((x) => x.id !== d.id).map((x) => `<button type="button" class="sr-mini" data-deck="${esc(x.id)}">${esc(x.title)}</button>`).join(' ')}</p>`;
       } else html += '<p class="sr-empty">Share one of your flashcard decks and the whole room studies it together: everyone sees the same card, flips it at the same time, and marks if they got it.</p>';
       html += mine.length ? `<h4 style="margin:18px 0 4px">Share a deck</h4>${mine.map((m, i) => `<div class="sr-deck"><span>${esc(m.name)} <small>${m.cards.length} cards</small></span><button type="button" class="sr-mini" data-share-deck="${i}">Share</button></div>`).join('')}`
-        : '<p class="sr-empty">You have no flashcards yet — make some with ＋ Flashcards under any of Cassie’s answers.</p>';
+        : '<p class="sr-empty">You have no flashcards yet. Make some with ＋ Flashcards under any of Cassie’s answers.</p>';
       body.innerHTML = html; foot.innerHTML = ''; foot.hidden = true;
     }
     function quiz() {
@@ -171,7 +171,7 @@
           const a = S.answers.get(`${q.id}|${i}`), mine = a && a.get(o.me);
           return `<div class="sr-q"><p>${i + 1}. ${esc(qq.q)}</p>${qq.o.map((opt, k) => `<button type="button" class="sr-opt${mine ? (k === qq.a ? ' right' : mine.pick === k ? ' wrong' : '') : ''}${mine && mine.pick === k ? ' pick' : ''}" data-ans="${i}|${k}" ${mine ? 'disabled' : ''}>${'ABCDE'[k]}. ${esc(opt)}</button>`).join('')}${mine && qq.why ? `<p class="sr-why">${esc(qq.why)}</p>` : ''}</div>`;
         }).join('');
-      } else html += '<p class="sr-empty">Make a quiz for the whole room: type a topic, Cassie writes 5 questions, and everyone answers on their own phone — with a live score board.</p>';
+      } else html += '<p class="sr-empty">Make a quiz for the whole room: type a topic, Cassie writes 5 questions, and everyone answers on their own phone, with a live score board.</p>';
       body.innerHTML = html;
       foot.hidden = false;
       if (foot.dataset.view !== 'quiz') { foot.dataset.view = 'quiz'; foot.innerHTML = '<input class="sr-in" maxlength="80" placeholder="Quiz topic, e.g. cell organelles"><button type="button" class="sr-btn" data-act="quiz">Make a group quiz</button>'; }
@@ -180,7 +180,7 @@
       body.dataset.view = 'notes';
       const list = [...S.notes.entries()];
       body.innerHTML = list.length ? list.map(([id, n]) => `<div class="sr-note">${esc(n.text)}<small>${esc(nameOf(n.uid, n.name))}</small>${n.uid === o.me ? `<button type="button" data-unnote="${esc(id)}" aria-label="Remove this note">×</button>` : ''}</div>`).join('')
-        : '<p class="sr-empty">Pin what the group finds while researching — a definition, a source, a formula, who does which part.</p>';
+        : '<p class="sr-empty">Pin what the group finds while researching, a definition, a source, a formula, who does which part.</p>';
       foot.hidden = false;
       if (foot.dataset.view !== 'notes') { foot.dataset.view = 'notes'; foot.innerHTML = '<textarea class="sr-in" rows="2" maxlength="600" placeholder="A note for everyone…"></textarea><button type="button" class="sr-btn" data-act="note">Pin</button>'; }
     }
@@ -191,7 +191,7 @@
       const left = S.timer ? S.timer.ends - (Date.now() + S.offset) : 0;
       if (left > 0) {
         const m = Math.floor(left / 60e3), s = Math.floor((left % 60e3) / 1000);
-        b.textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`; b.classList.add('on'); b.title = `Focus time for everyone (started by ${S.timer.by}) — tap to stop`;
+        b.textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`; b.classList.add('on'); b.title = `Focus time for everyone (started by ${S.timer.by}). Tap to stop`;
         tick = setTimeout(timerLabel, 1000);
       } else {
         if (S.timer && left <= 0 && !S.timer.rang) { S.timer.rang = true; if (o.speak) o.speak('Time for a break! Great focus, everyone.'); }
@@ -221,7 +221,7 @@
         const topic = cut(input.value, 80); if (!topic) { input.focus(); return; }
         el.disabled = true; el.textContent = 'Cassie is writing it…';
         try { const qs = await o.makeQuiz(topic); if (qs && qs.length) { input.value = ''; send({ t: 'quiz', topic, qs }); } else el.textContent = 'Try another topic'; }
-        catch (e) { el.textContent = 'Couldn’t make it — try again'; }
+        catch (e) { el.textContent = 'Couldn’t make it. Try again'; }
         finally { setTimeout(() => { el.disabled = false; el.textContent = 'Make a group quiz'; }, 1200); }
         return;
       }

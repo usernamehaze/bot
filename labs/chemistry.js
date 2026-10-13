@@ -88,12 +88,12 @@ const EXAMPLES = [
 ];
 const balanceLab = {
   id: 'balance', name: 'Equation balancer', subject: 'chemistry', topic: 'balancing chemical equations and conservation of mass',
-  blurb: 'Set the numbers in front yourself — Cassie counts every atom on both sides.',
+  blurb: 'Set the numbers in front yourself. Cassie counts every atom on both sides.',
   words: 'balance chemical equation coefficients reaction atoms conservation stoichiometry',
   icon: '<path d="M24 8v32M10 40h28"/><path d="M8 14h32"/><path d="M8 14l-4 12h8zM40 14l-4 12h8z"/><circle cx="24" cy="8" r="2"/>',
   tries: ['Balance water (H₂ + O₂ → H₂O) yourself', 'Balance burning methane yourself', 'Balance photosynthesis yourself'],
-  hints: ['Count the O atoms: 2 on the left, 1 on the right. Make the right side 2 H₂O, then fix the H on the left.', 'Balance C first, then H, and leave O for last — O₂ is easy to adjust because it is on its own.', 'Glucose (C₆H₁₂O₆) has 6 carbons, so start with 6 CO₂. Then balance H with water, and O with O₂ last.'],
-  about: 'Atoms are never created or destroyed in a chemical reaction (the law of conservation of mass), so every element must appear the same number of times on both sides.\nYou may only change the coefficients — the big numbers in front. Changing the small subscripts would turn a substance into a different one (H₂O₂ is hydrogen peroxide, not water).\nCassie’s answer solves the atom counts as simultaneous equations and gives the smallest whole numbers.',
+  hints: ['Count the O atoms: 2 on the left, 1 on the right. Make the right side 2 H₂O, then fix the H on the left.', 'Balance C first, then H, and leave O for last, O₂ is easy to adjust because it is on its own.', 'Glucose (C₆H₁₂O₆) has 6 carbons, so start with 6 CO₂. Then balance H with water, and O with O₂ last.'],
+  about: 'Atoms are never created or destroyed in a chemical reaction (the law of conservation of mass), so every element must appear the same number of times on both sides.\nYou may only change the coefficients, the big numbers in front. Changing the small subscripts would turn a substance into a different one (H₂O₂ is hydrogen peroxide, not water).\nCassie’s answer solves the atom counts as simultaneous equations and gives the smallest whole numbers.',
   mount({ stage, panel, api }) {
     let src = EXAMPLES[0][1], eq = null, coef = [], answer = null, peeked = false, err = '';
     const box = el('div', 'lab-balance');
@@ -116,9 +116,9 @@ const balanceLab = {
       const term = (f, j) => `<span class="lab-term"><span class="lab-coef"><button type="button" data-j="${j}" data-d="1" aria-label="More ${esc(f)}">▲</button><b>${coef[j]}</b><button type="button" data-j="${j}" data-d="-1" aria-label="Fewer ${esc(f)}" ${coef[j] <= 1 ? 'disabled' : ''}>▼</button></span><span class="lab-formula">${sub2(f)}</span></span>`;
       const side = (list, off) => list.map((f, i) => term(f, i + off)).join('<span class="lab-plus">+</span>');
       box.innerHTML = `<div class="lab-eq">${side(eq.left, 0)}<span class="lab-arrow">→</span>${side(eq.right, eq.left.length)}</div>
-        <p class="lab-verdict ${ok ? 'ok' : ''}">${ok ? (answer && coef.join() !== answer.join() && coef.every((c, j) => c % answer[j] === 0) ? 'Balanced — but you can make the numbers smaller.' : 'Balanced! Every atom on the left is on the right.') : 'Not balanced yet — tap ▲ ▼ to change the numbers.'}</p>
+        <p class="lab-verdict ${ok ? 'ok' : ''}">${ok ? (answer && coef.join() !== answer.join() && coef.every((c, j) => c % answer[j] === 0) ? 'Balanced, but you can make the numbers smaller.' : 'Balanced! Every atom on the left is on the right.') : 'Not balanced yet. Tap ▲ ▼ to change the numbers.'}</p>
         <table class="lab-atoms"><tr><th>Atom</th><th>Left</th><th>Right</th><th></th></tr>${elems.map((e) => `<tr class="${(L[e] || 0) === (R[e] || 0) ? 'ok' : 'off'}"><td>${e}</td><td>${L[e] || 0}</td><td>${R[e] || 0}</td><td>${(L[e] || 0) === (R[e] || 0) ? '✓' : '✗'}</td></tr>`).join('')}</table>`;
-      st.set([['Cassie’s answer', peeked ? (answer ? eq.left.map((f, j) => `${answer[j] > 1 ? answer[j] : ''}${f}`).join(' + ') + ' → ' + eq.right.map((f, j) => `${answer[j + eq.left.length] > 1 ? answer[j + eq.left.length] : ''}${f}`).join(' + ') : 'This one can’t be balanced in just one way.') : 'hidden — try it first']]);
+      st.set([['Cassie’s answer', peeked ? (answer ? eq.left.map((f, j) => `${answer[j] > 1 ? answer[j] : ''}${f}`).join(' + ') + ' → ' + eq.right.map((f, j) => `${answer[j + eq.left.length] > 1 ? answer[j + eq.left.length] : ''}${f}`).join(' + ') : 'This one can’t be balanced in just one way.') : 'hidden. Try it first']]);
       if (ok && !peeked) {
         const n = src.replace(/\s+/g, '');
         if (n === 'H2+O2->H2O') api.check(0);
@@ -146,7 +146,7 @@ const balanceLab = {
     const st = stats(panel);
     load(src);
     return {
-      state: () => (eq ? `balancing ${src}; my numbers in front are ${eq.left.concat(eq.right).map((f, j) => `${coef[j]} ${f}`).join(', ')} — ${(() => { const L = count('L'), R = count('R'); const bad = [...new Set([...Object.keys(L), ...Object.keys(R)])].filter((e2) => (L[e2] || 0) !== (R[e2] || 0)); return bad.length ? `not balanced yet (${bad.map((e2) => `${e2}: ${L[e2] || 0} left, ${R[e2] || 0} right`).join('; ')})` : 'balanced'; })()}` : `I typed “${src}” but it can't be read: ${err}`),
+      state: () => (eq ? `balancing ${src}; my numbers in front are ${eq.left.concat(eq.right).map((f, j) => `${coef[j]} ${f}`).join(', ')} - ${(() => { const L = count('L'), R = count('R'); const bad = [...new Set([...Object.keys(L), ...Object.keys(R)])].filter((e2) => (L[e2] || 0) !== (R[e2] || 0)); return bad.length ? `not balanced yet (${bad.map((e2) => `${e2}: ${L[e2] || 0} left, ${R[e2] || 0} right`).join('; ')})` : 'balanced'; })()}` : `I typed “${src}” but it can't be read: ${err}`),
       destroy: () => box.remove(),
     };
   },
@@ -170,9 +170,9 @@ const phLab = {
   blurb: 'Drip acid or base into water, watch the colour change and the pH move.',
   words: 'ph acid base alkali neutral neutralisation indicator titration litmus',
   icon: '<path d="M14 8h20M16 8v8l-8 22a3 3 0 0 0 3 4h26a3 3 0 0 0 3-4L32 16V8"/><path d="M12 30h24"/><circle cx="21" cy="35" r="1.5"/><circle cx="28" cy="33" r="1.5"/>',
-  tries: ['Make it exactly neutral — pH 7.0 (±0.1) — using both acid and base', 'Turn phenolphthalein pink', 'Make it as acidic as lemon juice (pH 2)'],
+  tries: ['Make it exactly neutral: pH 7.0 (±0.1): using both acid and base', 'Turn phenolphthalein pink', 'Make it as acidic as lemon juice (pH 2)'],
   hints: ['Add some acid, then the same amount of base. Equal volumes of the same strength cancel exactly. Near 7 the pH jumps fast, so use drops.', 'Choose Phenolphthalein as the indicator, then add base until the pH is above about 8.6.', 'Add acid a few mL at a time until the pH reads 2. Each step of 1 on the pH scale is 10 times more acidic.'],
-  about: 'Hydrochloric acid and sodium hydroxide are strong: they split up completely in water. Both are 0.1 mol/L.\nThe pH comes from pH = −log₁₀[H⁺], including water’s own ions (Kw = 1.0 × 10⁻¹⁴, true at 25 °C).\nIndicators: phenolphthalein is colourless below pH 8.2 and pink above it; litmus is red below about 4.5 and blue above about 8.3; universal-indicator colours vary a little between brands.\nThe everyday examples are typical values — real lemons, soaps and colas vary.',
+  about: 'Hydrochloric acid and sodium hydroxide are strong: they split up completely in water. Both are 0.1 mol/L.\nThe pH comes from pH = −log₁₀[H⁺], including water’s own ions (Kw = 1.0 × 10⁻¹⁴, true at 25 °C).\nIndicators: phenolphthalein is colourless below pH 8.2 and pink above it; litmus is red below about 4.5 and blue above about 8.3; universal-indicator colours vary a little between brands.\nThe everyday examples are typical values, real lemons, soaps and colas vary.',
   mount({ stage, panel, api }) {
     const V0 = 50, M = 0.1;
     let Va = 0, Vb = 0, ind = 'universal', hist = [[0, 7]], drop = null;
@@ -302,7 +302,7 @@ const atomLab = {
   words: 'atom proton neutron electron isotope ion element periodic table nucleus shell',
   icon: '<circle cx="24" cy="24" r="4"/><ellipse cx="24" cy="24" rx="19" ry="8"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(60 24 24)"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-60 24 24)"/>',
   tries: ['Build carbon-12', 'Make a negative ion (more electrons than protons)', 'Build oxygen-18, a heavy but stable oxygen'],
-  hints: ['Carbon has 6 protons. “Carbon-12” means protons + neutrons = 12. A neutral atom has as many electrons as protons.', 'Add one more electron than there are protons — the atom gets a negative charge.', 'Oxygen has 8 protons. Oxygen-18 needs 18 − 8 neutrons.'],
+  hints: ['Carbon has 6 protons. “Carbon-12” means protons + neutrons = 12. A neutral atom has as many electrons as protons.', 'Add one more electron than there are protons. The atom gets a negative charge.', 'Oxygen has 8 protons. Oxygen-18 needs 18 − 8 neutrons.'],
   about: 'The number of protons decides the element. Protons + neutrons = the mass number (carbon-12, carbon-14…). Atoms of one element with different numbers of neutrons are isotopes.\nThis is the Bohr model: electrons are drawn in shells holding 2, 8, 8 and then 2 (correct for the first 20 elements, hydrogen to calcium). Real electrons are spread in clouds (orbitals), not neat circles.\n“Stable” means the isotope is not known to decay; calcium-48 does decay, but so slowly (half-life about 6 × 10¹⁹ years) that it is treated as stable. Real ions rarely have charges bigger than about ±3.',
   mount({ stage, panel, api }) {
     let Z = 6, N = 6, E = 6, spin = 0, V = null;
@@ -370,8 +370,8 @@ const atomLab = {
     function report() {
       const e = ELEMENTS[Z], q = Z - E;
       const stable = e ? e[3].includes(N) : false;
-      st.set(e ? [['Element', `${e[1]} (${e[0]})`], ['Mass number', `${Z + N} → ${e[1].toLowerCase()}-${Z + N}`], ['Charge', q === 0 ? '0 (a neutral atom)' : `${q > 0 ? '+' : '−'}${Math.abs(q)} — a ${q > 0 ? 'positive ion (cation)' : 'negative ion (anion)'}${Math.abs(q) > 3 ? ' (very unlikely in nature)' : ''}`], ['Nucleus', stable ? 'stable' : 'unstable — it would be radioactive'], ['Electron shells', shellsOf(E).join(', ') || 'none'], ['Most common isotope', `${e[1].toLowerCase()}-${Z + e[2]}`]]
-        : [['Element', 'none — the number of protons decides the element']]);
+      st.set(e ? [['Element', `${e[1]} (${e[0]})`], ['Mass number', `${Z + N} → ${e[1].toLowerCase()}-${Z + N}`], ['Charge', q === 0 ? '0 (a neutral atom)' : `${q > 0 ? '+' : '−'}${Math.abs(q)}: a ${q > 0 ? 'positive ion (cation)' : 'negative ion (anion)'}${Math.abs(q) > 3 ? ' (very unlikely in nature)' : ''}`], ['Nucleus', stable ? 'stable' : 'unstable. It would be radioactive'], ['Electron shells', shellsOf(E).join(', ') || 'none'], ['Most common isotope', `${e[1].toLowerCase()}-${Z + e[2]}`]]
+        : [['Element', 'none: the number of protons decides the element']]);
       if (Z === 6 && N === 6 && E === 6) api.check(0);
       if (Z > 0 && E > Z) api.check(1);
       if (Z === 8 && N === 10) api.check(2);

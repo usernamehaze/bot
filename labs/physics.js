@@ -11,9 +11,9 @@ const projectileLab = {
   blurb: 'Pick an angle and a speed, launch, and see how gravity bends the path into an arc.',
   words: 'projectile motion trajectory gravity launch cannon ball parabola kinematics',
   icon: '<path d="M6 40h36"/><path d="M8 38c8-28 24-28 32 0" stroke-dasharray="3 4"/><circle cx="24" cy="17" r="3"/><path d="M8 38l6-8"/>',
-  tries: ['Find the angle that goes farthest (launching from the ground)', 'Hit the target', 'Launch on the Moon after Earth — how much farther?'],
+  tries: ['Find the angle that goes farthest (launching from the ground)', 'Hit the target', 'Launch on the Moon after Earth. How much farther?'],
   hints: ['Keep the launch height at 0 m and try angles close to 45°. Compare 30°, 45° and 60°.', 'Watch where your ball lands compared with the red target, then change the speed a little at a time.', 'Launch on Earth first. Then switch “Where” to Moon and launch again with the same angle and speed.'],
-  about: 'No air resistance: in real air a ball goes less far, and the best angle is a little below 45°.\nGravity: Earth 9.81, Moon 1.62, Mars 3.71, Jupiter 24.79 m/s² (Jupiter has no solid surface — imagine a platform at its cloud tops).\nTime in the air comes from h + v·sinθ·t − ½gt² = 0; range = v·cosθ × time; highest point = h + (v·sinθ)² ÷ 2g.',
+  about: 'No air resistance: in real air a ball goes less far, and the best angle is a little below 45°.\nGravity: Earth 9.81, Moon 1.62, Mars 3.71, Jupiter 24.79 m/s² (Jupiter has no solid surface. Imagine a platform at its cloud tops).\nTime in the air comes from h + v·sinθ·t − ½gt² = 0; range = v·cosθ × time; highest point = h + (v·sinθ)² ÷ 2g.',
   mount({ stage, panel, api }) {
     let ang = 40, v = 22, h0 = 0, gk = 'earth', target = 30 + Math.round(Math.random() * 40);
     let flight = null, aiming = false; const trails = [];
@@ -115,7 +115,7 @@ const projectileLab = {
       if (trails.length > 5) trails.shift();
       if (h0 === 0 && ang === 45) api.check(0);
       if (Math.abs(P.range - target) <= 2) { api.check(1); msg.textContent = `Hit! It landed ${num(P.range)} m away.`; }
-      else msg.textContent = `Landed ${num(P.range)} m away — ${P.range < target ? 'short' : 'long'} by ${num(Math.abs(P.range - target))} m.`;
+      else msg.textContent = `Landed ${num(P.range)} m away: ${P.range < target ? 'short' : 'long'} by ${num(Math.abs(P.range - target))} m.`;
       planets.add(gk);
       if (gk === 'moon' && planets.has('earth')) api.check(2);
       flight = null;
@@ -152,9 +152,9 @@ const pendulumLab = {
   blurb: 'Swing it and watch energy trade between height and speed. Try a double one for chaos.',
   words: 'pendulum period oscillation energy kinetic potential chaos double harmonic',
   icon: '<path d="M24 6v0M14 6h20"/><path d="M24 6l-8 26"/><circle cx="16" cy="34" r="5"/><path d="M8 36c4 6 12 6 16 4" stroke-dasharray="2 3"/>',
-  tries: ['Make the period exactly 2 seconds (a “seconds pendulum”)', 'Swing it on the Moon — slower or faster?', 'Double: watch two almost identical pendulums drift apart'],
-  hints: ['On Earth the length needs to be close to 1 m. Small swings keep closest to the formula — wide swings take a little longer.', 'Switch “Where” to Moon and wait for the measured period to appear.', 'Choose “Double (chaos)” and watch for at least 10 seconds.'],
-  about: 'The swing is worked out step by step (Runge–Kutta, 8 steps per frame) from the full equation θ″ = −(g/L)·sin θ, not the small-angle shortcut — so wide swings correctly take longer than 2π√(L/g).\nThe ball is a point mass on a light, stiff rod. “Damping” is a simple drag that slows it gradually.\nThe energy bars are per kilogram: height energy = g·L·(1 − cos θ), movement energy = ½(L·ω)².\nThe double pendulum has two equal masses on two equal arms, each half the length.',
+  tries: ['Make the period exactly 2 seconds (a “seconds pendulum”)', 'Swing it on the Moon: slower or faster?', 'Double: watch two almost identical pendulums drift apart'],
+  hints: ['On Earth the length needs to be close to 1 m. Small swings keep closest to the formula. Wide swings take a little longer.', 'Switch “Where” to Moon and wait for the measured period to appear.', 'Choose “Double (chaos)” and watch for at least 10 seconds.'],
+  about: 'The swing is worked out step by step (Runge-Kutta, 8 steps per frame) from the full equation θ″ = −(g/L)·sin θ, not the small-angle shortcut, so wide swings correctly take longer than 2π√(L/g).\nThe ball is a point mass on a light, stiff rod. “Damping” is a simple drag that slows it gradually.\nThe energy bars are per kilogram: height energy = g·L·(1 − cos θ), movement energy = ½(L·ω)².\nThe double pendulum has two equal masses on two equal arms, each half the length.',
   mount({ stage, panel, api }) {
     let mode = 'single', L = 1.2, gk = 'earth', damp = 0.02, start = 35;
     let th = (start * Math.PI) / 180, om = 0, t = 0, crossings = [], period = 0, dragging = false;
@@ -283,9 +283,9 @@ const wavesLab = {
   blurb: 'Wiggle one end of a string. Watch waves travel, bounce back and stand still.',
   words: 'wave wavelength frequency amplitude reflection standing wave string',
   icon: '<path d="M4 24c4-10 8-10 12 0s8 10 12 0 8-10 12 0 4 6 4 6"/><path d="M4 14v20M44 18v12"/>',
-  tries: ['Send a pulse at a fixed end — does it come back upside down?', 'Send a pulse at a loose end — what changes?', 'Make a standing wave (fixed end + steady wiggle)'],
+  tries: ['Send a pulse at a fixed end. Does it come back upside down?', 'Send a pulse at a loose end. What changes?', 'Make a standing wave (fixed end + steady wiggle)'],
   hints: ['Set the far end to Fixed, tap “Send a pulse”, and watch it hit the end and come back.', 'Set the far end to Loose and send another pulse. Compare which way up it returns.', 'Keep wiggling with a Fixed end, then set the frequency to one of the standing-wave frequencies shown below the controls.'],
-  about: 'The string is 200 beads joined by springs, solved with the wave equation (a finite-difference model).\nThe wave speed depends on the tension (and the string’s mass per metre), not on the frequency — so a higher frequency gives a shorter wavelength: λ = v ÷ f.\nA fixed end flips a pulse upside down; a loose end reflects it the right way up; “Goes on” lets the wave leave without reflecting.\nStanding waves form when the string fits whole half-wavelengths: f = n·v ÷ 2L.',
+  about: 'The string is 200 beads joined by springs, solved with the wave equation (a finite-difference model).\nThe wave speed depends on the tension (and the string’s mass per metre), not on the frequency, so a higher frequency gives a shorter wavelength: λ = v ÷ f.\nA fixed end flips a pulse upside down; a loose end reflects it the right way up; “Goes on” lets the wave leave without reflecting.\nStanding waves form when the string fits whole half-wavelengths: f = n·v ÷ 2L.',
   mount({ stage, panel, api }) {
     const N = 200, LEN = 10, STEP = 1 / 600;
     let y = new Float32Array(N), prev = new Float32Array(N), next = new Float32Array(N);
@@ -361,11 +361,11 @@ const wavesLab = {
     V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.waves3d(B, N)), { pitch: 10 });
     function report() {
       const v = speed(), lam = v / freq, n1 = v / (2 * LEN);
-      st.set([['Wave speed v', `${num(v)} m/s`], ['Wavelength λ = v ÷ f', mode === 'wiggle' ? `${num(lam)} m` : '—'], ['Standing-wave frequencies', `${num(n1)}, ${num(2 * n1)}, ${num(3 * n1)} Hz…`]]);
+      st.set([['Wave speed v', `${num(v)} m/s`], ['Wavelength λ = v ÷ f', mode === 'wiggle' ? `${num(lam)} m` : '-'], ['Standing-wave frequencies', `${num(n1)}, ${num(2 * n1)}, ${num(3 * n1)} Hz…`]]);
     }
     report(); tick.start();
     return {
-      state: () => `a 10 m string, wave speed ${num(speed())} m/s; my hand is ${mode === 'wiggle' ? `wiggling at ${num(freq)} Hz (wavelength ${num(speed() / freq)} m)` : 'sending single pulses'}; the far end is ${end === 'fixed' ? 'fixed' : end === 'loose' ? 'loose (free to slide)' : 'open — the wave just leaves'}`,
+      state: () => `a 10 m string, wave speed ${num(speed())} m/s; my hand is ${mode === 'wiggle' ? `wiggling at ${num(freq)} Hz (wavelength ${num(speed() / freq)} m)` : 'sending single pulses'}; the far end is ${end === 'fixed' ? 'fixed' : end === 'loose' ? 'loose (free to slide)' : 'open: the wave just leaves'}`,
       destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
     };
   },
@@ -375,12 +375,12 @@ const wavesLab = {
 const MEDIA = { air: ['Air', 1.0], water: ['Water', 1.33], glass: ['Glass', 1.5], diamond: ['Diamond', 2.42] };
 const lightLab = {
   id: 'refraction', name: 'Bending light', subject: 'physics', topic: 'refraction, Snell’s law and total internal reflection',
-  blurb: 'Aim a laser into water, glass or diamond and watch it bend — or bounce right back.',
+  blurb: 'Aim a laser into water, glass or diamond and watch it bend, or bounce right back.',
   words: 'light refraction snell law reflection total internal critical angle optics laser index',
   icon: '<path d="M4 26h40"/><path d="M8 6l16 20 8 18"/><path d="M24 26l16-20" stroke-dasharray="3 3"/>',
-  tries: ['Shine straight down — does it bend?', 'Make total internal reflection happen', 'Find the critical angle from water into air'],
+  tries: ['Shine straight down: does it bend?', 'Make total internal reflection happen', 'Find the critical angle from water into air'],
   hints: ['Move the angle slider to 0° so the laser points straight down the dashed line.', 'Light has to go from a slower material (higher n) into a faster one. Put water or glass on top and air below, then aim wider.', 'Top: Water, bottom: Air. Raise the angle slowly until the light just stops getting out.'],
-  about: 'Uses Snell’s law, n₁ sin θ₁ = n₂ sin θ₂, with refractive indices for yellow light: air 1.00 (really 1.0003), water 1.33, glass 1.50 (typical window glass), diamond 2.42.\nHow much light reflects comes from the Fresnel equations for ordinary (unpolarised) light.\nAngles are measured from the normal — the dashed line at right angles to the surface. The critical angle is sin⁻¹(n₂ ÷ n₁).',
+  about: 'Uses Snell’s law, n₁ sin θ₁ = n₂ sin θ₂, with refractive indices for yellow light: air 1.00 (really 1.0003), water 1.33, glass 1.50 (typical window glass), diamond 2.42.\nHow much light reflects comes from the Fresnel equations for ordinary (unpolarised) light.\nAngles are measured from the normal, the dashed line at right angles to the surface. The critical angle is sin⁻¹(n₂ ÷ n₁).',
   mount({ stage, panel, api }) {
     let top = 'air', bottom = 'water', ang = 40;
     const n1 = () => MEDIA[top][1], n2 = () => MEDIA[bottom][1];
@@ -423,11 +423,11 @@ const lightLab = {
       ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(O[0], O[1], 46, -Math.PI / 2 - k.a, -Math.PI / 2); ctx.stroke();
       text(ctx, `${num(ang)}°`, O[0] - 16 - Math.sin(k.a / 2) * 60, O[1] - Math.cos(k.a / 2) * 60, INK, 'center');
       if (!k.tir) { ctx.beginPath(); ctx.arc(O[0], O[1], 46, Math.PI / 2 - k.b, Math.PI / 2); ctx.stroke(); text(ctx, `${num((k.b * 180) / Math.PI)}°`, O[0] + 14 + Math.sin(k.b / 2) * 62, O[1] + Math.cos(k.b / 2) * 62, INK, 'center'); }
-      else text(ctx, 'Total internal reflection — no light gets through', O[0], O[1] + 40, C.gold, 'center');
+      else text(ctx, 'Total internal reflection. No light gets through', O[0], O[1] + 40, C.gold, 'center');
     });
     function report() {
       const k = calc();
-      st.set([['Angle in', `${num(ang)}°`], ['Angle out', k.tir ? 'none — it all reflects' : `${num((k.b * 180) / Math.PI)}°`], ['Reflected', `${num(k.R * 100)}%`], ['Critical angle', k.crit ? `${num(k.crit)}°` : 'none (light goes into a denser material)'], ['Light speed', `${num(299792 / n1())} → ${num(299792 / n2())} km/s`]]);
+      st.set([['Angle in', `${num(ang)}°`], ['Angle out', k.tir ? 'none: it all reflects' : `${num((k.b * 180) / Math.PI)}°`], ['Reflected', `${num(k.R * 100)}%`], ['Critical angle', k.crit ? `${num(k.crit)}°` : 'none (light goes into a denser material)'], ['Light speed', `${num(299792 / n1())} → ${num(299792 / n2())} km/s`]]);
       if (ang <= 0.5) api.check(0);
       if (k.tir) api.check(1);
       if (top === 'water' && bottom === 'air' && Math.abs(ang - 48.75) < 0.6) api.check(2);

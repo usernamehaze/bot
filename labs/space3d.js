@@ -17,10 +17,10 @@ const MORE = {
   Venus: [8.87, 0.815, 177.4, 'The hottest planet: its thick carbon-dioxide air traps heat. It spins backwards, and one day there is longer than its year.'],
   Earth: [9.81, 1, 23.44, 'The only place we know has life. About 71% of its surface is ocean, and its tilt gives us the seasons.'],
   Mars: [3.71, 0.107, 25.19, 'Red because of iron-oxide (rust) dust. It has Olympus Mons, the tallest volcano in the solar system (about 22 km high).'],
-  Jupiter: [24.79, 317.8, 3.13, 'The biggest planet — more than 1,300 Earths would fit inside. The Great Red Spot is a storm wider than Earth.'],
+  Jupiter: [24.79, 317.8, 3.13, 'The biggest planet: more than 1,300 Earths would fit inside. The Great Red Spot is a storm wider than Earth.'],
   Saturn: [10.44, 95.2, 26.73, 'Its rings are mostly chunks of ice, hundreds of thousands of km wide but often only about 10 m thick. Saturn is less dense than water.'],
   Uranus: [8.69, 14.5, 97.77, 'It is tipped on its side, so each pole gets about 42 years of sunlight, then 42 years of darkness.'],
-  Neptune: [11.15, 17.1, 28.32, 'The windiest planet — winds over 2,000 km/h. It was the first planet found by maths: its place was worked out, and it was spotted there in 1846. (Galileo saw it in 1612 but thought it was a star.)'],
+  Neptune: [11.15, 17.1, 28.32, 'The windiest planet: winds over 2,000 km/h. It was the first planet found by maths: its place was worked out, and it was spotted there in 1846. (Galileo saw it in 1612 but thought it was a star.)'],
 };
 const TILT = { Sun: 7.25, Moon: 6.7, Pluto: 122.5 };
 
@@ -35,10 +35,10 @@ const GALAXY_SPOTS = [
   ['Eagle Nebula', 'The Pillars of Creation', 'Its towering columns of gas, photographed by Hubble and Webb, are about 7,000 light-years away.', [17.0, 0.8, 7.0]],
   ['Omega Centauri', 'A globular cluster', 'About 10 million old stars in a ball, about 17,000 light-years away, above the Milky Way’s disc.', [309.1, 15.0, 17.1]],
 ];
-const ARMS = [['Perseus Arm', 0.2], ['Scutum–Centaurus Arm', 0.2 + Math.PI / 2], ['Norma Arm', 0.2 + Math.PI], ['Sagittarius Arm', 0.2 + (3 * Math.PI) / 2]];
+const ARMS = [['Perseus Arm', 0.2], ['Scutum-Centaurus Arm', 0.2 + Math.PI / 2], ['Norma Arm', 0.2 + Math.PI], ['Sagittarius Arm', 0.2 + (3 * Math.PI) / 2]];
 // the Local Group (distances in millions of light-years)
 const LOCAL = [
-  ['Milky Way', 'Our galaxy', 'A barred spiral galaxy about 100,000 light-years across, with 100–400 billion stars. Almost every star you can see in the night sky without a telescope is in it. (A few other galaxies, like Andromeda and the Magellanic Clouds, can be seen with your eyes too.)', [0, 0, 0], 100, 'spiral'],
+  ['Milky Way', 'Our galaxy', 'A barred spiral galaxy about 100,000 light-years across, with 100 to 400 billion stars. Almost every star you can see in the night sky without a telescope is in it. (A few other galaxies, like Andromeda and the Magellanic Clouds, can be seen with your eyes too.)', [0, 0, 0], 100, 'spiral'],
   ['Andromeda Galaxy (M31)', 'The nearest big galaxy', 'About 2.5 million light-years away and around 220,000 light-years across, with about a trillion stars. It is coming towards us, and the two may merge in several billion years: a 2025 study puts the chance at about 50% within 10 billion years. You can see it with your eyes on a dark night.', [121.17, -21.57, 2.54], 220, 'spiral'],
   ['Triangulum Galaxy (M33)', 'The third big spiral', 'About 2.7 million light-years away and 60,000 light-years across.', [133.61, -31.33, 2.73], 60, 'spiral'],
   ['Large Magellanic Cloud', 'A small galaxy next to ours', 'About 160,000 light-years away; seen from the Southern Hemisphere as a cloudy patch. It goes round the Milky Way.', [280.47, -32.89, 0.163], 32, 'cloud'],
@@ -53,8 +53,8 @@ const LOCAL = [
 const UNIVERSE = [
   ['Local Group', 'Our neighbourhood', 'The Milky Way, Andromeda, Triangulum and more than 80 small galaxies, about 10 million light-years across.', [0, 0, 0]],
   ['Virgo Cluster', 'The nearest big cluster of galaxies', 'More than 1,000 galaxies about 54 million light-years away. The Local Group is on its outskirts.', [283.8, 74.5, 54]],
-  ['Great Attractor', 'A pull in space', 'A huge concentration of mass about 150–250 million light-years away that everything around us is drifting towards.', [325.3, -7.3, 220]],
-  ['Coma Cluster', 'A huge cluster of galaxies', 'Over 1,000 galaxies about 320 million light-years away — where astronomers first found signs of dark matter (1933).', [58.1, 88.0, 321]],
+  ['Great Attractor', 'A pull in space', 'A huge concentration of mass about 150 to 250 million light-years away that everything around us is drifting towards.', [325.3, -7.3, 220]],
+  ['Coma Cluster', 'A huge cluster of galaxies', 'Over 1,000 galaxies about 320 million light-years away, where astronomers first found signs of dark matter (1933).', [58.1, 88.0, 321]],
   ['Shapley Supercluster', 'The biggest pile of galaxies nearby', 'Thousands of galaxies about 650 million light-years away.', [312.0, 30.7, 650]],
   ['Laniakea', 'Our supercluster', 'Our home supercluster: about 100,000 galaxies, roughly 520 million light-years across (named in 2014; Hawaiian for “immeasurable heaven”).', [0, 0, 0]],
   ['Edge of the observable universe', 'As far as light lets us see', 'Light from further away hasn’t had time to reach us in the universe’s 13.8 billion years. Because space has stretched, the edge is now about 46.5 billion light-years away in every direction. The glow from there is the cosmic microwave background.', [0, 0, 0]],
@@ -67,9 +67,9 @@ export const space3dLab = {
   blurb: 'Fly round the planets in 3D, then zoom out to the Milky Way, our neighbour galaxies and the whole observable universe. Tap anything to learn about it.',
   words: 'space solar system planets 3d sun moon galaxy milky way andromeda universe stars astronomy zoom nebula black hole',
   icon: '<circle cx="24" cy="24" r="5"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-20 24 24)"/><circle cx="40" cy="17" r="2.5"/><circle cx="9" cy="31" r="2"/>',
-  tries: ['Fly to Jupiter and find the Great Red Spot', 'Zoom out to the Milky Way and find where the Sun is', 'Find the Andromeda Galaxy — the nearest big galaxy'],
-  hints: ['Tap Jupiter (the biggest planet, the 5th from the Sun). Turn it round — the spot is a giant storm in its southern half.', 'Tap “Milky Way” under Scale, or keep zooming out past Neptune. Look for “You are here”.', 'Go to the Local Group scale and look for the biggest spiral apart from ours.'],
-  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged — at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project) — Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
+  tries: ['Fly to Jupiter and find the Great Red Spot', 'Zoom out to the Milky Way and find where the Sun is', 'Find the Andromeda Galaxy: the nearest big galaxy'],
+  hints: ['Tap Jupiter (the biggest planet, the 5th from the Sun). Turn it round: the spot is a giant storm in its southern half.', 'Tap “Milky Way” under Scale, or keep zooming out past Neptune. Look for “You are here”.', 'Go to the Local Group scale and look for the biggest spiral apart from ours.'],
+  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged, at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project): Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
   mount({ stage, panel, api }) {
     if (!webglOk()) { stage.appendChild(el('p', 'lab-err', 'This browser can’t show 3D (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.')); return {}; }
     // free: 2 views a week; Plus has it always
@@ -111,7 +111,7 @@ export const space3dLab = {
         if (e.deltaY > 0 && d >= S.controls.maxDistance * 0.97 && i < LEVELS.length - 1) go(LEVELS[i + 1][0]);
         else if (e.deltaY < 0 && d <= S.controls.minDistance * 1.05 && i > 0 && !selected) go(LEVELS[i - 1][0]);
       }, { passive: true });
-    }).catch(() => { loading.textContent = 'The 3D view couldn’t load — check your internet and open this lab again.'; });
+    }).catch(() => { loading.textContent = 'The 3D view couldn’t load. Check your internet and open this lab again.'; });
 
     /* ---------- building every scale ---------- */
     const dot = () => paintTexture(THREE, 64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
@@ -149,7 +149,7 @@ export const space3dLab = {
       const sun = new THREE.Mesh(new THREE.SphereGeometry(1.7, 64, 48), new THREE.MeshBasicMaterial({ map: sunTex }));
       sol.add(sun);
       look.sun(sun);
-      things.Sun = { obj: sun, name: 'Sun', sub: 'Our star', size: 1.7, level: 'solar', info: () => [['What it is', 'A yellow dwarf star — a ball of hot gas (mostly hydrogen and helium) that makes energy by nuclear fusion'], ['Diameter', '1,392,700 km (109 Earths across)'], ['Mass', '99.86% of everything in the solar system'], ['Surface', 'about 5,500 °C (the core: about 15 million °C)'], ['Light to Earth', 'about 8 minutes 20 seconds'], ['Age', 'about 4.6 billion years']] };
+      things.Sun = { obj: sun, name: 'Sun', sub: 'Our star', size: 1.7, level: 'solar', info: () => [['What it is', 'A yellow dwarf star: a ball of hot gas (mostly hydrogen and helium) that makes energy by nuclear fusion'], ['Diameter', '1,392,700 km (109 Earths across)'], ['Mass', '99.86% of everything in the solar system'], ['Surface', 'about 5,500 °C (the core: about 15 million °C)'], ['Light to Earth', 'about 8 minutes 20 seconds'], ['Age', 'about 4.6 billion years']] };
       S.pickable(sun, () => pick('Sun')); S.label(sun, 'Sun', { onTap: () => pick('Sun'), offset: new THREE.Vector3(0, -2.3, 0), show: () => sol.visible });
       const tex = {
         Mercury: (n) => (x, y) => { const v = n(x * 8, y * 8, 5); const c = 95 + v * 90; return [c, c * 0.97, c * 0.93]; },
@@ -181,7 +181,7 @@ export const space3dLab = {
         if (name === 'Earth') { // the Moon (its distance is enlarged too)
           const moon = new THREE.Mesh(new THREE.SphereGeometry(r * 0.27, 48, 32), new THREE.MeshStandardMaterial({ map: paintTexture(THREE, 256, 128, (g, w, h) => { const nn = noise2(42); const img = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = nn(x / 14, y / 14, 5); const c = 110 + v * 100; const k = (y * w + x) * 4; img.data[k] = c; img.data[k + 1] = c; img.data[k + 2] = c; img.data[k + 3] = 255; } g.putImageData(img, 0, 0); }), roughness: 1 }));
           pivot.add(moon); pivot.userData.moon = moon; look.dress('Moon', moon, r * 0.27);
-          things.Moon = { obj: moon, name: 'Moon', sub: 'Earth’s moon', size: r * 0.27, level: 'solar', info: () => [['Diameter', '3,474 km (about a quarter of Earth’s)'], ['Distance from Earth', 'about 384,400 km (light takes 1.3 s)'], ['One orbit', '27.3 days (29.5 days from new moon to new moon)'], ['Fact', 'The same side always faces Earth, because it spins exactly once each orbit.'], ['Visited', '12 people walked on it (1969–1972)']] };
+          things.Moon = { obj: moon, name: 'Moon', sub: 'Earth’s moon', size: r * 0.27, level: 'solar', info: () => [['Diameter', '3,474 km (about a quarter of Earth’s)'], ['Distance from Earth', 'about 384,400 km (light takes 1.3 s)'], ['One orbit', '27.3 days (29.5 days from new moon to new moon)'], ['Fact', 'The same side always faces Earth, because it spins exactly once each orbit.'], ['Visited', '12 people walked on it (1969 to 1972)']] };
           S.pickable(moon, () => pick('Moon'), () => sol.visible); S.label(moon, 'Moon', { onTap: () => pick('Moon'), className: 'small', show: () => sol.visible && S.camera.position.distanceTo(pivot.position) < 25 });
         }
         const orbit = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x8a90a8, transparent: true, opacity: 0.35 }));
@@ -250,7 +250,7 @@ export const space3dLab = {
       uni.add(points(web, 3.2, 0.75));
       UNIVERSE.forEach(([name, sub, text, lbd]) => {
         const pos = name === 'Laniakea' ? new THREE.Vector3(0, 260, 0) : name === 'Edge of the observable universe' ? new THREE.Vector3(0, 0, -1400) : galPos(lbd[0], lbd[1], lbd[2], new THREE.Vector3());
-        marker(uni, name, sub, () => [['What it is', sub], ['About it', text], ...(lbd[2] ? [['Distance', `about ${big(lbd[2] * 1e6)} light-years`]] : []), ...(name === 'Edge of the observable universe' ? [['In this picture', 'drawn far closer than it really is — at true scale it would be about 30 times farther out than Laniakea’s ring is wide']] : [])], pos, name === 'Local Group' ? 0xffd27a : 0xffffff, name === 'Local Group' ? 6 : 5);
+        marker(uni, name, sub, () => [['What it is', sub], ['About it', text], ...(lbd[2] ? [['Distance', `about ${big(lbd[2] * 1e6)} light-years`]] : []), ...(name === 'Edge of the observable universe' ? [['In this picture', 'drawn far closer than it really is. At true scale it would be about 30 times farther out than Laniakea’s ring is wide']] : [])], pos, name === 'Local Group' ? 0xffd27a : 0xffffff, name === 'Local Group' ? 6 : 5);
       });
       const lan = new THREE.Mesh(new THREE.SphereGeometry(260, 48, 24), new THREE.MeshBasicMaterial({ color: 0x6f8fff, wireframe: true, transparent: true, opacity: 0.06 }));
       uni.add(lan);
@@ -347,7 +347,7 @@ export const space3dLab = {
         ['Distance from the Sun now', `${num(now.r, 3)} AU = ${big(now.r * AU_KM)} km`],
         ...(name === 'Earth' ? [] : [['Distance from Earth now', `${big(fromEarth * AU_KM)} km (light takes ${num((fromEarth * AU_KM) / 299792.458 / 60, 3)} min)`]]),
         ['One year (orbit)', `${num(periodDays(p), 4)} Earth days${a > 1.5 ? ` (${num(periodDays(p) / 365.25, 3)} years)` : ''}`],
-        ['One day (spin)', `${num(Math.abs(dayH), 3)} hours${dayH < 0 ? ' — backwards' : ''}`],
+        ['One day (spin)', `${num(Math.abs(dayH), 3)} hours${dayH < 0 ? ': backwards' : ''}`],
         ['Moons', moons === 0 ? 'none' : name === 'Earth' ? '1 (the Moon)' : `${moons} known (as of ${MOONS_AS_OF})`],
         ['Gravity', `${gr} m/s² (${num(gr / 9.81, 2)} × Earth’s)`], ['Mass', `${num(mass, 3)} × Earth`], ['Average temperature', `${temp} °C`], ['Fact', MORE[name][3]]];
     }

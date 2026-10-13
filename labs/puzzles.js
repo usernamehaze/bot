@@ -23,8 +23,8 @@ function shell(panel, api, id, onNew, standard = () => true) {
     penalty(sec) { extra += sec; },
     get counts() { return !practice && standard(); },
     render() {
-      box.innerHTML = `<p class="puz-day">${practice ? 'Practice puzzle — not on the score board' : standard() ? `Today’s puzzle · ${esc(dayKey())}` : `Today’s puzzle at this size — only the standard size goes on the score board`}</p>
-        <p class="puz-time">${fmtTime(s.seconds)}</p>${!practice && done ? `<p class="puz-done">You finished today’s in ${esc(done.shown)} — it’s on the score board. Try a new one too!</p>` : ''}`;
+      box.innerHTML = `<p class="puz-day">${practice ? 'Practice puzzle, not on the score board' : standard() ? `Today’s puzzle · ${esc(dayKey())}` : `Today’s puzzle at this size. Only the standard size goes on the score board`}</p>
+        <p class="puz-time">${fmtTime(s.seconds)}</p>${!practice && done ? `<p class="puz-done">You finished today’s in ${esc(done.shown)}, it’s on the score board. Try a new one too!</p>` : ''}`;
       const btns = el('div', 'puz-btns');
       const nb = el('button', 'lab-btn main', practice ? 'Another new puzzle' : 'New puzzle');
       nb.type = 'button';
@@ -41,8 +41,8 @@ function shell(panel, api, id, onNew, standard = () => true) {
     // a finished puzzle: today's counts once; practice ones just say well done
     async win(value, shown) {
       s.stop();
-      if (practice) return 'Solved! (practice — not on the score board)';
-      if (!standard()) return 'Solved! (only the standard size goes on the score board — try it too!)';
+      if (practice) return 'Solved! (practice, not on the score board)';
+      if (!standard()) return 'Solved! (only the standard size goes on the score board. Try it too!)';
       const already = api.doneToday();
       const res = await api.finish(value, shown);
       if (already) return `Solved again! Your first finish today (${already.shown}) is the one on the score board.`;
@@ -106,10 +106,10 @@ function sudokuMake(n, rand) {
   return { n, br, bc, sol, puzzle };
 }
 const sudokuLab = {
-  id: 'sudoku', name: 'Sudoku', subject: 'puzzles', blurb: 'Fill the grid so every row, column and box has each number once. A fresh 9×9 every day — or 4×4 up to 12×12, as many as you like.',
+  id: 'sudoku', name: 'Sudoku', subject: 'puzzles', blurb: 'Fill the grid so every row, column and box has each number once. A fresh 9×9 every day, or 4×4 up to 12×12, as many as you like.',
   words: 'sudoku logic numbers grid daily puzzle',
   icon: '<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M18 6v36M30 6v36M6 18h36M6 30h36"/><path d="M11 12h2M23 24h2M35 36h2" stroke-width="3"/>',
-  about: 'Every daily Sudoku is checked by a solver to have exactly one solution, so it can always be finished by logic, without guessing.\nNumbers that clash with another in the same row, column or box turn red (that tells you about a clash, not whether a number matches the answer).\nSizes: 4×4 (2×2 boxes), 6×6 (2×3), 8×8 (2×4), 9×9 (3×3) and 12×12 (3×4) — each made fresh and checked to have exactly one answer. The score board uses today’s 9×9: your first finish counts.',
+  about: 'Every daily Sudoku is checked by a solver to have exactly one solution, so it can always be finished by logic, without guessing.\nNumbers that clash with another in the same row, column or box turn red (that tells you about a clash, not whether a number matches the answer).\nSizes: 4×4 (2×2 boxes), 6×6 (2×3), 8×8 (2×4), 9×9 (3×3) and 12×12 (3×4). Each made fresh and checked to have exactly one answer. The score board uses today’s 9×9: your first finish counts.',
   mount({ stage, panel, api }) {
     let size = 9, P = null, grid = [], notes = [], sel = -1, noting = false;
     const S = shell(panel, api, 'sudoku', () => make(), () => size === 9);
@@ -212,7 +212,7 @@ const nonogramLab = {
   id: 'nonogram', name: 'Nonogram', subject: 'puzzles', blurb: 'Fill squares to match the number clues on each row and column. 5×5 up to 25×25, a new one any time.',
   words: 'nonogram picross griddler picture logic daily puzzle',
   icon: '<rect x="14" y="14" width="28" height="28" rx="2"/><path d="M14 21h28M14 28h28M14 35h28M21 14v28M28 14v28M35 14v28"/><path d="M6 17h4M6 24h4M17 6v4M24 6v4" />',
-  about: 'Each clue lists the runs of filled squares in that row or column, in order: “3 1” means a run of 3, a gap, then a run of 1.\nEvery daily nonogram is checked to be solvable by logic alone — you never need to guess. Any filling that matches all the clues counts as solved.\nMark squares you know are empty with ✕ to help yourself.',
+  about: 'Each clue lists the runs of filled squares in that row or column, in order: “3 1” means a run of 3, a gap, then a run of 1.\nEvery daily nonogram is checked to be solvable by logic alone. You never need to guess. Any filling that matches all the clues counts as solved.\nMark squares you know are empty with ✕ to help yourself.',
   mount({ stage, panel, api }) {
     let size = 10, sol = [], g = [], rowsC = [], colsC = [], mode = 1, done = false;
     const S = shell(panel, api, 'nonogram', () => make(), () => size === 10);
@@ -372,7 +372,7 @@ const hashiLab = {
         const seen = new Set([0]), stack = [0];
         while (stack.length) { const a = stack.pop(); for (const [k, wgt] of mine) { if (!wgt) continue; const [x, y] = k.split('-').map(Number); const o = x === a ? y : y === a ? x : -1; if (o >= 0 && !seen.has(o)) { seen.add(o); stack.push(o); } } }
         if (seen.size === P.isl.length) { done = true; msg.hidden = false; msg.textContent = 'Solved!'; S.win(Math.round(S.seconds), fmtTime(S.seconds)).then((t) => { msg.textContent = t; S.render(); }); }
-        else warn = 'Every number fits — but the islands must all join into one network.';
+        else warn = 'Every number fits, but the islands must all join into one network.';
       }
       cv.redraw();
     }
@@ -388,7 +388,7 @@ const hashiLab = {
 const DIRS = [[-1, 0, 1, 4], [0, 1, 2, 8], [1, 0, 4, 1], [0, -1, 8, 2]]; // [dr, dc, my side, their side] N E S W
 const rot = (m) => ((m << 1) | (m >> 3)) & 15; // turn a quarter clockwise
 const pipesLab = {
-  id: 'pipes', name: 'Pipes', subject: 'puzzles', blurb: 'Turn the pipes so water from the middle reaches every tile — with no leaks. 4×4 up to 12×12.',
+  id: 'pipes', name: 'Pipes', subject: 'puzzles', blurb: 'Turn the pipes so water from the middle reaches every tile, with no leaks. 4×4 up to 12×12.',
   words: 'pipes plumber water network rotate tiles daily puzzle',
   icon: '<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M6 24h14v-12M42 24H28v12M24 6v6M24 36v6"/><circle cx="24" cy="24" r="4"/>',
   about: 'Every pipe tile can turn. The puzzle is solved when water from the tap in the middle reaches every tile and no pipe end is left open (no leaks).\nThe daily puzzle is made by laying a real network of pipes and then turning the tiles at random, so it can always be solved.',
@@ -594,7 +594,7 @@ const equationLab = {
   id: 'equation', name: 'Guess the equation', subject: 'puzzles', blurb: 'Find the hidden 8-symbol equation in six guesses. Every guess must be a true equation.',
   words: 'equation guess nerdle wordle math arithmetic daily puzzle',
   icon: '<rect x="4" y="16" width="8" height="12" rx="2"/><rect x="14" y="16" width="8" height="12" rx="2"/><rect x="24" y="16" width="8" height="12" rx="2"/><rect x="34" y="16" width="10" height="12" rx="2"/><path d="M26 22h4M36 21h6M36 24h6"/>',
-  about: 'The hidden equation has 8 symbols — digits and + − × ÷ = — like 12+46=58. Every guess must be a true equation, worked out with the usual order (× and ÷ before + and −). Numbers can’t start with 0.\nAfter each guess: a white square means the right symbol in the right place, an outlined square means the symbol is in the equation but somewhere else, and a dark square means it isn’t in the equation (or not that many times).\nYour score uses how many guesses you needed, then your time.',
+  about: 'The hidden equation has 8 symbols (digits and + − × ÷ =), like 12+46=58. Every guess must be a true equation, worked out with the usual order (× and ÷ before + and −). Numbers can’t start with 0.\nAfter each guess: a white square means the right symbol in the right place, an outlined square means the symbol is in the equation but somewhere else, and a dark square means it isn’t in the equation (or not that many times).\nYour score uses how many guesses you needed, then your time.',
   mount({ stage, panel, api }) {
     let answer = '', guesses = [], cur = '', over = false, warn = '';
     const S = shell(panel, api, 'equation', () => make());
@@ -630,7 +630,7 @@ const equationLab = {
             over = true; const g = guesses.length, sec = Math.round(S.seconds);
             msg.hidden = false; msg.textContent = 'Solved!';
             S.win(g * 600 + Math.min(599, sec), `${g}/6 · ${fmtTime(sec)}`).then((t) => { msg.textContent = t; S.render(); });
-          } else if (guesses.length === 6) { over = true; S.stop(); msg.hidden = false; msg.textContent = `The equation was ${[...answer].map(SHOW).join('')}. A new one comes tomorrow — or try a practice one.`; }
+          } else if (guesses.length === 6) { over = true; S.stop(); msg.hidden = false; msg.textContent = `The equation was ${[...answer].map(SHOW).join('')}. A new one comes tomorrow, or try a practice one.`; }
         }
       } else if (cur.length < LEN) cur += k;
       render();
@@ -702,7 +702,7 @@ const geographyLab = {
   id: 'geography', name: 'Geography', subject: 'puzzles', blurb: 'Name the highlighted country, pick its capital, then pin it on the map. Or find countries on the map, or tap around to explore.',
   words: 'geography countries capitals map world atlas daily quiz',
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M33 14l2 6-4 2" />',
-  about: 'Map: Natural Earth (public domain) in the Natural Earth projection; borders are shown as drawn in that data and are not a statement about any disputed territory. Small countries and islands are simplified at this scale.\nEach round: name the country (100 points), pick its capital (100 points), then pin the capital — 100 points minus 1 for every 10 km you are off. The capital listed is the official capital (for example Tanzania’s is Dodoma, Myanmar’s Naypyidaw, Kazakhstan’s Astana).\nEveryone gets the same 8 countries each day.',
+  about: 'Map: Natural Earth (public domain) in the Natural Earth projection; borders are shown as drawn in that data and are not a statement about any disputed territory. Small countries and islands are simplified at this scale.\nEach round: name the country (100 points), pick its capital (100 points), then pin the capital, 100 points minus 1 for every 10 km you are off. The capital listed is the official capital (for example Tanzania’s is Dodoma, Myanmar’s Naypyidaw, Kazakhstan’s Astana).\nEveryone gets the same 8 countries each day.',
   mount({ stage, panel, api }) {
     let world = null, rounds = [], k = 0, step = 0, points = 0, options = [], answered = null, pin = null, view = null, over = false, rand = null;
     // modes: today's quiz (as before) · find a country on the map · explore (tap any country)
@@ -741,11 +741,11 @@ const geographyLab = {
       const C0 = rounds[k];
       if (mode === 'explore') {
         const c = tapped && COUNTRIES.find((x) => x[0] === tapped.name);
-        qbox.innerHTML = `<p class="geo-n">Explore · drag to move, pinch or scroll to zoom</p><p class="geo-text">${tapped ? `That’s <b>${esc(nice(tapped.name))}</b>${c ? ` — capital: ${esc(c[2])}` : ''}.` : 'Tap any country to see its name.'}</p>`;
+        qbox.innerHTML = `<p class="geo-n">Explore · drag to move, pinch or scroll to zoom</p><p class="geo-text">${tapped ? `That’s <b>${esc(nice(tapped.name))}</b>${c ? `: capital: ${esc(c[2])}` : ''}.` : 'Tap any country to see its name.'}</p>`;
         cv.redraw(); return;
       }
       if (mode === 'find') {
-        qbox.innerHTML = `<p class="geo-n">Find it · ${findScore[0]} of ${findScore[1]} found first time · drag to move, pinch or scroll to zoom</p><p class="geo-text">${find ? (found === true ? `Yes — that’s <b>${esc(nice(find.name))}</b>!` : found === false ? `That’s ${esc(nice(tapped.name))}. <b>${esc(nice(find.name))}</b> is the one shining.` : `Tap <b>${esc(nice(find.name))}</b> on the map.`) : 'Loading the map…'}</p>${found != null ? '<button type="button" class="lab-btn main geo-next">Next country</button>' : ''}`;
+        qbox.innerHTML = `<p class="geo-n">Find it · ${findScore[0]} of ${findScore[1]} found first time · drag to move, pinch or scroll to zoom</p><p class="geo-text">${find ? (found === true ? `Yes. That’s <b>${esc(nice(find.name))}</b>!` : found === false ? `That’s ${esc(nice(tapped.name))}. <b>${esc(nice(find.name))}</b> is the one shining.` : `Tap <b>${esc(nice(find.name))}</b> on the map.`) : 'Loading the map…'}</p>${found != null ? '<button type="button" class="lab-btn main geo-next">Next country</button>' : ''}`;
         cv.redraw(); return;
       }
       if (over) { qbox.innerHTML = ''; cv.redraw(); return; }
@@ -861,7 +861,7 @@ const geographyLab = {
       mode = v; tapped = null; tapAt = null; zoomBox.hidden = mode === 'quiz'; vk = 1; vx = 0; vy = 0;
       if (mode === 'quiz') { make(); S.render(); } else { findScore = [0, 0]; nextFind(); }
     } });
-    loadWorld().then((wd) => { world = wd; if (mode === 'find' && !find) nextFind(); cv.redraw(); }).catch(() => { qbox.innerHTML = '<p class="lab-err">The map couldn’t load — check your internet and open this puzzle again.</p>'; });
+    loadWorld().then((wd) => { world = wd; if (mode === 'find' && !find) nextFind(); cv.redraw(); }).catch(() => { qbox.innerHTML = '<p class="lab-err">The map couldn’t load. Check your internet and open this puzzle again.</p>'; });
     make();
     return { state: () => (mode === 'find' ? `finding countries on the map: ${findScore[0]} of ${findScore[1]} found first time${find ? `; now looking for ${nice(find.name)}` : ''}` : mode === 'explore' ? `exploring the world map${tapped ? `; tapped ${nice(tapped.name)}` : ''}` : over ? `finished the geography quiz with ${points} points` : `geography round ${k + 1} of ${rounds.length}, ${points} points so far`), destroy: () => { S.destroy(); cv.destroy(); } };
   },

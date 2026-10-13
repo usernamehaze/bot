@@ -34,7 +34,7 @@ export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], [
 const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
-  { id: 'body3d', name: 'Human body 3D', subject: 'biology', blurb: 'Turn, zoom and pull apart the real body — 10 systems, tap any part.', explore: 'body',
+  { id: 'body3d', name: 'Human body 3D', subject: 'biology', blurb: 'Turn, zoom and pull apart the real body, 10 systems, tap any part.', explore: 'body',
     icon: '<path d="M24 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/><path d="M17 18h14l-2 12h-3l-1 12h-2l-1-12h-3z"/><path d="M17 18l-5 10M31 18l5 10"/>' },
   { id: 'cells3d', name: 'Animal & plant cells', subject: 'biology', blurb: 'Two cells cut open in 3D. Tap an organelle to see what it does.', explore: 'animal',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
@@ -96,7 +96,7 @@ function createView() {
         <div class="labs-board" hidden></div>
         <div class="labs-today"></div>
         <div class="labs-grid" role="list"></div>
-        <p class="labs-empty" hidden>No lab by that name yet — ask Cassie about it instead.</p>
+        <p class="labs-empty" hidden>No lab by that name yet. Ask Cassie about it instead.</p>
       </div>
     </section>
     <section class="lab-view" hidden>
@@ -193,7 +193,7 @@ function createView() {
     if (!rows.length) return tabs + `<p class="board-empty">${week ? 'No scores this week yet.' : 'No scores yet today.'}</p>`;
     const games = PUZZLES.map((p) => p.id);
     const head = `<tr><th>#</th><th class="bt-name">Player</th>${games.map((g) => `<th title="${esc(SHORT[g] || g)}">${esc(SHORT[g] || g)}</th>`).join('')}<th class="bt-total">Total</th></tr>`;
-    const body = rows.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.rank}</td><td class="bt-name">${esc(r.name || 'Student')}${r.me ? ' <small>(you)</small>' : ''}</td>${games.map((g) => `<td>${r.games && r.games[g] ? r.games[g] : '<span class="bt-dash">–</span>'}</td>`).join('')}<td class="bt-total">${r.total}</td></tr>`).join('');
+    const body = rows.map((r) => `<tr class="${r.me ? 'me' : ''}"><td>${r.rank}</td><td class="bt-name">${esc(r.name || 'Student')}${r.me ? ' <small>(you)</small>' : ''}</td>${games.map((g) => `<td>${r.games && r.games[g] ? r.games[g] : '<span class="bt-dash">-</span>'}</td>`).join('')}<td class="bt-total">${r.total}</td></tr>`).join('');
     return `${tabs}<div class="board-table-wrap"><table class="board-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   }
   async function renderBoard(show) {
@@ -202,9 +202,9 @@ function createView() {
     box.hidden = false;
     const draw = () => {
       const b = board || { top: [], players: 0 };
-      const podium = [1, 0, 2].map((i) => b.top[i] ? `<div class="pod p${i + 1}${b.top[i].me ? ' me' : ''}"><span class="pod-av">${esc((b.top[i].name || '?').slice(0, 2))}</span><b>${esc(b.top[i].name)}</b><small>${b.top[i].points} points</small><i>${i + 1}</i></div>` : `<div class="pod p${i + 1} empty"><span class="pod-av">·</span><b>—</b><small>open</small><i>${i + 1}</i></div>`).join('');
+      const podium = [1, 0, 2].map((i) => b.top[i] ? `<div class="pod p${i + 1}${b.top[i].me ? ' me' : ''}"><span class="pod-av">${esc((b.top[i].name || '?').slice(0, 2))}</span><b>${esc(b.top[i].name)}</b><small>${b.top[i].points} points</small><i>${i + 1}</i></div>` : `<div class="pod p${i + 1} empty"><span class="pod-av">·</span><b>-</b><small>open</small><i>${i + 1}</i></div>`).join('');
       const done = PUZZLES.filter((p) => progress(p).done).length;
-      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline ? 'The score board can’t be reached right now — your finishes are still kept on this device.' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
+      box.innerHTML = `<div class="board-head"><div><h3>Score board</h3><p>Points for where you place in each of today’s ${PUZZLES.length} puzzles. ${b.offline ? 'The score board can’t be reached right now. Your finishes are still kept on this device.' : b.players ? `${b.players} playing today.` : 'Be the first today!'}</p></div>
         <button type="button" class="lab-btn board-go" data-subject-go="puzzles">${done ? `${done}/${PUZZLES.length} done` : 'Play today’s puzzles'}</button></div>
         <div class="podium">${podium}</div>
         ${b.me ? `<p class="board-me">You: <b>#${b.me.rank}</b> with <b>${b.me.points}</b> points</p>` : board === null ? '<p class="board-me">Loading today’s board…</p>' : ''}
@@ -308,7 +308,7 @@ function createView() {
     const toggle = `<button type="button" class="lab-tries-toggle" aria-expanded="${!folded}">${folded ? 'Show ▾' : 'Hide ▴'}</button>`;
     if (folded) { box.innerHTML = `<h4>Try this <small>${n} of ${lab.tries.length} done</small>${toggle}</h4>`; return; }
     box.innerHTML = `<h4>Try this ${toggle}<small>${n ? `${n} of ${lab.tries.length} done · ` : ''}they tick when you do them · tap a goal for a hint</small></h4><ul>${lab.tries.map((t, i) => `<li class="${done[i] ? 'done' : ''}${i === justDone ? ' just' : ''}">
-      <div class="lab-try-row"><button type="button" class="lab-tick" data-tick="${i}" aria-pressed="${!!done[i]}" aria-label="${done[i] ? 'Done — tap to untick' : 'Not done yet — tap to tick it yourself'}" title="${done[i] ? 'Done — tap to untick' : 'Tap to tick it yourself'}"></button>
+      <div class="lab-try-row"><button type="button" class="lab-tick" data-tick="${i}" aria-pressed="${!!done[i]}" aria-label="${done[i] ? 'Done. Tap to untick' : 'Not done yet. Tap to tick it yourself'}" title="${done[i] ? 'Done. Tap to untick' : 'Tap to tick it yourself'}"></button>
       <button type="button" class="lab-try" data-try="${i}" aria-expanded="${i === openTry}"><span>${esc(t)}</span><span class="sr-only">${done[i] ? '(done)' : ''}</span><span class="lab-chev" aria-hidden="true">›</span></button></div>
       <div class="lab-hint" ${i === openTry ? '' : 'hidden'}><p>${esc((lab.hints || [])[i] || 'Play with the controls and watch what changes.')}</p>${opts.explain ? `<button type="button" class="lab-btn lab-nudge" data-nudge="${i}">${CURSOR}Still stuck? Cassie nudges you</button><p class="lab-nudge-text" hidden></p>` : ''}</div></li>`).join('')}</ul>`;
   }
@@ -332,7 +332,7 @@ function createView() {
       n.disabled = true; out.hidden = false; out.textContent = 'Cassie is thinking…'; out.classList.add('muted');
       opts.explain(`A student is working on this challenge in the ${lab.name} simulation (${lab.blurb}): "${lab.tries[i]}". What is on their screen now: ${described() || 'they have just started'}. Give one short, friendly hint in at most two sentences that points them in the right direction WITHOUT giving the answer or the exact numbers. Plain text, no formatting.`)
         .then((text) => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = String(text || '').replace(/[*_#`>]/g, '').trim() || 'Try changing one thing at a time and watch what happens.'; })
-        .catch(() => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = 'Cassie couldn’t answer just now — try the hint above, or tap Ask Cassie.'; })
+        .catch(() => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = 'Cassie couldn’t answer just now. Try the hint above, or tap Ask Cassie.'; })
         .finally(() => { n.disabled = false; });
     }
   });
@@ -399,9 +399,9 @@ function createView() {
     const q = current.subject === 'tools'
       ? `I'm using Cassie's ${current.name} study tool (${current.blurb})${now ? ` Right now: ${now}.` : ''} Look at my work, tell me what's good and what to fix, simply. Then ask me one quick question to check I understood.`
       : current.subject === 'games'
-        ? `I'm playing the ${current.name} game in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain the idea behind it simply and give me one tip — don't just give me the answer.`
+        ? `I'm playing the ${current.name} game in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain the idea behind it simply and give me one tip. Don't just give me the answer.`
         : current.subject === 'puzzles'
-      ? `I'm doing the daily ${current.name} puzzle in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Give me a strategy tip for this kind of puzzle — don't solve it for me.`
+      ? `I'm doing the daily ${current.name} puzzle in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Give me a strategy tip for this kind of puzzle. Don't solve it for me.`
       : `I'm playing with the ${current.name} lab in Cassie (${current.blurb})${now ? ` Right now: ${now}.` : ''} Explain what is happening and why, simply, using my numbers. Then ask me one quick question to check I understood.`;
     if (opts.converse) {
       stopTeaching();
