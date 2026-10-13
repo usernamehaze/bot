@@ -3679,7 +3679,7 @@ test('forms check each field as you type: the reason shows under the field in pl
   await page.type('#groq-key-input', 'abc123');
   await page.waitForFunction(() => /start with “gsk_”/.test(document.querySelector('#groq-key-input').closest('label').querySelector('.field-err').textContent), null, { timeout: 4000, polling: 100 });
   // every message: plain words, no codes, no dashes, ends like a sentence
-  const all = await page.evaluate(() => Object.entries(window.CassieErrors.STRINGS));
+  const all = await page.evaluate(() => Object.entries(window.CassieErrors.STRINGS).map(([k, v]) => [k, v.replace(/\{\w+\}/g, 'Try again.')])); // each {gap} filled the way the app fills it
   const bad = all.filter(([, t]) => !/[.!?”]$/.test(t) || /[—–]|\b(error|undefined|null|status|error code)\b|\b[45]\d\d\b/i.test(t));
   expect(!bad.length, 'messages that aren’t plain: ' + bad.map(([k]) => k).join(', '));
   expect(await page.evaluate(() => CassieErrors.explain(new Error('Failed to fetch')) === CassieErrors.say('network') && CassieErrors.explain(Object.assign(new Error('x'), { status: 500 })) === CassieErrors.say('unknown')), 'raw failures become plain words');
