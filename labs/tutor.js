@@ -10,7 +10,7 @@
    top, and "–" makes it a small pill ("Step 3 of 7") while she keeps talking and pointing. Closing it
    keeps the lesson: lesson() is where the student stopped, and offer(lesson) lets them carry on from
    there (or start it over) without asking her again. */
-import { el } from './kit.js';
+import { el, errorWords, errorWordsFor } from './kit.js';
 
 const CURSOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>';
 const VOICE_KEY = 'cassie.labs.tutorVoice';
@@ -266,7 +266,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
       show(0);
     } catch (e) {
       if (!alive || me !== asking) return;
-      sayEl.textContent = 'I couldn’t reach my brain just now. Check your internet and ask me again.';
+      sayEl.textContent = errorWords('tutor_no_brain');
     } finally { box.classList.remove('thinking'); }
   }
 
@@ -318,7 +318,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
       listening = hear();
       const said = await listening.done;
       if (said) { input.value = ''; teach(said); }
-    } catch (e) { sayEl.textContent = (e && e.message) || 'I couldn’t hear that. Try again, or type it.'; }
+    } catch (e) { sayEl.textContent = errorWordsFor(e, 'not_heard'); }
     finally { listening = null; mic.classList.remove('on'); mic.textContent = '🎤'; input.placeholder = 'Ask anything: “how do I use this?”'; }
   });
   function stop() {

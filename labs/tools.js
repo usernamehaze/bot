@@ -4,7 +4,7 @@
      Vocabulary Flash-Chain · Timeline Builder · Argument & Essay Deconstructor ·
      Smart Flashcard Matrix · Cornell Notes · Citation & Thesis Mapper
    (The Museum of Famous Arts lives in museum.js.) */
-import { el, esc, group, seg, button, row, stats, shuffle, fmtTime, plusOnly } from './kit.js';
+import { el, esc, group, seg, button, row, stats, shuffle, fmtTime, plusOnly, errorWords, errorWordsFor } from './kit.js';
 
 /* ---------- shared ---------- */
 // the JSON inside one of Cassie's replies ([…] or {…})
@@ -113,10 +113,10 @@ function sourcePanel(panel, api, { title, sets, value, onSet, paste, pastePlaceh
     const b = button(r, makeLabel, async () => {
       const t = input.value.trim();
       if (!t) { input.focus(); return; }
-      if (!api.canAsk()) { say(err, 'Cassie isn’t available right now. Paste your own below, or pick a ready-made set.', 'bad'); return; }
+      if (!api.canAsk()) { say(err, errorWords('lab_ai_off', { next: 'Paste your own below, or pick a ready-made set.' }), 'bad'); return; }
       say(err, '');
       try { await busy(b, 'Cassie is writing it…', () => make(t)); input.value = ''; }
-      catch (e) { say(err, e.message || 'Cassie couldn’t make that. Try another topic.', 'bad'); }
+      catch (e) { say(err, e.friendly ? e.message : errorWords('lab_ai_failed', { next: 'Try another topic, or try again in a moment.' }), 'bad'); }
     });
   }
   if (paste) {
@@ -231,7 +231,7 @@ const vocabLab = {
       make: async (topic) => {
         const list = jsonIn(await api.ask(`Make 10 vocabulary items about "${topic}" for a student: key terms and short, clear definitions (at most 15 words each). Reply with ONLY a JSON array: [{"term": "…", "def": "…"}]`));
         const p = (list || []).filter((x) => x && x.term && x.def).map((x) => [String(x.term).slice(0, 80), String(x.def).slice(0, 200)]);
-        if (p.length < 3) throw new Error('Cassie couldn’t make a set for that. Try another topic.');
+        if (p.length < 3) throw new Error(errorWords('lab_ai_failed', { next: 'Try another topic, or try again in a moment.' }));
         src.addSet('cassie' + Date.now(), { name: topic.slice(0, 40) + ' (by Cassie)', pairs: p }); setKey = src.select.value; deal();
       },
     });
@@ -393,7 +393,7 @@ const timelineLab = {
       make: async (topic) => {
         const list = jsonIn(await api.ask(`Make a timeline of 6 to 8 key events (or steps, if it's a process) for a student about "${topic}". In the correct order, earliest first. Use only events you are sure of. Reply with ONLY a JSON array: [{"when": "the year or date, or empty for steps", "sort": number to sort by (the year, or the step number), "event": "short description, at most 14 words"}]`));
         const items = (list || []).filter((x) => x && x.event).map((x, i) => [Number.isFinite(+x.sort) ? +x.sort : i + 1, String(x.when || '').slice(0, 20), String(x.event).slice(0, 200)]);
-        if (items.length < 3) throw new Error('Cassie couldn’t make a timeline for that. Try another topic.');
+        if (items.length < 3) throw new Error(errorWords('lab_ai_failed', { next: 'Try another topic, or try again in a moment.' }));
         src.addSet('cassie' + Date.now(), { name: topic.slice(0, 40) + ' (by Cassie)', items }); key = src.select.value; deal();
       },
     });
@@ -403,13 +403,13 @@ const timelineLab = {
     button(r, 'Shuffle again', () => deal());
     const r2 = row(panel);
     const gradeBtn = button(r2, 'Cassie, grade my timeline', async () => {
-      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now. Use “Check my order”.', 'bad'); return; }
+      if (!api.canAsk()) { say(fb, errorWords('lab_ai_off', { next: 'Use “Check my order” instead.' }), 'bad'); return; }
       const s = sets[key], mine = order.map((k, i) => `${i + 1}. ${s.items[k][2]}`).join('\n'), right = sortedIdx().map((k, i) => `${i + 1}. ${s.items[k][1] ? s.items[k][1] + ' - ' : ''}${s.items[k][2]}`).join('\n');
       say(fb, 'Cassie is reading your timeline…', 'muted');
       try {
         const t = await busy(gradeBtn, 'Cassie is grading…', () => api.ask(`A student put these events about "${s.name}" in this order:\n${mine}\n\nThe correct order is:\n${right}\n\nGrade their timeline out of ${s.items.length} (one point for each event in its right place). Then, for each one out of place, explain in one short sentence why it comes where it does (a cause, a date, or what must happen first). Be kind and brief. Plain text, no markdown.`));
         say(fb, String(t || '').replace(/[*#`_]/g, '').trim(), '');
-      } catch (e) { say(fb, 'Cassie couldn’t answer just now. Use “Check my order”.', 'bad'); }
+      } catch (e) { say(fb, errorWords('lab_ai_failed', { next: 'Use “Check my order” instead.' }), 'bad'); }
     });
     const fb = el('p', 'tl-msg'); fb.hidden = true; panel.appendChild(fb);
     const sortedIdx = () => sets[key].items.map((x, i) => i).sort((a, b) => sets[key].items[a][0] - sets[key].items[b][0]);
@@ -556,7 +556,7 @@ const essayLab = {
       if (!sents.length) return;
       if (!api.canAsk()) {
         if (mineRoles) { compare(roles, 'the word-clue guess'); return; }
-        say(fb, 'Cassie isn’t available right now. The colours are a first guess from word clues.', 'bad'); return;
+        say(fb, errorWords('lab_ai_off', { next: 'The colours are a first guess from word clues.' }), 'bad'); return;
       }
       say(fb, 'Cassie is reading it…', 'muted');
       try {
@@ -570,7 +570,7 @@ const essayLab = {
         if (mineRoles) { compare(roles, 'Cassie'); return; }
         draw();
         say(fb, String(d.feedback || '').replace(/[*#`_]/g, '').slice(0, 800), '');
-      } catch (e) { say(fb, 'Cassie couldn’t read it just now. The colours are a first guess from word clues.', 'bad'); }
+      } catch (e) { say(fb, errorWords('lab_ai_failed', { next: 'The colours are a first guess from word clues.' }), 'bad'); }
     }
     function compare(answer, who) {
       const same = mineRoles.filter((x, i) => x === answer[i]).length;
@@ -621,7 +621,7 @@ const matrixLab = {
         if (!file) return;
         say(fb, 'Reading ' + file.name + '…', 'muted');
         try { const t = await api.readFile(file); area.value = String(t || '').slice(0, 12000); deckName = file.name.replace(/\.\w+$/, '').slice(0, 50); say(fb, area.value ? `Read ${file.name}. Now tap “Make the cards”.` : 'That file has no text I can read (a scanned page?). Paste the text instead.', area.value ? '' : 'bad'); }
-        catch (err) { say(fb, 'I couldn’t read that file. Try a PDF, Word, PowerPoint or text file.', 'bad'); }
+        catch (err) { say(fb, errorWords('file_unreadable'), 'bad'); }
       });
     }
     let howMany = 10, kind = 'qa';
@@ -656,7 +656,7 @@ const matrixLab = {
       list = (list || []).filter((c) => c && c.f && c.b).map((c) => ({ f: String(c.f).slice(0, 300), b: String(c.b).slice(0, 600) }));
       if (!list.length) { list = cardsByRule(text, howMany); if (list.length) say(fb, 'Made these from the sentences’ wording (Cassie wasn’t available). Check them, then fix or drop any that read oddly.', ''); }
       else say(fb, `Cassie made ${list.length} cards. Tap one to flip it; ✎ fixes it, × drops it.`, 'good');
-      if (!list.length) { say(fb, 'I couldn’t find card-worthy lines. Try lines like “Osmosis: water moving across a membrane”.', 'bad'); return; }
+      if (!list.length) { say(fb, errorWords('cards_no_lines'), 'bad'); return; }
       cards = list; keep('cassie.tools.matrix', cards); study = null; draw(); api.check(0);
     }
     function draw() {
@@ -755,7 +755,7 @@ const cornellLab = {
         const file = e.target.files && e.target.files[0]; e.target.value = '';
         if (!file) return;
         say(fb, 'Reading ' + file.name + '…', 'muted');
-        try { area.value = String(await api.readFile(file) || '').slice(0, 12000); say(fb, area.value ? 'Read it. Now tap “Make Cornell notes”.' : 'No text I can read in that file.', area.value ? '' : 'bad'); } catch (err) { say(fb, 'I couldn’t read that file.', 'bad'); }
+        try { area.value = String(await api.readFile(file) || '').slice(0, 12000); say(fb, area.value ? 'Read it. Now tap “Make Cornell notes”.' : 'No text I can read in that file.', area.value ? '' : 'bad'); } catch (err) { say(fb, errorWords('file_unreadable'), 'bad'); }
       });
     }
     const r = row(panel);
@@ -1021,13 +1021,13 @@ const thesisLab = {
     }
     async function test() {
       if (!map.thesis.trim()) { say(fb, 'Write your thesis first.', 'bad'); return; }
-      if (!api.canAsk()) { say(fb, 'Cassie isn’t available right now. Use the strength check on the map.', 'bad'); return; }
+      if (!api.canAsk()) { say(fb, errorWords('lab_ai_off', { next: 'Use the strength check on the map.' }), 'bad'); return; }
       const outline = `THESIS: ${map.thesis}\n${map.reasons.map((rs, i) => `REASON ${i + 1}: ${rs.text || '(empty)'}\n${rs.ev.map((e) => `  EVIDENCE: "${e.quote}": ${authorsOf(e.authors).map((a) => a.last).join(', ') || 'no author'} (${e.year || 'n.d.'}), ${e.title}`).join('\n') || '  (no evidence)'}`).join('\n')}\nCOUNTER-ARGUMENT AND ANSWER: ${map.counter || '(none)'}`;
       say(fb, 'Cassie is testing it…', 'muted');
       try {
         const t = await busy(testBtn, 'Cassie is testing it…', () => api.ask(`Stress-test this argument plan for an essay, like a fair debate judge. Say: 1) is the thesis clear and arguable, 2) which reason is weakest and why, 3) whether each piece of evidence actually supports its reason (or is off-topic, too old, or not credible), 4) the strongest objection a critic would raise. End with the 2 most important fixes. Under 170 words, plain text, no markdown.\n\n${outline}`));
         say(fb, String(t || '').replace(/[*#`_]/g, '').trim(), ''); api.check(1);
-      } catch (e) { say(fb, 'Cassie couldn’t answer just now. Use the strength check on the map.', 'bad'); }
+      } catch (e) { say(fb, errorWords('lab_ai_failed', { next: 'Use the strength check on the map.' }), 'bad'); }
     }
     draw();
     return { state: () => `thesis: "${map.thesis}". ${map.reasons.map((rs, i) => `Reason ${i + 1}: ${rs.text} (${rs.ev.length} evidence)`).join('. ')}. Counter: ${map.counter || 'none'}. Citation style ${style.toUpperCase()}.`, destroy() {} };

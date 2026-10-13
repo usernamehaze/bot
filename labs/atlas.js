@@ -4,7 +4,7 @@
    Country facts: the world-countries data (ODbL) and World Bank population figures (CC BY 4.0),
    kept with the app so they work offline; the newest population and the history come live from
    the World Bank and Wikipedia when you're online. Flags: flag-icons (MIT). */
-import { el, esc, num, canvas, drag, at, group, seg, button, row, overlay, text, dot, line, C, INK, DIM, premium, free3dView } from './kit.js';
+import { el, esc, num, canvas, drag, at, group, seg, button, row, overlay, text, dot, line, C, INK, DIM, premium, free3dView, errorWords, errorWordsFor } from './kit.js';
 import { webglOk } from './three-kit.js';
 import { loadWorld, naturalEarth, FULL_NAMES } from './puzzles.js';
 
@@ -130,7 +130,7 @@ export const atlasLab = {
       let w = null;
       try { w = (await wikiSummary(`History of ${c.n}`)) || (await wikiSummary(c.n)); } catch (e) { w = null; }
       if (sel !== c) return;
-      box.innerHTML = w ? `<p>${esc(w.text)}</p>${safeUrl(w.url) ? `<a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">Read more on Wikipedia ↗</a>` : ''}` : '<p class="lab-note">The history couldn’t be loaded (no internet?). Tap Ask Cassie to hear about it.</p>';
+      box.innerHTML = w ? `<p>${esc(w.text)}</p>${safeUrl(w.url) ? `<a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">Read more on Wikipedia ↗</a>` : ''}` : `<p class="lab-note">${esc(errorWords('atlas_history_failed'))}</p>`;
     }
     card.addEventListener('click', (e) => { const b = e.target.closest('[data-c3]'); if (b) choose(byC3.get(b.dataset.c3)); });
 
@@ -140,7 +140,7 @@ export const atlasLab = {
       if (G) { G.select(null); G.pin(null); }
       card.innerHTML = `<p class="lab-note">Searching Wikipedia for “${esc(q)}”…</p>`;
       let titles = [];
-      try { titles = await wikiSearch(q); } catch (e) { card.innerHTML = '<p class="lab-err">Searching places needs the internet. Countries work offline. Try a country name.</p>'; return; }
+      try { titles = await wikiSearch(q); } catch (e) { card.innerHTML = `<p class="lab-err">${esc(errorWords('atlas_search_offline'))}</p>`; return; }
       if (!titles.length) { card.innerHTML = `<p class="lab-note">Nothing found for “${esc(q)}”. Check the spelling, or try a bigger place nearby.</p>`; return; }
       card.innerHTML = `<h4 class="atlas-h4">Places called “${esc(q)}”</h4><div class="atlas-results">${titles.map((t) => `<button type="button" data-title="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
       if (titles.length === 1) showPlace(titles[0]);
@@ -149,7 +149,7 @@ export const atlasLab = {
       card.innerHTML = `<p class="lab-note">Opening “${esc(title)}”…</p>`;
       let w = null;
       try { w = await wikiSummary(title); } catch (e) { w = null; }
-      if (!w) { card.innerHTML = '<p class="lab-err">That page couldn’t be loaded. Try another result.</p>'; return; }
+      if (!w) { card.innerHTML = `<p class="lab-err">${esc(errorWords('atlas_page_failed'))}</p>`; return; }
       place = w.at ? { name: w.title, at: w.at } : null; sel = null;
       if (place) { const inC = world && countryAt(w.at[1], w.at[0]); zoomToPoint(w.at, inC ? 4 : 3); }
       cv.redraw();
@@ -261,7 +261,7 @@ export const atlasLab = {
       // (the map's ids have no leading zeros in a few files; keep both)
       d.forEach((c) => { if (c.n3) byN3.set(c.n3, c); });
       cv.redraw(); suggest(); showView();
-    }).catch(() => { card.innerHTML = '<p class="lab-err">The atlas couldn’t load. Check your internet and open it again.</p>'; });
+    }).catch(() => { card.innerHTML = `<p class="lab-err">${esc(errorWords('lab_map_failed'))}</p>`; });
     return {
       state: () => (sel ? `looking at ${sel.n} in the world atlas: capital ${(sel.cap || []).join(', ')}, population ${sel.pop ? `${fmtPop(sel.pop[0])} (${sel.pop[1]})` : 'unknown'}, ${sel.sub || sel.reg}, languages ${(sel.lang || []).join(', ')}` : place ? `looking at ${place.name} in the world atlas` : `looking at the world ${G ? 'globe' : 'map'} in the atlas`),
       destroy: () => { dead = true; if (G) G.destroy(); cv.destroy(); },

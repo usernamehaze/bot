@@ -3714,6 +3714,39 @@ test('chat: when something fails Cassie says what happened, why and what to do, 
   await ctx.close();
 });
 
+test('Labs in Liquid Glass: 44px tap targets and AA words on a phone, errors from the one map in white (no colour), an empty search offers to ask Cassie', async (b) => {
+  const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
+  // no lab shows a raw error, and every lab error comes from the map
+  const raw = [];
+  for (const f of fs.readdirSync(path.join(ROOT, 'labs')).filter((x) => x.endsWith('.js'))) {
+    fs.readFileSync(path.join(ROOT, 'labs', f), 'utf8').split('\n').forEach((l, i) => { if (/(textContent|innerHTML)\s*=.*\b(e|err)\.message|\$\{res\.error\}|: ' \+ e\.message/.test(l)) raw.push(`${f}:${i + 1}`); });
+  }
+  expect(!raw.length, 'labs show raw error text at ' + raw.join(', '));
+  const { ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.' }) });
+  await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+  await page.waitForSelector('.labs-card', { timeout: 20000 });
+  let small = await tapTargetIssues(page);
+  expect(!small.length, 'Labs shelf: tap targets under 44px: ' + small.join(' | '));
+  let c = await contrastIssues(page, '.labs-shelf');
+  expect(c.checked > 5 && !c.bad.length, 'Labs shelf: words under AA: ' + c.bad.join(' | '));
+  // a search with no lab: why, and one next step that asks Cassie in the chat
+  await page.fill('.labs-search', 'zzxqy');
+  await seen(page, '.labs-empty .es-title', 'No lab by that name yet', 8000);
+  await page.click('.labs-empty .es-go');
+  await seen(page, '#chat-log .bubble-user', 'Explain zzxqy', 15000);
+  // a lab: its controls are 44px to touch, its words readable, its error text white
+  await page.evaluate(() => openLabs('projectile'));
+  await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  small = await tapTargetIssues(page);
+  expect(!small.length, 'a lab: tap targets under 44px: ' + small.join(' | '));
+  const errColour = await page.evaluate(() => { const p = document.createElement('p'); p.className = 'lab-err'; p.textContent = 'x'; document.querySelector('.lab-view').appendChild(p); const col = getComputedStyle(p).color; p.remove(); return col; });
+  const [r, g, bl] = errColour.match(/\d+/g).map(Number);
+  expect(Math.max(r, g, bl) - Math.min(r, g, bl) <= 4, 'lab error text is a neutral grey, no colour: ' + errColour);
+  expect(await page.evaluate(() => typeof window.CassieErrors.say('lab_ai_failed', { next: 'Try again.' }) === 'string' && !/\{next\}/.test(window.CassieErrors.say('lab_ai_failed'))), 'a lab message never shows a {gap}');
+  await ctx.close();
+});
+
 test('works offline after the first visit (app opens)', async (b) => {
   // no network fakes here: Playwright's fakes and service workers don't mix
   const ctx = await b.newContext({ ...devices['Pixel 7'] });

@@ -1,7 +1,7 @@
 /* Games that teach: logic and code, patterns, maps and bodies, fractions, and economics.
    They aren't daily puzzles (no score board) — each keeps your best on this device.
      Logic Circuit · Formula Cracker · Pinning Blitz · Fraction Diner · City Market */
-import { INK, DIM, FAINT, C, el, esc, canvas, at, overlay, group, seg, button, row, stats, stepper, slider, line, dot, text, arrow, shuffle, rng, seedOf, dayKey, fmtTime, formula } from './kit.js';
+import { INK, DIM, FAINT, C, el, esc, canvas, at, overlay, group, seg, button, row, stats, stepper, slider, line, dot, text, arrow, shuffle, rng, seedOf, dayKey, fmtTime, formula, errorWords, errorWordsFor, inputError } from './kit.js';
 import { loadWorld, naturalEarth, COUNTRIES, FULL_NAMES } from './puzzles.js';
 
 const tag = (box, t, cls = '') => { box.className = 'gm-msg ' + cls; box.textContent = t; box.hidden = !t; };
@@ -298,10 +298,10 @@ const crackerLab = {
       if (!t || over) return;
       let g;
       try {
-        if (mode === 'rule') { const f = formula(t); g = { text: t, ys: TESTX.map((x) => f(x)) }; if (g.ys.some((y) => !Number.isFinite(y))) throw new Error('That formula breaks at some x. Try another.'); }
-        else if (mode === 'regex') { const m = t.match(/^\/(.*)\/([gimsuy]*)$/); const src = m ? m[1] : t; if (src.length > 60) throw new Error('Keep it under 60 characters.'); g = { text: src, re: new RegExp(src, (m ? m[2] : '').replace(/[gy]/g, '')) }; }
+        if (mode === 'rule') { const f = formula(t); g = { text: t, ys: TESTX.map((x) => f(x)) }; if (g.ys.some((y) => !Number.isFinite(y))) throw inputError('That formula breaks at some x, so it can’t be drawn. Try another.'); }
+        else if (mode === 'regex') { const m = t.match(/^\/(.*)\/([gimsuy]*)$/); const src = m ? m[1] : t; if (src.length > 60) throw inputError('That pattern is too long. Keep it under 60 characters.'); g = { text: src, re: new RegExp(src, (m ? m[2] : '').replace(/[gy]/g, '')) }; }
         else { const atoms = atomsOf(t); g = { text: t, atoms, mass: massOf(atoms) }; }
-      } catch (e) { tag(msg, e.message.startsWith('Invalid') ? 'That isn’t a valid pattern: ' + e.message : e.message, 'bad'); return; }
+      } catch (e) { tag(msg, errorWordsFor(e, 'pattern_unreadable'), 'bad'); return; }
       tag(msg, '');
       guesses.push(g); api.check(0);
       const won = mode === 'rule' ? TESTX.every((x, i) => Math.abs(g.ys[i] - hidden.f(x)) < 1e-9)
@@ -401,7 +401,7 @@ const blitzLab = {
       if (map === 'world') {
         hud.innerHTML = '<p class="gm-q">Loading the map…</p>';
         world = world || await loadWorld().catch(() => null);
-        if (!world) { hud.innerHTML = '<p class="gm-q">The map couldn’t load.</p>'; return; }
+        if (!world) { hud.innerHTML = `<p class="gm-q">${esc(errorWords('lab_map_failed'))}</p>`; return; }
         const names = new Set(COUNTRIES.map((c) => c[0]));
         items = world.filter((c) => names.has(c.name)).map((c) => ({ name: (COUNTRIES.find((x) => x[0] === c.name) || [])[1] ? COUNTRIES.find((x) => x[0] === c.name)[1].replace(/^the /, '') : FULL_NAMES[c.name] || c.name, c, cont: (COUNTRIES.find((x) => x[0] === c.name) || [])[5] }));
       } else items = DIAGRAMS[map].parts.map(([name, mk, col]) => ({ name, path: mk(), col, rule: /membrane|wall/i.test(name) ? 'evenodd' : 'nonzero' }));

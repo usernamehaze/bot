@@ -4,7 +4,7 @@
    helper({ view, name, described, ask, format, speak, quiz, onMark })
      ask(msgs) → Promise<text> (the app's own path to Cassie); quiz(topic) → Promise<[{ q, o, a, why }]>
    → { ask(prompt, shown), quiz(topic), close(), destroy(), root, get open() } */
-import { el, esc } from './kit.js';
+import { el, esc, errorWords, errorWordsFor } from './kit.js';
 
 const HISTORY = 8; // the last few questions and answers go with each new question
 
@@ -63,10 +63,7 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
   const waiting = (text) => bubble('hp-wait', text);
   // a plain reason when Cassie can't answer (and what to do), never a raw error
   function why(e) {
-    const m = String((e && e.message) || '');
-    if (/key|limit|free|plus|today|week|sign in|log in/i.test(m) && m.length < 200) return m;
-    if (!navigator.onLine) return 'You seem to be offline. Connect to the internet, then try again.';
-    return 'Cassie couldn’t answer just now. Please try again in a moment.';
+    return errorWordsFor(e, 'no_answer');
   }
 
   // one question to Cassie: she sees the screen as it is right now, and the talk so far
@@ -114,7 +111,7 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
     let list = [];
     try { list = await quiz(topic); } catch (e) { list = null; card.innerHTML = `<p class="hp-err">${esc(why(e))}</p>`; }
     if (!alive || run !== quizRun) return;
-    if (list && !list.length) card.innerHTML = '<p class="hp-err">Cassie couldn’t write a quiz just now. Please try again in a moment.</p>';
+    if (list && !list.length) card.innerHTML = `<p class="hp-err">${esc(errorWords('quiz_failed'))}</p>`;
     if (!list || !list.length) { again(card, topic); return; }
     let i = 0, right = 0;
     const ask1 = () => {

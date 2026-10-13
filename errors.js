@@ -99,9 +99,26 @@
     cant_listen: 'This browser can’t listen here, so talking won’t work. Type your question instead.',
     no_mic_browser: 'This browser can’t use the microphone, so talking won’t work here. Try Chrome, Edge or Safari.',
     voice_no_answer: 'Sorry, Cassie couldn’t answer that just now. Can you say it again?',
+
+    // Labs and the 3D views
+    lab_ai_off: 'Cassie can’t help here right now because she isn’t connected. {next}',
+    lab_ai_failed: 'Cassie couldn’t answer just now because her brain didn’t reply. {next}',
+    lab_start_failed: 'This lab couldn’t start, and it isn’t your fault. Go back to all labs and open it again.',
+    lab_3d_failed: 'The 3D view couldn’t load, maybe because the internet dropped. Check your connection, then open it again.',
+    lab_map_failed: 'The map couldn’t load, maybe because the internet dropped. Check your connection, then open this again.',
+    lab_board_saved_here: 'Solved in {time}! The score board didn’t get it because Cassie’s server didn’t answer, but your finish is kept on this device.',
+    atlas_search_offline: 'Searching places needs the internet, and you seem to be offline. Countries still work, so try a country name.',
+    atlas_page_failed: 'That page couldn’t load, maybe because the internet dropped. Try another result, or try again in a moment.',
+    atlas_history_failed: 'The history couldn’t load, maybe because the internet dropped. Tap Ask Cassie to hear about it instead.',
+    cards_no_lines: 'Cassie couldn’t find lines to make cards from. Each card needs a word and its meaning on one line, like “Osmosis: water moving across a membrane”.',
+    formula_unreadable: 'Cassie can’t read that formula. Use x, numbers, + − × ÷ ^ and words like sin or sqrt, like 2x + 1.',
+    pattern_unreadable: 'Cassie can’t read that pattern. Check that every ( and [ has a partner, then try again.',
+    file_unreadable: 'Cassie couldn’t read that file. It may be a kind she doesn’t know. Try a PDF, Word, PowerPoint or text file.',
+    tutor_no_brain: 'Cassie couldn’t reach her brain just now, maybe because the internet dropped. Check your connection, then ask again.',
+    quiz_failed: 'Cassie couldn’t write a quiz just now because her brain didn’t reply. Try again in a moment.',
   };
 
-  const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+  const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : '')).replace(/\s+$/, '');
 
   function explain(err, fallback = 'unknown') {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return say('offline');
