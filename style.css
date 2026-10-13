@@ -15,7 +15,7 @@ html, :where(body, body *) { touch-action: manipulation; }
   --bg: #f2f0ec;
   --surface: #ffffff;
   --text: #1b1b1d;
-  --muted: #6d6d72;
+  --muted: #646469;
   --primary: #1b1b1d;
   --primary-dark: #000000;
   --border: #e5e2dc;
@@ -1729,7 +1729,7 @@ html.native .home:not([hidden]) {
 .today-card.dark { background: #161618; color: #fff !important; box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
 .home-sec { display: flex; align-items: center; justify-content: space-between; margin: 24px 2px 6px; }
 .home-sec h2 { margin: 0; font-family: inherit; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
-.home-link { min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--muted) !important; font-size: 15px !important; }
+.home-link { min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--text) !important; font-size: 15px !important; font-weight: 600; }
 .recent { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 66px; margin-bottom: 10px; padding: 12px 14px; border: 0; border-radius: 18px; background: var(--surface); box-shadow: var(--ring); text-align: left; transition: transform .15s; }
 .recent i { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--bg); }
 .recent i svg { width: 19px; height: 19px; }
@@ -1791,10 +1791,16 @@ html.native .tabbar { background: var(--lg-fill); }
 .tab { color: var(--lg-ink); }
 .tab.on { background: var(--lg-pick); color: var(--text); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
 .tab:focus-visible { outline-color: var(--text); }
-/* Reduce Transparency and Increase Contrast: solid surfaces and clear edges, no blur */
+/* Solid instead of glass: Lite mode (slow phones), Reduce Transparency and Increase Contrast.
+   The glass is made of tokens, so turning them solid here turns every glass surface solid. */
+html.lite {
+  --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none;
+  --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(0, 0, 0, .12); --lg-line: var(--border);
+}
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar, .home-ask, .home-round {
-    background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+  :root {
+    --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none;
+    --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(0, 0, 0, .12); --lg-line: var(--border); --lg-ink: var(--text);
   }
   .tab.on { background: var(--text); color: var(--surface); }
 }
@@ -1827,3 +1833,100 @@ html.native .tabbar { background: var(--lg-fill); }
 .x3d-toast { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); z-index: 20; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 99px; background: rgba(10, 11, 16, .82); color: #fff; font-size: .82rem; text-align: center; pointer-events: none; }
 .x3d-tools .x3d-btn { white-space: nowrap; }
 @media (max-width: 430px) { .x3d-tools { gap: 6px; } .x3d-tools .x3d-btn { padding-left: 11px; padding-right: 11px; font-size: .84rem; } }
+
+/* ===================== Design system: one type scale, radii, spacing, buttons =====================
+   Every screen draws from these. Monochrome: the only colour is one the student picks (--accent). */
+:root {
+  --fs-xs: .75rem; --fs-sm: .875rem; --fs-md: 1rem; --fs-lg: 1.25rem; --fs-xl: 1.75rem; --fs-2xl: 2.125rem;
+  --lh-tight: 1.2; --lh-body: 1.5;
+  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --tap: 44px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+/* Placeholder words are the muted grey everywhere (the browser's own grey is too light on the marble) */
+::placeholder { color: var(--muted); opacity: 1; }
+
+/* Keyboard focus: one monochrome ring everywhere (never the browser's coloured one) */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+/* Glass you can put on any surface: .glass for controls, .glass-thick where there is text to read */
+.glass, .glass-thick {
+  background: var(--lg-fill); border: 1px solid var(--lg-line);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  box-shadow: var(--lg-edge), var(--lg-lift);
+}
+.glass-thick { background: var(--lg-fill-thick); }
+
+/* Buttons: three sizes (sm 44, md 48, lg 56), three looks (filled, glass, plain), and clear
+   pressed, disabled and loading states. A plain .btn is the filled medium one. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  min-height: 48px; min-width: var(--tap); padding: 0 var(--sp-5);
+  border-radius: var(--r-pill); font-size: var(--fs-md); font-weight: 650; line-height: 1;
+  text-decoration: none; position: relative;
+  transition: transform .12s var(--ease), background-color .15s ease, opacity .15s ease, box-shadow .15s ease;
+}
+.btn-sm { min-height: var(--tap); padding: 0 var(--sp-4); font-size: var(--fs-sm); }
+.btn-md { min-height: 48px; }
+.btn-lg { min-height: 56px; padding: 0 var(--sp-6); font-size: var(--fs-lg); }
+.btn.secondary, .btn-glass {
+  background: var(--lg-fill); color: var(--text); border: 1px solid var(--lg-line);
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge);
+}
+.btn-plain { background: transparent; color: var(--text); border: 0; box-shadow: none; }
+.btn-plain:hover { background: var(--lg-pick); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.btn:active:not(:disabled, [aria-disabled="true"], .is-loading, [aria-busy="true"]) { transform: scale(.97); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; transform: none; }
+/* loading: the words stay for screen readers, a small spinner shows instead */
+.btn.is-loading, .btn[aria-busy="true"] { color: transparent !important; pointer-events: none; }
+.btn.is-loading::after, .btn[aria-busy="true"]::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border-radius: 50%; border: 2px solid var(--accent-ink, #fff); border-right-color: transparent; animation: btnSpin .7s linear infinite;
+}
+.btn.secondary.is-loading::after, .btn-glass.is-loading::after, .btn-plain.is-loading::after,
+.btn.secondary[aria-busy="true"]::after, .btn-glass[aria-busy="true"]::after, .btn-plain[aria-busy="true"]::after { border-color: var(--text); border-right-color: transparent; }
+@keyframes btnSpin { to { transform: rotate(360deg); } }
+
+/* The Plus sheet and other pop-up cards are thick glass */
+.plus-card { background: var(--lg-fill-thick); border-color: var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), 0 24px 64px rgba(0, 0, 0, .3); border-radius: var(--r-xl); padding: var(--sp-5); }
+.plus-actions > * { min-height: 48px; transition: transform .12s var(--ease); }
+.plus-actions > *:active { transform: scale(.97); }
+
+/* Touch screens: every tap target is at least 44 x 44. Controls in a tight row grow for real;
+   small ones on their own keep their look and get an invisible 44px touch area around them. */
+@media (pointer: coarse) {
+  .icon-btn, .icon-btn.round { width: var(--tap); height: var(--tap); }
+  .auth-field input { min-height: var(--tap); }
+  .auth-go { min-height: 48px; }
+  .auth-skip { min-height: var(--tap); }
+  .auth-eye { width: var(--tap); height: var(--tap); right: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .accent-sw { width: var(--tap); height: var(--tap); padding: 8px; background-clip: content-box; border-width: 0; box-shadow: inset 0 0 0 8px var(--surface), inset 0 0 0 10px var(--border); }
+  .accent-sw.active { box-shadow: inset 0 0 0 6px var(--surface), inset 0 0 0 8px var(--text); }
+  .accent-swatches { grid-template-columns: repeat(auto-fill, var(--tap)); gap: 0; }
+  .topbar-actions .icon-btn { width: var(--tap); height: var(--tap); }
+  .quick-actions { padding-top: 8px; padding-bottom: 8px; margin-top: -8px; margin-bottom: -8px; position: relative; z-index: 6; }
+  #prompt-input { min-height: var(--tap); padding-top: 11px; }
+  .bubble-tools { gap: 0 var(--sp-2); margin-top: 0; }
+  .bubble-tools button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--sp-1); justify-content: center; }
+  .bubble-tools button.suggest { min-height: 36px; margin: 4px 0; }
+  .listen-btn, .fc-mini, .model-pill { min-height: var(--tap); }
+  .followups { gap: var(--sp-2); }
+  .fu-chip { min-height: 36px; }
+  .settings-card .btn, .settings-actions .btn { min-height: var(--tap); }
+  .chip, .fu-chip, .aud-switch button, .auth-switch button, .auth-legal a, .key-link, .bubble-tools button.suggest { position: relative; }
+  .chip::after, .fu-chip::after, .aud-switch button::after, .auth-switch button::after, .auth-legal a::after, .key-link::after, .bubble-tools button.suggest::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--tap)); height: max(100%, var(--tap)); transform: translate(-50%, -50%);
+  }
+  .key-link { display: inline-block; }
+}
+
+/* Reduce Motion: no sliding, scaling or spinning, things just appear */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .btn:active, .chip:active, .fu-chip:active, .plus-actions > *:active { transform: none !important; }
+  .btn.is-loading::after, .btn[aria-busy="true"]::after { animation: none !important; border-right-color: currentColor; opacity: .6; }
+}

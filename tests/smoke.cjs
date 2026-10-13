@@ -3553,6 +3553,77 @@ test('no em or en dashes in anything people read (every page, label and message,
   await ctx.close();
 });
 
+test('Liquid Glass on a phone: every tap target is at least 44px, and every word passes WCAG AA on the marble, light and dark', async (b) => {
+  const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
+  const screens = {
+    'sign-up': async (page) => { await page.waitForSelector('.auth-page', { timeout: 10000 }); },
+    home: async (page) => { await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="home"]'); if (t) t.click(); }); await page.waitForTimeout(600); },
+    chat: async (page) => { await ask(page, 'what is photosynthesis'); },
+    settings: async (page) => { await page.evaluate(() => openSettings()); await page.waitForTimeout(700); },
+    'Plus sheet': async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForTimeout(400); },
+  };
+  for (const scheme of ['light', 'dark']) {
+    for (const [name, go] of Object.entries(screens)) {
+      const signup = name === 'sign-up';
+      const { ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: signup, state: signup ? null : { groqKey: 'gsk_test', tab: name === 'home' ? 'home' : 'chat' }, fakeGroq: () => ({ text: 'Photosynthesis is how plants make food.\n\nQuick check: where does it happen?' }) });
+      await page.emulateMedia({ colorScheme: scheme });
+      await go(page);
+      await page.waitForTimeout(500);
+      if (scheme === 'light') { const small = await tapTargetIssues(page); expect(!small.length, `${name}: tap targets under 44px: ` + small.join(' | ')); }
+      const { checked, bad } = await contrastIssues(page);
+      expect(checked >= 2, `${name} (${scheme}): no words were measured`);
+      expect(!bad.length, `${name} (${scheme}): words under AA contrast: ` + bad.join(' | '));
+      await ctx.close();
+    }
+  }
+});
+
+test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce Motion stops movement; buttons have 3 sizes and pressed, disabled and loading states', async (b) => {
+  const glass = (page) => page.evaluate(() => { const st = getComputedStyle(document.querySelector('.composer')); return { blur: st.backdropFilter || st.webkitBackdropFilter, bg: st.backgroundImage + ' ' + st.backgroundColor }; });
+  // glass by default (Lite mode off)
+  let { ctx, page } = await open(b, { lite: 'off', server: false, state: { groqKey: 'gsk_test' } });
+  let g = await glass(page);
+  expect(/blur/.test(g.blur), 'the chat box is frosted glass: ' + g.blur);
+  // Reduce Transparency: solid, no blur
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
+  g = await glass(page);
+  expect(!/blur/.test(g.blur) && /none/.test(g.bg), 'Reduce Transparency makes the chat box solid: ' + JSON.stringify(g));
+  await cdp.send('Emulation.setEmulatedMedia', { features: [] });
+  // Reduce Motion: nothing slides or spins
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const motion = await page.evaluate(() => { const b = document.createElement('button'); b.className = 'btn is-loading'; b.textContent = 'Save'; document.body.appendChild(b); const t = getComputedStyle(document.querySelector('.chip')).transitionDuration; const a = getComputedStyle(b, '::after').animationName; const d = getComputedStyle(b, '::after').animationDuration; b.remove(); return { t, a, d }; });
+  expect(/^0\.00001s|^1e-05s|^0s/.test(motion.t) && (motion.a === 'none' || /^0\.00001s|^1e-05s/.test(motion.d)), 'Reduce Motion stops the movement: ' + JSON.stringify(motion));
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // buttons: sizes and states
+  const btns = await page.evaluate(() => {
+    const make = (cls, attrs = {}) => { const b = document.createElement('button'); b.className = cls; b.textContent = 'Save'; Object.assign(b, attrs); document.body.appendChild(b); return b; };
+    const sm = make('btn btn-sm'), md = make('btn'), lg = make('btn btn-lg'), off = make('btn', { disabled: true }), busy = make('btn is-loading'), glassB = make('btn btn-glass');
+    busy.setAttribute('aria-busy', 'true');
+    const h = (e) => Math.round(e.getBoundingClientRect().height);
+    const out = { sm: h(sm), md: h(md), lg: h(lg), offOpacity: getComputedStyle(off).opacity, offCursor: getComputedStyle(off).cursor, busyText: getComputedStyle(busy).color, busySpinner: getComputedStyle(busy, '::after').content, busyClicks: getComputedStyle(busy).pointerEvents, glassBlur: getComputedStyle(glassB).backdropFilter };
+    [sm, md, lg, off, busy, glassB].forEach((e) => e.remove());
+    return out;
+  });
+  expect(btns.sm === 44 && btns.md === 48 && btns.lg === 56, 'three button sizes (44, 48, 56): ' + JSON.stringify(btns));
+  expect(+btns.offOpacity < .6 && btns.offCursor === 'not-allowed', 'a disabled button looks disabled: ' + JSON.stringify(btns));
+  expect(/rgba\(0, 0, 0, 0\)|transparent/.test(btns.busyText) && btns.busySpinner === '""' && btns.busyClicks === 'none', 'a loading button shows a spinner and can’t be tapped twice: ' + JSON.stringify(btns));
+  expect(/blur/.test(btns.glassBlur), 'a glass button is frosted: ' + JSON.stringify(btns));
+  // pressed: it shrinks a little while held
+  await page.evaluate(() => { const b = document.createElement('button'); b.className = 'btn'; b.id = 'press-me'; b.textContent = 'Press'; b.style.cssText = 'position:fixed;left:20px;top:200px;z-index:99999'; document.body.appendChild(b); });
+  const box = await page.locator('#press-me').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(250);
+  const pressed = await page.evaluate(() => getComputedStyle(document.querySelector('#press-me')).transform);
+  await page.mouse.up();
+  expect(/matrix\(0\.97/.test(pressed), 'a pressed button shrinks a little: ' + pressed);
+  await ctx.close();
+  // Lite mode (slow phones): solid surfaces too
+  ({ ctx, page } = await open(b, { lite: 'on', server: false, state: { groqKey: 'gsk_test' } }));
+  g = await glass(page);
+  expect(!/blur/.test(g.blur) && /none/.test(g.bg), 'Lite mode makes the chat box solid: ' + JSON.stringify(g));
+  await ctx.close();
+});
+
 test('works offline after the first visit (app opens)', async (b) => {
   // no network fakes here: Playwright's fakes and service workers don't mix
   const ctx = await b.newContext({ ...devices['Pixel 7'] });
