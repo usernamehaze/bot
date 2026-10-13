@@ -248,3 +248,5 @@
   #try-hint.play, .sp-planets i::after, .tk.speaking .tk-mic svg { animation: none; }
   .tp-card .f, .tp-card .b, .fc-card .f, .fc-card .b { transition: none; }
 }
+/* touch screens: the desk's tabs are 44px to touch */
+@media (pointer: coarse) { .dk-tabs button, .toy .pill, .toy .tbody > button { min-height: 44px; } }

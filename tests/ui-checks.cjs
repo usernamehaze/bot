@@ -41,7 +41,7 @@ async function tapTargetIssues(page) {
       const st = getComputedStyle(e);
       if (st.visibility === 'hidden' || +st.opacity === 0 || st.pointerEvents === 'none' || e.closest('[hidden], [inert], [aria-hidden="true"]')) continue;
       if (e.disabled || (e.checkVisibility && !e.checkVisibility({ contentVisibilityAuto: true }))) continue; // (inside a closed <details>, say)
-      e.scrollIntoView({ block: 'center', inline: 'nearest' });
+      e.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }); // (instant: a smooth-scrolling page hasn't moved yet when it's measured)
       // (a control that wraps over several lines, like a sentence: its biggest line is what's tapped)
       const rects = [...e.getClientRects()];
       const r = rects.length > 1 ? rects.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a)) : e.getBoundingClientRect();
@@ -89,7 +89,7 @@ async function tapTargetIssues(page) {
       const fills = grid && grid.getBoundingClientRect().width >= 0.9 * Math.min(W - 16, grid.parentElement.clientWidth);
       if (miss.length && !fills) { const h = document.elementFromPoint(cx + miss[0][0], cy + miss[0][1]); out.push(name(e, r) + ' under 44px' + (h ? ` (${miss[0][0] ? (miss[0][0] < 0 ? 'left' : 'right') : miss[0][1] < 0 ? 'above' : 'below'}: ${label(h)})` : '')); }
     }
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
     return out;
   });
 }

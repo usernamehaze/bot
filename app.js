@@ -6227,7 +6227,9 @@ function openProfile(first) {
     try { mascotSay(first ? `Nice to meet you, ${name}! 👋` : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
     renderProfileSummary();
   });
-  setTimeout(() => f.name.focus(), 50);
+  // the name box gets the focus, unless you're already typing in another box (it took the
+  // next letters: an age typed straight away landed in the name)
+  setTimeout(() => { if (!f.contains(document.activeElement)) f.name.focus(); }, 50);
 }
 /* ---------- Cassie accounts: sign in once, and your profile follows you ---------- */
 // Only with Cassie's server (config.js). What syncs: profile, settings and saved quiz
