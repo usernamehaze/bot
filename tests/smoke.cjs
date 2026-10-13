@@ -3747,6 +3747,47 @@ test('Labs in Liquid Glass: 44px tap targets and AA words on a phone, errors fro
   await ctx.close();
 });
 
+test('the other screens in Liquid Glass: Plus sheet, offline note, board, flashcards and the landing page (44px to touch, AA words, one next step when empty)', async (b) => {
+  const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
+  let { ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: false, state: { groqKey: 'gsk_test', plan: null, cards: [] } });
+  // the Plus sheet: what was tapped, why, what Plus adds, and two clear buttons (no payments here)
+  await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views. They come back on Monday.'));
+  const sheet = page.locator('.plus-sheet');
+  expect(/Real 3D views comes with Plus/.test(await sheet.locator('h3').innerText()) && await sheet.locator('.plus-list li').count() === 3, 'the Plus sheet says what it is and what Plus adds');
+  expect(await sheet.locator('.plus-go').getAttribute('href') === 'index.html#pricing', 'See the plans goes to the plans (no payment here)');
+  await sheet.locator('.plus-ok').click();
+  expect(await page.locator('.plus-sheet').count() === 0, 'Not now closes it');
+  // offline: a calm note says what still works, and goes away when the internet is back
+  await ctx.setOffline(true);
+  await seen(page, '#offline-note', 'still work', 5000);
+  expect(/Questions to Cassie need the internet/.test(await page.locator('#offline-note').innerText()), 'the offline note says what needs the internet');
+  await ctx.setOffline(false);
+  await page.waitForFunction(() => document.getElementById('offline-note').hidden, null, { timeout: 5000, polling: 100 });
+  // flashcards with none yet: why, and one next step
+  await page.evaluate(() => { state.cards = []; save(); const t = document.querySelector('.tabbar [data-tab="cards"]'); if (t) t.click(); });
+  await seen(page, '.empty-state .es-title', 'No flashcards yet', 8000);
+  await page.click('.empty-state .es-go');
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.name === 'f'), 'Write a card opens the form at the front of the card');
+  let small = await tapTargetIssues(page);
+  expect(!small.length, 'flashcards: tap targets under 44px: ' + small.join(' | '));
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const c = await contrastIssues(page); expect(!c.bad.length, `flashcards (${scheme}): words under AA: ` + c.bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  // the board: every tool is 44px to touch
+  await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t) t.click(); });
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-live', { timeout: 15000 });
+  small = await tapTargetIssues(page);
+  expect(!small.length, 'board: tap targets under 44px: ' + small.join(' | '));
+  await ctx.close();
+  // the landing page
+  ({ ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: false, state: null }));
+  await page.goto(APP.replace('app.html', 'index.html'));
+  await page.waitForTimeout(1500);
+  small = await tapTargetIssues(page);
+  expect(!small.length, 'landing: tap targets under 44px: ' + small.join(' | '));
+  await ctx.close();
+});
+
 test('works offline after the first visit (app opens)', async (b) => {
   // no network fakes here: Playwright's fakes and service workers don't mix
   const ctx = await b.newContext({ ...devices['Pixel 7'] });
