@@ -70,6 +70,7 @@
   .csk-note strong { font-weight: 700; }
   .csk-note code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   .csk-note[hidden] { display: none; }
+  .csk-panel > :not(.csk-stage) { flex-shrink: 0; } /* (the bars above keep their size; only the drawing area gives way when the board is short) */
   .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px; touch-action: none; }
   .csk-board { position: relative; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
   .csk-board canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -1345,6 +1346,7 @@
     function close() {
       closePop(); cancelAnimationFrame(fxRaf); cancelAnimationFrame(curRaf); cancelAnimationFrame(objRaf);
       window.removeEventListener('resize', fit);
+      if (refit) refit.disconnect();
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('paste', onPaste, true);
       wrap.remove();
@@ -1355,6 +1357,9 @@
     wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap && !strokes.length) close(); });
 
     window.addEventListener('resize', fit);
+    // (and when its own area changes: the study panel opening, the toolbar wrapping to two rows)
+    const refit = window.ResizeObserver ? new ResizeObserver(() => fit()) : null;
+    if (refit) refit.observe(stage);
     document.addEventListener('keydown', onKey, true);
     setSize(); drawBg(); redraw();
     // On a dark picture (e.g. a dark-mode graph), start with white ink so it shows.

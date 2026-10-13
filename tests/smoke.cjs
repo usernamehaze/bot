@@ -58,8 +58,8 @@ const FAKE_GSI = `window.google = { accounts: { id: {
 } } };`;
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', setup } = {}) {
-  const ctx = await browser.newContext({ ...devices[device], acceptDownloads: true });
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, setup } = {}) {
+  const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(touch ? { hasTouch: true } : {}), acceptDownloads: true });
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
@@ -1556,12 +1556,55 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
   await ctx.close();
 });
 
+test('Explore cells are their own view: own card on the Labs shelf and in 3D, Animal or Plant inside it, opened straight away (never through the body)', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
+    // anything of the body: its model files, or the 3D view turning into the body for a moment
+    await c.addInitScript(() => {
+      window.__body = [];
+      new MutationObserver((ms) => { for (const m of ms) if (m.target.classList && m.target.classList.contains('x3d-body-mode')) window.__body.push('body mode'); })
+        .observe(document, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    });
+  } });
+  const bodyFiles = [];
+  page.on('request', (r) => { if (/\/explore\/body\//.test(r.url())) bodyFiles.push(r.url()); });
+  // the Labs shelf and its 3D menu: the body and the cells are two cards
+  await tapLabs(page);
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the shelf has a cells card and a body card');
+  await page.click('.labs-chips [data-subject="3d"]');
+  expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the 3D menu has both too');
+  expect(/Cells 3D/.test(await page.locator('.labs-grid [data-lab="cells3d"]').innerText()), 'the cells card is named for the cells');
+  // the cells card opens the cells straight away
+  await page.click('.labs-grid [data-lab="cells3d"]');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="nucleus"]', { timeout: 30000 });
+  const tabs = await page.$$eval('.x3d-switch [data-cell]', (t) => t.map((x) => x.dataset.cell + ':' + x.getAttribute('aria-selected')));
+  expect(tabs.join() === 'animal:true,plant:false', 'inside the cells: Animal or Plant, nothing else: ' + tabs);
+  expect(await page.locator('.x3d-switch').isVisible() && await page.locator('.x3d-find').isHidden(), 'the cell switch shows; the body’s search does not');
+  await page.click('.x3d-switch [data-cell="plant"]');
+  await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 15000 });
+  await page.click('.x3d-close');
+  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 10000 });
+  // opened again, the cells come back on the one last looked at
+  await page.click('.labs-grid [data-lab="cells3d"]');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="chloroplast"]', { timeout: 30000 });
+  expect(await page.locator('.x3d-switch [data-cell="plant"]').getAttribute('aria-selected') === 'true', 'the plant cell, as left');
+  await page.click('.x3d-close');
+  // a link opens the cells too
+  await page.goto(APP + '?explore=cells');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="nucleus"]', { timeout: 30000 });
+  expect(await page.locator('.x3d-switch').isVisible() && await page.locator('.x3d-switch [data-cell="body"]').count() === 0, 'the link opens the cells, with no body tab');
+  const body = await page.evaluate(() => window.__body);
+  expect(!body.length && !bodyFiles.length, 'the body never showed or loaded on the way to the cells: ' + JSON.stringify({ body, bodyFiles: bodyFiles.slice(0, 3) }));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
   await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   expect(await page.locator('.labs').isHidden(), 'Labs steps aside while the 3D body is open');
-  expect(await page.locator('.x3d-switch [data-cell="body"]').getAttribute('aria-selected') === 'true', 'the 3D card opens the human body');
+  expect(await page.locator('.x3d').evaluate((e) => e.classList.contains('x3d-body-mode')) && await page.locator('.x3d-switch').isHidden(), 'the 3D card opens the human body, with no cell switch (the cells are their own view)');
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
   const on = await page.$$eval('.x3d-sys', (c) => c.filter((x) => x.getAttribute('aria-pressed') === 'true').map((x) => x.dataset.sys));
   const all = await page.$$eval('.x3d-sys[data-sys]', (c) => c.map((x) => x.textContent.trim()));
@@ -3770,6 +3813,77 @@ test('Liquid Glass on a phone: every tap target is at least 44px, and every word
       await ctx.close();
     }
   }
+});
+
+// the three screens every control is checked on: an iPhone, a small Android phone and a 1280x800
+// touch screen (a tablet on its side, a touch laptop: a mouse gets the smaller desktop sizes)
+const TAP_SIZES = [['iPhone 390x844', 'iPhone 13', { width: 390, height: 844 }], ['small Android 360x740', 'Pixel 7', { width: 360, height: 740 }], ['touch 1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]];
+// every screen and panel, each opened on its own: [name, how to get there, what to start with]
+const TAP_SCREENS = [
+  ['sign-up', async (page) => { await page.waitForSelector('.auth-page', { timeout: 10000 }); }, { state: null, server: true }],
+  ['profile', async (page) => { await page.evaluate(() => openProfile(false)); await page.waitForSelector('.profile-card', { timeout: 8000 }); }],
+  ['home', async (page) => { await page.waitForTimeout(600); }, { state: { tab: 'home' } }],
+  ['chat', async (page) => { await ask(page, 'what is photosynthesis'); }],
+  ['settings', async (page) => { await page.evaluate(() => openSettings()); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(500); }],
+  ...[0, 1, 2, 3, 4, 5].map((i) => [`settings section ${i + 1}`, async (page) => {
+    await page.evaluate(() => openSettings()); await page.waitForSelector('#settings-panel:not([hidden])');
+    const title = await page.evaluate((i) => { const g = [...document.querySelectorAll('#settings-panel details.settings-group')]; g.forEach((d, k) => { d.open = k === i; }); return g[i] ? g[i].querySelector('summary').textContent.trim().replace(/\s+/g, ' ') : ''; }, i);
+    await page.waitForTimeout(400);
+    return title;
+  }]),
+  ['Plus sheet', async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForSelector('.plus-sheet'); await page.waitForTimeout(400); }],
+  ['Labs shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
+  ['Labs 3D', async (page) => { await page.evaluate(() => openLabs(undefined, { subject: '3d' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
+  ['Games', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
+  ['Study tools shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'tools' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
+  ['Explore body', async (page) => { await page.evaluate(() => openExplore('body')); await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 30000 }); await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 }); await page.waitForTimeout(500); }],
+  ['Explore animal cell', async (page) => { await page.evaluate(() => openExplore('animal')); await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="nucleus"]', { timeout: 30000 }); await page.waitForTimeout(500); }],
+  ['Explore plant cell', async (page) => { await page.evaluate(() => openExplore('plant')); await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="chloroplast"]', { timeout: 30000 }); await page.waitForTimeout(500); }],
+  ['Explore cell part card', async (page) => { await page.evaluate(() => openExplore('animal')); await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="golgi"]', { timeout: 30000 }); await page.click('.x3d-chip[data-part="golgi"]'); await page.waitForSelector('.x3d-sheet:not([hidden])'); await page.waitForTimeout(400); }],
+  ['board', async (page) => { await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); }); await page.click('#board-btn'); await page.waitForSelector('.csk-live', { timeout: 15000 }); await page.waitForTimeout(400); }],
+  ['flashcards', async (page) => { await page.evaluate(() => window.CassieCards.open()); await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 }); await page.waitForTimeout(400); }, { state: { cards: [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }] } }],
+  ['study room', async (page) => {
+    await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+    await page.click('#board-btn'); await page.click('.csk-btn:has-text("Study together")'); await page.click('[data-room="new"]');
+    await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    await page.click('[data-room-act="study"]'); await page.waitForTimeout(600);
+  }, { server: true }],
+  ['Talk with Cassie', async (page) => { await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForTimeout(600); }],
+];
+test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
+  const { tapTargetIssues } = require('./ui-checks.cjs');
+  const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
+  const bad = [];
+  for (const [size, device, viewport] of TAP_SIZES) {
+    for (const [name, go, o = {}] of TAP_SCREENS) {
+      if (only && !only.test(name)) continue;
+      const { ctx, page } = await open(b, { device, viewport, touch: true, lite: 'on', server: o.server || false, state: o.state === null ? null : { groqKey: 'gsk_test', ...(o.state || {}) }, fakeGroq: () => ({ text: 'Photosynthesis is how plants make food.\n\nQuick check: where does it happen?' }) });
+      try {
+        const sub = await go(page);
+        const issues = await tapTargetIssues(page);
+        if (issues.length) bad.push(`${name}${sub ? ' (' + sub + ')' : ''} @ ${size}: ${issues.join(' | ')}`);
+        if (issues.length && process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/tap-${name}-${viewport.width}.png`.replace(/ /g, '_') });
+      } catch (e) { bad.push(`${name} @ ${size}: could not open: ${e.message.split('\n')[0]}`); }
+      await ctx.close();
+    }
+    // every lab, one after another in the same window
+    if (only && !only.test('labs')) continue;
+    const { ctx, page } = await open(b, { device, viewport, touch: true, lite: 'on', server: false, state: { groqKey: 'gsk_test' } });
+    const ids = await page.evaluate(async () => (await import('./labs/labs.js')).LABS.map((l) => l.id));
+    for (const id of ids) {
+      try {
+        await page.evaluate((x) => openLabs(x), id);
+        await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"]`, { timeout: 15000 });
+        await page.waitForTimeout(500);
+        const issues = await tapTargetIssues(page);
+        if (issues.length) bad.push(`lab ${id} @ ${size}: ${issues.join(' | ')}`);
+        if (issues.length && process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/tap-lab-${id}-${viewport.width}.png` });
+      } catch (e) { bad.push(`lab ${id} @ ${size}: could not open: ${e.message.split('\n')[0]}`); }
+    }
+    await ctx.close();
+  }
+  if (process.env.TAP_REPORT) fs.writeFileSync(process.env.TAP_REPORT, bad.join('\n'));
+  expect(!bad.length, `${bad.length} screens with buttons that can't be tapped properly:\n` + bad.join('\n'));
 });
 
 test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce Motion stops movement; buttons have 3 sizes and pressed, disabled and loading states', async (b) => {

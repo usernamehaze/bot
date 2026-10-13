@@ -115,6 +115,7 @@ const sudokuLab = {
     const S = shell(panel, api, 'sudoku', () => make(), () => size === 9);
     const wrap = el('div', 'puz-sudoku'); stage.appendChild(wrap);
     const board = el('div', 'sdk-grid'), pad = el('div', 'sdk-pad');
+    board.dataset.tapGrid = ''; // (a puzzle board: its cells are as big as the screen allows, see tests/ui-checks.cjs)
     wrap.append(board, pad);
     const msg = winNote(panel);
     function make() {

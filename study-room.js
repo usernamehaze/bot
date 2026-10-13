@@ -17,7 +17,9 @@
     -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); border-left: 1px solid rgba(18,17,23,.08); box-shadow: -12px 0 34px rgba(0,0,0,.14); color: #1b1b1d; font-size: 15px; }
   .sr[hidden] { display: none; }
   .csk-dark .sr { background: rgba(30,30,33,.94); color: #ededed; border-color: rgba(255,255,255,.08); }
-  @media (max-width: 700px) { .sr { top: auto; height: 72%; width: 100%; border-left: 0; border-top: 1px solid rgba(18,17,23,.08); border-radius: 20px 20px 0 0; } }
+  @media (max-width: 700px) { .sr { top: auto; height: min(72%, calc(100% - 240px)); width: 100%; border-left: 0; border-top: 1px solid rgba(18,17,23,.08); border-radius: 20px 20px 0 0; } }
+  /* wide screens: the board makes room for the panel, so its own buttons (Send to Cassie, Close, the colours) stay reachable */
+  @media (min-width: 701px) { .csk-panel:has(> .sr:not([hidden])) { padding-right: min(380px, 100%); } }
   .sr-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px 16px; }
   .sr-head h3 { margin: 0; font-size: 17px; flex: 1; }
   .sr-x, .sr-tm { min-height: 36px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; border-radius: 999px; padding: 0 12px; font: 600 13px/1 inherit; cursor: pointer; }
@@ -67,6 +69,12 @@
   .sr-note button { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(0,0,0,.08); cursor: pointer; }
   .sr-warn { margin: 8px 14px 0; padding: 10px 12px; border-radius: 12px; background: rgba(207,34,46,.1); font-size: 13px; line-height: 1.4; }
   .sr-warn[hidden] { display: none; }
+  
+  /* touch screens: 44px to touch */
+  @media (pointer: coarse) {
+    .sr-x { width: 44px; } .sr-x, .sr-tm, .sr-tabs button, .sr-btn, .sr-mini, .sr-foot input, .sr-foot textarea { min-height: 44px; }
+    .sr-tabs { padding-top: 2px; }
+  }
   `;
 
   function attach(o) {

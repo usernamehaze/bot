@@ -370,6 +370,8 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 
 /* ---------- study tools and games (tools.js, museum.js, games.js) ---------- */
 @media (max-width: 760px) { .lab-view.lab-tool .lab-body { grid-template-rows: minmax(340px, 66vh) auto; } }
+/* phones: Sudoku's picture is as tall as the board needs to fill the width (its cells as big as the screen allows) */
+@media (max-width: 760px) { .lab-view[data-lab="sudoku"] .lab-body { grid-template-rows: minmax(calc(100vw + 150px), auto) auto; } }
 .tl-sheet { position: absolute; inset: 0; overflow-y: auto; padding: 16px 18px 28px; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .tl-hint { margin: 0 0 12px; font-size: .84rem; color: rgba(255, 255, 255, .62); }
 .tl-hint.tl-win, .tl-msg.good { color: #b8f0cf; }
@@ -651,4 +653,37 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   .lab-acts { gap: 6px; }
   .lab-acts .lab-btn { white-space: nowrap; padding: 0 8px; gap: 5px; font-size: .82rem; }
   .lab-acts .lab-btn svg { width: 15px; height: 15px; flex: none; }
+}
+/* Touch screens, every lab: 44 x 44 to touch (found by the tap test on a 360px Android, a 390px
+   iPhone and a 1280px touch screen). Rows that were too tight grow; small controls get room. */
+@media (pointer: coarse) {
+  .lab-view input:not([type=range], [type=checkbox], [type=radio], [type=color], [type=hidden]), .lab-view select, .lab-view textarea { min-height: 44px; }
+  .lab-sl .lab-sl-typed input { min-height: 44px; width: 5.6em; }
+  .lab-view summary { min-height: 44px; display: flex; align-items: center; }
+  .lab-btn, .lab-seg button { min-width: 44px; }
+  /* steppers: − 3 + */
+  .lab-step { grid-template-columns: 1fr 44px 44px 44px; }
+  .lab-step button { height: 44px; }
+  /* the coefficient arrows over and under each number in an equation */
+  .lab-coef button { width: 44px; height: 44px; font-size: .8rem; }
+  /* the metals list over the 3D beaker */
+  .lab-series { gap: 0; }
+  .lab-series button { min-height: 44px; align-items: center; padding: 0 10px; }
+  .lab-series small { padding: 4px 6px; }
+  /* colour chips */
+  .lab-colour-chips { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; }
+  .lab-colour-chips button { min-height: 44px; }
+  /* name tags in the 3D labs: a 44px touch area around each one (three-kit.js keeps them apart) */
+  .lab3d-label::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+  /* the equation puzzle's keys: rows wrap rather than shrink */
+  .eq-keys > div { flex-wrap: wrap; }
+  .eq-keys button, .sdk-pad button { min-width: 44px; height: 44px; }
+  /* the country quiz, the vocabulary chain, the timeline, the thesis builder */
+  .geo-opts button, .tl-term { min-height: 44px; }
+  .tl-arrows { flex-direction: row; gap: 4px; }
+  .tl-arrows button { width: 44px; height: 44px; font-size: .8rem; }
+  .tl-x { min-width: 44px; min-height: 44px; }
+  .tl-ev2 span button { min-height: 44px; padding-inline: 12px; }
+  /* the essay's sentences: each one its own row to tap (in a paragraph the lines sat too close) */
+  .tl-para .tl-sent { display: block; min-height: 44px; margin: 4px 0; padding: 10px 12px; line-height: 1.45; }
 }
