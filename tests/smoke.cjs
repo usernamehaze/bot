@@ -2988,7 +2988,7 @@ test('Research finds real papers and writes an RRL; references copy as APA/MLA a
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
   await bar.locator('button', { hasText: 'Copy APA' }).click();
   const apa = await page.evaluate(() => navigator.clipboard.readText());
-  expect(/Smith, J\. \(2020\)\. Sleep and memory\. Journal of Sleep, 29\(3\), 101–115\. https:\/\/doi\.org\/10\.1\/abc/.test(apa) && /Cruz, A\. \(2019\)/.test(apa), 'APA references: ' + apa);
+  expect(/Smith, J\. \(2020\)\. Sleep and memory\. Journal of Sleep, 29\(3\), 101-115\. https:\/\/doi\.org\/10\.1\/abc/.test(apa) && /Cruz, A\. \(2019\)/.test(apa), 'APA references: ' + apa);
   const [bib] = await Promise.all([page.waitForEvent('download'), bar.locator('button', { hasText: 'BibTeX' }).click()]);
   const bibText = fs.readFileSync(await bib.path(), 'utf8');
   expect(/@article\{smith2020sleep,/.test(bibText) && /doi = \{10\.1\/abc\}/.test(bibText) && /pages = \{101--115\}/.test(bibText), 'BibTeX: ' + bibText);
