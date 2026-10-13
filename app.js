@@ -2030,7 +2030,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       await sleep(Math.ceil(secs * 1000) + 300);
       continue;
     }
-    throw friendlyError(CassieErrors.say('no_answer'));
+    throw friendlyError(detail || CassieErrors.say('no_answer')); // Cassie's own server words its messages for people
   }
 }
 
