@@ -1943,3 +1943,25 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .fc-field input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .room-join { flex-wrap: wrap; }
 .room-join .field-err { flex-basis: 100%; margin-top: 0; }
+
+/* An empty list (errors.js → CassieErrors.empty): a calm mark, why it's empty, one next step */
+.empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--sp-2); padding: var(--sp-5) var(--sp-4); margin: var(--sp-3) 0; border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); color: var(--text); }
+.empty-state .es-mark { width: 40px; height: 40px; border-radius: 50%; border: 2px dashed var(--muted); margin-bottom: var(--sp-1); }
+.empty-state .es-title { margin: 0; font-size: var(--fs-md); font-weight: 700; }
+.empty-state .es-text { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--text); max-width: 32ch; }
+.empty-state .es-go { margin-top: var(--sp-2); }
+.bubble .empty-state { margin: 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: var(--sp-2) 0; }
+
+/* Chat in the Liquid Glass style: softer, rounder bubbles from the same radii as everything else */
+.bubble { border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4); line-height: var(--lh-body); }
+.bubble-user { border-bottom-right-radius: 6px; }
+.bubble-assistant { border-bottom-left-radius: 6px; border-color: var(--lg-line); box-shadow: var(--lg-edge), 0 8px 24px rgba(18, 17, 23, .07); }
+.bubble.error { border: 1px solid var(--text); }
+.followups { gap: var(--sp-2); }
+.fu-chip { border-radius: var(--r-pill); }
+/* phones: the save row fits on one line (the download mark stands for "Save as") */
+@media (max-width: 430px) {
+  .bubble-tools .save-label { font-size: 0; gap: 0; padding-left: var(--sp-2); }
+  .bubble-tools .save-label svg { width: 16px; height: 16px; }
+}
+.bubble-tools .save-group { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: inherit; }

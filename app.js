@@ -1333,6 +1333,11 @@ function scrollToBottom() {
   chatLog.scrollTop = chatLog.scrollHeight;
   if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
+// While you're at the latest message, stay there when something is added under it a moment later
+// (the Listen row, the follow-up chips). Scroll up to read, and the chat stays where you are.
+let chatPinned = true;
+chatLog.addEventListener('scroll', () => { chatPinned = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 80; }, { passive: true });
+new MutationObserver(() => { if (chatPinned && chatLog.scrollHeight > chatLog.clientHeight) chatLog.scrollTop = chatLog.scrollHeight; }).observe(chatLog, { childList: true, subtree: true });
 
 function escapeHtml(str) {
   const d = document.createElement('div');
@@ -1837,12 +1842,12 @@ function rateLimitMessage(res, detail) {
   if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
   const daily = secs > 3600;
   if (daily) {
-    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in Settings. Each model has its own daily limit.`;
+    return CassieErrors.say('groq_daily', { when: wait ? ` until it resets in ${wait}${clock}` : '' });
   }
   if (wait) {
-    return `Slow down a sec. That's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
+    return CassieErrors.say('groq_minute', { wait: `${wait}${clock}` });
   }
-  return "Groq's free tier is busy for a moment. Wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
+  return CassieErrors.say('groq_busy');
 }
 
 // Seconds Groq asks us to wait before retrying (from headers or the message).
@@ -1939,7 +1944,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
         body: JSON.stringify(body),
       });
     } catch (netErr) {
-      return viaServerInstead(friendlyError("I couldn't reach Groq. Check your internet connection and try again."));
+      return viaServerInstead(friendlyError(CassieErrors.say('network')));
     }
     if (res.ok) {
       noteGroqBudget(model, res);
@@ -1949,7 +1954,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (res.status === 401) return viaServerInstead(friendlyError('Your Groq key isn’t working (it may have been deleted). Open Settings and paste a fresh key from console.groq.com/keys.'));
+    if (res.status === 401) return viaServerInstead(friendlyError(CassieErrors.say('groq_key_bad')));
     if (modelRetired(res.status, detail)) {
       const next = await nextGroqModel(tried);
       if (!next) return viaServerInstead(retiredError());
@@ -1985,7 +1990,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       continue;
     }
     if (isRateLimited(res.status, detail)) return viaServerInstead(friendlyError(rateLimitMessage(res, detail)));
-    if (res.status >= 500) return viaServerInstead(friendlyError('Groq is having a problem right now. Try again in a minute.'));
+    if (res.status >= 500) return viaServerInstead(friendlyError(CassieErrors.say('groq_down')));
     throw new Error(detail || `Request failed (${res.status})`);
   }
 }
@@ -2007,7 +2012,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
         body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined }),
       });
     } catch (e) {
-      throw friendlyError("I couldn't connect. Check your internet connection and try again.");
+      throw friendlyError(CassieErrors.say('network'));
     }
     if (res.ok) {
       const data = await res.json();
@@ -2025,7 +2030,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       await sleep(Math.ceil(secs * 1000) + 300);
       continue;
     }
-    throw friendlyError(detail || 'Cassie couldn’t answer just now. Please try again in a moment.');
+    throw friendlyError(CassieErrors.say('no_answer'));
   }
 }
 
@@ -2060,7 +2065,7 @@ async function askGroq(msgs, opts = {}) {
       if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
       const next = GROQ_MODELS.find((m) => !tried.has(m) && m !== e.model);
       if (next) { model = next; historyBudget = 3000; continue; }
-      const err = new Error("That message is too long for Groq's free per-minute limit. Try a shorter question, start a new chat, or attach the material as a file (the paperclip). I read long files in parts.");
+      const err = new Error(CassieErrors.say('message_too_long'));
       err.friendly = true;
       throw err;
     }
@@ -2117,7 +2122,7 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = nul
     if (res.ok) {
       const cand = (await res.json()).candidates?.[0];
       const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
-      if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one. Try rephrasing it." : '(no response)';
+      if (!text) return cand?.finishReason === 'SAFETY' ? CassieErrors.say('unsafe') : '(no response)';
       return text;
     }
     let detail = '';
@@ -2125,17 +2130,17 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = nul
     if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); forgetGeminiModels(); continue; }
     // busy ("high demand", overloaded) or out of free requests: the next Gemini model has its own capacity
     if (res.status >= 500 || isRateLimited(res.status, detail) || /high demand|overloaded|unavailable/i.test(detail)) {
-      lastErr = friendlyError('Google’s Gemini is very busy right now. Try again in a minute.');
+      lastErr = friendlyError(CassieErrors.say('gemini_busy'));
       lastErr.busy = true; lastErr.rateLimited = isRateLimited(res.status, detail);
       continue;
     }
     if (/api key/i.test(detail)) {
-      const e = new Error('Your Gemini key was rejected. Check it in Settings (gear icon). It should start with "AIza".');
+      const e = new Error(CassieErrors.say('gemini_key_bad'));
       e.friendly = true; e.keyRejected = true; throw e;
     }
     // refused for this model (newer models can be off for some keys): try the next one
     if (res.status === 403) {
-      lastErr = friendlyError(`Google refused your Gemini key for this${detail ? ` (“${detail.slice(0, 140)}”)` : ''}. Make a new key at aistudio.google.com/apikey and paste it in Settings.`);
+      lastErr = friendlyError(CassieErrors.say('gemini_key_refused'));
       lastErr.keyRejected = true;
       continue;
     }
@@ -2230,7 +2235,7 @@ async function askPicture(msgs, image, opts = {}) {
       return await serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist, { role: 'user', content }], { model: 'vision', maxTokens: 2048, onWait: opts.onWait, q: opts.q });
     } catch (e) { firstErr = firstErr || e; }
   }
-  if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now. Please try again in a minute.') : firstErr;
+  if (firstErr) throw firstErr.busy ? friendlyError(CassieErrors.say('pictures_busy')) : firstErr;
   throw new Error('Add your Google (Gemini) API key in Settings to use images.');
 }
 
@@ -2540,7 +2545,7 @@ async function groqDocument(doc, request, history, onStatus) {
   const text = pagesAskedFor(doc.text || '', request);
   const visualNotes = doc.hasVisuals ? await pictureNotes(doc, onStatus, waitNote) : [];
   if (!text && !visualNotes.length) {
-    throw friendlyError(`I couldn't find readable text in ${doc.name}, it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
+    throw friendlyError(CassieErrors.say('scanned_file', { name: doc.name }));
   }
   const hist = compactHistory(history, 800);
 
@@ -2710,7 +2715,7 @@ async function answerAboutDocument(doc, request, history, onStatus) {
   try { return await readDocumentAnswer(doc, request, history, onStatus); }
   catch (e) {
     if (!e.tooLarge) throw e;
-    throw friendlyError(`${doc.name} is too big for me to read in one go right now. Wait a minute and try again, ask about one part (for example “make a reviewer of pages 1 to 10”), or add your free Gemini key in Settings. Then I can read the whole file at once.`);
+    throw friendlyError(CassieErrors.say('file_too_big', { name: doc.name }));
   }
 }
 async function readDocumentAnswer(doc, request, history, onStatus) {
@@ -3031,7 +3036,7 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
         fcBtn.dataset.deck = r.deck;
         fcBtn.textContent = r.added ? `✓ ${r.added} cards: Study` : '✓ Already cards: Study';
       } catch (e) {
-        fcBtn.textContent = 'Couldn’t make cards. Try again';
+        fcBtn.textContent = 'Try again'; mascotSay(CassieErrors.say('cards_failed'), 5000);
         setTimeout(() => { fcBtn.textContent = '＋ Flashcards'; }, 2600);
       } finally { fcBtn.disabled = false; }
     });
@@ -3049,7 +3054,10 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
   const label = document.createElement('span');
   label.className = 'save-label';
   label.innerHTML = `${DL_ICON} Save as`;
-  tools.appendChild(label);
+  const saveGroup = document.createElement('span'); // "Save as" and its formats wrap together
+  saveGroup.className = 'save-group';
+  saveGroup.appendChild(label);
+  tools.appendChild(saveGroup);
   const docTitle = window.CassieExport.titleOf(text, title);
   SAVE_FORMATS.forEach((f) => {
     const btn = document.createElement('button');
@@ -3068,12 +3076,12 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
         btn.textContent = 'Saved ✓';
       } catch (e) {
         btn.textContent = 'Try again';
-        alert(`Couldn't make the ${f.label} file. Check your internet connection and try again.`);
+        alert(CassieErrors.say('file_failed', { label: f.label }));
       } finally {
         setTimeout(() => { btn.textContent = f.label; btn.disabled = false; }, 1600);
       }
     });
-    tools.appendChild(btn);
+    saveGroup.appendChild(btn);
   });
   bubble.appendChild(tools);
   if (want) addFileCard(bubble, text, docTitle, SAVE_FORMATS.find((x) => x.key === want));
@@ -3094,7 +3102,7 @@ function addFileCard(bubble, text, docTitle, f) {
     blob = b;
     small.textContent = `${f.label === 'Image' ? 'Image' : f.label} file · ready`;
     btn.disabled = false;
-  }).catch(() => { small.textContent = 'Couldn’t make the file. Use “Save as” above.'; });
+  }).catch(() => { small.textContent = CassieErrors.say('file_failed_saveas'); });
   btn.addEventListener('click', () => { if (blob) downloadBlob(name, blob); });
 }
 
@@ -3169,20 +3177,14 @@ function setTypingStatus(bubble, text) {
 }
 
 /* Errors read like Cassie, never like a crash, and come with a "Try again". */
-function errorText(err, prefix = 'Something went wrong') {
-  if (err && err.friendly) return err.message;
-  const m = String((err && err.message) || err || '');
-  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return "I couldn't connect. Check your internet and try again.";
-  if (/timeout|timed out|aborted/i.test(m)) return 'That took too long. Please try again.';
-  return `${prefix}. Please try again. If it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
-}
+function errorText(err, fallback = 'unknown') { return CassieErrors.explain(err, fallback); }
 let autoReports = 0;
 function reportAuto(where, message) {
   if (autoReports++ >= 5) return; // a handful per visit at most
   try { sendFeedback('auto', where, String(message || '').slice(0, 300)); } catch (e) { /* best effort */ }
 }
 function renderError(err, retry, prefix) {
-  reportAuto('chat', errorText(err, prefix));
+  reportAuto('chat', String((err && err.message) || err || '').slice(0, 300));
   const busyErr = /limit|busy|wait/i.test(errorText(err, prefix));
   botMood(busyErr ? 'busy' : 'oops', 3000);
   islandErrUntil = Date.now() + 3000;
@@ -3242,7 +3244,11 @@ function captureQuizMarks(reply) {
 const dueMistakes = () => (Array.isArray(state.mistakes) ? state.mistakes : []).filter((m) => (m.due || 0) <= Date.now());
 function reviewMistakes(all = false) {
   const list = (all ? state.mistakes || [] : dueMistakes()).slice(0, 10);
-  if (!list.length) { renderMessage('assistant', 'No mistakes to review right now. Nice! Start a quiz with “Quiz me”, and any you miss will come back here.'); return; }
+  if (!list.length) {
+    const b = renderMessage('assistant', '');
+    b.appendChild(CassieErrors.empty({ title: 'No mistakes to review', text: 'Nice! Questions you miss in a quiz come back here, so you can practise them again.', action: 'Start a quiz', onAction: () => { b.remove(); document.getElementById('quiz-btn')?.click(); } }));
+    return;
+  }
   if (!canChat()) { openSettings(); return; }
   track('feature', 'review');
   quizMode = true;
@@ -3570,7 +3576,7 @@ async function serverImage(prompt) {
   const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }) });
   let data = {};
   try { data = await res.json(); } catch (e) { /* ignore */ }
-  if (!res.ok || !data.image) throw friendlyError((data.error && data.error.message) || 'The picture makers are busy right now. Give it a minute and ask again.');
+  if (!res.ok || !data.image) throw friendlyError(CassieErrors.say('picture_busy'));
   return `data:${data.mimeType || 'image/jpeg'};base64,${data.image}`;
 }
 function loadImageUrl(url, ms = 90000) {
@@ -3593,7 +3599,7 @@ async function generateImage(prompt) {
     try { return { src: await loadImageUrl(url, attempt ? 60000 : 50000), keep: true }; } catch (e) { if (attempt === 0) await sleep(2500); }
   }
   if (SERVER) return { src: await serverImage(prompt), keep: false };
-  throw friendlyError("The free picture maker is busy right now. Give it a minute and ask again, or describe it more simply. (Everything else still works.)");
+  throw friendlyError(CassieErrors.say('picture_busy_free'));
 }
 function imageFileName(subject) {
   return (subject || 'cassie-image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'cassie-image';
@@ -3664,7 +3670,7 @@ async function answerPicture(label) {
     const blob = await window.CassieExport.toPng(ans.content, title);
     const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
     addImageToBubble(bubble, url, { download: true, name: window.CassieExport.fileBase(title) });
-  } catch (e) { bubble.appendChild(Object.assign(document.createElement('p'), { textContent: 'I couldn’t make the picture just now. Use “Save as → Image” under my answer instead.' })); }
+  } catch (e) { bubble.appendChild(Object.assign(document.createElement('p'), { textContent: CassieErrors.say('picture_save_failed') })); }
   state.messages.push({ role: 'assistant', content: '[I saved a picture of my answer]', display: caption });
   save();
 }
@@ -3718,7 +3724,7 @@ async function pictureReply(subject, typingBubble) {
     mascotCelebrate();
   } catch (err) {
     typingBubble.remove();
-    renderError(err, () => pictureReply(subject, renderTyping()), "Couldn't make that picture");
+    renderError(err, () => pictureReply(subject, renderTyping()), 'picture_failed');
     setCursorMode('idle');
   } finally {
     sendBtn.disabled = false;
@@ -3791,7 +3797,7 @@ async function runResearch(topic) {
     papers = await searchOpenAlex(topic, 8);
   } catch (e) {
     typing.remove();
-    renderMessage('assistant', "I couldn't reach the research database. Check your internet connection and try again.").classList.add('error');
+    renderMessage('assistant', CassieErrors.say('research_unreachable')).classList.add('error');
     setCursorMode('idle');
     return;
   }
@@ -3868,7 +3874,7 @@ async function askGeminiGrounded(q) {
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (isRateLimited(res.status, detail)) throw new Error("Google's free search tier is busy right now. Wait a minute and try again.");
+    if (isRateLimited(res.status, detail)) throw friendlyError(CassieErrors.say('search_busy'));
     throw new Error(detail || `Request failed (${res.status})`);
   }
   const cand = (await res.json()).candidates?.[0];
@@ -3948,7 +3954,7 @@ window.addEventListener('message', async (e) => {
     const ok = await attachFile(file);
     if (ok && d.prompt) handleSend(d.prompt);
   } catch (err) {
-    renderMessage('assistant', 'I couldn’t open the file from your browser tab. Download it and attach it with the paperclip instead.');
+    renderMessage('assistant', CassieErrors.say('tab_file'));
   }
 });
 
@@ -4182,7 +4188,7 @@ async function startRoom(code, title) {
       session.showNote({ headline: 'Cassie checked the board (everyone sees this)', reply: a });
       if (study) study.share(typed ? q : 'Check our board', a, { board: 1 });
       track('feature', 'room:check');
-    } catch (e) { session.showNote({ reply: errorText(e) || 'Couldn’t reach Cassie. Try again.' }); }
+    } catch (e) { session.showNote({ reply: errorText(e) }); }
     finally { btn.disabled = false; btn.textContent = was; }
   }
   banner('Connecting…');
@@ -4354,9 +4360,7 @@ async function attachInto(a, file) {
         a.status = 'ready'; a.note = `Photo (iPhone HEIC) · ${file.name}`;
         return true;
       }
-      return fail(kind === 'heic'
-        ? 'That’s an iPhone HEIC photo, which this browser can’t open. Send a screenshot of it instead, or set iPhone Camera → Formats → Most Compatible.'
-        : `Couldn’t open ${file.name} as a picture.`);
+      return fail(CassieErrors.say(kind === 'heic' ? 'heic' : 'photo_unreadable', { name: file.name }));
     }
   }
 
@@ -4368,7 +4372,7 @@ async function attachInto(a, file) {
     islandShow('upload', `Opening ${file.name}…`); botMood('upload');
     try {
       const doc = await readDocument(file, kind);
-      if (!doc.text && !doc.hasVisuals) return fail(`Couldn’t find anything readable in ${file.name}.`);
+      if (!doc.text && !doc.hasVisuals) return fail(CassieErrors.say('nothing_readable', { name: file.name }));
       a.doc = doc; a.status = 'ready';
       a.note = `${doc.label} · ${file.name}${doc.scanned ? ': scanned, I’ll read the pages as pictures' : ''}`;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
@@ -4380,8 +4384,8 @@ async function attachInto(a, file) {
   }
   if (kind === 'legacy-ppt') return fail('That’s an old PowerPoint (.ppt). Open it and Save As .pptx or PDF, then attach it again.');
   if (kind === 'legacy-doc') return fail('That’s an old Word file (.doc). Open it and Save As .docx or PDF, then attach it again.');
-  if (kind === 'xlsx') return fail('Spreadsheets aren’t supported yet. Save it as a PDF and attach that.');
-  return fail(`I can’t open ${file.name}. I read PDFs, PowerPoint (.pptx), Word (.docx), text files and photos.`);
+  if (kind === 'xlsx') return fail(CassieErrors.say('spreadsheet'));
+  return fail(CassieErrors.say('file_kind', { name: file.name }));
 }
 attachRemove.addEventListener('click', clearAttach);
 
@@ -4423,9 +4427,9 @@ let exploreMod = null;
    chat (askCassie), her answers drawn like the chat's, a quiz written as data, missed questions kept
    for "Review my mistakes". */
 const IN_LAB = {
-  converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(new Error('Cassie isn’t set up yet. Open Settings to connect her, then try again.'))),
+  converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   format: (node, text) => renderFormatted(node, text),
-  makeQuiz: (topic) => (canChat() ? quizQuestions(topic, 5) : Promise.reject(new Error('Cassie isn’t set up yet. Open Settings to connect her, then try again.'))),
+  makeQuiz: (topic) => (canChat() ? quizQuestions(topic, 5) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   onMark: (q, a, right) => { captureQuizMarks(`[[${right ? 'GOT' : 'MISSED'}: ${q} || ${a}]]`); },
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
@@ -4502,7 +4506,7 @@ async function openExplore(cell, ret) {
     }
     if (!exploreMod.supported()) {
       if (ret) ret.leave();
-      renderMessage('assistant', 'This browser can’t show 3D right now (WebGL is off). Try Chrome, or turn on “Use graphics acceleration” in its settings.');
+      renderMessage('assistant', CassieErrors.say('webgl'));
       return;
     }
     // Ask Cassie and Quiz me open a panel right here (labs/helper.js): the 3D view stays where it was
@@ -4529,7 +4533,7 @@ async function openExplore(cell, ret) {
   } catch (e) {
     if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
-    renderMessage('assistant', 'I couldn’t open the 3D cell just now. Check your internet connection and try again.');
+    renderMessage('assistant', CassieErrors.say('open_3d_failed'));
   }
 }
 // a link like app.html?explore=plant opens it straight away
@@ -4576,7 +4580,7 @@ async function openLabs(lab, more = {}) {
     });
   } catch (e) {
     islandShow('oops', 'Couldn’t open Labs', 2600);
-    renderMessage('assistant', 'I couldn’t open Labs just now. Check your internet connection and try again.');
+    renderMessage('assistant', CassieErrors.say('open_labs_failed'));
   }
 }
 if (labsBtn) labsBtn.addEventListener('click', () => openLabs(undefined, { section: 'learn' }));
@@ -4856,7 +4860,7 @@ function renderMemory() {
       ${weak.length ? `<div class="mem-section">Weak spots</div><div class="mem-chips">${weak.map((t) => `<button class="mem-review weak" data-topic="${memEsc(t.name)}">${memEsc(t.name)}</button>`).join('')}</div>` : ''}
 
       <div class="mem-section">Recently studied</div>
-      ${recent.length ? `<div class="mem-topics">${recent.map(memTopicRow).join('')}</div>` : '<p class="mem-empty">Ask Cassie some questions and she’ll start remembering what you study.</p>'}
+      ${recent.length ? `<div class="mem-topics">${recent.map(memTopicRow).join('')}</div>` : '<div class="mem-empty-slot"></div>'}
 
       <div class="mem-section">Notes Cassie remembers</div>
       <div class="mem-facts">${facts.length ? facts.map((f, i) => `<div class="mem-fact"><span>${memEsc(f.text)}</span><button class="mem-del" data-i="${i}" aria-label="Remove">&times;</button></div>`).join('') : '<p class="mem-empty">No notes yet. Try telling her: “Remember my exam is on Friday.”</p>'}</div>
@@ -4875,6 +4879,8 @@ function renderMemory() {
         <button class="btn" id="mem-done">Done</button>
       </div>
     </div>`;
+  const memSlot = memoryPanel.querySelector('.mem-empty-slot');
+  if (memSlot) memSlot.replaceWith(CassieErrors.empty({ title: 'Nothing remembered yet', text: 'Cassie remembers the topics you study, so she can help you review them later.', action: 'Ask a question', onAction: () => { memoryPanel.hidden = true; document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); } }));
 }
 
 function openMemory() {
@@ -5102,10 +5108,12 @@ function renderChatList() {
   const chats = [...state.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   chatList.innerHTML = '';
   if (!chats.length) {
-    const e = document.createElement('div');
-    e.className = 'chat-empty';
-    e.textContent = 'No past sessions yet. Start a chat to build your study trail.';
-    chatList.appendChild(e);
+    chatList.appendChild(CassieErrors.empty({
+      title: 'No chats yet',
+      text: 'Every chat you start with Cassie is kept here, so you can come back to it.',
+      action: 'Ask your first question',
+      onAction: () => { closeSidebar(); document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); },
+    }));
     return;
   }
   chats.forEach((c) => {
@@ -5364,10 +5372,10 @@ function showHumanVoiceSetting() {
   const CV = window.CassieVoice;
   const st = CV && CV.supported() ? CV.status() : 'unsupported';
   const name = voiceGender() === 'man' ? 'Edward' : 'Bella';
-  box.textContent = st === 'unsupported' ? 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4+.'
+  box.textContent = st === 'unsupported' ? CassieErrors.say('voice_unsupported')
     : st === 'ready' ? `✓ ${name}’s voice is ready.`
       : st === 'loading' ? (CV.warming && CV.warming() ? `Downloaded ✓ Setting up ${name}’s voice on this device (up to a minute)…` : `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once)`)
-        : st === 'failed' ? `Couldn’t get her voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
+        : st === 'failed' ? CassieErrors.say('voice_download_failed')
           : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once. Wi-Fi is best).';
   if (CV && CV.studio && CV.studio.on() && st !== 'ready') box.textContent = `Cassie’s studio voice stands in until her own voice is on this device. ${box.textContent}`;
 }
@@ -5532,7 +5540,7 @@ function heard(text) {
 async function micBlocked() {
   try { const p = await navigator.permissions.query({ name: 'microphone' }); return p.state === 'denied'; } catch (e) { return null; } // null: this browser can't say
 }
-const MIC_BLOCKED = 'Cassie can’t hear you. Allow the microphone for this site, then tap the mic.';
+const MIC_BLOCKED = CassieErrors.say('mic_blocked');
 async function micTrouble(v, sure) {
   if (voiceChat !== v) return;
   const blocked = await micBlocked();
@@ -5654,7 +5662,7 @@ async function listenWithRecorder(v) {
       if (voiceChat !== v) return;
       v.hearFails = (v.hearFails || 0) + 1;
       if (v.hearFails >= 2 && SpeechRecognitionCtor) v.useRecorder = false; // the browser listens instead
-      sayThenListen(e.message || 'Sorry, I couldn’t hear that. Try again?');
+      sayThenListen(e.friendly ? e.message : CassieErrors.say('not_heard'));
     }
   };
   v.recorder = recorder;
@@ -5699,7 +5707,7 @@ function hearOnce() {
     rec.continuous = false; rec.interimResults = false;
     let got = '';
     rec.addEventListener('result', (e) => { got = e.results[0][0].transcript; });
-    rec.addEventListener('error', (e) => { if (e.error === 'no-speech' || e.error === 'aborted') finish(''); else fail(new Error(/not-allowed|service-not-allowed/.test(e.error) ? 'Allow the microphone to talk to Cassie, or type instead.' : 'I couldn’t hear that. Try again, or type it.')); });
+    rec.addEventListener('error', (e) => { if (e.error === 'no-speech' || e.error === 'aborted') finish(''); else fail(friendlyError(CassieErrors.say(/not-allowed|service-not-allowed/.test(e.error) ? 'mic_blocked' : 'not_heard'))); });
     rec.addEventListener('end', () => finish(got));
     try { rec.start(); } catch (e) { fail(e); }
     stopFn = () => { try { rec.stop(); } catch (e) { /* already stopped */ } };
@@ -5715,7 +5723,7 @@ function hearOnce() {
       stopFn = () => { if (mr.state !== 'inactive') mr.stop(); };
       setTimeout(stopFn, 15000);
     }).catch(() => fail(new Error('Allow the microphone to talk to Cassie, or type instead.')));
-  } else fail(new Error('This browser can’t listen here. Type your question instead.'));
+  } else fail(friendlyError(CassieErrors.say('cant_listen')));
   return { done, stop: () => stopFn() };
 }
 async function transcribeAudio(blob) {
@@ -5800,7 +5808,7 @@ async function askOutLoud(text) {
     return;
   }
   if (live) live.stop();
-  sayThenListen(reply || 'Sorry, I couldn’t answer that just now. Can you say it again?');
+  sayThenListen(reply || CassieErrors.say('voice_no_answer'));
 }
 
 function startVoiceMode(mode) {
@@ -5821,7 +5829,7 @@ function startVoiceMode(mode) {
 
 function openVoice(mode = 'chat') {
   if (!canChat()) { openSettings(); return; }
-  if (!canHear()) { renderMessage('assistant', 'This browser can’t use the microphone. Try Chrome, Edge or Safari.'); return; }
+  if (!canHear()) { renderMessage('assistant', CassieErrors.say('no_mic_browser')); return; }
   if (!voiceUI) voiceUI = buildVoiceUI();
   if (voiceChat) closeVoice();
   voiceChat = { mode, phase: 'paused', quizBefore: quizMode, useRecorder: !SpeechRecognitionCtor || !!accurateHearing() };

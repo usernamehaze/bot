@@ -10,10 +10,19 @@ const path = require('path');
 const KEYWORDS_BEFORE_REGEX = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
 
 function jsStrings(src, from = 0, to = src.length, out = []) {
-  let i = from, last = ''; // last: the previous significant character or word, to tell a regex from a division
+  // one pass with a stack: code (counting its { }) and template literals (whose ${ } is code again),
+  // so comments, regular expressions and quotes are handled the same everywhere
+  const stack = [{ code: true, depth: 0 }];
+  let i = from, last = '', piece = 0; // last: the previous significant character or word (regex or division?)
   const lastWord = () => { const m = /([A-Za-z_$][\w$]*)$/.exec(src.slice(Math.max(from, i - 20), i).trimEnd()); return m ? m[1] : ''; };
   while (i < to) {
-    const c = src[i], n = src[i + 1];
+    const top = stack[stack.length - 1], c = src[i], n = src[i + 1];
+    if (!top.code) { // inside a template literal
+      if (c === '\\') { i += 2; continue; }
+      if (c === '`') { out.push({ start: piece, end: i, text: src.slice(piece, i) }); stack.pop(); i++; last = 'x'; continue; }
+      if (c === '$' && n === '{') { out.push({ start: piece, end: i, text: src.slice(piece, i) }); stack.push({ code: true, depth: 0 }); i += 2; last = '('; continue; }
+      i++; continue;
+    }
     if (c === '/' && n === '/') { while (i < to && src[i] !== '\n') i++; continue; }
     if (c === '/' && n === '*') { const e = src.indexOf('*/', i + 2); i = e < 0 ? to : e + 2; continue; }
     if (c === '\'' || c === '"') {
@@ -22,29 +31,11 @@ function jsStrings(src, from = 0, to = src.length, out = []) {
       out.push({ start: i + 1, end: j, text: src.slice(i + 1, j) });
       i = j + 1; last = 'x'; continue;
     }
-    if (c === '`') {
-      let j = i + 1, s = j;
-      while (j < to && src[j] !== '`') {
-        if (src[j] === '\\') { j += 2; continue; }
-        if (src[j] === '$' && src[j + 1] === '{') {
-          out.push({ start: s, end: j, text: src.slice(s, j) });
-          // find the matching } (strings and templates inside are scanned as code)
-          let depth = 1, k = j + 2;
-          const exprStart = k;
-          while (k < to && depth) {
-            const ch = src[k];
-            if (ch === '\'' || ch === '"') { k++; while (k < to && src[k] !== ch) k += src[k] === '\\' ? 2 : 1; k++; continue; }
-            if (ch === '`') { k++; let d2 = 0; while (k < to && (src[k] !== '`' || d2)) { if (src[k] === '\\') { k += 2; continue; } if (src[k] === '$' && src[k + 1] === '{') d2++; else if (src[k] === '}' && d2) d2--; k++; } k++; continue; }
-            if (ch === '{') depth++; else if (ch === '}') depth--;
-            k++;
-          }
-          jsStrings(src, exprStart, k - 1, out);
-          j = k; s = j; continue;
-        }
-        j++;
-      }
-      out.push({ start: s, end: j, text: src.slice(s, j) });
-      i = j + 1; last = 'x'; continue;
+    if (c === '`') { stack.push({ code: false }); piece = i + 1; i++; continue; }
+    if (c === '{') { top.depth++; last = '{'; i++; continue; }
+    if (c === '}') {
+      if (top.depth === 0 && stack.length > 1) { stack.pop(); piece = i + 1; i++; continue; } // back into the template
+      top.depth--; last = '}'; i++; continue;
     }
     if (c === '/') {
       const w = lastWord();
@@ -56,8 +47,8 @@ function jsStrings(src, from = 0, to = src.length, out = []) {
         last = 'x'; continue;
       }
     }
-    if (!/\s/.test(c)) last = /[\w$)\]]/.test(c) ? 'x' : c;
     if (/[A-Za-z_$]/.test(c)) { let j = i; while (j < to && /[\w$]/.test(src[j])) j++; const word = src.slice(i, j); last = KEYWORDS_BEFORE_REGEX.has(word) ? '(' : 'x'; i = j; continue; }
+    if (!/\s/.test(c)) last = /[\w$)\]]/.test(c) ? 'x' : c;
     i++;
   }
   return out;
