@@ -1328,8 +1328,8 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.mouse.click(at2.x, at2.y);
   await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 10000 });
   expect(/Nucleolus|Nucleus|Nuclear envelope/.test(await page.locator('.x3d-sheet h3').innerText()), 'tapping the nucleus area picks it: ' + await page.locator('.x3d-sheet h3').innerText() + JSON.stringify(at));
-  // pick from the list, read about it, ask Cassie
-  await page.click('.x3d-chip[data-part="golgi"]');
+  // pick from the list, read about it, ask Cassie (no navigation follows: don't wait for one on a page busy drawing 3D)
+  await page.click('.x3d-chip[data-part="golgi"]', { noWaitAfter: true });
   expect(/Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()) && /post office/.test(await page.locator('.x3d-sheet').innerText()), 'the Golgi card should show');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/explore-golgi.png' });
   await page.click('.x3d-act[data-act="ask"]');
@@ -2153,6 +2153,7 @@ test('Study tools: vocabulary chain, timeline, essay structure, flashcards from 
   // a Study tools shelf, and the new games on the Games shelf
   await page.evaluate(() => openLabs());
   await page.evaluate(() => openLabs(undefined, { section: 'tools' }));
+  await page.waitForSelector('.labs:not([hidden]) .labs-grid .labs-card[data-lab="vocab"]', { timeout: 15000 }); // (the shelf draws a moment later)
   const tools = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(['vocab', 'timeline', 'essay', 'cardmatrix', 'cornell', 'thesis', 'museum'].every((t) => tools.includes(t)) && !tools.includes('pendulum') && !tools.includes('sudoku'), 'the Study tools shelf: ' + tools);
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
@@ -2530,7 +2531,8 @@ test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze
     for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', `after ${btn}: ` + r); }
   }
   // a pinch on the 3D zooms the planets, never the page; nor on the buttons or the panel
-  const sunAt = () => page.evaluate(() => { const l = [...document.querySelectorAll('.lab3d-label')].find((x) => x.textContent === 'Saturn'); return l ? l.style.transform : ''; });
+  // (where the planets' name tags sit: a zoom moves them; one tag alone may be hidden behind a nearer one)
+  const sunAt = () => page.evaluate(() => [...document.querySelectorAll('.lab3d-label:not([hidden])')].map((x) => x.textContent + x.style.transform).join('|'));
   const before = await sunAt(), c = await page.locator('canvas.lab-3d').boundingBox();
   await page.waitForTimeout(800);
   expect(await pinch(c.x + c.width / 2, c.y + c.height / 2) === 1, 'a pinch on the 3D zoomed the whole page');
@@ -3004,7 +3006,9 @@ test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket
   await page.waitForSelector('.lab-stage.lab-is-3d canvas.lab-3d', { timeout: 20000 });
   await page.click('.lab-overlay .lab-btn:has-text("Whole world")');
   await page.waitForTimeout(1200);
-  const oz = await page.evaluate(() => document.querySelector('.lab-stage canvas.lab-3d')._toScreen(-25, 134));
+  // a spot in Australia where the globe itself is under the finger (its middle can sit under the zoom buttons)
+  const oz = await page.evaluate(() => { const c = document.querySelector('.lab-stage canvas.lab-3d'); return [[-25, 134], [-22, 122], [-30, 120], [-20, 140], [-28, 145]].map(([la, lo]) => c._toScreen(la, lo)).find((p) => document.elementFromPoint(p.x, p.y) === c); });
+  expect(oz, 'some of Australia shows on the globe');
   await page.mouse.click(oz.x, oz.y);
   await page.waitForSelector('.atlas-card h3:text-is("Australia")', { timeout: 5000 });
   expect(/Australia/.test(await page.locator('.atlas-peek').innerText()), 'tapping the globe picks the country, shown right on the globe');
@@ -3795,7 +3799,8 @@ test('Liquid Glass on a phone: every tap target is at least 44px, and every word
   const screens = {
     'sign-up': async (page) => { await page.waitForSelector('.auth-page', { timeout: 10000 }); },
     home: async (page) => { await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="home"]'); if (t) t.click(); }); await page.waitForTimeout(600); },
-    chat: async (page) => { await ask(page, 'what is photosynthesis'); },
+    // (the answer as it rests: the "Done" island sits over the top of it for a moment, then goes)
+    chat: async (page) => { await ask(page, 'what is photosynthesis'); await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }); await page.waitForTimeout(600); },
     settings: async (page) => { await page.evaluate(() => openSettings()); await page.waitForTimeout(700); },
     'Plus sheet': async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForTimeout(400); },
   };
