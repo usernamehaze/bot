@@ -51,7 +51,14 @@ function staticServer() {
 /* ---------- helpers ---------- */
 const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7' } = {}) {
+// Google's sign-in script, faked: its button signs in with whatever ID token the test put in window.__nextGoogleCredential
+const FAKE_GSI = `window.google = { accounts: { id: {
+  initialize(o) { window.__gsi = o; },
+  renderButton(box) { const b = document.createElement('button'); b.type = 'button'; b.className = 'fake-gsi'; b.textContent = 'Continue with Google'; b.style.cssText = 'min-height:44px;width:100%;border-radius:999px'; b.onclick = () => window.__gsi.callback({ credential: window.__nextGoogleCredential }); box.appendChild(b); },
+} } };`;
+// an ID token signed with the fake server's test keys (like Google's or Apple's)
+const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', setup } = {}) {
   const ctx = await browser.newContext({ ...devices[device], acceptDownloads: true });
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
@@ -61,6 +68,9 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
+  await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_GSI })); // never the real Google
+  await ctx.route(/appleid\.apple\.com/, (route) => route.abort()); // never the real Apple (a test brings its own)
+  if (setup) await setup(ctx);
   await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
   await ctx.route(/wikipedia\.org|worldbank\.org/, (route) => route.abort()); // the atlas's live lookups (a test brings its own)
   const groqCalls = [];
@@ -214,6 +224,190 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await tapSettings(page);
   expect(/Signed in as/.test(await page.locator('#account-row').textContent()), 'settings should say signed in');
   await ctx.close();
+});
+
+/* ---------- Sign in with Google and Apple (fake server, test keys) ---------- */
+// Apple's sign-in page, faked: it posts back to Cassie's server like Apple does (form_post), with an
+// ID token for the nonce it was given, or "user_cancelled_authorize" when the test says cancel.
+function fakeApple(who) {
+  return (ctx) => ctx.route(/appleid\.apple\.com\/auth\/authorize/, async (route) => {
+    const q = new URL(route.request().url()).searchParams;
+    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const fields = who.cancel ? { state: q.get('state'), error: 'user_cancelled_authorize' }
+      : { state: q.get('state'), id_token: await idToken({ provider: 'apple', sub: who.sub, email: who.email, nonce: q.get('nonce') }), user: JSON.stringify({ name: { firstName: 'Ana' } }) };
+    expect(q.get('client_id') === 'test.apple.services' && q.get('response_mode') === 'form_post' && q.get('redirect_uri') === SERVER + '/auth/apple/callback', 'Apple was opened with the wrong settings: ' + route.request().url());
+    return route.fulfill({ contentType: 'text/html', body: `<form method="post" action="${esc(q.get('redirect_uri'))}">${Object.entries(fields).map(([k, v]) => `<input type="hidden" name="${k}" value="${esc(v)}">`).join('')}</form><script>document.forms[0].submit()</script>` });
+  });
+}
+const savedAccount = (page) => page.evaluate(() => ({ account: state.account, plan: state.plan, token: localStorage.getItem('cassie.auth') }));
+const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
+
+test('sign in with Google: a new account, and a bad token shows a friendly message', async (b) => {
+  await serverMode({ noGoogle: false, noApple: false });
+  await fetch(SERVER + '/__reset');
+  const { ctx, page, errors } = await open(b, { state: null });
+  try {
+    await page.waitForSelector('.auth-page');
+    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.waitForSelector('.auth-apple:not([hidden])');
+    expect(await page.locator('.auth-or').isVisible(), 'the "or" line should show with the buttons');
+    for (const sel of ['.fake-gsi', '.auth-apple']) expect((await page.locator(sel).boundingBox()).height >= 44, sel + ' is under 44px tall');
+    expect(!/[–—]/.test(await page.locator('.auth-page').innerText()), 'a dash on the sign-in page');
+    // a token that isn't really Google's: a plain-words message, not signed in
+    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-bad', email: 'bad@example.com', badSig: true }));
+    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-err:not([hidden])');
+    expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('google_failed')), 'bad token message: ' + await authErr(page));
+    expect(!(await savedAccount(page)).token, 'a bad token signed someone in');
+    // a new person with Google: signed in, then the profile questions
+    const email = `gnew${Date.now()}@example.com`;
+    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-new-' + Date.now(), email }));
+    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-page', { state: 'detached' });
+    await page.waitForSelector('.profile-overlay', { timeout: 5000 });
+    const s = await savedAccount(page);
+    expect(s.token && s.account.email === email && s.account.providers.join() === 'google' && s.plan && s.plan.plan === 'free', 'new Google account not saved: ' + JSON.stringify(s));
+    expect(errors.length === 0, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
+test('sign in with Google: an email account links after its password once, and the password still works', async (b) => {
+  await fetch(SERVER + '/__reset');
+  const post = async (path, body, token) => { const r = await fetch(SERVER + path, { method: body ? 'POST' : 'GET', headers: { origin: 'http://localhost:4640', 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, ...(await r.json()) }; };
+  const email = `glink${Date.now()}@example.com`, sub = 'g-link-' + Date.now();
+  expect((await post('/auth/signup', { email, password: 'secret-pass-1', age: 17 })).token, 'signup failed');
+  let { ctx, page } = await open(b, { state: null });
+  try {
+    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
+    await page.click('.fake-gsi');
+    // the account has a password: Cassie asks for it once
+    await seen(page, '.auth-title', 'Link Google to your Cassie account', 5000);
+    expect(await page.inputValue('.auth-form input[name=email]') === email && await page.locator('.auth-form input[name=email]').getAttribute('readonly') !== null, 'the email to link should show, locked');
+    expect(await page.locator('.auth-google').isHidden() && await page.locator('.auth-apple').isHidden(), 'no provider buttons while linking');
+    await page.fill('.auth-form input[name=password]', 'not-the-password');
+    await page.click('.auth-go');
+    await page.waitForSelector('.auth-form .field-err:not([hidden])');
+    expect(await page.locator('.auth-form .field-err:not([hidden])').textContent() === await page.evaluate(() => CassieErrors.say('link_wrong_password')), 'wrong password message: ' + await page.locator('.auth-form .field-err:not([hidden])').textContent());
+    await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+    await page.click('.auth-go');
+    await page.waitForSelector('.auth-page', { state: 'detached' });
+    const s = await savedAccount(page);
+    expect(s.token && s.account.email === email && s.account.providers.join() === 'google', 'not linked: ' + JSON.stringify(s));
+  } finally { await ctx.close(); }
+  // the password still works, and the account now has both ways in
+  const login = await post('/auth/login', { email, password: 'secret-pass-1' });
+  expect(login.token && login.account.password === true && login.account.providers.join() === 'google', 'password sign-in after linking: ' + JSON.stringify(login));
+  // Google again (another device): straight in, no password asked
+  ({ ctx, page } = await open(b, { state: null }));
+  try {
+    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
+    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-page', { state: 'detached' });
+    expect((await savedAccount(page)).account.email === email, 'Google again should sign straight in');
+  } finally { await ctx.close(); }
+  // "I don't know this password": the old password goes, other devices are signed out, Google signs in
+  const email2 = `gforget${Date.now()}@example.com`;
+  const old = await post('/auth/signup', { email: email2, password: 'secret-pass-2', age: 17 });
+  ({ ctx, page } = await open(b, { state: null }));
+  try {
+    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: sub + '-2', email: email2 }));
+    await page.click('.fake-gsi');
+    await seen(page, '.auth-title', 'Link Google', 5000);
+    expect(/signs out other devices/.test(await page.locator('.auth-forgot').textContent()), 'should say what “I don’t know this password” does');
+    await page.click('.auth-switch [data-to=forget]');
+    await page.waitForSelector('.auth-page', { state: 'detached' });
+    expect((await savedAccount(page)).account.email === email2, 'not signed in after “I don’t know this password”');
+  } finally { await ctx.close(); }
+  expect((await post('/auth/me', null, old.token)).status === 401, 'the other device should be signed out');
+  const gone = await post('/auth/login', { email: email2, password: 'secret-pass-2' });
+  expect(gone.status === 401 && gone.code === 'google_account', 'the old password should be gone: ' + JSON.stringify(gone));
+});
+
+test('sign in with Apple: there and back, cancel is explained, and the plan is the same every way in', async (b) => {
+  await fetch(SERVER + '/__reset');
+  const post = async (path, body) => { const r = await fetch(SERVER + path, { method: 'POST', headers: { origin: 'http://localhost:4640', 'content-type': 'application/json' }, body: JSON.stringify(body) }); return { status: r.status, ...(await r.json()) }; };
+  const who = { cancel: true, sub: 'a-new-' + Date.now(), email: `anew${Date.now()}@privaterelay.appleid.com` };
+  let { ctx, page, errors } = await open(b, { state: null, setup: fakeApple(who) });
+  try {
+    // cancelled at Apple: back on the sign-in page with a plain-words message
+    await page.waitForSelector('.auth-apple:not([hidden])');
+    await page.click('.auth-apple');
+    await page.waitForURL(/app\.html$/, { timeout: 15000 });
+    await page.waitForSelector('.auth-err:not([hidden])', { timeout: 10000 });
+    expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('apple_cancelled')), 'cancel message: ' + await authErr(page));
+    expect(!page.url().includes('cassie-auth'), 'the answer should be taken out of the address');
+    // a new person with Apple: signed in, then the profile questions
+    who.cancel = false;
+    await page.click('.auth-apple');
+    await page.waitForURL(/app\.html$/, { timeout: 15000 });
+    await page.waitForSelector('.profile-overlay', { timeout: 10000 });
+    const s = await savedAccount(page);
+    expect(s.token && s.account.email === who.email && s.account.providers.join() === 'apple', 'new Apple account not saved: ' + JSON.stringify(s));
+    expect(await page.evaluate(() => state.profile === null || !state.profile) && await page.inputValue('.profile-card input[name=name]') !== null, 'profile questions should open');
+    expect(errors.length === 0, 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+  // an answer this tab didn't ask for is ignored
+  ({ ctx, page } = await open(b, { state: null }));
+  try {
+    await page.goto('about:blank');
+    await page.goto(APP + '#cassie-auth=' + encodeURIComponent(JSON.stringify({ type: 'cassie-auth', provider: 'apple', nonce: 'x'.repeat(32), token: 'stolen', account: { email: 'x@example.com' } })));
+    await page.waitForSelector('.auth-page');
+    expect(!(await savedAccount(page)).token && !page.url().includes('cassie-auth'), 'an answer from another tab signed in');
+  } finally { await ctx.close(); }
+
+  // the plan: an email account with Plus shows Plus by email, by Apple and by Google
+  const email = `aplan${Date.now()}@example.com`;
+  expect((await post('/auth/signup', { email, password: 'secret-pass-1', age: 17 })).token, 'signup failed');
+  const grant = await (await fetch(SERVER + '/admin/plan', { method: 'POST', headers: { authorization: 'Bearer test-admin-token-0123456789', 'content-type': 'application/json' }, body: JSON.stringify({ email, plan: 'plus', days: 30 }) })).json();
+  expect(grant && !grant.error, 'plan not given: ' + JSON.stringify(grant));
+  const byEmail = (await post('/auth/login', { email, password: 'secret-pass-1' })).plan;
+  const who2 = { sub: 'a-plan-' + Date.now(), email };
+  ({ ctx, page } = await open(b, { state: { plan: null }, setup: fakeApple(who2) }));
+  let byApple;
+  try {
+    await page.evaluate(() => openAuth({ mode: 'signin' }));
+    await page.waitForSelector('.auth-apple:not([hidden])');
+    await page.click('.auth-apple');
+    await page.waitForURL(/app\.html$/, { timeout: 15000 });
+    await seen(page, '.auth-title', 'Link Apple to your Cassie account', 10000);
+    await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+    await page.click('.auth-go');
+    await page.waitForSelector('.auth-page', { state: 'detached' });
+    byApple = (await savedAccount(page)).plan;
+    expect(await page.evaluate(() => planName()) === 'plus', 'the app should show Plus after Apple sign-in');
+  } finally { await ctx.close(); }
+  const byGoogle = (await post('/auth/google', { credential: await idToken({ provider: 'google', sub: 'g-plan-' + Date.now(), email }), password: 'secret-pass-1' })).plan;
+  expect([byEmail, byApple, byGoogle].every((p) => p && p.plan === 'plus' && p.until === byEmail.until), 'plans differ: ' + JSON.stringify([byEmail, byApple, byGoogle]));
+});
+
+test('sign in with Google and Apple: a provider the server has no ID for has no button', async (b) => {
+  try {
+    await serverMode({ noGoogle: true, noApple: false });
+    let { ctx, page } = await open(b, { state: null });
+    await page.waitForSelector('.auth-page');
+    await page.evaluate(() => authProviders());
+    await page.waitForSelector('.auth-apple:not([hidden])');
+    expect(await page.locator('.auth-google').isHidden() && !(await page.locator('.fake-gsi').count()), 'Google button shown with no GOOGLE_CLIENT_ID');
+    await ctx.close();
+    await serverMode({ noGoogle: false, noApple: true });
+    ({ ctx, page } = await open(b, { state: null }));
+    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    expect(await page.locator('.auth-apple').isHidden(), 'Apple button shown with no APPLE_SERVICES_ID');
+    await ctx.close();
+    await serverMode({ noGoogle: true, noApple: true });
+    ({ ctx, page } = await open(b, { state: null }));
+    await page.waitForSelector('.auth-page');
+    await page.evaluate(() => authProviders());
+    await page.waitForTimeout(200);
+    expect(await page.locator('.auth-google').isHidden() && await page.locator('.auth-apple').isHidden() && await page.locator('.auth-or').isHidden(), 'no providers: no buttons and no "or" line');
+    await page.click('.auth-switch [data-to=signin]');
+    await page.click('.auth-switch [data-to=forgot]');
+    expect(/aren’t available yet/.test(await page.locator('.auth-forgot').textContent()), 'forgot password should not point at a hidden button');
+    await ctx.close();
+  } finally { await serverMode({ noGoogle: false, noApple: false }); }
 });
 
 test('no key: Cassie answers through the server', async (b) => {

@@ -1142,9 +1142,17 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-form { width: min(330px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .auth-title { margin: 0; font-size: 1.55rem; letter-spacing: -.025em; text-align: center; }
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
-.auth-google { display: flex; justify-content: center; min-height: 44px; }
-.auth-gbtn { width: 100%; display: flex; justify-content: center; }
-.auth-google[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden], .auth-age[hidden] { display: none; }
+.auth-providers { display: grid; gap: var(--sp-2); }
+.auth-providers:not(:has(> :not([hidden]))) { display: none; }
+.auth-google { display: flex; justify-content: center; min-height: 48px; align-items: center; }
+.auth-gbtn { width: 100%; display: flex; justify-content: center; align-items: center; min-height: 44px; }
+/* Sign in with Apple: Apple's own look, which is already black and white (black in light mode, white in dark) */
+.auth-apple { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid var(--text); background: var(--text); color: var(--bg); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
+.auth-apple svg { width: 18px; height: 18px; flex: none; margin-top: -2px; }
+.auth-apple:hover { opacity: .9; }
+.auth-apple:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.auth-form input[readonly] { opacity: .75; }
+.auth-google[hidden], .auth-apple[hidden], .auth-or[hidden], .auth-err[hidden], .auth-forgot[hidden], .auth-age[hidden] { display: none; }
 .auth-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
 .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .auth-field { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 600; }
