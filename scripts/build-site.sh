@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 rm -rf _site && mkdir _site
 # (a list, not *.js: a stray script in the folder never ships by accident)
 cp index.html app.html start.html privacy.html terms.html bot.html style.css manifest.json _site/
-cp app.js board.js bot-page.js cards.js cassie-bot.js cite.js config.js export.js gradient.js listen.js memory.js \
+cp app.js errors.js board.js bot-page.js cards.js cassie-bot.js cite.js config.js export.js gradient.js listen.js memory.js \
    native.js sketch.js start.js study-room.js sw.js voice.js _site/
 cp _headers _site/   # Cloudflare Pages response headers (lets Bella's voice use several cores)
 cp -r icons landing patterns explore voice labs vendor _site/

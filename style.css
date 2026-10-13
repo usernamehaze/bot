@@ -1930,3 +1930,16 @@ html.lite {
   .btn:active, .chip:active, .fu-chip:active, .plus-actions > *:active { transform: none !important; }
   .btn.is-loading::after, .btn[aria-busy="true"]::after { animation: none !important; border-right-color: currentColor; opacity: .6; }
 }
+
+/* A reason under a field (errors.js): shown as you type, gone when it's fixed */
+.field-err { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; font-size: var(--fs-sm); line-height: 1.4; font-weight: 500; color: var(--text); text-align: left; }
+.field-err::before { content: "!"; flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; background: var(--text); color: var(--surface); font: 800 12px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; }
+.field-err[hidden] { display: none; }
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--text) !important; box-shadow: 0 0 0 1px var(--text) !important; }
+.pf-seg:has(+ input[aria-invalid="true"]) { box-shadow: 0 0 0 1px var(--text); border-radius: var(--r-sm); }
+.auth-go[aria-busy="true"], .pf-go[aria-busy="true"] { color: transparent; position: relative; pointer-events: none; }
+.auth-go[aria-busy="true"]::after, .pf-go[aria-busy="true"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 2px solid var(--accent-ink, #fff); border-right-color: transparent; animation: btnSpin .7s linear infinite; }
+.fc-field { display: grid; }
+.fc-field input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.room-join { flex-wrap: wrap; }
+.room-join .field-err { flex-basis: 100%; margin-top: 0; }

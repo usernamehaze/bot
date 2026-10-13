@@ -266,6 +266,11 @@ const settingsCloseBtn = document.getElementById('settings-close-btn');
 const groqKeyInput = document.getElementById('groq-key-input');
 const groqModelSelect = document.getElementById('groq-model-select');
 const geminiKeyInput = document.getElementById('gemini-key-input');
+// a pasted key that can't be right says so under the box (an empty box is fine: keys are optional)
+if (groqKeyInput && geminiKeyInput) CassieErrors.form(document.getElementById('settings-panel') || document.body, {
+  '#groq-key-input': (v) => (v.trim() && !/^gsk_/.test(v.trim()) ? 'groq_key' : ''),
+  '#gemini-key-input': (v) => (v.trim() && !/^(AIza|AQ\.)/.test(v.trim()) ? 'gemini_key' : ''),
+});
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const voiceGenderSelect = document.getElementById('voice-gender-select');
 const hearingSelect = document.getElementById('hearing-select');
@@ -4045,7 +4050,7 @@ const roomName = () => ((state.profile && state.profile.name) || 'Classmate').sp
 async function roomCall(path, body) {
   const r = await fetch(SERVER + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), name: roomName(), ...body }) });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(d.error || 'The study room isn’t available right now. Try again in a moment.'), { gone: !!d.gone, full: !!d.full });
+  if (!r.ok) throw Object.assign(new Error(d.error || CassieErrors.say('room_unavailable')), { gone: !!d.gone, full: !!d.full, friendly: !!d.error, code: d.code || '', status: r.status });
   return d;
 }
 function openRoomChooser(prefill = '') {
@@ -4066,7 +4071,9 @@ function openRoomChooser(prefill = '') {
     </div>`;
   document.body.appendChild(el);
   const err = el.querySelector('.room-err');
-  const fail = (e) => { err.hidden = false; err.textContent = e.message; el.querySelectorAll('button').forEach((b) => { b.disabled = false; }); };
+  const fail = (e) => { err.hidden = false; err.textContent = CassieErrors.explain(e, 'room_unavailable'); el.querySelectorAll('button').forEach((b) => { b.disabled = false; }); };
+  const joinForm = el.querySelector('.room-join');
+  const check = CassieErrors.form(joinForm, { code: (v) => (String(v).toUpperCase().replace(/[^A-Z0-9]/g, '').length !== 6 ? 'room_code' : '') });
   el.querySelector('.room-x').addEventListener('click', () => el.remove());
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
   el.querySelector('[data-room="new"]').addEventListener('click', async (e) => {
@@ -4076,7 +4083,8 @@ function openRoomChooser(prefill = '') {
   el.querySelector('.room-join').addEventListener('submit', async (e) => {
     e.preventDefault();
     const code = String(new FormData(e.target).get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (code.length !== 6) { fail(new Error('A room code is 6 letters and numbers.')); return; }
+    err.hidden = true;
+    if (!check.check()) return;
     try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { fail(x); }
   });
   setTimeout(() => el.querySelector(prefill ? '.room-join input' : '[data-room="new"]').focus(), 30);
@@ -6142,8 +6150,7 @@ function openProfile(first) {
     <label class="pf-field"><span>Your name (nickname)</span><input name="name" maxlength="40" autocomplete="nickname" placeholder="e.g. Hazel"></label>
     <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
     <label class="pf-field"><span>Level</span><select name="grade"><option value="">Choose your level…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
-    <div class="pf-field"><span>Gender</span><div class="pf-seg pf-seg3"><button type="button" data-gender="female">Female</button><button type="button" data-gender="male">Male</button><button type="button" data-gender="none">Prefer not to say</button></div></div>
-    <p class="pf-err" hidden></p>
+    <div class="pf-field"><span>Gender</span><div class="pf-seg pf-seg3"><button type="button" data-gender="female">Female</button><button type="button" data-gender="male">Male</button><button type="button" data-gender="none">Prefer not to say</button></div><input type="hidden" name="gender"></div>
     <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save'}</button>
   </form>`;
   document.body.appendChild(wrap);
@@ -6151,17 +6158,19 @@ function openProfile(first) {
   let gender = p.gender || '';
   f.name.value = p.name || ''; f.age.value = p.age || '';
   f.grade.value = p.role === 'pro' ? WORKING : (p.grade || '');
-  const sync = () => f.querySelectorAll('[data-gender]').forEach((b) => b.classList.toggle('on', b.dataset.gender === gender));
-  f.querySelectorAll('[data-gender]').forEach((b) => b.addEventListener('click', () => { gender = b.dataset.gender; sync(); f.querySelector('.pf-err').hidden = true; }));
-  f.addEventListener('input', () => { f.querySelector('.pf-err').hidden = true; });
+  const check = CassieErrors.form(f, {
+    name: (v) => (!v.trim() ? 'need_name' : ''),
+    age: (v) => (!String(v).trim() ? 'need_age' : !(Math.round(+v) >= 2 && Math.round(+v) <= 100) ? 'age_range' : ''),
+    grade: (v) => (!v ? 'need_level' : ''),
+    gender: (v) => (!v ? 'need_gender' : ''),
+  });
+  const sync = () => { f.gender.value = gender; f.querySelectorAll('[data-gender]').forEach((b) => { b.classList.toggle('on', b.dataset.gender === gender); b.setAttribute('aria-pressed', String(b.dataset.gender === gender)); }); };
+  f.querySelectorAll('[data-gender]').forEach((b) => b.addEventListener('click', () => { gender = b.dataset.gender; sync(); f.gender.dispatchEvent(new Event('change')); }));
   sync();
   f.addEventListener('submit', (e) => {
     e.preventDefault();
     const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value;
-    const err = !name ? 'Please type your name or nickname.' : !(age >= 2 && age <= 100) ? 'Please enter your age.'
-      : !grade ? 'Please choose your level.' : !gender ? 'Please choose your gender (or “Prefer not to say”).' : '';
-    const errEl = f.querySelector('.pf-err');
-    if (err) { errEl.textContent = err; errEl.hidden = false; return; }
+    if (!check.check()) return;
     const role = grade === WORKING ? 'pro' : 'student';
     state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? (p.field || '') : '', age, gender, at: p.at || Date.now() };
     state.audience = role === 'pro' ? 'pro' : 'student';
@@ -6198,10 +6207,10 @@ async function authCall(path, body, method = 'POST') {
       headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
-  } catch (e) { throw friendlyError("Couldn't connect. Check your internet and try again."); }
+  } catch (e) { const x = friendlyError(CassieErrors.say('network')); x.code = 'network'; throw x; }
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty */ }
-  if (!res.ok) { const e = friendlyError(data.error || 'Something went wrong. Please try again.'); e.status = res.status; throw e; }
+  if (!res.ok) { const e = friendlyError(data.error || CassieErrors.say('unknown')); e.status = res.status; e.code = data.code || ''; throw e; }
   return data;
 }
 function accountData() {
@@ -6377,6 +6386,15 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');
   const showErr = (m) => { err.textContent = m; err.hidden = !m; };
+  const signup = () => mode === 'signup';
+  const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const check = CassieErrors.form(f, {
+    email: (v) => (!v.trim() ? 'need_email' : !EMAIL_OK.test(v.trim()) ? 'email_bad' : ''),
+    age: (v) => (!signup() ? '' : !String(v).trim() ? 'need_age' : !(Math.round(+v) >= 2 && Math.round(+v) <= 100) ? 'age_range' : ''),
+    password: (v) => (!v ? 'need_password' : signup() && v.length < 8 ? ['password_short', { n: 8 - v.length }] : ''),
+  });
+  // where the server's answer belongs: under a field, or above the button
+  const FIELD_OF = { email_taken: 'email', email_bad: 'email', email_disposable: 'email', no_account: 'email', wrong_password: 'password', password_short: 'password', password_long: 'password', age_range: 'age' };
   const setMode = (m) => {
     mode = m;
     f.querySelector('.auth-title').textContent = m === 'signup' ? 'Create your Cassie account' : 'Sign in to Cassie';
@@ -6390,6 +6408,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
       : 'Don’t have an account? <button type="button" data-to="signup">Sign up</button> · <button type="button" data-to="forgot">Forgot password?</button>';
     f.querySelector('.auth-forgot').hidden = true;
     showErr('');
+    check.clear();
   };
   f.querySelector('.auth-switch').addEventListener('click', (e) => {
     const to = e.target.closest('[data-to]')?.dataset.to;
@@ -6409,15 +6428,17 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
   const done = (res) => { close(); afterSignIn(res); };
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = f.email.value.trim(), password = f.password.value;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return showErr('Please type your email address.');
-    const age = Math.round(+f.age.value);
-    if (mode === 'signup' && !(age >= 2 && age <= 100)) return showErr('Please enter your age.');
-    if (mode === 'signup' && password.length < 8) return showErr('Use at least 8 characters for your password.');
-    if (!password) return showErr('Please type your password.');
-    go.disabled = true; go.textContent = mode === 'signup' ? 'Creating…' : 'Signing in…';
-    try { done(await authCall(mode === 'signup' ? '/auth/signup' : '/auth/login', mode === 'signup' ? { email, password, age } : { email, password })); }
-    catch (e2) { setMode(mode); showErr(e2.message); go.disabled = false; }
+    const email = f.email.value.trim(), password = f.password.value, age = Math.round(+f.age.value);
+    showErr('');
+    if (!check.check()) return;
+    go.disabled = true; go.setAttribute('aria-busy', 'true');
+    try { done(await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password })); }
+    catch (e2) {
+      go.disabled = false; go.removeAttribute('aria-busy');
+      const field = FIELD_OF[e2.code];
+      if (field) check.show(field, e2.code, { n: Math.max(1, 8 - password.length) });
+      else showErr(CassieErrors.explain(e2));
+    }
   });
   f.querySelector('.auth-skip').addEventListener('click', () => {
     close();
@@ -6430,7 +6451,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async ({ credential }) => {
-          try { done(await authCall('/auth/google', { credential })); } catch (e) { showErr(e.message); }
+          try { done(await authCall('/auth/google', { credential })); } catch (e) { showErr(CassieErrors.explain(e, 'google_failed')); }
         },
       });
       const box = page.querySelector('.auth-gbtn');
@@ -6459,7 +6480,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
   if (act === 'signout') { try { await authCall('/auth/logout', {}); } catch (e2) { /* signed out anyway */ } signedOutLocally(); mascotSay('Signed out. Your stuff is still here on this device.', 3000); return; }
   if (act === 'delete') {
     if (!confirm('Delete your Cassie account? Your profile and saved mistakes are removed from the server. What’s on this device stays.')) return;
-    try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(e2.message); }
+    try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(CassieErrors.explain(e2)); }
   }
 });
 
@@ -6494,7 +6515,7 @@ function openReport() {
     <h2>Report a problem</h2>
     <p class="pf-sub">What happened? What did you expect? Please don’t include personal info like your full name, phone number, or passwords.</p>
     <label class="pf-field"><span>What went wrong</span><textarea name="text" rows="5" maxlength="1200" placeholder="e.g. The graph didn't show when I asked for y = x^2"></textarea></label>
-    <p class="pf-err" hidden></p>
+    <p class="pf-err" role="alert" hidden></p>
     <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Cancel</button><button type="submit" class="pf-go">Send</button></div>
   </form>`;
   document.body.appendChild(wrap);
@@ -6503,14 +6524,17 @@ function openReport() {
   wrap.querySelector('.pf-cancel').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
   f.text.focus();
+  const check = CassieErrors.form(f, { text: (v) => (v.trim().length < 5 ? 'need_report' : '') });
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = f.text.value.trim();
     const err = f.querySelector('.pf-err');
-    if (text.length < 5) { err.textContent = 'Please describe the problem in a few words.'; err.hidden = false; return; }
-    f.querySelector('.pf-go').disabled = true;
+    err.hidden = true;
+    if (!check.check()) return;
+    const send = f.querySelector('.pf-go');
+    send.disabled = true; send.setAttribute('aria-busy', 'true');
     const ok = await sendFeedback('report', 'report', text);
-    if (!ok) { err.textContent = "Couldn't send. Check your internet and try again."; err.hidden = false; f.querySelector('.pf-go').disabled = false; return; }
+    if (!ok) { err.textContent = CassieErrors.say(navigator.onLine === false ? 'offline' : 'report_failed'); err.hidden = false; send.disabled = false; send.removeAttribute('aria-busy'); return; }
     f.innerHTML = '<h2>Thank you!</h2><p class="pf-sub">Your report was sent. It helps make Cassie better for everyone.</p><button type="button" class="pf-go">Close</button>';
     f.querySelector('.pf-go').addEventListener('click', close);
   });

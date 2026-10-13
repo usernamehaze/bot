@@ -12,6 +12,7 @@ const ASSETS = [
   'app.html',
   'style.css',
   'config.js',
+  'errors.js',
   'cassie-bot.js',
   'app.js',
   'native.js',
