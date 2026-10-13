@@ -3626,7 +3626,7 @@ test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce
 
 test('forms check each field as you type: the reason shows under the field in plain words, from one map of messages', async (b) => {
   const src = fs.readFileSync(path.join(ROOT, 'errors.js'), 'utf8');
-  expect(/window\.CassieErrors = \{ STRINGS, say, explain, form \}/.test(src), 'one map of messages and one helper (errors.js)');
+  expect(/window\.CassieErrors = \{ STRINGS, say, explain, form, empty \}/.test(src), 'one map of messages and one helper (errors.js)');
   // the app shows no raw error text: messages go through the helper
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const raw = app.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /(showErr|alert|textContent\s*=)\s*\(?\s*e\d?\.message|err\.textContent = e\.message/.test(l));
@@ -3683,6 +3683,34 @@ test('forms check each field as you type: the reason shows under the field in pl
   const bad = all.filter(([, t]) => !/[.!?”]$/.test(t) || /[—–]|\b(error|undefined|null|status|error code)\b|\b[45]\d\d\b/i.test(t));
   expect(!bad.length, 'messages that aren’t plain: ' + bad.map(([k]) => k).join(', '));
   expect(await page.evaluate(() => CassieErrors.explain(new Error('Failed to fetch')) === CassieErrors.say('network') && CassieErrors.explain(Object.assign(new Error('x'), { status: 500 })) === CassieErrors.say('unknown')), 'raw failures become plain words');
+  await ctx.close();
+});
+
+test('chat: when something fails Cassie says what happened, why and what to do, in plain words; empty lists offer one next step', async (b) => {
+  // the service's own error text (codes, internals) never reaches the chat
+  let { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ status: 500, message: 'upstream_error: model_overloaded at node 7 (code 502)' }) });
+  await page.fill('#prompt-input', 'what is osmosis'); await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('#chat-log .bubble.error', { timeout: 30000 });
+  const said = await page.locator('#chat-log .bubble.error').last().innerText();
+  const plain = await page.evaluate((t) => Object.values(CassieErrors.STRINGS).some((v) => t.includes(v)), said);
+  expect(plain && !/upstream|overloaded|node 7|502|500|error:/i.test(said), 'a failed answer is in plain words from the map: ' + said);
+  expect(await page.locator('#chat-log .bubble.error .retry-btn').count() === 1, 'a failed answer offers Try again');
+  // every way the chat words an error goes through the one helper
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  expect(/function errorText\(err, fallback = 'unknown'\) \{ return CassieErrors\.explain\(err, fallback\); \}/.test(app), 'chat errors go through CassieErrors.explain');
+  expect(!/friendlyError\(detail|\$\{CV\.error\(\)|data\.error\.message\) \|\|/.test(app), 'no raw service text is shown');
+  // empty lists: the side menu with no chats, the memory panel, nothing to review
+  await page.evaluate(() => { state.chats = []; renderChatList(); openSidebar(); });
+  const es = page.locator('#chat-list .empty-state');
+  expect(await es.locator('.es-title').textContent() === 'No chats yet' && await es.locator('.es-go').count() === 1, 'the side menu says why it is empty and offers one next step');
+  await es.locator('.es-go').click();
+  expect(await page.evaluate(() => document.activeElement === document.getElementById('prompt-input')), 'Ask your first question goes to the chat box');
+  await page.evaluate(() => { window.CassieMemory.clearAll(); openMemory(); });
+  const mem = page.locator('#memory-panel .empty-state');
+  expect(await mem.count() === 1 && await mem.locator('.es-go').count() === 1, 'the memory panel says nothing is remembered yet and offers one next step');
+  await page.evaluate(() => { document.getElementById('memory-panel').hidden = true; state.mistakes = []; reviewMistakes(); });
+  const rv = page.locator('#chat-log .empty-state').last();
+  expect(await rv.locator('.es-title').textContent() === 'No mistakes to review' && await rv.locator('.es-go').textContent() === 'Start a quiz', 'nothing to review says so and offers a quiz');
   await ctx.close();
 });
 

@@ -4,6 +4,7 @@
      CassieErrors.say(key, vars)      → the words for one message ({n} in a message is filled from vars)
      CassieErrors.explain(err, key)   → the words for something that failed: the server's code, no
                                         internet, too slow, too busy… (key: what to say if nothing fits)
+     CassieErrors.empty({ title, text, action, onAction }) → a friendly empty list with one next step
      CassieErrors.form(form, rules)   → checks each field as you type and shows the reason under it
                                         rules: { fieldName or selector: (value, form) => '' or a key or [key, vars] }
                                         → { check() → true when every field is fine, show(name, key), clear() } */
@@ -56,6 +57,48 @@
     room_limit: 'You’ve made 10 rooms today, which is the most for one day. Use one of those, or make a new one tomorrow.',
     room_join_first: 'You aren’t in this room yet, so you can’t draw here. Join with the room code first.',
     room_full_board: 'This board is full, so nothing more fits. Save it, then start a new room.',
+
+    // chat: Cassie's brains (Groq, Gemini) and what she reads
+    groq_daily: 'You’ve used today’s free questions on this model, so it’s resting{when}. Switch to another model in Settings, because each one has its own daily limit.',
+    groq_minute: 'That was a lot of questions in one minute, so Groq’s free plan asked Cassie to pause. Try again in {wait}.',
+    groq_busy: 'Groq’s free plan is busy for a moment because lots of people are asking. Wait a few seconds, then try again.',
+    groq_key_bad: 'Your Groq key isn’t working anymore, maybe because it was deleted. Open Settings and paste a new key from console.groq.com/keys.',
+    groq_down: 'Groq, which powers Cassie’s answers, is having a problem right now. Try again in a minute.',
+    no_answer: 'Cassie couldn’t answer just now because her brain didn’t reply. Try again in a moment.',
+    message_too_long: 'That message is too long to send in one go, because the free plan has a size limit. Ask a shorter question, start a new chat, or attach it as a file with the paperclip.',
+    unsafe: 'Cassie can’t help with that one because it goes against her safety rules. Try asking it a different way.',
+    gemini_busy: 'Google’s Gemini is very busy right now because lots of people are using it. Try again in a minute.',
+    gemini_key_bad: 'Google didn’t accept your Gemini key, so Cassie can’t use it. Check it in Settings. It should start with “AIza”.',
+    gemini_key_refused: 'Google turned down your Gemini key for this, so Cassie can’t use it here. Make a new key at aistudio.google.com/apikey and paste it in Settings.',
+    pictures_busy: 'Everyone who reads pictures for Cassie is busy right now, so she can’t read it yet. Try again in a minute.',
+    scanned_file: 'Cassie couldn’t find words to read in {name}, because it looks like scanned pictures. Add your free Gemini key in Settings, and she’ll read the pages directly.',
+    file_too_big: '{name} is too big for Cassie to read in one go right now. Wait a minute and try again, ask about one part (like “make a reviewer of pages 1 to 10”), or add your free Gemini key in Settings so she can read all of it.',
+    nothing_readable: 'Cassie couldn’t find anything to read in {name}. It may be empty or only pictures. Try another file, or a photo of the page.',
+    spreadsheet: 'Cassie can’t read spreadsheets yet. Save it as a PDF, then attach that.',
+    file_kind: 'Cassie can’t open {name} because she doesn’t know that kind of file. She reads PDFs, PowerPoint, Word, text files and photos.',
+    heic: 'That’s an iPhone HEIC photo, which this browser can’t open. Send a screenshot of it instead, or set iPhone Camera, Formats, Most Compatible.',
+    photo_unreadable: 'Cassie couldn’t open {name} as a picture. The file may be damaged. Take a screenshot of it and attach that instead.',
+    tab_file: 'Cassie couldn’t open the file from your browser tab because the browser blocked it. Download it, then attach it with the paperclip.',
+    file_failed: 'Cassie couldn’t make the {label} file, maybe because the internet dropped. Check your connection, then tap the button again.',
+    file_failed_saveas: 'Cassie couldn’t make that file here. Use “Save as” above to save it another way.',
+    cards_failed: 'Cassie couldn’t make flashcards from that answer just now. Tap the button to try again.',
+    picture_busy: 'The picture makers are busy right now because lots of people are making pictures. Wait a minute, then ask again.',
+    picture_busy_free: 'The free picture maker is busy right now, so your picture didn’t come. Wait a minute and ask again, or describe it more simply. Everything else still works.',
+    picture_failed: 'Cassie couldn’t make that picture, and it isn’t your fault. Try again, or describe it more simply.',
+    picture_save_failed: 'Cassie couldn’t turn this answer into a picture just now. Use “Save as”, then “Image”, under her answer instead.',
+    research_unreachable: 'Cassie couldn’t reach the research library, maybe because the internet dropped. Check your connection, then try again.',
+    search_busy: 'Google’s free web search is busy right now, so Cassie can’t look it up. Wait a minute, then try again.',
+    not_set_up: 'Cassie isn’t set up yet, so she can’t answer. Open Settings to connect her, then try again.',
+    webgl: 'This browser can’t show 3D right now because its graphics are turned off. Try Chrome, or turn on “Use graphics acceleration” in its settings.',
+    open_3d_failed: 'Cassie couldn’t open the 3D view, maybe because the internet dropped. Check your connection, then try again.',
+    open_labs_failed: 'Cassie couldn’t open Labs, maybe because the internet dropped. Check your connection, then try again.',
+    voice_unsupported: 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4 or newer.',
+    voice_download_failed: 'Cassie’s voice didn’t download, maybe because the internet dropped. Check your connection, then tap Play a sample to try again.',
+    mic_blocked: 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.',
+    not_heard: 'Cassie couldn’t hear that clearly. Try again, or type it.',
+    cant_listen: 'This browser can’t listen here, so talking won’t work. Type your question instead.',
+    no_mic_browser: 'This browser can’t use the microphone, so talking won’t work here. Try Chrome, Edge or Safari.',
+    voice_no_answer: 'Sorry, Cassie couldn’t answer that just now. Can you say it again?',
   };
 
   const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
@@ -122,5 +165,22 @@
     };
   }
 
-  window.CassieErrors = { STRINGS, say, explain, form };
+  // An empty list or screen: what's (not) here, and one button for the next step.
+  //   empty({ title, text, action, onAction }) → the element (put it where the list would be)
+  function empty({ title, text = '', action = '', onAction } = {}) {
+    const box = document.createElement('div');
+    box.className = 'empty-state';
+    box.innerHTML = '<div class="es-mark" aria-hidden="true"></div><p class="es-title"></p><p class="es-text"></p>';
+    box.querySelector('.es-title').textContent = title || '';
+    const t = box.querySelector('.es-text'); t.textContent = text; t.hidden = !text;
+    if (action) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-sm es-go'; b.textContent = action;
+      if (onAction) b.addEventListener('click', onAction);
+      box.appendChild(b);
+    }
+    return box;
+  }
+
+  window.CassieErrors = { STRINGS, say, explain, form, empty };
 })();
