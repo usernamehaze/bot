@@ -26,7 +26,7 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 .labs-chips[hidden] { display: none; }
 .labs-tools { padding: 8px 16px 4px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .labs-search { flex: 1 1 260px; min-width: 0; max-width: 460px; padding: 10px 16px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .06); color: #f2f2f4; font: inherit; font-size: .9rem; outline: none; }
-.labs-search::placeholder { color: rgba(255, 255, 255, .45); }
+.labs-search::placeholder { color: rgba(255, 255, 255, .62); }
 .labs-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .labs-chips::-webkit-scrollbar { display: none; }
 .labs-chips button { flex-shrink: 0; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .16); background: transparent; font-size: .84rem; font-weight: 600; cursor: pointer; }
@@ -601,3 +601,54 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 
 /* the games are their own place (the Games button): no Labs tabs there */
 .labs.games-mode .labs-tabs { display: none; }
+
+/* ===== Liquid Glass in Labs and the 3D views (always dark here) =====
+   One dark glass for every floating card. Over the moving 3D there is no blur (it would make the
+   3D stutter on phones): a thick, nearly solid fill reads just as clearly. */
+.lab-helper, .lab-tutor { background: rgba(24, 24, 28, .9); border: 1px solid rgba(255, 255, 255, .14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 18px 48px rgba(0, 0, 0, .45); }
+.lab-helper, .lab-tutor:not(.tut-mini) { border-radius: var(--r-xl, 28px); }
+.labs-card, .labs-feature { border-radius: var(--r-lg, 20px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-feature { -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); }
+@media (prefers-reduced-transparency: reduce) { .labs-shelf .labs-card, .labs-shelf .labs-feature { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #1c1c20; } }
+
+/* buttons: pressed, disabled and busy look the same everywhere in Labs */
+.lab-btn, .tut-btn, .labs-chips button, .lab-seg button, .labs-x, .lab-back { transition: transform .12s cubic-bezier(.2, .8, .2, 1), background-color .15s ease, opacity .15s ease; }
+.lab-btn:active:not(:disabled), .tut-btn:active:not(:disabled), .labs-chips button:active, .lab-seg button:active, .labs-x:active, .lab-back:active { transform: scale(.97); }
+.lab-btn:disabled, .tut-btn:disabled { opacity: .45; cursor: not-allowed; }
+.lab-btn[aria-busy="true"], .tut-btn[aria-busy="true"] { opacity: .7; pointer-events: none; }
+.lab-btn:focus-visible, .tut-btn:focus-visible, .labs-chips button:focus-visible, .lab-seg button:focus-visible, .labs-x:focus-visible, .lab-back:focus-visible { outline: 2px solid #f2f2f4; outline-offset: 2px; }
+
+/* something that went wrong: white words with a small ! mark (no colour) */
+.lab-err { color: #f2f2f4; display: flex; gap: 6px; align-items: flex-start; }
+.lab-err::before { content: "!"; flex: none; width: 18px; height: 18px; border-radius: 50%; background: #f2f2f4; color: #111; font: 800 12px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; }
+
+/* an empty search: why it's empty and one next step, on the dark shelf */
+.labs-empty .empty-state { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .14); color: #f2f2f4; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); margin: 24px auto; max-width: 420px; }
+.labs-empty .es-text { color: rgba(242, 242, 244, .82); }
+.labs-empty .es-mark { border-color: rgba(242, 242, 244, .5); }
+.labs-empty .es-go { background: #f2f2f4; color: #111; border: 0; }
+
+/* touch screens: every tap target in Labs and the 3D views is at least 44 x 44 */
+@media (pointer: coarse) {
+  .labs-x { width: 44px; height: 44px; }
+  .lab-back, .labs-search, .labs-chips button, .lab-btn, .lab-seg button, .tut-btn, .tut-icon, .lab-tries-toggle, .hp-opt, .hp-ask input, .hp-ask button { min-height: 44px; }
+  .tut-icon, .lab-tries-toggle { min-width: 44px; }
+  /* the tick: a 44px button with the small box drawn inside it, so it never overlaps the challenge next to it */
+  .lab-tick { width: 44px; height: 44px; margin: -11px -4px -11px -13px; border: 0 !important; background: transparent !important; border-radius: 12px; }
+  .lab-tick::before { display: none; }
+  .lab-tick::after { content: ""; position: absolute; left: 13px; top: 13px; width: 18px; height: 18px; box-sizing: border-box; border-radius: 6px; border: 1.5px solid rgba(255, 255, 255, .5); }
+  .lab-tries li.done .lab-tick::after { border-color: #f2f2f4; background: #f2f2f4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23111' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .lab-try { min-height: 44px; align-items: center; margin-top: 0; margin-bottom: 0; }
+  .lab-panel input[type=range], .lab-view input[type=range] { min-height: 44px; }
+  .lab-panel summary, .lab-view summary { padding-block: 12px; }
+  .lab-tries-toggle { padding: 0 14px; }
+}
+/* the shelf tabs share the row evenly (Learn, Study tools) with the words centred */
+.labs-tabs { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.labs-tabs button { justify-content: center; min-height: 52px; }
+/* phones: Teach me, Ask Cassie and Quiz me each fit on one line */
+@media (max-width: 430px) {
+  .lab-acts { gap: 6px; }
+  .lab-acts .lab-btn { white-space: nowrap; padding: 0 8px; gap: 5px; font-size: .82rem; }
+  .lab-acts .lab-btn svg { width: 15px; height: 15px; flex: none; }
+}

@@ -3,7 +3,7 @@
    that doesn't count. Every puzzle is made so it has a fair solution:
    Sudoku has exactly one answer, the Nonogram can be solved by logic alone, Pipes and
    Bridges are built backwards from a real solution, and the Mirrors' laser path exists. */
-import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, at, clock, group, seg, button, row, stats, line, dot, text, dayKey, seedOf, rng, shuffle, fmtTime, overlay } from './kit.js';
+import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, at, clock, group, seg, button, row, stats, line, dot, text, dayKey, seedOf, rng, shuffle, fmtTime, overlay, errorWords, errorWordsFor } from './kit.js';
 
 /* ---------- shared: the timer, today's puzzle or a practice one ----------
    Today's puzzle (at its standard size) is the one on the score board. "New puzzle" makes a
@@ -46,7 +46,7 @@ function shell(panel, api, id, onNew, standard = () => true) {
       const already = api.doneToday();
       const res = await api.finish(value, shown);
       if (already) return `Solved again! Your first finish today (${already.shown}) is the one on the score board.`;
-      if (res && res.error) return `Solved in ${shown}! (The score board didn’t take it: ${res.error})`;
+      if (res && res.error) return errorWords('lab_board_saved_here', { time: shown });
       return res && res.me ? `Solved in ${shown}! You’re #${res.me.rank} today with ${res.me.points} points.` : `Solved in ${shown}!`;
     },
   };
@@ -861,7 +861,7 @@ const geographyLab = {
       mode = v; tapped = null; tapAt = null; zoomBox.hidden = mode === 'quiz'; vk = 1; vx = 0; vy = 0;
       if (mode === 'quiz') { make(); S.render(); } else { findScore = [0, 0]; nextFind(); }
     } });
-    loadWorld().then((wd) => { world = wd; if (mode === 'find' && !find) nextFind(); cv.redraw(); }).catch(() => { qbox.innerHTML = '<p class="lab-err">The map couldn’t load. Check your internet and open this puzzle again.</p>'; });
+    loadWorld().then((wd) => { world = wd; if (mode === 'find' && !find) nextFind(); cv.redraw(); }).catch(() => { qbox.innerHTML = `<p class="lab-err">${esc(errorWords('lab_map_failed'))}</p>`; });
     make();
     return { state: () => (mode === 'find' ? `finding countries on the map: ${findScore[0]} of ${findScore[1]} found first time${find ? `; now looking for ${nice(find.name)}` : ''}` : mode === 'explore' ? `exploring the world map${tapped ? `; tapped ${nice(tapped.name)}` : ''}` : over ? `finished the geography quiz with ${points} points` : `geography round ${k + 1} of ${rounds.length}, ${points} points so far`), destroy: () => { S.destroy(); cv.destroy(); } };
   },

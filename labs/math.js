@@ -1,7 +1,7 @@
 /* Math labs: a function grapher with slopes and areas, fractions you can see, chance,
    a unit converter, simple vs compound interest, a picture proof of (a + b)², and the
    Tower of Hanoi. */
-import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, slider, seg, button, row, stats, stepper, line, dot, text, niceStep, formula, integrate, gcd } from './kit.js';
+import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, slider, seg, button, row, stats, stepper, line, dot, text, niceStep, formula, integrate, gcd, errorWordsFor } from './kit.js';
 import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Function lab ---------------- */
@@ -124,7 +124,7 @@ const fnLab = {
     function read() {
       src = input.value;
       try { f = formula(src); err = ''; errEl.hidden = true; }
-      catch (e) { err = e.message; errEl.textContent = e.message; errEl.hidden = false; }
+      catch (e) { err = e.message; errEl.textContent = errorWordsFor(e, 'formula_unreadable'); errEl.hidden = false; }
       report();
     }
     input.addEventListener('input', read);

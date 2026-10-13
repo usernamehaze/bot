@@ -2,7 +2,7 @@
    who made each one, when, what it is made of, where it is now, and the story behind it.
    Pictures come from Wikipedia (Wikimedia Commons) for works that are free to show; works
    still under copyright show their details and a link instead of a copy of the picture. */
-import { el, esc, group, seg, button, row, stats, shuffle, plusOnly } from './kit.js';
+import { el, esc, group, seg, button, row, stats, shuffle, plusOnly, errorWords, errorWordsFor } from './kit.js';
 
 // [id, title, artist, year, medium, where it is, the story, Wikipedia article, free to show?]
 const PH = [
@@ -161,10 +161,10 @@ const museumLab = {
       const ask = e.target.closest('[data-askart]');
       if (ask && open) {
         const a = ALL.find((x) => x.id === open), out = page.querySelector('.tl-one .tl-msg');
-        if (!api.canAsk()) { out.hidden = false; out.textContent = 'Cassie isn’t available right now.'; return; }
+        if (!api.canAsk()) { out.hidden = false; out.textContent = errorWords('lab_ai_off', { next: 'Read the notes about this work below.' }); return; }
         ask.disabled = true; out.hidden = false; out.className = 'tl-msg muted'; out.textContent = 'Cassie is looking…';
         try { const t = await api.ask(`Tell a student about "${a.title}" by ${a.artist} (${a.year}). In under 120 words: what to look for in it (composition, colour, technique), why it matters in art history${a.from === 'ph' ? ' and to Filipinos' : ''}, and one surprising fact. Only facts you are sure of. Plain text, no markdown.`); out.className = 'tl-msg'; out.textContent = String(t || '').replace(/[*#`_]/g, '').trim(); }
-        catch (err) { out.textContent = 'Cassie couldn’t answer just now.'; }
+        catch (err) { out.textContent = errorWordsFor(err, 'lab_ai_failed'); }
         finally { ask.disabled = false; }
       }
     });

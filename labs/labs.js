@@ -11,7 +11,7 @@
    With converse (and makeQuiz) Ask Cassie and Quiz me stay inside the lab (labs/helper.js);
    without them they hand the question to onAsk / onQuiz.
 */
-import { el, esc, dayKey, setPremium } from './kit.js';
+import { el, esc, dayKey, setPremium, errorWords, errorWordsFor } from './kit.js';
 import { tutor } from './tutor.js';
 import { helper } from './helper.js';
 import { MATH } from './math.js';
@@ -96,7 +96,7 @@ function createView() {
         <div class="labs-board" hidden></div>
         <div class="labs-today"></div>
         <div class="labs-grid" role="list"></div>
-        <p class="labs-empty" hidden>No lab by that name yet. Ask Cassie about it instead.</p>
+        <div class="labs-empty" hidden></div>
       </div>
     </section>
     <section class="lab-view" hidden>
@@ -172,7 +172,17 @@ function createView() {
       ? (section === 'games') === (shelfOf(l) === 'games') && (l.name + ' ' + l.blurb + ' ' + (l.words || '') + ' ' + (NAMES[l.subject] || '')).toLowerCase().includes(q)
       : section !== 'learn' ? shelfOf(l) === section : shelfOf(l) === 'learn' && (subject === 'all' || (subject === '3d' ? is3d(l) : l.subject === subject))));
     grid.replaceChildren(...list.map(card));
-    $('.labs-empty').hidden = list.length > 0;
+    const none = $('.labs-empty');
+    none.hidden = list.length > 0;
+    if (!none.hidden && window.CassieErrors) {
+      const q0 = search.value.trim();
+      none.replaceChildren(window.CassieErrors.empty({
+        title: 'No lab by that name yet',
+        text: `Cassie can still explain ${q0 ? `“${q0}”` : 'it'} to you, even without a lab.`,
+        action: 'Ask Cassie about it',
+        onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); },
+      }));
+    }
     const t = todays(), tp = progress(t);
     const today = $('.labs-today');
     today.hidden = !!q || section !== 'learn' || (subject !== 'all' && subject !== t.subject);
@@ -273,7 +283,7 @@ function createView() {
       },
       doneToday() { const d = store.get('cassie.puzzles')[dayKey()] || {}; return d[lab.id] || null; },
       // Cassie, from inside a lab (a hint, grading, cards from notes…)
-      ask: (q) => (opts.explain ? opts.explain(q) : Promise.reject(new Error('Cassie isn’t available here.'))),
+      ask: (q) => (opts.explain ? opts.explain(q) : Promise.reject(Object.assign(new Error(errorWords('lab_ai_off', { next: 'Try again in a moment.' })), { friendly: true }))),
       canAsk: () => !!opts.explain,
       // the student's flashcard decks (spaced repetition)
       addCards: (list, deck) => (opts.addCards ? opts.addCards(list, deck) : 0),
@@ -291,7 +301,7 @@ function createView() {
       say: (t) => (opts.speak ? opts.speak(t) : null),
     };
     try { mounted = lab.mount({ stage, panel: controls, api }) || {}; }
-    catch (e) { stage.textContent = 'This lab couldn’t start: ' + e.message; mounted = {}; }
+    catch (e) { stage.textContent = errorWords('lab_start_failed'); mounted = {}; console.error(e); }
     if (opts.onOpen) opts.onOpen(lab.id);
     setTimeout(() => $('.lab-back').focus(), 30);
   }
@@ -332,7 +342,7 @@ function createView() {
       n.disabled = true; out.hidden = false; out.textContent = 'Cassie is thinking…'; out.classList.add('muted');
       opts.explain(`A student is working on this challenge in the ${lab.name} simulation (${lab.blurb}): "${lab.tries[i]}". What is on their screen now: ${described() || 'they have just started'}. Give one short, friendly hint in at most two sentences that points them in the right direction WITHOUT giving the answer or the exact numbers. Plain text, no formatting.`)
         .then((text) => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = String(text || '').replace(/[*_#`>]/g, '').trim() || 'Try changing one thing at a time and watch what happens.'; })
-        .catch(() => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = 'Cassie couldn’t answer just now. Try the hint above, or tap Ask Cassie.'; })
+        .catch(() => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = errorWords('lab_ai_failed', { next: 'Read the hint above, or tap Ask Cassie.' }); })
         .finally(() => { n.disabled = false; });
     }
   });

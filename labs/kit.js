@@ -13,6 +13,11 @@ export function el(tag, cls, html) {
   if (html != null) e.innerHTML = html;
   return e;
 }
+// the words for something that went wrong, from the one map in errors.js
+export const errorWords = (key, vars) => (window.CassieErrors ? window.CassieErrors.say(key, vars) : '');
+// a message about what someone typed, already in plain words (shown as it is)
+export const inputError = (words) => Object.assign(new Error(words), { friendly: true });
+export const errorWordsFor = (e, key) => (window.CassieErrors ? window.CassieErrors.explain(e, key) : '');
 export const esc = (t) => String(t).replace(/[<&>"]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;', '"': '&quot;' }[c]));
 // numbers people read: 3 significant figures, no "1e-7" noise
 export function num(v, digits = 3) {
@@ -244,8 +249,8 @@ const FUNCS = {
 };
 export function formula(src) {
   const s = String(src).toLowerCase().replace(/\s+/g, '').replace(/π/g, 'pi').replace(/×|·/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/\*\*/g, '^').replace(/²/g, '^2').replace(/³/g, '^3').replace(/^(y|f\(x\))=/, '');
-  if (!s) throw new Error('Type a formula, like 2x + 1 or sin(x).');
-  if (s.length > 200) throw new Error('That formula is too long.');
+  if (!s) throw inputError('Type a formula, like 2x + 1 or sin(x).');
+  if (s.length > 200) throw inputError('That formula is too long.');
   const toks = [];
   for (let i = 0; i < s.length;) {
     const ch = s[i];
@@ -257,7 +262,7 @@ export function formula(src) {
       let word = w[0];
       while (word) {
         const name = Object.keys(FUNCS).concat(['pi', 'e', 'x']).sort((a, b) => b.length - a.length).find((k) => word.startsWith(k));
-        if (!name) throw new Error(`I don't know “${word}”. Use x, numbers, + − × ÷ ^ and sin, cos, tan, sqrt, ln, log, abs, exp.`);
+        if (!name) throw inputError(`I don't know “${word}”. Use x, numbers, + − × ÷ ^ and sin, cos, tan, sqrt, ln, log, abs, exp.`);
         toks.push(name === 'x' ? { t: 'x' } : name === 'pi' ? { t: 'n', v: Math.PI } : name === 'e' ? { t: 'n', v: Math.E } : { t: 'f', v: name });
         word = word.slice(name.length);
       }
@@ -265,7 +270,7 @@ export function formula(src) {
       continue;
     }
     if ('+-*/^()|'.includes(ch)) { toks.push({ t: ch }); i++; continue; }
-    throw new Error(`I can't read “${ch}” in the formula.`);
+    throw inputError(`I can't read “${ch}” in the formula.`);
   }
   let k = 0;
   const peek = () => toks[k], take = (t) => (toks[k] && toks[k].t === t ? toks[k++] : null);
@@ -300,11 +305,11 @@ export function formula(src) {
   }
   function atom() {
     const tk = toks[k++];
-    if (!tk) throw new Error('The formula ends too soon.');
+    if (!tk) throw inputError('The formula ends too soon.');
     if (tk.t === 'n') { const v = tk.v; return () => v; }
     if (tk.t === 'x') return (x) => x;
-    if (tk.t === '(') { const a = expr(); if (!take(')')) throw new Error('A bracket “(” is not closed.'); return a; }
-    if (tk.t === '|') { absOpen++; const a = expr(); absOpen--; if (!take('|')) throw new Error('A “|” is not closed.'); return (x) => Math.abs(a(x)); }
+    if (tk.t === '(') { const a = expr(); if (!take(')')) throw inputError('A bracket “(” is not closed.'); return a; }
+    if (tk.t === '|') { absOpen++; const a = expr(); absOpen--; if (!take('|')) throw inputError('A “|” is not closed.'); return (x) => Math.abs(a(x)); }
     if (tk.t === 'f') {
       const fn = FUNCS[tk.v];
       // sin x and sin(x) both work; sin^2(x) means (sin x)^2
@@ -312,10 +317,10 @@ export function formula(src) {
       const a = peek() && peek().t === '(' ? atom() : power();
       return (x) => fn(a(x));
     }
-    throw new Error(`Something is missing before “${tk.t}”.`);
+    throw inputError(`Something is missing before “${tk.t}”.`);
   }
   const f = expr();
-  if (k < toks.length) throw new Error(`I can't read the part from “${toks[k].t === 'n' ? toks[k].v : toks[k].t}”.`);
+  if (k < toks.length) throw inputError(`I can't read the part from “${toks[k].t === 'n' ? toks[k].v : toks[k].t}”.`);
   return f;
 }
 
