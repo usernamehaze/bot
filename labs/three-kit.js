@@ -33,6 +33,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
   controls.screenSpacePanning = true;
   controls.zoomToCursor = true; // pinch or scroll zooms in on what you point at, not the middle
   const frames = new Set(), picks = [], tags = [];
+  const coarse = matchMedia('(pointer: coarse)'); // a finger: tags you tap are 44px to touch
   let w = 1, h = 1, raf = 0, alive = true, fly = null, awake = performance.now() + 1500;
   const fit = () => {
     const r = stage.getBoundingClientRect();
@@ -58,14 +59,31 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
     if (lazy && !fly && performance.now() > awake) return;
     renderer.render(scene, camera);
     // labels follow their objects (hidden when behind the camera or too far away to matter)
+    // every tag stays whole inside the picture (one at the edge used to be cut off), and a tag
+    // you can tap never sits on another one: the nearer one shows, so a tap lands on what you see
+    const shown = [];
     for (const t of tags) {
       if (!t.obj.visible || (t.show && !t.show())) { t.el.hidden = true; continue; }
       t.obj.getWorldPosition(v);
       if (t.offset) v.add(t.offset);
       v.project(camera);
-      if (v.z > 1 || v.z < -1) { t.el.hidden = true; continue; }
+      if (v.z > 1 || v.z < -1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) { t.el.hidden = true; continue; } // (behind the camera or off the picture)
       t.el.hidden = false;
-      t.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) ${t.align === 'left' ? 'translate(0, -50%)' : t.align === 'center' ? 'translate(-50%, -50%)' : 'translate(-50%, -130%)'}`;
+      shown.push({ t, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, z: v.z });
+    }
+    shown.sort((a, b) => a.z - b.z);
+    const taken = [], touch = coarse.matches ? 44 : 0;
+    for (const { t, x, y } of shown) {
+      const lw = t.el.offsetWidth, lh = t.el.offsetHeight;
+      let left = t.align === 'left' ? x : x - lw / 2, top = t.align === 'left' || t.align === 'center' ? y - lh / 2 : y - lh * 1.3;
+      const tap = t.el.tagName === 'BUTTON', mx = Math.max(2, tap ? (touch - lw) / 2 : 0), my = Math.max(2, tap ? (touch - lh) / 2 : 0); // (its touch area inside too)
+      left = Math.min(Math.max(left, mx), Math.max(mx, w - lw - mx)); top = Math.min(Math.max(top, my), Math.max(my, h - lh - my));
+      if (tap) {
+        const bw = Math.max(lw, touch), bh = Math.max(lh, touch), bx = left + lw / 2 - bw / 2, by = top + lh / 2 - bh / 2;
+        if (taken.some((r) => bx < r.x + r.w && bx + bw > r.x && by < r.y + r.h && by + bh > r.y)) { t.el.hidden = true; continue; }
+        taken.push({ x: bx, y: by, w: bw, h: bh });
+      }
+      t.el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     }
   }
   loop();

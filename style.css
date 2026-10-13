@@ -474,9 +474,10 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
   will-change: left, top;
 }
 #mascot.dragging { transition: none; cursor: grabbing; }
+#mascot.gliding:not(.dragging) { pointer-events: none; }
 /* playful antics: a waddle while walking, hops while playing, and ducking
    behind the chat bubbles to peek */
-#mascot.walking { transition: left 1.15s ease-in-out, top 1.15s ease-in-out; }
+#mascot.walking { transition: left 1.15s ease-in-out, top 1.15s ease-in-out; pointer-events: none; } /* (a tap on a button she's strolling past goes to the button) */
 #mascot.walking #mascot-btn { animation: mascotWaddle .5s ease-in-out infinite; }
 @keyframes mascotWaddle { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
 #mascot.playing #mascot-btn { animation: mascotHop .42s ease-in-out 3; }
@@ -512,6 +513,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
   font-size: .82rem;
   line-height: 1.4;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+  pointer-events: none; /* a passing tip: a tap goes to the button under it */
 }
 .mascot-bubble[hidden] { display: none; }
 
@@ -1313,6 +1315,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .reader-label { font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .reader-page p { margin: 0 0 10px; line-height: 1.6; font-size: 1.02rem; -webkit-user-select: text; user-select: text; }
 body.reader-open #mascot { display: none; }
+body:has(#settings-panel:not([hidden])) #mascot { visibility: hidden; } /* (she sat on the settings) */
 .reader-open-btn { display: inline-block; margin-top: 10px; }
 .share-tip { margin-top: 12px; font-size: .8rem; color: var(--muted); line-height: 1.45; }
 .share-tip[hidden] { display: none; }
@@ -1356,7 +1359,7 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
 .x3d-switch button { border: 0; background: transparent; padding: 7px 14px; font-size: .85rem; font-weight: 600; }
 .x3d-switch button[aria-selected="true"] { background: #f2f2f4; color: #111; }
 .x3d-tools { display: flex; gap: 6px; margin-left: auto; }
-.x3d-hint { position: absolute; left: 16px; right: 16px; top: calc(64px + var(--safe-top, 0px)); margin: 0; font-size: .78rem; color: rgba(255, 255, 255, .62); pointer-events: none; }
+.x3d-hint { position: absolute; left: 16px; right: 16px; top: calc(var(--x3d-top, calc(56px + var(--safe-top, 0px))) + 8px); margin: 0; font-size: .78rem; color: rgba(255, 255, 255, .62); pointer-events: none; }
 .x3d-loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 600; color: rgba(255, 255, 255, .8); pointer-events: none; }
 .x3d-loading[hidden] { display: none; }
 .x3d-parts {
@@ -1395,8 +1398,8 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
   .x3d-tools { margin-left: 0; width: 100%; order: 3; }
   .x3d-switch { flex: 1; }
   .x3d-switch button { flex: 1; padding: 7px 8px; }
-  .x3d-hint { top: calc(108px + var(--safe-top, 0px)); }
 }
+.x3d-switch[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .x3d-sheet { animation: none; } }
 
 /* ---------- Talk with Cassie: the voice conversation screen ----------
@@ -1486,7 +1489,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 }
 @media (max-width: 380px) { .topbar .brand > span { display: none; } } /* the Cassie dot stays */
 /* Explore 3D — the human body */
-.x3d-find { position: absolute; left: 16px; right: 16px; top: calc(62px + var(--safe-top, 0px)); max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.x3d-find { position: absolute; left: 16px; right: 16px; top: calc(var(--x3d-top, calc(56px + var(--safe-top, 0px))) + 6px); max-width: 460px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .x3d-find .x3d-search { flex: 1; min-width: 0; width: auto; }
 .x3d-find .x3d-results, .x3d-find .x3d-showall { flex-basis: 100%; margin-top: 0; }
 .x3d-sex { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); flex-shrink: 0; }
@@ -1515,7 +1518,6 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-credit { margin: 10px 0 0; font-size: .72rem; color: rgba(255, 255, 255, .45); }
 .x3d-credit a { color: inherit; }
 .x3d-act[hidden], .x3d-btn[hidden] { display: none; }
-@media (max-width: 560px) { .x3d-find { top: calc(108px + var(--safe-top, 0px)); } }
 /* body: atlas-style view controls, pulled-apart view, orientation letters */
 .x3d-count { flex-basis: 100%; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: rgba(255, 255, 255, .62); pointer-events: none; }
 .x3d-count b { color: #f2f2f4; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -1558,7 +1560,24 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .x3d-gizmo[hidden] { display: none; }
 .x3d-gizmo button { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .22); background: rgba(16, 17, 22, .85); color: #f2f2f4; font: inherit; font-size: .64rem; font-weight: 700; cursor: pointer; }
 .x3d-gizmo button[data-face="A"], .x3d-gizmo button[data-face="S"] { background: #f2f2f4; color: #111; }
-@media (max-width: 560px) { .x3d-gizmo { right: 14px; top: calc(170px + var(--safe-top, 0px)); bottom: auto; transform: scale(.85); transform-origin: top right; } }
+@media (max-width: 560px) { .x3d-gizmo { right: 14px; top: calc(var(--x3d-top, 108px) + 66px); bottom: auto; transform: scale(.85); transform-origin: top right; } }
+/* touch screens: every control in the 3D views is 44 x 44 to touch; the letters spread out on a
+   bigger ring (--gz-r, read by explore/cell3d.js) so each has its own 44px, and a letter on the far
+   side (behind the others) can't be tapped through them */
+@media (pointer: coarse) {
+  .x3d-sex button, .x3d-seg button, .x3d-act, .x3d-reassemble, .x3d-results button { min-height: 44px; }
+  .x3d-search { min-height: 44px; }
+  .x3d-sheet-x { width: 44px; height: 44px; right: 6px; top: 6px; }
+  .x3d-sheet-head { padding-right: 50px; }
+  .x3d-sheet .x3d-sheet-min { right: 54px; }
+  .x3d-body-mode .x3d-sheet .x3d-sheet-head { padding-right: 100px; }
+  .x3d-spread { height: 44px; }
+  .x3d-gizmo { --gz-r: 44px; width: 132px; height: 132px; }
+  .x3d-gizmo button { width: 30px; height: 30px; margin: -15px 0 0 -15px; font-size: .74rem; }
+  .x3d-gizmo button::after { content: ""; position: absolute; left: -7px; top: -7px; right: -7px; bottom: -7px; border-radius: 50%; }
+  .x3d-gizmo button.far { pointer-events: none; }
+}
+@media (pointer: coarse) and (max-width: 560px) { .x3d-gizmo { transform: none; right: 10px; top: calc(var(--x3d-top, 108px) + 100px); } }
 /* the picked part: a callout beside it, with a line to the spot */
 .x3d-body-mode .x3d-label.on { margin-left: 46px; padding-left: 10px; background: rgba(16, 17, 22, .9); color: #f2f2f4; border-color: rgba(255, 255, 255, .4); border-radius: 8px; }
 .x3d-body-mode .x3d-label.on::before { left: -46px; top: 50%; width: 15px; height: 17px; margin-top: 0; border-radius: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='100 80 305 350'%3E%3Cpath d='M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z' fill='white' stroke='%230b0a0f' stroke-width='22' stroke-linejoin='round' paint-order='stroke'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
@@ -1930,7 +1949,17 @@ html.lite {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--tap)); height: max(100%, var(--tap)); transform: translate(-50%, -50%);
   }
   .key-link { display: inline-block; }
+  .fu-chip { min-height: var(--tap); } /* (36px with a 44px area overlapped the chip in the next row) */
+  .new-chat-btn, .home-ideas, .pf-seg button { min-height: var(--tap); }
+  /* a switch row: the whole row is its label, so the switch is as tall as the row */
+  /* a switch row: the whole row is its label, 44px tall, reaching a little past each side so a
+     finger just beside the switch still works it */
+  .field-toggle, .field.row { display: flex; align-items: center; min-height: var(--tap); padding-inline: 12px; margin-inline: -12px; }
+  /* Talk with Cassie */
+  .vc-x { width: var(--tap); height: var(--tap); }
+  .vc-modes button, .vc-gender button, .vc-hv button { min-height: var(--tap); }
 }
+@media (max-width: 370px) { .tab { min-width: 44px; padding: 0 10px; } } /* (after the phone rule: six tabs still fit at 360) */
 
 /* Reduce Motion: no sliding, scaling or spinning, things just appear */
 @media (prefers-reduced-motion: reduce) {
@@ -1999,6 +2028,9 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
   .fc-x, .fc-back { width: var(--tap); height: var(--tap); }
   .fc-btn, .fc-field input, .fc-form input, .fc-mini { min-height: var(--tap); }
   summary.fc-btn { display: inline-flex; align-items: center; }
+  .fc-more summary { width: var(--tap); height: var(--tap); }
+  .fc-more[open] > div { top: 50px; }
+  .fc-more button { min-height: var(--tap); }
 }
 /* An empty chat on a computer shows Cassie's welcome with its next steps (the phone app has its own
    Home screen; the rule that hides that one must not hide this one) */

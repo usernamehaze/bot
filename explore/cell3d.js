@@ -1,9 +1,11 @@
-/* Explore 3D — an animal cell and a plant cell you can turn, zoom and tap.
+/* Explore 3D — an animal cell and a plant cell you can turn, zoom and tap, and the human body.
+   The cells and the body are two separate views: the cells' switch picks Animal or Plant, and
+   the body has none (each is opened on its own, from Labs or a ?explore= link).
    Every shape is drawn here in code (no model files to download), and the cells are cut
    open so you can see inside. Tap a part to learn what it does, then ask Cassie about it
    or start a quiz. Works with a mouse and with touch (drag to turn, pinch to zoom).
 
-     import('./explore/cell3d.js').then((m) => m.open({ cell: 'animal', onAsk, onQuiz, onClose }));
+     import('./explore/cell3d.js').then((m) => m.open({ cell: 'animal', onAsk, onQuiz, onClose }));   // 'animal', 'plant' or 'body'
 */
 import * as THREE from './three.module.min.js';
 import { OrbitControls } from './OrbitControls.js';
@@ -367,12 +369,11 @@ function createView() {
   root.setAttribute('aria-label', 'Explore 3D');
   root.setAttribute('tabindex', '-1');
   root.innerHTML = `
-    <canvas class="x3d-canvas" aria-label="3D cell. Drag to turn, pinch or scroll to zoom, tap a part"></canvas>
+    <canvas class="x3d-canvas" aria-label="3D model. Drag to turn, pinch or scroll to zoom, tap a part"></canvas>
     <div class="x3d-labels" aria-hidden="true"></div>
     <div class="x3d-top">
       <button type="button" class="x3d-btn x3d-close" aria-label="Close">×</button>
-      <div class="x3d-switch" role="tablist" aria-label="What to explore">
-        <button type="button" role="tab" data-cell="body">Human body</button>
+      <div class="x3d-switch" role="tablist" aria-label="Which cell">
         <button type="button" role="tab" data-cell="animal">Animal cell</button>
         <button type="button" role="tab" data-cell="plant">Plant cell</button>
       </div>
@@ -432,6 +433,11 @@ function createView() {
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const canvas = $('.x3d-canvas'), labelsEl = $('.x3d-labels'), sheet = $('.x3d-sheet'), partsEl = $('.x3d-parts'), hint = $('.x3d-hint');
+  // what sits under the top bar (the find row, the hint, the letters) goes where the bar really ends:
+  // on a narrow phone its buttons wrap to two rows, and a fixed offset put the find row on top of them
+  const topBar = $('.x3d-top');
+  const markTop = () => { if (!root.hidden) root.style.setProperty('--x3d-top', Math.round(topBar.getBoundingClientRect().height) + 'px'); };
+  if (window.ResizeObserver) new ResizeObserver(markTop).observe(topBar);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -479,6 +485,7 @@ function createView() {
     inBody = k === 'body';
     root.classList.toggle('x3d-body-mode', inBody);
     findEl.hidden = !inBody; hint.hidden = inBody;
+    $('.x3d-switch').hidden = inBody; // Animal or Plant: a choice inside the cells, not the body
     $('[data-tool="labels"]').hidden = inBody; $('[data-tool="cut"]').hidden = inBody; $('[data-tool="view"]').hidden = !inBody;
     $('.x3d-gizmo').hidden = !inBody;
     if (!inBody) showViewPanel(false);
@@ -492,7 +499,6 @@ function createView() {
     if (inBody) {
       Object.values(cells).forEach((c) => { c.group.visible = false; });
       current = null; selected = null; sheet.hidden = true;
-      root.querySelectorAll('[data-cell]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.cell === k)));
       labelsEl.replaceChildren(body.trayLabels, body.label); labelEls.clear();
       resetView(); renderParts();
       if (viewOpen === null) showViewPanel(true); // open the first time, like an atlas
@@ -902,11 +908,15 @@ function createView() {
   // the letters turn with the body: S up top, A toward you when you face its front…
   function placeGizmo() {
     const q = camera.quaternion.clone().invert();
-    gizmoEl.querySelectorAll('[data-face]').forEach((b) => {
+    const taken = [], tap = gizmoR > 30 ? 44 : 0; // (touch screens: a letter whose 44px overlaps a nearer one's isn't tapped through it)
+    [...gizmoEl.querySelectorAll('[data-face]')].map((b) => [b, gz.copy(LOOKS[b.dataset.face]).normalize().applyQuaternion(q).z]).sort((a, b) => b[1] - a[1]).forEach(([b]) => {
       gz.copy(LOOKS[b.dataset.face]).normalize().applyQuaternion(q);
-      b.style.transform = `translate(${gz.x * 26}px, ${-gz.y * 26}px) scale(${0.8 + 0.25 * (gz.z + 1) / 2})`;
+      b.style.transform = `translate(${gz.x * gizmoR}px, ${-gz.y * gizmoR}px) scale(${tap ? 1 : 0.8 + 0.25 * (gz.z + 1) / 2})`; // (a finger: full size, the fading shows the depth)
       b.style.opacity = String(0.45 + 0.55 * (gz.z + 1) / 2);
       b.style.zIndex = String(Math.round((gz.z + 1) * 10));
+      const x = gz.x * gizmoR, y = -gz.y * gizmoR, crowded = tap && taken.some(([tx, ty]) => Math.abs(tx - x) < tap && Math.abs(ty - y) < tap);
+      b.classList.toggle('far', gz.z < -0.35 || !!crowded); // behind or crowded by a nearer letter: not tapped through it
+      if (!b.classList.contains('far')) taken.push([x, y]);
     });
   }
   // the details card can shrink to a bar (name + "Selection details")
@@ -920,8 +930,10 @@ function createView() {
   sheet.querySelector('.x3d-sheet-min').addEventListener('click', (e) => { e.stopPropagation(); setSheetMini(!sheet.classList.contains('mini')); });
   sheet.querySelector('.x3d-sheet-head').addEventListener('click', () => { if (sheet.classList.contains('mini')) setSheetMini(false); });
 
+  let gizmoR = 26; // the letters' ring (bigger on touch screens, from the CSS)
   function resize() {
     const w = root.clientWidth || window.innerWidth, h = root.clientHeight || window.innerHeight;
+    gizmoR = parseFloat(getComputedStyle(gizmoEl).getPropertyValue('--gz-r')) || 26;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     // phones in portrait: step back so the whole cell fits the width
@@ -976,7 +988,7 @@ function createView() {
     $('[data-tool="teach"]').hidden = !opts.onTeach; $('[data-tool="ask"]').hidden = !opts.onAskHere;
     root.hidden = false;
     document.documentElement.classList.add('x3d-open');
-    resize();
+    resize(); markTop();
     if (!raf) frame();
     const want = o.cell || (inBody || !current ? 'body' : kind);
     if ((!current && !inBody) || want !== kind) showCell(want);

@@ -893,6 +893,7 @@ function mascotWalk() {
   const dir = r.left < window.innerWidth / 2 ? 1 : -1; // wander toward the roomier side
   const step = 90 + Math.random() * 80;
   const tx = Math.min(Math.max(r.left + dir * step, b.minX), b.maxX);
+  if (!mascotSpotClear(tx, r.top)) { mascotPlay(); return; } // (she'd stop on an answer or a button: play in place instead)
   set3D('walk'); // a real waddle: feet stepping, body bobbing, arms swinging
   mascot.classList.add('walking');
   placeMascot(tx, r.top);
@@ -1129,6 +1130,11 @@ function placeMascot(x, y) {
   const b = mascotBounds();
   const nx = Math.min(Math.max(x, b.minX), b.maxX);
   const ny = Math.min(Math.max(y, b.minY), b.maxY);
+  const r = mascot.getBoundingClientRect();
+  if (Math.abs(r.left - nx) > 2 || Math.abs(r.top - ny) > 2) { // (while she glides there, a tap goes to the button under her)
+    mascot.classList.add('gliding');
+    clearTimeout(placeMascot.t); placeMascot.t = setTimeout(() => mascot.classList.remove('gliding'), 450);
+  }
   mascot.style.left = nx + 'px';
   mascot.style.top = ny + 'px';
 }
@@ -1143,18 +1149,23 @@ let mascotUserMoved = false; // once dragged, stop auto-docking her on resize
 // message, board, or home card, hop her to the first clear corner. Skipped once
 // the user has dragged her somewhere on purpose.
 function rectsOverlap(a, b) { return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom); }
-function keepMascotClear() {
-  if (!mascot || mascotDragging || mascotUserMoved || mascotAsleep) return;
-  const items = [...document.querySelectorAll('#chat-log .bubble, #chat-log .cassie-board, #chat-log .home-example, #chat-log .home-title, #chat-log .home-sub, #chat-log .home-tip')]
-    .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
-  if (!items.length) return;
+// is a spot clear of the answers and the buttons under them?
+function mascotSpotClear(x, y, items = mascotAvoid()) {
   const { w, h } = mascotBtnSize();
   const half = 46; // her opaque body is ~a bit wider than the button, not the whole canvas
-  const clearAt = (x, y) => {
-    const cx = x + w / 2, cy = y + h / 2;
-    const mr = { left: cx - half, right: cx + half, top: cy - half, bottom: cy + half };
-    return !items.some((r) => rectsOverlap(mr, r));
-  };
+  const cx = x + w / 2, cy = y + h / 2;
+  const mr = { left: cx - half, right: cx + half, top: cy - half, bottom: cy + half };
+  return !items.some((r) => rectsOverlap(mr, r));
+}
+function mascotAvoid() {
+  return [...document.querySelectorAll('#chat-log .bubble, #chat-log .cassie-board, #chat-log .home-example, #chat-log .home-title, #chat-log .home-sub, #chat-log .home-tip, #chat-log .fu-chip')]
+    .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+}
+function keepMascotClear() {
+  if (!mascot || mascotDragging || mascotUserMoved || mascotAsleep) return;
+  const items = mascotAvoid();
+  if (!items.length) return;
+  const clearAt = (x, y) => mascotSpotClear(x, y, items);
   const cur = mascot.getBoundingClientRect();
   if (clearAt(cur.left, cur.top)) return; // already clear — leave her be
   const b = mascotBounds();
@@ -1298,6 +1309,16 @@ if (mascotBtn && mascot) {
     else restMascot();
     requestAnimationFrame(keepMascotClear);
   });
+  // the Hint/Quiz row or the chat box changing (a row shown or hidden, the box growing, a file
+  // attached, the phone tab bar showing) moves her floor: re-dock, so she never sits on a button
+  if (window.ResizeObserver) {
+    const redock = new ResizeObserver(() => {
+      if (mascotDragging) return;
+      if (mascotUserMoved) { const r = mascot.getBoundingClientRect(); placeMascot(r.left, r.top); } else restMascot();
+      requestAnimationFrame(keepMascotClear);
+    });
+    ['quick-actions', 'composer', 'attach-preview', 'tabbar'].forEach((id) => { const el = document.getElementById(id); if (el) redock.observe(el); });
+  }
   set3D('neutral');
   scheduleEmote();  // occasional happy blip while idle
   scheduleAntic();  // occasional walk / play / peek-a-boo
@@ -1778,6 +1799,7 @@ function showFollowups() {
   chatLog.appendChild(row);
   followupRow = row;
   scrollToBottom();
+  requestAnimationFrame(keepMascotClear); // (she sat on Double-check)
 }
 
 /* ---------- providers: Groq for text, Gemini for images ---------- */
@@ -4486,7 +4508,7 @@ async function teach3d(view) {
   const body = view.kind === 'body';
   const lab = body
     ? { id: 'body3d', name: 'Human body 3D', subject: 'explore', blurb: 'a real 3D human body', about: 'The chips at the bottom turn each body system on or off (bones, muscles, organs…). Boy or Girl picks the body. "Find a part" searches any part by name. Tap any part on the model to see what it is and does, then Ask Cassie or Quiz me about it. "Look around" turns the body to the front, back or side, and its slider pulls every part apart and sorts it. Drag to turn, pinch or scroll to zoom, two fingers to move.' }
-    : { id: view.kind + 'cell', name: view.kind === 'plant' ? 'Plant cell 3D' : 'Animal cell 3D', subject: 'explore', blurb: 'a 3D cell, cut open', about: 'Tap any organelle (or its name in the list at the bottom) to see what it does. Labels shows or hides the names; Cut open shows the inside or the whole cell. The tabs at the top switch between the human body, the animal cell and the plant cell. Drag to turn, pinch or scroll to zoom.' };
+    : { id: view.kind + 'cell', name: view.kind === 'plant' ? 'Plant cell 3D' : 'Animal cell 3D', subject: 'explore', blurb: 'a 3D cell, cut open', about: 'Tap any organelle (or its name in the list at the bottom) to see what it does. Labels shows or hides the names; Cut open shows the inside or the whole cell. The Animal cell and Plant cell tabs at the top switch between the two cells. Drag to turn, pinch or scroll to zoom.' };
   teacher3d = tutor({ view: view.root, lab, collect: collectAll, described: () => describe3d(view),
     ask: askShown,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
@@ -4498,10 +4520,12 @@ async function teach3d(view) {
   if (lessons3d.has(view.kind)) teacher3d.offer(lessons3d.get(view.kind));
   else teacher3d.teach('How do I use this? Teach me from the start.');
 }
+// the cells and the body are separate views: 'cells' opens the cells on the one last looked at
+let lastCell = 'animal';
 async function openExplore(cell, ret) {
   track('feature', 'explore');
   // free: 2 views a week of each (the body, the animal cell, the plant cell); Plus has them always
-  const want = ['plant', 'animal', 'body'].includes(cell) ? cell : 'body', seen = new Set();
+  const want = cell === 'cells' ? lastCell : ['plant', 'animal', 'body'].includes(cell) ? cell : 'body', seen = new Set();
   const first = free3d(want, seen);
   if (!first) { if (ret) ret.back(); return; }
   try {
@@ -4527,6 +4551,7 @@ async function openExplore(cell, ret) {
       // a short explanation of a tapped part of the body, without leaving the 3D view
       explain: (q) => (canChat() ? askShown(q) : Promise.reject(new Error('no brain'))),
       onClose: () => {
+        if (view.kind !== 'body') lastCell = view.kind;
         stopTeach3d();
         lessons3d.clear(); // (a lesson is about the 3D view as it was on screen)
         dropHelp3d();
@@ -4542,7 +4567,7 @@ async function openExplore(cell, ret) {
     renderMessage('assistant', CassieErrors.say('open_3d_failed'));
   }
 }
-// a link like app.html?explore=plant opens it straight away
+// a link like app.html?explore=plant (or =cells, =body) opens it straight away
 { const ex = new URLSearchParams(location.search).get('explore'); if (ex) setTimeout(() => openExplore(ex), 300); }
 
 /* ---------- Labs: simulations to play with, then ask Cassie why ----------
