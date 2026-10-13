@@ -224,21 +224,21 @@ const COMPOUNDS = [['H2O', 'water'], ['CO2', 'carbon dioxide'], ['NaCl', 'sodium
 // "Ca(OH)2" → { Ca: 1, O: 2, H: 2 }; throws on something that isn't a formula
 export function atomsOf(f) {
   const s = String(f).replace(/\s+/g, '').replace(/[₀-₉]/g, (d) => '₀₁₂₃₄₅₆₇₈₉'.indexOf(d));
-  if (!s || s.length > 30) throw new Error('Type a formula like H2O or Ca(OH)2.');
+  if (!s || s.length > 30) throw inputError('Type a formula like H2O or Ca(OH)2.');
   let i = 0;
   const group = () => {
     const out = {};
     while (i < s.length && s[i] !== ')') {
       let part;
-      if (s[i] === '(') { i++; part = group(); if (s[i] !== ')') throw new Error('A bracket isn’t closed.'); i++; }
-      else { const m = /^[A-Z][a-z]?/.exec(s.slice(i)); if (!m || !MASS[m[0]]) throw new Error(`“${(m && m[0]) || s[i]}” isn’t an element I know. Elements start with a capital letter (Na, Cl, O…).`); i += m[0].length; part = { [m[0]]: 1 }; }
+      if (s[i] === '(') { i++; part = group(); if (s[i] !== ')') throw inputError('A bracket isn’t closed.'); i++; }
+      else { const m = /^[A-Z][a-z]?/.exec(s.slice(i)); if (!m || !MASS[m[0]]) throw inputError(`“${(m && m[0]) || s[i]}” isn’t an element I know. Elements start with a capital letter (Na, Cl, O…).`); i += m[0].length; part = { [m[0]]: 1 }; }
       const d = /^\d+/.exec(s.slice(i)); const k = d ? +d[0] : 1; if (d) i += d[0].length;
       for (const [e, c] of Object.entries(part)) out[e] = (out[e] || 0) + c * k;
     }
     return out;
   };
   const a = group();
-  if (i < s.length) throw new Error('There’s a “)” without a “(”.');
+  if (i < s.length) throw inputError('There’s a “)” without a “(”.');
   return a;
 }
 const massOf = (atoms) => Object.entries(atoms).reduce((s2, [e, c]) => s2 + MASS[e] * c, 0);
