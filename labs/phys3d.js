@@ -275,7 +275,7 @@ export function light3d(B) {
       if (!k.tir) { if (Math.abs(k.b - lastB) > 1e-4) { lastB = k.b; arcOut.geometry.dispose(); arcOut.geometry = new THREE.TorusGeometry(1, 0.012, 6, 48, Math.max(0.001, k.b)); } arcOut.position.copy(o); arcOut.scale.setScalar(R); arcOut.rotation.set(0, 0, -Math.PI / 2); }
       tIn.at(O[0] - 16 - Math.sin(k.a / 2) * 64, O[1] - Math.cos(k.a / 2) * 64, 0, `${s.angText}°`);
       if (!k.tir) { tOut.at(O[0] + 14 + Math.sin(k.b / 2) * 66, O[1] + Math.cos(k.b / 2) * 66, 0, `${s.outText}°`); tTir.hide(); }
-      else { tOut.hide(); tTir.at(O[0], O[1] + 44, 0, 'Total internal reflection — no light gets through'); }
+      else { tOut.hide(); tTir.at(O[0], O[1] + 44, 0, 'Total internal reflection. No light gets through'); }
     },
   };
 }

@@ -95,7 +95,7 @@
   $$('[data-plan]').forEach((a) => {
     if (WAITLIST_URL) { a.href = WAITLIST_URL + (WAITLIST_URL.includes('?') ? '&' : '?') + 'plan=' + a.dataset.plan; a.target = '_blank'; a.rel = 'noopener'; return; }
     a.textContent = 'Coming soon';
-    a.addEventListener('click', (e) => { e.preventDefault(); toast('Paid plans are almost here — everything on Free works today.'); });
+    a.addEventListener('click', (e) => { e.preventDefault(); toast('Paid plans are almost here. Everything on Free works today.'); });
   });
 
   /* ---------- tour video ---------- */

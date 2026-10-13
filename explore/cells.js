@@ -4,7 +4,7 @@
 export const PARTS = {
   membrane: { name: 'Cell membrane', color: '#6fb6d9', does: 'A thin, flexible double layer of fats (phospholipids) with proteins in it. It wraps the cell and controls what goes in and out.', like: 'the security gate' },
   cytoplasm: { name: 'Cytoplasm', color: '#a9d4ea', does: 'The jelly-like fluid that fills the cell and holds the organelles in place. Many of the cell’s chemical reactions happen here.', like: 'the factory floor' },
-  nucleus: { name: 'Nucleus', color: '#8a5cf0', does: 'Holds the cell’s DNA — the instructions for making every protein — and controls what the cell does and when it divides.', like: 'the control room' },
+  nucleus: { name: 'Nucleus', color: '#8a5cf0', does: 'Holds the cell’s DNA, the instructions for making every protein, and controls what the cell does and when it divides.', like: 'the control room' },
   envelope: { name: 'Nuclear envelope', color: '#b9a3f5', does: 'A double membrane around the nucleus. Its pores let RNA and proteins move in and out.', like: 'the walls and doors of the control room' },
   nucleolus: { name: 'Nucleolus', color: '#4b2aa8', does: 'A dense spot inside the nucleus where ribosomes are made.', like: 'the ribosome factory' },
   rer: { name: 'Rough ER', color: '#3f86e0', does: 'Folded membranes studded with ribosomes. It builds proteins and sends them on to the Golgi apparatus.', like: 'the assembly line' },

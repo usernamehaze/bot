@@ -436,7 +436,7 @@ async function adminPlan(request, env, url) {
   const b = request.method === 'POST' ? await request.json().catch(() => ({})) : { email: url.searchParams.get('email') };
   const email = String(b.email || '').trim().toLowerCase().slice(0, 200);
   const acc = email && await env.DB.prepare('SELECT id, email, name FROM accounts WHERE email = ?').bind(email).first();
-  if (!acc) return json({ error: 'No Cassie account with that email — they need to sign up first.' }, 404);
+  if (!acc) return json({ error: 'No Cassie account with that email. They need to sign up first.' }, 404);
   if (request.method === 'POST') {
     const plan = ['free', 'plus', 'pro'].includes(b.plan) ? b.plan : null;
     if (!plan) return json({ error: 'plan must be free, plus or pro' }, 400);
@@ -467,7 +467,7 @@ async function transcribe(request, env, ctx) {
   try { form = await request.formData(); } catch (e) { return chatError('Send the recording as a form.', 400, h); }
   const file = form.get('file');
   if (!file || typeof file === 'string' || !file.size) return chatError('No recording.', 400, h);
-  if (file.size > 8 * 1024 * 1024) return chatError('That recording is too long — talk in shorter bits.', 413, h);
+  if (file.size > 8 * 1024 * 1024) return chatError('That recording is too long. Talk in shorter bits.', 413, h);
   const uid = /^[\w-]{8,64}$/.test(String(form.get('uid') || '')) ? String(form.get('uid')) : 'anon';
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const now = Date.now(), minute = Math.floor(now / 60e3), mk = `t|${uid}|${ip}`;
@@ -477,7 +477,7 @@ async function transcribe(request, env, ctx) {
   if (n > (+env.TRANSCRIBE_MINUTE_LIMIT || 20)) return chatError('Lots of talking! Give me a few seconds.', 429, h, { 'retry-after': '20' });
   if (env.DB) {
     await ensureSchema(env.DB);
-    if (await countUse(env.DB, 't:' + ip, dayOf(now)) > (+env.TRANSCRIBE_DAILY_LIMIT || 3000)) return chatError('That’s a lot of voice for today — type for now, and voice comes back tomorrow.', 429, h);
+    if (await countUse(env.DB, 't:' + ip, dayOf(now)) > (+env.TRANSCRIBE_DAILY_LIMIT || 3000)) return chatError('That’s a lot of voice for today. Type for now, and voice comes back tomorrow.', 429, h);
   }
   const lang = /^[a-z]{2}$/.test(String(form.get('language') || '')) ? String(form.get('language')) : '';
   const hint = String(form.get('prompt') || '').slice(0, 600); // words from the conversation, so Whisper spells them right
@@ -509,7 +509,7 @@ async function transcribe(request, env, ctx) {
     } catch (e) { problems.push(`Workers AI whisper: ${e.message || e}`); }
   }
   ctx.waitUntil(logProblem(env, 'voice: transcribe', problems.join(' | ') || 'no speech-to-text set up'));
-  return chatError('I couldn’t hear that clearly — try again, or type it.', 503, h);
+  return chatError('I couldn’t hear that clearly. Try again, or type it.', 503, h);
 }
 
 /* ---------------------------------------------------------------- the iPhone Shortcut
@@ -544,17 +544,17 @@ async function ask(request, env, ctx) {
   }
   if (!reply) { ctx.waitUntil(logProblem(env, 'iPhone Shortcut', 'no AI answered')); return out('Cassie is very busy right now. Try again in a minute.', 503); }
   ctx.waitUntil(countChat(env, today, src));
-  return out(`${plainText(reply)}\n\n— Cassie · askcassie.pages.dev`);
+  return out(`${plainText(reply)}\n\nCassie · askcassie.pages.dev`);
 }
 
 async function chat(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   const text = await request.text();
-  if (text.length > 8e6) return chatError('That photo or file is too big to send — try a smaller one.', 413, h);
+  if (text.length > 8e6) return chatError('That photo or file is too big to send. Try a smaller one.', 413, h);
   let body; try { body = JSON.parse(text); } catch (e) { return chatError('Bad request.', 400, h); }
   const cleaned = cleanMessages(body.messages);
-  if (!cleaned) return chatError('That message is too long — try a shorter question or start a new chat.', 413, h);
+  if (!cleaned) return chatError('That message is too long. Try a shorter question or start a new chat.', 413, h);
 
   // Fair use: each person gets a daily allowance through this shared key.
   const now = Date.now(), today = dayOf(now);
@@ -587,8 +587,8 @@ async function chat(request, env, ctx) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
     if (question && usedQ > L.questions) ctx.waitUntil(refund().catch(() => {})); // a refused question isn't counted
     return chatError(plan === 'free'
-      ? `You've used today's ${shown} free questions. They come back at midnight — or add your own free Groq key in Settings to keep going right now.`
-      : `You've reached today's fair-use limit (${shown}). It resets at midnight — thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
+      ? `You've used today's ${shown} free questions. They come back at midnight, or add your own free Groq key in Settings to keep going right now.`
+      : `You've reached today's fair-use limit (${shown}). It resets at midnight. Thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
   }
   const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
 
@@ -673,11 +673,11 @@ async function chat(request, env, ctx) {
   ctx.waitUntil(logProblem(env, cleaned.image ? 'chat: picture' : 'chat: text', problems.filter(Boolean).join(' | ') || `status ${lastStatus}`));
   // an unanswered question shouldn't use up the person's daily allowance
   ctx.waitUntil(refund());
-  if (cleaned.image && !env.GROQ_KEY && !env.GEMINI_KEY) return chatError('Reading photos needs a Groq or Gemini key — add one in Settings.', 503, h);
+  if (cleaned.image && !env.GROQ_KEY && !env.GEMINI_KEY) return chatError('Reading photos needs a Groq or Gemini key. Add one in Settings.', 503, h);
   if (cleaned.image) vision.at = 0; // look again for picture readers next time
   return lastStatus === 429
-    ? chatError('Cassie is very busy right now — try again in a minute.', 429, h, { 'retry-after': '20' })
-    : chatError(cleaned.image ? 'I couldn’t read that picture just now — try again in a minute, or type the question instead.' : 'Cassie can’t reach her brain right now — try again in a moment.', 503, h);
+    ? chatError('Cassie is very busy right now. Try again in a minute.', 429, h, { 'retry-after': '20' })
+    : chatError(cleaned.image ? 'I couldn’t read that picture just now. Try again in a minute, or type the question instead.' : 'Cassie can’t reach her brain right now. Try again in a moment.', 503, h);
 }
 
 /* ------------------------------------------------------------------ pictures */
@@ -770,7 +770,7 @@ async function image(request, env, ctx) {
   const bump = (k) => countUseQuery(env.DB, k, today);
   const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'img:an:' + ip : 'img:u:' + uid), bump('img:i:' + ip)]);
   if ((u.results?.[0]?.n || 0) > perDay || (i.results?.[0]?.n || 0) > perDay * 25) {
-    return chatError(`You've made today's ${perDay} pictures. More tomorrow — or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
+    return chatError(`You've made today's ${perDay} pictures. More tomorrow, or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
   }
   try {
     const out = await env.AI.run(IMAGE_MODEL, { prompt, steps: 6 });
@@ -780,7 +780,7 @@ async function image(request, env, ctx) {
     return json({ image: b64, mimeType: 'image/jpeg' }, 200, h);
   } catch (e) {
     ctx.waitUntil(uncountUses(env.DB, ['img:u:' + uid, 'img:i:' + ip]));
-    return chatError('Couldn’t make that picture right now — try again in a minute, or describe it more simply.', 503, h);
+    return chatError('Couldn’t make that picture right now. Try again in a minute, or describe it more simply.', 503, h);
   }
 }
 
@@ -838,7 +838,7 @@ async function speak(request, env, ctx) {
     await ensureSchema(env.DB);
     const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
     if (all > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
-    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today — Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
+    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today. Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively
@@ -913,7 +913,7 @@ async function room(request, env, url) {
       db.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
     ]);
     const mine = await db.prepare('SELECT COUNT(*) AS n FROM rooms WHERE owner = ? AND created > ?').bind(uid, old).first();
-    if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today — use one of those, or try again tomorrow.' }, 429, h);
+    if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today. Use one of those, or try again tomorrow.' }, 429, h);
     let code = '';
     for (let i = 0; i < 5 && !code; i++) {
       const c = Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => ROOM_LETTERS[x % ROOM_LETTERS.length]).join('');
@@ -927,7 +927,7 @@ async function room(request, env, url) {
     return json({ code, title: clean(b.title, 60) || `${name}’s study room` }, 200, h);
   }
   const code = clean(b.code, 6).toUpperCase();
-  if (!okCode(code)) return json({ error: 'That code isn’t right — it’s 6 letters and numbers.' }, 400, h);
+  if (!okCode(code)) return json({ error: 'That code isn’t right. It’s 6 letters and numbers.' }, 400, h);
   const r = await live(code);
   if (!r) return json({ error: 'No room with that code (rooms last a day).', gone: true }, 404, h);
 
@@ -942,7 +942,7 @@ async function room(request, env, url) {
     if (!ops.length) return json({ ok: true }, 200, h);
     if (!(await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) return json({ error: 'Join the room first.' }, 403, h);
     const count = await db.prepare('SELECT COUNT(*) AS n FROM room_ops WHERE code = ?').bind(code).first();
-    if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full — save it and start a new room.', full: true }, 409, h);
+    if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full. Save it and start a new room.', full: true }, 409, h);
     const rows = [];
     for (const op of ops) {
       if (!op || !(['add', 'del', 'clearmine'].includes(op.t) || STUDY_OPS.includes(op.t))) continue;
@@ -1070,7 +1070,7 @@ async function verifyGoogle(credential, env) {
   if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in isn’t set up on this server yet.');
   const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
   const t = r.ok ? await r.json() : null;
-  if (!t || t.aud !== env.GOOGLE_CLIENT_ID || !/^(https:\/\/)?accounts\.google\.com$/.test(t.iss || '') || +t.exp * 1000 < Date.now() || !t.sub) throw new Error('Google sign-in didn’t work — please try again.');
+  if (!t || t.aud !== env.GOOGLE_CLIENT_ID || !/^(https:\/\/)?accounts\.google\.com$/.test(t.iss || '') || +t.exp * 1000 < Date.now() || !t.sub) throw new Error('Google sign-in didn’t work. Please try again.');
   return { sub: String(t.sub), email: String(t.email || '').toLowerCase(), verified: t.email_verified === true || t.email_verified === 'true', name: String(t.given_name || t.name || '').slice(0, 40) };
 }
 
@@ -1088,7 +1088,7 @@ async function auth(request, env, path) {
   }
 
   if (path === '/auth/signup' || path === '/auth/login' || path === '/auth/google') {
-    if (!(await authAllowed(request, env))) return fail('Too many tries — please wait an hour and try again.', 429);
+    if (!(await authAllowed(request, env))) return fail('Too many tries. Please wait an hour and try again.', 429);
     const now = Date.now();
     if (path === '/auth/google') {
       let g; try { g = await verifyGoogle(String(body.credential || ''), env); } catch (e) { return fail(e.message, 401); }
@@ -1116,24 +1116,24 @@ async function auth(request, env, path) {
     if (!EMAIL_RE.test(email)) return fail('Please type a valid email address.');
     if (path === '/auth/signup') {
       if (!(+body.age >= 2 && +body.age <= 100)) return fail('Please enter your age.'); // every age is welcome
-      if (DISPOSABLE_RE.test(email)) return fail('Please use your real email address — throwaway emails can’t make accounts.');
+      if (DISPOSABLE_RE.test(email)) return fail('Please use your real email address. Throwaway emails can’t make accounts.');
       if (password.length < 8) return fail('Use at least 8 characters for your password.');
       if (password.length > 200) return fail('That password is too long.');
       const exists = await env.DB.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first();
-      if (exists) return fail('There’s already an account with that email — sign in instead.', 409);
+      if (exists) return fail('There’s already an account with that email. Sign in instead.', 409);
       const salt = randomToken(16);
       const acc = { id: randomToken(12), email, name: String(body.name || '').trim().slice(0, 40), data: null };
       await env.DB.prepare('INSERT INTO accounts (id, email, pass, salt, name, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .bind(acc.id, email, await hashPassword(password, salt), salt, acc.name, now, now).run();
       return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: true });
     }
-    if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('Too many tries for this account — please wait an hour and try again.', 429);
+    if (!(await authAllowed(request, env, 'authm:' + (await sha256(email)), 15))) return fail('Too many tries for this account. Please wait an hour and try again.', 429);
     if (password.length > 200) return fail('That email and password don’t match. Check them and try again.', 401);
     const acc = await env.DB.prepare('SELECT * FROM accounts WHERE email = ?').bind(email).first();
     const tried = await hashPassword(password, (acc && acc.salt) || 'no-account-salt'); // always hash, so a wrong email takes as long as a wrong password
     const good = !!(acc && acc.pass && sameText(tried, acc.pass));
     if (!good) {
-      if (acc && !acc.pass && acc.google) return fail('This account uses Google — tap “Continue with Google”.', 401);
+      if (acc && !acc.pass && acc.google) return fail('This account uses Google. Tap “Continue with Google”.', 401);
       return fail('That email and password don’t match. Check them and try again.', 401);
     }
     return ok({ token: await newSession(env, acc.id), account: publicAccount(acc), isNew: !acc.data, plan: await accountPlan(env, acc.id).catch(() => ({ plan: 'free', until: 0 })) });
@@ -1232,7 +1232,7 @@ async function adminOk(request, env) {
   await ensureSchema(env.DB);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown', hour = new Date().toISOString().slice(0, 13);
   const tries = await env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind('adm:' + ip, hour).first();
-  if (tries && tries.n >= 10) return { error: 'Too many wrong tries — wait an hour.', status: 429 };
+  if (tries && tries.n >= 10) return { error: 'Too many wrong tries. Wait an hour.', status: 429 };
   if (given && sameText(given, String(env.ADMIN_TOKEN))) return null;
   await countUse(env.DB, 'adm:' + ip, hour);
   return { error: 'wrong token', status: 401 };
@@ -1263,7 +1263,7 @@ async function stats(request, env) {
     all(`SELECT name, COUNT(*) AS n, COUNT(DISTINCT uid) AS users FROM events WHERE event = 'feature' AND day >= ? GROUP BY name ORDER BY n DESC LIMIT 40`, since),
     all(`SELECT word, SUM(n) AS n FROM words WHERE day >= ? GROUP BY word ORDER BY n DESC LIMIT 50`, since),
     all(`SELECT COALESCE(NULLIF(role,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
-    all(`SELECT COALESCE(NULLIF(grade,''),'—') AS k, COUNT(*) AS n FROM users WHERE role = 'student' GROUP BY k ORDER BY n DESC`),
+    all(`SELECT COALESCE(NULLIF(grade,''),'-') AS k, COUNT(*) AS n FROM users WHERE role = 'student' GROUP BY k ORDER BY n DESC`),
     all(`SELECT COALESCE(NULLIF(age,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
     all(`SELECT COALESCE(NULLIF(platform,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
     all(`SELECT substr(uid,1,8) AS id, opens, uses, first_day, last_day, role, grade, age FROM users ORDER BY opens + uses DESC LIMIT 25`),
@@ -1290,7 +1290,7 @@ export default {
     if (request.cf && request.cf.colo) lastColo = request.cf.colo;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
-      if (tooFast(request, url.pathname)) return json({ error: 'Too many requests — please wait a minute.' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
+      if (tooFast(request, url.pathname)) return json({ error: 'Too many requests. Please wait a minute.' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
       if (url.pathname === '/admin/plan' && (request.method === 'GET' || request.method === 'POST')) return await adminPlan(request, env, url);
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);

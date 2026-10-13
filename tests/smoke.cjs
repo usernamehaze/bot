@@ -395,7 +395,7 @@ test('flashcards: Cassie makes cards from an answer, spaced-repetition study, mi
     fakeGroq: (body) => ({ text: /Make flashcards/.test(JSON.stringify(body)) ? 'Here you go:\n' + CARDS : ANSWER }) });
   const a = await ask(page, 'Explain photosynthesis');
   await a.locator('.fc-make').click();
-  await page.waitForFunction(() => /3 cards — Study/.test(document.querySelector('.fc-make').textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => /3 cards: Study/.test(document.querySelector('.fc-make').textContent), null, { timeout: 10000 });
   expect(/Use only what the text says/.test(JSON.stringify(groqCalls.at(-1))) && /Chlorophyll/.test(JSON.stringify(groqCalls.at(-1))), 'Cassie makes the cards from that answer');
   // study: the first card's front, flip, then grade
   await a.locator('.fc-make').click();
@@ -2670,7 +2670,7 @@ test('Museum and games: famous paintings, a logic circuit, cracking a rule / reg
     const box = await page.locator('.lab-stage canvas').boundingBox(), top = 150, cx = box.width / 2, cy = top + (box.height - top) / 2, R = Math.max(30, Math.min(box.width * 0.4, (box.height - top) * 0.42));
     for (let k = 0; k < n; k++) { const a = -Math.PI / 2 + ((k + 0.5) / d) * Math.PI * 2; await page.mouse.click(box.x + cx + Math.cos(a) * R * 0.6, box.y + cy + Math.sin(a) * R * 0.6); }
   } else if (/calamansi/.test(q)) {
-    const [, total, a, bb] = q.match(/(\d+) mL of calamansi juice — (\d+) parts? syrup to (\d+) parts water/).map(Number), unit = total / (a + bb);
+    const [, total, a, bb] = q.match(/(\d+) mL of calamansi juice: (\d+) parts? syrup to (\d+) parts water/).map(Number), unit = total / (a + bb);
     await page.evaluate(([s1, w1]) => { const [rs, rw] = document.querySelectorAll('.gm-pour input[type=range]'); rs.value = s1; rs.dispatchEvent(new Event('input', { bubbles: true })); rw.value = w1; rw.dispatchEvent(new Event('input', { bubbles: true })); }, [a * unit, bb * unit]);
   } else {
     const [, from, to] = (await page.locator('.gm-recipe tr').first().innerText()).match(/For (\d+)\s+For (\d+)/).map(Number);
@@ -3527,6 +3527,29 @@ test('Android: Share → Cassie (text and a screenshot) opens the app with it', 
   await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
   await page.waitForSelector('.att-image img', { timeout: 10000 });
   expect(await page.locator('.att-image img').isVisible(), 'the shared screenshot is attached, ready to ask about');
+  await ctx.close();
+});
+
+test('no em or en dashes in anything people read (every page, label and message, and Cassie’s own answers)', async (b) => {
+  // 1. the source: every string a student can see, in the app, Labs, 3D views, landing page, extension and server
+  const U = require('./ui-strings.cjs');
+  const found = [];
+  for (const f of U.UI_FILES()) for (const x of U.uiStrings(f)) if (/[—–]/.test(x.text)) found.push(`${f}:${x.line} ${JSON.stringify(x.text.trim().slice(0, 80))}`);
+  expect(!found.length, `${found.length} em/en dashes in words people read:\n  ` + found.slice(0, 20).join('\n  '));
+  // 2. the pages as they show: app.html and index.html, their text and the labels people hover or hear
+  const shown = async (page) => page.evaluate(() => document.body.innerText + ' ' + [...document.querySelectorAll('[title],[placeholder],[aria-label],[alt]')]
+    .map((e) => ['title', 'placeholder', 'aria-label', 'alt'].map((a) => e.getAttribute(a) || '').join(' ')).join(' ') + ' ' + document.title);
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Photosynthesis — the way plants make food — happens in the leaves.\n— Plants need light\nWorld War I (1914–1918) changed maps. See the Michaelis–Menten curve—it bends.' }) });
+  expect(!/[—–]/.test(await shown(page)), 'app.html shows a dash: ' + (await shown(page)).match(/.{0,40}[—–].{0,40}/));
+  // 3. Cassie’s answers never show one either, even when the model writes them
+  const a = await ask(page, 'what is photosynthesis');
+  const said = await a.innerText();
+  expect(!/[—–]/.test(said), 'Cassie’s answer shows a dash: ' + said);
+  expect(/Photosynthesis, the way plants make food, happens/.test(said) && /1914-1918/.test(said) && /Michaelis-Menten/.test(said), 'the dashes became commas and hyphens: ' + said);
+  const land = await ctx.newPage();
+  await land.goto(APP.replace('app.html', 'index.html'));
+  await land.waitForLoadState('domcontentloaded');
+  expect(!/[—–]/.test(await shown(land)), 'index.html shows a dash: ' + (await shown(land)).match(/.{0,40}[—–].{0,40}/));
   await ctx.close();
 });
 

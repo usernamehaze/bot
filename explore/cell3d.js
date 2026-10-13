@@ -367,7 +367,7 @@ function createView() {
   root.setAttribute('aria-label', 'Explore 3D');
   root.setAttribute('tabindex', '-1');
   root.innerHTML = `
-    <canvas class="x3d-canvas" aria-label="3D cell — drag to turn, pinch or scroll to zoom, tap a part"></canvas>
+    <canvas class="x3d-canvas" aria-label="3D cell. Drag to turn, pinch or scroll to zoom, tap a part"></canvas>
     <div class="x3d-labels" aria-hidden="true"></div>
     <div class="x3d-top">
       <button type="button" class="x3d-btn x3d-close" aria-label="Close">×</button>
@@ -414,7 +414,7 @@ function createView() {
     <div class="x3d-loading">Building the cell…</div>
     <section class="x3d-sheet" hidden aria-live="polite">
       <button type="button" class="x3d-sheet-x" aria-label="Close">×</button>
-      <button type="button" class="x3d-sheet-x x3d-sheet-min" aria-label="Make the details small" aria-expanded="true" hidden>–</button>
+      <button type="button" class="x3d-sheet-x x3d-sheet-min" aria-label="Make the details small" aria-expanded="true" hidden>, </button>
       <div class="x3d-sheet-head"><span class="x3d-dot"></span><h3></h3><span class="x3d-sheet-sub">Tap to read what it is and does</span></div>
       <p class="x3d-path" hidden></p>
       <p class="x3d-like"></p>
@@ -625,7 +625,7 @@ function createView() {
     const mine = moreFor;
     el.hidden = false; el.classList.add('muted'); el.textContent = 'Cassie is looking it up…';
     const where = info.path.length ? `, in the ${info.path[info.path.length - 1].name.toLowerCase()}` : '';
-    opts.explain(`In two short sentences for a high-school student, say exactly what the ${info.name}${info.latin ? ` (${info.latin})` : ''} of the human body is — it is part of the ${info.system.toLowerCase()} system${where} — and what it does. Plain sentences only: no lists, no headings, no formatting, no greeting.`)
+    opts.explain(`In two short sentences for a high-school student, say exactly what the ${info.name}${info.latin ? ` (${info.latin})` : ''} of the human body is. It is part of the ${info.system.toLowerCase()} system${where}, and what it does. Plain sentences only: no lists, no headings, no formatting, no greeting.`)
       .then((text) => {
         text = String(text || '').replace(/[*_#`>]/g, '').replace(/\s+/g, ' ').trim();
         if (!text) throw new Error('empty');
@@ -778,7 +778,7 @@ function createView() {
     const b = e.target.closest('[data-act]');
     if (b && inBody && bodyPart) {
       const p = bodyPart;
-      if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${p.name}${p.latin ? ` (${p.latin})` : ''} — part of the ${p.system.toLowerCase()} system${p.path.length ? `, in the ${p.path[p.path.length - 1].name.toLowerCase()}` : ''} — simply: where it is in the body, what it does, and one fact that helps me remember it. Then ask me one quick question to check I understood.`, { part: p.name, cell: 'body' });
+      if (b.dataset.act === 'ask' && opts.onAsk) opts.onAsk(`Explain the ${p.name}${p.latin ? ` (${p.latin})` : ''}: part of the ${p.system.toLowerCase()} system${p.path.length ? `, in the ${p.path[p.path.length - 1].name.toLowerCase()}` : ''}: simply: where it is in the body, what it does, and one fact that helps me remember it. Then ask me one quick question to check I understood.`, { part: p.name, cell: 'body' });
       if (b.dataset.act === 'quiz' && opts.onQuiz) opts.onQuiz(`the ${p.system.toLowerCase()} system of the human body (its main parts, where they are and what they do)`, { cell: 'body' });
       if (b.dataset.act === 'hide') { body.hide(p.index); showAllEl.hidden = false; }
       return;
@@ -913,7 +913,7 @@ function createView() {
   function setSheetMini(on) {
     sheet.classList.toggle('mini', on);
     const m = sheet.querySelector('.x3d-sheet-min');
-    m.textContent = on ? '+' : '–';
+    m.textContent = on ? '+' : '-';
     m.setAttribute('aria-expanded', String(!on));
     m.setAttribute('aria-label', on ? 'Show the details' : 'Make the details small');
   }

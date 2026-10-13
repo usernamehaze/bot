@@ -220,7 +220,7 @@
       const pad = 12 * u, tagH = s.n ? 22 * u : 0;
       const { fs, lines } = fitText(measure, s.text || '', w - pad * 2, h - pad * 2 - tagH, Math.round(30 * u), Math.max(9, Math.round(12 * u)), 600);
       lines.forEach((ln, i) => out.push({ tool: 'text', x: pad, y: pad + i * fs * 1.22, size: fs, color: ink, text: ln, weight: 600 }));
-      if (s.n) out.push({ tool: 'text', x: pad, y: h - pad - 14 * u, size: Math.round(14 * u), color: mute, text: '— ' + s.n, weight: 600 });
+      if (s.n) out.push({ tool: 'text', x: pad, y: h - pad - 14 * u, size: Math.round(14 * u), color: mute, text: '- ' + s.n, weight: 600 });
     } else {
       const back = face, pad = 14 * u, top = 26 * u;
       out.push({ tool: 'text', x: pad, y: pad * 0.8, size: Math.round(13 * u), color: mute, text: back ? 'ANSWER' : 'QUESTION', weight: 700 });
@@ -270,7 +270,7 @@
   }
 
   // Quick shapes to draw on: built around (0, 0), then placed where the student taps
-  const TEMPLATES = [['grid', 'Coordinate grid', [660, 660]], ['venn2', 'Venn diagram — 2 sets', [700, 480]], ['venn3', 'Venn diagram — 3 sets', [640, 620]], ['flow', 'Flowchart boxes', [560, 640]], ['gates', 'Logic gates', [740, 470]]];
+  const TEMPLATES = [['grid', 'Coordinate grid', [660, 660]], ['venn2', 'Venn diagram: 2 sets', [700, 480]], ['venn3', 'Venn diagram: 3 sets', [640, 620]], ['flow', 'Flowchart boxes', [560, 640]], ['gates', 'Logic gates', [740, 470]]];
   function template(kind, ink, soft) {
     const it = [];
     const pen = (pts, c = ink, size = 4) => it.push({ tool: 'pen', color: c, size, points: pts });
@@ -365,13 +365,13 @@
         <div class="csk-room" hidden aria-live="polite"></div>
         <div class="csk-note" hidden></div>
         <div class="csk-tools">
-          <button class="csk-btn" data-tool="select" title="Move — drag sticky notes and cards, tap a card to flip it">${svg('select')}</button>
+          <button class="csk-btn" data-tool="select" title="Move. Drag sticky notes and cards, tap a card to flip it">${svg('select')}</button>
           <button class="csk-btn on" data-tool="pen" title="Pen">${svg('pen')}</button>
           <button class="csk-btn" data-tool="hl" title="Highlighter">${svg('hl')}</button>
           <button class="csk-btn" data-tool="line" title="Straight line">${svg('line')}</button>
           <button class="csk-btn" data-tool="text" title="Type text">${svg('text')}</button>
           <button class="csk-btn" data-tool="eraser" title="Eraser">${svg('eraser')}</button>
-          <button class="csk-btn" data-tool="laser" title="Laser pointer — point at something; it fades in 2 seconds">${svg('laser')}</button>
+          <button class="csk-btn" data-tool="laser" title="Laser pointer: point at something; it fades in 2 seconds">${svg('laser')}</button>
           <span class="csk-sep"></span>
           <button class="csk-btn" data-tool="note" title="Sticky notes">${svg('note')}</button>
           <button class="csk-btn" data-act="cards" title="Flashcards on the board">${svg('cards')}</button>
@@ -385,7 +385,7 @@
           <button class="csk-btn" data-act="redo" title="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="clear" title="Clear your drawing">${svg('trash')}</button>
           <button class="csk-btn" data-act="grid" title="Graph paper">${svg('grid')}</button>
-          ${opts.room ? '' : `<button class="csk-btn" data-act="pic" title="Draw on a picture — or paste one with Ctrl+V">${svg('image')}</button>`}
+          ${opts.room ? '' : `<button class="csk-btn" data-act="pic" title="Draw on a picture, or paste one with Ctrl+V">${svg('image')}</button>`}
           <input type="file" accept="image/*" class="csk-hidden csk-picfile">
           <input type="file" accept=".json,application/json" class="csk-hidden csk-boardfile">
         </div>
@@ -618,7 +618,7 @@
     // sticky notes sorted into one column per colour (the "cluster grid")
     function tidyNotes() {
       const notes = strokes.filter((s) => s.tool === 'note').sort((a, b) => (a.z || 0) - (b.z || 0));
-      if (!notes.length) { toast('No sticky notes yet — tap the board to add one'); return; }
+      if (!notes.length) { toast('No sticky notes yet. Tap the board to add one'); return; }
       const order = NOTE_COLORS.map((c) => c[0]), groups = new Map();
       notes.forEach((s) => { const key = order.includes(s.color) ? s.color : 'other'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(s); });
       const keys = [...groups.keys()].sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99);
@@ -915,7 +915,7 @@
       let decks = [];
       try { decks = (opts.decks ? opts.decks() : []).filter((d) => d && d.cards && d.cards.length).slice(0, 12); } catch (e) { decks = []; }
       openPop('cards', `<h4>Flashcards on the board</h4><p>Paste a deck: one card per line, front and back split by a dash, tab or colon. Everyone can flip and move them.</p>
-        <textarea class="csk-deck" aria-label="Cards to drop" placeholder="Mitochondria – makes the cell’s energy (ATP)&#10;Osmosis – water moving across a membrane"></textarea>
+        <textarea class="csk-deck" aria-label="Cards to drop" placeholder="Mitochondria, makes the cell’s energy (ATP)&#10;Osmosis, water moving across a membrane"></textarea>
         <div class="csk-row"><button class="csk-btn primary" data-pop="drop">Drop these cards</button></div>
         ${opts.makeCards ? '<div class="csk-or">or let Cassie write them</div><div class="csk-row"><input class="csk-topic" aria-label="Topic" placeholder="A topic, e.g. the water cycle"><button class="csk-btn" data-pop="make">Make with Cassie</button></div>' : ''}
         ${decks.length ? `<div class="csk-or">or one of your decks</div><div class="csk-list">${decks.map((d, i) => `<button class="csk-btn" data-pop="deck" data-i="${i}">${esc(d.name)} · ${d.cards.length} cards</button>`).join('')}</div>` : ''}
@@ -934,7 +934,7 @@
       openPop('save', `<h4>Save the board</h4><div class="csk-list">
         <button class="csk-btn" data-pop="png">Picture (PNG)</button>
         <button class="csk-btn" data-pop="pdf">PDF${plus}</button>
-        <button class="csk-btn" data-pop="json">Board file (.json) — open it again later${plus}</button>
+        <button class="csk-btn" data-pop="json">Board file (.json). Open it again later${plus}</button>
         <button class="csk-btn" data-pop="open">Open a board file…${plus}</button></div>`);
     }
     function popErr(msg) { const el = pop && pop.querySelector('.csk-poperr'); if (el) { el.hidden = false; el.textContent = msg; } }
@@ -944,7 +944,7 @@
       if (a === 'tidy') { closePop(); tidyNotes(); return; }
       if (a === 'drop') {
         const list = parseDeck(pop.querySelector('textarea').value);
-        if (!list.length) { popErr('Put one card per line, like “Osmosis – water moving across a membrane”.'); return; }
+        if (!list.length) { popErr('Put one card per line, like “Osmosis: water moving across a membrane”.'); return; }
         closePop(); dropCards(list); return;
       }
       if (a === 'deck') { const d = (pop._decks || [])[+b.dataset.i]; closePop(); if (d) dropCards(d.cards); return; }
@@ -954,9 +954,9 @@
         b.disabled = true; b.textContent = 'Cassie is writing them…';
         try {
           const list = await opts.makeCards(topic);
-          if (!list || !list.length) throw new Error('Cassie couldn’t make cards for that — try another topic.');
+          if (!list || !list.length) throw new Error('Cassie couldn’t make cards for that. Try another topic.');
           closePop(); dropCards(list);
-        } catch (err) { if (pop) { b.disabled = false; b.textContent = 'Make with Cassie'; popErr((err && err.message) || 'Couldn’t reach Cassie — try again.'); } }
+        } catch (err) { if (pop) { b.disabled = false; b.textContent = 'Make with Cassie'; popErr((err && err.message) || 'Couldn’t reach Cassie. Try again.'); } }
         return;
       }
       if (a === 'tpl') { closePop(); setTool('place'); pendingTpl = b.dataset.k; toast('Tap the board where it should go'); return; }
@@ -1043,7 +1043,7 @@
       if (t.dataset.pop) { popAct(t); return; }
       if (t.dataset.tool) {
         // tap a tool that's already on to switch it off: back to Move, so a drag never draws by accident
-        if (t.dataset.tool === tool && tool !== 'select') { setTool('select'); closePop(); toast('Drawing is off — drag notes and cards freely, or tap a tool to draw again'); return; }
+        if (t.dataset.tool === tool && tool !== 'select') { setTool('select'); closePop(); toast('Drawing is off. Drag notes and cards freely, or tap a tool to draw again'); return; }
         setTool(t.dataset.tool);
         if (tool === 'hl' && (color === '#1b1b1d' || color === '#ffffff')) { color = '#f2c200'; syncInk(); }
         if (tool === 'note') { if (pop && pop.dataset.kind === 'note') closePop(); else notePop(); } else closePop();
@@ -1088,7 +1088,7 @@
           const reply = await opts.onCheck(snapshot(), parts());
           if (reply) showNote({ reply });
         } catch (err) {
-          showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' });
+          showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie. Try again.' });
         } finally { t.disabled = false; label.textContent = was; }
       }
     });
@@ -1188,7 +1188,7 @@
           if (out && typeof out === 'object' && out.draw) draw(out.draw);
           showNote({ reply: reply || (out && out.draw ? 'Drawn on your board ✏️' : '(no reply)') }); input.value = '';
         }
-        catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie — try again.' }); }
+        catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie. Try again.' }); }
         finally { btn.disabled = false; btn.textContent = 'Ask'; }
       });
       askForm.addEventListener('keydown', (e) => e.stopPropagation());

@@ -40,11 +40,11 @@ const safeImg = (u) => (/^https:\/\/upload\.wikimedia\.org\//.test(u || '') ? u 
 
 export const atlasLab = {
   id: 'atlas', name: 'World atlas', subject: 'geography', topic: 'world geography: countries, capitals, populations, languages and their history',
-  blurb: 'Tap any country for its flag, capital, population, languages and a short history — or search any place in the world.',
+  blurb: 'Tap any country for its flag, capital, population, languages and a short history, or search any place in the world.',
   words: 'atlas world map countries flags capitals population geography history places cities search',
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M14 12l4 4-2 5 4 3M32 30l3 4"/>',
   tries: ['Look up a country’s flag, capital and population', 'Find a country with more than 200 million people', 'Search a place that isn’t a country (a city, a volcano…)'],
-  hints: ['Tap any country on the map — your own, maybe — or type its name in the search box.', 'Try the biggest countries in Asia, the Americas or Africa — there are only a few above 200 million.', 'Type a city, a mountain or a landmark in the search box, then tap “Search places”.'],
+  hints: ['Tap any country on the map, your own, maybe, or type its name in the search box.', 'Try the biggest countries in Asia, the Americas or Africa. There are only a few above 200 million.', 'Type a city, a mountain or a landmark in the search box, then tap “Search places”.'],
   about: 'Country facts come from the open world-countries data (ODbL) and populations from the World Bank (CC BY 4.0; for the Philippines, the PSA’s official 2024 census), stored with Cassie so they work offline; when you’re online Cassie also asks the World Bank for its newest figure, and the year is always shown. Populations are estimates.\nThe history and place summaries come from Wikipedia (CC BY-SA) and are shown with a link to the full article. Map: Natural Earth (public domain). Borders are shown as drawn in that data and are not a statement about any disputed territory.',
   mount({ stage, panel, api }) {
     let data = [], world = null, sel = null, place = null, vk = 1, vx = 0, vy = 0, proj = null;
@@ -110,7 +110,7 @@ export const atlasLab = {
       const neighbours = (c.bor || []).map((b) => byC3.get(b)).filter(Boolean);
       card.innerHTML = `<div class="atlas-head">${c.f ? `<img class="atlas-flag" src="${flagUrl(c)}" alt="Flag of ${esc(c.n)}">` : ''}<div><h3>${esc(c.n)}</h3><p class="space-sub">${esc(c.o)}</p></div></div>
         <dl class="lab-stats">
-          ${fact('Capital', esc((c.cap || []).join(', ') || '—'))}
+          ${fact('Capital', esc((c.cap || []).join(', ') || '-'))}
           ${fact('Population', c.pop ? `<span class="atlas-pop">${fmtPop(c.pop[0])} <small>(${c.pop[1]}, ${esc(c.pop[2] || 'World Bank')})</small></span>` : 'not in the World Bank data')}
           ${fact('Area', c.area ? `${Math.round(c.area).toLocaleString()} km²` : '')}
           ${fact('Where', esc([c.sub || c.reg, c.land ? 'landlocked (no coast)' : ''].filter(Boolean).join(' · ')))}
@@ -118,7 +118,7 @@ export const atlasLab = {
           ${fact('Money', esc((c.cur || []).join(', ')))}
           ${fact('People are called', esc(c.dem))}
           ${fact('Calling code · web', esc([c.call, (c.tld || [])[0]].filter(Boolean).join(' · ')))}
-          ${fact('UN member', c.un ? 'yes' : c.ind ? 'no' : 'no — a territory')}
+          ${fact('UN member', c.un ? 'yes' : c.ind ? 'no' : 'no: a territory')}
         </dl>
         ${neighbours.length ? `<h4 class="atlas-h4">Neighbours</h4><div class="atlas-chips">${neighbours.map((n) => `<button type="button" data-c3="${esc(n.c3)}">${n.f ? `<img src="${flagUrl(n)}" alt="">` : ''}${esc(n.n)}</button>`).join('')}</div>` : ''}
         <h4 class="atlas-h4">History</h4><div class="atlas-wiki"><p class="lab-note">Looking it up on Wikipedia…</p></div>`;
@@ -140,7 +140,7 @@ export const atlasLab = {
       if (G) { G.select(null); G.pin(null); }
       card.innerHTML = `<p class="lab-note">Searching Wikipedia for “${esc(q)}”…</p>`;
       let titles = [];
-      try { titles = await wikiSearch(q); } catch (e) { card.innerHTML = '<p class="lab-err">Searching places needs the internet. Countries work offline — try a country name.</p>'; return; }
+      try { titles = await wikiSearch(q); } catch (e) { card.innerHTML = '<p class="lab-err">Searching places needs the internet. Countries work offline. Try a country name.</p>'; return; }
       if (!titles.length) { card.innerHTML = `<p class="lab-note">Nothing found for “${esc(q)}”. Check the spelling, or try a bigger place nearby.</p>`; return; }
       card.innerHTML = `<h4 class="atlas-h4">Places called “${esc(q)}”</h4><div class="atlas-results">${titles.map((t) => `<button type="button" data-title="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
       if (titles.length === 1) showPlace(titles[0]);
@@ -149,7 +149,7 @@ export const atlasLab = {
       card.innerHTML = `<p class="lab-note">Opening “${esc(title)}”…</p>`;
       let w = null;
       try { w = await wikiSummary(title); } catch (e) { w = null; }
-      if (!w) { card.innerHTML = '<p class="lab-err">That page couldn’t be loaded — try another result.</p>'; return; }
+      if (!w) { card.innerHTML = '<p class="lab-err">That page couldn’t be loaded. Try another result.</p>'; return; }
       place = w.at ? { name: w.title, at: w.at } : null; sel = null;
       if (place) { const inC = world && countryAt(w.at[1], w.at[0]); zoomToPoint(w.at, inC ? 4 : 3); }
       cv.redraw();
@@ -157,7 +157,7 @@ export const atlasLab = {
       showPeek('', w.title, w.kind);
       const img = safeImg(w.image);
       card.innerHTML = `${img ? `<img class="atlas-photo" src="${esc(img)}" alt="${esc(w.title)}">` : ''}<h3>${esc(w.title)}</h3>${w.kind ? `<p class="space-sub">${esc(w.kind)}</p>` : ''}<p>${esc(w.text)}</p>
-        ${w.at ? `<p class="lab-note">📍 ${num(Math.abs(w.at[0]), 4)}° ${w.at[0] >= 0 ? 'N' : 'S'}, ${num(Math.abs(w.at[1]), 4)}° ${w.at[1] >= 0 ? 'E' : 'W'} — pinned on the map</p>` : '<p class="lab-note">Wikipedia has no single location for this, so it isn’t pinned.</p>'}
+        ${w.at ? `<p class="lab-note">📍 ${num(Math.abs(w.at[0]), 4)}° ${w.at[0] >= 0 ? 'N' : 'S'}, ${num(Math.abs(w.at[1]), 4)}° ${w.at[1] >= 0 ? 'E' : 'W'}: pinned on the map</p>` : '<p class="lab-note">Wikipedia has no single location for this, so it isn’t pinned.</p>'}
         ${safeUrl(w.url) ? `<a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">Read more on Wikipedia ↗</a>` : ''}`;
       const inside = w.at && world && countryAt(w.at[1], w.at[0]), c = inside && byN3.get(String(inside.id));
       if (c) { const b = el('button', 'lab-btn', `About ${c.n} ›`); b.type = 'button'; b.addEventListener('click', () => choose(c)); card.appendChild(b); }
@@ -261,7 +261,7 @@ export const atlasLab = {
       // (the map's ids have no leading zeros in a few files; keep both)
       d.forEach((c) => { if (c.n3) byN3.set(c.n3, c); });
       cv.redraw(); suggest(); showView();
-    }).catch(() => { card.innerHTML = '<p class="lab-err">The atlas couldn’t load — check your internet and open it again.</p>'; });
+    }).catch(() => { card.innerHTML = '<p class="lab-err">The atlas couldn’t load. Check your internet and open it again.</p>'; });
     return {
       state: () => (sel ? `looking at ${sel.n} in the world atlas: capital ${(sel.cap || []).join(', ')}, population ${sel.pop ? `${fmtPop(sel.pop[0])} (${sel.pop[1]})` : 'unknown'}, ${sel.sub || sel.reg}, languages ${(sel.lang || []).join(', ')}` : place ? `looking at ${place.name} in the world atlas` : `looking at the world ${G ? 'globe' : 'map'} in the atlas`),
       destroy: () => { dead = true; if (G) G.destroy(); cv.destroy(); },

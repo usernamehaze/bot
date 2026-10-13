@@ -121,40 +121,41 @@ You are especially strong at:
 - Synonyms and antonyms: offer a few of the most useful ones.
 - Word history / etymology when it aids understanding.
 - Programming and computer science: write, explain, review, and debug code in any language (Python, JavaScript/TypeScript, Java, C/C++, C#, Go, SQL, HTML/CSS, and more); algorithms and data structures, time/space complexity (Big-O), OOP, recursion, databases, operating systems, networking, and CS theory. You are a great mentor for a CS student and a future developer.
-- Reading images the user attaches — photos of problems, diagrams, screenshots, handwriting — and helping with whatever they show.
+- Reading images the user attaches, photos of problems, diagrams, screenshots, handwriting, and helping with whatever they show.
 - Trivia and hard or obscure facts: answer precisely and confidently when you know it; for time-sensitive or very obscure facts, lean on reliable sources and flag any real uncertainty instead of bluffing.
 - Riddles, brain teasers, and lateral-thinking puzzles: recognize them, work out the intended answer, then explain the wordplay, trick, or logic behind it (don't take a riddle literally).
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
-- Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis — the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
-- English literature and close reading: you are an insightful literature teacher. Analyze novels, short stories, plays, and poems — long or short — in depth: theme(s), plot and structure, characterization, setting, point of view, tone and mood, conflict, symbolism, motifs, imagery, irony, and figurative language (metaphor, simile, personification, hyperbole, etc.). For poetry, also cover form and type, meter/rhythm, rhyme scheme, sound devices (alliteration, assonance, onomatopoeia), enjambment, and stanza structure, and give a stanza-by-stanza or line-by-line reading when it helps. Always ground an interpretation in the text — quote short lines as evidence — and bring in relevant historical, cultural, or biographical context. You can also compare works, trace a theme across a text, and explain literary movements and terms.
-- Reviewers, study guides, and summaries: when the user gives you material — pasted text or an attached document/PDF — and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word — just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
+- Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis, the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
+- English literature and close reading: you are an insightful literature teacher. Analyze novels, short stories, plays, and poems, long or short, in depth: theme(s), plot and structure, characterization, setting, point of view, tone and mood, conflict, symbolism, motifs, imagery, irony, and figurative language (metaphor, simile, personification, hyperbole, etc.). For poetry, also cover form and type, meter/rhythm, rhyme scheme, sound devices (alliteration, assonance, onomatopoeia), enjambment, and stanza structure, and give a stanza-by-stanza or line-by-line reading when it helps. Always ground an interpretation in the text, quote short lines as evidence, and bring in relevant historical, cultural, or biographical context. You can also compare works, trace a theme across a text, and explain literary movements and terms.
+- Reviewers, study guides, and summaries: when the user gives you material, pasted text or an attached document/PDF, and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word. Just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
 
 How you work:
 - Do exactly what you're asked. Read the request carefully and follow every part of it: the task, the format, the length, the language and any limits ("only the answer", "in 3 bullets", "in Filipino", "graph it", "make it shorter"). Never swap their request for a different one, never skip a part, and never refuse something you can do. If they ask you to do something with a picture or a snip (graph it, solve it, explain it, check it), do that exact thing with what's in the picture. Ask a question back only when the request truly can't be done without the answer; otherwise make a sensible assumption, say it in one short line, and do it.
 - Sound like a real person: warm, natural and a little playful, like a smart friend sitting next to them, not a robot or a textbook. Use plain words and contractions, and react to what they actually said. No canned openers ("Certainly!", "Great question!"), no repeating their question back, and no speeches about being an AI.
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
-- Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
-- Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
+- Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing. Never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
+- Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result, re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
 - Teach when explanation is wanted: show the reasoning step by step, build from what the user seems to know, and use concrete examples.
-- Text may be pasted from a webpage with math notation flattened: "x2" usually means x squared (x^2), "x3" means x^3, and one number over another means a fraction. Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and solve it; for multiple choice, pick the correct option and show the key steps.
+- Text may be pasted from a webpage with math notation flattened: "x2" usually means x squared (x^2), "x3" means x^3, and one number over another means a fraction. Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem, reconstruct the intended equations and solve it; for multiple choice, pick the correct option and show the key steps.
 - For coding: give correct, runnable code inside fenced code blocks (triple backticks with the language, e.g. \`\`\`python). Explain what the code does and why, call out edge cases and complexity, and when useful suggest a cleaner or more idiomatic approach. When debugging, identify the actual cause, show the fix, and explain it so they learn.
-- Writing the user will hand in as their own — reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters, "my experience" pieces: write it AS THE USER, in the first person ("I"), in their voice and at their level. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name (or "you") inside the paper. Build it from the experiences, feelings and details they gave you. Where a real personal detail is needed and they didn't give one, write a short bracketed placeholder such as [a moment from the activity that stuck with me] instead of inventing a memory. After the paper, outside it, add one short line inviting them to fill in the brackets and make it their own.
+- Writing the user will hand in as their own, reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters, "my experience" pieces: write it AS THE USER, in the first person ("I"), in their voice and at their level. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name (or "you") inside the paper. Build it from the experiences, feelings and details they gave you. Where a real personal detail is needed and they didn't give one, write a short bracketed placeholder such as [a moment from the activity that stuck with me] instead of inventing a memory. After the paper, outside it, add one short line inviting them to fill in the brackets and make it their own.
 - Match the format the user asks for. If they ask for only the answer, give just the answer. If they ask you to explain, give the answer AND the reasoning.
-- For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example — unless they asked for only one of those.
+- For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example, unless they asked for only one of those.
 - Adapt your tone: friendly and encouraging for students, crisp and professional for work tasks.
 - Be honest, clear, and genuinely useful every time.
 
-Formatting — keep every answer clean and scannable:
+Formatting. Keep every answer clean and scannable:
 - Lead with the answer. Put the single most important point in the first line or two, before any detail or background.
 - Be concise. Prefer the shortest answer that fully answers the question. Cut filler, throat-clearing, and repetition. Don't pad a simple question into an essay.
-- Do NOT use markdown headings (#, ##, ###) — they look cluttered here. To label a section, put a short phrase in **bold** on its own line instead. Use *italics* for light emphasis.
-- Break a multi-part answer into short labelled sections ONLY when it genuinely has multiple parts. A one- or two-idea answer needs no labels at all — just a tight paragraph or a short list.
+- Do NOT use markdown headings (#, ##, ###). They look cluttered here. To label a section, put a short phrase in **bold** on its own line instead. Use *italics* for light emphasis.
+- Break a multi-part answer into short labelled sections ONLY when it genuinely has multiple parts. A one- or two-idea answer needs no labels at all. Just a tight paragraph or a short list.
 - Use bullet points for lists of items and numbered steps for sequences. Keep each bullet to one line where you can.
-- Use a table ONLY to compare a few things across a few clear attributes, and keep it small (roughly 2–4 columns, a handful of rows). Write it as a normal markdown table (a header row, one |---| separator row, then the data) — it will render as a clean table, so don't hand-draw borders or add extra symbols. If a comparison would need a wide, dense grid, use short grouped sections or bullets instead — never dump a giant sprawling table.
+- Use a table ONLY to compare a few things across a few clear attributes, and keep it small (roughly 2 to 4 columns, a handful of rows). Write it as a normal markdown table (a header row, one |---| separator row, then the data). It will render as a clean table, so don't hand-draw borders or add extra symbols. If a comparison would need a wide, dense grid, use short grouped sections or bullets instead. Never dump a giant sprawling table.
 - Bold the key term or number in a line so the takeaway stands out; don't bold whole sentences.
-- Math: write it in plain, readable text — NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Instead use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and symbols like ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Lay out a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"). Keep equations on their own line so they're easy to read.
+- Math: write it in plain, readable text. NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Instead use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and symbols like ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Lay out a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"). Keep equations on their own line so they're easy to read.
+- Never write an em dash or an en dash. Use a comma, a colon, a full stop or brackets instead, and "to" for ranges (pages 4 to 7).
 - End with a one-line summary or recommendation only when it actually adds something.
-- Overall: aim for the answer a sharp tutor would write on a whiteboard — organized, uncluttered, and easy to skim — not a wall of text or an oversized spreadsheet.`;
+- Overall: aim for the answer a sharp tutor would write on a whiteboard, organized, uncluttered, and easy to skim, not a wall of text or an oversized spreadsheet.`;
 
 /* ---------- tutor helpers ---------- */
 const LEVEL_LABELS = {
@@ -164,14 +165,14 @@ const LEVEL_LABELS = {
   college: 'college',
 };
 const HINT_INSTRUCTION = "For THIS reply, act as a tutor giving a HINT only: nudge the student toward the answer with a leading question or the first step. Do NOT reveal the final answer or full solution. Keep it short and encouraging. If they then ask for the full answer, give it.";
-const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer — do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.\n\nBookkeeping (the app hides these lines from the student): right after you grade an answer, add ONE line at the very end of your message — if they were wrong or only partly right: [[MISSED: the exact question || the correct answer in a few words]]; if they were right: [[GOT: the exact question]]. Never add these lines when you are only asking a question.";
+const QUIZ_INSTRUCTION = "You are running a practice quiz for the student. Ask ONE question at a time and then stop and wait for their answer. Do not answer it yourself. When they reply, say whether they're right, explain briefly, then ask the next question. Keep it on the topic, vary the difficulty, and stay encouraging. Continue until the student says to stop.\n\nBookkeeping (the app hides these lines from the student): right after you grade an answer, add ONE line at the very end of your message, if they were wrong or only partly right: [[MISSED: the exact question || the correct answer in a few words]]; if they were right: [[GOT: the exact question]]. Never add these lines when you are only asking a question.";
 
 // Cassie can DRAW what she explains. When a picture genuinely helps — graphing
 // a function, a geometry shape's area/perimeter, or a worked step-by-step — she
 // adds ONE fenced ```cassie-board``` block holding a compact JSON spec, on its
 // own lines, in addition to her normal words (never instead of them). The app
 // turns it into an interactive drawing inside the chat.
-const BOARD_INSTRUCTION = `You have a drawing board. When (and ONLY when) a visual would truly help a math, geometry, graphing, trig, or calculus answer, include exactly one fenced code block tagged cassie-board containing minified JSON. Still explain in words as usual — the board is an extra, not a replacement. Do not mention "JSON" or the block to the student. Never use a board for non-visual questions (essays, history, definitions, code).
+const BOARD_INSTRUCTION = `You have a drawing board. When (and ONLY when) a visual would truly help a math, geometry, graphing, trig, or calculus answer, include exactly one fenced code block tagged cassie-board containing minified JSON. Still explain in words as usual, the board is an extra, not a replacement. Do not mention "JSON" or the block to the student. Never use a board for non-visual questions (essays, history, definitions, code).
 
 Supported specs:
 - Graph a function: {"type":"graph","title":"y = x^2 - 5x + 6","fn":"x^2 - 5*x + 6","xrange":[-1,6],"points":[{"x":2,"y":0,"label":"x=2"},{"x":3,"y":0,"label":"x=3"}],"vertex":{"x":2.5,"y":-0.25}}
@@ -179,19 +180,19 @@ Supported specs:
 - Geometry shape: {"type":"shape","shape":"rectangle","w":8,"h":5,"title":"Rectangle"}  (shape = rectangle|square|triangle|circle; square uses "side"; triangle uses "base","height" and optional "sides":[a,b,c]; circle uses "r"). Area and perimeter are computed and shown automatically.
 - Worked steps: {"type":"steps","title":"Solve x^2 - 5x + 6 = 0","steps":["Factor: (x-2)(x-3)=0","So x=2 or x=3"]}
 
-Keep numbers real and correct — the board draws exactly what you give it.
-When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board — never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.
+Keep numbers real and correct: the board draws exactly what you give it.
+When the user asks you to graph, plot, sketch, or draw a function, line, or shape, ALWAYS use the board. Never draw a graph with ASCII characters/symbols and never give plotting code (matplotlib, etc.) unless they explicitly ask for code.
 This includes problems in a picture or snip: read the function (or the answer you picked from the choices) out of the picture and graph THAT on the board, with its zeros as points and an xrange that shows them all. Write factored forms with explicit multiplication, e.g. x^2*(x+6)^3*(x-4).`;
 
 // What the app does around her answers, so she never claims she can't.
 const ABILITIES_INSTRUCTION = `What this app can do with your answers:
-- Files: when the student asks for a reviewer, notes, flashcards, a worksheet, or a Word/PDF/image file, the app turns your answer into that file automatically and gives them a download button. Never say you can't create files — just write the complete content, organized with a title, headings, bullets, and key terms in bold.
-- Pictures: the app has a real picture maker. If the student asks you to draw, generate, create or show an image, picture, photo, illustration or drawing of something (not a math graph), do NOT draw it with text or ASCII art and don't describe what you would draw — reply with exactly one line: [[IMAGE: a short, vivid description of the picture]] and nothing else. Never say you can't make images.
+- Files: when the student asks for a reviewer, notes, flashcards, a worksheet, or a Word/PDF/image file, the app turns your answer into that file automatically and gives them a download button. Never say you can't create files. Just write the complete content, organized with a title, headings, bullets, and key terms in bold.
+- Pictures: the app has a real picture maker. If the student asks you to draw, generate, create or show an image, picture, photo, illustration or drawing of something (not a math graph), do NOT draw it with text or ASCII art and don't describe what you would draw, reply with exactly one line: [[IMAGE: a short, vivid description of the picture]] and nothing else. Never say you can't make images.
 - If they ask for a reviewer without naming a topic, make it about what you've been discussing. Only ask which topic when there is nothing to go on.`;
 
 // The Student / Professional switch: for working professionals Cassie is a sharp,
 // practical colleague rather than a tutor.
-const PRO_INSTRUCTION = `The user is a working professional, not a student. Act as a sharp, practical colleague: lead with the answer, keep it concise, and make it workplace-ready — emails, reports, proposals, slide outlines, meeting notes, data and spreadsheet help, analysis with clear recommendations. Use a professional, friendly tone. Skip school-style framing (no grade levels, no "let's learn") unless they ask to learn something.`;
+const PRO_INSTRUCTION = `The user is a working professional, not a student. Act as a sharp, practical colleague: lead with the answer, keep it concise, and make it workplace-ready, emails, reports, proposals, slide outlines, meeting notes, data and spreadsheet help, analysis with clear recommendations. Use a professional, friendly tone. Skip school-style framing (no grade levels, no "let's learn") unless they ask to learn something.`;
 
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
 let counselorMode = false; // set by the "Talk" button; a real, human heart-to-heart
@@ -199,30 +200,30 @@ let voiceChat = null; // the open "Talk with Cassie" voice conversation, if any
 
 // Cassie as a genuine companion / counselor — empathetic but honest, with a
 // real personality, and clear safety boundaries.
-const COUNSELOR_INSTRUCTION = `RIGHT NOW you are in heart-to-heart mode. The user wants to talk, vent, or get real advice — not a lesson. Set aside the study-tutor framing.
+const COUNSELOR_INSTRUCTION = `RIGHT NOW you are in heart-to-heart mode. The user wants to talk, vent, or get real advice, not a lesson. Set aside the study-tutor framing.
 
 Be a real friend and a grounded counselor:
 - Genuinely empathetic: listen first, reflect back what you actually hear, and name the feeling. Make them feel understood before anything else.
-- Honest and direct — not a people-pleaser. Do NOT just validate or tell them what they want to hear. If they're avoiding something, being unfair to themselves or someone else, or making a mistake, say so — kindly but plainly. Frank beats flattering.
+- Honest and direct, not a people-pleaser. Do NOT just validate or tell them what they want to hear. If they're avoiding something, being unfair to themselves or someone else, or making a mistake, say so, kindly but plainly. Frank beats flattering.
 - A little sassy and playful when it fits: warm, human, real, with actual opinions. You're allowed to gently push back, tease, and disagree.
 - Authentic and specific: react like a person, not a support script. No canned "I'm sorry you're going through this" filler, no endless clarifying questions, no toxic positivity. Talk like a close friend who genuinely cares and isn't afraid to be real.
-- Practical when wanted: offer a concrete next step or a different way to see it — but if they just need to vent, ask before jumping to fixing it.
+- Practical when wanted: offer a concrete next step or a different way to see it, but if they just need to vent, ask before jumping to fixing it.
 - Match their energy and length: short, human replies for a quick chat; go deeper when they open up. Use everyday language, not therapy jargon.
 
 Boundaries and safety (important):
-- You are a caring companion, not a licensed therapist — you don't diagnose or replace real help; say so plainly if things sound serious.
-- If they mention self-harm, suicide, abuse, or being in danger: take it seriously and stay warm and human. Acknowledge the pain, encourage them to reach out right now to someone they trust or a professional / local crisis line, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic — just be present and point them to real help.`;
+- You are a caring companion, not a licensed therapist. You don't diagnose or replace real help; say so plainly if things sound serious.
+- If they mention self-harm, suicide, abuse, or being in danger: take it seriously and stay warm and human. Acknowledge the pain, encourage them to reach out right now to someone they trust or a professional / local crisis line, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic. Just be present and point them to real help.`;
 
 // Talking out loud (the voice screen): replies are read aloud, so no formatting at all.
 const VOICE_INSTRUCTION = `RIGHT NOW you are talking out loud with the student, like on a call. Your reply is read aloud by a speech voice, so:
 - Plain spoken sentences only: no markdown, no bullet points, no numbered lists, no headings, no tables, no code blocks, no emojis, no LaTeX, and never a cassie-board drawing.
 - Say maths in words ("x squared plus three x equals ten", "one half").
 - Keep it short: usually one to three sentences, about 60 words at most, unless they ask you to explain something fully.
-- Sound like a warm, natural friend on a call — contractions, everyday words. Ask a question back only when it helps the conversation.`;
+- Sound like a warm, natural friend on a call, contractions, everyday words. Ask a question back only when it helps the conversation.`;
 // "Teach Cassie": the student learns by explaining (the Feynman technique), Cassie is the curious classmate.
-const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud — they learn best by explaining it to someone. You play a curious, friendly classmate who wants to understand the topic. Don't lecture and don't take over.
-- React to what they just said in your own words, then ask exactly ONE follow-up question that makes them think deeper: why, how does that work, what would happen if, can you give an example — or the question a confused classmate would ask about a step they skipped.
-- If something they said is wrong or unclear, don't correct it straight away: ask about it so they notice ("Wait — I thought…?"). Only explain it yourself if they're stuck or ask you to.
+const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud. They learn best by explaining it to someone. You play a curious, friendly classmate who wants to understand the topic. Don't lecture and don't take over.
+- React to what they just said in your own words, then ask exactly ONE follow-up question that makes them think deeper: why, how does that work, what would happen if, can you give an example, or the question a confused classmate would ask about a step they skipped.
+- If something they said is wrong or unclear, don't correct it straight away: ask about it so they notice ("Wait. I thought…?"). Only explain it yourself if they're stuck or ask you to.
 - Every four or five turns, sum up in one sentence what they've taught you so far.
 - When they say they're done (or "that's all"), give a short spoken report: what they explained well, what was missing or wrong (with the right idea), and one thing to review next.
 - If they haven't picked a topic yet, ask what they're going to teach you.`;
@@ -232,7 +233,7 @@ const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud — th
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   let sp = SYSTEM_PROMPT;
   if (state.level && LEVEL_LABELS[state.level]) {
-    sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level — match your vocabulary, depth, and examples to that level.`;
+    sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level: match your vocabulary, depth, and examples to that level.`;
   }
   if (state.citationStyle && state.citationStyle !== 'APA') {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
@@ -466,7 +467,7 @@ function botMood(name, ms) {
    It works with the 3D Cassie and with Cursor Cassie. */
 const islandEl = document.getElementById('island');
 let islandBot = null, islandTimer = null, islandBusy = false, islandErrUntil = 0;
-const ISLAND_SAY = { thinking: 'Thinking…', reading: 'Reading your file…', searching: 'Searching…', drawing: 'Drawing…', busy: 'Lots of students — hang on…', highlighting: 'Looking at your highlight…', upload: 'Got your file!', done: 'Done', oops: 'That didn’t work' };
+const ISLAND_SAY = { thinking: 'Thinking…', reading: 'Reading your file…', searching: 'Searching…', drawing: 'Drawing…', busy: 'Lots of students: hang on…', highlighting: 'Looking at your highlight…', upload: 'Got your file!', done: 'Done', oops: 'That didn’t work' };
 function islandFit() {
   if (!islandEl) return;
   const inner = islandEl.querySelector('.island-in');
@@ -684,7 +685,7 @@ function isleFromTransfer(dt) {
 // Read what was dropped, then show what Cassie can do with it.
 async function isleTake(card, got) {
   if (!got) return;
-  if (isleBusy) { card.error('I’m still answering — drop it again in a moment.'); return; }
+  if (isleBusy) { card.error('I’m still answering: drop it again in a moment.'); return; }
   if (got.text) {
     clearAttach();
     card.ready({ kind: 'text', text: got.text.slice(0, 12000) });
@@ -807,7 +808,7 @@ if (audSwitch) {
     dressCassie();
     set3D('happy');
     setTimeout(() => set3D('neutral'), 1600);
-    try { if (typeof mascotSay === 'function') mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode — let’s learn!', 2600); } catch (err) { /* ignore */ }
+    try { if (typeof mascotSay === 'function') mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode: let’s learn!', 2600); } catch (err) { /* ignore */ }
   });
   renderAudience();
 }
@@ -972,7 +973,7 @@ const MASCOT_REACTIONS = {
   ],
   long: [
     { t: "Whoa, lots to read!", e: 'emote-surprised' },
-    { t: 'Big one — I got it!', e: 'emote-cool' },
+    { t: 'Big one. I got it!', e: 'emote-cool' },
   ],
   greet: [
     { t: 'Hi there! 👋', e: 'emote-happy' },
@@ -1532,6 +1533,21 @@ function renderProse(container, text) {
   flushList();
 }
 
+// Cassie's words never show an em or en dash (they read as clutter to young readers): ranges get
+// a hyphen, a dash that starts a line becomes a list dash, and every other one becomes a comma.
+function noDashes(text) {
+  return String(text)
+    .replace(/(\d)\s*[–—]\s*(?=\d)/g, '$1-')
+    .replace(/^([ \t]*)[—–][ \t]*/gm, '$1- ')
+    .replace(/[ \t]*[—–][ \t]*(?=[.,!?;:)\]]|$)/gm, '')
+    .replace(/([A-Za-zÀ-ÿ])–(?=[A-Za-zÀ-ÿ])/g, '$1-')
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/,\s*,/g, ',');
+}
+window.noDashes = noDashes;
+// Cassie's answer to one question, ready to show (no dashes)
+const askShown = (q) => askCassie([{ role: 'user', content: q }]).then(noDashes);
+
 // Render text into `container`, turning ```fenced``` blocks into <pre><code>
 // and everything else into clean formatted HTML.
 function renderFormatted(container, text) {
@@ -1562,7 +1578,7 @@ function renderFormatted(container, text) {
       pre.appendChild(code);
       container.appendChild(pre);
     } else if (seg.trim()) {
-      renderProse(container, deLatex(seg));
+      renderProse(container, deLatex(noDashes(seg)));
     }
   });
 }
@@ -1816,12 +1832,12 @@ function rateLimitMessage(res, detail) {
   if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
   const daily = secs > 3600;
   if (daily) {
-    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in Settings — each model has its own daily limit.`;
+    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in Settings. Each model has its own daily limit.`;
   }
   if (wait) {
-    return `Slow down a sec — that's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
+    return `Slow down a sec. That's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
   }
-  return "Groq's free tier is busy for a moment — wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
+  return "Groq's free tier is busy for a moment. Wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
 }
 
 // Seconds Groq asks us to wait before retrying (from headers or the message).
@@ -1863,7 +1879,7 @@ async function nextGroqModel(tried) {
   return GROQ_MODELS.find((m) => !tried.has(m)) || (await discoverGroqTextModels()).find((m) => !tried.has(m)) || '';
 }
 function retiredError() {
-  const e = new Error("Groq just retired the AI model I was using. Open Settings (gear icon), pick a different Groq model, and ask again — your chat is saved.");
+  const e = new Error("Groq just retired the AI model I was using. Open Settings (gear icon), pick a different Groq model, and ask again. Your chat is saved.");
   e.friendly = true;
   return e;
 }
@@ -1918,7 +1934,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
         body: JSON.stringify(body),
       });
     } catch (netErr) {
-      return viaServerInstead(friendlyError("I couldn't reach Groq — check your internet connection and try again."));
+      return viaServerInstead(friendlyError("I couldn't reach Groq. Check your internet connection and try again."));
     }
     if (res.ok) {
       noteGroqBudget(model, res);
@@ -1964,7 +1980,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
       continue;
     }
     if (isRateLimited(res.status, detail)) return viaServerInstead(friendlyError(rateLimitMessage(res, detail)));
-    if (res.status >= 500) return viaServerInstead(friendlyError('Groq is having a problem right now — try again in a minute.'));
+    if (res.status >= 500) return viaServerInstead(friendlyError('Groq is having a problem right now. Try again in a minute.'));
     throw new Error(detail || `Request failed (${res.status})`);
   }
 }
@@ -1986,7 +2002,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
         body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined }),
       });
     } catch (e) {
-      throw friendlyError("I couldn't connect — check your internet connection and try again.");
+      throw friendlyError("I couldn't connect. Check your internet connection and try again.");
     }
     if (res.ok) {
       const data = await res.json();
@@ -2004,7 +2020,7 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       await sleep(Math.ceil(secs * 1000) + 300);
       continue;
     }
-    throw friendlyError(detail || 'Cassie couldn’t answer just now — please try again in a moment.');
+    throw friendlyError(detail || 'Cassie couldn’t answer just now. Please try again in a moment.');
   }
 }
 
@@ -2023,7 +2039,7 @@ async function askGroq(msgs, opts = {}) {
     try {
       let text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey, q: opts.q });
       if (!text) text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true }); // blank once? ask again
-      if (!text) throw friendlyError('I went blank on that one — please ask again, maybe in different words.');
+      if (!text) throw friendlyError('I went blank on that one. Please ask again, maybe in different words.');
       return text;
     } catch (e) {
       if (e.groqLimited) {
@@ -2039,7 +2055,7 @@ async function askGroq(msgs, opts = {}) {
       if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; } // trim & retry
       const next = GROQ_MODELS.find((m) => !tried.has(m) && m !== e.model);
       if (next) { model = next; historyBudget = 3000; continue; }
-      const err = new Error("That message is too long for Groq's free per-minute limit. Try a shorter question, start a new chat, or attach the material as a file (the paperclip) — I read long files in parts.");
+      const err = new Error("That message is too long for Groq's free per-minute limit. Try a shorter question, start a new chat, or attach the material as a file (the paperclip). I read long files in parts.");
       err.friendly = true;
       throw err;
     }
@@ -2096,7 +2112,7 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = nul
     if (res.ok) {
       const cand = (await res.json()).candidates?.[0];
       const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
-      if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one — try rephrasing it." : '(no response)';
+      if (!text) return cand?.finishReason === 'SAFETY' ? "I can't help with that one. Try rephrasing it." : '(no response)';
       return text;
     }
     let detail = '';
@@ -2104,12 +2120,12 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = nul
     if (res.status === 404 || /no longer available|decommission/i.test(detail)) { lastErr = new Error(detail); forgetGeminiModels(); continue; }
     // busy ("high demand", overloaded) or out of free requests: the next Gemini model has its own capacity
     if (res.status >= 500 || isRateLimited(res.status, detail) || /high demand|overloaded|unavailable/i.test(detail)) {
-      lastErr = friendlyError('Google’s Gemini is very busy right now — try again in a minute.');
+      lastErr = friendlyError('Google’s Gemini is very busy right now. Try again in a minute.');
       lastErr.busy = true; lastErr.rateLimited = isRateLimited(res.status, detail);
       continue;
     }
     if (/api key/i.test(detail)) {
-      const e = new Error('Your Gemini key was rejected — check it in Settings (gear icon). It should start with "AIza".');
+      const e = new Error('Your Gemini key was rejected. Check it in Settings (gear icon). It should start with "AIza".');
       e.friendly = true; e.keyRejected = true; throw e;
     }
     // refused for this model (newer models can be off for some keys): try the next one
@@ -2121,7 +2137,7 @@ async function geminiGenerate({ contents, system, maxTokens = 2048, models = nul
     throw new Error(detail || `Request failed (${res.status})`);
   }
   if (lastErr && (lastErr.busy || lastErr.keyRejected)) throw lastErr;
-  const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon — meanwhile text questions still work.");
+  const e = new Error("Google retired the Gemini model I use for files and pictures. I'll be updated soon: meanwhile text questions still work.");
   e.friendly = true; e.cause = lastErr;
   throw e;
 }
@@ -2163,7 +2179,7 @@ async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } 
   }
   const model = state.groqKey ? await discoverGroqVisionModel() : 'vision'; // the server picks its own
   if (!model) {
-    const e = new Error('To read pictures, add your free Google (Gemini) API key in Settings — Groq has no picture-reading model on your key right now.');
+    const e = new Error('To read pictures, add your free Google (Gemini) API key in Settings. Groq has no picture-reading model on your key right now.');
     e.friendly = true; throw e;
   }
   const hist = trimHistory(msgs, 2000).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
@@ -2209,7 +2225,7 @@ async function askPicture(msgs, image, opts = {}) {
       return await serverChat([{ role: 'system', content: buildSystemPrompt(opts) }, ...hist, { role: 'user', content }], { model: 'vision', maxTokens: 2048, onWait: opts.onWait, q: opts.q });
     } catch (e) { firstErr = firstErr || e; }
   }
-  if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now — please try again in a minute.') : firstErr;
+  if (firstErr) throw firstErr.busy ? friendlyError('Everyone who reads pictures for me is busy right now. Please try again in a minute.') : firstErr;
   throw new Error('Add your Google (Gemini) API key in Settings to use images.');
 }
 
@@ -2273,22 +2289,22 @@ async function askCassie(msgs, image, opts = {}) {
 /* ---------- reading whole files: reviewers, summaries, answers ---------- */
 // What "take note of everything" means — used for every file, photo and page.
 const NOTES_GUIDE = `Take note of EVERYTHING a student could be asked about. One fact per bullet, under these labels when they apply (skip a label with nothing under it):
-**People** — full name — who they are / what they did
-**Key terms** — **term** — what it means
-**Dates & times** — exact date, year or time — what happened (keep every single one)
-**Places, groups & things** — countries, cities, organisations, laws, treaties, books, inventions, species, objects — why each matters
-**Events & history** — in the order they happened, with causes and effects
-**Numbers & formulas** — statistics, amounts, measurements, equations (with units)
-**Processes** — numbered steps
+**People**, full name, who they are / what they did
+**Key terms**, **term**, what it means
+**Dates & times**, exact date, year or time, what happened (keep every single one)
+**Places, groups & things**, countries, cities, organisations, laws, treaties, books, inventions, species, objects, why each matters
+**Events & history**: in the order they happened, with causes and effects
+**Numbers & formulas**: statistics, amounts, measurements, equations (with units)
+**Processes**: numbered steps
 **Lists, types & comparisons**
-**Pictures, tables & charts** — what each shows, every label and value you can read
-**Questions in the file** — exercises or questions it asks
+**Pictures, tables & charts**: what each shows, every label and value you can read
+**Questions in the file**: exercises or questions it asks
 Put the page or slide after a fact when you know it, like (p. 12). Copy names, dates and numbers exactly. Never invent anything.`;
-const REVIEWER_TAIL = 'After the sections, add **People to remember** (name — who), **Timeline** (every date and time in order — what happened), and **Key terms** (term — meaning), then 10 practice questions and an **Answers** list.';
-const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables — or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
-Do exactly what they ask with it — a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
-For a reviewer, notes, summary or study guide: follow the file's order and cover EVERY page, section, slide or topic — don't stop early or skip the middle. Use bold section labels on their own line and tight bullets. Keep every person (full name and who they are), key term (in bold, with its meaning), date and time (with what happened), place, event, number, formula and process (as numbered steps), and say what each diagram, chart, table or picture shows and why it matters. Put the page or slide in brackets after a fact when you know it, like (p. 12). ${REVIEWER_TAIL} Stick to the file — don't invent facts that aren't in it.
-The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content — don't tell them to copy it anywhere.`;
+const REVIEWER_TAIL = 'After the sections, add **People to remember** (name, who), **Timeline** (every date and time in order, what happened), and **Key terms** (term, meaning), then 10 practice questions and an **Answers** list.';
+const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables, or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
+Do exactly what they ask with it, a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
+For a reviewer, notes, summary or study guide: follow the file's order and cover EVERY page, section, slide or topic, don't stop early or skip the middle. Use bold section labels on their own line and tight bullets. Keep every person (full name and who they are), key term (in bold, with its meaning), date and time (with what happened), place, event, number, formula and process (as numbered steps), and say what each diagram, chart, table or picture shows and why it matters. Put the page or slide in brackets after a fact when you know it, like (p. 12). ${REVIEWER_TAIL} Stick to the file: don't invent facts that aren't in it.
+The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content, don't tell them to copy it anywhere.`;
 
 function leanDocSystem() {
   let sp = `You are Cassie, a sharp, warm study buddy. Formatting: lead with what matters; label sections with a short **bold** phrase on its own line (never # headings); tight bullet points; key terms in **bold**; plain-text math (no LaTeX); a small table only when it truly helps.`;
@@ -2407,12 +2423,12 @@ function compactHistory(history, budget = 1500) {
 async function geminiDocument(doc, request, history, onStatus) {
   const parts = [];
   if (doc.kind === 'pdf' && doc.file.size <= 14 * 1024 * 1024) {
-    onStatus(`Reading all of ${doc.name} — pages, pictures and diagrams…`);
+    onStatus(`Reading all of ${doc.name}: pages, pictures and diagrams…`);
     parts.push({ inlineData: { mimeType: 'application/pdf', data: await fileToBase64(doc.file) } });
-    parts.push({ text: `(That is "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.)` });
+    parts.push({ text: `(That is "${doc.name}": a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.)` });
   } else {
     onStatus(`Reading ${doc.name} and its pictures…`);
-    if (doc.text) parts.push({ text: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${doc.text.slice(0, 500000)}\n"""` });
+    if (doc.text) parts.push({ text: `File "${doc.name}": a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${doc.text.slice(0, 500000)}\n"""` });
     const imgs = await docImages(doc, 16);
     imgs.forEach((img) => { parts.push({ text: `[Picture from ${img.label}]` }); parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } }); });
   }
@@ -2446,15 +2462,15 @@ function partSpan(part, fallback) {
   if (!nums.length) return fallback;
   const word = /\[Slide /.test(part) ? 'slide' : 'page';
   const lo = Math.min(...nums), hi = Math.max(...nums);
-  return lo === hi ? `${word} ${lo}` : `${word}s ${lo}–${hi}`;
+  return lo === hi ? `${word} ${lo}` : `${word}s ${lo}-${hi}`;
 }
-// Which pages a group of notes covers, from their [Pages 4–7] labels.
+// Which pages a group of notes covers, from their [Pages 4-7] labels (older notes wrote 4–7).
 function groupSpan(group) {
   const nums = [], word = /^\[Slide/i.test(group[0] || '') ? 'slides' : 'pages';
-  group.forEach((n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)(?:–(\d+))?/i); if (m) nums.push(+m[1], +(m[2] || m[1])); });
+  group.forEach((n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)(?:\s*(?:-|–|to)\s*(\d+))?/i); if (m) nums.push(+m[1], +(m[2] || m[1])); });
   if (!nums.length) return '';
   const lo = Math.min(...nums), hi = Math.max(...nums);
-  return lo === hi ? `${word.slice(0, -1)} ${lo}` : `${word} ${lo}–${hi}`;
+  return lo === hi ? `${word.slice(0, -1)} ${lo}` : `${word} ${lo}-${hi}`;
 }
 // Asking for everything (a reviewer, notes, a summary…) rather than one question about the file.
 const WHOLE_FILE_RE = /\b(reviewers?|review|notes?|summar\w*|outline|study guide|everything|whole|entire|complete|all (?:the )?(?:pages|details|info\w*)|important (?:details|points|facts)|key (?:points|facts|details)|take note|flash ?cards?|buod|lahat)\b/i;
@@ -2478,11 +2494,11 @@ async function pictureNotes(doc, onStatus, waitNote) {
     const imgs = batches[i].imgs || await docImages(doc, 4, batches[i].pages);
     if (!imgs.length) continue;
     const labels = imgs.map((x) => x.label).join(', ');
-    onStatus(`Looking at the pictures — ${labels} (${i + 1} of ${batches.length})…`);
+    onStatus(`Looking at the pictures: ${labels} (${i + 1} of ${batches.length})…`);
     try {
       const note = await askGroqVision([{ role: 'user', content: `These are ${labels} from "${doc.name}". For each one, take study notes. If it is mostly text, write out ALL of its important content. If it is a diagram, table, chart or picture, say what it shows and every label and value you can read.\n\n${NOTES_GUIDE}` }],
         imgs, { system: 'You turn pages and pictures from a student\'s file into accurate, complete study notes. Bullets only. Never invent anything you cannot read.', maxTokens: 1500, onWait: waitNote(`Looking at ${labels}…`) });
-      if (note) out.push(`[${labels.replace(/^\w/, (c) => c.toUpperCase())} — pictures]\n${note}`);
+      if (note) out.push(`[${labels.replace(/^\w/, (c) => c.toUpperCase())}: pictures]\n${note}`);
     } catch (e) {
       if (e.friendly && /limit|free questions/i.test(e.message)) break; // out of budget: keep what we have
     }
@@ -2493,8 +2509,8 @@ async function pictureNotes(doc, onStatus, waitNote) {
 // Pull "@@PERSON: …", "@@DATE: …", "@@TERM: …" lines out of a section into the master lists.
 function takeMasterLines(md, lists) {
   return md.replace(/^\s*[-*•]?\s*@@\s*(PERSON|DATE|TERM)\s*:\s*(.+)$/gim, (_, kind, body) => {
-    const [head, ...rest] = body.split(/\s+[—–-]\s+/);
-    const item = { head: (head || '').replace(/\*\*/g, '').trim(), tail: rest.join(' — ').trim() };
+    const [head, ...rest] = body.split(/\s+[—–|-]\s+/);
+    const item = { head: (head || '').replace(/\*\*/g, '').trim(), tail: rest.join(', ').trim() };
     if (!item.head) return '';
     const key = kind.toUpperCase();
     const k = (item.head + (key === 'DATE' ? item.tail : '')).toLowerCase();
@@ -2504,22 +2520,22 @@ function takeMasterLines(md, lists) {
 }
 function masterListsMd(lists) {
   const yearOf = (t) => { const m = t.match(/\b(\d{3,4})\b/); return m ? +m[1] : Infinity; };
-  const bullets = (arr) => arr.map((x) => `- **${x.head}**${x.tail ? ` — ${x.tail}` : ''}`).join('\n');
+  const bullets = (arr) => arr.map((x) => `- **${x.head}**${x.tail ? `: ${x.tail}` : ''}`).join('\n');
   let md = '';
   if (lists.PERSON.length) md += `**People to remember**\n${bullets(lists.PERSON)}\n\n`;
-  if (lists.DATE.length) md += `**Timeline — every date and time**\n${bullets([...lists.DATE].sort((a, b) => yearOf(a.head) - yearOf(b.head)))}\n\n`;
+  if (lists.DATE.length) md += `**Timeline: every date and time**\n${bullets([...lists.DATE].sort((a, b) => yearOf(a.head) - yearOf(b.head)))}\n\n`;
   if (lists.TERM.length) md += `**Key terms**\n${bullets(lists.TERM)}\n\n`;
   return md.trim();
 }
 
 async function groqDocument(doc, request, history, onStatus) {
   const sys = leanDocSystem();
-  const waitNote = (label) => (secs) => onStatus(`${label} (free per-minute limit — continuing in ${secs}s)`);
+  const waitNote = (label) => (secs) => onStatus(`${label} (free per-minute limit: continuing in ${secs}s)`);
   const whole = WHOLE_FILE_RE.test(request) || wantsStudyFile(request);
   const text = pagesAskedFor(doc.text || '', request);
   const visualNotes = doc.hasVisuals ? await pictureNotes(doc, onStatus, waitNote) : [];
   if (!text && !visualNotes.length) {
-    throw friendlyError(`I couldn't find readable text in ${doc.name} — it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
+    throw friendlyError(`I couldn't find readable text in ${doc.name}, it looks like scanned pictures. Add your free Gemini key in Settings and I'll read the pages directly.`);
   }
   const hist = compactHistory(history, 800);
 
@@ -2529,7 +2545,7 @@ async function groqDocument(doc, request, history, onStatus) {
     onStatus(`Reading ${doc.name}…`);
     try {
       const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
-        { role: 'user', content: `File "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualAll ? `\n\nNotes on the pictures and pages in the file:\n${visualAll}` : ''}\n\n${request}` }],
+        { role: 'user', content: `File "${doc.name}": a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualAll ? `\n\nNotes on the pictures and pages in the file:\n${visualAll}` : ''}\n\n${request}` }],
         { maxTokens: 3500, lean: true, rotate: true, onWait: waitNote('Reading…') });
       if (reply) return reply;
     } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
@@ -2539,7 +2555,7 @@ async function groqDocument(doc, request, history, onStatus) {
   let parts = text ? splitChunks(text, GROQ_DOC_PART) : [];
   const truncated = parts.length > GROQ_DOC_MAX_PARTS;
   if (truncated) parts = parts.slice(0, GROQ_DOC_MAX_PARTS);
-  const NOTE_SYS = `You take complete, accurate study notes from one part of a student's file.\n${NOTES_GUIDE}\nBullets only, no intro. Be thorough — usually 250–500 words, more if the part is dense.`;
+  const NOTE_SYS = `You take complete, accurate study notes from one part of a student's file.\n${NOTES_GUIDE}\nBullets only, no intro. Be thorough: usually 250 to 500 words, more if the part is dense.`;
   // if a part is too big for the model right now, split it in two and try again
   const noteFor = async (chunk, label, depth = 0) => {
     try {
@@ -2555,14 +2571,14 @@ async function groqDocument(doc, request, history, onStatus) {
   let span = 'the start';
   for (let i = 0; i < parts.length; i++) {
     span = partSpan(parts[i], span);
-    onStatus(`Reading ${span} of ${doc.name} — part ${i + 1} of ${parts.length}…`);
+    onStatus(`Reading ${span} of ${doc.name}: part ${i + 1} of ${parts.length}…`);
     notes.push(`[${span.replace(/^\w/, (c) => c.toUpperCase())}]\n${await noteFor(parts[i], span.replace(/^\w/, (c) => c.toUpperCase()))}`);
   }
   notes.push(...visualNotes);
   // picture notes slot in by page, so everything reads in the file's order
   const firstNum = (n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)/i); return m ? +m[1] : Infinity; };
   notes.sort((x, y) => firstNum(x) - firstNum(y));
-  const tail = truncated ? `\n\n*This file is very long, so I read the first ${GROQ_DOC_MAX_PARTS} parts. Add your free Gemini key in Settings and I'll read the whole file — pictures included — in one go.*` : '';
+  const tail = truncated ? `\n\n*This file is very long, so I read the first ${GROQ_DOC_MAX_PARTS} parts. Add your free Gemini key in Settings and I'll read the whole file, pictures included, in one go.*` : '';
 
   // One answer from the notes (shrinking them if the model says it's too long).
   const finalFrom = async (list, ask, maxTokens = 3000) => {
@@ -2611,10 +2627,10 @@ async function groqDocument(doc, request, history, onStatus) {
   const sections = [];
   const writeSection = async (group, i, n, depth = 0) => {
     const where = groupSpan(group) || `section ${i + 1}`;
-    onStatus(`Writing it up — ${where} (section ${i + 1} of ${n})…`);
+    onStatus(`Writing it up: ${where} (section ${i + 1} of ${n})…`);
     try {
       return await groqChat([{ role: 'system', content: sys },
-        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this section of the answer. Cover every note above, in order — keep every name, date, time, place, number and term. No intro, no conclusion, no practice questions (those come at the end).\nThen, after the section, add one line for every person, date/time and key term in these notes, exactly like this:\n@@PERSON: full name — who they are / what they did\n@@DATE: date or time — what happened\n@@TERM: term — what it means` }],
+        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this section of the answer. Cover every note above, in order. Keep every name, date, time, place, number and term. No intro, no conclusion, no practice questions (those come at the end).\nThen, after the section, add one line for every person, date/time and key term in these notes, exactly like this:\n@@PERSON: full name - who they are / what they did\n@@DATE: date or time - what happened\n@@TERM: term - what it means` }],
         { maxTokens: 3200, lean: true, rotate: true, onWait: waitNote(`Writing ${where}…`) });
     } catch (e) {
       if (!e.tooLarge || depth >= 1 || group.length < 2) throw e;
@@ -2636,7 +2652,7 @@ async function groqDocument(doc, request, history, onStatus) {
       { role: 'user', content: `Key facts from all of "${doc.name}":\n"""\n${facts}\n"""\n\nWrite 10 practice questions that cover the whole file (mix multiple choice, identification and short answer), then an **Answers** list.` }],
       { maxTokens: 1600, lean: true, rotate: true, onWait: waitNote('Writing practice questions…') });
   } catch (e) { /* the reviewer is still complete without them */ }
-  const pagesNote = doc.pages ? ` — all ${doc.pages} pages` : '';
+  const pagesNote = doc.pages ? `: all ${doc.pages} pages` : '';
   return [`**${doc.name}${pagesNote}**`, ...sections, master, questions ? `**Practice questions**\n\n${questions}` : ''].filter(Boolean).join('\n\n') + tail;
 }
 
@@ -2645,9 +2661,9 @@ async function groqDocument(doc, request, history, onStatus) {
    usual whole-file reading. Their notes become one combined "file" (marked photo by photo,
    file by file) that Cassie answers from, so nothing from photo 9 is lost behind photo 1. */
 const PHOTO_READ = (k, n, name) => `This is photo ${k} of ${n} that I attached${name ? ` ("${name}")` : ''}. Read it carefully and completely, then answer in three parts:
-**Text in the photo** — copy out EVERY word exactly as written (printed or handwritten), in reading order: headings, paragraphs, lists, questions with all of their answer choices, labels, captions, table cells, formulas and numbers. Don't summarise or correct anything; write [unclear] for a word you can't read.
-**Pictures** — every diagram, chart, table, map or drawing: what it shows, with every label and value you can read.
-**Notes** — ${NOTES_GUIDE}
+**Text in the photo**: copy out EVERY word exactly as written (printed or handwritten), in reading order: headings, paragraphs, lists, questions with all of their answer choices, labels, captions, table cells, formulas and numbers. Don't summarise or correct anything; write [unclear] for a word you can't read.
+**Pictures**: every diagram, chart, table, map or drawing: what it shows, with every label and value you can read.
+**Notes**: ${NOTES_GUIDE}
 Never add anything that isn't in the photo. If part of it is blurry or cut off, say which part.`;
 async function readPhoto(image, prompt) {
   const msgs = [{ role: 'user', content: prompt }];
@@ -2681,7 +2697,7 @@ async function answerAboutMany(items, request, history, onStatus) {
   const label = [photos.length ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : '', files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
   const doc = { name: `your ${label}`, kind: 'txt', label, text: parts.filter(Boolean).join('\n\n'), hasVisuals: false, scanned: false, combined: true };
   onStatus('Putting it all together…');
-  const reply = await answerAboutDocument(doc, `${request}\n\n(This content comes from ${label}, each marked with === headers. Use all of them — don't skip any. When it helps, say where a fact is from, like "(photo 3)" or "(${files[0] ? files[0].doc.name : 'the file'}, p. 4)".)`, history, onStatus);
+  const reply = await answerAboutDocument(doc, `${request}\n\n(This content comes from ${label}, each marked with === headers. Use all of them: don't skip any. When it helps, say where a fact is from, like "(photo 3)" or "(${files[0] ? files[0].doc.name : 'the file'}, p. 4)".)`, history, onStatus);
   return { reply, doc };
 }
 
@@ -2689,7 +2705,7 @@ async function answerAboutDocument(doc, request, history, onStatus) {
   try { return await readDocumentAnswer(doc, request, history, onStatus); }
   catch (e) {
     if (!e.tooLarge) throw e;
-    throw friendlyError(`${doc.name} is too big for me to read in one go right now. Wait a minute and try again, ask about one part (for example “make a reviewer of pages 1–10”), or add your free Gemini key in Settings — then I can read the whole file at once.`);
+    throw friendlyError(`${doc.name} is too big for me to read in one go right now. Wait a minute and try again, ask about one part (for example “make a reviewer of pages 1 to 10”), or add your free Gemini key in Settings. Then I can read the whole file at once.`);
   }
 }
 async function readDocumentAnswer(doc, request, history, onStatus) {
@@ -2697,7 +2713,7 @@ async function readDocumentAnswer(doc, request, history, onStatus) {
     try { return await geminiDocument(doc, request, history, onStatus); }
     catch (e) {
       if (!canChat() || geminiOnly()) throw e;
-      onStatus('Gemini is busy — reading it another way…');
+      onStatus('Gemini is busy, reading it another way…');
     }
   }
   if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
@@ -2949,7 +2965,7 @@ function importBackupFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     let data;
-    try { data = JSON.parse(reader.result); } catch (e) { alert('That file isn’t valid JSON — it may be corrupted.'); return; }
+    try { data = JSON.parse(reader.result); } catch (e) { alert('That file isn’t valid JSON. It may be corrupted.'); return; }
     if (!data || data.app !== 'cassie' || data.kind !== 'backup') { alert('That doesn’t look like a Cassie backup file.'); return; }
     if (!confirm('Import this backup? It replaces the memory and chats on this device. Your saved API keys stay as they are.')) return;
     try { if (data.memory) localStorage.setItem(MEM_KEY, JSON.stringify(data.memory)); } catch (e) { /* ignore */ }
@@ -3008,9 +3024,9 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
         const deck = (title || (chat && chat.title) || 'My cards').replace(/^(New chat|Chat)$/i, 'My cards').slice(0, 60);
         const r = await window.CassieCards.fromText(text, deck);
         fcBtn.dataset.deck = r.deck;
-        fcBtn.textContent = r.added ? `✓ ${r.added} cards — Study` : '✓ Already cards — Study';
+        fcBtn.textContent = r.added ? `✓ ${r.added} cards: Study` : '✓ Already cards: Study';
       } catch (e) {
-        fcBtn.textContent = 'Couldn’t make cards — try again';
+        fcBtn.textContent = 'Couldn’t make cards. Try again';
         setTimeout(() => { fcBtn.textContent = '＋ Flashcards'; }, 2600);
       } finally { fcBtn.disabled = false; }
     });
@@ -3047,7 +3063,7 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
         btn.textContent = 'Saved ✓';
       } catch (e) {
         btn.textContent = 'Try again';
-        alert(`Couldn't make the ${f.label} file — check your internet connection and try again.`);
+        alert(`Couldn't make the ${f.label} file. Check your internet connection and try again.`);
       } finally {
         setTimeout(() => { btn.textContent = f.label; btn.disabled = false; }, 1600);
       }
@@ -3073,7 +3089,7 @@ function addFileCard(bubble, text, docTitle, f) {
     blob = b;
     small.textContent = `${f.label === 'Image' ? 'Image' : f.label} file · ready`;
     btn.disabled = false;
-  }).catch(() => { small.textContent = 'Couldn’t make the file — use “Save as” above.'; });
+  }).catch(() => { small.textContent = 'Couldn’t make the file. Use “Save as” above.'; });
   btn.addEventListener('click', () => { if (blob) downloadBlob(name, blob); });
 }
 
@@ -3151,9 +3167,9 @@ function setTypingStatus(bubble, text) {
 function errorText(err, prefix = 'Something went wrong') {
   if (err && err.friendly) return err.message;
   const m = String((err && err.message) || err || '');
-  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return "I couldn't connect — check your internet and try again.";
-  if (/timeout|timed out|aborted/i.test(m)) return 'That took too long — please try again.';
-  return `${prefix}. Please try again — if it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return "I couldn't connect. Check your internet and try again.";
+  if (/timeout|timed out|aborted/i.test(m)) return 'That took too long. Please try again.';
+  return `${prefix}. Please try again. If it keeps happening, tap “Report a problem” in Settings. (${m.slice(0, 120)})`;
 }
 let autoReports = 0;
 function reportAuto(where, message) {
@@ -3165,7 +3181,7 @@ function renderError(err, retry, prefix) {
   const busyErr = /limit|busy|wait/i.test(errorText(err, prefix));
   botMood(busyErr ? 'busy' : 'oops', 3000);
   islandErrUntil = Date.now() + 3000;
-  islandShow(busyErr ? 'busy' : 'oops', busyErr ? 'Very busy — try again soon' : 'That didn’t work', 3000);
+  islandShow(busyErr ? 'busy' : 'oops', busyErr ? 'Very busy. Try again soon' : 'That didn’t work', 3000);
   const b = renderMessage('assistant', errorText(err, prefix));
   b.classList.add('error');
   if (retry) {
@@ -3221,7 +3237,7 @@ function captureQuizMarks(reply) {
 const dueMistakes = () => (Array.isArray(state.mistakes) ? state.mistakes : []).filter((m) => (m.due || 0) <= Date.now());
 function reviewMistakes(all = false) {
   const list = (all ? state.mistakes || [] : dueMistakes()).slice(0, 10);
-  if (!list.length) { renderMessage('assistant', 'No mistakes to review right now — nice! Start a quiz with “Quiz me”, and any you miss will come back here.'); return; }
+  if (!list.length) { renderMessage('assistant', 'No mistakes to review right now. Nice! Start a quiz with “Quiz me”, and any you miss will come back here.'); return; }
   if (!canChat()) { openSettings(); return; }
   track('feature', 'review');
   quizMode = true;
@@ -3269,8 +3285,8 @@ async function handleSend(text, opts = {}) {
     const prev = chatLog.querySelector('.need-key-msg');
     if (prev) prev.remove();
     const b = renderMessage('assistant', image
-      ? "To read an image I need your free Google (Gemini) API key — add it in Settings (top right)."
-      : "I need one free key to start — the easiest is Google's: go to **aistudio.google.com/apikey**, sign in with your Google account, tap **Create API key**, and paste it in Settings. It takes about a minute, and that one key covers everything.");
+      ? "To read an image I need your free Google (Gemini) API key. Add it in Settings (top right)."
+      : "I need one free key to start. The easiest is Google's: go to **aistudio.google.com/apikey**, sign in with your Google account, tap **Create API key**, and paste it in Settings. It takes about a minute, and that one key covers everything.");
     if (b) b.classList.add('need-key-msg');
     return;
   }
@@ -3289,8 +3305,8 @@ async function handleSend(text, opts = {}) {
   let displayContent = sendText;
   if (attachedDoc) {
     const excerpt = doc.text ? `\n\n(Excerpt from the start of the file:)\n${doc.text.slice(0, 1200)}` : '';
-    modelContent = `[I attached the file "${doc.name}" — a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.] ${sendText}${excerpt}`;
-    displayContent = `${sendText}\n\n(attached: ${doc.name} — ${doc.label})`;
+    modelContent = `[I attached the file "${doc.name}": a ${KIND_WORD[doc.kind] || 'file'}, ${doc.label}.] ${sendText}${excerpt}`;
+    displayContent = `${sendText}\n\n(attached: ${doc.name} - ${doc.label})`;
   }
   const manyLabel = [images.length ? `${images.length} photo${images.length === 1 ? '' : 's'}` : '', docs.length ? `${docs.length} file${docs.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
   if (many) {
@@ -3329,7 +3345,7 @@ async function handleSend(text, opts = {}) {
   if (doc || many) botMood('reading');
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
-  const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit — continuing in ${secs}s…`); botMood('busy'); };
+  const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit: continuing in ${secs}s…`); botMood('busy'); };
 
   try {
     let reply;
@@ -3341,7 +3357,7 @@ async function handleSend(text, opts = {}) {
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait, onDelta: opts.onDelta });
     reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
-    if (!reply) throw friendlyError('I went blank on that one — please ask again.');
+    if (!reply) throw friendlyError('I went blank on that one. Please ask again.');
     // A picture request the detector missed: the model hands it over as [[IMAGE: …]],
     // or draws ASCII art for something that isn't a graph → make a real picture.
     const marker = !doc && !image && reply.match(/\[\[\s*IMAGE\s*:\s*([^\]]+)\]\]/i);
@@ -3360,7 +3376,7 @@ async function handleSend(text, opts = {}) {
     if (bubble.querySelector('.cassie-board')) track('feature', 'graph');
     const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
     const title = doc
-      ? (/review/i.test(sendText) ? `Reviewer – ${base}` : `${base} – notes`)
+      ? (/review/i.test(sendText) ? `Reviewer: ${base}` : `${base}: notes`)
       : '';
     const want = window.CassieExport ? (window.CassieExport.wantedFormat(sendText) || (wantsStudyFile(sendText) && looksLikeContent(reply) ? 'docx' : '')) : '';
     addTextDownload(bubble, reply, { title, want });
@@ -3423,7 +3439,7 @@ async function tryGenerateImage(prompt, model) {
   }
   const parts = (await res.json()).candidates?.[0]?.content?.parts || [];
   const imgPart = parts.find((p) => p.inlineData && p.inlineData.data);
-  if (!imgPart) throw new Error('no image came back — try describing it differently');
+  if (!imgPart) throw new Error('no image came back. Try describing it differently');
   return `data:${imgPart.inlineData.mimeType || 'image/png'};base64,${imgPart.inlineData.data}`;
 }
 
@@ -3549,7 +3565,7 @@ async function serverImage(prompt) {
   const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }) });
   let data = {};
   try { data = await res.json(); } catch (e) { /* ignore */ }
-  if (!res.ok || !data.image) throw friendlyError((data.error && data.error.message) || 'The picture makers are busy right now — give it a minute and ask again.');
+  if (!res.ok || !data.image) throw friendlyError((data.error && data.error.message) || 'The picture makers are busy right now. Give it a minute and ask again.');
   return `data:${data.mimeType || 'image/jpeg'};base64,${data.image}`;
 }
 function loadImageUrl(url, ms = 90000) {
@@ -3572,7 +3588,7 @@ async function generateImage(prompt) {
     try { return { src: await loadImageUrl(url, attempt ? 60000 : 50000), keep: true }; } catch (e) { if (attempt === 0) await sleep(2500); }
   }
   if (SERVER) return { src: await serverImage(prompt), keep: false };
-  throw friendlyError("The free picture maker is busy right now — give it a minute and ask again, or describe it more simply. (Everything else still works.)");
+  throw friendlyError("The free picture maker is busy right now. Give it a minute and ask again, or describe it more simply. (Everything else still works.)");
 }
 function imageFileName(subject) {
   return (subject || 'cassie-image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'cassie-image';
@@ -3847,7 +3863,7 @@ async function askGeminiGrounded(q) {
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
-    if (isRateLimited(res.status, detail)) throw new Error("Google's free search tier is busy right now — wait a minute and try again.");
+    if (isRateLimited(res.status, detail)) throw new Error("Google's free search tier is busy right now. Wait a minute and try again.");
     throw new Error(detail || `Request failed (${res.status})`);
   }
   const cand = (await res.json()).candidates?.[0];
@@ -3927,7 +3943,7 @@ window.addEventListener('message', async (e) => {
     const ok = await attachFile(file);
     if (ok && d.prompt) handleSend(d.prompt);
   } catch (err) {
-    renderMessage('assistant', 'I couldn’t open the file from your browser tab — download it and attach it with the paperclip instead.');
+    renderMessage('assistant', 'I couldn’t open the file from your browser tab. Download it and attach it with the paperclip instead.');
   }
 });
 
@@ -4010,13 +4026,13 @@ function openSketch(opts = {}) {
     checkLabel: 'Send to Cassie',
     onCheck: (png) => {
       window.CassieSketch.close();
-      attachDataUrl(png, 'Check my work on this board — what did I get right, and what should I fix?');
+      attachDataUrl(png, 'Check my work on this board. What did I get right, and what should I fix?');
       return '';
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
     ...boardDecks(),
-    extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code — draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
+    extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code, draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
   });
 }
 
@@ -4029,7 +4045,7 @@ const roomName = () => ((state.profile && state.profile.name) || 'Classmate').sp
 async function roomCall(path, body) {
   const r = await fetch(SERVER + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), name: roomName(), ...body }) });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(d.error || 'The study room isn’t available right now — try again in a moment.'), { gone: !!d.gone, full: !!d.full });
+  if (!r.ok) throw Object.assign(new Error(d.error || 'The study room isn’t available right now. Try again in a moment.'), { gone: !!d.gone, full: !!d.full });
   return d;
 }
 function openRoomChooser(prefill = '') {
@@ -4042,11 +4058,11 @@ function openRoomChooser(prefill = '') {
   el.innerHTML = `<div class="room-card">
       <button type="button" class="room-x" aria-label="Close">×</button>
       <h2>Study together</h2>
-      <p>Start a study room and share the code — up to 12 classmates, each at home: draw on the same board, chat, ask Cassie for everyone, study shared flashcards, take a group quiz and pin notes, live.</p>
+      <p>Start a study room and share the code, up to 12 classmates, each at home: draw on the same board, chat, ask Cassie for everyone, study shared flashcards, take a group quiz and pin notes, live.</p>
       <button type="button" class="room-go main" data-room="new">Start a room</button>
       <form class="room-join"><input name="code" maxlength="6" placeholder="Have a code? e.g. K7M2QX" autocomplete="off" autocapitalize="characters" value="${escapeHtml(prefill)}"><button type="submit" class="room-go">Join</button></form>
       <p class="room-err" hidden></p>
-      <p class="room-fine">Rooms last a day. What you share in a room — drawings, sticky notes, cards, messages, and where your pointer is on the board — everyone in it sees. Be kind, it’s a study room.</p>
+      <p class="room-fine">Rooms last a day. What you share in a room, drawings, sticky notes, cards, messages, and where your pointer is on the board, everyone in it sees. Be kind, it’s a study room.</p>
     </div>`;
   document.body.appendChild(el);
   const err = el.querySelector('.room-err');
@@ -4087,8 +4103,8 @@ const roomQuiz = (topic) => quizQuestions(topic, 5);
 async function quizQuestions(topic, n = 5) {
   const p = state.profile || {};
   const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
-  const reply = await askCassie([{ role: 'user', content: `Write a ${n}-question multiple-choice quiz about "${topic}" for a ${level} student. Each question has 4 options and exactly one right answer; the wrong options should be believable. Reply with ONLY a JSON array, no other text: [{"q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "one short sentence on why the answer is right"}] — "a" is the index (0–3) of the right option.` }]);
-  const s = String(reply || ''), i = s.indexOf('['), j = s.lastIndexOf(']');
+  const reply = await askCassie([{ role: 'user', content: `Write a ${n}-question multiple-choice quiz about "${topic}" for a ${level} student. Each question has 4 options and exactly one right answer; the wrong options should be believable. Reply with ONLY a JSON array, no other text: [{"q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "one short sentence on why the answer is right"}], "a" is the index (0 to 3) of the right option.` }]);
+  const s = noDashes(reply || ''), i = s.indexOf('['), j = s.lastIndexOf(']');
   if (i < 0 || j <= i) return [];
   try {
     return JSON.parse(s.slice(i, j + 1)).filter((q) => q && q.q && Array.isArray(q.o) && q.o.length >= 2 && Number.isInteger(+q.a) && +q.a < q.o.length).slice(0, Math.max(n, 1)).map((q) => ({ q: String(q.q), o: q.o.map(String), a: +q.a, why: String(q.why || '') }));
@@ -4106,7 +4122,7 @@ async function startRoom(code, title) {
     title: `${title} · ${code}`,
     dark: false, // everyone sees the same page
     checkLabel: 'Send to Cassie',
-    onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board — what did we get right, and what should we fix?'); return ''; },
+    onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board. What did we get right, and what should we fix?'); return ''; },
     askPlaceholder: 'Ask Cassie about the board (only you see her answer)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
     ...boardDecks(),
@@ -4120,7 +4136,7 @@ async function startRoom(code, title) {
   const study = window.CassieStudy && panel ? window.CassieStudy.attach({
     panel, me, name: roomName(),
     send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); },
-    ask: (q) => askCassie([{ role: 'user', content: q }]),
+    ask: askShown,
     makeQuiz: roomQuiz,
     decks: boardDecks().decks,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
@@ -4130,7 +4146,7 @@ async function startRoom(code, title) {
   R.stop = () => { stopRoom(); if (study) study.destroy(); };
   const banner = (note = '') => {
     const who = R.members.map((m) => `<span>${escapeHtml(m.uid === me ? `${m.name} (you)` : m.name)}</span>`).join('');
-    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button><button type="button" class="csk-btn" data-room-act="check" title="Cassie looks at the whole board — a proof, code, a diagram — and everyone sees her answer">🔎 Ask Cassie to check our board</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button><button type="button" class="csk-btn" data-room-act="check" title="Cassie looks at the whole board, a proof, code, a diagram, and everyone sees her answer">🔎 Ask Cassie to check our board</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
     const sb = el.querySelector('[data-room-act="study"]');
     if (sb) sb.onclick = () => study.toggle();
     el.querySelector('[data-room-act="check"]').onclick = (e) => groupCheck(e.currentTarget);
@@ -4158,7 +4174,7 @@ async function startRoom(code, title) {
       session.showNote({ headline: 'Cassie checked the board (everyone sees this)', reply: a });
       if (study) study.share(typed ? q : 'Check our board', a, { board: 1 });
       track('feature', 'room:check');
-    } catch (e) { session.showNote({ reply: errorText(e) || 'Couldn’t reach Cassie — try again.' }); }
+    } catch (e) { session.showNote({ reply: errorText(e) || 'Couldn’t reach Cassie. Try again.' }); }
     finally { btn.disabled = false; btn.textContent = was; }
   }
   banner('Connecting…');
@@ -4282,7 +4298,7 @@ function boardToImage(boardEl) {
 if (window.CassieBoard) {
   window.CassieBoard.onDraw = async (boardEl, spec) => {
     const image = await boardToImage(boardEl);
-    openSketch({ image, title: spec.title ? `Board — ${spec.title}` : 'Your board' });
+    openSketch({ image, title: spec.title ? `Board: ${spec.title}` : 'Your board' });
   };
 }
 const boardBtn = document.getElementById('board-btn');
@@ -4315,7 +4331,7 @@ async function attachInto(a, file) {
   // Photos / screenshots → picture reading.
   if (kind === 'image' || kind === 'heic') {
     a.kind = 'image';
-    if (others('image') >= MAX_PHOTOS) return fail(`Up to ${MAX_PHOTOS} photos at a time — send these first, then add more.`);
+    if (others('image') >= MAX_PHOTOS) return fail(`Up to ${MAX_PHOTOS} photos at a time. Send these first, then add more.`);
     try {
       a.image = await processImageFile(file);
       a.status = 'ready'; a.note = '';
@@ -4339,14 +4355,14 @@ async function attachInto(a, file) {
   // Documents → read the whole thing in the browser.
   a.kind = 'doc';
   if (kind === 'pdf' || kind === 'docx' || kind === 'pptx' || kind === 'txt') {
-    if (others('doc') >= MAX_FILES) return fail(`Up to ${MAX_FILES} files at a time — send these first, then add more.`);
+    if (others('doc') >= MAX_FILES) return fail(`Up to ${MAX_FILES} files at a time. Send these first, then add more.`);
     renderAttachments();
     islandShow('upload', `Opening ${file.name}…`); botMood('upload');
     try {
       const doc = await readDocument(file, kind);
       if (!doc.text && !doc.hasVisuals) return fail(`Couldn’t find anything readable in ${file.name}.`);
       a.doc = doc; a.status = 'ready';
-      a.note = `${doc.label} · ${file.name}${doc.scanned ? ' — scanned, I’ll read the pages as pictures' : ''}`;
+      a.note = `${doc.label} · ${file.name}${doc.scanned ? ': scanned, I’ll read the pages as pictures' : ''}`;
       if (!promptInput.value.trim()) promptInput.placeholder = 'What should I do with it? e.g. “Make a reviewer”';
       islandShow('done', `Got it · ${doc.label}`, 2200); botMood('done', 2200);
       return true;
@@ -4356,7 +4372,7 @@ async function attachInto(a, file) {
   }
   if (kind === 'legacy-ppt') return fail('That’s an old PowerPoint (.ppt). Open it and Save As .pptx or PDF, then attach it again.');
   if (kind === 'legacy-doc') return fail('That’s an old Word file (.doc). Open it and Save As .docx or PDF, then attach it again.');
-  if (kind === 'xlsx') return fail('Spreadsheets aren’t supported yet — save it as a PDF and attach that.');
+  if (kind === 'xlsx') return fail('Spreadsheets aren’t supported yet. Save it as a PDF and attach that.');
   return fail(`I can’t open ${file.name}. I read PDFs, PowerPoint (.pptx), Word (.docx), text files and photos.`);
 }
 attachRemove.addEventListener('click', clearAttach);
@@ -4454,7 +4470,7 @@ async function teach3d(view) {
     ? { id: 'body3d', name: 'Human body 3D', subject: 'explore', blurb: 'a real 3D human body', about: 'The chips at the bottom turn each body system on or off (bones, muscles, organs…). Boy or Girl picks the body. "Find a part" searches any part by name. Tap any part on the model to see what it is and does, then Ask Cassie or Quiz me about it. "Look around" turns the body to the front, back or side, and its slider pulls every part apart and sorts it. Drag to turn, pinch or scroll to zoom, two fingers to move.' }
     : { id: view.kind + 'cell', name: view.kind === 'plant' ? 'Plant cell 3D' : 'Animal cell 3D', subject: 'explore', blurb: 'a 3D cell, cut open', about: 'Tap any organelle (or its name in the list at the bottom) to see what it does. Labels shows or hides the names; Cut open shows the inside or the whole cell. The tabs at the top switch between the human body, the animal cell and the plant cell. Drag to turn, pinch or scroll to zoom.' };
   teacher3d = tutor({ view: view.root, lab, collect: collectAll, described: () => describe3d(view),
-    ask: (q) => askCassie([{ role: 'user', content: q }]),
+    ask: askShown,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
     hear: canHear() ? hearOnce : null,
     level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' ') });
@@ -4491,7 +4507,7 @@ async function openExplore(cell, ret) {
       onTeach: () => teach3d(view),
       onAskHere: async () => { stopTeach3d(); (await help3dFor(view)).ask('Explain what I\'m looking at simply, then ask me one quick question to check I understood.', 'What am I looking at?'); },
       // a short explanation of a tapped part of the body, without leaving the 3D view
-      explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
+      explain: (q) => (canChat() ? askShown(q) : Promise.reject(new Error('no brain'))),
       onClose: () => {
         stopTeach3d();
         lessons3d.clear(); // (a lesson is about the 3D view as it was on screen)
@@ -4505,7 +4521,7 @@ async function openExplore(cell, ret) {
   } catch (e) {
     if (ret) ret.back();
     islandShow('oops', 'Couldn’t open 3D', 2600);
-    renderMessage('assistant', 'I couldn’t open the 3D cell just now — check your internet connection and try again.');
+    renderMessage('assistant', 'I couldn’t open the 3D cell just now. Check your internet connection and try again.');
   }
 }
 // a link like app.html?explore=plant opens it straight away
@@ -4534,7 +4550,7 @@ async function openLabs(lab, more = {}) {
       openExplore: (cell, ret) => openExplore(cell, ret),
       premium: PREMIUM,
       // a short hint from Cassie inside the lab, without leaving it
-      explain: (q) => (canChat() ? askCassie([{ role: 'user', content: q }]) : Promise.reject(new Error('no brain'))),
+      explain: (q) => (canChat() ? askShown(q) : Promise.reject(new Error('no brain'))),
       // the study tools: your flashcard decks (spaced repetition) and reading your files
       addCards: (list, deck) => (window.CassieCards ? window.CassieCards.add(list, deck, 'labs') : 0),
       openCards: window.CassieCards ? (deck) => window.CassieCards.open(deck) : null,
@@ -4552,7 +4568,7 @@ async function openLabs(lab, more = {}) {
     });
   } catch (e) {
     islandShow('oops', 'Couldn’t open Labs', 2600);
-    renderMessage('assistant', 'I couldn’t open Labs just now — check your internet connection and try again.');
+    renderMessage('assistant', 'I couldn’t open Labs just now. Check your internet connection and try again.');
   }
 }
 if (labsBtn) labsBtn.addEventListener('click', () => openLabs(undefined, { section: 'learn' }));
@@ -4594,7 +4610,7 @@ if (quizBtn) {
     } else {
       const saved = (state.mistakes || []).length;
       renderMessage('assistant', saved
-        ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again — tap “Review my mistakes” on the home screen (New chat) any time, or turn them into flashcards (Ideas → Flashcards).`
+        ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again. Tap “Review my mistakes” on the home screen (New chat) any time, or turn them into flashcards (Ideas → Flashcards).`
         : 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
     }
   });
@@ -4616,7 +4632,7 @@ if (talkBtn) {
       if (quizBtn) quizBtn.classList.remove('active');
       if (typeof setQuizLabel === 'function') setQuizLabel('Quiz me');
       if (!state.messages.length) chatLog.innerHTML = '';
-      renderMessage('assistant', "Okay — real talk mode. No lessons, no fluff. What's going on? I'm listening.");
+      renderMessage('assistant', "Okay: real talk mode. No lessons, no fluff. What's going on? I'm listening.");
       try { set3D('encouraging'); } catch (e) { /* ignore */ }
     } else {
       renderMessage('assistant', "Back to study mode. I'm here whenever you want to talk again.");
@@ -4645,7 +4661,7 @@ function openSettings() {
   if (keysGroup) keysGroup.open = !canChat();
   const keysOpt = document.getElementById('keys-optional'), keysSub = document.getElementById('keys-sub');
   if (keysOpt) keysOpt.hidden = !SERVER;
-  if (keysSub && SERVER) keysSub.textContent = 'Optional — for heavy use';
+  if (keysSub && SERVER) keysSub.textContent = 'Optional, for heavy use';
   syncAccentSwatches();
   settingsPanel.hidden = false;
 }
@@ -4673,7 +4689,7 @@ function buildAccentSwatches() {
   wrap.innerHTML = '';
   const none = document.createElement('button');
   none.type = 'button'; none.className = 'accent-sw accent-none';
-  none.dataset.accent = ''; none.title = 'None — marble monochrome';
+  none.dataset.accent = ''; none.title = 'None: marble monochrome';
   none.setAttribute('aria-label', 'None (marble monochrome)');
   wrap.appendChild(none);
   ACCENT_COLORS.forEach((c) => {
@@ -4813,7 +4829,7 @@ function renderMemory() {
         <h2>What Cassie remembers</h2>
         <button class="icon-btn" id="mem-close" aria-label="Close">&times;</button>
       </div>
-      <p class="mem-privacy">${memIcon('lock')}Everything here stays on your device. No account, no server — only you can see it.</p>
+      <p class="mem-privacy">${memIcon('lock')}Everything here stays on your device. No account, no server. Only you can see it.</p>
       ${hasData ? `
       <div class="mem-stats">
         <div class="mem-stat"><b>${memIcon('flame')}${s.streak}</b><small>day streak</small></div>
@@ -4822,7 +4838,7 @@ function renderMemory() {
         <div class="mem-stat"><b>${memIcon('book')}${s.topics}</b><small>topics</small></div>
         <div class="mem-stat"><b>${memIcon('repeat')}${s.due}</b><small>to review</small></div>
       </div>
-      <p class="mem-note">A gentle tracker — it grows as you learn. No streak-shaming here.</p>` : `
+      <p class="mem-note">A gentle tracker. It grows as you learn. No streak-shaming here.</p>` : `
       <p class="mem-welcome">This is where your progress will live. Ask Cassie a question or finish a focus session, and your streak, topics, and reviews start filling in here.</p>`}
 
       <label class="field"><span>Your name (optional)</span><input id="mem-name" type="text" value="${memEsc(d.profile.name)}" placeholder="What should I call you?"></label>
@@ -4983,10 +4999,10 @@ if (memoryPanel) {
       try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(times.focus); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
       const long = cycles % 4 === 0;
       switchMode(long ? 'long' : 'break');
-      nudge(long ? `Awesome focus! Take a ${times.long}-minute break — stretch and breathe.` : `Nice work! ${times.brk}-minute break — drink some water and rest your eyes.`, 'encouraging');
+      nudge(long ? `Awesome focus! Take a ${times.long}-minute break: stretch and breathe.` : `Nice work! ${times.brk}-minute break: drink some water and rest your eyes.`, 'encouraging');
     } else {
       switchMode('focus');
-      nudge(`Break's over — ${times.focus} minutes of focus. Let's go!`, 'thinking');
+      nudge(`Break's over: ${times.focus} minutes of focus. Let's go!`, 'thinking');
     }
     start(); // auto-flow into the next block
   }
@@ -5262,7 +5278,7 @@ function bellaChunks(t) {
     // very long sentences are cut at a comma, so no single piece takes long to make
     while (s.length > (out.length ? 220 : 90)) {
       const lim = out.length ? 220 : 90;
-      const cut = Math.max(s.lastIndexOf(', ', lim), s.lastIndexOf('; ', lim), s.lastIndexOf(' — ', lim));
+      const cut = Math.max(s.lastIndexOf(', ', lim), s.lastIndexOf('; ', lim), s.lastIndexOf(' - ', lim));
       const at = cut > 25 ? cut + 1 : s.lastIndexOf(' ', lim);
       if (at < 20) break;
       out.push(s.slice(0, at).trim()); s = s.slice(at).trim();
@@ -5287,7 +5303,7 @@ function buildVoiceUI() {
       </div>
       <div class="vc-gender" role="radiogroup" aria-label="Cassie's voice"><button type="button" role="radio" data-gender="woman">Woman</button><button type="button" role="radio" data-gender="man">Man</button></div>
     </div>
-    <button type="button" class="vc-stage" aria-label="Cassie — tap to stop her talking"><span class="vc-ring"></span><span class="vc-bot"></span></button>
+    <button type="button" class="vc-stage" aria-label="Cassie. Tap to stop her talking"><span class="vc-ring"></span><span class="vc-bot"></span></button>
     <p class="vc-status" aria-live="polite"></p>
     <p class="vc-you"></p>
     <p class="vc-cassie" aria-live="polite"></p>
@@ -5333,7 +5349,7 @@ function buildVoiceUI() {
 }
 
 /* Settings → Voice: is her human voice on this device, and how does it sound? */
-const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together — ask me anything, and I’ll explain it step by step.';
+const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together. Ask me anything, and I’ll explain it step by step.';
 function showHumanVoiceSetting() {
   const box = document.getElementById('hv-state');
   if (!box) return;
@@ -5344,7 +5360,7 @@ function showHumanVoiceSetting() {
     : st === 'ready' ? `✓ ${name}’s voice is ready.`
       : st === 'loading' ? (CV.warming && CV.warming() ? `Downloaded ✓ Setting up ${name}’s voice on this device (up to a minute)…` : `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once)`)
         : st === 'failed' ? `Couldn’t get her voice${CV.error() ? ` (${CV.error()})` : ''}. Check the internet and tap Play a sample to try again.`
-          : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once — Wi-Fi is best).';
+          : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once. Wi-Fi is best).';
   if (CV && CV.studio && CV.studio.on() && st !== 'ready') box.textContent = `Cassie’s studio voice stands in until her own voice is on this device. ${box.textContent}`;
 }
 function playHumanSample() {
@@ -5393,7 +5409,7 @@ function showHumanVoice() {
     // she just became ready, mid-conversation: say so, and switch from her next answer
     v.toldReady = true; v.readyAt = Date.now();
     box.dataset.st = 'note'; box.hidden = false;
-    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b> — she’ll use it from her next answer.';
+    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b>: she’ll use it from her next answer.';
     clearTimeout(v.noteTimer); v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
     return;
   }
@@ -5405,11 +5421,11 @@ function showHumanVoice() {
     box.hidden = false;
     const pct = Math.round(CV.progress() * 100), standIn = studioVoice() ? 'a stand-in voice' : 'your phone’s voice';
     box.innerHTML = CV.warming && CV.warming()
-      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there — this part can take up to a minute. She keeps talking with ${standIn} until then.</small>`
-      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking — until it’s ready, she uses ${standIn}.</small>`;
+      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there. This part can take up to a minute. She keeps talking with ${standIn} until then.</small>`
+      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking: until it’s ready, she uses ${standIn}.</small>`;
   } else if (st === 'failed') {
     box.hidden = false;
-    box.innerHTML = 'Cassie is using your phone’s voice — her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
+    box.innerHTML = 'Cassie is using your phone’s voice because her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
   } else if (later) {
     box.hidden = true;
   } else {
@@ -5427,7 +5443,7 @@ function noteVoice(kind) {
   if (!was || was === kind || !voiceUI || !voiceUI.hv || (kind === 'bella' && v.toldReady)) return;
   const box = voiceUI.hv;
   box.dataset.st = 'note'; box.hidden = false;
-  box.innerHTML = kind === 'bella' ? `✓ <b>Cassie’s own voice is ready</b> — she’ll use it from now on.`
+  box.innerHTML = kind === 'bella' ? `✓ <b>Cassie’s own voice is ready</b>: she’ll use it from now on.`
     : was === 'studio' ? 'Today’s studio voice is used up, so Cassie switched voices. Her own voice (in Settings → Voice) has no limit.'
       : 'Cassie switched voices.';
   clearTimeout(v.noteTimer); v.readyAt = Date.now();
@@ -5438,7 +5454,7 @@ function setVoicePhase(phase, text) {
   if (!v || !ui) return;
   v.phase = phase;
   ui.el.dataset.phase = phase;
-  const say = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Cassie is talking — tap her to cut in', paused: 'Paused — tap the mic to talk' }[phase];
+  const say = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Cassie is talking. Tap her to cut in', paused: 'Paused. Tap the mic to talk' }[phase];
   ui.status.textContent = text || say || '';
   const mood = { listening: 'listening', thinking: 'thinking', speaking: 'talking', paused: 'idle' }[phase] || 'idle';
   if (ui.bot) ui.bot.setState(mood);
@@ -5508,7 +5524,7 @@ function heard(text) {
 async function micBlocked() {
   try { const p = await navigator.permissions.query({ name: 'microphone' }); return p.state === 'denied'; } catch (e) { return null; } // null: this browser can't say
 }
-const MIC_BLOCKED = 'Cassie can’t hear you — allow the microphone for this site, then tap the mic.';
+const MIC_BLOCKED = 'Cassie can’t hear you. Allow the microphone for this site, then tap the mic.';
 async function micTrouble(v, sure) {
   if (voiceChat !== v) return;
   const blocked = await micBlocked();
@@ -5691,7 +5707,7 @@ function hearOnce() {
       stopFn = () => { if (mr.state !== 'inactive') mr.stop(); };
       setTimeout(stopFn, 15000);
     }).catch(() => fail(new Error('Allow the microphone to talk to Cassie, or type instead.')));
-  } else fail(new Error('This browser can’t listen here — type your question instead.'));
+  } else fail(new Error('This browser can’t listen here. Type your question instead.'));
   return { done, stop: () => stopFn() };
 }
 async function transcribeAudio(blob) {
@@ -5711,7 +5727,7 @@ async function transcribeAudio(blob) {
     let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
     throw new Error(m || 'Sorry, I couldn’t hear that. Try again?');
   }
-  throw new Error('To talk with me here, use Chrome, Edge or Safari — or add a free Groq key in Settings.');
+  throw new Error('To talk with me here, use Chrome, Edge or Safari, or add a free Groq key in Settings.');
 }
 
 // Cut a growing answer into pieces to speak: the first piece as soon as there is one (short, so
@@ -5727,7 +5743,7 @@ function speakablePieces(text, from, finished) {
     let end = m ? m.index + m[0].length : -1;
     // a long sentence: cut at a comma so no piece takes long to make
     const lim = first ? 60 : 200;
-    if ((end < 0 || end > lim) && rest.length > lim) { const cut = Math.max(rest.lastIndexOf(', ', lim), rest.lastIndexOf('; ', lim), rest.lastIndexOf(' — ', lim)); if (cut > 20) end = cut + 2; }
+    if ((end < 0 || end > lim) && rest.length > lim) { const cut = Math.max(rest.lastIndexOf(', ', lim), rest.lastIndexOf('; ', lim), rest.lastIndexOf(' - ', lim)); if (cut > 20) end = cut + 2; }
     if (end < 0) { if (finished) end = rest.length; else break; }
     // short sentences after the first are joined to the next (fewer, smoother pieces)
     if (!first && end < 40 && !finished) { const m2 = /[.!?…]+["”’)]*(\s|$)/.exec(rest.slice(end)); if (!m2) break; end += m2.index + m2[0].length; }
@@ -5944,11 +5960,11 @@ async function runExplainOrAnswer(text, rect, mode) {
       : '';
   let prompt;
   if (mode === 'answer') {
-    prompt = `Give only the direct answer to this — no explanation, no extra words:\n\n"${text}"`;
+    prompt = `Give only the direct answer to this. No explanation, no extra words:\n\n"${text}"`;
   } else if (mode === 'code') {
     prompt = `Write clean, well-commented code that solves or implements this. Pick a sensible language if none is stated, put the code in a fenced code block, and briefly explain how it works.${depth}\n\n"${text}"`;
   } else {
-    prompt = `Answer this and explain your reasoning — give the answer, then explain why/how.${depth}\n\n"${text}"`;
+    prompt = `Answer this and explain your reasoning. Give the answer, then explain why/how.${depth}\n\n"${text}"`;
   }
   try {
     const reply = await askCassie([{ role: 'user', content: prompt }]);
@@ -6114,7 +6130,7 @@ function profileLine(p) {
     : /^(Nursery|Kindergarten)$/.test(p.grade || '') ? `a little one in ${p.grade.toLowerCase()}`
     : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
   const young = (p.age && p.age < 8) || /^(Nursery|Kindergarten)$/.test(p.grade || '');
-  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} — ${who}. Use their name now and then when talking with them — but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${young ? ' They are a very young child: use very short sentences, simple everyday words and a warm, playful tone, and keep everything safe.' : p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
+  return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} - ${who}. Use their name now and then when talking with them, but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${young ? ' They are a very young child: use very short sentences, simple everyday words and a warm, playful tone, and keep everything safe.' : p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
 }
 function openProfile(first) {
   const p = state.profile || (state.account && state.account.name ? { name: state.account.name } : {});
@@ -6182,10 +6198,10 @@ async function authCall(path, body, method = 'POST') {
       headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
-  } catch (e) { throw friendlyError("Couldn't connect — check your internet and try again."); }
+  } catch (e) { throw friendlyError("Couldn't connect. Check your internet and try again."); }
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty */ }
-  if (!res.ok) { const e = friendlyError(data.error || 'Something went wrong — please try again.'); e.status = res.status; throw e; }
+  if (!res.ok) { const e = friendlyError(data.error || 'Something went wrong. Please try again.'); e.status = res.status; throw e; }
   return data;
 }
 function accountData() {
@@ -6260,7 +6276,7 @@ function plusSheet(what, why) {
     <p>Plus and Pro open all the 3D any time (the body, the cells, the solar system, the globe and Real 3D in Labs), the Museum quiz, and saving or printing your notes, maps and boards. Paid plans are almost here, and everything else in Labs stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
-      ${signedOut ? '<button type="button" class="plus-in">I have Plus — sign in</button>' : ''}
+      ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
       <button type="button" class="plus-ok">Not now</button>
     </div></div>`;
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
@@ -6351,7 +6367,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
       <div class="auth-copy">
         <p class="auth-kicker">Your study buddy</p>
         <h2>Learn anything.<br>On every device.</h2>
-        <p>Sign in once — your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
+        <p>Sign in once: your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
       </div>
       <div class="auth-hero"></div>
     </div>`;
@@ -6381,7 +6397,7 @@ function openAuth({ first = false, mode = 'signin' } = {}) {
     if (to === 'forgot') {
       const fp = f.querySelector('.auth-forgot');
       fp.textContent = GOOGLE_CLIENT_ID
-        ? 'If your account uses the same email as your Google account, tap “Continue with Google” to get back in — no password needed.'
+        ? 'If your account uses the same email as your Google account, tap “Continue with Google” to get back in. No password needed.'
         : 'Password resets aren’t available yet. Tap “Report a problem” in Settings with your email and we’ll help, or create a new account.';
       fp.hidden = false; return;
     }
@@ -6494,7 +6510,7 @@ function openReport() {
     if (text.length < 5) { err.textContent = 'Please describe the problem in a few words.'; err.hidden = false; return; }
     f.querySelector('.pf-go').disabled = true;
     const ok = await sendFeedback('report', 'report', text);
-    if (!ok) { err.textContent = "Couldn't send — check your internet and try again."; err.hidden = false; f.querySelector('.pf-go').disabled = false; return; }
+    if (!ok) { err.textContent = "Couldn't send. Check your internet and try again."; err.hidden = false; f.querySelector('.pf-go').disabled = false; return; }
     f.innerHTML = '<h2>Thank you!</h2><p class="pf-sub">Your report was sent. It helps make Cassie better for everyone.</p><button type="button" class="pf-go">Close</button>';
     f.querySelector('.pf-go').addEventListener('click', close);
   });

@@ -5,12 +5,12 @@ import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, sli
 /* ---------------- Vectors ---------------- */
 const vectorLab = {
   id: 'vectors', name: 'Vectors', subject: 'math', topic: 'vectors: adding and subtracting, magnitude, dot product, cross product and the angle between vectors',
-  blurb: 'Drag two vectors and watch their sum, difference, dot product, angle and cross product — in 2D or 3D.',
+  blurb: 'Drag two vectors and watch their sum, difference, dot product, angle and cross product, in 2D or 3D.',
   words: 'vector addition subtraction dot product cross product magnitude angle components physics',
   icon: '<path d="M8 40L22 14M8 40l30-8M22 14l16 18" /><path d="M22 14l-5 2M22 14l1 5M38 32l-4-4M38 32l-5 1"/>',
   tries: ['Make a and b perpendicular (a · b = 0)', 'Make a + b point straight up', 'In 3D, make a × b point straight along the z-axis'],
-  hints: ['Perpendicular means a right angle between them. Try a = (3, 0) and b = (0, 2) — then try a tilted pair.', 'Straight up means the x part of a + b is 0: the x parts of a and b must cancel.', 'In 3D, keep both vectors flat in the x–y plane (z = 0). Their cross product is then perpendicular to that plane.'],
-  about: 'Vectors are drawn to scale on a grid. Their heads snap to whole numbers so the arithmetic is easy to check.\na + b adds the parts: (a₁ + b₁, a₂ + b₂). The dot product a · b = a₁b₁ + a₂b₂ (+ a₃b₃ in 3D) = |a||b| cos θ, so it is 0 exactly when the vectors are perpendicular.\nThe cross product a × b (3D) is perpendicular to both, with length |a||b| sin θ — the area of the parallelogram they make. Its direction follows the right-hand rule. In 2D only its z part (a₁b₂ − a₂b₁) is shown.',
+  hints: ['Perpendicular means a right angle between them. Try a = (3, 0) and b = (0, 2). Then try a tilted pair.', 'Straight up means the x part of a + b is 0: the x parts of a and b must cancel.', 'In 3D, keep both vectors flat in the x-y plane (z = 0). Their cross product is then perpendicular to that plane.'],
+  about: 'Vectors are drawn to scale on a grid. Their heads snap to whole numbers so the arithmetic is easy to check.\na + b adds the parts: (a₁ + b₁, a₂ + b₂). The dot product a · b = a₁b₁ + a₂b₂ (+ a₃b₃ in 3D) = |a||b| cos θ, so it is 0 exactly when the vectors are perpendicular.\nThe cross product a × b (3D) is perpendicular to both, with length |a||b| sin θ, the area of the parallelogram they make. Its direction follows the right-hand rule. In 2D only its z part (a₁b₂ − a₂b₁) is shown.',
   mount({ stage, panel, api }) {
     let dim = 2, a = [4, 2, 0], b = [1, 4, 0], show = { sum: true, diff: false, proj: false };
     let yaw = -0.6, pitch = 0.45, S = 30, O = [0, 0], held = null;
@@ -81,7 +81,7 @@ const vectorLab = {
     function sync(fromSliders) {
       if (!fromSliders) sl.forEach(([n, i, s]) => s.set((n === 'a' ? a : b)[i]));
       const d = dotp(), c = cross(), f = (v) => `(${v.slice(0, dim).join(', ')})`;
-      st.set([['|a|', num(mag(a))], ['|b|', num(mag(b))], ['a + b', f([a[0] + b[0], a[1] + b[1], a[2] + b[2]])], ['a − b', f([a[0] - b[0], a[1] - b[1], a[2] - b[2]])], ['a · b', `${d}${d === 0 && mag(a) && mag(b) ? ' — perpendicular!' : ''}`], ['Angle between', `${num(angle())}°`], [dim === 3 ? 'a × b' : 'a × b (z part)', dim === 3 ? `(${c.join(', ')}), length ${num(Math.hypot(...c))}` : `${c[2]} = area of the parallelogram`]]);
+      st.set([['|a|', num(mag(a))], ['|b|', num(mag(b))], ['a + b', f([a[0] + b[0], a[1] + b[1], a[2] + b[2]])], ['a − b', f([a[0] - b[0], a[1] - b[1], a[2] - b[2]])], ['a · b', `${d}${d === 0 && mag(a) && mag(b) ? ': perpendicular!' : ''}`], ['Angle between', `${num(angle())}°`], [dim === 3 ? 'a × b' : 'a × b (z part)', dim === 3 ? `(${c.join(', ')}), length ${num(Math.hypot(...c))}` : `${c[2]} = area of the parallelogram`]]);
       if (d === 0 && mag(a) && mag(b)) api.check(0);
       const s = [a[0] + b[0], a[1] + b[1]]; if (dim === 2 && s[0] === 0 && s[1] > 0) api.check(1);
       if (dim === 3 && c[0] === 0 && c[1] === 0 && c[2] !== 0) api.check(2);
@@ -164,12 +164,12 @@ function meshOf(kind, d) {
 }
 const solidsLab = {
   id: 'solids', name: '3D shapes', subject: 'math', topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
-  blurb: 'Turn 13 solids — cubes, spheres, cones, prisms, a torus… Make them any size and watch volume and surface area change.',
+  blurb: 'Turn 13 solids: cubes, spheres, cones, prisms, a torus… Make them any size and watch volume and surface area change.',
   words: 'volume surface area 3d solids geometry cube sphere cylinder cone pyramid prism cuboid',
   icon: '<path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/>',
-  tries: ['Make a cube with a volume of exactly 64 cm³', 'Double a cube’s side — what happens to its volume?', 'Compare shapes with the same volume: which has the least surface?'],
+  tries: ['Make a cube with a volume of exactly 64 cm³', 'Double a cube’s side: what happens to its volume?', 'Compare shapes with the same volume: which has the least surface?'],
   hints: ['A cube’s volume is a × a × a. Which whole number cubed is 64?', 'Note the volume, double the side, and divide the new volume by the old one.', 'Choose “Same volume” and compare the surface areas of the cube, cylinder and sphere.'],
-  about: 'Formulas are the exact ones, worked out with π to many decimal places; answers are rounded to 3 significant figures. Lengths are in the unit you pick (mm, cm, m or inches), areas in that unit squared and volumes in that unit cubed. Slide from 0.1 to 100 or type any size up to 10,000.\nThe 3D pictures are drawn to scale. Curved shapes are drawn with flat facets (like a disco ball), but the numbers use the true curved formulas.\nIn “Same volume” the cylinder is as tall as it is wide (h = 2r) and every shape holds exactly the same volume; the sphere always needs the least surface — that is why bubbles and raindrops are round.',
+  about: 'Formulas are the exact ones, worked out with π to many decimal places; answers are rounded to 3 significant figures. Lengths are in the unit you pick (mm, cm, m or inches), areas in that unit squared and volumes in that unit cubed. Slide from 0.1 to 100 or type any size up to 10,000.\nThe 3D pictures are drawn to scale. Curved shapes are drawn with flat facets (like a disco ball), but the numbers use the true curved formulas.\nIn “Same volume” the cylinder is as tall as it is wide (h = 2r) and every shape holds exactly the same volume; the sphere always needs the least surface. That is why bubbles and raindrops are round.',
   mount({ stage, panel, api }) {
     let kind = 'cube', dims = Object.fromEntries(Object.entries(SOLIDS).map(([k, s]) => [k, s.dims.map((x) => x[1])])), same = false, Vsame = 100, unit = 'cm';
     let yaw = 0.6, pitch = 0.5, auto = true, cubeVols = [];
@@ -260,12 +260,12 @@ const SEQS = {
 };
 const recursionLab = {
   id: 'recursion', name: 'Recursion', subject: 'math', topic: 'sequences and recursion: arithmetic and geometric sequences, Fibonacci, factorials and recursive functions in Python',
-  blurb: 'See each term of a sequence built from the one before — in math and in Python.',
+  blurb: 'See each term of a sequence built from the one before, in math and in Python.',
   words: 'recursion sequence arithmetic geometric fibonacci factorial collatz python programming recursive function',
   icon: '<rect x="4" y="18" width="10" height="12" rx="2"/><rect x="19" y="18" width="10" height="12" rx="2"/><rect x="34" y="18" width="10" height="12" rx="2"/><path d="M14 24h5M29 24h5"/><path d="M9 14c0-6 15-6 15 0" />',
   tries: ['Find the 10th Fibonacci number', 'Make a geometric sequence that halves every time', 'Find a Collatz start that takes more than 100 steps to reach 1'],
   hints: ['Choose Fibonacci and tap “Next term” until you have 10 terms.', 'Geometric: each term is the one before times r. What r halves a number?', 'Choose Collatz and try different starting numbers between 20 and 30.'],
-  about: 'A recursive rule defines each term from the term (or terms) before it, plus a starting value — the “base case” that stops the recursion. The Python functions shown are real, working code (Python 3) that compute the same numbers.\nThe Collatz rule is an unsolved puzzle: every starting number anyone has tried eventually reaches 1, but no one has proved that it always does.\nNumbers are exact whole numbers (or exact decimals for a ratio of ½).',
+  about: 'A recursive rule defines each term from the term (or terms) before it, plus a starting value, the “base case” that stops the recursion. The Python functions shown are real, working code (Python 3) that compute the same numbers.\nThe Collatz rule is an unsolved puzzle: every starting number anyone has tried eventually reaches 1, but no one has proved that it always does.\nNumbers are exact whole numbers (or exact decimals for a ratio of ½).',
   mount({ stage, panel, api }) {
     let kind = 'fib', p = { a: 2, d: 3, r: 2, c: 27 }, terms = [], shownN = 6;
     function compute() {

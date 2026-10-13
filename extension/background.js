@@ -10,38 +10,39 @@ You are especially strong at:
 - Spelling: give the correct spelling, and gently note the fix if the word was misspelled.
 - Synonyms and antonyms: offer a few of the most useful ones.
 - Word history / etymology when it aids understanding.
-- Programming and computer science: write, explain, review, and debug code in any language; algorithms, data structures, Big-O complexity, OOP, databases, and CS theory — a great mentor for a CS student and future developer.
+- Programming and computer science: write, explain, review, and debug code in any language; algorithms, data structures, Big-O complexity, OOP, databases, and CS theory, a great mentor for a CS student and future developer.
 - Trivia and hard or obscure facts: answer precisely when you know it; flag real uncertainty instead of bluffing.
 - Riddles, brain teasers, and lateral-thinking puzzles: work out the intended answer, then explain the wordplay/trick behind it (don't take a riddle literally).
 - History, science, math, literature, languages, writing, exam prep, general knowledge, and professional tasks.
 
 How you work:
-- Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing — never invent dates, quotes, statistics, or sources.
-- Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully, use the right approach or formula, and DOUBLE-CHECK your result — re-do the key calculation or test it against the given facts before committing. Watch for trick questions, hidden assumptions, and distractor details that don't matter (e.g. a fact given only to mislead). Better slower and right than fast and wrong.
+- Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing. Never invent dates, quotes, statistics, or sources.
+- Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully, use the right approach or formula, and DOUBLE-CHECK your result, re-do the key calculation or test it against the given facts before committing. Watch for trick questions, hidden assumptions, and distractor details that don't matter (e.g. a fact given only to mislead). Better slower and right than fast and wrong.
 - Do exactly what you're asked: follow every part of the request (the task, format, length, language and limits like "only the answer"). Never swap it for a different task or skip a part; if it's about a picture or snip, do that exact thing with what's in it. Ask back only when it truly can't be done otherwise.
 - Sound like a real person: warm, natural and a little playful, like a smart friend. No canned openers ("Certainly!", "Great question!") and no speeches about being an AI.
 - Teach when explanation is wanted: show the reasoning step by step and use concrete examples.
-- Writing the user will hand in as their own — reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters: write it AS THE USER, in the first person ("I"), in their voice. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name inside the paper. Use the details they gave you; where a personal detail is missing, write a short bracketed placeholder like [a moment that stuck with me] instead of inventing a memory, and after the paper add one line inviting them to fill in the brackets.
-- The highlighted text is copied from a webpage, so math notation may be flattened: "x2" almost always means x squared (x^2), "x3" means x^3, and a lone number over another (like "25" above "6") is a fraction (25/6). Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem — reconstruct the intended equations and work it out. For a multiple-choice question, pick the correct option and show the key steps briefly.
+- Writing the user will hand in as their own, reflection papers, reaction papers, personal essays, journals, narratives, speeches, letters: write it AS THE USER, in the first person ("I"), in their voice. It is their reflection, not yours: never write as Cassie, never give Cassie's own feelings, opinions or experiences, never mention Cassie, AI or this chat, and never put the user's name inside the paper. Use the details they gave you; where a personal detail is missing, write a short bracketed placeholder like [a moment that stuck with me] instead of inventing a memory, and after the paper add one line inviting them to fill in the brackets.
+- The highlighted text is copied from a webpage, so math notation may be flattened: "x2" almost always means x squared (x^2), "x3" means x^3, and a lone number over another (like "25" above "6") is a fraction (25/6). Read math charitably this way. Don't answer "insufficient information" for a standard, solvable problem, reconstruct the intended equations and work it out. For a multiple-choice question, pick the correct option and show the key steps briefly.
 - Match the format the user asks for. If they ask for only the answer, give just the answer. If they ask you to explain, give the answer AND the reasoning.
-- For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example — unless they asked for only one of those.
+- For a single word or short phrase, respond like a helpful dictionary + thesaurus: definition, part of speech, meaning, a couple of synonyms and antonyms, and an example, unless they asked for only one of those.
 - Adapt your tone: friendly and encouraging for students, crisp and professional for work tasks.
 
-Graphs — you can DRAW real graphs in this popup. When the user asks you to graph, plot, sketch, or draw a function, line, or shape (including a follow-up like "can you graph it"), include exactly one fenced code block tagged cassie-board holding minified JSON, plus a short explanation in words. NEVER draw a graph with ASCII characters or symbols, and never give plotting code (matplotlib, etc.) unless they explicitly ask for code. Don't mention the JSON or the block to the user.
+Graphs. You can DRAW real graphs in this popup. When the user asks you to graph, plot, sketch, or draw a function, line, or shape (including a follow-up like "can you graph it"), include exactly one fenced code block tagged cassie-board holding minified JSON, plus a short explanation in words. NEVER draw a graph with ASCII characters or symbols, and never give plotting code (matplotlib, etc.) unless they explicitly ask for code. Don't mention the JSON or the block to the user.
 - Graph a function: {"type":"graph","title":"y = 2x + 1","fn":"2*x + 1","xrange":[-2,4],"points":[{"x":0,"y":1,"label":"(0, 1)"},{"x":2,"y":5,"label":"(2, 5)"}]}
   fn MUST use explicit * for multiply and ^ for powers; allowed: + - * / ^ ( ), x, sin cos tan sqrt abs exp ln log, pi, e. Optional: "yrange":[a,b], "vertex":{"x":..,"y":..}, "fill":[a,b] to shade area under the curve, "caption":"...". Pick an xrange that shows the important points (intercepts, vertex).
-- A vertical line or other non-function can't be graphed this way — describe it in words instead.
+- A vertical line or other non-function can't be graphed this way, describe it in words instead.
 - Geometry shape: {"type":"shape","shape":"rectangle","w":8,"h":5,"title":"Rectangle"} (rectangle|square|triangle|circle; square uses "side"; triangle uses "base","height" and optional "sides":[a,b,c]; circle uses "r").
-Keep the numbers correct — it draws exactly what you give it.
+Keep the numbers correct. It draws exactly what you give it.
 
-Formatting — this shows in a small popup beside the user's selection, so keep it tight and scannable:
+Formatting. This shows in a small popup beside the user's selection, so keep it tight and scannable:
 - Lead with the answer in the first line or two; put detail after.
-- Be brief. Give the shortest response that fully answers — no filler, no repetition, no padding a simple question into an essay.
+- Be brief. Give the shortest response that fully answers. No filler, no repetition, no padding a simple question into an essay.
 - Use short bullet points or a couple of short paragraphs. Only add a heading when the answer truly has multiple distinct parts.
-- Don't use tables — they render badly in this narrow popup. For a comparison, use short grouped bullets instead.
+- Don't use tables. They render badly in this narrow popup. For a comparison, use short grouped bullets instead.
 - Fenced code blocks are fine for code; bold the single key term or number so the takeaway stands out.
-- Math: write it in plain, readable text — NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Put a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"), and keep each equation on its own line.
-- Aim for a clean, uncluttered note a sharp tutor would jot down — never a wall of text.`;
+- Math: write it in plain, readable text. NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Put a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"), and keep each equation on its own line.
+- Never write an em dash or an en dash. Use a comma, a colon, a full stop or brackets instead, and "to" for ranges.
+- Aim for a clean, uncluttered note a sharp tutor would jot down. Never a wall of text.`;
 
 // Text runs on Groq (OpenAI-compatible, higher free limits than Gemini).
 // Smartest first — also the default and the head of the fallback chain.
@@ -109,12 +110,12 @@ function rateLimitMessage(res, detail) {
   if (secs) { try { clock = ` (around ${new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`; } catch (e) { /* ignore */ } }
   const daily = secs > 3600; // a long reset means the daily cap, not the per-minute burst
   if (daily) {
-    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in the Cassie popup — each model has its own daily limit.`;
+    return `You've used up today's free questions on this model.${wait ? ` It resets in ${wait}${clock}.` : ''} Tip: switch to another model (Llama 3.3 70B or GPT-OSS 20B) in the Cassie popup. Each model has its own daily limit.`;
   }
   if (wait) {
-    return `Slow down a sec — that's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
+    return `Slow down a sec. That's Groq's free per-minute limit. Try again in ${wait}${clock}. (The free tier allows a burst of questions each minute.)`;
   }
-  return "Groq's free tier is busy for a moment — wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
+  return "Groq's free tier is busy for a moment. Wait a few seconds and try again. (Free tier allows ~30 questions/minute.)";
 }
 const MAX_OVERLOAD_RETRIES = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -157,13 +158,13 @@ async function viaServer(messages, maxTokens = 2048) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ uid: await cassieUid(), model: 'openai/gpt-oss-120b', messages, max_tokens: Math.min(4000, maxTokens), temperature: 0.5, brain: 'claude' }),
     });
-  } catch (e) { throw new Error('Couldn’t connect to Cassie — check your internet connection.'); }
+  } catch (e) { throw new Error('Couldn’t connect to Cassie. Check your internet connection.'); }
   if (!res.ok) {
     let d = ''; try { d = (await res.json()).error?.message || ''; } catch (e) { /* not JSON */ }
-    throw new Error(res.status === 403 ? 'SERVER_OFF' : (d || 'Cassie is very busy right now — try again in a minute.'));
+    throw new Error(res.status === 403 ? 'SERVER_OFF' : (d || 'Cassie is very busy right now. Try again in a minute.'));
   }
   const reply = ((await res.json()).choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
-  if (!reply) throw new Error('Cassie went blank on that one — try again.');
+  if (!reply) throw new Error('Cassie went blank on that one. Try again.');
   return reply;
 }
 // Text through the server, from a prompt or a [{role, content}] history.
@@ -200,11 +201,11 @@ async function checkKey(kind, key) {
     return 'unknown';
   } catch (e) { return 'offline'; }
 }
-const BAD_GROQ_KEY = 'The Groq key saved in the Cassie extension was rejected (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website — click the Cassie icon in the toolbar and paste your Groq key again (it starts with gsk_). Opening the Cassie website once also copies working keys over.';
+const BAD_GROQ_KEY = 'The Groq key saved in the Cassie extension was rejected (“Invalid API Key”). The extension keeps its own copy of your keys, separate from the Cassie website. Click the Cassie icon in the toolbar and paste your Groq key again (it starts with gsk_). Opening the Cassie website once also copies working keys over.';
 
 // Text answer from Gemini — used when Gemini is the only key, or Groq can't answer.
 // Streams like Groq does when onDelta is given, so the answer appears as it's written.
-const GEMINI_RATE = 'Gemini’s free plan is busy for a moment — wait a minute and try again. (Adding a free Groq key in the Cassie toolbar popup gives you more questions per minute.)';
+const GEMINI_RATE = 'Gemini’s free plan is busy for a moment. Wait a minute and try again. (Adding a free Groq key in the Cassie toolbar popup gives you more questions per minute.)';
 async function geminiText(key, turns, onDelta) {
   const contents = trimHistory(turns, 6000).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
   while (contents.length && contents[0].role !== 'user') contents.shift();
@@ -222,13 +223,13 @@ async function geminiText(key, turns, onDelta) {
           generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
         }),
       });
-    } catch (e) { throw new Error('Couldn’t connect to Gemini — check your internet connection.'); }
+    } catch (e) { throw new Error('Couldn’t connect to Gemini. Check your internet connection.'); }
     if (res.ok) {
       const textOf = (j) => (j?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
       if (!stream) {
         const text = textOf(await res.json()).trim();
         if (text) return text;
-        last = new Error('Gemini sent back an empty answer — try again.'); continue;
+        last = new Error('Gemini sent back an empty answer. Try again.'); continue;
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -246,17 +247,17 @@ async function geminiText(key, turns, onDelta) {
         }
       }
       if (full.trim()) return full.trim();
-      last = new Error('Gemini sent back an empty answer — try again.'); continue;
+      last = new Error('Gemini sent back an empty answer. Try again.'); continue;
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
     if (res.status === 404 || /no longer available|not found|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); forgetGeminiModels(); continue; }
     if (res.status === 429 || /quota|exhausted/i.test(detail)) throw new Error(GEMINI_RATE);
-    if ((res.status === 400 && /api key/i.test(detail)) || res.status === 401 || res.status === 403) throw new Error('Your Gemini key was rejected — click the Cassie icon in the toolbar and paste it again (it starts with AIza). Get one free at aistudio.google.com/apikey.');
-    if (res.status === 503 || /overloaded|unavailable/i.test(detail)) { last = new Error('Gemini is busy right now — try again in a moment.'); continue; }
+    if ((res.status === 400 && /api key/i.test(detail)) || res.status === 401 || res.status === 403) throw new Error('Your Gemini key was rejected. Click the Cassie icon in the toolbar and paste it again (it starts with AIza). Get one free at aistudio.google.com/apikey.');
+    if (res.status === 503 || /overloaded|unavailable/i.test(detail)) { last = new Error('Gemini is busy right now. Try again in a moment.'); continue; }
     throw new Error(detail || `Gemini request failed (${res.status})`);
   }
-  throw last || new Error('Gemini isn’t available right now — try again in a moment.');
+  throw last || new Error('Gemini isn’t available right now. Try again in a moment.');
 }
 // Groq answers when there's a Groq key (it's faster). Gemini answers when it's the
 // only key, or when Groq rejects the key or runs out of free questions.
@@ -316,7 +317,7 @@ async function askCassie(input, groqKey, model, onDelta) {
         if (historyBudget > 1000) { historyBudget = Math.floor(historyBudget / 2); continue; }
         const next = GROQ_MODELS.find((m) => !tried.has(m));
         if (next) { modelId = next; chrome.storage.local.set({ groqModel: next }); historyBudget = 4000; continue; }
-        throw new Error('That was a bit too long for the free per-minute limit — try a shorter selection or question.');
+        throw new Error('That was a bit too long for the free per-minute limit. Try a shorter selection or question.');
       }
       if (isTransientOverload(res.status, detail) && overloadTries < MAX_OVERLOAD_RETRIES) {
         overloadTries += 1;
@@ -530,19 +531,19 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
           generationConfig: { maxOutputTokens: Math.max(2048, (maxTokens || 900) * 3), temperature: 0.4 },
         }),
       });
-    } catch (e) { throw new Error('Couldn’t connect to Google — check your internet connection.'); }
+    } catch (e) { throw new Error('Couldn’t connect to Google. Check your internet connection.'); }
     if (res.ok) {
       const cand = (await res.json()).candidates?.[0];
       const text = (cand?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
       if (text) return text;
-      throw new Error('Gemini sent back an empty answer — try again.');
+      throw new Error('Gemini sent back an empty answer. Try again.');
     }
     let detail = '';
     try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
     if (res.status === 404 || /no longer available|decommission/i.test(detail)) { last = new Error('Gemini model unavailable'); forgetGeminiModels(); continue; }
     // busy ("high demand") or out of free requests: the next model has its own capacity, then Groq
-    if (res.status >= 500 || res.status === 429 || /high demand|overloaded|unavailable/i.test(detail)) { last = new Error('Google’s Gemini is very busy right now — try again in a minute.'); continue; }
-    if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected — check it in the Cassie toolbar popup.');
+    if (res.status >= 500 || res.status === 429 || /high demand|overloaded|unavailable/i.test(detail)) { last = new Error('Google’s Gemini is very busy right now. Try again in a minute.'); continue; }
+    if (res.status === 400 && /api key/i.test(detail)) throw new Error('Your Gemini key was rejected. Check it in the Cassie toolbar popup.');
     // refused for this model (newer models can be off for some keys): try the next one
     if (res.status === 403) { last = new Error(`Google refused your Gemini key for pictures${detail ? ` (“${detail.slice(0, 140)}”)` : ''}. Make a new key at aistudio.google.com/apikey and paste it in the Cassie toolbar popup.`); continue; }
     throw new Error(detail || `Gemini request failed (${res.status})`);
@@ -582,7 +583,7 @@ async function visionViaGroq(groqKey, { image, images, prompt, system, maxTokens
             ],
           }),
         });
-      } catch (e) { throw new Error('Couldn’t connect to Groq — check your internet connection.'); }
+      } catch (e) { throw new Error('Couldn’t connect to Groq. Check your internet connection.'); }
       if (res.ok) {
         _visionModelOK = model;
         return ((await res.json()).choices?.[0]?.message?.content || '').trim() || '(no answer)';
@@ -596,10 +597,10 @@ async function visionViaGroq(groqKey, { image, images, prompt, system, maxTokens
         try { secs = parseDuration(res.headers.get('retry-after')); } catch (e) { /* ignore */ }
         if (!secs) { const w = detail.match(/try again in ([0-9hms.\s]+)/i); if (w) secs = parseDuration(w[1]); }
         if (secs > 0 && secs <= 20 && attempt < 2) { await sleep(secs * 1000 + 300); continue; }
-        throw new Error(rateLimitMessage(res, detail).replace(/ Tip:.*$/, ' Tip: add a free Google (Gemini) key in the Cassie toolbar popup — snips will use that instead.'));
+        throw new Error(rateLimitMessage(res, detail).replace(/ Tip:.*$/, ' Tip: add a free Google (Gemini) key in the Cassie toolbar popup. Snips will use that instead.'));
       }
       if (res.status === 401) throw new Error(BAD_GROQ_KEY);
-      if (res.status === 413 || /too large|reduce/i.test(detail)) throw new Error('That snip is too big for Groq’s free limit — drag a smaller box around just the part you need.');
+      if (res.status === 413 || /too large|reduce/i.test(detail)) throw new Error('That snip is too big for Groq’s free limit. Drag a smaller box around just the part you need.');
       break; // 400/404 etc: this model can't take pictures — try the next one
     }
   }
@@ -707,7 +708,7 @@ async function readPicture(keys, msg) {
   // at the easiest-to-read version.
   if (SEEMS_BLANK.test(reply) && !prep.flat) {
     try {
-      reply = await ask([prep.light || prep.original], 'This picture is NOT blank — it is a screenshot with text and/or a diagram on it' + (prep.light ? ' (colours inverted from a dark-mode page)' : '') + '. Read it carefully.\n\n' + msg.prompt);
+      reply = await ask([prep.light || prep.original], 'This picture is NOT blank. It is a screenshot with text and/or a diagram on it' + (prep.light ? ' (colours inverted from a dark-mode page)' : '') + '. Read it carefully.\n\n' + msg.prompt);
     } catch (e) { /* keep the first reply */ }
   }
   return reply;
@@ -865,7 +866,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const res = await fetch(f.url, { credentials: 'include' });
       if (!res.ok) throw new Error('Couldn’t download it (' + res.status + '). Download the file and attach it in the Cassie app.');
       const buf = await res.arrayBuffer();
-      if (buf.byteLength > 30 * 1024 * 1024) throw new Error('That file is over 30 MB — download it and attach it in the Cassie app.');
+      if (buf.byteLength > 30 * 1024 * 1024) throw new Error('That file is over 30 MB. Download it and attach it in the Cassie app.');
       await openInApp({ name: f.name, mime: f.mime, base64: bufToBase64(buf), prompt: msg.prompt || 'Read this whole file and make me a complete reviewer of it.' }, tab.index + 1);
       sendResponse({ ok: true, kind: f.kind, name: f.name });
     })().catch((e) => sendResponse({ error: e.message }));

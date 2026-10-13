@@ -80,7 +80,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
   box.innerHTML = `
     <div class="tut-head"><span class="tut-who">${CURSOR}<b>Cassie is teaching</b></span>
       <button type="button" class="tut-icon tut-voice" aria-pressed="${voiceOn}" title="Cassie’s voice on or off">${voiceOn ? 'Voice on' : 'Voice off'}</button>
-      <button type="button" class="tut-icon tut-min" aria-label="Make the card small" title="Make it small (Cassie keeps teaching)">–</button>
+      <button type="button" class="tut-icon tut-min" aria-label="Make the card small" title="Make it small (Cassie keeps teaching)">, </button>
       <button type="button" class="tut-icon tut-x" aria-label="Stop teaching">✕</button></div>
     <button type="button" class="tut-pill" aria-label="Show Cassie’s card again">${CURSOR}<span class="tut-pill-text">Cassie is teaching</span></button>
     <p class="tut-say" aria-live="polite"></p>

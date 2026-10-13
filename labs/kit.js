@@ -16,7 +16,7 @@ export function el(tag, cls, html) {
 export const esc = (t) => String(t).replace(/[<&>"]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;', '"': '&quot;' }[c]));
 // numbers people read: 3 significant figures, no "1e-7" noise
 export function num(v, digits = 3) {
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return '-';
   if (Math.abs(v) < 1e-9) return '0';
   const a = Math.abs(v);
   if (a >= 1e6 || a < 1e-3) return v.toExponential(2).replace('e+', ' × 10^').replace('e-', ' × 10^-');

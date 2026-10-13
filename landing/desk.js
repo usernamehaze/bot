@@ -27,11 +27,11 @@ const mini = (host, state = 'idle', opts = {}) => (window.CassieBot && host ? wi
 const TERMS = {
   mitochondria: {
     explain: 'Mitochondria are the cell’s power stations. They take glucose from your food and oxygen from your breath and turn them into ATP, the energy every part of the cell spends. Muscle cells have thousands of them.',
-    quiz: ['What do mitochondria make?', ['ATP — the cell’s energy', 'Proteins', 'DNA'], 0],
+    quiz: ['What do mitochondria make?', ['ATP: the cell’s energy', 'Proteins', 'DNA'], 0],
     card: ['Mitochondria', 'The cell part that turns glucose + oxygen into ATP (energy). “The powerhouse of the cell.”'],
   },
   'cellular respiration': {
-    explain: 'Cellular respiration is how cells “burn” food without fire: glucose + oxygen → carbon dioxide + water + energy (ATP). It happens in the mitochondria — and it’s why you breathe out CO₂.',
+    explain: 'Cellular respiration is how cells “burn” food without fire: glucose + oxygen → carbon dioxide + water + energy (ATP). It happens in the mitochondria, and it’s why you breathe out CO₂.',
     quiz: ['Which gas does cellular respiration give off?', ['Oxygen', 'Carbon dioxide', 'Nitrogen'], 1],
     card: ['Cellular respiration', 'glucose + oxygen → carbon dioxide + water + ATP, in the mitochondria'],
   },
@@ -41,9 +41,9 @@ const TERMS = {
     card: ['ATP', 'Adenosine triphosphate: the molecule that carries energy inside cells'],
   },
   glucose: {
-    explain: 'Glucose (C₆H₁₂O₆) is a simple sugar — the main fuel your cells burn. Plants make it by photosynthesis; you get it from food like rice and bread.',
+    explain: 'Glucose (C₆H₁₂O₆) is a simple sugar, the main fuel your cells burn. Plants make it by photosynthesis; you get it from food like rice and bread.',
     quiz: ['Where do plants get their glucose?', ['From the soil', 'They make it by photosynthesis', 'From rain'], 1],
-    card: ['Glucose', 'C₆H₁₂O₆ — a simple sugar, the cell’s main fuel'],
+    card: ['Glucose', 'C₆H₁₂O₆: a simple sugar, the cell’s main fuel'],
   },
   photosynthesis: {
     explain: 'Photosynthesis is how plants make food: carbon dioxide + water + sunlight → glucose + oxygen. It happens in the chloroplasts, and it’s where almost all the oxygen you breathe comes from.',
@@ -53,15 +53,15 @@ const TERMS = {
   'carbon dioxide': {
     explain: 'Carbon dioxide (CO₂) is a gas made of one carbon and two oxygen atoms. You breathe it out; plants take it in for photosynthesis. It’s also a greenhouse gas that traps heat.',
     quiz: ['Plants take in carbon dioxide to…', ['Breathe it out again', 'Make glucose', 'Make chlorophyll'], 1],
-    card: ['Carbon dioxide', 'CO₂ — breathed out by us, taken in by plants for photosynthesis'],
+    card: ['Carbon dioxide', 'CO₂: breathed out by us, taken in by plants for photosynthesis'],
   },
   chlorophyll: {
-    explain: 'Chlorophyll is the green pigment in leaves. It absorbs red and blue light to power photosynthesis and reflects green — which is the colour you see.',
+    explain: 'Chlorophyll is the green pigment in leaves. It absorbs red and blue light to power photosynthesis and reflects green, which is the colour you see.',
     quiz: ['Why do leaves look green?', ['Chlorophyll reflects green light', 'They absorb green light', 'The sap is green'], 0],
     card: ['Chlorophyll', 'The green pigment that absorbs red & blue light for photosynthesis'],
   },
   cell: {
-    explain: 'A cell is the smallest living unit — every living thing is made of one or more. Your body has about 37 trillion of them, each with its own power stations (mitochondria).',
+    explain: 'A cell is the smallest living unit. Every living thing is made of one or more. Your body has about 37 trillion of them, each with its own power stations (mitochondria).',
     quiz: ['About how many cells are in a human body?', ['37 thousand', '37 million', '37 trillion'], 2],
     card: ['Cell', 'The smallest unit of life; humans have about 37 trillion'],
   },
@@ -110,7 +110,7 @@ function tryIt() {
     bot.setState('talking');
     if (!T) {
       out.innerHTML = `<p></p><a class="tp-open" href="start.html">Ask Cassie about “${esc(chosen)}” in the app →</a>`;
-      await typeInto($('p', out), 'In this demo I only know the words in bold. In the app I explain anything you pick — any website, PDF or photo.', 90, my);
+      await typeInto($('p', out), 'In this demo I only know the words in bold. In the app I explain anything you pick, any website, PDF or photo.', 90, my);
     } else if (kind === 'explain') {
       out.innerHTML = '<p></p>';
       await typeInto($('p', out), T.explain, 90, my);
@@ -121,12 +121,12 @@ function tryIt() {
         const ok = +b.dataset.o === right;
         $$('[data-o]', out).forEach((x) => { x.disabled = true; x.classList.toggle('right', +x.dataset.o === right); });
         if (!ok) b.classList.add('wrong');
-        const fb = $('.tp-fb', out); fb.hidden = false; fb.textContent = ok ? 'Yes! That’s it.' : `Not quite — it’s “${opts[right]}”.`;
+        const fb = $('.tp-fb', out); fb.hidden = false; fb.textContent = ok ? 'Yes! That’s it.' : `Not quite. It’s “${opts[right]}”.`;
         bot.setState(ok ? 'proud' : 'encourage');
       }));
     } else {
       const [front, back] = T.card;
-      out.innerHTML = `<button type="button" class="tp-card"><span class="f">${esc(front)}<small>tap to flip</small></span><span class="b">${esc(back)}</span></button><p class="tp-note">Saved to your deck — in the app it comes back right before you’d forget it.</p>`;
+      out.innerHTML = `<button type="button" class="tp-card"><span class="f">${esc(front)}<small>tap to flip</small></span><span class="b">${esc(back)}</span></button><p class="tp-note">Saved to your deck. In the app it comes back right before you’d forget it.</p>`;
       $('.tp-card', out).addEventListener('click', (e) => e.currentTarget.classList.toggle('flip'));
     }
     if (!my.dead) setTimeout(() => { if (!my.dead) bot.setState('idle'); }, 1800);
@@ -180,7 +180,7 @@ function desk() {
     stage.replaceChildren();
     stage.dataset.demo = id;
     current = { id };
-    try { current = Object.assign(current, await DEMOS[id](stage)); } catch (e) { stage.innerHTML = '<p class="dk-err">This demo couldn’t start here — open Cassie to try it.</p>'; }
+    try { current = Object.assign(current, await DEMOS[id](stage)); } catch (e) { stage.innerHTML = '<p class="dk-err">This demo couldn’t start here. Open Cassie to try it.</p>'; }
   }
   showDemo = show;
   tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.demo)));
@@ -199,7 +199,7 @@ function desk() {
 DEMOS.snip = async (stage) => {
   stage.innerHTML = `<div class="sn">
     <div class="sn-page"><p class="sn-q"><b>Problem 4.</b> Find the roots and the vertex of the graph below.</p><canvas class="sn-cv" width="520" height="340" aria-label="A graph of y = x² − 2x − 3"></canvas><div class="sn-box" hidden></div>
-      <p class="sn-tip">Drag a box around the graph to snip it — or <button type="button" class="sn-auto">snip it for me</button></p></div>
+      <p class="sn-tip">Drag a box around the graph to snip it, or <button type="button" class="sn-auto">snip it for me</button></p></div>
     <aside class="sn-board" hidden><div class="sn-bh"><span>Cassie’s board</span><i class="sn-bot"></i></div><canvas class="sn-bc" width="420" height="300"></canvas><ol class="sn-steps"></ol></aside></div>`;
   const cv = $('.sn-cv', stage), g = cv.getContext('2d');
   const W = 520, H = 340, X = (x) => 60 + (x + 3) * 60, Y = (y) => 40 + (6 - y) * 24;
@@ -250,17 +250,17 @@ DEMOS.snip = async (stage) => {
 /* --- Drop a file → reviewer --- */
 DEMOS.files = async (stage) => {
   stage.innerHTML = `<div class="fl">
-    <div class="fl-files"><p class="fl-tip">Drag a file onto Cassie — or tap one</p>
+    <div class="fl-files"><p class="fl-tip">Drag a file onto Cassie, or tap one</p>
       <button type="button" class="fl-file" data-f="pptx" draggable="true"><span class="ico">PPT</span><span>Cell Biology.pptx<small>47 slides</small></span></button>
-      <button type="button" class="fl-file" data-f="pdf" draggable="true"><span class="ico">PDF</span><span>Module 6 — Ecosystems.pdf<small>18 pages</small></span></button>
+      <button type="button" class="fl-file" data-f="pdf" draggable="true"><span class="ico">PDF</span><span>Module 6. Ecosystems.pdf<small>18 pages</small></span></button>
       <button type="button" class="fl-file" data-f="jpg" draggable="true"><span class="ico">JPG</span><span>my-notes.jpg<small>a photo of handwritten notes</small></span></button></div>
     <div class="fl-drop" tabindex="-1"><div class="fl-bot"></div><div class="fl-pill" hidden></div></div>
     <article class="fl-rev" hidden></article></div>`;
   const bot = mini($('.fl-bot', stage), 'upload', { glow: true });
   const FILES = {
-    pptx: { n: 'Cell Biology.pptx', unit: 'slide', of: 47, title: 'Reviewer — Cell Biology', body: [['The cell', ['Smallest unit of life; all living things are made of cells (cell theory)', 'Prokaryotic (no nucleus: bacteria) vs eukaryotic (nucleus: plants, animals)']], ['Organelles', ['**Nucleus** — holds DNA; controls the cell (slide 9)', '**Mitochondria** — make ATP by cellular respiration (slide 14)', '**Chloroplasts** — photosynthesis, plants only (slide 17)', '**Ribosomes** — make proteins (slide 21)']], ['Practice', ['1. Which organelle makes ATP?', '2. Name two parts only plant cells have.']]] },
-    pdf: { n: 'Module 6 — Ecosystems.pdf', unit: 'page', of: 18, title: 'Reviewer — Ecosystems', body: [['Key terms', ['**Producer** — makes its own food (plants, algae)', '**Consumer** — eats other organisms', '**Decomposer** — breaks down dead matter (fungi, bacteria)']], ['Energy flow', ['Sun → producers → herbivores → carnivores', 'Only about **10%** of energy passes to each next level (p. 7)']], ['Practice', ['1. Why are there fewer top predators than plants?', '2. Give one example of a decomposer.']]] },
-    jpg: { n: 'my-notes.jpg', unit: 'line', of: 24, title: 'Your notes, typed up', body: [['Fractions', ['To add: make the bottoms the same → ½ + ⅓ = 3⁄6 + 2⁄6 = 5⁄6', 'To multiply: tops × tops, bottoms × bottoms']], ['Check', ['Your note says ¾ × ⅔ = 6⁄7 — it’s **6⁄12 = ½** (multiply the bottoms too)']]] },
+    pptx: { n: 'Cell Biology.pptx', unit: 'slide', of: 47, title: 'Reviewer: Cell Biology', body: [['The cell', ['Smallest unit of life; all living things are made of cells (cell theory)', 'Prokaryotic (no nucleus: bacteria) vs eukaryotic (nucleus: plants, animals)']], ['Organelles', ['**Nucleus**: holds DNA; controls the cell (slide 9)', '**Mitochondria**: make ATP by cellular respiration (slide 14)', '**Chloroplasts**: photosynthesis, plants only (slide 17)', '**Ribosomes**: make proteins (slide 21)']], ['Practice', ['1. Which organelle makes ATP?', '2. Name two parts only plant cells have.']]] },
+    pdf: { n: 'Module 6: Ecosystems.pdf', unit: 'page', of: 18, title: 'Reviewer: Ecosystems', body: [['Key terms', ['**Producer**: makes its own food (plants, algae)', '**Consumer**: eats other organisms', '**Decomposer**: breaks down dead matter (fungi, bacteria)']], ['Energy flow', ['Sun → producers → herbivores → carnivores', 'Only about **10%** of energy passes to each next level (p. 7)']], ['Practice', ['1. Why are there fewer top predators than plants?', '2. Give one example of a decomposer.']]] },
+    jpg: { n: 'my-notes.jpg', unit: 'line', of: 24, title: 'Your notes, typed up', body: [['Fractions', ['To add: make the bottoms the same → ½ + ⅓ = 3⁄6 + 2⁄6 = 5⁄6', 'To multiply: tops × tops, bottoms × bottoms']], ['Check', ['Your note says ¾ × ⅔ = 6⁄7. It’s **6⁄12 = ½** (multiply the bottoms too)']]] },
   };
   const drop = $('.fl-drop', stage), pill = $('.fl-pill', stage), rev = $('.fl-rev', stage);
   let busy = false, dead = false;
@@ -295,14 +295,14 @@ DEMOS.files = async (stage) => {
 DEMOS.talk = async (stage) => {
   const TALKS = [
     { mode: 'Chat', you: 'Why is the sky blue?', src: 'landing/voice/talk-sky.m4a', say: 'Great question! Sunlight has every colour in it. Air scatters the short blue waves the most, so blue light reaches you from all over the sky.' },
-    { mode: 'Teach Cassie', you: 'So — photosynthesis makes glucose from sunlight.', src: 'landing/voice/talk-teach.m4a', say: 'Ooh, okay! But what else does the plant need, besides sunlight? And where does the oxygen come from?' },
+    { mode: 'Teach Cassie', you: 'So: photosynthesis makes glucose from sunlight.', src: 'landing/voice/talk-teach.m4a', say: 'Ooh, okay! But what else does the plant need, besides sunlight? And where does the oxygen come from?' },
     { mode: 'Quiz me', you: 'Quiz me on fractions.', src: 'landing/voice/talk-quiz.m4a', say: 'Sure! Here’s your first one. What is one half plus one third? Take your time.' },
   ];
   stage.innerHTML = `<div class="tk"><div class="tk-modes" role="tablist">${TALKS.map((t, i) => `<button type="button" role="tab" data-t="${i}" aria-selected="${i === 0}">${t.mode}</button>`).join('')}</div>
     <div class="tk-bot"></div><div class="tk-wave" aria-hidden="true">${'<i></i>'.repeat(28)}</div>
     <p class="tk-you"></p><p class="tk-say" aria-live="polite"></p>
     <button type="button" class="tk-mic" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Hear Cassie answer</span></button>
-    <p class="tk-note">Her real voice, made on your own device in the app — no robot voice. In the app you just talk.</p></div>`;
+    <p class="tk-note">Her real voice, made on your own device in the app. No robot voice. In the app you just talk.</p></div>`;
   const bot = mini($('.tk-bot', stage), 'listening', { glow: true });
   const audio = new Audio(); audio.preload = 'none';
   let k = 0, raf = 0, dead = false;
@@ -346,7 +346,7 @@ function labPicker(stage, items, note) {
     $$('[data-i]', stage).forEach((b) => b.setAttribute('aria-selected', String(+b.dataset.i === i)));
     if (m && m.destroy) { try { m.destroy(); } catch (e) { /* ignore */ } } m = null;
     host.innerHTML = '<p class="dk-wait">Loading…</p>';
-    try { const mm = await mountLab(host, items[i].load, items[i]); if (my !== seq) { if (mm.destroy) mm.destroy(); return; } m = mm; } catch (e) { host.innerHTML = '<p class="dk-err">This one couldn’t start here — open it in Cassie’s Labs.</p>'; }
+    try { const mm = await mountLab(host, items[i].load, items[i]); if (my !== seq) { if (mm.destroy) mm.destroy(); return; } m = mm; } catch (e) { host.innerHTML = '<p class="dk-err">This one couldn’t start here. Open it in Cassie’s Labs.</p>'; }
   }
   $$('[data-i]', stage).forEach((b) => b.addEventListener('click', () => go(+b.dataset.i)));
   go(0);
@@ -360,9 +360,9 @@ DEMOS.labs = async (stage) => labPicker(stage, [
   { name: 'pH mixer', load: pickLab('../labs/chemistry.js', 'CHEMISTRY', 'ph') },
   { name: 'Build an atom', load: pickLab('../labs/chemistry.js', 'CHEMISTRY', 'atom') },
   { name: 'Pea genetics', load: pickLab('../labs/biology.js', 'BIOLOGY', 'punnett') },
-], 'These are the real Labs from the app — 29 experiments, from pendulums to Punnett squares, plus 7 daily puzzles. Then tap <b>Ask Cassie</b> in the app and she explains <i>your</i> experiment.');
+], 'These are the real Labs from the app, 29 experiments, from pendulums to Punnett squares, plus 7 daily puzzles. Then tap <b>Ask Cassie</b> in the app and she explains <i>your</i> experiment.');
 DEMOS.space = async (stage) => {
-  stage.innerHTML = `<div class="sp"><div class="sp-cover"><div class="sp-planets" aria-hidden="true"><i></i><i></i><i></i><i></i></div><h3>Space and rockets, in 3D</h3><p>The planets where they really are today — then zoom out to the Milky Way, our neighbour galaxies and the whole universe. Or build a rocket and launch it.</p>
+  stage.innerHTML = `<div class="sp"><div class="sp-cover"><div class="sp-planets" aria-hidden="true"><i></i><i></i><i></i><i></i></div><h3>Space and rockets, in 3D</h3><p>The planets where they really are today. Then zoom out to the Milky Way, our neighbour galaxies and the whole universe. Or build a rocket and launch it.</p>
     <div class="sp-go"><button type="button" class="dk-btn main" data-go="space">Fly through space</button><button type="button" class="dk-btn" data-go="rocket">Launch a rocket</button></div><small>Loads a 3D view (about 1 MB)</small></div></div>`;
   let inner = null;
   $$('[data-go]', stage).forEach((b) => b.addEventListener('click', () => {
@@ -374,7 +374,7 @@ DEMOS.space = async (stage) => {
   return { destroy() { if (inner) inner.destroy(); } };
 };
 DEMOS.atlas = async (stage) => labPicker(stage, [{ name: 'World atlas', load: async () => (await import('../labs/atlas.js')).atlasLab }],
-  'Tap a country for its flag, capital, population and history — or search any place.');
+  'Tap a country for its flag, capital, population and history, or search any place.');
 DEMOS.puzzles = async (stage) => labPicker(stage, [
   { name: 'Sudoku', load: pickLab('../labs/puzzles.js', 'PUZZLES', 'sudoku') },
   { name: 'Bridges', load: pickLab('../labs/puzzles.js', 'PUZZLES', 'hashi') },
@@ -388,13 +388,13 @@ function toys() {
   // flashcards that flip, with spaced repetition
   const fc = $('#toy-cards');
   if (fc) {
-    const CARDS = [['What does the mitochondria make?', 'ATP — the cell’s energy'], ['½ + ⅓ = ?', '⅚ (3⁄6 + 2⁄6)'], ['Capital of Japan?', 'Tokyo'], ['H₂O is…', 'Water: two hydrogen atoms, one oxygen']];
+    const CARDS = [['What does the mitochondria make?', 'ATP: the cell’s energy'], ['½ + ⅓ = ?', '⅚ (3⁄6 + 2⁄6)'], ['Capital of Japan?', 'Tokyo'], ['H₂O is…', 'Water: two hydrogen atoms, one oxygen']];
     let i = 0;
     const card = $('.fc-card', fc), next = (gap) => { $('.fc-due', fc).textContent = gap; i = (i + 1) % CARDS.length; card.classList.remove('flip'); setTimeout(draw, 180); };
     const draw = () => { $('.f', card).textContent = CARDS[i][0]; $('.b', card).textContent = CARDS[i][1]; $('.fc-n', fc).textContent = `${i + 1} / ${CARDS.length}`; };
     card.addEventListener('click', () => card.classList.toggle('flip'));
-    $('[data-k="again"]', fc).addEventListener('click', () => next('Again — back in 1 minute'));
-    $('[data-k="good"]', fc).addEventListener('click', () => next('Good — back in 3 days'));
+    $('[data-k="again"]', fc).addEventListener('click', () => next('Again: back in 1 minute'));
+    $('[data-k="good"]', fc).addEventListener('click', () => next('Good: back in 3 days'));
     draw();
   }
   // a quiz question
@@ -402,7 +402,7 @@ function toys() {
   if (qz) $$('[data-a]', qz).forEach((b) => b.addEventListener('click', () => {
     $$('[data-a]', qz).forEach((x) => { x.disabled = true; x.classList.toggle('right', x.dataset.a === '1'); });
     if (b.dataset.a !== '1') b.classList.add('wrong');
-    $('.qz-fb', qz).textContent = b.dataset.a === '1' ? 'Right! Light, water and CO₂ in — glucose and oxygen out.' : 'Close! Oxygen is what comes out. Cassie would explain why, then ask another.';
+    $('.qz-fb', qz).textContent = b.dataset.a === '1' ? 'Right! Light, water and CO₂ in, glucose and oxygen out.' : 'Close! Oxygen is what comes out. Cassie would explain why, then ask another.';
   }));
   // focus timer
   const tm = $('#toy-timer');
@@ -422,7 +422,7 @@ function toys() {
   const lv = $('#toy-level');
   if (lv) {
     const SAY = {
-      5: 'Plants are like little kitchens. They use sunlight, water and air to cook their own food — a kind of sugar. And while they cook, they give us fresh oxygen to breathe!',
+      5: 'Plants are like little kitchens. They use sunlight, water and air to cook their own food, a kind of sugar. And while they cook, they give us fresh oxygen to breathe!',
       10: 'Photosynthesis turns light energy into chemical energy. In the chloroplasts, chlorophyll captures light to combine carbon dioxide and water into glucose, releasing oxygen: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂.',
       13: 'Photosynthesis couples the light-dependent reactions (photolysis of water at photosystem II, producing ATP and NADPH via the electron transport chain) to the Calvin cycle, where RuBisCO fixes CO₂ into G3P.',
     };
@@ -432,10 +432,10 @@ function toys() {
   const ct = $('#toy-cite');
   if (ct) {
     const C = {
-      APA: 'Walker, M. P., & Stickgold, R. (2004). Sleep-dependent learning and memory consolidation. <i>Neuron, 44</i>(1), 121–133.',
-      MLA: 'Walker, Matthew P., and Robert Stickgold. “Sleep-Dependent Learning and Memory Consolidation.” <i>Neuron</i>, vol. 44, no. 1, 2004, pp. 121–33.',
-      IEEE: 'M. P. Walker and R. Stickgold, “Sleep-dependent learning and memory consolidation,” <i>Neuron</i>, vol. 44, no. 1, pp. 121–133, 2004.',
-      Chicago: 'Walker, Matthew P., and Robert Stickgold. 2004. “Sleep-Dependent Learning and Memory Consolidation.” <i>Neuron</i> 44 (1): 121–33.',
+      APA: 'Walker, M. P., & Stickgold, R. (2004). Sleep-dependent learning and memory consolidation. <i>Neuron, 44</i>(1), 121-133.',
+      MLA: 'Walker, Matthew P., and Robert Stickgold. “Sleep-Dependent Learning and Memory Consolidation.” <i>Neuron</i>, vol. 44, no. 1, 2004, pp. 121-33.',
+      IEEE: 'M. P. Walker and R. Stickgold, “Sleep-dependent learning and memory consolidation,” <i>Neuron</i>, vol. 44, no. 1, pp. 121-133, 2004.',
+      Chicago: 'Walker, Matthew P., and Robert Stickgold. 2004. “Sleep-Dependent Learning and Memory Consolidation.” <i>Neuron</i> 44 (1): 121-33.',
     };
     $$('[data-c]', ct).forEach((b) => b.addEventListener('click', () => { $$('[data-c]', ct).forEach((x) => x.setAttribute('aria-pressed', String(x === b))); $('.ct-ref', ct).innerHTML = C[b.dataset.c]; }));
   }
@@ -457,7 +457,7 @@ function toys() {
   }
   // memory: remembered things you can forget
   const mm = $('#toy-memory');
-  if (mm) mm.addEventListener('click', (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.closest('li').classList.add('gone'); setTimeout(() => { b.closest('li').remove(); if (!$('li', mm)) $('ul', mm).innerHTML = '<li class="empty">All forgotten — it was only on this device anyway.</li>'; }, 300); });
+  if (mm) mm.addEventListener('click', (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.closest('li').classList.add('gone'); setTimeout(() => { b.closest('li').remove(); if (!$('li', mm)) $('ul', mm).innerHTML = '<li class="empty">All forgotten. It was only on this device anyway.</li>'; }, 300); });
   // Student / Professional: Cassie changes outfit
   const pr = $('#toy-pro');
   if (pr) {
@@ -469,7 +469,7 @@ function toys() {
   // the Island: what Cassie is doing, at the top of the screen
   const il = $('#toy-island');
   if (il) {
-    const STEPS = [['reading', 'Reading Module 6.pdf · page 4 of 18'], ['thinking', 'Thinking…'], ['writing', 'Writing your reviewer'], ['done', '✓ Reviewer ready — tap to open']];
+    const STEPS = [['reading', 'Reading Module 6.pdf · page 4 of 18'], ['thinking', 'Thinking…'], ['writing', 'Writing your reviewer'], ['done', '✓ Reviewer ready. Tap to open']];
     const bot = mini($('.il-bot', il), 'reading');
     let k = 0, t = 0;
     const step = () => { const [s, txt] = STEPS[k++ % STEPS.length]; bot.setState(s); $('.il-txt', il).textContent = txt; il.classList.toggle('done', s === 'done'); };
