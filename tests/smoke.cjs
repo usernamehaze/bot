@@ -1306,11 +1306,14 @@ test('the web app has no pop-out (it lives in the Chrome extension)', async (b) 
   await ctx.close();
 });
 
+// a click in the 3D view never navigates: don't wait for a navigation on a page busy drawing 3D
+// (where the 3D is drawn in software, that wait timed out)
+const NO_NAV = { noWaitAfter: true };
 test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
   await open3d(page, 'cells3d');
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 20000 });
-  await page.click('.x3d-switch [data-cell="animal"]');
+  await page.click('.x3d-switch [data-cell="animal"]', NO_NAV);
   await page.waitForSelector('.x3d-chip[data-part="nucleus"]', { timeout: 20000 });
   const chips = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
   for (const id of ['membrane', 'nucleus', 'nucleolus', 'rer', 'ser', 'golgi', 'mito', 'ribosome', 'lysosome', 'centrioles']) expect(chips.includes(id), 'animal cell is missing ' + id + ': ' + chips);
@@ -1318,7 +1321,7 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   // tapping the 3D picture picks the part under the finger
   await page.waitForTimeout(800);
   const at = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
-  await page.click('.x3d-tools [data-tool="reset"]');
+  await page.click('.x3d-tools [data-tool="reset"]', NO_NAV);
   // a small drag stops the slow spin (like a finger would), so the nucleus stays where we measure it
   const cb = await page.locator('.x3d-canvas').boundingBox();
   await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height * 0.8);
@@ -1326,26 +1329,26 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
   await page.waitForTimeout(1500);
   const at2 = await page.evaluate(() => { const el = document.querySelector('.x3d-label[data-part="nucleolus"]'); const m = /translate\(([\d.]+)px, ([\d.]+)px\)/.exec(el.style.transform); return { x: +m[1], y: +m[2] }; });
   await page.mouse.click(at2.x, at2.y);
-  await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 10000 });
+  await page.waitForSelector('.x3d-sheet:not([hidden])', { timeout: 30000 });
   expect(/Nucleolus|Nucleus|Nuclear envelope/.test(await page.locator('.x3d-sheet h3').innerText()), 'tapping the nucleus area picks it: ' + await page.locator('.x3d-sheet h3').innerText() + JSON.stringify(at));
-  // pick from the list, read about it, ask Cassie (no navigation follows: don't wait for one on a page busy drawing 3D)
-  await page.click('.x3d-chip[data-part="golgi"]', { noWaitAfter: true });
+  // pick from the list, read about it, ask Cassie
+  await page.click('.x3d-chip[data-part="golgi"]', NO_NAV);
   expect(/Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()) && /post office/.test(await page.locator('.x3d-sheet').innerText()), 'the Golgi card should show');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/explore-golgi.png' });
-  await page.click('.x3d-act[data-act="ask"]');
+  await page.click('.x3d-act[data-act="ask"]', NO_NAV);
   await seen(page, '.x3d .lab-helper:not([hidden]) .hp-a', 'post office');
   expect(await page.locator('.x3d').isVisible() && /Golgi apparatus/.test(await page.locator('.x3d-sheet h3').innerText()), 'the answer shows in the 3D view, which stays where it was');
-  await page.click('.lab-helper .hp-x');
+  await page.click('.lab-helper .hp-x', NO_NAV);
   expect(/golgi apparatus of an animal cell/i.test(JSON.stringify(groqCalls.at(-1))), 'Cassie is asked about the Golgi of an animal cell');
   // plant cell → quiz (the 3D view is still open: switch cells right there)
-  await page.click('.x3d-switch [data-cell="plant"]');
-  await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 10000 });
+  await page.click('.x3d-switch [data-cell="plant"]', NO_NAV);
+  await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 30000 });
   const plant = await page.$$eval('.x3d-chip', (c) => c.map((x) => x.dataset.part));
   for (const id of ['wall', 'vacuole', 'chloroplast', 'plasmodesmata', 'nucleus', 'mito']) expect(plant.includes(id), 'plant cell is missing ' + id);
   expect(!plant.includes('centrioles'), 'a plant cell shows no centrioles');
-  await page.click('.x3d-chip[data-part="chloroplast"]');
+  await page.click('.x3d-chip[data-part="chloroplast"]', NO_NAV);
   expect(/photosynthesis/.test(await page.locator('.x3d-sheet').innerText()) && /Only in plant cells/.test(await page.locator('.x3d-sheet').innerText()), 'the chloroplast card');
-  await page.click('.x3d-act[data-act="quiz"]');
+  await page.click('.x3d-act[data-act="quiz"]', NO_NAV);
   await seen(page, '.x3d .lab-helper:not([hidden]) .hp-title', 'Quiz me');
   await seen(page, '.lab-helper .hp-quiz .hp-err, .lab-helper .hp-quiz .hp-q');
   expect(/multiple-choice quiz about \\"the parts of a plant cell/.test(JSON.stringify(groqCalls.at(-1))), 'the quiz is about the plant cell: ' + JSON.stringify(groqCalls.at(-1)).slice(0, 300));
