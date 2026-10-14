@@ -934,7 +934,9 @@
         ${decks.length ? `<div class="csk-or">or one of your decks</div><div class="csk-list">${decks.map((d, i) => `<button class="csk-btn" data-pop="deck" data-i="${i}">${esc(d.name)} · ${d.cards.length} cards</button>`).join('')}</div>` : ''}
         <p class="csk-poperr" hidden></p>`);
       pop._decks = decks;
-      setTimeout(() => pop && pop.querySelector('textarea').focus(), 30);
+      // the deck box gets the focus, unless you're already typing in the pop (a topic typed
+      // straight away lost its letters to the deck box)
+      setTimeout(() => { if (pop && !pop.contains(pop.getRootNode().activeElement)) pop.querySelector('textarea').focus(); }, 30);
     }
     function shapesPop() {
       openPop('shapes', `<h4>Quick shapes</h4><p>Pick one, then tap where it should go. Draw on top of it.</p>
