@@ -2022,6 +2022,10 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 /* Offline: a glass note across the top */
 .offline-note { position: fixed; z-index: 2147483000; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); box-sizing: border-box; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
 .offline-note[hidden] { display: none; }
+/* Cassie's voice stopped partway (voice.js): she pauses and says so, with Keep going */
+.cv-pause { position: fixed; z-index: 2147483001; left: 50%; bottom: calc(var(--safe-bottom) + 16px); transform: translateX(-50%); width: min(480px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; }
+.cv-pause p { margin: 0; }
+.cv-pause button { align-self: flex-start; min-height: 44px; padding: 0 20px; border-radius: 99px; border: 0; background: var(--text); color: var(--bg); font: inherit; font-weight: 600; cursor: pointer; }
 
 /* Flashcards on touch screens: 44px to touch */
 @media (pointer: coarse) {

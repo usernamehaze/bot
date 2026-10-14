@@ -4503,6 +4503,13 @@ let exploreMod = null;
 /* Ask Cassie and Quiz me inside Labs and the 3D views (labs/helper.js): the same path to Cassie as the
    chat (askCassie), her answers drawn like the chat's, a quiz written as data, missed questions kept
    for "Review my mistakes". */
+// Teach me: one voice for a whole lesson (voice.js picks it when the lesson starts and keeps it)
+function lessonVoice() {
+  const CV = window.CassieVoice;
+  if (!CV || !CV.session) return null;
+  const s = CV.session({ gender: voiceGender() });
+  return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() };
+}
 const IN_LAB = {
   converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   format: (node, text) => renderFormatted(node, text),
@@ -4561,6 +4568,7 @@ async function teach3d(view) {
   teacher3d = tutor({ view: view.root, lab, collect: collectAll, described: () => describe3d(view),
     ask: askShown,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+    speaker: lessonVoice,
     hear: canHear() ? hearOnce : null,
     level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' ') });
   teacher3d.kind = view.kind;
@@ -4649,6 +4657,7 @@ async function openLabs(lab, more = {}) {
       decks: () => boardDecks().decks(),
       readFile: async (file) => (await readDocument(file)).text,
       speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+      speaker: lessonVoice,
       // Teach me (the tutor in a lab): listen to one question, and the student's level
       hear: canHear() ? hearOnce : null,
       level: [state.profile && state.profile.grade, state.profile && state.profile.level].filter(Boolean).join(' '),
@@ -5431,7 +5440,7 @@ function buildVoiceUI() {
     if (!b) return;
     state.voiceGender = b.dataset.gender; save(); markGender();
     const sel = document.getElementById('voice-gender-select'); if (sel) sel.value = voiceGender();
-    if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); sayThenListen('Hi! This is my voice now.'); }
+    if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); newConversationVoice(voiceChat); sayThenListen('Hi! This is my voice now.'); }
   });
   ui.markGender = markGender;
   ui.hv = q('.vc-hv');
@@ -5502,11 +5511,11 @@ function showHumanVoice() {
   const wasNote = box.dataset.st === 'note';
   box.dataset.st = st;
   const v = voiceChat;
-  if (st === 'ready' && v && v.voiceKind && v.voiceKind !== 'bella' && !v.toldReady) {
-    // she just became ready, mid-conversation: say so, and switch from her next answer
+  if (st === 'ready' && v && v.voice && v.voice.voice !== 'bella' && !v.toldReady) {
+    // she just became ready, mid-conversation: say so; this conversation keeps the voice it started with
     v.toldReady = true; v.readyAt = Date.now();
     box.dataset.st = 'note'; box.hidden = false;
-    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b>: she’ll use it from her next answer.';
+    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b>: she’ll use it the next time you talk with her.';
     clearTimeout(v.noteTimer); v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
     return;
   }
@@ -5518,8 +5527,8 @@ function showHumanVoice() {
     box.hidden = false;
     const pct = Math.round(CV.progress() * 100), standIn = studioVoice() ? 'a stand-in voice' : 'your phone’s voice';
     box.innerHTML = CV.warming && CV.warming()
-      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there. This part can take up to a minute. She keeps talking with ${standIn} until then.</small>`
-      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking: until it’s ready, she uses ${standIn}.</small>`;
+      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there. This part can take up to a minute. This conversation keeps ${standIn}.</small>`
+      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking: this conversation keeps ${standIn}, and her own voice starts next time.</small>`;
   } else if (st === 'failed') {
     box.hidden = false;
     box.innerHTML = 'Cassie is using your phone’s voice because her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
@@ -5531,20 +5540,11 @@ function showHumanVoice() {
   }
 }
 
-// The voice screen keeps one voice; it changes only when Cassie's own voice becomes ready (an
-// upgrade) or the studio voice runs out for the day — and then she says so, once.
-function noteVoice(kind) {
-  const v = voiceChat;
-  if (!v || !kind) return;
-  const was = v.voiceKind; v.voiceKind = kind;
-  if (!was || was === kind || !voiceUI || !voiceUI.hv || (kind === 'bella' && v.toldReady)) return;
-  const box = voiceUI.hv;
-  box.dataset.st = 'note'; box.hidden = false;
-  box.innerHTML = kind === 'bella' ? `✓ <b>Cassie’s own voice is ready</b>: she’ll use it from now on.`
-    : was === 'studio' ? 'Today’s studio voice is used up, so Cassie switched voices. Her own voice (in Settings → Voice) has no limit.'
-      : 'Cassie switched voices.';
-  clearTimeout(v.noteTimer); v.readyAt = Date.now();
-  v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
+// The voice screen keeps one voice for the whole conversation (voice.js picks it when it opens):
+// it never changes partway, only when the student picks the other voice themselves.
+function newConversationVoice(v) {
+  if (v.voice) v.voice.end();
+  v.voice = window.CassieVoice && window.CassieVoice.session ? window.CassieVoice.session({ gender: voiceGender() }) : null;
 }
 function setVoicePhase(phase, text) {
   const v = voiceChat, ui = voiceUI;
@@ -5588,8 +5588,7 @@ function sayThenListen(text) {
     // Bella speaks it. If her voice isn't ready on this device (still downloading, or her engine
     // can't run here), the device's own best voice says it — Cassie is never silent.
     if (!clean) { finish(); return; }
-    const h = window.CassieVoice.speak(clean, { gender: voiceGender(), onVoice: noteVoice });
-    noteVoice(h.voice);
+    const h = v.voice ? v.voice.speak(clean) : window.CassieVoice.speak(clean, { gender: voiceGender() });
     v.stopSpeaking = () => { h.stop(); finish(); };
     h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
@@ -5855,9 +5854,7 @@ async function askOutLoud(text) {
   voiceUI.cassie.textContent = '';
   const before = state.messages.length;
   // she starts speaking the first sentence while the rest of the answer is still coming
-  const CV = window.CassieVoice;
-  const live = CV && CV.stream ? CV.stream({ gender: voiceGender(), onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); }, onVoice: noteVoice }) : null;
-  if (live) noteVoice(live.voice);
+  const live = v.voice ? v.voice.stream({ onStart: () => { if (voiceChat === v) setVoicePhase('speaking'); } }) : null;
   let upTo = 0;
   v.stopSpeaking = live ? () => live.stop() : null;
   const onDelta = (sofar) => {
@@ -5930,6 +5927,7 @@ function openVoice(mode = 'chat') {
   if (voiceUI.bot) voiceUI.bot.pause(false);
   track('feature', 'voice:' + mode);
   if (window.CassieVoice) window.CassieVoice.unlock(); // inside the tap, so phones let her speak later
+  newConversationVoice(voiceChat); // one voice from here to the end of the conversation
   startHumanVoice();
   startVoiceMode(mode); // speaks right away, inside the tap, so phones allow the sound
   setTimeout(() => { try { voiceUI.mic.focus(); } catch (e) { /* ignore */ } }, 60);
@@ -5938,6 +5936,7 @@ function closeVoice() {
   const v = voiceChat;
   if (!v) return;
   v.stopSpeaking && v.stopSpeaking();
+  if (v.voice) v.voice.end();
   voiceChat = null;
   try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
   if (v.rec) { try { v.rec.onend = null; v.rec.abort(); } catch (e) { /* ignore */ } }

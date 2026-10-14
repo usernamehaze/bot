@@ -2,7 +2,7 @@
    The voice itself is made in voice/voice-worker.js (Kokoro, on the device). This file
    asks it for one sentence at a time and plays each as soon as it's ready, while the
    next one is being made. Nothing is sent anywhere; once downloaded it works offline.
-   window.CassieVoice = { speak, stream, best, supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
+   window.CassieVoice = { speak, stream, session, best, supported, got, prepare, status, progress, onChange, say, sayStream, VOICES } */
 (function () {
   // Bella: the same voice as Cassie's explainer video (Kokoro af_bella); George, a calm British voice, for a man's
   const VOICES = { woman: 'af_bella', man: 'bm_george' };
@@ -209,8 +209,8 @@
     };
   }
 
-  // The device's own voice — only while Bella isn't ready on this device (still downloading, or her
-  // engine can't run here), so Cassie never goes silent. Picks the most natural voice it has:
+  // The device's own voice: only when neither Bella nor the studio voice is there when a lesson
+  // starts (still downloading, or her engine can't run here), so Cassie never goes silent. Picks the most natural voice it has:
   // Apple's Premium/Enhanced voices, Google's and Microsoft's natural ones, then a known good name.
   const synth = window.speechSynthesis;
   const NICE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Karen', 'Moira', 'Serena', 'Aria', 'Jenny', 'Google US English'], man: ['Daniel', 'Arthur', 'Oliver', 'Google UK English Male', 'Ryan', 'Evan', 'Nathan', 'Tom', 'Alex', 'Aaron', 'Guy'] };
@@ -227,6 +227,11 @@
       if (i >= 0) sc += 4 - i * 0.2;
       if (other.some((n) => v.name.includes(n))) sc -= 5;
       if (/novelty|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|zarvox|albert|fred|junior|ralph|kathy|superstar|grandpa|grandma|eddy|flo|reed|rocko|sandy|shelley/i.test(v.name)) sc -= 20;
+      if (/espeak|mbrola|festival|pico|flite/i.test(v.name)) sc -= 20; // robotic engines
+      // a voice that says it is a woman's or a man's
+      const female = /\bfemale\b|\bwoman\b/i.test(v.name), male = !female && /\bmale\b|\bman\b/i.test(v.name);
+      if (gender === 'man' ? male : female) sc += 3;
+      if (gender === 'man' ? female : male) sc -= 6;
       if (gender === 'man' && /en-GB/i.test(v.lang)) sc += 2; // the man's voice is British
       if (v.localService) sc += 0.5;
       if (sc > bestScore) { bestScore = sc; best = v; }
@@ -234,26 +239,38 @@
     return best;
   }
   if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', () => {}); // loads the list early
+  // the device's list of voices can arrive a moment late: wait for it (briefly) before picking one
+  function deviceVoiceSoon(gender) {
+    if (!synth || synth.getVoices().length) return Promise.resolve(deviceVoice(gender));
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(t); try { synth.removeEventListener('voiceschanged', done); } catch (e) { /* ignore */ } resolve(deviceVoice(gender)); };
+      const t = setTimeout(done, 1500);
+      try { synth.addEventListener('voiceschanged', done); } catch (e) { /* ignore */ }
+    });
+  }
+  // Say it with the device's voice. opts.voice: the exact voice to use (one voice for a whole lesson);
+  // otherwise the best one for opts.gender, picked once for all of it. done resolves to
+  // { status: 'done' | 'stopped' } or { status: 'error', at } when a sentence could not be said.
   function deviceSay(text, opts = {}) {
     let stopped = false, finish;
     const done = new Promise((r) => { finish = r; });
     if (!synth || !text) { finish({ status: 'done' }); return { done, stop() {} }; }
     // one sentence at a time: long utterances get cut off on some phones
     const parts = String(text).match(/[^.!?]+[.!?]*\s*/g) || [String(text)];
+    const v = 'voice' in opts ? opts.voice : deviceVoice(opts.gender);
     let i = 0;
     const next = () => {
       if (stopped) return;
       if (i >= parts.length) { finish({ status: 'done' }); return; }
       try {
         const u = new SpeechSynthesisUtterance(parts[i++].trim());
-        const v = deviceVoice(opts.gender);
         if (v) { try { u.voice = v; } catch (e) { /* not a voice this browser knows */ } u.lang = v.lang; }
         u.rate = opts.rate || 1; u.pitch = 1;
         u.onstart = () => { if (i === 1 && opts.onStart) opts.onStart(); };
         u.onend = next;
-        u.onerror = next;
+        u.onerror = (e) => { if (stopped) return; if (e && /interrupted|canceled/.test(e.error)) next(); else finish({ status: 'error', at: i - 1 }); };
         synth.speak(u);
-      } catch (e) { finish({ status: 'done' }); } // never leave Cassie stuck
+      } catch (e) { finish({ status: 'error', at: i - 1 }); } // never leave Cassie stuck
     };
     try { synth.cancel(); } catch (e) { /* ignore */ }
     setTimeout(next, 30);
@@ -268,7 +285,8 @@
 
   // Cassie's studio voice: ElevenLabs, through Cassie's server (it holds the key and counts the
   // credits). The most natural of her voices, so it goes first when the server has it; when it's
-  // off, used up for the day or offline, Bella (on the device) or the device's voice carries on.
+  // off, used up for the day or offline, the next lesson starts with Bella (on the device) or the
+  // device's voice (a lesson that already started keeps its voice: see session()).
   let studio = { server: '', uid: '', on: false, off: false };
   function setupStudio(o) {
     studio = { ...studio, ...o };
@@ -315,13 +333,13 @@
     }
     return out;
   }
-  // Which voice speaks: Cassie's own (Bella or Edward) once she's on this device — always the same
-  // voice from then on, and no limits. Until then the studio voice stands in (when Cassie's server
-  // has it and today's allowance isn't used up), else the device's own.
+  // Which voice speaks: Cassie's own (Bella or Edward) once she's on this device, no limits. Until then
+  // the studio voice stands in (when Cassie's server has it and today's allowance isn't used up), else
+  // the device's own best voice for her gender.
   const has = (k) => (k === 'bella' ? status === 'ready' && !!worker : k === 'studio' ? studioReady() : k === 'device' && !!synth);
   function best() { return has('bella') ? 'bella' : has('studio') ? 'studio' : 'device'; }
-  const fallback = (k) => ['bella', 'studio', 'device'].find((x) => x !== k && has(x)) || 'device';
   function bellaClip(text, voice, myTurn, speed) {
+    if (!worker) return Promise.reject(new Error('her voice stopped'));
     const id = ++seq;
     const p = new Promise((resolve) => waiting.set(id, { resolve }));
     worker.postMessage({ type: 'say', id, turn: myTurn, text, voice, speed: speed || 1 });
@@ -333,20 +351,78 @@
       return b;
     });
   }
+
+  /* One voice for a whole lesson or conversation. It is picked when the lesson starts and never
+     changes until it ends: not when the studio voice runs out, not when her own voice finishes
+     downloading, not when a sentence fails. A sentence that fails is tried once more in the same
+     voice; if it fails again Cassie pauses and says so, with a Keep going button. When the studio
+     voice is used up for the day, Keep going carries on with the words on screen (never in a
+     different voice); the next lesson starts with another voice. */
+  const played = []; // the last pieces said and the voice that said each (for checking it never changes)
+  function session(opts = {}) {
+    const s = sessionState(opts);
+    return {
+      get voice() { return s.kind; },
+      get gender() { return s.gender; },
+      get muted() { return s.muted; },
+      stream: (o = {}) => stream({ ...o, session: s }),
+      speak: (text, o = {}) => speak(text, { ...o, session: s }),
+      end() { s.ended = true; s.live.forEach((h) => h.stop()); },
+    };
+  }
+  // the pause note: what happened, in plain words, and a Keep going button
+  let pauseBox = null;
+  function pauseNote(usedUp) {
+    let close;
+    const keep = new Promise((resolve) => { close = resolve; });
+    if (pauseBox) pauseBox.remove();
+    const box = document.createElement('div');
+    box.className = 'cv-pause'; box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-label', 'Cassie’s voice stopped');
+    const p = document.createElement('p');
+    p.textContent = usedUp
+      ? 'Cassie’s studio voice is used up for today. She keeps the same voice for the whole lesson, so she will show the rest on screen. Next time she will start with another voice.'
+      : 'Cassie’s voice stopped working for a moment. Tap Keep going and she will carry on in the same voice.';
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.textContent = 'Keep going';
+    const end = () => { if (pauseBox === box) pauseBox = null; box.remove(); close(); };
+    btn.addEventListener('click', end);
+    box.append(p, btn);
+    document.body.appendChild(box);
+    pauseBox = box;
+    try { btn.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    return { keep, close: end };
+  }
+  // after a failure, give the same voice a moment to come back
+  async function revive(kind) {
+    if (kind !== 'bella' || (status === 'ready' && worker)) return;
+    await Promise.race([prepare().catch(() => {}), new Promise((r) => setTimeout(r, 20000))]);
+  }
   // Speak an answer while it is still being written: push(text) a piece at a time, end() when it's
-  // all there. One voice for the whole answer (picked now); if it fails partway, the next best
-  // carries on from that piece and keeps going. Returns { push, end, done, stop, said, voice }.
-  // opts.onVoice(kind) tells which voice took over.
+  // all there. Uses the lesson's voice (opts.session), or picks one for this answer alone.
+  // Returns { push, end, done, stop, said, voice }.
   function stream(opts = {}) {
-    const myTurn = ++turn, bv = VOICES[opts.gender] || VOICES.woman;
+    return run(opts.session || sessionState(opts), opts);
+  }
+  // the voice is picked here; the device's is chosen once, the best one for her gender, and kept
+  function sessionState(opts) {
+    const gender = opts.gender === 'man' ? 'man' : 'woman';
     let kind = has(opts.voice) ? opts.voice : best();
     if (kind !== 'device' && !audioCtx()) kind = 'device';
+    const s = { kind, gender, muted: false, live: new Set(), ended: false, spoke: false };
+    s.devReady = kind === 'device' ? deviceVoiceSoon(gender).then((v) => { s.dev = v; }) : Promise.resolve();
+    return s;
+  }
+  function run(s, opts) {
+    const myTurn = ++turn, bv = VOICES[s.gender] || VOICES.woman;
     const pieces = [];
-    let ended = false, stopped = false, wake = null, said = 0, srcNode = null, dev = null, endNow = null;
+    let ended = false, stopped = false, wake = null, said = 0, srcNode = null, dev = null, endNow = null, paused = null;
     const nudge = () => { if (wake) { const w = wake; wake = null; w(); } };
-    const make = (text) => (kind === 'bella' ? bellaClip(text, bv, myTurn, opts.speed) : kind === 'studio' ? studioClip(text, opts.gender) : null);
+    const make = (text) => (s.kind === 'bella' ? bellaClip(text, bv, myTurn, opts.speed) : studioClip(text, s.gender));
     // the studio voice downloads a couple of pieces ahead (it costs credits); Bella makes them all in turn
-    const ahead = (i) => { for (let j = i; j < pieces.length && (kind === 'bella' || j < i + 3); j++) if (!pieces[j].job && kind !== 'device') { pieces[j].job = make(pieces[j].text); pieces[j].job.catch(() => {}); } };
+    const ahead = (i) => {
+      if (s.kind === 'device' || s.muted) return;
+      for (let j = i; j < pieces.length && (s.kind === 'bella' || j < i + 3); j++) if (!pieces[j].job) { pieces[j].job = make(pieces[j].text); pieces[j].job.catch(() => {}); }
+    };
     const play = (buf) => new Promise((resolve) => {
       const src = audioCtx().createBufferSource(); src.buffer = buf; src.connect(audioCtx().destination);
       // a phone that hasn't woken the speaker never says "ended": move on after the piece's length
@@ -355,48 +431,88 @@
       src.onended = () => endNow && endNow(); srcNode = src;
       try { src.start(); } catch (e) { endNow(); }
     });
-    const done = (async () => {
-      for (let i = 0; ; i++) {
-        while (i >= pieces.length && !ended && !stopped) await new Promise((r) => { wake = r; });
-        if (stopped) return { status: 'stopped' };
-        if (i >= pieces.length) return { status: 'done' };
-        let buf = null;
-        while (kind !== 'device') {
-          ahead(i);
-          try { buf = await pieces[i].job; break; } catch (e) {
-            if (stopped) return { status: 'stopped' };
-            if (kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
-            kind = fallback(kind); pieces.forEach((p, j) => { if (j >= i) p.job = null; });
-            if (opts.onVoice) opts.onVoice(kind);
-          }
-        }
-        if (stopped) return { status: 'stopped' };
-        if (i === 0 && opts.onStart) opts.onStart(kind);
-        if (kind === 'device') { dev = deviceSay(pieces[i].text, { gender: opts.gender, rate: opts.rate }); await dev.done; dev = null; }
-        else await play(buf);
-        srcNode = null; said = i + 1;
-        if (stopped) return { status: 'stopped' };
+    // one piece in the lesson's voice: true when said, false when it failed
+    const once = async (i) => {
+      if (s.kind === 'device') {
+        await s.devReady;
+        if (stopped) return true;
+        dev = deviceSay(pieces[i].text, { voice: s.dev || null, gender: s.gender, rate: opts.rate, onStart: () => { if (i === 0 && opts.onStart) opts.onStart(s.kind); } });
+        const r = await dev.done; dev = null;
+        if (r.status === 'error') return false;
+        played.push({ kind: 'device', voice: s.dev ? s.dev.name : '', gender: s.gender }); if (played.length > 200) played.shift();
+        s.spoke = true;
+        return true;
       }
-    })();
-    return {
-      done,
+      ahead(i);
+      let buf;
+      try { buf = await pieces[i].job; } catch (e) { return false; }
+      if (stopped) return true;
+      if (i === 0 && opts.onStart) opts.onStart(s.kind);
+      played.push({ kind: s.kind, voice: s.kind === 'bella' ? bv : s.gender, gender: s.gender }); if (played.length > 200) played.shift();
+      s.spoke = true;
+      await play(buf);
+      return true;
+    };
+    const handle = {
+      done: null,
       get said() { return said; },
-      get voice() { return kind; },
+      get voice() { return s.kind; },
       live: true,
       push(text) { if (stopped || ended || !text || !String(text).trim()) return; pieces.push({ text: String(text).trim(), job: null }); ahead(said); nudge(); },
       end() { ended = true; nudge(); },
       stop() {
         if (stopped) return;
         stopped = true;
-        if (kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
+        if (s.kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
         try { if (srcNode) srcNode.stop(); } catch (e) { /* ignore */ }
         if (endNow) endNow();
         if (dev) dev.stop();
+        if (paused) paused.close();
         nudge();
       },
     };
+    s.live.add(handle);
+    handle.done = (async () => {
+      try {
+        for (let i = 0; ; i++) {
+          while (i >= pieces.length && !ended && !stopped) await new Promise((r) => { wake = r; });
+          if (stopped || s.ended) return { status: 'stopped' };
+          if (i >= pieces.length) return { status: 'done', muted: s.muted };
+          if (s.muted) { said = i + 1; continue; } // (the words are on screen)
+          for (let tries = 0; ; tries++) {
+            if (await once(i)) break;
+            if (stopped) return { status: 'stopped' };
+            if (s.kind === 'bella' && worker) worker.postMessage({ type: 'stop', turn: myTurn + 1 });
+            pieces.forEach((p, j) => { if (j >= i) p.job = null; });
+            // the studio voice was already used up before she said a word: that is still the start,
+            // so the lesson picks its voice again (and keeps that one)
+            if (!s.spoke && s.kind === 'studio' && studio.off) {
+              const k = best(); s.kind = k !== 'device' && !audioCtx() ? 'device' : k;
+              s.devReady = s.kind === 'device' ? deviceVoiceSoon(s.gender).then((v) => { s.dev = v; }) : Promise.resolve();
+              tries = -1; continue;
+            }
+            // a device with no voices at all has nothing to keep going with: the words stay on screen
+            if (s.kind === 'device' && !s.dev && !(synth && synth.getVoices().length)) { s.muted = true; break; }
+            if (tries === 0) { await revive(s.kind); continue; } // try once more, in the same voice
+            // it failed twice: pause and say so; Keep going tries again (or, used up, shows the words)
+            const usedUp = s.kind === 'studio' && studio.off;
+            if (opts.onPause) opts.onPause(true);
+            paused = pauseNote(usedUp);
+            await paused.keep;
+            paused = null;
+            if (stopped) return { status: 'stopped' };
+            if (opts.onPause) opts.onPause(false);
+            if (usedUp) { s.muted = true; break; }
+            tries = -1;
+          }
+          srcNode = null; said = i + 1;
+          if (stopped) return { status: 'stopped' };
+        }
+      } finally { s.live.delete(handle); }
+    })();
+    return handle;
   }
-  // Read anything aloud with the best voice there is (see best()).
+  // Read anything aloud (see best()). opts.session: the lesson's voice.
   function speak(text, opts = {}) {
     const st = stream(opts);
     sentences(text).forEach((p) => st.push(p));
@@ -404,10 +520,13 @@
     return st;
   }
 
+
   window.CassieVoice = {
     speak,
     stream,
+    session,
     best,
+    played: () => played.slice(),
     warming: () => warming,
     studio: { setup: setupStudio, ready: studioReady, on: () => studio.on, say: studioSay },
     device: { say: deviceSay, voice: deviceVoice, supported: () => !!synth },
