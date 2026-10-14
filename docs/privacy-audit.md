@@ -168,3 +168,16 @@ Tests:
 Pages: rewrite `privacy.html` (Grade 6 words, no dashes) and the matching parts of `terms.html`.
 
 Not mine to change (needs you): GitHub Pages and repo visibility, and Cloudflare Workers Logs.
+
+---
+
+## 7. Step 2: done (14 October 2026)
+
+- Automatic error reports carry only the message key (`file_kind`, `network`), never its words; the server stores `other` for anything else, so an older app can't leak a file name either. They're sent only when usage counts are on, and never for under-13s.
+- Server problem logs keep a reason picked by the server (`429 over its limit`), never a service's own error text; crash logs keep the error type and code locations, not its message.
+- `tidy()` deletes day-old rooms, finished daily and hourly limit counts (the IP addresses) and old scores, every 10 minutes while the server is busy and from the Cron Trigger. It keeps weekly and monthly allowances, which the old random sweep used to wipe.
+- "Delete my account" also deletes the account's `plans` row (approved).
+- The site build leaves out `voice/README.md`, `explore/body/README.md` and `icons/logo.svg`.
+- No fake reviews or made-up numbers were found, so none were removed.
+- `privacy.html` rewritten in plain words; `terms.html` updated to match.
+- Tests: an upload's words, name and bytes are in no table and no log after answers (and a failed one); `privacy.html` names every service the code calls; rooms, limit counts and a deleted account's plan go when their time is up.

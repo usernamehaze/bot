@@ -3207,9 +3207,23 @@ function setTypingStatus(bubble, text) {
 /* Errors read like Cassie, never like a crash, and come with a "Try again". */
 function errorText(err, fallback = 'unknown') { return CassieErrors.explain(err, fallback); }
 let autoReports = 0;
+// Only which message it was ("file_kind", "network") is reported, never its words: they can hold a
+// file's name or a service's reply. (The server keeps nothing else either.)
+function messageKey(message) {
+  const m = String(message || '');
+  const all = (window.CassieErrors && window.CassieErrors.STRINGS) || {};
+  for (const [key, words] of Object.entries(all)) {
+    const re = new RegExp('^' + words.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{\w+\\?\}/g, '[\\s\\S]*') + '$');
+    if (re.test(m.trim())) return key;
+  }
+  return 'other';
+}
 function reportAuto(where, message) {
+  // only with usage counts on, and never for under-13s (like the counts themselves)
+  const an = state.analytics;
+  if (!an || an.usage === false || (state.profile && state.profile.age < 13)) return;
   if (autoReports++ >= 5) return; // a handful per visit at most
-  try { sendFeedback('auto', where, String(message || '').slice(0, 300)); } catch (e) { /* best effort */ }
+  try { sendFeedback('auto', where, messageKey(message)); } catch (e) { /* best effort */ }
 }
 function renderError(err, retry, prefix) {
   reportAuto('chat', String((err && err.message) || err || '').slice(0, 300));

@@ -12,187 +12,100 @@
       padding: 32px 20px 64px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       line-height: 1.6;
-      color: #1c1d2b;
+      color: #1b1b1d;
       background: #ffffff;
       max-width: 760px;
       margin-left: auto;
       margin-right: auto;
     }
     @media (prefers-color-scheme: dark) {
-      body { color: #e9e9ef; background: #14151a; }
-      a { color: #8ab4ff; }
-      hr { border-color: #3a3b44; }
+      body { color: #ededed; background: #141416; }
+      hr { border-color: #3a3a3e; }
+      .updated { color: #a8a8ae; }
     }
+    a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
     h1 { font-size: 1.7rem; margin: 0 0 4px; }
     h2 { font-size: 1.15rem; margin: 28px 0 8px; }
-    .updated { color: #6b6f8a; font-size: .9rem; margin: 0 0 20px; }
-    hr { border: none; border-top: 1px solid #e6e2f5; margin: 24px 0; }
+    .updated { color: #5f5f66; font-size: .9rem; margin: 0 0 20px; }
+    hr { border: none; border-top: 1px solid #e3e3e6; margin: 24px 0; }
     ul { padding-left: 20px; }
-    li { margin: 4px 0; }
-    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; }
+    li { margin: 6px 0; }
   </style>
 </head>
 <body>
   <h1>Cassie: Privacy Policy</h1>
-  <p class="updated">Last updated: 11 October 2026</p>
+  <p class="updated">Last updated: 14 October 2026</p>
 
-  <p>
-    Cassie is a free study helper, a browser extension and web app that gives you
-    explanations, answers, and code for text you highlight. This policy explains
-    what Cassie does and does not do with your information. In plain terms:
-    <strong>Cassie has no account and does not sell or share your personal data.
-    The web app counts anonymous usage (see below), and you can switch that off.</strong>
-  </p>
+  <p>Cassie is a free study helper. She works as a web app, a phone app and a Chrome extension. This page tells you, in plain words, what Cassie keeps, what she sends to other companies, and how to delete your things.</p>
 
-  <hr>
-
-  <h2>What Cassie stores on your device</h2>
+  <h2>The short version</h2>
   <ul>
-    <li><strong>Your API key</strong>: the free Groq API key (and, in the web app,
-      an optional Google Gemini key for images) that you enter. It is stored only in
-      your own browser's local storage on your device. It is never sent anywhere
-      except directly to that provider when you ask a question.</li>
-    <li><strong>Your settings</strong>: such as your chosen model.</li>
-    <li><strong>Your profile</strong> (web app): the name, grade or field of work, and
-      age you enter when you first open Cassie. It is used only to pitch answers at the
-      right level, stays in your browser, and can be edited in Settings → You.</li>
-    <li><strong>Answer history</strong>: recent questions and answers are saved
-      locally in your browser so you can review them. You can clear this at any time
-      from the extension's popup. It never leaves your device.</li>
-  </ul>
-  <p>
-    None of this is transmitted to the developer. There is no Cassie account or login.
-  </p>
-
-  <h2>What is sent when you ask a question</h2>
-  <p>
-    When you highlight text (or use "Ask about this page"), the selected text, or
-    the text of the page you chose, is sent, together with your question, directly
-    from your browser to the AI provider so it can generate a response:
-  </p>
-  <ul>
-    <li><strong>Groq</strong>: used for all text answers.
-      See <a href="https://groq.com/privacy-policy/" target="_blank" rel="noopener">Groq's privacy policy</a>.</li>
-    <li><strong>Google Gemini</strong>: used only in the web app, and only for
-      images (generating pictures or reading a photo you attach).
-      See <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener">Google's terms</a>.</li>
-  </ul>
-  <p>
-    These requests go straight from your device to the provider using your own API
-    key. The developer of Cassie never receives, sees, or stores this content.
-  </p>
-
-  <h2>Labs: the World atlas</h2>
-  <p>
-    When you look up a country or search a place in Labs → World atlas, its name is sent
-    straight from your browser to <strong>Wikipedia</strong> (for the summary and history) and,
-    for countries, its country code to the <strong>World Bank</strong> (for the newest population).
-    Nothing else is sent, and Cassie's own server isn't involved.
-  </p>
-
-  <h2>When Cassie answers without your own key (web app)</h2>
-  <p>
-    If you haven't added your own Groq key, your question goes to Cassie's server, which
-    passes it to Groq (or, if Groq is busy, to Cloudflare Workers AI) and sends the answer
-    back. The server does <strong>not</strong> save your questions or Cassie's answers. It only
-    counts how many questions each device asked today, using the random ID below, so everyone
-    gets a fair share. If you add your own key, your questions go straight to Groq instead.
-  </p>
-
-  <h2>If you create a Cassie account (optional)</h2>
-  <p>
-    You can use Cassie without an account. If you create one, Cassie's server keeps your
-    email address, a securely scrambled (hashed) version of your password. Never the
-    password itself, and your profile (name, grade or field, age), settings and saved
-    quiz mistakes, so they follow you to your other devices. If you use "Continue with
-    Google", Google tells Cassie your email and first name. Your chats, files and API
-    keys are never saved to your account. You can delete your account any time in
-    <strong>Settings → You → Delete account</strong>, which removes it from the server.
-  </p>
-
-  <h2>Study rooms (web app)</h2>
-  <p>
-    If you start or join a study room, Cassie's server keeps what you share in it so everyone in the
-    room can see it: your first name, what you draw or write on the board (including sticky notes and
-    flashcards), chat messages, quiz answers and notes, and where your pointer is on the board (so
-    classmates can see your cursor and laser pointer). Anyone with the room's code can join. Rooms and
-    everything in them are deleted after a day.
-  </p>
-
-  <h2>Feedback you choose to send</h2>
-  <p>
-    If you tap thumbs up or down on an answer, or use <strong>Report a problem</strong>, Cassie
-    sends what you picked or typed, which feature it was about, and the same broad groups listed
-    below (student or working, school level, age range, device). It does not include your
-    question, Cassie's answer, or your name. Please don't type personal details in a report.
-  </p>
-
-  <h2>Anonymous usage counts (web app)</h2>
-  <p>
-    To learn how many people use Cassie and which features help most, the web app
-    sends small anonymous counts to a stats server run by the developer:
-  </p>
-  <ul>
-    <li>a random ID made on your device (not linked to your name or email),</li>
-    <li>when Cassie is opened, and which feature was used (for example "chat",
-      "quiz", "graph", "picture"),</li>
-    <li>broad groups only: student or working, school level (e.g. "Senior High School"),
-      an age range (e.g. "18-24"), phone or computer, and language.</li>
-  </ul>
-  <p>
-    <strong>Topic words (adults only, optional).</strong> If you are 18 or older and leave
-    "Share topic words" on, up to five keywords from a message (for example
-    "photosynthesis") are counted so the developer can see popular subjects. Common words
-    are removed, and nothing is collected in Talk mode. Your full messages, Cassie's
-    answers, files, photos, your name and your exact age are <strong>never</strong> sent.
-  </p>
-  <p>
-    You can switch both off any time in <strong>Settings → You</strong>. The browser
-    extension does not send usage counts.
-  </p>
-
-  <h2>What Cassie does NOT do</h2>
-  <ul>
-    <li>No selling or sharing of your data with anyone.</li>
-    <li>No advertising, and no third-party trackers. The anonymous counts above go only to Cassie's own stats server.</li>
-    <li>No hidden or background activity. Cassie only acts when you deliberately
-      highlight text or click its button.</li>
-    <li>No collection of browsing history, keystrokes, or personal information.</li>
+    <li><strong>Cassie uses AI.</strong> To answer you, she sends your question to an AI service run by another company. They are all named below.</li>
+    <li><strong>Your files, photos and voice are not kept.</strong> Cassie uses them to answer you, then lets them go. Our server does not save them and does not write them in any log.</li>
+    <li><strong>Most of your things stay on your device.</strong> Your chats, flashcards and settings live in your own browser.</li>
+    <li><strong>We never sell your data.</strong> There are no ads and no trackers.</li>
   </ul>
 
-  <h2>Permissions</h2>
+  <h2>What stays on your device</h2>
+  <p>These are saved in your own browser or phone. They do not go to us.</p>
   <ul>
-    <li><strong>Access to the pages you use it on</strong>, so it can read the text
-      you highlight and show the answer there.</li>
-    <li><strong>Storage</strong>: to save your API key, settings, and answer history
-      locally, as described above.</li>
-    <li><strong>Active tab</strong>: to read the current page's text when you click
-      "Ask about this page."</li>
+    <li>Your chats with Cassie. If you attached a file, the chat keeps its name and the first part of its words, so you can ask more about it later. Photos are not kept in your chats.</li>
+    <li>Your profile: your name or nickname, your age and your school level. Cassie uses it to explain things at the right level.</li>
+    <li>Your flashcards, your quiz mistakes, what Cassie remembers about you, and your settings.</li>
+    <li>Your own AI keys, if you add them. They are only sent to the company the key belongs to.</li>
+    <li>In the Chrome extension: your last 60 questions and answers, small pictures of your last 10 snips, and your keys.</li>
   </ul>
 
-  <h2>Children and intended use</h2>
-  <p>
-    Cassie is an open, visible homework and reading aid. It is not designed for use
-    during tests, quizzes, or other graded work.
-  </p>
-  <p>
-    <strong>Cassie is for learners of every age</strong>, from nursery to college and work.
-    Children should use Cassie, and make an account, with a parent's, guardian's or teacher's
-    permission. For anyone under 13, Cassie sends no usage counts and no topic words at all, and
-    topic words are only ever shared by adults. A parent or guardian can ask us to delete a
-    child's account at any time: contact us below.
-  </p>
+  <h2>What Cassie sends to other companies</h2>
+  <p>When you ask something, Cassie sends what you asked (your words, and any photo, file text or voice) to one of these services so it can make an answer. If you have not added your own key, it goes through Cassie's server first, and our server passes it on. Each company follows its own privacy rules.</p>
+  <ul>
+    <li><strong>Groq</strong>: writes most of Cassie's answers, reads photos, and turns your voice into words.</li>
+    <li><strong>Anthropic (Claude)</strong>: writes answers for people on the Plus and Pro plans.</li>
+    <li><strong>Google Gemini</strong>: writes answers when Groq is busy, reads photos and files, makes pictures, and looks things up on the web with Google Search when you ask for a web answer. If you add your own Gemini key, a PDF you attach is sent to Google whole.</li>
+    <li><strong>Cloudflare</strong>: runs Cassie's website and server. Its Workers AI is our backup. It can write answers, read photos, turn voice into words and make pictures.</li>
+    <li><strong>ElevenLabs</strong>: reads Cassie's answers out loud in her studio voice. It only gets Cassie's answer, never your files. The sound file is kept in Cloudflare's cache for up to 30 days, so the same sentence is not made twice.</li>
+    <li><strong>Pollinations</strong>: makes pictures from a short written description. It never gets your photos.</li>
+    <li><strong>OpenAlex</strong>: finds real research papers for the topic you give when you use Research.</li>
+    <li><strong>Wikipedia</strong> and the <strong>World Bank</strong>: give facts about the country or place you look up in the World atlas.</li>
+    <li><strong>Hugging Face</strong>: your device downloads Cassie's voice from it one time. Nothing you write or say is sent.</li>
+    <li><strong>Google</strong> and <strong>Apple</strong>: if you sign in with them, they tell Cassie your email and first name. Also, when you talk to Cassie, your browser may turn your voice into words by itself. In Chrome that is done by Google, and in Safari by Apple.</li>
+  </ul>
 
-  <h2>Changes to this policy</h2>
-  <p>
-    If this policy changes, the updated date above will change. Continued use of
-    Cassie means you accept the current policy.
-  </p>
+  <h2>Your files, photos and voice</h2>
+  <p>PDFs, Word files and PowerPoints are read on your own device. Only their words (or pictures of the pages, for scanned files) are sent, to one of the services above, to answer you. Photos, voice recordings and pictures of your board are sent the same way. Cassie's server passes them on and then drops them. It keeps no copy, and it never writes them, or their names, in any log or table. We test this every time Cassie changes.</p>
+
+  <h2>What Cassie's server keeps</h2>
+  <ul>
+    <li><strong>Counts for fair limits.</strong> How many questions, pictures and minutes of voice were used today, so everyone gets a fair share. These counts use your internet address (IP address) or a random number made by your device. They are deleted when the day ends. Weekly and monthly picture and voice allowances are kept until the week or month ends.</li>
+    <li><strong>Anonymous usage counts</strong>, if you leave them on: a random number made by your device, when Cassie opened, which feature you used, and broad groups only (student or working, school level, age range, phone or computer, language). If you are 18 or older and leave "topic words" on, up to five single words from a typed question (like "photosynthesis") are counted. Never your messages, files, photos or name. Nothing at all is counted for children under 13. You can turn these off in Settings, You.</li>
+    <li><strong>Problem reports.</strong> If you use Report a problem, we keep what you type, the feature, and the broad groups above. Please do not type personal details. When something breaks and usage counts are on, the app also sends which error message it showed (like "network"), never the words of your question or file.</li>
+    <li><strong>Your account</strong>, if you make one: your email, a scrambled copy of your password (never the password itself), your first name, your profile and settings, your quiz mistakes and up to 500 flashcards, so they follow you to other devices. If you sign in with Google or Apple, we keep which one and its number for you. Your chats, files, photos and keys are never saved to your account.</li>
+    <li><strong>Study rooms.</strong> What you share in a room so the others can see it: your first name, your drawings, notes, flashcards, chat messages, quiz answers and where your pointer is. Anyone with the room code can join. Rooms and everything in them are deleted after one day.</li>
+    <li><strong>Daily puzzles.</strong> Your first name and your time, for the score board. Kept for 14 days.</li>
+  </ul>
+
+  <h2>How to delete your things</h2>
+  <ul>
+    <li><strong>Your account:</strong> Settings, You, Delete account. This removes your account, your plan and your sign ins from our server right away.</li>
+    <li><strong>One chat:</strong> open the menu and delete it there. <strong>What Cassie remembers:</strong> open Memory and tap Clear all memory.</li>
+    <li><strong>Everything on this device:</strong> clear this site's data in your browser settings, or remove the app or the extension.</li>
+    <li><strong>Usage counts and problem reports:</strong> turn usage counts off in Settings, You. The counts are not linked to your name, so we cannot find yours. To delete a problem report, email us when you sent it and what it said.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>Cassie is for learners of every age. Children should use Cassie, and make an account, with help from a parent, guardian or teacher. For children under 13, Cassie sends no usage counts and no error reports.</p>
+
+  <h2>What Cassie does not do</h2>
+  <ul>
+    <li>No selling or sharing of your data for ads. No ads and no trackers.</li>
+    <li>The extension only reads a page when you highlight text, snip, or click Cassie's button. It does not collect your browsing history or what you type.</li>
+  </ul>
+
+  <h2>Changes</h2>
+  <p>If this page changes, the date at the top changes too.</p>
 
   <h2>Contact</h2>
-  <p>
-    Questions about this policy? Contact the developer at:
-    <strong>failanzahazel@gmail.com</strong>.
-  </p>
+  <p>Questions, or want something deleted? Email <strong>failanzahazel@gmail.com</strong>.</p>
+  <p><a href="terms.html">Terms of Use</a></p>
 </body>
 </html>

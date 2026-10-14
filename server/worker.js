@@ -279,9 +279,9 @@ async function askGemini(env, messages, maxTokens = 2048) {
         let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
         if (LOCATION_BLOCKED.test(m)) { geminiBlocked = { until: Date.now() + 10 * 60e3, where: lastColo }; return { reply: null, detail: geminiBlockedText(), blocked: true }; }
         if (r.status === 404) { gemini.at = 0; if (/no longer available|not found/i.test(m)) geminiGone.add(model); } // a retired name: never again
-        detail += `${model}: ${r.status} ${m.slice(0, 90)} · `;
+        detail += `${model}: ${reasonOf(r.status, m)} · `;
       }
-    } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : e.message} · `; }
+    } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : reasonOf(0, e.message)} · `; }
   }
   return { reply: null, detail: detail ? 'Gemini ' + detail.replace(/ · $/, '') : '' };
 }
@@ -302,12 +302,28 @@ async function aiVision(env, messages, maxTokens = 1500) {
       const reply = String((o && (o.response ?? o.result?.response)) || '').trim();
       if (reply) return { reply, detail: '' };
       detail += `${model}: empty answer · `;
-    } catch (e) { detail += `${model}: ${String(e.message || e).slice(0, 90)} · `; }
+    } catch (e) { detail += `${model}: ${reasonOf(0, e.message || e)} · `; }
   }
   return { reply: null, detail: 'Workers AI ' + detail.replace(/ · $/, '') };
 }
 
-/* Problems the server hit, for the dashboard (a few hundred a day at most, no messages). */
+/* Problems the server hit, for the dashboard (a few hundred a day at most, no messages).
+   What went wrong at a service is a short reason picked here: a service's own error text is never
+   kept, because it can quote the request (a student's question, file or photo). */
+function reasonOf(status, msg = '') {
+  const m = String(msg || '');
+  const why = /timeout|timed out|no answer in/i.test(m) ? 'no answer in time'
+    : /location|region|country/i.test(m) && /not supported|allow|available/i.test(m) ? 'not allowed from this location'
+    : /billing|payment|credit/i.test(m) ? 'billing'
+    : /rate.?limit|too many|resource.?exhausted|quota|limit:/i.test(m) || status === 429 ? 'over its limit'
+    : /decommission|no longer|not found|does not exist|unknown model|model_not_found/i.test(m) || status === 404 ? 'model not found'
+    : /too large|too long|payload|context length|maximum/i.test(m) || status === 413 ? 'too large'
+    : /safety|blocked|policy/i.test(m) ? 'blocked by its safety rules'
+    : /api.?key|unauthori|permission|forbidden|invalid.?auth/i.test(m) || status === 401 || status === 403 ? 'key not accepted'
+    : /image|vision|picture/i.test(m) ? 'can’t read pictures'
+    : status >= 500 ? 'service error' : status ? 'refused' : 'no connection';
+  return status ? `${status} ${why}` : why;
+}
 let problemDay = '', problemCount = 0;
 async function logProblem(env, where, detail) {
   try {
@@ -318,6 +334,26 @@ async function logProblem(env, where, detail) {
     await env.DB.prepare('INSERT INTO feedback (ts, day, uid, kind, feature, text, ctx) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(Date.now(), day, 'server', 'error', String(where).slice(0, 40), String(detail || '').slice(0, 600), 'server').run();
   } catch (e) { /* the dashboard is best-effort */ }
+}
+/* Tidy-up: what is only kept for a while goes when its time is up, whether or not anyone uses the
+   feature again: study rooms after a day, the daily and hourly limit counts (they hold IP
+   addresses) once their day is over, puzzle scores after 14 days. (Weekly and monthly allowances
+   stay until their week or month ends.) Runs every 10 minutes while the server is busy, and from
+   the Cron Trigger. */
+let tidiedAt = 0;
+async function tidy(env) {
+  if (!env.DB) return;
+  await ensureSchema(env.DB);
+  const now = Date.now(), old = now - ROOM_HOURS * 3600e3, today = dayOf(now);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM room_ops WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
+    env.DB.prepare('DELETE FROM room_members WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
+    env.DB.prepare('DELETE FROM room_here WHERE ts < ?').bind(old),
+    env.DB.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
+    // a day (2026-10-14) or an hour (2026-10-14T05) that is over; weeks (gpic:) and months (2026-10) stay
+    env.DB.prepare("DELETE FROM quota WHERE day < ? AND length(day) IN (10, 13) AND k NOT LIKE 'gpic:%'").bind(today),
+    env.DB.prepare('DELETE FROM scores WHERE day < ?').bind(dayOf(now - 14 * 86400e3)),
+  ]);
 }
 function cleanMessages(list) {
   if (!Array.isArray(list) || !list.length || list.length > 40) return null;
@@ -498,8 +534,8 @@ async function transcribe(request, env, ctx) {
         const r = await fetch(`${GROQ}/audio/transcriptions`, { method: 'POST', headers: { authorization: `Bearer ${env.GROQ_KEY}` }, body: fd, signal: AbortSignal.timeout(30000) });
         if (r.ok) { const text = String((await r.json()).text || '').trim(); ctx.waitUntil(countChat(env, dayOf(now), 'voice')); return json({ text }, 200, h); }
         let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
-        problems.push(`Groq ${model}: ${r.status} ${m}`.slice(0, 200));
-      } catch (e) { problems.push(`Groq ${model}: ${e.message}`); }
+        problems.push(`Groq ${model}: ${reasonOf(r.status, m)}`);
+      } catch (e) { problems.push(`Groq ${model}: ${reasonOf(0, e.message)}`); }
     }
   }
   if (env.AI) {
@@ -510,7 +546,7 @@ async function transcribe(request, env, ctx) {
       const text = String((o && (o.text ?? o.result?.text)) || '').trim();
       ctx.waitUntil(countChat(env, dayOf(now), 'voice-backup'));
       return json({ text }, 200, h);
-    } catch (e) { problems.push(`Workers AI whisper: ${e.message || e}`); }
+    } catch (e) { problems.push(`Workers AI whisper: ${reasonOf(0, e && e.message || e)}`); }
   }
   ctx.waitUntil(logProblem(env, 'voice: transcribe', problems.join(' | ') || 'no speech-to-text set up'));
   return chatError('I couldn’t hear that clearly. Try again, or type it.', 503, h);
@@ -585,7 +621,6 @@ async function chat(request, env, ctx) {
   const keys = [who === 'anon' ? 'an:' + ip : 'u:' + who, 'i:' + ip, ...(question ? ['q:' + (who === 'anon' ? 'an:' + ip : who)] : [])];
   const counts = (await env.DB.batch(keys.map(bump))).map((r) => r.results?.[0]?.n || 0);
   const [usedU, usedI, usedQ = 0] = counts;
-  if (Math.random() < 0.01) ctx.waitUntil(env.DB.prepare('DELETE FROM quota WHERE day < ?').bind(today).run());
   const refund = () => uncountUses(env.DB, keys);
   if (usedU > perDay || usedI > Math.max(perDay, 150) * 25 || usedQ > L.questions) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
@@ -633,14 +668,14 @@ async function chat(request, env, ctx) {
       let r;
       try {
         r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) });
-      } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : e.message}`); continue; }
+      } catch (e) { lastStatus = 503; problems.push(`Groq ${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : reasonOf(0, e.message)}`); continue; }
       if (r.ok) {
         ctx.waitUntil(countChat(env, today, 'groq'));
         return new Response(r.body, { status: 200, headers: { 'content-type': stream ? 'text/event-stream' : 'application/json', 'cache-control': 'no-store', ...h, ...left, 'x-cassie-source': 'groq' } });
       }
       lastStatus = r.status;
       try { lastDetail = (await r.json()).error?.message || ''; } catch (e) { lastDetail = ''; }
-      problems.push(`Groq ${model}: ${r.status} ${lastDetail}`.slice(0, 300));
+      problems.push(`Groq ${model}: ${reasonOf(r.status, lastDetail)}`);
       // too long: the app trims the chat and retries, so hand it back (a picture the model can't take tries the next one)
       if (r.status === 413 || (r.status === 400 && !cleaned.image && !/model|decommission|not found|does not exist|vision|image/i.test(lastDetail))) return chatError(lastDetail || 'Too long.', r.status, h);
       // 429 / 5xx / retired model / picture refused: try the next model, then the backups
@@ -671,7 +706,7 @@ async function chat(request, env, ctx) {
         ctx.waitUntil(countChat(env, today, 'backup'));
         return json({ choices: [{ index: 0, message: { role: 'assistant', content: String(reply) }, finish_reason: 'stop' }] }, 200, { ...h, ...left, 'x-cassie-source': 'backup' });
       }
-    } catch (e) { lastDetail = lastDetail || String(e && e.message || e); problems.push(`Workers AI: ${e.message || e}`); }
+    } catch (e) { lastDetail = lastDetail || String(e && e.message || e); problems.push(`Workers AI: ${reasonOf(0, e && e.message || e)}`); }
   }
   ctx.waitUntil(countChat(env, today, 'failed'));
   ctx.waitUntil(logProblem(env, cleaned.image ? 'chat: picture' : 'chat: text', problems.filter(Boolean).join(' | ') || `status ${lastStatus}`));
@@ -722,14 +757,14 @@ async function geminiPicture(env, prompt, ref) {
       });
       if (!r.ok) {
         let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
-        last = `${model}: ${r.status} ${m}`.slice(0, 200);
+        last = `${model}: ${reasonOf(r.status, m)}`;
         if (r.status === 429 && /limit:\s*0|billing|free tier/i.test(m)) { geminiPicGone = true; geminiPicGoneAt = Date.now(); return { error: 'no-billing', detail: last }; }
         continue;
       }
       const got = ((await r.json()).candidates?.[0]?.content?.parts || []).find((p) => p.inlineData && p.inlineData.data);
       if (got) return { image: got.inlineData.data, mimeType: got.inlineData.mimeType || 'image/png', model };
       last = `${model}: no picture came back`;
-    } catch (e) { last = `${model}: ${e.message}`.slice(0, 200); }
+    } catch (e) { last = `${model}: ${reasonOf(0, e.message)}`; }
   }
   return { error: 'failed', detail: last };
 }
@@ -803,9 +838,13 @@ async function feedback(request, env) {
   await ensureSchema(env.DB);
   const now = Date.now();
   await env.DB.prepare('INSERT INTO feedback (ts, day, uid, kind, feature, text, ctx) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(now, dayOf(now), uid, b.kind, label(b.feature, 40), String(b.text || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, 1500), ctxText).run();
+    .bind(now, dayOf(now), uid, b.kind, label(b.feature, 40), b.kind === 'auto' ? autoCode(b.text) : String(b.text || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, 1500), ctxText).run();
   return new Response(null, { status: 204, headers: h });
 }
+
+// An automatic error report keeps only which message the app showed ("file_kind", "network"):
+// the words themselves can hold a file's name or a service's reply.
+const autoCode = (t) => (/^[a-z][a-z0-9_]{0,39}$/.test(String(t || '')) ? String(t) : 'other');
 
 /* ------------------------------------------------------------------ Cassie's studio voice */
 // Reads text aloud with ElevenLabs when the secret ELEVENLABS_API_KEY is set (Cloudflare → the
@@ -854,10 +893,10 @@ async function speak(request, env, ctx) {
   try {
     r = await say(voice);
     if ((r.status === 404 || r.status === 400) && voice === ELEVEN_VOICES.man) r = await say(ELEVEN_VOICES.manSpare);
-  } catch (e) { ctx.waitUntil(logProblem(env, 'voice: elevenlabs', String(e.message || e)).catch(() => {})); return chatError('The studio voice didn’t answer.', 502, h); }
+  } catch (e) { ctx.waitUntil(logProblem(env, 'voice: elevenlabs', reasonOf(0, e && e.message || e)).catch(() => {})); return chatError('The studio voice didn’t answer.', 502, h); }
   if (!r.ok) {
     let m = ''; try { m = JSON.stringify(await r.json()).slice(0, 300); } catch (e) { /* not JSON */ }
-    ctx.waitUntil(logProblem(env, 'voice: elevenlabs', `${r.status} ${m}`).catch(() => {}));
+    ctx.waitUntil(logProblem(env, 'voice: elevenlabs', reasonOf(r.status, m)).catch(() => {}));
     return chatError('The studio voice didn’t work just now.', 502, h, { 'x-speak': 'error' });
   }
   const buf = await r.arrayBuffer();
@@ -1274,8 +1313,8 @@ async function auth(request, env, path) {
     await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(acc.sessionHash).run();
     return ok({ signedOut: true });
   }
-  if (path === '/auth/delete') { // "Delete my account" — removes everything about it
-    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
+  if (path === '/auth/delete') { // "Delete my account" — removes everything about it (its plan too)
+    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM plans WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
     return ok({ deleted: true });
   }
   return fail('Cassie couldn’t find that. It may have been removed. Go back and try again.', 404, 'not_found');
@@ -1399,10 +1438,11 @@ async function stats(request, env) {
 }
 
 export default {
-  // Cron Trigger (Worker → Settings → Triggers): the daily brain check
-  async scheduled(event, env, ctx) { ctx.waitUntil(runHealth(env)); },
+  // Cron Trigger (Worker → Settings → Triggers): the daily brain check, and the tidy-up
+  async scheduled(event, env, ctx) { ctx.waitUntil(runHealth(env)); ctx.waitUntil(tidy(env).catch(() => {})); },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (env.DB && Date.now() - tidiedAt > 10 * 60e3) { tidiedAt = Date.now(); ctx.waitUntil(tidy(env).catch(() => {})); }
     if (request.cf && request.cf.colo) lastColo = request.cf.colo;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(request.headers.get('origin') || '', env) });
     try {
@@ -1424,7 +1464,9 @@ export default {
       if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) return dashboard();
       return new Response('not found', { status: 404 });
     } catch (e) {
-      ctx.waitUntil(logProblem(env, 'server: ' + url.pathname.slice(0, 30), String(e && e.stack || e).slice(0, 600)).catch(() => {}));
+      // where it broke, not what it said: an error's message can quote the request (a bad JSON body, say)
+      const where = String(e && e.stack || '').split('\n').filter((l) => /^\s*at /.test(l)).slice(0, 6).join('\n');
+      ctx.waitUntil(logProblem(env, 'server: ' + url.pathname.slice(0, 30), `${(e && e.name) || 'Error'}\n${where}`.slice(0, 600)).catch(() => {}));
       return json({ error: 'Something went wrong on Cassie’s server. Please try again.' }, 500, cors(request.headers.get('origin') || '', env));
     }
   },
