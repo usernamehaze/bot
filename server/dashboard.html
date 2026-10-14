@@ -30,6 +30,7 @@
   .wrap { max-width: 1120px; margin: 0 auto; padding: 20px 16px 48px; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
   header h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  .big { margin: 6px 0 0; font-size: 34px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   header .sp { flex: 1; }
   select, button, input { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
   button { cursor: pointer; font-weight: 600; }
@@ -245,7 +246,8 @@
         </div>
       </div>
       <div class="grid two">
-        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)', 'gemini-picture': 'Pictures (Gemini)', 'gemini-picture-photo': 'Answer pictures from a photo (Gemini)' }[r.src] || r.src), (r) => r.n)}</div>
+        <div class="card"><h2>Care shown</h2><p class="sub">Times a student said they want to hurt or kill themselves and Cassie answered with care and the crisis lines, last ${d.days} days. Counted with nothing else: no words, no id.</p><p class="big">${((d.chats || []).find((r) => r.src === 'care') || { n: 0 }).n}</p></div>
+        <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last ${d.days} days</p>${bars((d.chats || []).filter((r) => r.src !== 'care'), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)', 'gemini-picture': 'Pictures (Gemini)', 'gemini-picture-photo': 'Answer pictures from a photo (Gemini)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>
           ${(d.reports || []).length ? `<div class="reports">${d.reports.map((r) => `<div class="rep"><div class="meta">${esc(new Date(r.ts).toLocaleString())} · ${r.kind === 'report' ? 'Report' : r.kind === 'down' ? '👎 ' + esc(fname(r.feature)) : r.kind === 'error' ? '⚠️ ' + esc(r.feature || 'Server problem') : r.kind === 'auto' ? '⚠️ App error · ' + esc(fname(r.feature)) : esc(r.kind)}${r.ctx ? ' · ' + esc(r.ctx) : ''}</div><div class="txt">${esc(r.text)}</div></div>`).join('')}</div>` : '<div class="empty">No reports yet</div>'}</div>
       </div>

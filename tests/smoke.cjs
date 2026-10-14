@@ -464,6 +464,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     'schemas.openxmlformats.org': 'names inside Word and PowerPoint files', 'www.w3.org': 'SVG and XML names',
     'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
     'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
+    'ncmh.gov.ph': 'where care.js’s crisis numbers were checked (a note in the code)',
   };
   const SERVICES = [ // [which addresses, the name privacy.html must use]
     [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'],
@@ -527,6 +528,157 @@ test('what the server keeps for a while goes when its time is up: rooms after a 
   t = await dump();
   expect(!t.accounts.some((r) => r.id === id) && !t.plans.some((r) => r.account === id) && !t.sessions.some((r) => r.account === id) && !t.identities.some((r) => r.account === id), 'nothing of the account is left, its plan included');
   await ctx.close();
+});
+
+// a student at risk: the messages Cassie must answer with care, and study questions she must not
+const CARE_AT_RISK = [
+  'I want to kill myself',
+  'i don’t want to live anymore, nobody would even notice',
+  'I’ve been cutting myself again and I can’t stop',
+  'gusto ko nang mamatay', // Tagalog
+  'ayoko na talaga, magpapakamatay na lang ako', // Tagalog
+  'pagod na ako sa lahat, I just want to end my life na', // Taglish
+];
+const CARE_ACADEMIC = [
+  'The character kills himself at the end of the novel. What does it symbolize?',
+  'Explain cell suicide (apoptosis) in simple terms.',
+  'Why did Romeo kill himself in Romeo and Juliet?',
+  'Bakit nagpakamatay ang tauhan sa nobela?',
+  'What is the suicide squeeze in baseball?',
+  'Summarize Durkheim’s study of suicide rates for my sociology report.',
+];
+// the verified lines (care.js: NCMH's own Contact Us page) as they must show
+const CARE_NUMBERS = ['1553', '1800 1888 1553', '0919 057 1553', '0917 899 8727', '0966 351 4518'];
+const careShows = (text) => /NCMH Crisis Hotline/.test(text) && CARE_NUMBERS.every((n) => text.includes(n));
+
+test('care first in the chat: 6 at-risk messages (English, Tagalog, Taglish) get care and the verified crisis lines, 6 study questions get a normal answer', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Here is a normal study answer.' }) });
+  const cares = async () => ((await serverStats()).chats || []).reduce((n, r) => n + (r.src === 'care' ? r.n : 0), 0);
+  const before = await cares();
+  for (const m of CARE_AT_RISK) {
+    const asked = groqCalls.length;
+    const a = await ask(page, m);
+    const t = await a.innerText();
+    expect(await a.evaluate((e) => e.classList.contains('bubble-care')), `care for: ${m}`);
+    expect(careShows(t), `the verified numbers for: ${m}: ${t.slice(0, 200)}`);
+    expect(await a.locator('a.care-num[href^="tel:"]').count() === CARE_NUMBERS.length, 'every number is a button to call');
+    const fil = /mamatay|magpapakamatay|pagod na ako/.test(m);
+    expect(fil ? /Ligtas ka ba ngayon\?/.test(t) && /nakatatandang pinagkakatiwalaan/.test(t) : /Are you safe right now\?/.test(t) && /adult you trust/.test(t), `asks if they’re safe, and to tell a trusted adult (${fil ? 'Filipino' : 'English'}): ${m}`);
+    expect(!/[–—]/.test(t), 'no dashes');
+    expect(groqCalls.length === asked, 'no AI was asked first: ' + m);
+  }
+  // Cassie keeps listening: the chat goes on as normal
+  expect(await page.locator('#prompt-input').isEnabled(), 'the chat stays open');
+  for (const m of CARE_ACADEMIC) {
+    const asked = groqCalls.length;
+    const a = await ask(page, m);
+    const t = await a.innerText();
+    expect(!(await a.evaluate((e) => e.classList.contains('bubble-care'))) && !/1553|NCMH/.test(t), 'no care for a study question: ' + m);
+    expect(groqCalls.length === asked + 1 && /normal study answer/.test(t), 'the AI answers it: ' + m);
+  }
+  expect(await page.locator('.bubble-care').count() === CARE_AT_RISK.length, 'care shows for exactly the at-risk messages');
+  // the AI was told how to judge it too, and never to write a number itself
+  expect(/\[\[CARE\]\]/.test(groqCalls.at(-1).messages[0].content) && /Never write any phone number/.test(groqCalls.at(-1).messages[0].content), 'the system prompt has the care rule');
+  // the dashboard counts it, with nothing else: no words, no id
+  await page.waitForTimeout(500);
+  expect(await cares() === before + CARE_AT_RISK.length, 'the dashboard counts each time');
+  const dump = JSON.stringify((await (await fetch(SERVER + '/__dump')).json()).tables);
+  expect(!/kill myself|mamatay|magpapakamatay|cutting myself|end my life/i.test(dump), 'none of the words reach the server');
+  // a saved chat shows the care card again when it's opened
+  await page.reload();
+  await page.waitForSelector('.bubble-care', { timeout: 10000 });
+  expect(careShows(await page.locator('.bubble-care').last().innerText()), 'the care card comes back with the chat');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('care everywhere: Talk with Cassie says it gently with the lines on screen, Labs Ask Cassie, the AI’s own judgement, Cassie’s server and the Shortcut', async (b) => {
+  const SUBTLE = 'everything feels pointless and I just want it all to stop forever';
+  const fake = (body) => {
+    const last = JSON.stringify(body.messages.at(-1));
+    return { text: /want it all to stop/.test(last) ? '[[CARE]] That sounds really heavy, and I’m glad you told me. You matter. Are you safe right now?' : 'A normal answer about the lab.' };
+  };
+  const { ctx, page, errors } = await open(b, { state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: fake });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  // the AI's own judgement in the chat: its warm words, then the verified lines (never its own number)
+  const a = await ask(page, SUBTLE);
+  const t = await a.innerText();
+  expect(await a.evaluate((e) => e.classList.contains('bubble-care')) && /That sounds really heavy/.test(t) && careShows(t) && !/\[\[CARE\]\]/.test(t), 'the AI noticed, and the lines show under its words: ' + t.slice(0, 160));
+  // Talk with Cassie: said gently out loud, the numbers on screen
+  await page.click('#voice-btn');
+  await page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
+  await page.evaluate(() => window.__say('ayoko na, gusto ko nang mamatay'));
+  await page.waitForFunction(() => window.__shown.some((t) => /Ligtas ka ba ngayon/.test(t)), null, { timeout: 15000 });
+  const said = await page.evaluate(() => window.__shown.find((t) => /Ligtas ka ba ngayon/.test(t)));
+  expect(!/\d{3}/.test(said) && /screen/.test(said), 'the numbers aren’t read out, she points to the screen: ' + said);
+  expect(careShows(await page.locator('.vc-care').innerText()) && await page.locator('.vc-care').isVisible(), 'the lines are on the voice screen');
+  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 15000 });
+  await page.click('.vc-x');
+  // Labs: Ask Cassie in a lab
+  await page.evaluate(() => openLabs('projectile'));
+  await page.waitForSelector('.lab-view:not([hidden]) .lab-ask', { timeout: 20000 });
+  await page.click('.lab-ask');
+  await page.waitForSelector('.lab-helper:not([hidden]) .hp-ask input', { timeout: 10000 });
+  await page.fill('.lab-helper .hp-ask input', 'I want to hurt myself');
+  await page.press('.lab-helper .hp-ask input', 'Enter');
+  await page.waitForSelector('.lab-helper .hp-care', { timeout: 5000 });
+  expect(careShows(await page.locator('.lab-helper .hp-care').innerText()), 'care in the lab, with the lines');
+  await page.fill('.lab-helper .hp-ask input', 'Why does the ball curve down?');
+  await page.press('.lab-helper .hp-ask input', 'Enter');
+  await seen(page, '.lab-helper .hp-a', 'A normal answer about the lab', 15000);
+  expect(await page.locator('.lab-helper .hp-care').count() === 1, 'a lab question is just answered (Cassie keeps listening)');
+  // Cassie's server (any app, the extension with no key): a question the student typed, before any limit or AI
+  const viaServer = (content, q = 1) => page.evaluate(async ([srv, content, q]) => { const r = await fetch(srv + '/chat', { method: 'POST', body: JSON.stringify({ uid: 'care-test-1234', q, messages: [{ role: 'user', content }] }) }); return { src: r.headers.get('x-cassie-source'), text: (await r.json()).choices?.[0]?.message?.content || '' }; }, [SERVER, content, q]);
+  let r = await viaServer('papatayin ko na lang ang sarili ko');
+  expect(r.src === 'care' && careShows(r.text) && /Ligtas ka ba ngayon/.test(r.text), 'the server answers with care: ' + JSON.stringify(r).slice(0, 200));
+  r = await viaServer('Explain cell suicide (apoptosis) in simple terms.');
+  expect(r.src !== 'care' && !/1553/.test(r.text), 'and answers a study question normally');
+  r = await viaServer('[I attached the file "novel.pdf": a PDF.] Summarize chapter 3\n\n(Excerpt from the start of the file:)\nI want to kill myself, said the old man.');
+  expect(r.src !== 'care', 'a file’s own words never set it off');
+  // the iPhone Shortcut
+  const shortcut = await (await fetch(SERVER + '/ask?text=' + encodeURIComponent('I want to end my life'))).text();
+  expect(careShows(shortcut) && /Are you safe right now/.test(shortcut), 'the Shortcut answers with care: ' + shortcut.slice(0, 120));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('care in the Chrome extension: a typed question gets care and the lines before any AI, the AI’s own judgement adds them, and its copy of care.js is the app’s', async () => {
+  expect(fs.readFileSync(path.join(ROOT, 'extension/care.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'care.js'), 'utf8'), 'extension/care.js differs from care.js: copy it over');
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof careOf === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // what goes to Cassie's server for the count (the worker's own requests, recorded where they're made)
+    await sw.evaluate(() => { self.__care = []; const real = self.fetch; self.fetch = (u, o) => (/\/care$/.test(String(u)) ? (self.__care.push({ body: (o && o.body) || '', url: String(u) }), Promise.resolve(new Response(null, { status: 204 }))) : real(u, o)); });
+    // the AI's own judgement: its words, then the verified lines; and the rule is in its system prompt
+    const flagged = await sw.evaluate(() => careOf('[[CARE]] That sounds so hard. You matter. Ligtas ka ba ngayon?', { typed: 'pagod na ako sa lahat ng ito' }));
+    expect(careShows(flagged) && /That sounds so hard/.test(flagged) && !/\[\[CARE\]\]/.test(flagged), 'the AI’s flag adds the lines: ' + flagged.slice(0, 120));
+    expect(await sw.evaluate(() => SYSTEM_PROMPT.includes(CassieCare.MARK) && /Never write any phone number/.test(SYSTEM_PROMPT)), 'the extension’s system prompt has the care rule');
+    expect(await sw.evaluate(() => careOf('Photosynthesis makes glucose.', { typed: 'what is photosynthesis' })) === 'Photosynthesis makes glucose.', 'a normal answer is left alone');
+    // the popup: a typed question gets care at once, with no AI and nothing but a count sent
+    const id = new URL(sw.url()).host;
+    const page = await ctx.newPage();
+    await page.goto(`chrome-extension://${id}/popup.html`);
+    await page.fill('#page-q', 'gusto ko nang mamatay');
+    await page.click('#page-ask');
+    await page.waitForFunction(() => /1553/.test(document.getElementById('page-answer').textContent), null, { timeout: 5000 });
+    const t = await page.locator('#page-answer').innerText();
+    expect(careShows(t) && /Ligtas ka ba ngayon/.test(t), 'care in the popup: ' + t.slice(0, 120));
+    await page.waitForTimeout(500);
+    const counted = await sw.evaluate(() => self.__care);
+    expect(counted.length === 2 && counted.every((c) => c.body === '' && /\/care$/.test(c.url)), 'a count each time (the AI’s flag and the popup), with nothing in it: ' + JSON.stringify(counted));
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
 test('no key: Cassie answers through the server', async (b) => {
@@ -3532,9 +3684,10 @@ test('Gemini pictures on the server: “a photo of the answer” redraws the stu
 });
 
 test('one copy of the truth: the extension’s board is the app’s, and the server file you paste matches its source', async () => {
-  for (const f of ['board.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, f), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  for (const f of ['board.js', 'sketch.js', 'care.js']) expect(fs.readFileSync(path.join(ROOT, f), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
   const html = fs.readFileSync(path.join(ROOT, 'server/dashboard.html'), 'utf8').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
-  const built = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8').replace('__DASHBOARD_HTML__', () => html);
+  const care = fs.readFileSync(path.join(ROOT, 'care.js'), 'utf8'); // (the server's care response is the app's own file)
+  const built = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8').replace('/*__CARE_JS__*/', () => care).replace('__DASHBOARD_HTML__', () => html);
   expect(built === fs.readFileSync(path.join(ROOT, 'server/worker.js'), 'utf8'), 'server/worker.js is out of date: run  cd server && python3 build.py');
 });
 

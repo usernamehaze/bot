@@ -13,6 +13,7 @@ const ASSETS = [
   'style.css',
   'config.js',
   'errors.js',
+  'care.js',
   'cassie-bot.js',
   'app.js',
   'native.js',

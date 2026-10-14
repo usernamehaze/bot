@@ -817,6 +817,20 @@
     flushList();
   }
 
+  // A student at risk (care.js): care before anything else, no AI is asked. Counted on Cassie's
+  // server with nothing else (no words, no id).
+  function careFirst(q, rect) {
+    const hit = window.CassieCare && window.CassieCare.check(q);
+    if (!hit) return false;
+    gen++;
+    popover.hidden = false;
+    const reply = window.CassieCare.reply(hit.lang);
+    convo.push({ role: 'user', content: q }, { role: 'assistant', content: reply });
+    setContent(reply);
+    if (rect) positionPopover(rect);
+    try { chrome.runtime.sendMessage({ type: 'CASSIE_CARE' }); } catch (e) { /* the count is best effort */ }
+    return true;
+  }
   function setContent(text, { muted = false } = {}) {
     body.classList.toggle('muted', muted);
     body.innerHTML = '';
@@ -917,6 +931,7 @@
     const go = () => {
       const q = input.value.trim();
       if (!q) return;
+      if (careFirst(q, rect)) return;
       convo.push({ role: 'user', content: q });
       convoLabel = q;
       runConversation(rect);
@@ -1016,6 +1031,7 @@
 
   function runPageAsk(question, rect) {
     rect = rect || bottomRightRect();
+    if (question && careFirst(question, rect)) return;
     const q = question || 'Summarize this page and list the key points.';
     setContent('Reading the page…', { muted: true });
     positionPopover(rect);
