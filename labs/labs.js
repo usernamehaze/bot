@@ -361,7 +361,7 @@ function createView() {
     if (!current || !opts.explain) return;
     if (teacher && teacher.root.isConnected) { stopTeaching(); return; }
     closeHelp();
-    teacher = tutor({ view: labView, lab: current, mounted: () => mounted, described, ask: opts.explain, speak: opts.speak, hear: opts.hear, level: opts.level });
+    teacher = tutor({ view: labView, lab: current, mounted: () => mounted, described, ask: opts.explain, speak: opts.speak, speaker: opts.speaker, hear: opts.hear, level: opts.level });
     teacher.root.querySelector('.tut-x').addEventListener('click', () => stopTeaching());
     labView.classList.add('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'true');
     if (opts.onTeach) opts.onTeach(current.id);

@@ -72,7 +72,7 @@ export function collectAll(view) {
   return out;
 }
 
-export function tutor({ view, lab, mounted, described, ask, speak, hear, level, collect: collector }) {
+export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear, level, collect: collector }) {
   const box = el('div', 'lab-tutor');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Cassie teaches you');
@@ -95,6 +95,8 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
   document.body.append(finger, ring);
   finger.hidden = ring.hidden = true;
 
+  // one voice for the whole lesson: picked now, kept to the end (speaker() comes from voice.js)
+  const lessonVoice = speaker ? speaker() : null;
   let steps = [], at = 0, targets = [], pointed = null, talking = null, waitOff = null, raf = 0, alive = true, asking = 0, finished = false;
   const pill = $('.tut-pill'), pillText = $('.tut-pill-text');
 
@@ -189,8 +191,8 @@ export function tutor({ view, lab, mounted, described, ask, speak, hear, level, 
   }
   function voice(text) {
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } talking = null; }
-    if (!voiceOn || !speak) return new Promise((r) => setTimeout(r, Math.min(9000, 1200 + text.length * 45)));
-    try { talking = speak(text); } catch (e) { talking = null; }
+    if (!voiceOn || !(speak || lessonVoice)) return new Promise((r) => setTimeout(r, Math.min(9000, 1200 + text.length * 45)));
+    try { talking = lessonVoice ? lessonVoice.speak(text) : speak(text); } catch (e) { talking = null; }
     return talking && talking.done ? talking.done : Promise.resolve();
   }
   function show(k) {
@@ -325,6 +327,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     alive = false; asking++;
     clearPoint();
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } }
+    if (lessonVoice) lessonVoice.end();
     if (listening) { try { listening.stop(); } catch (e) { /* ignore */ } }
     box.remove(); finger.remove(); ring.remove();
     removeEventListener('resize', onResize);
