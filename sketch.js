@@ -516,6 +516,8 @@
       redrawObjs();
       $('[data-act="undo"]').disabled = !strokes.length;
       $('[data-act="redo"]').disabled = !redo.length;
+      // (nothing of yours to clear: greyed out, like Undo, so a tap never does nothing)
+      $('[data-act="clear"]').disabled = room ? !strokes.some((x) => x.mine || !x.u) : !strokes.length; // (a stroke just drawn is yours before it's sent)
     }
     // ---- sticky notes and flashcards (their own layer, newest on top) ----
     const handleR = () => Math.max(15, 13 * scaleK());
@@ -1194,6 +1196,7 @@
         e.preventDefault();
         const input = askForm.querySelector('input'), btn = askForm.querySelector('button');
         const q = input.value.trim();
+        if (!q && !btn.disabled) { input.focus(); return; } // nothing typed yet: the box is where to type
         if (!q || btn.disabled) return;
         btn.disabled = true; btn.textContent = '…';
         showNote({ reply: 'Cassie is thinking…' });

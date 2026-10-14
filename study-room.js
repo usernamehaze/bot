@@ -90,18 +90,19 @@
     o.panel.appendChild(root);
     const $ = (s) => root.querySelector(s), body = $('.sr-body'), foot = $('.sr-foot');
     const nameOf = (uid, fallback) => (uid === o.me ? 'You' : (S.members.find((m) => m.uid === uid) || {}).name || fallback || 'Classmate');
-    const send = (op) => { op.id = op.id || rid(); pending.set(op.id, Date.now()); o.send({ ...op, n: o.name }); };
+    // what you do shows at once (not after the room's server sends it back); its echo is then skipped
+    const send = (op) => { op.id = op.id || rid(); pending.set(op.id, Date.now()); o.send({ ...op, n: o.name }); receive([{ uid: o.me, ts: Date.now() + S.offset, op: { ...op, n: o.name } }], 0, true); };
     const watch = setInterval(() => { // our steps never came back: the server is too old for group study
       for (const [, at] of pending) if (Date.now() - at > 8000) { $('.sr-warn').hidden = false; break; }
     }, 3000);
 
     /* ---------- what arrives ---------- */
-    function receive(list, serverNow) {
+    function receive(list, serverNow, local) {
       if (serverNow) S.offset = serverNow - Date.now();
       let changed = false;
       for (const { uid, ts, op } of list) {
         if (!op || !KINDS.has(op.t)) continue;
-        if (op.id) { pending.delete(op.id); if (S.seen.has(op.id)) continue; S.seen.add(op.id); }
+        if (op.id) { if (!local) pending.delete(op.id); if (S.seen.has(op.id)) continue; S.seen.add(op.id); } // (still waiting for the server until it comes back)
         changed = true;
         const who = { uid, name: cut(op.n, 30) || 'Classmate', ts: ts || Date.now() };
         if (op.t === 'msg') { S.msgs.push({ ...who, text: cut(op.text, 500) }); if (uid !== o.me && (root.hidden || tab !== 'chat')) unread++; }
@@ -211,7 +212,7 @@
     async function act(a, el) {
       const input = foot.querySelector('.sr-in');
       if (a === 'close') { root.hidden = true; return; }
-      if (a === 'send') { const t = cut(input.value, 500); if (!t) return; input.value = ''; send({ t: 'msg', text: t }); return; }
+      if (a === 'send') { const t = cut(input.value, 500); if (!t) { input.focus(); return; } input.value = ''; send({ t: 'msg', text: t }); return; }
       if (a === 'ask') {
         const q = cut(input.value, 300); if (!q) { input.placeholder = 'Type a question for Cassie first'; input.focus(); return; }
         input.value = ''; el.disabled = true; el.textContent = 'Cassie is thinking…';
@@ -233,7 +234,7 @@
         finally { setTimeout(() => { el.disabled = false; el.textContent = 'Make a group quiz'; }, 1200); }
         return;
       }
-      if (a === 'note') { const t = cut(input.value, 600); if (!t) return; input.value = ''; send({ t: 'note', text: t }); }
+      if (a === 'note') { const t = cut(input.value, 600); if (!t) { input.focus(); return; } input.value = ''; send({ t: 'note', text: t }); }
     }
     function say(text) { if (voice) { voice.stop(); voice = null; } if (o.speak) voice = o.speak(text); }
     root.addEventListener('click', (e) => {

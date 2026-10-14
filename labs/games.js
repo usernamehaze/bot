@@ -318,6 +318,7 @@ const crackerLab = {
     page.addEventListener('submit', (e) => {
       e.preventDefault();
       const f = e.target;
+      if (!f.querySelector('input').value.trim()) { f.querySelector('input').focus(); return; } // nothing typed yet: the box is where to type
       if (f.classList.contains('gm-probe')) { const x = Math.round(+f.querySelector('input').value); if (Number.isFinite(x) && x >= -10 && x <= 10 && ![...fixedXs, ...probes].includes(x)) { probes.push(x); draw(); } return; }
       guess(f.querySelector('input').value);
     });

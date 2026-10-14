@@ -298,7 +298,7 @@ html.labs-open, html.labs-open body { overflow: hidden; }
 .lab-units-all tr.on td { color: #ffcf5a; font-weight: 700; }
 
 .lab-sl-typed { display: inline-flex; align-items: center; gap: 4px; }
-.lab-sl .lab-sl-typed input { -webkit-appearance: textfield; appearance: textfield; height: auto; cursor: text; touch-action: auto; width: 5.2em; padding: 3px 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; font-size: .85rem; text-align: right; }
+.lab-sl .lab-sl-typed input { -webkit-appearance: textfield; appearance: textfield; height: auto; cursor: text; touch-action: manipulation; width: 5.2em; padding: 3px 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; font-size: .85rem; text-align: right; }
 .lab-sl .lab-sl-typed input.bad { border-color: #e5484d; }
 .lab-sl-typed i { font-style: normal; font-size: .8rem; color: rgba(255, 255, 255, .6); }
 

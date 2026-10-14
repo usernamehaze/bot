@@ -55,6 +55,8 @@ function shell(panel, api, id, onNew, standard = () => true) {
   s.render();
   return s;
 }
+// a new size builds a whole new board: the size chosen shows first, the board is built after that's drawn
+const resize = (fn) => (v) => requestAnimationFrame(() => setTimeout(() => fn(v)));
 const winNote = (panel) => { const p = el('p', 'puz-win'); p.hidden = true; panel.appendChild(p); return p; };
 
 /* ---------------- Sudoku ---------------- */
@@ -146,7 +148,10 @@ const sudokuLab = {
       if (done && msg.hidden) { msg.hidden = false; msg.textContent = 'Solved!'; S.win(Math.round(S.seconds), fmtTime(S.seconds)).then((t) => { msg.textContent = t; S.render(); }); }
     }
     function put(d) {
-      if (sel < 0 || P.puzzle[sel]) return;
+      // no square chosen yet: the first empty one lights up, so you see where your number goes
+      // no square chosen yet, or one printed in the puzzle (it can't change): the next empty square
+      // lights up, so you see where your number goes
+      if (sel < 0 || P.puzzle[sel]) { const from = Math.max(0, sel), k = grid.findIndex((v, i) => i >= from && !v && !P.puzzle[i]); sel = k >= 0 ? k : grid.findIndex((v, i) => !v && !P.puzzle[i]); if (sel >= 0) render(); return; }
       if (noting && d) { notes[sel].has(d) ? notes[sel].delete(d) : notes[sel].add(d); grid[sel] = 0; }
       else { grid[sel] = d; notes[sel].clear(); }
       render();
@@ -162,7 +167,7 @@ const sudokuLab = {
     };
     document.addEventListener('keydown', keys);
     let pending = 0;
-    seg(group(panel, 'Size'), { options: [[4, '4 × 4'], [6, '6 × 6'], [8, '8 × 8'], [9, '9 × 9 (today’s)'], [12, '12 × 12']], value: size, onChange: (v) => { size = +v; make(); S.render(); } });
+    seg(group(panel, 'Size'), { options: [[4, '4 × 4'], [6, '6 × 6'], [8, '8 × 8'], [9, '9 × 9 (today’s)'], [12, '12 × 12']], value: size, onChange: resize((v) => { size = +v; make(); S.render(); }) });
     make();
     return { state: () => `a ${P.n}×${P.n} Sudoku with ${grid.filter(Boolean).length} of ${P.n * P.n} squares filled`, destroy: () => { S.destroy(); document.removeEventListener('keydown', keys); } };
   },
@@ -260,8 +265,10 @@ const nonogramLab = {
       cv.redraw();
     }
     seg(group(panel, 'Tap to'), { options: [[1, '■ Fill'], [2, '✕ Mark empty']], value: mode, onChange: (v) => { mode = +v; } });
-    seg(group(panel, 'Size'), { options: [[5, '5 × 5'], [8, '8 × 8'], [10, '10 × 10 (today’s)'], [12, '12 × 12'], [15, '15 × 15'], [20, '20 × 20'], [25, '25 × 25']], value: size, onChange: (v) => { size = +v; make(); S.render(); } });
-    button(row(panel, 'lab-row-btns'), 'Clear my squares', () => { g = g.map(() => 0); done = false; msg.hidden = true; cv.redraw(); });
+    seg(group(panel, 'Size'), { options: [[5, '5 × 5'], [8, '8 × 8'], [10, '10 × 10 (today’s)'], [12, '12 × 12'], [15, '15 × 15'], [20, '20 × 20'], [25, '25 × 25']], value: size, onChange: resize((v) => { size = +v; make(); S.render(); }) });
+    const clearBtn = button(row(panel, 'lab-row-btns'), 'Clear my squares', () => { g = g.map(() => 0); done = false; msg.hidden = true; cv.redraw(); });
+    // (greyed out while there's nothing to clear, so a tap never does nothing)
+    const drawn = cv.redraw; cv.redraw = () => { drawn(); clearBtn.disabled = !g.some((v) => v); };
     make();
     return { state: () => `a ${size}×${size} nonogram with ${g.filter((v) => v === 1).length} squares filled so far`, destroy: () => { S.destroy(); cv.destroy(); } };
   },
@@ -378,8 +385,10 @@ const hashiLab = {
       cv.redraw();
     }
     panel.appendChild(el('p', 'lab-note', 'Drag from one island to another to build a bridge (or tap one, then the other). Do it again for a double bridge; a third time removes it.'));
-    seg(group(panel, 'Size'), { options: [[5, 'Small'], [7, 'Medium (today’s)'], [9, 'Large'], [11, 'Huge'], [13, 'Giant']], value: n, onChange: (v) => { n = +v; make(); S.render(); } });
-    button(row(panel, 'lab-row-btns'), 'Remove all my bridges', () => { mine = new Map(); done = false; msg.hidden = true; cv.redraw(); });
+    seg(group(panel, 'Size'), { options: [[5, 'Small'], [7, 'Medium (today’s)'], [9, 'Large'], [11, 'Huge'], [13, 'Giant']], value: n, onChange: resize((v) => { n = +v; make(); S.render(); }) });
+    const clearBtn = button(row(panel, 'lab-row-btns'), 'Remove all my bridges', () => { mine = new Map(); done = false; msg.hidden = true; cv.redraw(); });
+    // (greyed out while there's nothing to remove, so a tap never does nothing)
+    const drawn = cv.redraw; cv.redraw = () => { drawn(); clearBtn.disabled = ![...mine.values()].some((v) => v); };
     make();
     return { state: () => `a Bridges puzzle with ${P.isl.length} islands; ${P.isl.filter((I, i) => count(i) === I.need).length} of them have the right number of bridges`, destroy: () => { S.destroy(); cv.destroy(); } };
   },
@@ -448,7 +457,7 @@ const pipesLab = {
       cv.redraw(); st.set([['Turns', String(moves)]]);
     });
     panel.appendChild(el('p', 'lab-note', 'Tap a tile to turn it a quarter clockwise.'));
-    seg(group(panel, 'Size'), { options: [[4, '4 × 4'], [5, '5 × 5'], [6, '6 × 6 (today’s)'], [8, '8 × 8'], [10, '10 × 10'], [12, '12 × 12']], value: n, onChange: (v) => { n = +v; make(); st.set([['Turns', '0']]); S.render(); } });
+    seg(group(panel, 'Size'), { options: [[4, '4 × 4'], [5, '5 × 5'], [6, '6 × 6 (today’s)'], [8, '8 × 8'], [10, '10 × 10'], [12, '12 × 12']], value: n, onChange: resize((v) => { n = +v; make(); st.set([['Turns', '0']]); S.render(); }) });
     const st = stats(panel);
     make(); st.set([['Turns', '0']]);
     return { state: () => `a ${n}×${n} pipes puzzle; ${solved().wet.size} of ${n * n} tiles have water after ${moves} turns`, destroy: () => { S.destroy(); cv.destroy(); } };
@@ -547,7 +556,7 @@ const mirrorsLab = {
       st.set([['Taps', String(taps)]]); cv.redraw();
     });
     panel.appendChild(el('p', 'lab-note', 'Tap a mirror to turn it between / and \\.'));
-    seg(group(panel, 'Size'), { options: [[5, '5 × 5'], [7, '7 × 7 (today’s)'], [9, '9 × 9'], [11, '11 × 11']], value: n, onChange: (v) => { n = +v; make(); st.set([['Taps', '0']]); S.render(); } });
+    seg(group(panel, 'Size'), { options: [[5, '5 × 5'], [7, '7 × 7 (today’s)'], [9, '9 × 9'], [11, '11 × 11']], value: n, onChange: resize((v) => { n = +v; make(); st.set([['Taps', '0']]); S.render(); }) });
     const st = stats(panel);
     make(); st.set([['Taps', '0']]);
     return { state: () => `a laser-mirror puzzle; the beam ${trace().hit ? 'reaches' : 'does not yet reach'} the target after ${taps} taps`, destroy: () => { S.destroy(); cv.destroy(); } };

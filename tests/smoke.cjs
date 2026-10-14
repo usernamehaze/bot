@@ -58,8 +58,8 @@ const FAKE_GSI = `window.google = { accounts: { id: {
 } } };`;
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, setup } = {}) {
-  const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(touch ? { hasTouch: true } : {}), acceptDownloads: true });
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup } = {}) {
+  const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(touch ? { hasTouch: true } : {}), ...(scale ? { deviceScaleFactor: scale } : {}), acceptDownloads: true });
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
@@ -93,6 +93,11 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await page.goto(APP);
   return { ctx, page, errors, groqCalls };
 }
+// A lab card says "Opening…" at once and opens its lab a frame later (so the tap shows at once): wait for it
+async function openCard(page, sel) {
+  await page.click(sel);
+  await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *, .x3d:not([hidden])', { timeout: 20000 });
+}
 // the 3D models are opened from Labs (the 3D shelf)
 // Labs and Settings: a button in the top bar on a computer, a tab in the tab bar on a phone
 const tapLabs = async (page) => page.click(await page.locator('#labs-btn').isVisible() ? '#labs-btn' : '#tabbar [data-tab="labs"]');
@@ -101,7 +106,7 @@ async function open3d(page, id) {
   await tapLabs(page);
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
   await page.click('.labs-chips [data-subject="3d"]');
-  await page.click(`.labs-grid [data-lab="${id}"]`);
+  await openCard(page, `.labs-grid [data-lab="${id}"]`);
 }
 // waits for some text in a part of the page, checking on a timer (a page busy drawing 3D in
 // software barely gets to draw a frame, and the usual frame-by-frame check then times out)
@@ -1945,7 +1950,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the 3D menu has both too');
   expect(/Cells 3D/.test(await page.locator('.labs-grid [data-lab="cells3d"]').innerText()), 'the cells card is named for the cells');
   // the cells card opens the cells straight away
-  await page.click('.labs-grid [data-lab="cells3d"]');
+  await openCard(page, '.labs-grid [data-lab="cells3d"]');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="nucleus"]', { timeout: 30000 });
   const tabs = await page.$$eval('.x3d-switch [data-cell]', (t) => t.map((x) => x.dataset.cell + ':' + x.getAttribute('aria-selected')));
   expect(tabs.join() === 'animal:true,plant:false', 'inside the cells: Animal or Plant, nothing else: ' + tabs);
@@ -1955,7 +1960,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
   await page.click('.x3d-close');
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 10000 });
   // opened again, the cells come back on the one last looked at
-  await page.click('.labs-grid [data-lab="cells3d"]');
+  await openCard(page, '.labs-grid [data-lab="cells3d"]');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="chloroplast"]', { timeout: 30000 });
   expect(await page.locator('.x3d-switch [data-cell="plant"]').getAttribute('aria-selected') === 'true', 'the plant cell, as left');
   await page.click('.x3d-close');
@@ -2246,7 +2251,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   // every lab opens, draws, says how its model works, and closes without an error
   for (const id of ids.filter((x) => !/3d$/.test(x))) {
     await page.evaluate((sec) => openLabs(undefined, { section: sec }), games.includes(id) ? 'games' : 'learn');
-    await page.click(`.labs-grid [data-lab="${id}"]`);
+    await openCard(page, `.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
     expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet').count() >= 1, id + ' draws something');
     expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
@@ -2259,7 +2264,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   }
   // “Try this” goals are buttons: a tap shows the hint
   await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
-  await page.click('.labs-grid [data-lab="pendulum"]');
+  await openCard(page, '.labs-grid [data-lab="pendulum"]');
   await page.click('.lab-try >> nth=0');
   expect(await page.locator('.lab-hint >> nth=0').isVisible() && /1 m/.test(await page.locator('.lab-hint >> nth=0').innerText()), 'tapping a goal shows its hint');
   await page.click('.lab-nudge');
@@ -2267,7 +2272,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   expect(await page.locator('.labs').isVisible(), 'Cassie’s nudge appears inside the lab');
   await page.click('.lab-back');
   // the function lab: x^2 − 4, tap the middle → slope 0 → the first goal ticks
-  await page.click('[data-lab="function"]');
+  await openCard(page, '[data-lab="function"]');
   await page.fill('.lab-input', 'x^2 - 4');
   const st = page.locator('.lab-stage');
   const sb = await st.boundingBox();
@@ -2280,7 +2285,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await shot('lab-function');
   await page.click('.lab-back');
   // balancing water yourself: 2 H2 + O2 → 2 H2O
-  await page.click('[data-lab="balance"]');
+  await openCard(page, '[data-lab="balance"]');
   await page.click('.lab-coef [data-j="0"][data-d="1"]');
   expect(!(await page.locator('.lab-verdict.ok').count()), 'not balanced half way');
   await page.click('.lab-coef [data-j="2"][data-d="1"]');
@@ -2292,7 +2297,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await shot('lab-balance');
   await page.click('.lab-back');
   // Punnett: Yy × Yy is 3 : 1 right away; two genes → 9 : 3 : 3 : 1
-  await page.click('[data-lab="punnett"]');
+  await openCard(page, '[data-lab="punnett"]');
   expect(/3 : 1/.test(await page.locator('.lab-stats').innerText()), 'Yy × Yy gives 3 : 1');
   await page.click('.lab-seg button:has-text("Two genes")');
   expect(/9 : 3 : 3 : 1/.test(await page.locator('.lab-stats').innerText()), 'YyRr × YyRr gives 9 : 3 : 3 : 1');
@@ -2301,7 +2306,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await shot('lab-punnett');
   await page.click('.lab-back');
   // pH: 10 mL acid then 10 mL base = neutral
-  await page.click('[data-lab="ph"]');
+  await openCard(page, '[data-lab="ph"]');
   await page.locator('.lab-group:has-text("Acid") button:has-text("+ 10 mL")').click();
   expect(/acidic/.test(await page.locator('.lab-stats').innerText()), 'acid makes it acidic');
   await page.locator('.lab-group:has-text("Base") button:has-text("+ 10 mL")').click();
@@ -2309,14 +2314,14 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   await shot('lab-ph');
   await page.click('.lab-back');
   // the atom: carbon-12 is built at the start
-  await page.click('[data-lab="atom"]');
+  await openCard(page, '[data-lab="atom"]');
   expect(/Carbon \(C\)/.test(await page.locator('.lab-stats').innerText()) && /carbon-12/.test(await page.locator('.lab-stats').innerText()), 'six of each is carbon-12');
   await page.click('.lab-chips >> text=Chloride Cl⁻');
   expect(/negative ion/.test(await page.locator('.lab-stats').innerText()), 'chloride is a negative ion');
   await shot('lab-atom');
   await page.click('.lab-back');
   // launch: drag on the picture to aim, then 45° from the ground and the big Launch button on the picture
-  await page.click('[data-lab="projectile"]');
+  await openCard(page, '[data-lab="projectile"]');
   const pb = await page.locator('.lab-stage').boundingBox();
   await page.mouse.move(pb.x + pb.width * 0.4, pb.y + pb.height * 0.4); await page.mouse.down(); await page.mouse.move(pb.x + pb.width * 0.5, pb.y + pb.height * 0.3, { steps: 4 }); await page.mouse.up();
   expect(await page.locator('.lab-sl:has-text("Angle") output').innerText() !== '40°', 'dragging on the picture aims the launcher');
@@ -2354,7 +2359,7 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   await page.waitForSelector('.labs-board:not([hidden])', { timeout: 5000 });
   expect(/Be the first today|playing today/.test(await page.locator('.labs-board').innerText()), 'the score board shows on the shelf');
   // solve today's Laser mirrors puzzle by trying mirror turns (the real path exists)
-  await page.click('.labs-grid [data-lab="mirrors"]');
+  await openCard(page, '.labs-grid [data-lab="mirrors"]');
   await page.waitForSelector('.puz-head');
   await page.waitForFunction(() => document.querySelector('.lab-stage').dataset.geo);
   // try every combination of mirror turns in Gray-code order (one tap per step) until the laser hits
@@ -2379,7 +2384,7 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   expect(/Done today/i.test(await page.locator('.labs-grid [data-lab="mirrors"]').innerText()), 'the shelf marks the puzzle done today');
   await shot('labs-board');
   // the same puzzle for everyone today: another student gets the same Sudoku
-  await page.click('.labs-grid [data-lab="sudoku"]');
+  await openCard(page, '.labs-grid [data-lab="sudoku"]');
   await page.waitForSelector('.sdk-grid .sdk-c');
   const mine = await page.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(','));
   const other = await ctx.browser().newContext({ serviceWorkers: 'block' });
@@ -2396,14 +2401,14 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
   await shot('puzzle-sudoku');
   await page.click('.lab-back');
   // equation: a false guess is refused with a reason
-  await page.click('.labs-grid [data-lab="equation"]');
+  await openCard(page, '.labs-grid [data-lab="equation"]');
   for (const k of '1+1=3000'.split('')) await page.click(`.eq-keys [data-k="${k}"]`);
   await page.click('.eq-keys [data-k="enter"]');
   expect(/isn’t true|just a number|8 symbols/.test(await page.locator('.eq-warn').innerText()), 'a wrong equation is refused: ' + await page.locator('.eq-warn').innerText());
   await shot('puzzle-equation');
   await page.click('.lab-back');
   // geography: the map loads and a round can be answered
-  await page.click('.labs-grid [data-lab="geography"]');
+  await openCard(page, '.labs-grid [data-lab="geography"]');
   await page.waitForSelector('.geo-opts button');
   await page.click('.geo-opts button >> nth=0');
   await page.waitForSelector('.geo-next');
@@ -2440,7 +2445,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await shot('lab-goals');
   await page.click('.lab-back');
   // colour: a named colour, its name, and the hex
-  await page.click('.labs-grid [data-lab="colour"]');
+  await openCard(page, '.labs-grid [data-lab="colour"]');
   await page.click('.lab-colour-chips [aria-label="Mustard"]');
   expect(/Mustard/.test(await page.locator('.lab-swatch').innerText()) && /#FFDB58/.test(await page.locator('.lab-swatch').innerText()), 'the swatch says the colour’s name and hex: ' + await page.locator('.lab-swatch').innerText());
   await page.locator('.lab-sl:has-text("Blue") input').fill('255');
@@ -2448,7 +2453,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await shot('lab-colour-names');
   await page.click('.lab-back');
   // chance: the coin flips through the air, then the count goes up
-  await page.click('.labs-grid [data-lab="chance"]');
+  await openCard(page, '.labs-grid [data-lab="chance"]');
   await page.click('.lab-row-btns .lab-btn:has-text("× 1") >> nth=0');
   await page.waitForTimeout(250);
   await shot('lab-coin-flipping');
@@ -2461,7 +2466,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await page.waitForFunction(() => /Trials\s*1(?![\d,])/.test(document.querySelector('.lab-stats').textContent), null, { timeout: 4000 });
   await page.click('.lab-back');
   // 3D shapes: 13 of them, any size typed in
-  await page.click('.labs-grid [data-lab="solids"]');
+  await openCard(page, '.labs-grid [data-lab="solids"]');
   expect(await page.locator('.lab-group:has(h4:text-is("Shape")) .lab-seg button').count() === 13, '13 shapes');
   await page.click('.lab-seg button:has-text("Torus")');
   await page.locator('.lab-sl:has-text("Ring radius") input[type=number]').fill('12.5');
@@ -2471,8 +2476,9 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await page.click('.lab-back');
   // puzzles: more sizes, and a new puzzle any time
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
-  await page.click('.labs-grid [data-lab="sudoku"]');
+  await openCard(page, '.labs-grid [data-lab="sudoku"]');
   await page.click('.lab-seg button:has-text("12 × 12")');
+  await page.waitForFunction(() => document.querySelectorAll('.sdk-c').length === 144, null, { timeout: 5000 }).catch(() => {}); // (the size shows first, the new board a frame later)
   expect(await page.locator('.sdk-c').count() === 144 && await page.locator('.sdk-pad [data-d="12"]').count() === 1, 'a 12 × 12 sudoku with 1–12');
   const first = await page.$$eval('.sdk-c', (c) => c.map((x) => x.textContent).join(','));
   await page.click('.puz-head .lab-btn:has-text("New puzzle")');
@@ -2480,7 +2486,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   await shot('puzzle-sudoku-12');
   await page.click('.lab-back');
   for (const [id, label] of [['nonogram', '20 × 20'], ['hashi', 'Huge'], ['pipes', '10 × 10'], ['mirrors', '11 × 11']]) {
-    await page.click(`.labs-grid [data-lab="${id}"]`);
+    await openCard(page, `.labs-grid [data-lab="${id}"]`);
     await page.click(`.lab-seg button:has-text("${label}")`);
     await page.waitForTimeout(150);
     await shot('puzzle-' + id + '-big');
@@ -2488,7 +2494,7 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
     await page.click('.lab-back');
   }
   // geography: find a country by tapping it on the map
-  await page.click('.labs-grid [data-lab="geography"]');
+  await openCard(page, '.labs-grid [data-lab="geography"]');
   await page.click('.lab-seg button:has-text("Find it on the map")');
   await page.waitForFunction(() => /Tap .+ on the map/.test(document.querySelector('.geo-q').textContent), null, { timeout: 10000 });
   const gb = await page.locator('.lab-stage canvas').boundingBox();
@@ -3027,7 +3033,7 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   await page.waitForSelector('.labs-shelf:not([hidden])');
   await page.evaluate(() => document.documentElement.classList.remove('watch-labs'));
   // the Body System: ask about what's on screen, then find the heart and take its quiz
-  await page.click('.labs-grid [data-lab="body3d"]');
+  await openCard(page, '.labs-grid [data-lab="body3d"]');
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 30000 });
   await page.waitForSelector('.labs', { state: 'hidden' });
   await page.click('[data-tool="ask"]');
@@ -4224,7 +4230,7 @@ const TAP_SCREENS = [
     await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
     await page.click('[data-room-act="study"]'); await page.waitForTimeout(600);
   }, { server: true }],
-  ['Talk with Cassie', async (page) => { await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForTimeout(600); }],
+  ['Talk with Cassie', async (page) => { await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
 ];
 test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
   const { tapTargetIssues } = require('./ui-checks.cjs');
@@ -4260,6 +4266,90 @@ test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped 
   }
   if (process.env.TAP_REPORT) fs.writeFileSync(process.env.TAP_REPORT, bad.join('\n'));
   expect(!bad.length, `${bad.length} screens with buttons that can't be tapped properly:\n` + bad.join('\n'));
+});
+
+// Every control on every screen and in every lab, tapped for real on a phone (390x844, a finger) and a
+// computer (1280x800, a mouse): the tap reaches it and something visibly responds within 100 ms.
+const RESPONSE_SIZES = [['phone 390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['computer 1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]];
+test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), every lab with TAP_SWEEP=all: a tap reaches it and something visibly responds within 100 ms, with no freeze, no double click and no drag that taps', async (b) => {
+  const { tapResponseIssues } = require('./ui-checks.cjs');
+  const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
+  const bad = [];
+  const skip = /delete (my )?account|sign out|log out|fake-gsi/i; // (fake-gsi: the tests' stand-in for Google's own button)
+  // one screen: opened fresh (the same saved data) whenever a tap changed it
+  const run = async (label, device, viewport, touch, o, go, onlyKeys) => {
+    // (1x pixels: this test machine draws 3D in software, 9 times slower at an iPhone's 3x)
+    const { ctx, page } = await open(b, { device, viewport, touch, scale: 1, lite: 'on', server: o.server || false, state: o.state === null ? null : { groqKey: 'gsk_test', ...(o.state || {}) }, fakeGroq: () => ({ text: 'Photosynthesis is how plants make food.\n\nQuick check: where does it happen?' }) });
+    ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); }); // (a link that opens a new tab)
+    page.on('dialog', (d) => d.dismiss().catch(() => {}));
+    page.on('filechooser', () => {});
+    // (a moment for the screen to finish starting up, so its own start-up work isn't blamed on a tap)
+    const settle = async () => { await page.waitForLoadState('load').catch(() => {}); await page.waitForTimeout(500); };
+    try {
+      await go(page); await settle();
+      const saved = await page.evaluate(() => JSON.stringify(Object.entries(localStorage)));
+      const reopen = async () => {
+        await page.evaluate((x) => { localStorage.clear(); JSON.parse(x).forEach(([k, v]) => localStorage.setItem(k, v)); }, saved).catch(() => {});
+        await page.goto(APP); await go(page); await settle(); return page;
+      };
+      let last = '';
+      const issues = await Promise.race([
+        tapResponseIssues(page, { reopen, touch, skip, only: onlyKeys, perKind: all ? 0 : 4, seen: all ? null : seenAt[viewport.width], log: (m) => { last = m; if (process.env.TAP_VERBOSE) console.log(`  ${label}: ${m}`); } }),
+        new Promise((r) => setTimeout(() => r([{ cause: 'stuck', what: `the screen stopped answering after: ${last}` }]), (onlyKeys === undefined ? 6 : 15) * 60000)), // (longer alone: 3D in software here)
+      ]);
+      await ctx.close();
+      return issues;
+    } catch (e) { await ctx.close(); return [{ cause: 'could not open', what: e.message.split('\n')[0] }]; }
+  };
+  // a screen whose taps were slow while other screens ran beside it is measured again on its own
+  let solo = Promise.resolve(), soloing = 0;
+  const job = (label, ...a) => async () => {
+    let issues = await run(label, ...a);
+    const keys = new Set(issues.filter((i) => i.key).map((i) => i.key));
+    const again = issues.some((i) => i.cause === 'could not open' || i.cause === 'stuck'); // (the whole screen, alone)
+    if (keys.size || again) {
+      busy--; soloing++; // (waiting its turn: not counted as running)
+      const prev = solo; let free; solo = new Promise((r) => { free = r; });
+      try { await prev; while (busy > 0) await new Promise((r) => setTimeout(r, 200)); issues = await run(label, ...a, again ? null : keys); } finally { soloing--; busy++; free(); }
+    }
+    issues.forEach((i) => bad.push(`[${i.cause}] ${label}: ${i.what}`));
+    if (process.env.TAP_REPORT) fs.appendFileSync(process.env.TAP_REPORT, `${label}: ${issues.length ? issues.map((i) => `[${i.cause}] ${i.what}`).join(' | ') : 'ok'}\n`);
+  };
+  const jobs = [], seenAt = { 390: new Set(), 1280: new Set() };
+  let ids = [];
+  if (!only || only.test('labs')) {
+    const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
+    ids = await page.evaluate(async () => (await import('./labs/labs.js')).LABS.map((l) => l.id));
+    await ctx.close();
+  }
+  // The whole sweep (TAP_SWEEP=all: every control, every lab, and the 3D views on a computer screen)
+  // takes hours here, where 3D is drawn in software. The regular run: every screen at both sizes (the
+  // 3D views on the phone), up to 4 controls of each kind on a screen (4 of a shelf's 30 lab cards),
+  // and one lab of each kind: a simulation, a game, a puzzle and a study tool.
+  const all = process.env.TAP_SWEEP === 'all' || !!only;
+  const SAMPLE = /^(fractions|cracker|nonogram|vocab)$/;
+  for (const [size, device, viewport, touch] of RESPONSE_SIZES) {
+    for (const [name, go, o = {}] of TAP_SCREENS) if ((!only || only.test(name)) && (all || touch || !/^Explore/.test(name))) jobs.push(job(`${name} @ ${size}`, device, viewport, touch, o, go));
+    for (const id of ids) {
+      if (process.env.LAB_ONLY && !new RegExp(process.env.LAB_ONLY).test(id)) continue;
+      if (!all && !process.env.LAB_ONLY && !SAMPLE.test(id)) continue;
+      jobs.push(job(`lab ${id} @ ${size}`, device, viewport, touch, {}, async (page) => {
+        await page.evaluate((x) => openLabs(x), id);
+        await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"]`, { timeout: 15000 });
+        await page.waitForTimeout(500);
+      }));
+    }
+  }
+  // a few screens at once (each in its own window)
+  const lanes = +process.env.TAP_LANES || 4;
+  let busy = 0;
+  await Promise.all(Array.from({ length: lanes }, async () => { while (jobs.length) { while (soloing) await new Promise((r) => setTimeout(r, 200)); const j = jobs.shift(); if (!j) break; busy++; try { await j(); } finally { busy--; } } }));
+  // freezes after the screen has answered are reported (a 3D picture drawn in software here makes them
+  // on any machine like this one) but don't fail it: a tap must reach its control and show within 100 ms
+  const freezes = bad.filter((x) => x.startsWith('[blocked]'));
+  if (freezes.length) console.log(`  (${freezes.length} freezes after a visible response:)\n  ` + freezes.join('\n  '));
+  const fails = bad.filter((x) => !x.startsWith('[blocked]'));
+  expect(!fails.length, `${fails.length} controls that are slow or don't respond:\n` + fails.join('\n'));
 });
 
 test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce Motion stops movement; buttons have 3 sizes and pressed, disabled and loading states', async (b) => {
