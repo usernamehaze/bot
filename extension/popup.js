@@ -84,6 +84,9 @@ function showPageAnswer(text) {
 }
 
 pageAsk.addEventListener('click', () => {
+  // a student at risk: care before anything else, no AI is asked (care.js; counted with no words, no id)
+  const hit = window.CassieCare && window.CassieCare.check(pageQ.value);
+  if (hit) { showPageAnswer(window.CassieCare.reply(hit.lang)); try { chrome.runtime.sendMessage({ type: 'CASSIE_CARE' }); } catch (e) { /* best effort */ } return; }
   const question = pageQ.value.trim() || 'Summarize this page and list the key points.';
   showPageAnswer('Reading the page…');
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {

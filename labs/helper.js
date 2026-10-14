@@ -66,6 +66,17 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
     return errorWordsFor(e, 'no_answer');
   }
 
+  // a student at risk: care before anything else (care.js), and Cassie keeps listening here
+  function careHere(lang, aiWords) {
+    const C = window.CassieCare;
+    const b = el('div', 'hp-msg hp-a hp-care');
+    b.appendChild(C.card(lang, aiWords));
+    log.appendChild(b);
+    log.scrollTop = log.scrollHeight;
+    history.push({ role: 'assistant', content: C.reply(lang, aiWords) });
+    if (C.count) C.count();
+  }
+
   // one question to Cassie: she sees the screen as it is right now, and the talk so far
   async function askOne(prompt, shown) {
     show('ask');
@@ -79,6 +90,8 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
       const text = String(await ask([...history.slice(-HISTORY), { role: 'user', content }]) || '').trim();
       if (!alive) return;
       wait.remove();
+      const care = window.CassieCare && window.CassieCare.fromAI(text);
+      if (care) { history.push({ role: 'user', content }); careHere(window.CassieCare.langOf(prompt), care.aiWords); return; }
       history.push({ role: 'user', content }, { role: 'assistant', content: text });
       const a = bubble('hp-a', text || 'Cassie had nothing to say to that. Try asking another way.', true);
       const l = text && listenButton(text);
@@ -94,6 +107,8 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
     const q = input.value.trim();
     if (!q) { input.focus(); return; }
     input.value = '';
+    const hit = window.CassieCare && window.CassieCare.check(q);
+    if (hit) { show('ask'); stopTalking(); bubble('hp-me', q); history.push({ role: 'user', content: q }); careHere(hit.lang); return; } // no AI is asked
     askOne(q);
   });
   $('.hp-x').addEventListener('click', close);

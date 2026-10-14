@@ -57,6 +57,20 @@
  */
 
 const TZ_OFFSET_H = 8;
+/* Cassie's care response (care.js, put here by build.py): a student who says they want to hurt or
+   kill themselves gets care before anything else, from any app, the extension or the Shortcut. */
+/*__CARE_JS__*/
+const Care = globalThis.CassieCare;
+// the student's own words in a question (not a file's text that came with it)
+function studentWords(messages) {
+  const last = [...messages].reverse().find((m) => m.role === 'user');
+  if (!last) return '';
+  const t = typeof last.content === 'string' ? last.content : last.content.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+  return t.replace(/^\[I attached[^\]]*\]\s*/, '').split(/\n\n\(Excerpt from|\n\[Picture from/)[0];
+}
+// counted with nothing else: no words, no id
+const countCare = (env, ctx) => ctx.waitUntil(countChat(env, dayOf(Date.now()), 'care').catch(() => {}));
+
 const DEFAULT_ORIGINS = ['https://askcassie.pages.dev', 'https://usernamehaze.github.io', 'http://localhost'];
 const EVENTS = new Set(['open', 'feature', 'signup']);
 
@@ -557,7 +571,7 @@ async function transcribe(request, env, ctx) {
    browser tab opens. Shortcuts sends no Origin header, so this route has its own small daily
    cap per network instead of the site check. */
 const MATH_NOTE = 'The text was copied on a phone, so maths may be flattened: "x2" usually means x², "x3" means x³, a number on the line under another number is often a fraction, and symbols like √, π, ∫ or exponents may be missing or split across lines. Rebuild the intended expression first and say it in one line ("I read this as: …"), then solve it carefully and double-check the result.';
-const ASK_SYSTEM = `You are Cassie, a warm, sharp study buddy. A student selected some text on their phone (from a PDF, a document or a web page) and wants help with it. Do what it needs: if it is a question or a problem, solve it, giving the answer first and then the key steps; otherwise explain it simply, with a short example. Keep it under 180 words. Plain text only: no markdown symbols (no **, #, tables) and no LaTeX; write maths with ordinary symbols (x², √, ½, ≤, π). ${MATH_NOTE}`;
+const ASK_SYSTEM = `You are Cassie, a warm, sharp study buddy. A student selected some text on their phone (from a PDF, a document or a web page) and wants help with it. Do what it needs: if it is a question or a problem, solve it, giving the answer first and then the key steps; otherwise explain it simply, with a short example. Keep it under 180 words. Plain text only: no markdown symbols (no **, #, tables) and no LaTeX; write maths with ordinary symbols (x², √, ½, ≤, π). ${MATH_NOTE}` + '\n\n' + Care.INSTRUCTION;
 const plainText = (t) => String(t).replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/```[\s\S]*?```/g, '').replace(/\*\*|__|`/g, '').replace(/^#{1,6}\s*/gm, '').replace(/^\s*[-*]\s+/gm, '• ').replace(/\n{3,}/g, '\n\n').trim();
 async function ask(request, env, ctx) {
   const url = new URL(request.url);
@@ -566,6 +580,8 @@ async function ask(request, env, ctx) {
   if (!text) return out('Select some words first, then Share → Ask Cassie.');
   const now = Date.now(), today = dayOf(now), ip = request.headers.get('cf-connecting-ip') || 'unknown';
   await ensureSchema(env.DB);
+  const care = Care.check(text); // safety first
+  if (care) { countCare(env, ctx); return out(Care.reply(care.lang)); }
   const used = await countUse(env.DB, 'a:' + ip, today);
   const limit = +env.ASK_LIMIT || 40;
   if (used > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
@@ -582,6 +598,8 @@ async function ask(request, env, ctx) {
   if (!reply && env.AI) {
     try { const o = await env.AI.run(BACKUP_MODEL, { messages, max_tokens: 1200, temperature: 0.4 }); reply = (o && (o.response ?? o.result?.response)) || null; } catch (e) { reply = null; }
   }
+  const flagged = reply && Care.fromAI(reply);
+  if (flagged) { countCare(env, ctx); return out(Care.reply(Care.langOf(text), flagged.aiWords)); }
   if (!reply) { ctx.waitUntil(logProblem(env, 'iPhone Shortcut', 'no AI answered')); return out('Cassie is very busy right now. Try again in a minute.', 503); }
   ctx.waitUntil(countChat(env, today, src));
   return out(`${plainText(reply)}\n\nCassie · askcassie.pages.dev`);
@@ -595,6 +613,12 @@ async function chat(request, env, ctx) {
   let body; try { body = JSON.parse(text); } catch (e) { return chatError('Bad request.', 400, h); }
   const cleaned = cleanMessages(body.messages);
   if (!cleaned) return chatError('That message is too long. Try a shorter question or start a new chat.', 413, h);
+  // Safety first: before any limit or AI, a student at risk gets care (a question they typed, not a file)
+  const care = body.q === 1 || body.q === true ? Care.check(studentWords(cleaned.messages)) : null;
+  if (care) {
+    if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); }
+    return json({ choices: [{ index: 0, message: { role: 'assistant', content: Care.reply(care.lang) }, finish_reason: 'stop' }] }, 200, { ...h, 'x-cassie-source': 'care', 'access-control-expose-headers': 'x-cassie-source' });
+  }
 
   // Fair use: each person gets a daily allowance through this shared key.
   const now = Date.now(), today = dayOf(now);
@@ -1456,6 +1480,7 @@ export default {
       if (url.pathname === '/speak') return await speak(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/e') return await ingest(request, env);
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
+      if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);
       if (url.pathname.startsWith('/scores/')) return await scores(request, env, url);

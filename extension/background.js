@@ -1,4 +1,6 @@
 'use strict';
+// Cassie's care response (care.js, the app's own copy): a student at risk gets care first
+importScripts('care.js');
 
 const SYSTEM_PROMPT = `You are Cassie, a warm, sharp, and reliable study buddy and professional buddy,
 available as a browser extension. The user has highlighted a piece of text on a
@@ -42,7 +44,7 @@ Formatting. This shows in a small popup beside the user's selection, so keep it 
 - Fenced code blocks are fine for code; bold the single key term or number so the takeaway stands out.
 - Math: write it in plain, readable text. NEVER LaTeX. Do not use \\frac, \\begin{cases}, \\text{}, \\left, \\right, dollar-sign math, or any backslash commands. Use ordinary characters and symbols: a/b for fractions, x^2 (or x²) for powers, √ for roots, and ≤ ≥ ≠ ≈ × ÷ · π ∑ ∞ directly. Put a piecewise or multi-case answer as a short bulleted list, one case per line (e.g. "- b/(a+b), if p = q = 1/2"), and keep each equation on its own line.
 - Never write an em dash or an en dash. Use a comma, a colon, a full stop or brackets instead, and "to" for ranges.
-- Aim for a clean, uncluttered note a sharp tutor would jot down. Never a wall of text.`;
+- Aim for a clean, uncluttered note a sharp tutor would jot down. Never a wall of text.` + '\n\n' + CassieCare.INSTRUCTION;
 
 // Text runs on Groq (OpenAI-compatible, higher free limits than Gemini).
 // Smartest first — also the default and the head of the fallback chain.
@@ -411,13 +413,25 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   return false;
 });
 
+// Care: counted on Cassie's server with nothing else (no words, no id), and the AI's own judgement:
+// a reply it starts with CassieCare.MARK becomes its warm words plus the verified crisis lines
+function countCare() { fetch(CASSIE_SERVER + '/care', { method: 'POST' }).catch(() => {}); }
+const lastUserWords = (msg) => (msg.typed || (Array.isArray(msg.messages) ? (msg.messages.filter((m) => m.role === 'user').pop() || {}).content : msg.text) || '');
+function careOf(reply, msg) {
+  const f = CassieCare.fromAI(reply);
+  if (!f) return reply;
+  countCare();
+  return CassieCare.reply(CassieCare.langOf(lastUserWords(msg)), f.aiWords);
+}
+chrome.runtime.onMessage.addListener((msg) => { if (msg?.type === 'CASSIE_CARE') countCare(); return false; });
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;
 
   (async () => {
     const keys = await getKeys();
     try {
-      const reply = await answerAny(msg.text, keys);
+      const reply = careOf(await answerAny(msg.text, keys), msg);
       sendResponse({ reply });
     } catch (err) {
       sendResponse({ error: err.message });
@@ -472,7 +486,15 @@ chrome.runtime.onConnect.addListener((port) => {
       const keys = await getKeys();
       try {
         const input = Array.isArray(msg.messages) ? msg.messages : msg.text;
-        const reply = await answerAny(input, keys, (delta) => post({ delta }));
+        // the answer streams as it's written, except a reply the AI marked for care (held until done)
+        let held = '', open = false;
+        const onDelta = (delta) => {
+          if (open) { post({ delta }); return; }
+          held += delta;
+          const t = held.trimStart();
+          if (t.length >= CassieCare.MARK.length || !CassieCare.MARK.startsWith(t)) { if (!t.startsWith(CassieCare.MARK)) { open = true; post({ delta: held }); } }
+        };
+        const reply = careOf(await answerAny(input, keys, onDelta), msg);
         post({ done: true, reply });
         logAnswer(msg.log, reply, null, port.sender);
       } catch (err) {

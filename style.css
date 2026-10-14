@@ -2037,3 +2037,20 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 html:not(.native) #chat-log > .home { display: flex; }
 /* a study room problem in plain monochrome, like every other error */
 .room-err { color: var(--text) !important; font-weight: 600; }
+
+/* Care (care.js): a student who says they want to hurt themselves. Calm and plain, monochrome,
+   the same in the chat, the voice screen and the Labs panel (it takes their text colour). */
+.care { display: grid; gap: 10px; max-width: 34rem; line-height: 1.5; }
+.care p { margin: 0; }
+.care-open { font-weight: 600; }
+.care-line { display: grid; gap: 8px; padding: 12px; border-radius: 16px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); }
+.care-name { font-size: .92em; }
+.care-nums { display: flex; flex-wrap: wrap; gap: 8px; }
+.care-num { display: inline-flex; flex-direction: column; justify-content: center; min-height: 48px; min-width: 44px; padding: 6px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); color: inherit; text-decoration: none; }
+.care-num small { font-size: .74em; opacity: .75; }
+.care-num span { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.care-num:hover, .care-num:focus-visible { background: color-mix(in srgb, currentColor 10%, transparent); }
+.care-num:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.vc-care { max-width: 34rem; margin: 6px auto 0; padding: 0 16px; text-align: left; color: var(--text); }
+.vc-care[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .care-num { transition: none; } }

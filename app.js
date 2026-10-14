@@ -212,7 +212,7 @@ Be a real friend and a grounded counselor:
 
 Boundaries and safety (important):
 - You are a caring companion, not a licensed therapist. You don't diagnose or replace real help; say so plainly if things sound serious.
-- If they mention self-harm, suicide, abuse, or being in danger: take it seriously and stay warm and human. Acknowledge the pain, encourage them to reach out right now to someone they trust or a professional / local crisis line, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic. Just be present and point them to real help.`;
+- If they mention self-harm or suicide, follow the safety rule at the top (start with the care mark; Cassie shows the verified crisis lines, so never write a number yourself). If they mention abuse or being in danger: take it seriously and stay warm and human, encourage them to tell someone they trust right now, and if they may be in immediate danger, to contact local emergency services. Don't lecture, don't panic. Just be present and keep listening.`;
 
 // Talking out loud (the voice screen): replies are read aloud, so no formatting at all.
 const VOICE_INSTRUCTION = `RIGHT NOW you are talking out loud with the student, like on a call. Your reply is read aloud by a speech voice, so:
@@ -232,6 +232,7 @@ const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud. They 
 // tutor mode. Highlight-popover calls pass tutor:false.
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   let sp = SYSTEM_PROMPT;
+  if (window.CassieCare) sp += `\n\n${window.CassieCare.INSTRUCTION}`; // a student at risk: care first (care.js)
   if (state.level && LEVEL_LABELS[state.level]) {
     sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level: match your vocabulary, depth, and examples to that level.`;
   }
@@ -1629,6 +1630,31 @@ function renderMessage(role, text) {
   return bubble;
 }
 
+/* A student who says they want to hurt or kill themselves gets care before anything else
+   (care.js): warm words, the verified crisis lines as buttons to call, and Cassie keeps listening.
+   The dashboard counts it with nothing else: no words, no id. */
+function countCare() {
+  if (!SERVER) return;
+  try { fetch(SERVER + '/care', { method: 'POST', keepalive: true }).catch(() => {}); } catch (e) { /* best effort */ }
+}
+if (window.CassieCare) window.CassieCare.count = countCare; // (Labs and the 3D views count it too)
+function renderCare(lang, aiWords) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble bubble-assistant bubble-care';
+  bubble.appendChild(window.CassieCare.card(lang, aiWords));
+  chatLog.appendChild(bubble);
+  scrollToBottom();
+  return bubble;
+}
+function giveCare(lang, aiWords) {
+  state.messages.push({ role: 'assistant', content: window.CassieCare.reply(lang, aiWords), care: { lang, ...(aiWords ? { aiWords } : {}) } });
+  touchChat();
+  save();
+  setCursorMode('idle');
+  countCare();
+  return renderCare(lang, aiWords);
+}
+
 function renderTyping() {
   const bubble = document.createElement('div');
   bubble.className = 'bubble bubble-assistant';
@@ -1766,7 +1792,7 @@ function renderHistory() {
     return;
   }
   state.messages.forEach((m) => {
-    const b = renderMessage(m.role, m.display || m.content);
+    const b = m.care && window.CassieCare ? renderCare(m.care.lang, m.care.aiWords) : renderMessage(m.role, m.display || m.content);
     if (m.image && b) addImageToBubble(b, m.image, { download: true });
     if (m.papers && b && window.CassieCite) b.appendChild(window.CassieCite.bar(m.papers, { track }));
   });
@@ -3382,6 +3408,12 @@ async function handleSend(text, opts = {}) {
   autoGrow();
   taskOutfit = null;
   dressCassie();
+  // Safety first: a student who says they want to hurt or kill themselves gets care before
+  // anything else. No AI is asked, and nothing of it is remembered, tracked or counted as a topic
+  // (the dashboard counts care with no words and no id).
+  const careHit = window.CassieCare && window.CassieCare.check(text);
+  if (careHit) { giveCare(careHit.lang); return; }
+
   const featureName = many ? 'files:many' : doc ? 'file:' + (doc.kind || 'file') : image ? 'photo' : counselorMode ? 'talk' : quizMode ? 'quiz' : opts.mode === 'hint' ? 'hint' : 'chat';
   track('feature', featureName);
   if (!doc && !image && !many) trackWords(sendText);
@@ -3411,6 +3443,9 @@ async function handleSend(text, opts = {}) {
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait, onDelta: opts.onDelta });
     reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
     if (!reply) throw friendlyError('I went blank on that one. Please ask again.');
+    // the AI's own judgement: it saw a student at risk that the word list didn't
+    const careAI = window.CassieCare && window.CassieCare.fromAI(reply);
+    if (careAI) { wordQ.length = 0; typingBubble.remove(); giveCare(window.CassieCare.langOf(sendText), careAI.aiWords); return; } // (and no topic words go out)
     // A picture request the detector missed: the model hands it over as [[IMAGE: …]],
     // or draws ASCII art for something that isn't a graph → make a real picture.
     const marker = !doc && !image && reply.match(/\[\[\s*IMAGE\s*:\s*([^\]]+)\]\]/i);
@@ -5368,6 +5403,7 @@ function buildVoiceUI() {
     <p class="vc-status" aria-live="polite"></p>
     <p class="vc-you"></p>
     <p class="vc-cassie" aria-live="polite"></p>
+    <div class="vc-care" hidden></div>
     <div class="vc-bar">
       <button type="button" class="vc-mic" aria-label="Pause listening"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg></button>
     </div>
@@ -5375,7 +5411,7 @@ function buildVoiceUI() {
     <p class="vc-tip"></p>`;
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
-  const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), mic: q('.vc-mic'), tip: q('.vc-tip'), gender: q('.vc-gender'), stage: q('.vc-stage'), bot: null };
+  const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), care: q('.vc-care'), mic: q('.vc-mic'), tip: q('.vc-tip'), gender: q('.vc-gender'), stage: q('.vc-stage'), bot: null };
   if (window.CassieBot) ui.bot = window.CassieBot.create(q('.vc-bot'), { glow: true, accent: state.accent || '#d8343c' });
   q('.vc-x').addEventListener('click', closeVoice);
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVoice(); });
@@ -5826,6 +5862,8 @@ async function askOutLoud(text) {
   v.stopSpeaking = live ? () => live.stop() : null;
   const onDelta = (sofar) => {
     if (voiceChat !== v) return;
+    const t = String(sofar).trimStart(), mark = window.CassieCare ? window.CassieCare.MARK : '';
+    if (mark && t && (t.startsWith(mark) || mark.startsWith(t))) return; // care: said gently below, not read out as it comes
     const clean = cleanForSpeech(sofar);
     voiceUI.cassie.textContent = clean;
     if (!live) return;
@@ -5836,6 +5874,15 @@ async function askOutLoud(text) {
   if (voiceChat !== v) { if (live) live.stop(); return; }
   const last = state.messages[state.messages.length - 1];
   const reply = state.messages.length > before && last && last.role === 'assistant' ? last.content : '';
+  // a student at risk: Cassie says it gently, and the crisis lines stay on the screen to tap
+  if (reply && last.care && window.CassieCare) {
+    if (live) live.stop();
+    voiceUI.care.replaceChildren(window.CassieCare.card(last.care.lang, last.care.aiWords));
+    voiceUI.care.hidden = false;
+    voiceUI.cassie.textContent = '';
+    sayThenListen(window.CassieCare.spoken(last.care.lang, last.care.aiWords));
+    return;
+  }
   track('feature', 'voice');
   if (live && reply) {
     // the rest of the answer, then listen again
@@ -5903,6 +5950,7 @@ function closeVoice() {
   setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
   dressCassie();
   voiceUI.el.hidden = true;
+  voiceUI.care.hidden = true; voiceUI.care.replaceChildren();
   document.documentElement.classList.remove('vc-open');
   if (voiceUI.bot) voiceUI.bot.pause(true);
   try { voiceBtn && voiceBtn.focus(); } catch (e) { /* ignore */ }

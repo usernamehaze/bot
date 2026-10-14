@@ -142,6 +142,15 @@ function showTextJob(text, mode = 'explain') {
   const follow = () => {
     const q = input.value.trim(); if (!q) return;
     input.value = '';
+    // a student at risk: care before anything else, no AI is asked (care.js; counted with no words, no id)
+    const hit = window.CassieCare && window.CassieCare.check(q);
+    if (hit) {
+      const reply = window.CassieCare.reply(hit.lang);
+      convo.push({ role: 'user', content: q }, { role: 'assistant', content: reply });
+      renderMd(out, reply);
+      try { chrome.runtime.sendMessage({ type: 'CASSIE_CARE' }); } catch (e) { /* best effort */ }
+      return;
+    }
     convo.push({ role: 'user', content: q });
     ask(convo, out, (full) => convo.push({ role: 'assistant', content: full }), { kind: 'highlight', q });
   };
