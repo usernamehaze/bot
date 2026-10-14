@@ -410,6 +410,125 @@ test('sign in with Google and Apple: a provider the server has no ID for has no 
   } finally { await serverMode({ noGoogle: false, noApple: false }); }
 });
 
+test('uploads are used to answer, then dropped: a file’s words, name and bytes are in no table and no log on the server', async (b) => {
+  const MARK = 'Zqx' + Math.random().toString(36).slice(2, 10).replace(/\d/g, 'k'); // a word found nowhere else
+  const { ctx, page } = await open(b, { state: { groqKey: '' } }); // no key: everything goes through Cassie's server
+  // a Word file and a PDF with the marker in their words and their names, and a photo of random pixels
+  const files = await page.evaluate(async (mark) => {
+    const b64 = async (blob) => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of u) s += String.fromCharCode(x); return btoa(s); };
+    const md = `# ${mark} notes\n\nThe ${mark} cell divides in four phases: prophase, metaphase, anaphase, telophase.`;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+    for (let i = 0; i < 400; i++) { g.fillStyle = `rgb(${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0})`; g.fillRect(Math.random() * 64, Math.random() * 64, 4, 4); }
+    return { docx: await b64(await window.CassieExport.toDocx(md, mark)), pdf: await b64(await window.CassieExport.toPdf(md, mark)), png: c.toDataURL('image/png').split(',')[1] };
+  }, MARK);
+  const attach = async (name, mimeType, base64) => {
+    await page.setInputFiles('#file-input', { name, mimeType, buffer: Buffer.from(base64, 'base64') });
+    await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
+  };
+  await attach(`${MARK}-notes.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', files.docx);
+  await ask(page, 'Make me a reviewer from this file');
+  await page.evaluate(() => createNewChat());
+  await attach(`${MARK}-module.pdf`, 'application/pdf', files.pdf);
+  await ask(page, 'What is this about?');
+  await page.evaluate(() => createNewChat());
+  await attach(`${MARK}-photo.png`, 'image/png', files.png);
+  await ask(page, 'What is in this photo?');
+  // an answer that fails everywhere: the server writes what went wrong in its problem log
+  await serverMode({ groq: 'down', groqVision: 'down', ai: 'down', aiVision: 'down' });
+  await page.evaluate(() => createNewChat());
+  await attach(`${MARK}-again.png`, 'image/png', files.png);
+  await page.fill('#prompt-input', `Read ${MARK} in this photo`); await page.press('#prompt-input', 'Enter');
+  await page.waitForSelector('#chat-log .bubble.error', { timeout: 30000 });
+  await serverMode({ groq: 'ok', groqVision: 'ok', ai: 'ok', aiVision: 'ok' });
+  // an automatic error report about a file (its message holds the file's name), and the same from an older app
+  await page.evaluate((m) => reportAuto('chat', CassieErrors.say('file_kind', { name: m + '-notes.xyz' })), MARK);
+  await page.evaluate(async ([srv, m]) => fetch(srv + '/f', { method: 'POST', body: JSON.stringify({ uid: 'old-app-1234', kind: 'auto', feature: 'chat', text: `Couldn’t read ${m}-notes.pdf` }) }), [SERVER, MARK]);
+  await page.waitForTimeout(800);
+  const dump = await (await fetch(SERVER + '/__dump')).json();
+  // it really went to the AI (so the check below means something)...
+  expect(dump.sentToAI.includes(MARK), 'the file’s words were sent to the AI to answer');
+  expect(dump.tables.feedback.some((r) => r.kind === 'auto' && r.text === 'file_kind') && dump.tables.feedback.some((r) => r.kind === 'auto' && r.text === 'other'), 'the error reports arrived (as message keys only)');
+  expect(dump.tables.feedback.some((r) => r.kind === 'error' && /chat: picture/.test(r.feature)), 'the failed answer is in the server’s problem log: ' + JSON.stringify(dump.tables.feedback.map((r) => r.feature)));
+  // ...and nothing of it stayed: no words, no names, no bytes, in any table or log
+  const kept = JSON.stringify({ tables: dump.tables, logs: dump.logs });
+  const slices = (b64) => [0.25, 0.5, 0.75].map((f) => b64.slice(Math.floor(b64.length * f), Math.floor(b64.length * f) + 32));
+  expect(!kept.toLowerCase().includes(MARK.toLowerCase()), 'an upload’s words or name were kept: ' + (kept.match(new RegExp('.{0,80}' + MARK + '.{0,80}', 'i')) || [''])[0]);
+  for (const [kind, b64] of Object.entries(files)) for (const s of slices(b64)) expect(!kept.includes(s), `the ${kind} file’s bytes were kept`);
+  expect(!/metaphase|anaphase|telophase/i.test(kept), 'a file’s words were kept');
+  await ctx.close();
+});
+
+test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
+  // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
+  const NOT_A_SERVICE = {
+    'schemas.openxmlformats.org': 'names inside Word and PowerPoint files', 'www.w3.org': 'SVG and XML names',
+    'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
+    'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
+  };
+  const SERVICES = [ // [which addresses, the name privacy.html must use]
+    [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'],
+    [/^api\.elevenlabs\.io$/, 'ElevenLabs'], [/^image\.pollinations\.ai$/, 'Pollinations'], [/^api\.openalex\.org$/, 'OpenAlex'],
+    [/\.wikipedia\.org$/, 'Wikipedia'], [/^api\.worldbank\.org$/, 'World Bank'], [/^huggingface\.co$/, 'Hugging Face'],
+    [/^(accounts|www)\.google(apis)?\.com$|^docs\.google\.com$/, 'Google'], [/^appleid\.apple\.com$/, 'Apple'],
+    [/\.workers\.dev$/, 'Cloudflare'], // Cassie's own server runs on Cloudflare
+  ];
+  const libs = /three\.module|GLTFLoader|OrbitControls|BufferGeometryUtils|RoomEnvironment|RoundedBoxGeometry|meshopt/;
+  const files = [...fs.readdirSync(ROOT).filter((f) => f.endsWith('.js')),
+    ...['labs', 'explore', 'extension'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f)),
+    'server/worker.src.js', 'voice/voice-worker.js'].filter((f) => !libs.test(f));
+  const code = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const hosts = [...new Set([...code.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)].map((m) => m[1].toLowerCase()))];
+  const needed = new Set(), unknown = [];
+  for (const h of hosts) {
+    if (NOT_A_SERVICE[h]) continue;
+    const s = SERVICES.find(([re]) => re.test(h));
+    if (s) needed.add(s[1]); else unknown.push(h);
+  }
+  // services reached without a web address in our code
+  if (/env\.AI\.run\(/.test(code)) needed.add('Cloudflare'); // Workers AI
+  if (fs.existsSync(path.join(ROOT, 'voice/kokoro.web.js'))) needed.add('Hugging Face'); // the voice model downloads from it
+  if (/SpeechRecognition/.test(code)) { needed.add('Google'); needed.add('Apple'); } // the browser's own speech-to-text
+  expect(!unknown.length, 'Cassie calls a service privacy.html doesn’t know about: ' + unknown.join(', ') + '. Name it on the page (what it gets and why) and add it to this test.');
+  const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
+  const missing = [...needed].filter((n) => !page.includes(n));
+  expect(!missing.length, 'privacy.html doesn’t name: ' + missing.join(', '));
+  expect(needed.size >= 12, 'the scan found the services (sanity): ' + [...needed].join(', '));
+  // and it says the rest of what it promises, in plain words with no dashes
+  expect(/uses AI/.test(page) && /not kept/.test(page) && /Delete account/.test(page) && !/[–—]/.test(page), 'privacy.html says Cassie uses AI, that uploads are not kept, how to delete, with no dashes');
+});
+
+test('what the server keeps for a while goes when its time is up: rooms after a day, daily limit counts (IP addresses) after their day, a deleted account’s plan with it', async (b) => {
+  const { ctx, page } = await open(b, { state: { groqKey: '' } });
+  const call = (p, body, token) => page.evaluate(async ([srv, p, body, token]) => { const r = await fetch(srv + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) }); return r.json().catch(() => ({})); }, [SERVER, p, body, token]);
+  const dump = async () => (await (await fetch(SERVER + '/__dump')).json()).tables;
+  // a study room with a drawing in it, and a question (it counts toward today's limits, by IP too)
+  const room = await call('/room/create', { uid: 'tidy-test-ana', name: 'Ana' });
+  expect(/^[A-Z0-9]{6}$/.test(room.code || ''), 'a room: ' + JSON.stringify(room));
+  await call('/room/ops', { uid: 'tidy-test-ana', code: room.code, ops: [{ t: 'add', s: { tool: 'pen', pts: [[1, 2], [3, 4]] } }] });
+  await ask(page, 'what is osmosis');
+  let t = await dump();
+  expect(t.rooms.some((r) => r.code === room.code) && t.room_ops.length && t.quota.some((r) => /^i:/.test(r.k)), 'the room and today’s counts are there');
+  // a day later, with nobody making a new room: the scheduled tidy-up takes them away
+  await fetch(SERVER + '/__age'); await fetch(SERVER + '/__cron');
+  t = await dump();
+  expect(!t.rooms.some((r) => r.code === room.code) && !t.room_ops.some((r) => r.code === room.code) && !t.room_members.some((r) => r.code === room.code), 'a day-old room and everything in it is gone');
+  expect(!t.quota.some((r) => r.day < '2026' || /^2000/.test(r.day)), 'yesterday’s limit counts (with IP addresses) are gone: ' + JSON.stringify(t.quota.slice(0, 3)));
+  expect(t.quota.some((r) => r.k === 'SP:month'), 'this month’s allowance stays until the month ends');
+  // Delete my account: the account, its sign ins and its plan
+  const email = `tidy${Date.now()}@example.com`;
+  const acc = await call('/auth/signup', { email, password: 'secret-pass-1', age: 20 });
+  expect(acc.token, 'signed up: ' + JSON.stringify(acc));
+  await fetch(SERVER + '/admin/plan', { method: 'POST', headers: { authorization: 'Bearer test-admin-token-0123456789', 'content-type': 'application/json' }, body: JSON.stringify({ email, plan: 'plus', days: 30 }) });
+  t = await dump();
+  const id = (t.accounts.find((r) => r.email === email) || {}).id;
+  expect(id && t.plans.some((r) => r.account === id), 'the account has a plan');
+  const del = await call('/auth/delete', {}, acc.token);
+  expect(del.deleted, 'deleted: ' + JSON.stringify(del));
+  t = await dump();
+  expect(!t.accounts.some((r) => r.id === id) && !t.plans.some((r) => r.account === id) && !t.sessions.some((r) => r.account === id) && !t.identities.some((r) => r.account === id), 'nothing of the account is left, its plan included');
+  await ctx.close();
+});
+
 test('no key: Cassie answers through the server', async (b) => {
   await serverMode({ groq: 'ok', ai: 'ok', reply: '' });
   const { ctx, page, errors } = await open(b);

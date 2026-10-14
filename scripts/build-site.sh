@@ -13,6 +13,8 @@ cp app.js errors.js board.js bot-page.js cards.js cassie-bot.js cite.js config.j
    native.js sketch.js start.js study-room.js sw.js voice.js _site/
 cp _headers _site/   # Cloudflare Pages response headers (lets Bella's voice use several cores)
 cp -r icons landing patterns explore voice labs vendor _site/
+# notes for developers and an unused logo aren't needed to run the site (they stay in the repo)
+rm -f _site/voice/README.md _site/explore/body/README.md _site/icons/logo.svg
 [ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)
 mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/
 # A new version on every deploy, so phones never keep yesterday's files: the ?v= on every script

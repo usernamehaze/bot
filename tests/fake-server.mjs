@@ -134,7 +134,15 @@ export async function startFakeServer(port = 4630) {
       return { response: /17 × 23/.test(JSON.stringify(input.messages)) ? '391' : 'Backup brain answer: plants use sunlight.' };
     } },
   };
-  const ctx = { waitUntil() {} };
+  // background work (ctx.waitUntil) is kept track of, so /__dump can wait for it to finish
+  const pending = new Set();
+  const ctx = { waitUntil(p) { const q = Promise.resolve(p).catch(() => {}); pending.add(q); q.finally(() => pending.delete(q)); } };
+  // what the server writes to the console (on Cloudflare that's what its logs keep)
+  const logs = [];
+  for (const k of ['log', 'info', 'warn', 'error', 'debug']) {
+    const orig = console[k].bind(console);
+    console[k] = (...a) => { logs.push(a.map((x) => (typeof x === 'string' ? x : (() => { try { return JSON.stringify(x); } catch (e) { return String(x); } })())).join(' ')); orig(...a); };
+  }
   const server = http.createServer((req, res) => handle(req, res).catch(() => { try { res.writeHead(500); res.end(); } catch (e) { /* the browser already left */ } }));
   async function handle(req, res) { // a browser may cancel a request halfway — that must not crash the server
     const chunks = []; for await (const c of req) chunks.push(c);
@@ -147,6 +155,28 @@ export async function startFakeServer(port = 4630) {
     if (req.url === '/__idtoken' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*' });
       return res.end(await idToken(JSON.parse(body.toString() || '{}')));
+    }
+    // every row of every table, and every console line so far (for "nothing was kept" tests)
+    if (req.url === '/__dump') {
+      await Promise.allSettled([...pending]);
+      const tables = {};
+      for (const { name } of sq.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()) tables[name] = sq.prepare(`SELECT * FROM "${name}"`).all();
+      res.writeHead(200, { 'content-type': 'application/json' });
+      // (and, kept apart, what the fake AI services were sent: that's where a question should go)
+      return res.end(JSON.stringify({ tables, logs, sentToAI: JSON.stringify([mode.calls.map((c) => c.last), mode.claudeCalls, mode.geminiCalls]) }));
+    }
+    // make what's stored a day older (rooms, and the daily limit counts), as if a day went by
+    if (req.url === '/__age') {
+      sq.exec(`UPDATE rooms SET created = created - 25 * 3600000; UPDATE room_here SET ts = ts - 25 * 3600000;
+        UPDATE quota SET day = '2000-01-01' WHERE length(day) = 10 AND k NOT LIKE 'gpic:%'; UPDATE quota SET day = '2000-01-01T00' WHERE length(day) = 13;
+        INSERT OR REPLACE INTO quota (k, day, n) VALUES ('SP:month', strftime('%Y-%m', 'now', '+8 hours'), 5)`); // (and this month's studio voice allowance, used a little)
+      res.writeHead(204); return res.end();
+    }
+    // the Cron Trigger, as Cloudflare would run it
+    if (req.url === '/__cron') {
+      ctx.waitUntil(worker.scheduled({ cron: 'test' }, env, ctx));
+      await Promise.allSettled([...pending]);
+      res.writeHead(204); return res.end();
     }
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }
