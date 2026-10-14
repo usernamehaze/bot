@@ -91,7 +91,7 @@ export const atlasLab = {
     });
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const q = input.value.trim().toLowerCase(); if (!q) return;
+      const q = input.value.trim().toLowerCase(); if (!q) { input.focus(); return; } // nothing typed yet: the box is where to type
       const exact = data.find((c) => c.n.toLowerCase() === q || c.o.toLowerCase() === q || c.c3.toLowerCase() === q);
       sugg.replaceChildren();
       if (exact) choose(exact); else findPlace(input.value.trim());

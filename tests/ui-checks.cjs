@@ -9,7 +9,18 @@
                                     is not counted: that sheet is what's on screen.
      contrastIssues(page, sel)  → words under WCAG AA against the real pixels behind them (glass over
                                   the marble): the screen is shot once with every word made invisible,
-                                  and each word's colour is measured against what was behind it */
+                                  and each word's colour is measured against what was behind it
+     tapResponseIssues(page, o) → every control on the screen is tapped for real (a finger on a touch
+                                  screen, a mouse on a computer), one at a time, the screen opened
+                                  fresh again whenever a tap changed it. Each one fails when:
+                                  · something else on top catches the tap
+                                  · the phone's 300 ms tap delay is on for it (no touch-action:
+                                    manipulation, or a page without width=device-width)
+                                  · nothing visibly changes within 100 ms of the finger landing
+                                  · the page is blocked by work longer than 100 ms right after
+                                  · one tap fires its click twice
+                                  · dragging it (a slider, a handle, a card you can move) also
+                                    counts as a tap */
 
 async function tapTargetIssues(page) {
   return page.evaluate(() => {
@@ -148,4 +159,222 @@ async function contrastIssues(page, sel = 'body') {
   return { checked: items.length, bad };
 }
 
-module.exports = { tapTargetIssues, contrastIssues };
+
+/* ---------- taps that are slow or do nothing ---------- */
+// in the page, once per load: notes when a finger lands, what changes after, long work, clicks
+function installTapWatch() {
+  if (window.__tw) return;
+  const tw = window.__tw = { armed: null, t0: 0, change: 0, paint: 0, what: '', clicks: 0, longs: [], evs: [], all: [], noisy: new Set(), quiet: false };
+  // when each part of the tap began to run (the app's own work is what follows it)
+  ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click'].forEach((ev) => addEventListener(ev, () => { if (tw.armed) tw.evs.push(performance.now()); }, true));
+  // things that change by themselves all the time (a clock, labels following a 3D model) are not a response
+  new MutationObserver((list) => {
+    const now = performance.now();
+    for (const m of list) {
+      if (m.type === 'attributes' && (/^data-tw/.test(m.attributeName) || m.oldValue === m.target.getAttribute(m.attributeName))) continue; // (set to what it was: nothing changed)
+      if (tw.quiet) { tw.noisy.add(m.target); continue; }
+      if (!tw.t0 || tw.noisy.has(m.target)) continue;
+      // Cassie's cursor and her face follow every finger anywhere: that is not this control answering
+      const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+      if (el && (el.closest('#cassie-cursor') || (el.closest('svg') && el.closest('svg').querySelector('.cb-all')))) continue;
+      const onCassie = tw.armed && tw.armed.closest && tw.armed.closest('#mascot'); // (unless it was Cassie herself who was tapped)
+      if (el && !onCassie && ((el.id === 'mascot' && m.type === 'attributes') || el.closest('#mascot-bubble'))) continue; // (the mascot gliding to its spot, and her bubble's own timer)
+      if (m.type === 'attributes' && m.target.parentElement && tw.noisy.has(m.target.parentElement) && m.attributeName === 'style') continue;
+      const t = m.target.nodeType === 1 ? m.target : m.target.parentElement, cls = (n) => (n && n.className && typeof n.className === 'string' ? '.' + n.className.split(' ')[0] : '');
+      const desc = m.type + ' ' + (t ? t.tagName.toLowerCase() + (t.id ? '#' + t.id : '') + cls(t) + ' in ' + (t.parentElement ? t.parentElement.tagName.toLowerCase() + cls(t.parentElement) : '') : '') + (m.attributeName ? ' [' + m.attributeName + ': ' + String(m.oldValue).slice(0, 30) + ' → ' + String(m.target.getAttribute(m.attributeName)).slice(0, 30) + ']' : ' "' + String((t && t.textContent) || '').trim().slice(0, 30) + '"');
+      if (tw.all.length < 80) tw.all.push(desc); // (everything that changed: to tell whether a drag did what a tap does)
+      if (tw.change) continue;
+      tw.change = now; tw.what = desc;
+      requestAnimationFrame(() => { tw.paint = performance.now(); });
+    }
+  }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true });
+  const saw = (what) => { if (!tw.t0 || tw.change) return; tw.change = performance.now(); tw.what = what; requestAnimationFrame(() => { tw.paint = performance.now(); }); };
+  // focus only shows on a box you type in (a caret); on a button a mouse click draws no focus ring
+  ['focusin', 'input', 'change', 'toggle', 'scroll'].forEach((ev) => addEventListener(ev, (e) => { if (ev === 'focusin' && !(e.target.matches && e.target.matches('input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable]'))) return; saw(ev); }, true));
+  addEventListener('pointerdown', (e) => { if (tw.armed && !tw.t0) tw.t0 = e.timeStamp; }, true);
+  addEventListener('click', (e) => { if (tw.armed && e.isTrusted && (tw.armed.contains(e.target) || e.target === tw.armed)) tw.clicks++; }, true);
+  try { new PerformanceObserver((l) => l.getEntries().forEach((x) => tw.longs.push([x.startTime, x.duration]))).observe({ type: 'longtask' }); } catch (e) { /* no long task timing */ }
+}
+// the controls on the screen now: anything you can tap or drag, each with a path to find it again
+function controlsNow() {
+  const W = innerWidth, H = innerHeight;
+  const path = (e) => { const p = []; for (let n = e; n && n !== document.body; n = n.parentElement) { const i = n.parentElement ? [...n.parentElement.children].indexOf(n) : 0; p.unshift(`${n.tagName.toLowerCase()}:nth-child(${i + 1})`); } return 'body > ' + p.join(' > '); };
+  const name = (e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${e.classList.length ? '.' + [...e.classList].slice(0, 2).join('.') : ''} "${(e.getAttribute('aria-label') || e.textContent.trim() || e.title || e.placeholder || e.value || '').trim().replace(/\s+/g, ' ').slice(0, 28)}"`;
+  const sel = 'button, a[href], [role=button], [role=tab], [role=radio], [role=switch], [role=checkbox], [role=slider], input:not([type=hidden]), select, textarea, summary, label, [draggable="true"], [tabindex="0"]';
+  const set = new Set(document.querySelectorAll(sel));
+  // anything else that looks tappable (a card with a click handler): the outermost box with a hand cursor
+  for (const e of document.body.querySelectorAll('div, span, li, img, svg, canvas, figure, article, section')) {
+    if (getComputedStyle(e).cursor !== 'pointer' && getComputedStyle(e).cursor !== 'grab') continue;
+    if (e.parentElement && ['pointer', 'grab'].includes(getComputedStyle(e.parentElement).cursor)) continue;
+    if (e.closest(sel)) continue;
+    set.add(e);
+  }
+  const out = [];
+  for (const e of set) {
+    if (e.tagName === 'LABEL' && e.control && set.has(e.control)) continue; // (the box itself is tapped)
+    if (!e.getClientRects().length) continue;
+    const st = getComputedStyle(e);
+    if (st.visibility === 'hidden' || +st.opacity === 0 || st.pointerEvents === 'none' || e.closest('[hidden], [inert], [aria-hidden="true"]')) continue;
+    if (e.disabled || e.getAttribute('aria-disabled') === 'true' || (e.checkVisibility && !e.checkVisibility({ contentVisibilityAuto: true }))) continue;
+    const r = e.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) continue;
+    // a panel parked off the screen (a closed side menu) is not on screen
+    let parked = false;
+    for (let n = e; n && n !== document.body; n = n.parentElement) { const q = n.getBoundingClientRect(), p = getComputedStyle(n).position; if ((p === 'fixed' || p === 'absolute') && (q.right <= 0 || q.left >= W || q.bottom <= 0 || q.top >= H)) { parked = true; break; } }
+    if (parked) continue;
+    const drag = e.matches('input[type=range], [draggable="true"], [role=slider]') || st.cursor === 'grab' || st.touchAction === 'none';
+    out.push({ key: path(e), name: name(e), drag });
+  }
+  return out;
+}
+// get one control ready: in view, and is the place a finger lands really this control?
+function aim(key) {
+  const e = document.querySelector(key);
+  if (!e) return null;
+  e.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  const rects = [...e.getClientRects()];
+  const r = rects.length > 1 ? rects.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a)) : e.getBoundingClientRect();
+  const x = Math.max(1, Math.min(innerWidth - 2, r.left + r.width / 2)), y = Math.max(1, Math.min(innerHeight - 2, r.top + r.height / 2));
+  const h = document.elementFromPoint(x, y);
+  const own = !!h && (h === e || e.contains(h) || [...(e.labels || [])].some((l) => l.contains(h)) || (e.tagName === 'LABEL' && e.control === h)
+    || (e.tagName === 'CANVAS' && h.tagName === 'CANVAS' && h.parentElement === e.parentElement)); // (a canvas laid over it on purpose takes its touches)
+  // behind a sheet or dialog that covers most of the screen: not what's on screen now
+  if (!own && h) {
+    const dlg = h.closest('[role=dialog], [role=alertdialog]'); // (an open panel docked over part of the screen, like a bottom sheet)
+    if (dlg && !dlg.contains(e)) return { behind: true };
+    const W = innerWidth, H = innerHeight, big = (n) => { const q = n.getBoundingClientRect(); return q.width * q.height >= W * H * 0.6; };
+    for (let n = h; n && n !== document.body; n = n.parentElement) {
+      const p = getComputedStyle(n).position;
+      if ((p === 'fixed' || p === 'absolute') && !n.contains(e) && big(n)) return { behind: true };
+    }
+  }
+  const label = (n) => n ? `${n.tagName.toLowerCase()}${n.id ? '#' + n.id : ''}${n.classList && n.classList.length ? '.' + [...n.classList].slice(0, 2).join('.') : ''}` : 'nothing';
+  // the 300 ms delay: phones skip it on a page sized to the device, or a control with touch-action manipulation/none
+  const vp = (document.querySelector('meta[name=viewport]') || {}).content || '';
+  const ta = getComputedStyle(e).touchAction;
+  // (only "auto" keeps double-tap-to-zoom, which is what makes a phone wait; on any element up to the page)
+  let fast = /width=device-width/.test(vp);
+  for (let n = e; n && fast; n = n.parentElement) if (getComputedStyle(n).touchAction === 'auto' && n === e) fast = false;
+  // an option that is already the chosen one has nothing to change
+  const chosen = document.activeElement === e || ['aria-pressed', 'aria-checked', 'aria-selected', 'aria-current'].some((k) => ['true', 'page'].includes(e.getAttribute(k))) || (e.type === 'radio' && e.checked) || /(^| )(on|active|selected|current)( |$)/.test(typeof e.className === 'string' ? e.className : '');
+  // a slider already at the spot tapped, and empty space on a picture you draw or drag on, have nothing to answer
+  const surface = e.tagName === 'CANVAS' || e.matches('input[type=range]') || (e.tagName === 'LABEL' && !!e.querySelector('input[type=range]'));
+  const onControl = !!h && !!h.closest('button, a[href], [role=button], input, label');
+  return { onControl, surface, chosen, x, y, w: r.width, h: r.height, own, cover: own ? '' : label(h) + (h && h.closest('[class]') && h.closest('[class]') !== h ? ' in ' + label(h.closest('[class]')) : ''), fast, ta };
+}
+function arm(key) {
+  const tw = window.__tw;
+  // a live 3D picture (three.js) on screen when the finger lands: this test machine draws it in
+  // software, hundreds of times slower than a phone's graphics chip, and the browser holds the tap
+  // until a frame is drawn, so only the app's own work after the tap is timed there
+  tw.gl = [...document.querySelectorAll('canvas[data-engine]')].some((c) => c.getClientRects().length && !c.closest('[hidden]'));
+  tw.armed = document.querySelector(key); tw.t0 = 0; tw.change = 0; tw.paint = 0; tw.what = ''; tw.clicks = 0; tw.longs = []; tw.evs = []; tw.all = [];
+}
+const quiet = (on) => { window.__tw.quiet = on; if (on) window.__tw.noisy = new Set(window.__tw.steady || []); };
+// things that change by themselves every second or so (a puzzle's clock): watched for longer when a screen opens
+// (only what changes in two windows one after the other: a screen still finishing a one-off change isn't a clock)
+// Learned once per screen, then found again by where they sit when the screen is opened again.
+async function learnSteady(page, known) {
+  if (known) { await page.evaluate((keys) => { window.__tw.steady = keys.map((k) => { try { return document.querySelector(k); } catch (e) { return null; } }).filter(Boolean); }, known); return known; }
+  await page.evaluate(() => { window.__tw.steady = []; window.__tw.quiet = true; window.__tw.noisy = new Set(); });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { window.__tw.first = window.__tw.noisy; window.__tw.noisy = new Set(); });
+  await page.waitForTimeout(1200);
+  return page.evaluate(() => {
+    const tw = window.__tw; tw.steady = [...tw.noisy].filter((n) => tw.first.has(n)); tw.quiet = false;
+    const path = (e) => { const p = []; for (let n = e; n && n !== document.body; n = n.parentElement) { if (!n.parentElement) return null; p.unshift(`${n.tagName.toLowerCase()}:nth-child(${[...n.parentElement.children].indexOf(n) + 1})`); } return 'body > ' + p.join(' > '); };
+    return tw.steady.map((n) => (n.nodeType === 1 ? n : n.parentElement)).filter(Boolean).map(path).filter(Boolean);
+  });
+}
+function readout() {
+  const tw = window.__tw;
+  const gl = tw.gl;
+  const work = tw.change ? Math.round(tw.change - Math.max(0, ...tw.evs.filter((t) => t <= tw.change))) : null;
+  const r = { all: tw.all.slice(), gl, work, t0: tw.t0, change: tw.change, paint: tw.paint, what: tw.what, clicks: tw.clicks, longs: tw.longs.filter(([s, d]) => tw.t0 && s >= tw.t0 - 5 && s < tw.t0 + 1000 && d > 100).map(([, d]) => Math.round(d)) }; tw.armed = null; return r;
+}
+
+// o: { reopen: async () => page (the screen opened fresh), touch: bool, cdp: for touch drags, skip: RegExp of names not to tap }
+async function tapResponseIssues(page, o) {
+  const out = [];
+  // a file picker, a download or a new tab opening is the tap answering too (they are not in the page)
+  let outside = false;
+  const away = () => { outside = true; };
+  const watch = (pg) => { pg.on('filechooser', away); pg.on('download', away); pg.on('popup', away); pg.on('dialog', away); };
+  watch(page);
+  // the screen's shape (not its numbers): a tap that changes a readout doesn't need the screen opened again
+  const sig = async (pg) => (await pg.evaluate(controlsNow)).map((c) => c.key).join('|') + '@' + pg.url();
+  await page.evaluate(installTapWatch);
+  const steadyKeys = await learnSteady(page);
+  let list = (await page.evaluate(controlsNow)).filter((c) => !o.only || o.only.has(c.key));
+  // o.seen: controls already checked on another screen (the tab bar is on almost every one) are not tapped again
+  if (o.seen && !o.only) list = list.filter((c) => { if (o.seen.has(c.name)) return false; o.seen.add(c.name); return true; });
+  // o.perKind: at most this many controls of the same kind (the same tag and classes) on a screen
+  if (o.perKind && !o.only) { const seen = new Map(); list = list.filter((c) => { const t = c.name.split(' ')[0], k = /^[a-z]+$/.test(t) ? c.name : t; /* (plain buttons: each its own kind) */ seen.set(k, (seen.get(k) || 0) + 1); return seen.get(k) <= o.perKind; }); }
+  let base = await sig(page), dirty = false;
+  for (const c of list) {
+    if (o.skip && o.skip.test(c.name)) continue;
+    // a sheet or card the tap opened usually closes with Escape: much quicker than opening the screen again
+    if (dirty && !page.isClosed()) { try { await page.keyboard.press('Escape'); await page.waitForTimeout(250); if ((await sig(page)) === base) dirty = false; } catch (e) { /* open it again */ } }
+    if (dirty) { const was = page; page = await o.reopen(); if (page !== was) watch(page); await page.evaluate(installTapWatch); await learnSteady(page, steadyKeys); base = await sig(page); dirty = false; }
+    let a;
+    try { a = await page.evaluate(aim, c.key); } catch (e) { dirty = true; continue; }
+    if (!a || a.behind) continue; // (gone: this screen has changed by itself; or under a sheet)
+    if (!a.own && a.surface && a.onControl) continue; // (a picture with a label or button of its own on top: that is what's tapped there)
+    if (!a.own) { out.push({ key: c.key, cause: 'covered', what: `${c.name}: the tap lands on ${a.cover}` }); continue; }
+    if (o.touch && !a.fast) out.push({ key: c.key, cause: 'tap delay', what: `${c.name}: touch-action ${a.ta}` });
+    // a moment to see what changes by itself, then the tap
+    await page.evaluate(quiet, true); await page.waitForTimeout(100); await page.evaluate(quiet, false);
+    await page.evaluate(arm, c.key);
+    // a 3D picture: what it shows before the tap (some buttons only move the picture)
+    // (a picture on screen, 3D or flat: some buttons only change what it shows)
+    const glBox = await page.evaluate(() => { const cv = [...document.querySelectorAll('canvas')].find((x) => { const q = x.getBoundingClientRect(); return q.width > 60 && q.height > 60 && !x.closest('[hidden]') && q.bottom > 0 && q.top < innerHeight; }); if (!cv) return null; const q = cv.getBoundingClientRect(); return { x: Math.max(0, q.left), y: Math.max(0, q.top), width: Math.min(innerWidth, q.right) - Math.max(0, q.left), height: Math.min(innerHeight, q.bottom) - Math.max(0, q.top) }; });
+    const before = glBox ? await page.screenshot({ clip: glBox }).catch(() => null) : null;
+    outside = false;
+    const url0 = page.url();
+    try {
+      if (o.touch) await page.touchscreen.tap(a.x, a.y); else await page.mouse.click(a.x, a.y);
+    } catch (e) { dirty = true; continue; }
+    // until it shows (or 300 ms: three times slower than it should be), then a moment for long work to be seen
+    await page.waitForFunction(() => window.__tw.paint || (window.__tw.gl && window.__tw.change), null, { timeout: 300, polling: 16 }).catch(() => {});
+    await page.waitForTimeout(120);
+    let r;
+    try { r = await page.evaluate(readout); } catch (e) { dirty = true; continue; } // (it went to another page: that's a response)
+    let ms = r.gl ? r.work : r.paint ? Math.round(r.paint - r.t0) : r.change ? Math.round(r.change - r.t0) + 150 : null; // (changed, but not yet drawn 150 ms later)
+    if (outside || page.url() !== url0) { ms = 0; r.what = 'opened outside the page'; }
+    if (ms === null && before) { const after = await page.screenshot({ clip: glBox }).catch(() => null); if (after && !after.equals(before)) { ms = 0; r.what = 'the picture changed'; } }
+    if (ms > 100 && a.chosen && !r.longs.length) ms = null; // (already chosen: a later change is something else's)
+    if (o.log) o.log(`${c.name}: ${ms === null ? 'no change' : ms + ' ms'} ${r.what}${r.longs.length ? ' long ' + r.longs.join('+') : ''}`);
+    if (!r.t0) out.push({ key: c.key, cause: 'covered', what: `${c.name}: the finger never reached it` });
+    else if (ms === null && (a.chosen || a.surface)) { /* already chosen, or a slider tapped at its own value, or empty space on a picture */ }
+    else if (ms === null) out.push({ key: c.key, cause: 'no response', what: `${c.name}: nothing changed on screen` });
+    else if (ms > 100) out.push({ key: c.key, cause: 'slow', what: `${c.name}: ${ms} ms (${r.what})` });
+    if (r.longs.length && !r.gl) out.push({ key: c.key, cause: 'blocked', what: `${c.name}: the page froze for ${r.longs.join(' + ')} ms` });
+    if (r.clicks > 1) out.push({ key: c.key, cause: 'double', what: `${c.name}: one tap, ${r.clicks} clicks` });
+    // a drag on something you can drag must not also count as a tap
+    if (c.drag && !dirty && !c.name.startsWith('canvas')) { // (a picture's own drags mean something there: its lab's tests cover them)
+      let a2; try { a2 = await page.evaluate(aim, c.key); } catch (e) { a2 = null; }
+      if (a2 && a2.own && !(await page.evaluate((k) => document.querySelector(k).matches('input[type=range]'), c.key))) {
+        await page.evaluate(arm, c.key);
+        const dx = Math.min(60, a2.w / 2 + 30);
+        if (o.touch) {
+          const cdp = await page.context().newCDPSession(page);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a2.x, y: a2.y }] });
+          for (let k = 1; k <= 6; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a2.x + (dx * k) / 6, y: a2.y }] });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await cdp.detach();
+        } else {
+          await page.mouse.move(a2.x, a2.y); await page.mouse.down(); await page.mouse.move(a2.x + dx, a2.y, { steps: 6 }); await page.mouse.up();
+        }
+        await page.waitForTimeout(300);
+        let d; try { d = await page.evaluate(readout); } catch (e) { d = { clicks: 0 }; }
+        // (a click event after a drag is normal; what matters is whether the app then did what a tap does)
+        if (r.what && d.all && d.all.includes(r.what)) out.push({ key: c.key, cause: 'drag taps', what: `${c.name}: a drag did what a tap does (${r.what})` });
+        dirty = true;
+      }
+    }
+    if (!dirty) { try { dirty = (await sig(page)) !== base; } catch (e) { dirty = true; } }
+  }
+  return out;
+}
+
+module.exports = { tapTargetIssues, contrastIssues, tapResponseIssues };

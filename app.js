@@ -1227,6 +1227,9 @@ if (mascotBtn && mascot) {
     const dy = e.clientY - downY;
     if (!moved && Math.hypot(dx, dy) > 4) {
       moved = true;
+      // held only once it's a drag: holding from the press sent a plain click to the wrapper, not her
+      // button, so clicking Cassie with a mouse did nothing
+      try { mascot.setPointerCapture(pointerId); } catch (_) {}
       mascotDragging = true;
       mascot.classList.add('dragging');
       clearEmote();
@@ -1266,7 +1269,6 @@ if (mascotBtn && mascot) {
     downX = e.clientX; downY = e.clientY; moved = false;
     const r = mascot.getBoundingClientRect();
     startLeft = r.left; startTop = r.top;
-    try { mascot.setPointerCapture(pointerId); } catch (_) {}
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   });
@@ -4468,6 +4470,8 @@ attachRemove.addEventListener('click', clearAttach);
 
 composer.addEventListener('submit', (e) => {
   e.preventDefault();
+  // nothing typed yet: Send puts you in the box to type (a tap always does something)
+  if (!promptInput.value.trim() && !attachments.length) { promptInput.focus(); return; }
   handleSend(promptInput.value);
 });
 
@@ -5408,7 +5412,7 @@ function buildVoiceUI() {
       </div>
       <div class="vc-gender" role="radiogroup" aria-label="Cassie's voice"><button type="button" role="radio" data-gender="woman">Woman</button><button type="button" role="radio" data-gender="man">Man</button></div>
     </div>
-    <button type="button" class="vc-stage" aria-label="Cassie. Tap to stop her talking"><span class="vc-ring"></span><span class="vc-bot"></span></button>
+    <button type="button" class="vc-stage" aria-label="Cassie. Tap her to stop her talking, or to start listening"><span class="vc-ring"></span><span class="vc-bot"></span></button>
     <p class="vc-status" aria-live="polite"></p>
     <p class="vc-you"></p>
     <p class="vc-cassie" aria-live="polite"></p>
@@ -5432,7 +5436,14 @@ function buildVoiceUI() {
     else if (v.phase === 'speaking') { v.stopSpeaking && v.stopSpeaking(); }
     else if (v.phase === 'paused') listenVoice();
   });
-  ui.stage.addEventListener('click', () => { if (voiceChat && voiceChat.phase === 'speaking' && voiceChat.stopSpeaking) voiceChat.stopSpeaking(); });
+  // tapping Cassie: stops her talking; when she isn't, it's the mic (a tap on her always does something)
+  ui.stage.addEventListener('click', () => {
+    const v = voiceChat;
+    if (!v) return;
+    if (v.phase === 'speaking' && v.stopSpeaking) v.stopSpeaking();
+    else if (v.phase === 'paused') listenVoice();
+    else if (v.phase === 'listening') setVoicePhase('listening', 'I’m listening. Say something, or tap the mic to pause.');
+  });
   const markGender = () => ui.gender.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === voiceGender())));
   markGender();
   ui.gender.addEventListener('click', (e) => {
@@ -6808,7 +6819,9 @@ document.getElementById('reader-close')?.addEventListener('click', closeReader);
 /* "Paste & ask": copy words in any app, open Cassie, tap once (the easiest way on iPhone). */
 document.getElementById('paste-btn')?.addEventListener('click', async () => {
   let text = '';
+  islandShow('reading', 'Reading what you copied…'); // at once: the browser can take a moment (or ask first)
   try { text = (await navigator.clipboard.readText()) || ''; } catch (e) { text = ''; }
+  islandRest();
   track('feature', 'paste-ask');
   if (text.trim()) { showShareCard(text, 'what you copied'); return; }
   // no clipboard access (or nothing copied): let them paste by hand

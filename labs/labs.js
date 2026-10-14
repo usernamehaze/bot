@@ -443,7 +443,12 @@ function createView() {
   $('.labs-x').addEventListener('click', () => close());
   root.addEventListener('click', (e) => {
     const c = e.target.closest('[data-lab]');
-    if (c && shelf.contains(c)) openLab(c.dataset.lab);
+    // the card says "Opening…" at once; the lab is built once that has been drawn (a big lab takes a moment)
+    if (c && shelf.contains(c) && !c.classList.contains('opening')) {
+      c.classList.add('opening');
+      const id = c.dataset.lab;
+      requestAnimationFrame(() => setTimeout(() => { c.classList.remove('opening'); if (!root.hidden && !shelf.hidden) openLab(id); }));
+    }
     const sec = e.target.closest('.labs-tabs [data-section]');
     if (sec && shelf.contains(sec)) { setSection(sec.dataset.section); search.value = ''; renderShelf(); return; }
     const s = e.target.closest('[data-subject], [data-subject-go]');

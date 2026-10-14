@@ -72,12 +72,12 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
       shown.push({ t, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, z: v.z });
     }
     shown.sort((a, b) => a.z - b.z);
-    const taken = [], touch = coarse.matches ? 44 : 0;
+    const taken = [], touch = coarse.matches ? 44 : 0, under = headInset();
     for (const { t, x, y } of shown) {
       const lw = t.el.offsetWidth, lh = t.el.offsetHeight;
       let left = t.align === 'left' ? x : x - lw / 2, top = t.align === 'left' || t.align === 'center' ? y - lh / 2 : y - lh * 1.3;
       const tap = t.el.tagName === 'BUTTON', mx = Math.max(2, tap ? (touch - lw) / 2 : 0), my = Math.max(2, tap ? (touch - lh) / 2 : 0); // (its touch area inside too)
-      left = Math.min(Math.max(left, mx), Math.max(mx, w - lw - mx)); top = Math.min(Math.max(top, my), Math.max(my, h - lh - my));
+      left = Math.min(Math.max(left, mx), Math.max(mx, w - lw - mx)); top = Math.min(Math.max(top, my + under), Math.max(my + under, h - lh - my));
       if (tap) {
         const bw = Math.max(lw, touch), bh = Math.max(lh, touch), bx = left + lw / 2 - bw / 2, by = top + lh / 2 - bh / 2;
         if (taken.some((r) => bx < r.x + r.w && bx + bw > r.x && by < r.y + r.h && by + bh > r.y)) { t.el.hidden = true; continue; }
@@ -85,6 +85,17 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
       }
       t.el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     }
+  }
+  // on a phone the lab's title bar lies over the top of the picture: tags stay below it (else a tag
+  // there can't be tapped). Measured twice a second, not every frame.
+  let inset = 0, insetAt = -1e9;
+  function headInset() {
+    const now = performance.now();
+    if (now - insetAt < 500) return inset;
+    insetAt = now;
+    const view = canvas.closest('.lab-view'), head = view && view.querySelector('.lab-head');
+    inset = head && !head.hidden ? Math.max(0, Math.min(h / 3, head.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top)) : 0;
+    return inset;
   }
   loop();
   // tapping: the nearest tappable object under the finger (a tap, not a drag)

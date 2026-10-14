@@ -755,7 +755,9 @@ function createView() {
     const b = e.target.closest('[data-sex]');
     if (!b || b.dataset.sex === body.sex) return;
     root.querySelectorAll('.x3d-sex [data-sex]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
-    body.setSex(b.dataset.sex).catch(() => {});
+    // the choice shows at once; the new body is built after that has been drawn
+    const sex = b.dataset.sex;
+    requestAnimationFrame(() => setTimeout(() => body.setSex(sex).catch(() => {})));
     if (opts.onSelect) opts.onSelect('sex:' + b.dataset.sex);
   });
   root.querySelector('.x3d-switch').addEventListener('click', (e) => {

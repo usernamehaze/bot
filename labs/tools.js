@@ -43,7 +43,7 @@ async function busy(btn, text, fn) {
 }
 
 /* Press a chip and drag it onto a target — or tap the chip, then tap the target (easier on
-   a phone). Calls drop(chip, target) either way. */
+   a phone), or tap the target first, then the chip. Calls drop(chip, target) every way. */
 function dragDrop(root, { chip, target, drop }) {
   let start = null, ghost = null, picked = null, over = null;
   const clear = () => { if (ghost) ghost.remove(); ghost = null; if (over) over.classList.remove('tl-over'); over = null; if (start) start.c.classList.remove('tl-dragging'); start = null; };
@@ -77,13 +77,17 @@ function dragDrop(root, { chip, target, drop }) {
     const s = start;
     if (s.moved) { const t = targetAt(e.clientX, e.clientY); clear(); if (t) drop(s.c, t); return; }
     clear();
+    // the place was tapped first: this chip goes there
+    if (picked && !picked.matches(chip) && root.contains(picked)) { const t = picked; pick(null); drop(s.c, t); return; }
     // a tap: pick it up, then tap where it goes (which can be another chip, e.g. in a list)
     if (picked && picked !== s.c && s.c.matches(target)) { const c = picked; pick(null); drop(c, s.c); return; }
     pick(s.c);
   };
   const tap = (e) => {
-    if (!picked) return;
     const t = e.target.closest(target);
+    const place = t && root.contains(t) && !t.closest(chip) && !t.classList.contains('tl-done') ? t : null;
+    // nothing picked up yet, or a place picked: tapping a place picks it (then tap the chip that goes there)
+    if (!picked || !picked.matches(chip)) { if (place) pick(place); return; }
     if (t && root.contains(t) && !t.closest(chip) && t !== picked) { const c = picked; pick(null); drop(c, t); }
   };
   root.addEventListener('pointerdown', down);
@@ -764,14 +768,16 @@ const cornellLab = {
     const g2 = group(panel, 'Review and keep');
     const r2 = row(g2);
     const coverBtn = button(r2, 'Cover the notes (test yourself)', () => { cover = !cover; coverBtn.textContent = cover ? 'Show the notes' : 'Cover the notes (test yourself)'; draw(); if (cover) api.check(1); });
+    // before there are notes, these say so (a tap never does nothing)
+    const noDoc = () => { if (doc) return false; say(fb, 'Make your Cornell notes first: paste your notes above, then tap Make Cornell notes.', 'bad'); return true; };
     button(r2, 'Cues → flashcards', () => {
-      if (!doc) return;
+      if (noDoc()) return;
       const n = api.addCards(doc.rows.map((x) => ({ f: x.cue, b: x.notes.join(' ') })), (doc.title || 'Cornell notes').slice(0, 60));
       say(fb, n ? `Added ${n} cards (cue → notes) to your Flashcards.` : 'Those cards are already in your Flashcards.', 'good');
     });
     const r3 = row(g2);
-    button(r3, 'Download (.txt)', plusOnly('Saving your Cornell notes', () => { if (doc) download(((doc.title || 'cornell-notes').replace(/[^\w-]+/g, '-').slice(0, 40) || 'cornell-notes') + '.txt', asText()); }));
-    button(r3, 'Print', plusOnly('Printing your Cornell notes', () => printIt()));
+    button(r3, 'Download (.txt)', plusOnly('Saving your Cornell notes', () => { if (!noDoc()) download(((doc.title || 'cornell-notes').replace(/[^\w-]+/g, '-').slice(0, 40) || 'cornell-notes') + '.txt', asText()); }));
+    button(r3, 'Print', plusOnly('Printing your Cornell notes', () => { if (!noDoc()) printIt(); }));
     async function make() {
       const text = area.value.trim();
       if (text.length < 30) { say(fb, 'Paste some notes first.', 'bad'); return; }
