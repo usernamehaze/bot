@@ -2865,7 +2865,7 @@ test('a pinch in Labs or the 3D body never zooms the whole page (in the chat it 
   await ctx.close();
 });
 
-test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze the lab, and a pinch on the 3D never zooms the page', async (b) => {
+test('iPhone: the Solar System has no Teach me, Ask Cassie or Quiz me, Back always works, and a pinch on the 3D never zooms the page', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
     const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
     if (!/The things on the screen, numbered/.test(u)) return { text: 'Here is how it works.' };
@@ -2888,24 +2888,11 @@ test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze
   const held = () => page.evaluate(() => /maximum-scale=1/.test(document.querySelector('meta[name=viewport]').content));
   await openSpace();
   expect(await held(), 'Labs holds the page at its normal size (no iPhone zoom into a box you type in)');
-  // Teach me: she points at the picture and the panel; closing her leaves every button working
-  await page.tap('.lab-teach');
-  await page.waitForFunction(() => /the Sun/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
-  await page.tap('.tut-next');
-  await page.waitForFunction(() => /To scale/.test(document.querySelector('.tut-say').textContent), null, { timeout: 8000 });
-  await page.tap('.tut-x');
-  expect(await page.locator('.lab-tutor, .tut-finger, .tut-ring').count() === 0, 'the tutor leaves nothing behind');
-  for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', 'after Teach me: ' + r); }
+  // no Teach me, Ask Cassie or Quiz me here (they froze a real phone), and Back is always reachable
+  for (const sel of ['.lab-teach', '.lab-ask', '.lab-quiz']) expect(!(await page.locator(`.lab-view:not([hidden]) ${sel}`).isVisible()), sel + ' is gone from the space lab');
+  expect(await reachable('.lab-back') === 'ok', 'Back can be tapped');
   await page.locator(today).scrollIntoViewIfNeeded(); await page.locator(today).tap();
-  // Ask Cassie and Quiz me open a panel inside the lab; closing it leaves every button working
-  for (const btn of ['.lab-ask', '.lab-quiz']) {
-    await page.tap(btn);
-    await page.waitForSelector('.lab-helper:not([hidden])', { timeout: 10000 });
-    await page.waitForSelector('.lab-helper .hp-a, .lab-helper .hp-err, .lab-helper .hp-q', { timeout: 10000 });
-    await page.tap('.lab-helper .hp-x');
-    expect(await page.locator('.lab-helper:not([hidden])').count() === 0, 'the panel closes');
-    for (const sel of ['.lab-back', '.lab-teach', '.lab-ask', '.lab-quiz']) { const r = await reachable(sel); expect(r === 'ok', `after ${btn}: ` + r); }
-  }
+  expect(await reachable('.lab-back') === 'ok', 'Back can still be tapped after using the lab');
   // a pinch on the 3D zooms the planets, never the page; nor on the buttons or the panel
   // (where the planets' name tags sit: a zoom moves them; one tag alone may be hidden behind a nearer one)
   const sunAt = () => page.evaluate(() => [...document.querySelectorAll('.lab3d-label:not([hidden])')].map((x) => x.textContent + x.style.transform).join('|'));
@@ -2919,7 +2906,7 @@ test('iPhone: the Solar System’s Teach me, Ask Cassie and Quiz me never freeze
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.5 });
   await page.waitForFunction(() => visualViewport.scale === 1, null, { timeout: 3000 }).catch(() => { throw new Error('a zoomed page stays zoomed in Labs'); });
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
-  for (const sel of ['.lab-back', '.lab-teach']) { const r = await reachable(sel); expect(r === 'ok', 'after pinching: ' + r); }
+  { const r = await reachable('.lab-back'); expect(r === 'ok', 'after pinching: ' + r); }
   await page.tap('.lab-back');
   await page.waitForSelector('.labs-shelf:not([hidden])', { timeout: 5000 });
   // the chat can still be zoomed for reading
@@ -2971,7 +2958,7 @@ test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom
   await ctx.close();
 });
 
-test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question quiz in the Solar System and the Body System, and the chat never shows', async (b) => {
+test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question quiz in Build an atom and the Body System (none in the space labs), and the chat never shows', async (b) => {
   const asked = [], bodies = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
     const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
@@ -2990,15 +2977,20 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   });
   const chatBubbles = () => page.locator('#chat-log .bubble').count();
   const before = await chatBubbles();
-  // the Solar System: tap Jupiter, then ask
+  // the 3D space labs have no Ask Cassie or Quiz me (they froze a real phone there)
   await page.evaluate(() => openLabs('space3d'));
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="space3d"] .lab3d-label:not([hidden])', { timeout: 30000 });
+  expect(!(await page.locator('.lab-view:not([hidden]) .lab-ask').isVisible()) && !(await page.locator('.lab-view:not([hidden]) .lab-quiz').isVisible()), 'no Ask Cassie or Quiz me in the Solar System');
+  await page.click('.lab-back');
+  await page.waitForSelector('.labs-shelf:not([hidden])');
+  // Build an atom: make carbon-14, then ask
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 30000 });
   await page.evaluate(() => document.documentElement.classList.add('watch-labs'));
-  await page.locator('.lab3d-label:not([hidden]):text-is("Jupiter")').click({ force: true });
-  await page.waitForSelector('.space-card h3:text-is("Jupiter")');
+  await page.click('.lab-view:not([hidden]) button:has-text("Carbon-14")');
   await page.click('.lab-ask');
   await page.waitForSelector('.lab-helper:not([hidden]) .hp-a >> text=biggest planet', { timeout: 15000 });
-  expect(/the Solar system & beyond \(3D\) lab in Cassie\. What's on my screen right now: .*Jupiter/s.test(asked.at(-1)), 'Cassie sees the screen: ' + asked.at(-1).slice(0, 300));
+  expect(/the Build an atom lab in Cassie\. What's on my screen right now: .*carbon/is.test(asked.at(-1)), 'Cassie sees the screen: ' + asked.at(-1).slice(0, 300));
   expect(await page.locator('.lab-ask[aria-pressed="true"]').count() === 1, 'Ask Cassie shows as on');
   // a follow-up typed in the panel (she remembers the talk), and the answer can be read out loud
   await page.fill('.lab-helper .hp-ask input', 'what about its moons?');
@@ -3007,14 +2999,13 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   expect(bodies.at(-1).messages.some((m) => m.role === 'assistant' && /You are looking at Jupiter/.test(m.content)), 'the follow-up carries the talk so far');
   expect(await page.locator('.lab-helper .hp-a strong, .lab-helper .hp-a b').count() >= 1, 'her answer is formatted like the chat');
   expect(await page.locator('.lab-helper .hp-a .hp-listen').count() === 2, 'every answer has Listen');
-  // the lab still works behind the panel
-  await page.click('.lab-seg button:has-text("1 week / s")');
-  expect(await page.locator('.lab-seg button:has-text("1 week / s")[aria-pressed="true"], .lab-seg button:has-text("1 week / s").on, .lab-seg button:has-text("1 week / s")[aria-checked="true"]').count() === 1, 'the lab’s controls work with the panel open');
+  const stats = () => page.locator('.lab-view:not([hidden]) .lab-stats').innerText();
+  const atomBefore = await stats();
   // Quiz me: two questions, one at a time, then the score
   await page.click('.lab-quiz');
   await page.waitForFunction(() => (document.querySelector('.lab-helper:not([hidden]) .hp-title') || {}).textContent === 'Quiz me');
   await page.waitForSelector('.lab-helper .hp-q >> text=Which planet is the biggest?', { timeout: 15000 });
-  expect(/multiple-choice quiz about "the solar system/.test(asked.at(-1)), 'the quiz is about the lab’s topic');
+  expect(/multiple-choice quiz about "atomic structure/.test(asked.at(-1)), 'the quiz is about the lab’s topic');
   expect(await page.locator('.lab-helper .hp-qn').innerText().then((t) => /Question 1 of 2/i.test(t)), 'question 1 of 2');
   await page.click('.lab-helper .hp-opt:has-text("Jupiter")');
   await page.waitForSelector('.lab-helper .hp-why >> text=Right!');
@@ -3028,7 +3019,7 @@ test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question qu
   expect(missed.includes('Which planet is closest to the Sun?') && !missed.includes('Which planet is the biggest?'), 'the missed question is kept for Review my mistakes: ' + missed.join(' | '));
   // closing goes back to exactly where the student was
   await page.click('.lab-helper .hp-x');
-  expect(await page.locator('.lab-helper:not([hidden])').count() === 0 && /Jupiter/.test(await page.locator('.space-card h3').innerText()) && await page.locator('.lab-seg button:has-text("1 week / s")[aria-pressed="true"]').count() === 1, 'the lab is as it was');
+  expect(await page.locator('.lab-helper:not([hidden])').count() === 0 && (await stats()) === atomBefore && /carbon/i.test(atomBefore), 'back to the lab as it was: ' + atomBefore.replace(/\s+/g, ' ').slice(0, 120));
   await page.click('.lab-back');
   await page.waitForSelector('.labs-shelf:not([hidden])');
   await page.evaluate(() => document.documentElement.classList.remove('watch-labs'));
@@ -4355,73 +4346,47 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
 });
 
 // A real phone: in the Solar System, after Teach me (or any top-bar button) nothing could be tapped, not
-// even Back. The tutor's card moved out of the way of what it pointed at, to a fixed 66 px from the top,
-// right over the lab's top bar (148 px tall on a phone). Floating cards now stay below the measured bar.
-test('3D space labs: after Teach me, Ask Cassie or Quiz me every top-bar button and the lab still take taps, and Back goes to the shelf (390x844, 360x740, 1280x800)', async (b) => {
+// even Back. The 3D space labs now have no Teach me, Ask Cassie or Quiz me, as before Teach me existed.
+test('3D space labs: no Teach me, Ask Cassie or Quiz me; every control takes taps and Back goes to the shelf (390x844, 360x740, 1280x800)', async (b) => {
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const bad = [];
-  // Cassie's lesson points at every numbered thing on the screen, so her card has to move out of the way
-  const fakeGroq = (body) => {
-    const u = (body.messages || []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
-    if (/The things on the screen, numbered/.test(u)) { const n = (u.match(/\n\d+\. /g) || []).length; return { text: JSON.stringify({ steps: Array.from({ length: Math.min(6, Math.max(1, n)) }, (_, i) => ({ say: 'Look here.', point: n - i })) }) }; }
-    return { text: 'The Sun holds the planets in their orbits.' };
-  };
   for (const [size, device, viewport, touch] of [['390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['360x740', 'Pixel 7', { width: 360, height: 740 }, true], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]]) {
     for (const lab of ['solar', 'space3d']) {
       // (a browser of its own for each lab and size, started again if this machine's software-drawn 3D
       // wears it out: dozens of reloads in a row, which a student never does, can crash it here)
-      let own = null, ctx = null, page = null, errors = [];
-      const watch = (p) => { p.on('dialog', (d) => d.dismiss().catch(() => {})); p.on('crash', () => console.log(`  (${lab} @ ${size}: this machine's browser crashed; starting a new one)`)); };
+      let own = null, page = null, errors = [];
       const boot = async () => {
         if (own) await own.close().catch(() => {});
         own = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
-        const o = await open(own, { device, viewport, touch, scale: 1, server: false, state: { groqKey: 'gsk_test' }, fakeGroq });
-        ctx = o.ctx; page = o.page; errors = o.errors; watch(page);
+        const o = await open(own, { device, viewport, touch, scale: 1, server: false, state: { groqKey: 'gsk_test' } });
+        page = o.page; errors = o.errors; page.on('dialog', (d) => d.dismiss().catch(() => {}));
       };
-      await boot();
-      const fresh = async () => {
-        if (!page.isClosed()) return page;
-        try { page = await ctx.newPage(); watch(page); page.on('pageerror', (e) => errors.push(e.message)); } catch (e) { await boot(); }
-        return page;
+      const go = async () => {
+        if (page.url() !== APP) await page.goto(APP);
+        await page.evaluate((x) => openLabs(x), lab);
+        await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${lab}"] .lab-controls > *`, { timeout: 30000 });
+        await page.waitForTimeout(800);
       };
       const tap = async (sel) => { const r = await page.locator(sel).first().boundingBox(); if (touch) await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); else await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2); };
-      const seen = new Set(); // (each control once per lab and size: the top bar is checked right after Teach me)
-      for (const [btn, card] of [['.lab-teach', '.lab-tutor'], ['.lab-ask', '.lab-helper'], ['.lab-quiz', '.lab-helper']]) {
-        const go = async () => {
-          await fresh(); if (page.url() !== APP) await page.goto(APP);
-          await page.evaluate((x) => openLabs(x), lab);
-          await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${lab}"] .lab-controls > *`, { timeout: 30000 });
-          await page.waitForTimeout(800);
-          await tap(`.lab-view:not([hidden]) ${btn}`);
-          await page.waitForSelector(`${card}:not([hidden])`, { timeout: 15000 });
-          if (btn === '.lab-teach') { // through the lesson: the card moves at every step
-            await page.waitForSelector('.tut-step', { timeout: 15000 });
-            for (let k = 0; k < 5; k++) { await page.evaluate(() => { const n = document.querySelector('.tut-next'); if (n && n.offsetParent) n.click(); }); await page.waitForTimeout(500); }
-          } else await page.waitForTimeout(1500);
-        };
-        for (let attempt = 0; attempt < 2; attempt++) try {
-          await go();
-          const head = await page.evaluate(() => Math.round(document.querySelector('.lab-view:not([hidden]) .lab-head').getBoundingClientRect().bottom));
-          const cardTop = await page.evaluate((c) => { const e = document.querySelector(`${c}:not([hidden])`); return e ? Math.round(e.getBoundingClientRect().top) : 9999; }, card);
-          if (cardTop < head) bad.push(`${lab} ${btn} @ ${size}: the card (top ${cardTop}) is over the top bar (bottom ${head})`);
-          const issues = await tapResponseIssues(page, { touch, scope: `.lab-view:not([hidden]) .lab-head, ${card}, .lab-view:not([hidden]) .lab-controls`, perKind: 1, max: 8, seen, // (the top bar once per lab and size, the card, and the lab's first controls) skip: /delete|sign out/i,
-            reopen: async () => { await fresh(); await page.goto(APP); await go(); return page; } });
-          issues.filter((i) => i.cause !== 'blocked').forEach((i) => bad.push(`${lab} after ${btn} @ ${size}: [${i.cause}] ${i.what}`));
-          // and Back, from right here, goes to the shelf (the lab is opened again only if the check left it)
-          await fresh();
-          const still = await page.evaluate(([l, c]) => !!document.querySelector(`.lab-view:not([hidden])[data-lab="${l}"]`) && !!document.querySelector(`${c}:not([hidden])`), [lab, card]).catch(() => false);
-          if (!still) { await page.goto(APP); await go(); }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await boot(); await go();
+          for (const sel of ['.lab-teach', '.lab-ask', '.lab-quiz']) if (await page.locator(`.lab-view:not([hidden]) ${sel}`).isVisible()) bad.push(`${lab} @ ${size}: ${sel} is still there`);
+          const issues = await tapResponseIssues(page, { touch, scope: '.lab-view:not([hidden]) .lab-head, .lab-view:not([hidden]) .lab-controls, .lab-view:not([hidden]) .lab-stage', perKind: 1, max: 10, skip: /delete|sign out/i,
+            reopen: async () => { if (page.isClosed()) await boot(); await page.goto(APP); await go(); return page; } });
+          issues.filter((i) => i.cause !== 'blocked').forEach((i) => bad.push(`${lab} @ ${size}: [${i.cause}] ${i.what}`));
+          // Back, from wherever the check left the lab, goes to the shelf
+          if (!(await page.locator(`.lab-view:not([hidden])[data-lab="${lab}"]`).count())) { await page.goto(APP); await go(); }
           await tap('.lab-view:not([hidden]) .lab-back');
-          await page.waitForSelector('.labs:not([hidden]) .labs-shelf:not([hidden])', { timeout: 8000 }).catch(() => bad.push(`${lab} after ${btn} @ ${size}: Back didn’t go to the shelf`));
+          await page.waitForSelector('.labs:not([hidden]) .labs-shelf:not([hidden])', { timeout: 8000 }).catch(() => bad.push(`${lab} @ ${size}: Back didn’t go to the shelf`));
+          if (errors.length) bad.push(`${lab} @ ${size}: page errors: ${errors.join('; ')}`);
           break;
         } catch (e) {
           // (this machine's browser gave out: once more in a new one; anything else is a real failure)
-          if (attempt === 0 && /closed|crash|Target|new tab/i.test(e.message)) { await boot(); continue; }
-          bad.push(`${lab} after ${btn} @ ${size}: ${e.message.split('\n')[0]}`); break;
+          if (attempt === 0 && /closed|crash|Target|new tab/i.test(e.message)) { console.log(`  (${lab} @ ${size}: this machine's browser gave out; again in a new one)`); continue; }
+          bad.push(`${lab} @ ${size}: ${e.message.split('\n')[0]}`); break;
         }
-        await fresh(); await page.goto(APP).catch(() => {});
       }
-      if (errors.length) bad.push(`${lab} @ ${size}: page errors: ${errors.join('; ')}`);
       await own.close().catch(() => {});
     }
   }

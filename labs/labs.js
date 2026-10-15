@@ -31,6 +31,8 @@ import { GAMES } from './games.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography']];
+// labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone)
+const NO_HELPERS = new Set(['solar', 'space3d']);
 const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
@@ -257,8 +259,11 @@ function createView() {
     $('.lab-about').hidden = !lab.about;
     $('.lab-about').open = false;
     $('.lab-about p').textContent = lab.about || '';
-    $('.lab-quiz').hidden = (lab.subject === 'puzzles' || lab.subject === 'games' || lab.subject === 'tools') && !lab.topic;
-    $('.lab-teach').hidden = !opts.explain; // every lab, game and study tool
+    // the 3D space labs have none of Teach me, Ask Cassie and Quiz me: there they froze a real phone
+    const plain = NO_HELPERS.has(lab.id);
+    $('.lab-quiz').hidden = plain || ((lab.subject === 'puzzles' || lab.subject === 'games' || lab.subject === 'tools') && !lab.topic);
+    $('.lab-teach').hidden = plain || !opts.explain; // every other lab, game and study tool
+    $('.lab-ask').hidden = plain;
     labView.classList.toggle('lab-tool', !!lab.wide);
     renderTries();
     const api = {
@@ -358,7 +363,7 @@ function createView() {
     labView.classList.remove('tutoring'); $('.lab-teach').setAttribute('aria-pressed', 'false');
   }
   $('.lab-teach').addEventListener('click', () => {
-    if (!current || !opts.explain) return;
+    if (!current || !opts.explain || NO_HELPERS.has(current.id)) return;
     if (teacher && teacher.root.isConnected) { stopTeaching(); return; }
     closeHelp();
     teacher = tutor({ view: labView, lab: current, mounted: () => mounted, described, ask: opts.explain, speak: opts.speak, speaker: opts.speaker, hear: opts.hear, level: opts.level });
@@ -404,7 +409,7 @@ function createView() {
     try { return mounted.state(); } catch (e) { return ''; }
   }
   $('.lab-ask').addEventListener('click', () => {
-    if (!current) return;
+    if (!current || NO_HELPERS.has(current.id)) return;
     const now = described();
     const q = current.subject === 'tools'
       ? `I'm using Cassie's ${current.name} study tool (${current.blurb})${now ? ` Right now: ${now}.` : ''} Look at my work, tell me what's good and what to fix, simply. Then ask me one quick question to check I understood.`
@@ -426,7 +431,7 @@ function createView() {
     if (opts.onAsk) opts.onAsk(q, { lab: name });
   });
   $('.lab-quiz').addEventListener('click', () => {
-    if (!current) return;
+    if (!current || NO_HELPERS.has(current.id)) return;
     const topic = current.topic || current.name;
     if (opts.converse && opts.makeQuiz) {
       stopTeaching();
