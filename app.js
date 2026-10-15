@@ -32,6 +32,7 @@ const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
 const GEMINI_VISION_MODEL = 'gemini-3.6-flash';
 
 let state = loadState();
+var sideReady = false; // (set once the sidebar's study tools are made; save() runs before that)
 
 // Cassie's own server (config.js / server/README.md). With it, nobody needs a key to start.
 const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
@@ -64,6 +65,7 @@ function save() {
   const { messages, ...rest } = state; // `messages` is a runtime alias to the current chat
   try { localStorage.setItem(STORE_KEY, JSON.stringify(rest)); } catch (e) { /* quota */ }
   if (typeof syncAccount === 'function') syncAccount();
+  sideListSoon();
 }
 
 if (!GROQ_MODELS.includes(state.groqModel)) {
@@ -1113,6 +1115,8 @@ function mascotFloorTop() {
 function mascotBtnSize() {
   return { w: (mascotBtn && mascotBtn.offsetWidth) || 58, h: (mascotBtn && mascotBtn.offsetHeight) || 68 };
 }
+// (computers: the sidebar is always there, so she stays to the right of it)
+function sideEdge() { const sb = document.getElementById('sidebar'); return sb && matchMedia('(min-width: 761px)').matches ? sb.getBoundingClientRect().right : 0; }
 function mascotBounds() {
   const { w, h } = mascotBtnSize();
   // The 3D canvas is ~150px wide, centred on the button, so keep the button
@@ -1122,7 +1126,7 @@ function mascotBounds() {
   return {
     maxX: Math.max(8, window.innerWidth - w / 2 - pad),
     maxY: Math.max(70, mascotFloorTop() - h - 8),
-    minX: Math.min(52, Math.max(8, window.innerWidth - w / 2 - pad)),
+    minX: Math.min(52 + sideEdge(), Math.max(8, window.innerWidth - w / 2 - pad)),
     minY: 70,
   };
 }
@@ -1681,44 +1685,112 @@ const HOME_EXAMPLES = [
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
 
-// The "Ideas" panel: starters that used to sit on the home screen, tucked away on the right
-// so the chat stays a clean canvas. Open it from "Ideas to get started".
-const ideasPanel = (() => {
-  const el = document.createElement('aside');
-  el.className = 'ideas-panel';
-  el.hidden = true;
-  el.setAttribute('aria-label', 'Ideas to get started');
-  el.innerHTML = '<div class="ideas-head"><h2>Ideas</h2><button type="button" class="ideas-x" aria-label="Close">×</button></div>'
-    + '<label class="ideas-hl"><span><b>Highlight help</b><small>On: Cassie pops up when you highlight words. Off: highlight and copy like normal.</small></span><input type="checkbox" class="ideas-hl-toggle" role="switch"></label>'
-    + '<div class="ideas-list"></div>';
-  const shade = document.createElement('div');
-  shade.className = 'ideas-shade';
-  shade.hidden = true;
-  document.body.append(shade, el);
-  shade.addEventListener('click', () => closeIdeas());
-  el.querySelector('.ideas-x').addEventListener('click', () => closeIdeas());
-  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeIdeas(); });
-  // the highlight switch: the same one as in Settings
-  el.querySelector('.ideas-hl-toggle').addEventListener('change', (e) => {
-    state.highlightHelp = e.target.checked; save();
-    const t = document.getElementById('highlight-help-toggle'); if (t) t.checked = e.target.checked;
-    track('feature', 'highlight-' + (e.target.checked ? 'on' : 'off'));
+/* ---------- Study tools in the sidebar ----------
+   Every tool (Flashcards and the rest) lives in the left sidebar, so it is one tap away at any time,
+   mid-chat too. Computers: a slim rail of icons, or the full sidebar (the round chevron switches, and
+   the choice is kept). Phones: the same list at the top of the slide-out menu. */
+const SIDE_KEY = 'cassie.sideOpen';
+// (the full sidebar keeps its list of chats up to date as they change)
+function sideListSoon() {
+  if (!sideReady || !sideWide.matches || !document.body.classList.contains('side-open')) return;
+  clearTimeout(sideListSoon.t); sideListSoon.t = setTimeout(renderChatList, 150);
+}
+const sideWide = matchMedia('(min-width: 761px)');
+const sideTools = document.getElementById('side-tools');
+const sideSearch = document.getElementById('side-search');
+const sideToggle = document.getElementById('side-toggle');
+const sideTip = document.getElementById('side-tip');
+const sideHl = document.getElementById('side-hl-toggle');
+const toolBtns = [];
+function runTool(ex) {
+  hideSideTip();
+  if (!sideWide.matches) closeSidebar();
+  if (ex.run) { ex.run(); return; }
+  if (ex.send) handleSend(ex.text);
+  else { promptInput.value = ex.text; autoGrow(); promptInput.focus(); }
+}
+HOME_EXAMPLES.forEach((ex) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'side-tool'; b.dataset.tip = ex.label;
+  b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span>`;
+  b.querySelector('span').textContent = ex.label;
+  b.addEventListener('click', () => runTool(ex));
+  sideTools.appendChild(b);
+  toolBtns.push([b, ex]);
+});
+// the tool that's open now gets the bar on its left
+const TOOL_OPEN = {
+  Flashcards: () => !!document.querySelector('.fc:not([hidden])'),
+  'Labs: try a simulation': () => document.documentElement.classList.contains('labs-open'),
+  'Explore in 3D (in Labs)': () => document.documentElement.classList.contains('x3d-open'),
+  'Teach Cassie out loud': () => !!document.querySelector('.vc:not([hidden])'),
+};
+function markOpenTools() {
+  toolBtns.forEach(([b, ex]) => {
+    const on = !!(TOOL_OPEN[ex.label] && TOOL_OPEN[ex.label]());
+    b.classList.toggle('on', on);
+    if (on) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
   });
-  return { el, shade, list: el.querySelector('.ideas-list') };
-})();
-function fillIdeas(bar) {
-  ideasPanel.list.replaceChildren(...bar.children);
 }
-function openIdeas() {
-  ideasPanel.el.querySelector('.ideas-hl-toggle').checked = state.highlightHelp !== false;
-  ideasPanel.el.hidden = false; ideasPanel.shade.hidden = false;
-  requestAnimationFrame(() => { ideasPanel.el.classList.add('open'); ideasPanel.shade.classList.add('open'); });
-  setTimeout(() => { const b = ideasPanel.list.querySelector('button'); if (b) b.focus(); }, 80);
+let markQueued = false;
+const markSoon = () => { if (markQueued) return; markQueued = true; requestAnimationFrame(() => { markQueued = false; markOpenTools(); }); };
+new MutationObserver(markSoon).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(markSoon).observe(document.body, { childList: true, attributes: true, subtree: true, attributeFilter: ['hidden'] });
+// the rail or the full sidebar (computers)
+function setSideOpen(open, keep = true) {
+  document.body.classList.toggle('side-open', open);
+  sideToggle.setAttribute('aria-expanded', String(open));
+  sideToggle.setAttribute('aria-label', open ? 'Make the sidebar small' : 'Show the full sidebar');
+  sideToggle.title = open ? 'Make it small' : 'Show the full sidebar';
+  if (keep) { try { localStorage.setItem(SIDE_KEY, open ? 'open' : 'rail'); } catch (e) { /* no storage: this visit only */ } }
+  hideSideTip();
+  if (open) renderChatList();
+  setTimeout(() => { if (typeof keepMascotClear === 'function') keepMascotClear(); }, 300);
 }
-function closeIdeas() {
-  if (ideasPanel.el.hidden) return;
-  ideasPanel.el.classList.remove('open'); ideasPanel.shade.classList.remove('open');
-  setTimeout(() => { ideasPanel.el.hidden = true; ideasPanel.shade.hidden = true; }, 250);
+let sideOpenSaved = false;
+try { sideOpenSaved = localStorage.getItem(SIDE_KEY) === 'open'; } catch (e) { /* ignore */ }
+sideReady = true;
+setSideOpen(sideOpenSaved, false);
+syncSideHl();
+sideToggle.addEventListener('click', () => setSideOpen(!document.body.classList.contains('side-open')));
+document.getElementById('side-search-btn').addEventListener('click', () => { setSideOpen(true); sideSearch.focus(); });
+// names in the rail: a tooltip beside the icon (hover or keyboard focus)
+function showSideTip(el) {
+  if (!sideWide.matches || document.body.classList.contains('side-open') || !el.dataset.tip) return;
+  const r = el.getBoundingClientRect();
+  sideTip.textContent = el.dataset.tip; sideTip.hidden = false;
+  sideTip.style.left = (r.right + 10) + 'px';
+  sideTip.style.top = (r.top + r.height / 2 - sideTip.offsetHeight / 2) + 'px';
+}
+function hideSideTip() { sideTip.hidden = true; }
+document.getElementById('sidebar').addEventListener('pointerover', (e) => { const t = e.target.closest('[data-tip]'); if (t && e.pointerType !== 'touch') showSideTip(t); });
+document.getElementById('sidebar').addEventListener('pointerout', (e) => { const t = e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) hideSideTip(); });
+document.getElementById('sidebar').addEventListener('focusin', (e) => { const t = e.target.closest('[data-tip]'); if (t && t.matches(':focus-visible')) showSideTip(t); else hideSideTip(); });
+document.getElementById('sidebar').addEventListener('focusout', hideSideTip);
+document.getElementById('sidebar').addEventListener('scroll', hideSideTip, { passive: true });
+// Search: the tools and the chats that match
+function applySideSearch() {
+  if (!sideReady) return;
+  const q = sideSearch.value.trim().toLowerCase();
+  toolBtns.forEach(([b, ex]) => { b.hidden = !!q && !ex.label.toLowerCase().includes(q); });
+  document.querySelectorAll('#chat-list .chat-item').forEach((it) => { it.hidden = !!q && !it.querySelector('.ci-title').textContent.toLowerCase().includes(q); });
+}
+sideSearch.addEventListener('input', applySideSearch);
+sideSearch.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sideSearch.value) { e.stopPropagation(); sideSearch.value = ''; applySideSearch(); } });
+// the highlight switch: the same setting as the one in Settings
+function syncSideHl() { sideHl.checked = state.highlightHelp !== false; }
+sideHl.addEventListener('change', () => {
+  state.highlightHelp = sideHl.checked; save();
+  const t = document.getElementById('highlight-help-toggle'); if (t) t.checked = sideHl.checked;
+  track('feature', 'highlight-' + (sideHl.checked ? 'on' : 'off'));
+});
+// "Ideas to get started" on the home screen: shows where the tools live
+function showTools() {
+  if (sideWide.matches) setSideOpen(true); else openSidebar();
+  sideSearch.value = ''; applySideSearch();
+  sideTools.classList.remove('flash'); void sideTools.offsetWidth; sideTools.classList.add('flash');
+  setTimeout(() => sideTools.classList.remove('flash'), 1600);
+  sideTools.scrollIntoView({ block: 'nearest' });
 }
 
 function renderHome() {
@@ -1732,30 +1804,7 @@ function renderHome() {
     <p class="home-sub">Your study buddy. Ask me anything.</p>
     <button type="button" class="home-ideas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg>Ideas to get started</button>
   `;
-  intro.querySelector('.home-ideas').addEventListener('click', () => openIdeas());
-  const bar = document.createElement('div');
-  bar.className = 'home-bar';
-  HOME_EXAMPLES.forEach((ex) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'home-example';
-    btn.innerHTML = `<svg class="home-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg>`;
-    const lbl = document.createElement('span');
-    lbl.textContent = ex.label;
-    btn.appendChild(lbl);
-    btn.addEventListener('click', () => {
-      closeIdeas();
-      if (ex.run) { ex.run(); return; }
-      if (ex.send) {
-        handleSend(ex.text);
-      } else {
-        promptInput.value = ex.text;
-        autoGrow();
-        promptInput.focus();
-      }
-    });
-    bar.appendChild(btn);
-  });
+  intro.querySelector('.home-ideas').addEventListener('click', () => showTools());
   const due = dueMistakes().length, saved = (state.mistakes || []).length;
   if (saved) {
     const btn = document.createElement('button');
@@ -1765,7 +1814,7 @@ function renderHome() {
     const lbl = document.createElement('span');
     lbl.textContent = due ? `Review my mistakes (${due})` : `Review my mistakes (${saved} saved)`;
     btn.appendChild(lbl);
-    btn.addEventListener('click', () => { closeIdeas(); reviewMistakes(!due); });
+    btn.addEventListener('click', () => reviewMistakes(!due));
     intro.appendChild(btn); // personal and timely: it stays on the home screen
   }
   const cardsDue = window.CassieCards ? window.CassieCards.dueCount() : 0;
@@ -1777,11 +1826,10 @@ function renderHome() {
     const lbl = document.createElement('span');
     lbl.textContent = `Flashcards to review (${cardsDue})`;
     btn.appendChild(lbl);
-    btn.addEventListener('click', () => { closeIdeas(); window.CassieCards.open(); });
+    btn.addEventListener('click', () => window.CassieCards.open());
     intro.appendChild(btn);
   }
   wrap.appendChild(intro);
-  fillIdeas(bar);
   chatLog.appendChild(wrap);
   if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
 }
@@ -4856,7 +4904,7 @@ function closeSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
-  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; }
+  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; syncSideHl(); }
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
@@ -5192,7 +5240,7 @@ function resetQuizUi() {
   if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
 }
 function openSidebar() {
-  renderChatList();
+  renderChatList(); syncSideHl();
   sidebar.classList.add('open');
   sidebarOverlay.classList.add('open');
 }
@@ -5231,6 +5279,7 @@ function renderChatList() {
     item.addEventListener('click', () => selectChat(c.id));
     chatList.appendChild(item);
   });
+  applySideSearch();
 }
 function selectChat(id) {
   if (id !== state.currentId) {
