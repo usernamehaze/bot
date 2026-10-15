@@ -1445,7 +1445,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .vc-ring { animation: none !important; } }
 
 /* ---------- a clean chat canvas ----------
-   The starters live in the "Ideas" panel on the right; the chips under the chat stay
+   The starters live in the sidebar (Study tools); the chips under the chat stay
    on one line and scroll sideways instead of stacking up on phones. */
 .home-ideas {
   display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; padding: 9px 15px; border-radius: 99px;
@@ -1453,29 +1453,69 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 }
 .home-ideas svg { width: 16px; height: 16px; fill: currentColor; }
 .home-ideas:hover { border-color: var(--text); }
-.ideas-shade { position: fixed; inset: 0; z-index: 140; background: rgba(0, 0, 0, .25); opacity: 0; transition: opacity .25s; }
-.ideas-shade.open { opacity: 1; }
-.ideas-shade[hidden], .ideas-panel[hidden] { display: none; }
-.ideas-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 141; width: min(340px, 88vw); overflow-y: auto;
-  padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom)); background: var(--bg);
-  border-left: 1px solid var(--border); box-shadow: -18px 0 40px rgba(0, 0, 0, .14);
-  transform: translateX(104%); transition: transform .28s cubic-bezier(.3, .9, .4, 1);
+/* ---------- study tools in the sidebar ----------
+   Every tool is in the left sidebar, one tap away mid-chat too. Computers: a slim rail of icons, or
+   the full sidebar (the round chevron switches). Phones: the list at the top of the slide-out menu. */
+.side-search { display: flex; align-items: center; gap: 8px; height: 40px; margin: 0 0 12px; padding: 0 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+.side-search svg, .side-search-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
+.side-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; outline: none; }
+.side-search:focus-within { border-color: var(--text); }
+.side-search-btn { display: none; }
+.side-tools { display: flex; flex-direction: column; gap: 2px; margin: 0 0 14px; border-radius: 12px; transition: box-shadow .3s ease; }
+.side-tools.flash { box-shadow: 0 0 0 2px var(--text); }
+.side-tool { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; white-space: nowrap; }
+.side-tool svg { width: 18px; height: 18px; fill: currentColor; flex: none; opacity: .85; }
+.side-tool span { overflow: hidden; text-overflow: ellipsis; }
+.side-tool::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--text); opacity: 0; transition: opacity .15s ease; }
+.side-tool:hover, .side-tool:focus-visible, .side-tool.on { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.side-tool:hover::before, .side-tool:focus-visible::before, .side-tool.on::before { opacity: 1; }
+.side-tool.on { font-weight: 650; }
+.side-tool:focus-visible { outline: none; }
+.side-tool[hidden], .chat-item[hidden] { display: none; }
+.side-hl { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 0; padding: 12px 14px; border-radius: 16px; background: var(--bg); border: 1px solid var(--border); cursor: pointer; }
+.side-hl b { display: block; font-size: .88rem; }
+.side-hl small { display: block; margin-top: 2px; color: var(--muted); font-size: .76rem; line-height: 1.35; }
+.side-hl input { appearance: none; -webkit-appearance: none; flex-shrink: 0; width: 44px; height: 26px; border-radius: 99px; background: var(--border); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
+.side-hl input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .15s; }
+.side-hl input:checked { background: var(--primary); }
+.side-hl input:checked::after { transform: translateX(18px); }
+.side-toggle { display: none; }
+/* (the whole sidebar scrolls, so nothing in it is squeezed or hidden under the phone's tab bar) */
+.sidebar { overflow-y: auto; overscroll-behavior: contain; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar .chat-list { flex: none; overflow: visible; }
+html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
+/* phones: a closed menu is out of reach (no keyboard focus or taps into it while it's off screen) */
+@media (max-width: 760px) {
+  .sidebar { visibility: hidden; transition: transform .24s ease, visibility 0s linear .24s; }
+  .sidebar.open { visibility: visible; transition: transform .24s ease; }
 }
-.ideas-panel.open { transform: none; }
-.ideas-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.ideas-head h2 { margin: 0; font-size: 1.15rem; }
-.ideas-x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.2rem; line-height: 1; cursor: pointer; }
-.ideas-hl { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
-.ideas-hl b { display: block; font-size: .92rem; }
-.ideas-hl small { display: block; margin-top: 2px; color: var(--muted); font-size: .78rem; line-height: 1.35; }
-.ideas-hl input { appearance: none; -webkit-appearance: none; flex-shrink: 0; width: 44px; height: 26px; border-radius: 99px; background: var(--border); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
-.ideas-hl input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .15s; }
-.ideas-hl input:checked { background: var(--primary); }
-.ideas-hl input:checked::after { transform: translateX(18px); }
-.ideas-list { display: flex; flex-direction: column; gap: 10px; }
-.ideas-list .home-example { width: 100%; justify-content: flex-start; }
-@media (prefers-reduced-motion: reduce) { .ideas-panel, .ideas-shade { transition: none; } }
+.side-tip { position: fixed; z-index: 300; padding: 6px 10px; border-radius: 8px; background: var(--text); color: var(--bg); font-size: .8rem; font-weight: 600; white-space: nowrap; pointer-events: none; box-shadow: 0 6px 16px rgba(0, 0, 0, .18); }
+.side-tip[hidden] { display: none; }
+@media (pointer: coarse) { .side-tool, .side-search { min-height: 44px; } }
+@media (min-width: 761px) {
+  body { --side-w: 72px; }
+  body.side-open { --side-w: 280px; }
+  .sidebar { transform: none; width: var(--side-w); max-width: none; box-shadow: none; z-index: 50; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; transition: width .25s ease; }
+  #sidebar-overlay, #sidebar-close, #menu-btn { display: none !important; }
+  #app { margin-left: var(--side-w); width: calc(100% - var(--side-w)); transition: margin-left .25s ease, width .25s ease; }
+  .reader { left: var(--side-w); }
+  .side-toggle { display: grid; place-items: center; position: fixed; z-index: 51; top: calc(20px + var(--safe-top)); left: calc(var(--side-w) - 14px); width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .12); transition: left .25s ease; }
+  .side-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s ease; }
+  body:not(.side-open) .side-toggle svg { transform: rotate(180deg); }
+  .side-toggle:hover { border-color: var(--text); }
+  /* the rail: icons only */
+  body:not(.side-open) .sidebar { padding-left: 12px; padding-right: 12px; }
+  body:not(.side-open) .sidebar .rail-hide, body:not(.side-open) .sidebar-head .brand span, body:not(.side-open) .side-tool span, body:not(.side-open) .new-chat-btn .nc-text { display: none; }
+  body:not(.side-open) .sidebar-head { justify-content: center; padding: 0; }
+  body:not(.side-open) .side-search-btn { display: grid; place-items: center; width: 100%; height: 40px; margin: 0 0 12px; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); cursor: pointer; }
+  body:not(.side-open) .side-search-btn:hover { color: var(--text); }
+  body:not(.side-open) .side-menu-label { text-align: center; padding: 0 0 6px; font-size: .58rem; letter-spacing: .04em; }
+  body:not(.side-open) .side-tool { justify-content: center; padding: 8px 0; }
+  body:not(.side-open) .new-chat-btn { padding: 11px 0; }
+}
+@media (min-width: 761px) and (pointer: coarse) { .side-toggle { width: 44px; height: 44px; left: calc(var(--side-w) - 22px); } body:not(.side-open) .side-search-btn { height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .sidebar, #app, .side-toggle, .side-toggle svg, .side-tools { transition: none !important; } }
 .quick-actions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .quick-actions::-webkit-scrollbar { display: none; }
 .quick-actions .chip { flex-shrink: 0; }

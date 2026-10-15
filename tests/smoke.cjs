@@ -4196,18 +4196,114 @@ test('highlight text in an answer → Explain; switched off, highlighting is jus
   await page.click('#highlight-popover [data-mode=explain]');
   await page.waitForSelector('#highlight-popover >> text=Simply put', { timeout: 10000 });
   await page.click('#highlight-popover-close');
-  // OFF, with the switch in the Ideas side panel: highlighting is just highlighting
-  await page.evaluate(() => openIdeas());
-  await page.waitForSelector('.ideas-panel.open .ideas-hl-toggle', { timeout: 3000 });
+  // OFF, with the switch in the sidebar: highlighting is just highlighting
+  await page.evaluate(() => setSideOpen(true));
+  await page.waitForTimeout(300);
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/app-hl-switch.png' });
-  await page.click('.ideas-hl');
-  expect(await page.evaluate(() => state.highlightHelp === false), 'the side panel switch turns highlight help off');
-  await page.evaluate(() => closeIdeas());
+  await page.click('.side-hl');
+  expect(await page.evaluate(() => state.highlightHelp === false), 'the sidebar switch turns highlight help off');
   await page.waitForTimeout(300);
   await a.locator('p').first().selectText(); await page.mouse.up();
   await page.waitForTimeout(800);
   expect(await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
   await ctx.close();
+});
+
+test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of icons or the full sidebar on a computer, the menu on a phone), Search, the highlight switch, and Ideas to get started points there', async (b) => {
+  const { tapResponseIssues } = require('./ui-checks.cjs');
+  const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
+  // ---- a computer ----
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: reply });
+  expect(await page.locator('.ideas-panel, .ideas-shade').count() === 0, 'the old Ideas panel is gone');
+  expect(await page.locator('.home-ideas').isVisible(), 'Ideas to get started is still on the home screen');
+  await ask(page, 'What is osmosis?');
+  const geo = () => page.evaluate(() => { const s = document.getElementById('sidebar').getBoundingClientRect(), a = document.getElementById('app').getBoundingClientRect(), c = document.getElementById('chat-log').getBoundingClientRect(); return { side: Math.round(s.right), app: Math.round(a.left), chat: Math.round(c.left), wide: document.documentElement.scrollWidth > innerWidth, open: document.body.classList.contains('side-open') }; });
+  let g = await geo();
+  expect(!g.open && g.side >= 60 && g.side <= 90 && g.app >= g.side && g.chat >= g.side && !g.wide, 'a slim rail beside the chat, nothing covered: ' + JSON.stringify(g));
+  const fc = page.locator('.side-tool[data-tip="Flashcards"]');
+  const fb = await fc.boundingBox();
+  expect(await fc.isVisible() && fb && fb.y + fb.height <= 800 && fb.x + fb.width <= g.side, 'the rail shows Flashcards, no scrolling: ' + JSON.stringify(fb));
+  expect(!(await fc.locator('span').isVisible()), 'the rail is icons only');
+  // its name shows beside it on hover
+  await fc.hover();
+  await page.waitForSelector('#side-tip:not([hidden])', { timeout: 2000 });
+  expect((await page.locator('#side-tip').innerText()) === 'Flashcards', 'the tooltip names it');
+  await fc.click();
+  await page.waitForSelector('.fc:not([hidden]) .fc-x', { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('.side-tool[data-tip="Flashcards"]').classList.contains('on'), null, { timeout: 2000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/side-rail-cards.png' });
+  await page.click('.fc-x');
+  await page.waitForFunction(() => !document.querySelector('.side-tool[data-tip="Flashcards"]').classList.contains('on'), null, { timeout: 2000 });
+  // the chevron: the full sidebar with every tool's name, kept after a reload
+  await page.click('#side-toggle');
+  await page.waitForTimeout(400);
+  const labels = await page.evaluate(() => HOME_EXAMPLES.map((x) => x.label));
+  for (const l of labels) expect(await page.locator('.side-tool', { hasText: l }).locator('span').isVisible(), 'the full sidebar shows ' + l);
+  g = await geo();
+  expect(g.open && g.side >= 260 && g.app >= g.side && !g.wide, 'the full sidebar, the chat moved over: ' + JSON.stringify(g));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/side-open.png' });
+  await page.reload(); await page.waitForTimeout(800);
+  expect((await geo()).open, 'still the full sidebar after a reload');
+  // Search: the tools and the chats that match
+  await page.fill('#side-search', 'flash');
+  const shownTools = await page.evaluate(() => [...document.querySelectorAll('.side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip));
+  expect(shownTools.join() === 'Flashcards', 'flash leaves only Flashcards: ' + shownTools);
+  expect(await page.locator('#chat-list .chat-item:visible').count() === 0, 'and the chat about osmosis is hidden');
+  await page.fill('#side-search', 'osmo');
+  expect(await page.locator('#chat-list .chat-item:visible').count() === 1 && await page.locator('.side-tool:visible').count() === 0, 'osmo finds the chat');
+  await page.fill('#side-search', '');
+  // the highlight switch is the same setting as the one in Settings
+  await page.click('.side-hl');
+  expect(await page.evaluate(() => state.highlightHelp === false && document.getElementById('highlight-help-toggle').checked === false), 'the sidebar switch turns highlight help off, Settings agrees');
+  await page.click('.side-hl');
+  // nothing covered or scrolling sideways, either way, at three widths
+  for (const open of [true, false]) {
+    await page.evaluate((o) => setSideOpen(o), open);
+    for (const width of [1024, 1280, 1440]) {
+      await page.setViewportSize({ width, height: width === 1024 ? 768 : width === 1440 ? 900 : 800 }); await page.waitForTimeout(350);
+      g = await geo();
+      expect(g.open === open && g.app >= g.side && g.chat >= g.side && !g.wide, `${width}, ${open ? 'full' : 'rail'}: ` + JSON.stringify(g));
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // the tap test on the sidebar, both ways
+  const reopen = async () => { await page.goto(APP); await page.waitForTimeout(800); return page; };
+  for (const open of [false, true]) {
+    await page.evaluate((o) => setSideOpen(o), open); await page.waitForTimeout(350);
+    const bad = await tapResponseIssues(page, { reopen: async () => { const p = await reopen(); await p.evaluate((o) => setSideOpen(o), open); await p.waitForTimeout(350); return p; }, touch: false, scope: '#sidebar, #side-toggle', skip: /delete|×/i, perKind: 3 });
+    expect(!bad.length, `the sidebar (${open ? 'full' : 'rail'}) answers taps: ` + JSON.stringify(bad).slice(0, 600));
+  }
+  // Ideas to get started: the home screen of a new chat shows where the tools are
+  await page.goto(APP); await page.waitForTimeout(600);
+  await page.evaluate(() => { setSideOpen(false); createNewChat(); });
+  await page.click('.home-ideas');
+  await page.waitForFunction(() => document.body.classList.contains('side-open') && document.querySelector('.side-tools.flash'), null, { timeout: 2000 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // ---- a phone ----
+  const ph = await open(b, { device: 'iPhone 13', touch: true, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: reply });
+  const pp = ph.page;
+  await pp.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+  await ask(pp, 'What is osmosis?');
+  expect(await pp.evaluate(() => document.getElementById('sidebar').getBoundingClientRect().right <= 0) && !(await pp.locator('#side-toggle').isVisible()), 'no rail on a phone');
+  await pp.tap('#menu-btn');
+  await pp.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 2000 }); await pp.waitForTimeout(300);
+  const pfb = await pp.locator('.side-tool[data-tip="Flashcards"]').boundingBox();
+  expect(pfb && pfb.height >= 44 && pfb.y + pfb.height <= 844, 'Flashcards is in the menu, 44px tall: ' + JSON.stringify(pfb));
+  if (process.env.SHOTS) await pp.screenshot({ path: process.env.SHOTS + '/side-phone.png' });
+  await pp.tap('.side-tool[data-tip="Flashcards"]');
+  await pp.waitForSelector('.fc:not([hidden]) .fc-x', { timeout: 5000 });
+  expect(!(await pp.evaluate(() => document.getElementById('sidebar').classList.contains('open'))), 'the menu closes');
+  await pp.tap('.fc-x');
+  // the tap test on the phone's menu
+  const preopen = async () => { await pp.goto(APP); await pp.waitForTimeout(800); await pp.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); openSidebar(); }); await pp.waitForTimeout(400); return pp; };
+  await preopen();
+  // (Close menu is left out: the menu takes longer to slide away than the check waits; closing is checked above)
+  const pbad = await tapResponseIssues(pp, { reopen: preopen, touch: true, scope: '#sidebar', skip: /delete|×|close menu/i, perKind: 3 });
+  expect(!pbad.length, 'the phone menu answers taps: ' + JSON.stringify(pbad).slice(0, 600));
+  expect(ph.errors.length === 0, 'page errors: ' + ph.errors.join('; '));
+  await ph.ctx.close();
 });
 
 test('Talk mode and Hint answer', async (b) => {

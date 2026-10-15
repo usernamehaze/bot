@@ -30,13 +30,20 @@
       <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z"/></svg>
     </button>
   </div>
-  <button id="new-chat-btn" class="new-chat-btn">
+  <!-- every study tool, one tap away at any time (computers: a slim rail of icons or the full list) -->
+  <button type="button" id="side-search-btn" class="side-search-btn" aria-label="Search tools and chats" data-tip="Search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+  </button>
+  <label class="side-search rail-hide"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="side-search" type="search" placeholder="Search" aria-label="Search tools and chats" autocomplete="off" enterkeyhint="search"></label>
+  <div class="sidebar-section side-menu-label">Menu</div>
+  <nav id="side-tools" class="side-tools" aria-label="Study tools"></nav>
+  <button id="new-chat-btn" class="new-chat-btn" data-tip="New chat">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
-    New chat
+    <span class="nc-text">New chat</span>
   </button>
 
   <!-- Pomodoro focus timer -->
-  <div class="pomo" id="pomo">
+  <div class="pomo rail-hide" id="pomo">
     <div class="pomo-head">
       <span id="pomo-mode">Focus</span>
       <span class="pomo-head-r">
@@ -68,10 +75,13 @@
     </div>
   </div>
 
-  <div class="sidebar-section">Recents</div>
-  <div id="chat-list" class="chat-list"></div>
-  <div class="sidebar-foot">Your study buddy · Cassie</div>
+  <div class="sidebar-section rail-hide">Recents</div>
+  <div id="chat-list" class="chat-list rail-hide"></div>
+  <label class="side-hl rail-hide"><span><b>Highlight help</b><small>On: Cassie pops up when you highlight words. Off: highlight and copy like normal.</small></span><input type="checkbox" id="side-hl-toggle" role="switch"></label>
+  <div class="sidebar-foot rail-hide">Your study buddy · Cassie</div>
 </aside>
+<button type="button" id="side-toggle" class="side-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="Show the full sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+<div id="side-tip" class="side-tip" role="tooltip" hidden></div>
 
 <div id="app">
   <div id="offline-note" class="offline-note" role="status" hidden><b>You’re offline.</b> Your chats, flashcards, notes and most of Labs still work. Questions to Cassie need the internet, so connect when you can.</div>
