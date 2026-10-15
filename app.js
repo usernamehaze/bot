@@ -4511,7 +4511,10 @@ let exploreMod = null;
 function lessonVoice() {
   const CV = window.CassieVoice;
   if (!CV || !CV.session) return null;
-  const s = CV.session({ gender: voiceGender() });
+  // phones and tablets: the phone's own voice (it starts inside the tap, so it always gets to speak);
+  // no Keep going note: a step that can't be said stays on screen with a button to hear it again
+  const phone = !!(CV.device && CV.device.onPhone && CV.device.onPhone() && CV.device.supported());
+  const s = CV.session({ gender: voiceGender(), pause: false, ...(phone ? { voice: 'device', phone: true } : {}) });
   return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() };
 }
 const IN_LAB = {

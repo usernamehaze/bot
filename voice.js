@@ -214,6 +214,7 @@
   // Apple's Premium/Enhanced voices, Google's and Microsoft's natural ones, then a known good name.
   const synth = window.speechSynthesis;
   const NICE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Karen', 'Moira', 'Serena', 'Aria', 'Jenny', 'Google US English'], man: ['Daniel', 'Arthur', 'Oliver', 'Google UK English Male', 'Ryan', 'Evan', 'Nathan', 'Tom', 'Alex', 'Aaron', 'Guy'] };
+  const deviceVoiceAny = (gender) => deviceVoice(gender);
   function deviceVoice(gender) {
     const all = synth ? synth.getVoices() : [];
     const lang = (navigator.language || 'en').slice(0, 2);
@@ -238,9 +239,44 @@
     }
     return best;
   }
+  // Phones and tablets: the phone's own voice, the one its assistant speaks with. iPhone and iPad: the
+  // best installed voice for her gender, Premium, then Enhanced, then the plain one. Android: a Google
+  // voice (on the phone itself first). Anything else: the best one deviceVoice() finds.
+  const APPLE = { woman: ['Ava', 'Samantha', 'Allison', 'Zoe', 'Susan', 'Nicky', 'Joelle', 'Noelle'], man: ['Evan', 'Daniel', 'Tom', 'Nathan', 'Aaron', 'Arthur', 'Oliver'] };
+  const isApple = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const isAndroid = () => /Android/i.test(navigator.userAgent);
+  function onPhone() { return isApple() || isAndroid() || /Mobi/i.test(navigator.userAgent); }
+  function phoneVoice(gender) {
+    const all = synth ? synth.getVoices() : [];
+    const lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
+    const fits = (v) => /^en/i.test(v.lang) || String(v.lang).slice(0, 2).toLowerCase() === lang;
+    let best = null, bestScore = -Infinity;
+    if (isApple()) {
+      const names = APPLE[gender] || APPLE.woman;
+      for (const v of all) {
+        if (!fits(v)) continue;
+        const i = names.findIndex((n) => new RegExp('^' + n + '\\b').test(v.name));
+        if (i < 0) continue;
+        const tier = /premium/i.test(v.name) ? 3 : /enhanced/i.test(v.name) ? 2 : 1;
+        const sc = tier * 100 + (/^en/i.test(v.lang) ? 10 : 0) - i;
+        if (sc > bestScore) { bestScore = sc; best = v; }
+      }
+    } else if (isAndroid()) {
+      for (const v of all) {
+        if (!fits(v) || !/google/i.test(v.name)) continue;
+        const female = /\bfemale\b/i.test(v.name), male = !female && /\bmale\b/i.test(v.name);
+        let sc = (v.localService ? 20 : 0) + (/^en/i.test(v.lang) ? 10 : 0);
+        if (gender === 'man' ? male : female) sc += 5;
+        if (gender === 'man' ? female || !male : male) sc -= 8; // (a plain "Google US English" is a woman's voice)
+        if (sc > bestScore) { bestScore = sc; best = v; }
+      }
+    }
+    return best || deviceVoice(gender);
+  }
   if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', () => {}); // loads the list early
   // the device's list of voices can arrive a moment late: wait for it (briefly) before picking one
-  function deviceVoiceSoon(gender) {
+  function deviceVoiceSoon(gender, phone) {
+    const deviceVoice = phone ? phoneVoice : deviceVoiceAny;
     if (!synth || synth.getVoices().length) return Promise.resolve(deviceVoice(gender));
     return new Promise((resolve) => {
       const done = () => { clearTimeout(t); try { synth.removeEventListener('voiceschanged', done); } catch (e) { /* ignore */ } resolve(deviceVoice(gender)); };
@@ -266,14 +302,20 @@
         const u = new SpeechSynthesisUtterance(parts[i++].trim());
         if (v) { try { u.voice = v; } catch (e) { /* not a voice this browser knows */ } u.lang = v.lang; }
         u.rate = opts.rate || 1; u.pitch = 1;
-        u.onstart = () => { if (i === 1 && opts.onStart) opts.onStart(); };
-        u.onend = next;
-        u.onerror = (e) => { if (stopped) return; if (e && /interrupted|canceled/.test(e.error)) next(); else finish({ status: 'error', at: i - 1 }); };
+        // a phone that never starts this sentence (it says nothing, no error either) counts as a failure
+        const at = i - 1;
+        let begun = false;
+        const watch = setTimeout(() => { if (!stopped && !begun) { stopped = true; try { synth.cancel(); } catch (e) { /* ignore */ } finish({ status: 'error', at }); } }, 4000);
+        u.onstart = () => { begun = true; clearTimeout(watch); if (i === 1 && opts.onStart) opts.onStart(); };
+        u.onend = () => { begun = true; clearTimeout(watch); if (!stopped) next(); };
+        u.onerror = (e) => { clearTimeout(watch); if (stopped) return; if (e && /interrupted|canceled/.test(e.error)) next(); else finish({ status: 'error', at }); };
         synth.speak(u);
       } catch (e) { finish({ status: 'error', at: i - 1 }); } // never leave Cassie stuck
     };
-    try { synth.cancel(); } catch (e) { /* ignore */ }
-    setTimeout(next, 30);
+    // nothing playing: the first sentence starts right now, still inside the tap (phones allow it then);
+    // otherwise what's playing is stopped first and this starts a moment later
+    if (!synth.speaking && !synth.pending) next();
+    else { try { synth.cancel(); } catch (e) { /* ignore */ } setTimeout(next, 30); }
     return { done, stop() { stopped = true; try { synth.cancel(); } catch (e) { /* ignore */ } finish({ status: 'stopped' }); } };
   }
   // phones: speech has to start once inside a tap — do it with a silent word on the first tap
@@ -359,6 +401,9 @@
      voice is used up for the day, Keep going carries on with the words on screen (never in a
      different voice); the next lesson starts with another voice. */
   const played = []; // the last pieces said and the voice that said each (for checking it never changes)
+  /* opts.pause === false (Teach me): no Keep going note. A sentence that fails twice is left on
+     screen and the lesson goes on; handle.done says { status: 'error' } so the screen can offer to hear
+     it again. opts.voice: 'device' uses the device's own voice (opts.phone: the phone's best one). */
   function session(opts = {}) {
     const s = sessionState(opts);
     return {
@@ -408,14 +453,14 @@
     const gender = opts.gender === 'man' ? 'man' : 'woman';
     let kind = has(opts.voice) ? opts.voice : best();
     if (kind !== 'device' && !audioCtx()) kind = 'device';
-    const s = { kind, gender, muted: false, live: new Set(), ended: false, spoke: false };
-    s.devReady = kind === 'device' ? deviceVoiceSoon(gender).then((v) => { s.dev = v; }) : Promise.resolve();
+    const s = { kind, gender, muted: false, live: new Set(), ended: false, spoke: false, pause: opts.pause !== false, phone: !!opts.phone, devKnown: false };
+    s.devReady = kind === 'device' ? deviceVoiceSoon(gender, s.phone).then((v) => { s.dev = v; s.devKnown = true; }) : Promise.resolve();
     return s;
   }
   function run(s, opts) {
     const myTurn = ++turn, bv = VOICES[s.gender] || VOICES.woman;
-    const pieces = [];
-    let ended = false, stopped = false, wake = null, said = 0, srcNode = null, dev = null, endNow = null, paused = null;
+    const pieces = (opts.pieces || []).map((text) => ({ text, job: null }));
+    let ended = !!opts.pieces, stopped = false, wake = null, said = 0, srcNode = null, dev = null, endNow = null, paused = null;
     const nudge = () => { if (wake) { const w = wake; wake = null; w(); } };
     const make = (text) => (s.kind === 'bella' ? bellaClip(text, bv, myTurn, opts.speed) : studioClip(text, s.gender));
     // the studio voice downloads a couple of pieces ahead (it costs credits); Bella makes them all in turn
@@ -434,7 +479,7 @@
     // one piece in the lesson's voice: true when said, false when it failed
     const once = async (i) => {
       if (s.kind === 'device') {
-        await s.devReady;
+        if (!s.devKnown) await s.devReady;
         if (stopped) return true;
         dev = deviceSay(pieces[i].text, { voice: s.dev || null, gender: s.gender, rate: opts.rate, onStart: () => { if (i === 0 && opts.onStart) opts.onStart(s.kind); } });
         const r = await dev.done; dev = null;
@@ -488,14 +533,17 @@
             // so the lesson picks its voice again (and keeps that one)
             if (!s.spoke && s.kind === 'studio' && studio.off) {
               const k = best(); s.kind = k !== 'device' && !audioCtx() ? 'device' : k;
-              s.devReady = s.kind === 'device' ? deviceVoiceSoon(s.gender).then((v) => { s.dev = v; }) : Promise.resolve();
+              s.devReady = s.kind === 'device' ? deviceVoiceSoon(s.gender, s.phone).then((v) => { s.dev = v; s.devKnown = true; }) : Promise.resolve();
               tries = -1; continue;
             }
             // a device with no voices at all has nothing to keep going with: the words stay on screen
             if (s.kind === 'device' && !s.dev && !(synth && synth.getVoices().length)) { s.muted = true; break; }
             if (tries === 0) { await revive(s.kind); continue; } // try once more, in the same voice
-            // it failed twice: pause and say so; Keep going tries again (or, used up, shows the words)
             const usedUp = s.kind === 'studio' && studio.off;
+            // Teach me: no pause. The words stay on screen and the lesson goes on (used up: the rest
+            // of the lesson is on screen; otherwise the next step tries this voice again)
+            if (!s.pause) { if (usedUp) s.muted = true; return { status: 'error', at: i, muted: s.muted }; }
+            // it failed twice: pause and say so; Keep going tries again (or, used up, shows the words)
             if (opts.onPause) opts.onPause(true);
             paused = pauseNote(usedUp);
             await paused.keep;
@@ -514,10 +562,7 @@
   }
   // Read anything aloud (see best()). opts.session: the lesson's voice.
   function speak(text, opts = {}) {
-    const st = stream(opts);
-    sentences(text).forEach((p) => st.push(p));
-    st.end();
-    return st;
+    return stream({ ...opts, pieces: sentences(text) });
   }
 
 
@@ -529,7 +574,7 @@
     played: () => played.slice(),
     warming: () => warming,
     studio: { setup: setupStudio, ready: studioReady, on: () => studio.on, say: studioSay },
-    device: { say: deviceSay, voice: deviceVoice, supported: () => !!synth },
+    device: { say: deviceSay, voice: deviceVoice, phoneVoice, onPhone, supported: () => !!synth },
     sayStream,
     VOICES,
     supported,

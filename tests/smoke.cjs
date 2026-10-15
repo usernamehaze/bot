@@ -1334,7 +1334,7 @@ test('Listen: Cassie reads answers and flashcards aloud — the studio voice whi
 // One voice for a whole lesson or conversation: the studio voice running out at step 3 never hands the
 // rest to another voice. She tries once more, pauses with Keep going, and shows the rest on screen.
 // The next lesson starts with the device's best voice for her gender (never a robotic one), kept to the end.
-test('one voice per lesson: a 7-step Teach me and a 6-turn voice chat keep the same voice, for the woman and the man, when the studio voice runs out at step 3', async (b) => {
+test('one voice per lesson: a 7-step Teach me (no pop up) and a 6-turn voice chat keep the same voice, for the woman and the man, when the studio voice runs out at step 3', async (b) => {
   const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
   // the studio voice: `allow` sentences, then used up for the day
   const studioRoute = async (ctx, allow) => {
@@ -1369,19 +1369,15 @@ test('one voice per lesson: a 7-step Teach me and a 6-turn voice chat keep the s
     await t.page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
     await t.page.evaluate(() => openLabs('atom'));
     await t.page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+    await t.page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
     await t.page.click('.lab-teach');
-    // step 3: tried once more in the same voice, then Cassie pauses and says why
-    await t.page.waitForSelector('.cv-pause button', { timeout: 20000 });
-    const note = await t.page.locator('.cv-pause').innerText();
-    expect(/used up/.test(note) && /same voice/.test(note) && plain(note), `${gender}: the pause says what happened in plain words: ${note}`);
-    expect(/3 of 7/.test(await t.page.locator('.tut-step').innerText()), `${gender}: it paused at step 3`);
-    expect(tlog.length === 4 && tlog.slice(2).every((x) => /Step 3/.test(x.text) && !x.ok), `${gender}: step 3 was tried twice in the studio voice: ` + JSON.stringify(tlog));
-    await t.page.click('.cv-pause button');
-    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 30000 });
+    // step 3: tried once more in the same voice, then the lesson goes on with the words on screen (no pop up)
+    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 40000 });
     await t.page.waitForTimeout(400);
+    expect(await t.page.evaluate(() => window.__paused) === 0 && await t.page.locator('.cv-pause').count() === 0, `${gender}: no Keep going pop up in Teach me`);
     let played = await t.page.evaluate(() => window.CassieVoice.played());
     expect(played.length === 2 && played.every((x) => x.kind === 'studio' && x.voice === gender), `${gender}: every step spoke in the same studio voice: ` + JSON.stringify(played));
-    expect(tlog.length === 4 && tlog.every((x) => x.voice === gender), `${gender}: no more studio calls after the pause, all in the ${gender}’s voice: ` + JSON.stringify(tlog));
+    expect(tlog.length === 4 && tlog.slice(2).every((x) => /Step 3/.test(x.text) && !x.ok) && tlog.every((x) => x.voice === gender), `${gender}: step 3 was tried twice in the studio voice, then no more calls: ` + JSON.stringify(tlog));
     expect((await t.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-lesson`);
     // the next lesson starts in the device's best voice for her gender, and keeps it for all 7 steps
     await t.page.click('.tut-x');
@@ -1421,6 +1417,94 @@ test('one voice per lesson: a 7-step Teach me and a 6-turn voice chat keep the s
     expect((await c.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-conversation`);
     expect(c.errors.length === 0, 'page errors: ' + c.errors.join('; '));
     await c.ctx.close();
+  }
+});
+
+test('Teach me on phones: the phone’s own voice (iPhone Premium, then Enhanced; Android Google), one voice for 7 steps, started inside the tap, Next cuts the old speech, and a voice that fails never pops up', async (b) => {
+  // the phone's speech: records each cancel and sentence (with its voice, and whether it began inside a tap)
+  const PHONE_SPEECH = (list) => {
+    window.__ev = []; window.__fail = null; window.__speakMs = 200;
+    window.__inTap = false;
+    addEventListener('click', () => { window.__inTap = true; }, true);
+    addEventListener('click', () => { window.__inTap = false; }, false);
+    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    let cur = null;
+    const synth = { speaking: false, pending: false, getVoices: () => list, addEventListener() {}, removeEventListener() {},
+      cancel() { window.__ev.push({ e: 'cancel' }); if (cur) { const u = cur; cur = null; clearTimeout(u._t); u.onerror && u.onerror({ error: 'interrupted' }); } this.speaking = false; },
+      speak(u) {
+        if (!u.text.trim()) return;
+        window.__ev.push({ e: 'speak', text: u.text, voice: u.voice ? u.voice.name : '(none)', tap: window.__inTap });
+        if (window.__fail && window.__fail.test(u.text)) { setTimeout(() => u.onerror && u.onerror({ error: 'synthesis-failed' }), 10); return; }
+        cur = u; this.speaking = true;
+        setTimeout(() => { if (cur !== u) return; u.onstart && u.onstart(); u._t = setTimeout(() => { if (cur !== u) return; cur = null; synth.speaking = false; u.onend && u.onend(); }, window.__speakMs); }, 5);
+      } };
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  };
+  const APPLE = [{ name: 'Samantha', lang: 'en-US', localService: true }, { name: 'Ava (Enhanced)', lang: 'en-US', localService: true }, { name: 'Ava (Premium)', lang: 'en-US', localService: true },
+    { name: 'Daniel', lang: 'en-GB', localService: true }, { name: 'Evan (Enhanced)', lang: 'en-US', localService: true }, { name: 'Fred', lang: 'en-US', localService: true }, { name: 'Zarvox', lang: 'en-US', localService: true }];
+  const ANDROID = [{ name: 'Google US English', lang: 'en-US', localService: false }, { name: 'Google English (United States) Female', lang: 'en-US', localService: true },
+    { name: 'Google UK English Male', lang: 'en-GB', localService: true }, { name: 'eSpeak English', lang: 'en-US', localService: true }];
+  const cases = [['iPhone 13', APPLE, { woman: 'Ava (Premium)', man: 'Evan (Enhanced)' }], ['Pixel 5', ANDROID, { woman: 'Google English (United States) Female', man: 'Google UK English Male' }]];
+  const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
+  const stepIs = (n) => `/${n} of 7/.test((document.querySelector('.tut-step') || {}).textContent || '')`;
+  for (const [device, voices, want] of cases) {
+    for (const gender of ['woman', 'man']) {
+      const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
+      const page = t.page;
+      await t.ctx.addInitScript(PHONE_SPEECH, voices);
+      await page.reload();
+      await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
+      await page.evaluate(() => openLabs('atom'));
+      await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+      await page.evaluate(() => { window.__speakMs = 2500; }); // (long sentences: Next comes while she is still talking)
+      await page.tap('.lab-teach');
+      await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
+      await page.waitForFunction(() => window.__ev.some((x) => x.e === 'speak' && /Step 1/.test(x.text)), null, { timeout: 5000 });
+      // Next while she's still talking: the old sentence is cut first, the new one starts inside the tap
+      for (let k = 2; k <= 7; k++) {
+        await page.waitForTimeout(300);
+        const n0 = await page.evaluate(() => window.__ev.length);
+        await page.tap('.tut-next');
+        await page.waitForFunction((k) => window.__ev.some((x) => x.e === 'speak' && x.text === `Step ${k} is here.`), k, { timeout: 5000 });
+        const ev = (await page.evaluate(() => window.__ev)).slice(n0);
+        const sp = ev.findIndex((x) => x.e === 'speak'), cancel = ev.findIndex((x) => x.e === 'cancel');
+        expect(cancel >= 0 && cancel < sp, `${device} ${gender}: Next cancels the old speech before step ${k} starts: ` + JSON.stringify(ev));
+        expect(ev[sp].tap === true, `${device} ${gender}: step ${k} starts inside the tap on Next: ` + JSON.stringify(ev[sp]));
+      }
+      const spoken = (await page.evaluate(() => window.__ev)).filter((x) => x.e === 'speak');
+      expect(spoken.length >= 7 && spoken.every((x) => x.voice === want[gender]), `${device} ${gender}: every step in ${want[gender]}: ` + JSON.stringify(spoken.map((x) => x.voice)));
+      expect(await page.evaluate(() => window.__paused) === 0, `${device} ${gender}: no Keep going pop up`);
+      expect(t.errors.length === 0, "page errors: " + t.errors.join("; "));
+      await t.ctx.close();
+    }
+    // the voice fails from step 3 on: no pop up, the lesson still reaches step 7, and Hear it again shows
+    const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
+    const page = t.page;
+    await t.ctx.addInitScript(PHONE_SPEECH, voices);
+    await page.reload();
+    await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
+    await page.evaluate(() => openLabs('atom'));
+    await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+    await page.evaluate(() => { window.__fail = /Step [3-7]/; window.__speakMs = 2500; });
+    await page.tap('.lab-teach');
+    await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
+    await page.tap('.tut-next'); await page.waitForTimeout(200);
+    await page.tap('.tut-next');
+    await page.waitForFunction(new Function('return ' + stepIs(3)), null, { timeout: 5000 });
+    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
+    expect((await page.locator('.tut-hear').boundingBox()).height >= 44, `${device}: Hear it again is 44px tall`);
+    const tries = await page.evaluate(() => window.__ev.filter((x) => x.e === 'speak' && /Step 3/.test(x.text)).length);
+    expect(tries === 2, `${device}: step 3 was tried twice: ${tries}`);
+    for (let k = 4; k <= 7; k++) { await page.tap('.tut-next'); await page.waitForFunction(new Function('return ' + stepIs(k)), null, { timeout: 5000 }); }
+    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
+    expect(await page.evaluate(() => window.__paused) === 0 && await page.locator('.cv-pause').count() === 0, `${device}: no pop up when the voice fails`);
+    // the voice works again: Hear it again says the step (inside the tap)
+    await page.evaluate(() => { window.__fail = null; });
+    await page.tap('.tut-hear');
+    await page.waitForFunction(() => window.__ev.filter((x) => x.e === 'speak' && /Step 7/.test(x.text)).length === 3, null, { timeout: 5000 });
+    expect(await page.locator('.tut-hear').isHidden(), `${device}: the button goes once she can speak`);
+    expect(t.errors.length === 0, 'page errors: ' + t.errors.join('; '));
+    await t.ctx.close();
   }
 });
 

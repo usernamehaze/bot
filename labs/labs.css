@@ -537,6 +537,8 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 .lab-tutor .tut-step { font-size: .78em; } .lab-tutor .tut-btn { font-size: .84em; } .lab-tutor .tut-pill { font-size: .88em; }
 .lab-tutor.tut-top { bottom: auto; top: calc(var(--bar-bottom, 60px) + 6px); }
 .tut-btn:disabled { opacity: .35; cursor: default; }
+.tut-hear { display: block; margin: 0 0 10px; min-height: 44px; }
+.tut-hear[hidden] { display: none; }
 .tut-ask { display: flex; gap: 6px; }
 .tut-ask input { flex: 1; min-width: 0; padding: 8px 12px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; font-size: .9rem; }
 .lab-tutor .tut-mic.on { background: #fff; color: #111; }
