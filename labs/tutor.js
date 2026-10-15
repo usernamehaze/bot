@@ -14,6 +14,7 @@ import { el, errorWords, errorWordsFor, watchTopBar } from './kit.js';
 
 const CURSOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>';
 const VOICE_KEY = 'cassie.labs.tutorVoice';
+const SIZE_KEY = 'cassie.labs.tutorSize'; // the card's size, pinched or Ctrl + scrolled (0.7 to 1.6)
 
 // Everything on screen Cassie can point at, numbered for her.
 function collect(view, mounted) {
@@ -102,13 +103,22 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   const pill = $('.tut-pill'), pillText = $('.tut-pill-text');
 
   /* ---------- where the card sits: dragged, made small, or moved out of the way ---------- */
-  const EDGE = 10, cardWidth = () => Math.min(440, innerWidth - EDGE * 2);
+  const clampSize = (v) => Math.max(0.7, Math.min(1.6, Number.isFinite(v) ? v : 1));
+  let size = 1;
+  try { size = clampSize(parseFloat(localStorage.getItem(SIZE_KEY)) || 1); } catch (e) { /* no storage: today's size */ }
+  const EDGE = 10, cardWidth = () => Math.min((innerWidth <= 760 ? innerWidth - EDGE * 2 : 440) * size, innerWidth - EDGE * 2);
+  // where the card may go: below the top bar, above the tab bar when it shows
+  function bottomEdge() {
+    const tb = document.getElementById('tabbar');
+    if (tb && tb.getClientRects().length && getComputedStyle(tb).visibility !== 'hidden') { const r = tb.getBoundingClientRect(); if (r.height && r.top < innerHeight) return r.top - EDGE; }
+    return innerHeight - EDGE;
+  }
   function placeAt(x, y) {
     if (!box.classList.contains('tut-mini')) box.style.width = cardWidth() + 'px';
     const r = box.getBoundingClientRect();
     const top = Math.max(EDGE, topBar.bottom() + 6);
     x = Math.max(EDGE, Math.min(innerWidth - r.width - EDGE, x));
-    y = Math.max(top, Math.min(innerHeight - r.height - EDGE, y));
+    y = Math.max(top, Math.min(bottomEdge() - r.height, y));
     Object.assign(box.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
     box.classList.remove('tut-top');
   }
@@ -116,10 +126,11 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   function dragBy(handle, onTap) {
     handle.addEventListener('pointerdown', (e) => {
       if (e.button > 0 || (handle !== pill && e.target.closest('button'))) return;
-      const r = box.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+      const r = box.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, gen = pinchGen;
       let moved = false;
       try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       const move = (ev) => {
+        if (pinch || gen !== pinchGen) { moved = true; return; } // (two fingers: that's a pinch, not a drag)
         const dx = ev.clientX - sx, dy = ev.clientY - sy;
         if (!moved && Math.hypot(dx, dy) < 6) return;
         moved = true;
@@ -139,6 +150,44 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     if (pointed) setTimeout(() => dodge(pointed), 50);
     (yes ? pill : $('.tut-min')).focus({ preventScroll: true });
   }
+  /* ---------- the card's size: pinch it with two fingers, or Ctrl + scroll on a computer ---------- */
+  let pinch = null, pinchGen = 0, saveTimer = 0;
+  function setSize(v) {
+    v = clampSize(v);
+    if (Math.abs(v - size) < 0.005 && box.style.getPropertyValue('--tut-s')) return;
+    const before = box.getBoundingClientRect();
+    size = v;
+    box.style.setProperty('--tut-s', String(size));
+    if (box.classList.contains('tut-mini')) return;
+    box.style.width = cardWidth() + 'px';
+    const after = box.getBoundingClientRect();
+    // it grows and shrinks around its middle, and stays whole on the screen
+    placeAt(before.left + before.width / 2 - after.width / 2, before.top + before.height / 2 - after.height / 2);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { try { localStorage.setItem(SIZE_KEY, size.toFixed(2)); } catch (e) { /* not kept */ } }, 250);
+  }
+  const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  // (the page doesn't zoom and the 3D picture behind doesn't move: the card keeps the gesture)
+  box.addEventListener('touchstart', (e) => {
+    if (e.touches.length < 2) return;
+    e.preventDefault();
+    pinch = { d: spread(e.touches) || 1, s: size }; pinchGen++;
+  }, { passive: false });
+  box.addEventListener('touchmove', (e) => {
+    if (!pinch || e.touches.length < 2) return;
+    e.preventDefault();
+    setSize(pinch.s * spread(e.touches) / pinch.d);
+  }, { passive: false });
+  const endPinch = (e) => { if (pinch && e.touches.length < 2) pinch = null; };
+  box.addEventListener('touchend', endPinch); box.addEventListener('touchcancel', endPinch);
+  box.addEventListener('gesturestart', (e) => e.preventDefault()); // (an iPhone's own pinch)
+  box.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return; // (Ctrl + scroll, and a laptop's trackpad pinch, which comes as Ctrl + scroll)
+    e.preventDefault();
+    setSize(size * Math.exp(-e.deltaY * 0.004));
+  }, { passive: false });
+  if (size !== 1) requestAnimationFrame(() => { const s0 = size; size = 1; box.style.setProperty('--tut-s', '1'); setSize(s0); }); // (the size kept from last time)
+
   dragBy($('.tut-head'));
   dragBy(pill, () => mini(false));
   pill.addEventListener('click', (e) => { if (e.detail === 0) mini(false); }); // (the keyboard: Enter or Space)
