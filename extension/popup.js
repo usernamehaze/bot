@@ -2,6 +2,14 @@
 
 const groqKeyInput = document.getElementById('groq-key');
 try { document.getElementById('version').textContent = 'Cassie extension v' + chrome.runtime.getManifest().version; } catch (e) { /* ignore */ }
+// A newer Cassie on the website? Say so, with a Download button (the check is at most once a day).
+try {
+  chrome.runtime.sendMessage({ type: 'CASSIE_UPDATE_CHECK' }).then((r) => {
+    if (!r?.newer) return;
+    document.getElementById('update-get').href = 'https://askcassie.pages.dev/cassie-extension.zip?v=' + r.latest;
+    document.getElementById('update-note').hidden = false;
+  }, () => {});
+} catch (e) { /* ignore */ }
 const geminiKeyInput = document.getElementById('gemini-key');
 const modelSelect = document.getElementById('model');
 const saveBtn = document.getElementById('save');
