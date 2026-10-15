@@ -10,7 +10,7 @@
    top, and "–" makes it a small pill ("Step 3 of 7") while she keeps talking and pointing. Closing it
    keeps the lesson: lesson() is where the student stopped, and offer(lesson) lets them carry on from
    there (or start it over) without asking her again. */
-import { el, errorWords, errorWordsFor } from './kit.js';
+import { el, errorWords, errorWordsFor, watchTopBar } from './kit.js';
 
 const CURSOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>';
 const VOICE_KEY = 'cassie.labs.tutorVoice';
@@ -89,6 +89,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     <form class="tut-ask"><input type="text" placeholder="Ask anything: “how do I use this?”" aria-label="Ask Cassie how to do something here" enterkeyhint="send">
       ${hear ? '<button type="button" class="tut-btn tut-mic" aria-label="Say it out loud" title="Say it out loud">🎤</button>' : ''}<button type="submit" class="tut-btn tut-go">Ask</button></form>`;
   view.appendChild(box);
+  const topBar = watchTopBar(view); // (the card never covers the lab's top bar: Back must always work)
   const $ = (s) => box.querySelector(s);
   const sayEl = $('.tut-say'), input = $('.tut-ask input');
   const finger = el('div', 'tut-finger', CURSOR), ring = el('div', 'tut-ring');
@@ -105,8 +106,9 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   function placeAt(x, y) {
     if (!box.classList.contains('tut-mini')) box.style.width = cardWidth() + 'px';
     const r = box.getBoundingClientRect();
+    const top = Math.max(EDGE, topBar.bottom() + 6);
     x = Math.max(EDGE, Math.min(innerWidth - r.width - EDGE, x));
-    y = Math.max(EDGE, Math.min(innerHeight - r.height - EDGE, y));
+    y = Math.max(top, Math.min(innerHeight - r.height - EDGE, y));
     Object.assign(box.style, { left: x + 'px', top: y + 'px', right: 'auto', bottom: 'auto' });
     box.classList.remove('tut-top');
   }
@@ -150,9 +152,9 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     const b = box.getBoundingClientRect(), w = b.width, h = b.height, gap = 8;
     const covers = (x, y) => r.left < x + w + gap && r.right > x - gap && r.top < y + h + gap && r.bottom > y - gap;
     if (!covers(b.left, b.top)) return;
-    const right = innerWidth - w - EDGE, low = innerHeight - h - EDGE - (innerWidth <= 760 ? 70 : 0), high = 66;
+    const right = innerWidth - w - EDGE, low = innerHeight - h - EDGE - (innerWidth <= 760 ? 70 : 0), high = Math.max(EDGE, topBar.bottom() + 6);
     const spots = [[EDGE, low], [right, low], [EDGE, high], [right, high], [b.left, r.top - h - 14], [b.left, r.bottom + 14]];
-    const free = spots.find(([x, y]) => y >= EDGE && y + h <= innerHeight - EDGE && !covers(x, y));
+    const free = spots.find(([x, y]) => y >= high && y + h <= innerHeight - EDGE && !covers(x, y));
     if (free) placeAt(free[0], free[1]);
     else box.classList.add('tut-top');
   }
@@ -303,7 +305,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     $('.tut-continue').focus({ preventScroll: true });
   }
   $('.tut-prev').addEventListener('click', () => { if (at > 0) show(at - 1); });
-  $('.tut-ask').addEventListener('submit', (e) => { e.preventDefault(); const q = input.value; input.value = ''; teach(q); });
+  $('.tut-ask').addEventListener('submit', (e) => { e.preventDefault(); const q = input.value; if (!q.trim()) { input.focus(); return; } input.value = ''; teach(q); }); // (nothing typed yet: the box is where to type)
   $('.tut-voice').addEventListener('click', (e) => {
     voiceOn = !voiceOn;
     try { localStorage.setItem(VOICE_KEY, voiceOn ? 'on' : 'off'); } catch (err) { /* ignore */ }
@@ -331,6 +333,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     if (listening) { try { listening.stop(); } catch (e) { /* ignore */ } }
     box.remove(); finger.remove(); ring.remove();
     removeEventListener('resize', onResize);
+    topBar.stop();
   }
   $('.tut-x').addEventListener('click', () => stop());
   return { teach, stop, lesson, offer, get steps() { return steps; }, get at() { return at; }, root: box };

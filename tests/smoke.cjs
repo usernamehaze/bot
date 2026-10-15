@@ -3105,7 +3105,9 @@ test('Teach me card: "where is the heart", made small, the heart still tappable,
   await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2); await page.mouse.down();
   await page.mouse.move(pb.x + 30, -400, { steps: 6 }); await page.mouse.up();
   pb = await page.locator('.lab-tutor').boundingBox();
-  expect(pb.y >= 0 && pb.y < 60, 'dragged to the top, and kept on the screen: ' + JSON.stringify(pb));
+  // as high as it goes: just under the top bar (over it, the top bar's buttons couldn't be tapped)
+  const barBottom = await page.evaluate(() => document.querySelector('.x3d:not([hidden]) .x3d-top').getBoundingClientRect().bottom);
+  expect(pb.y >= barBottom && pb.y < barBottom + 20, 'dragged to the top: kept on the screen, just under the top bar (' + Math.round(barBottom) + '): ' + JSON.stringify(pb));
   expect(await page.locator('.lab-tutor.tut-mini').count() === 1, 'a drag does not open it');
   // a tap opens it again where it is; its top drags it too
   await page.tap('.tut-pill');
@@ -4350,6 +4352,80 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
   if (freezes.length) console.log(`  (${freezes.length} freezes after a visible response:)\n  ` + freezes.join('\n  '));
   const fails = bad.filter((x) => !x.startsWith('[blocked]'));
   expect(!fails.length, `${fails.length} controls that are slow or don't respond:\n` + fails.join('\n'));
+});
+
+// A real phone: in the Solar System, after Teach me (or any top-bar button) nothing could be tapped, not
+// even Back. The tutor's card moved out of the way of what it pointed at, to a fixed 66 px from the top,
+// right over the lab's top bar (148 px tall on a phone). Floating cards now stay below the measured bar.
+test('3D space labs: after Teach me, Ask Cassie or Quiz me every top-bar button and the lab still take taps, and Back goes to the shelf (390x844, 360x740, 1280x800)', async (b) => {
+  const { tapResponseIssues } = require('./ui-checks.cjs');
+  const bad = [];
+  // Cassie's lesson points at every numbered thing on the screen, so her card has to move out of the way
+  const fakeGroq = (body) => {
+    const u = (body.messages || []).map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+    if (/The things on the screen, numbered/.test(u)) { const n = (u.match(/\n\d+\. /g) || []).length; return { text: JSON.stringify({ steps: Array.from({ length: Math.min(6, Math.max(1, n)) }, (_, i) => ({ say: 'Look here.', point: n - i })) }) }; }
+    return { text: 'The Sun holds the planets in their orbits.' };
+  };
+  for (const [size, device, viewport, touch] of [['390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['360x740', 'Pixel 7', { width: 360, height: 740 }, true], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]]) {
+    for (const lab of ['solar', 'space3d']) {
+      // (a browser of its own for each lab and size, started again if this machine's software-drawn 3D
+      // wears it out: dozens of reloads in a row, which a student never does, can crash it here)
+      let own = null, ctx = null, page = null, errors = [];
+      const watch = (p) => { p.on('dialog', (d) => d.dismiss().catch(() => {})); p.on('crash', () => console.log(`  (${lab} @ ${size}: this machine's browser crashed; starting a new one)`)); };
+      const boot = async () => {
+        if (own) await own.close().catch(() => {});
+        own = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
+        const o = await open(own, { device, viewport, touch, scale: 1, server: false, state: { groqKey: 'gsk_test' }, fakeGroq });
+        ctx = o.ctx; page = o.page; errors = o.errors; watch(page);
+      };
+      await boot();
+      const fresh = async () => {
+        if (!page.isClosed()) return page;
+        try { page = await ctx.newPage(); watch(page); page.on('pageerror', (e) => errors.push(e.message)); } catch (e) { await boot(); }
+        return page;
+      };
+      const tap = async (sel) => { const r = await page.locator(sel).first().boundingBox(); if (touch) await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); else await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2); };
+      const seen = new Set(); // (each control once per lab and size: the top bar is checked right after Teach me)
+      for (const [btn, card] of [['.lab-teach', '.lab-tutor'], ['.lab-ask', '.lab-helper'], ['.lab-quiz', '.lab-helper']]) {
+        const go = async () => {
+          await fresh(); if (page.url() !== APP) await page.goto(APP);
+          await page.evaluate((x) => openLabs(x), lab);
+          await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${lab}"] .lab-controls > *`, { timeout: 30000 });
+          await page.waitForTimeout(800);
+          await tap(`.lab-view:not([hidden]) ${btn}`);
+          await page.waitForSelector(`${card}:not([hidden])`, { timeout: 15000 });
+          if (btn === '.lab-teach') { // through the lesson: the card moves at every step
+            await page.waitForSelector('.tut-step', { timeout: 15000 });
+            for (let k = 0; k < 5; k++) { await page.evaluate(() => { const n = document.querySelector('.tut-next'); if (n && n.offsetParent) n.click(); }); await page.waitForTimeout(500); }
+          } else await page.waitForTimeout(1500);
+        };
+        for (let attempt = 0; attempt < 2; attempt++) try {
+          await go();
+          const head = await page.evaluate(() => Math.round(document.querySelector('.lab-view:not([hidden]) .lab-head').getBoundingClientRect().bottom));
+          const cardTop = await page.evaluate((c) => { const e = document.querySelector(`${c}:not([hidden])`); return e ? Math.round(e.getBoundingClientRect().top) : 9999; }, card);
+          if (cardTop < head) bad.push(`${lab} ${btn} @ ${size}: the card (top ${cardTop}) is over the top bar (bottom ${head})`);
+          const issues = await tapResponseIssues(page, { touch, scope: `.lab-view:not([hidden]) .lab-head, ${card}, .lab-view:not([hidden]) .lab-controls`, perKind: 1, max: 8, seen, // (the top bar once per lab and size, the card, and the lab's first controls) skip: /delete|sign out/i,
+            reopen: async () => { await fresh(); await page.goto(APP); await go(); return page; } });
+          issues.filter((i) => i.cause !== 'blocked').forEach((i) => bad.push(`${lab} after ${btn} @ ${size}: [${i.cause}] ${i.what}`));
+          // and Back, from right here, goes to the shelf (the lab is opened again only if the check left it)
+          await fresh();
+          const still = await page.evaluate(([l, c]) => !!document.querySelector(`.lab-view:not([hidden])[data-lab="${l}"]`) && !!document.querySelector(`${c}:not([hidden])`), [lab, card]).catch(() => false);
+          if (!still) { await page.goto(APP); await go(); }
+          await tap('.lab-view:not([hidden]) .lab-back');
+          await page.waitForSelector('.labs:not([hidden]) .labs-shelf:not([hidden])', { timeout: 8000 }).catch(() => bad.push(`${lab} after ${btn} @ ${size}: Back didn’t go to the shelf`));
+          break;
+        } catch (e) {
+          // (this machine's browser gave out: once more in a new one; anything else is a real failure)
+          if (attempt === 0 && /closed|crash|Target|new tab/i.test(e.message)) { await boot(); continue; }
+          bad.push(`${lab} after ${btn} @ ${size}: ${e.message.split('\n')[0]}`); break;
+        }
+        await fresh(); await page.goto(APP).catch(() => {});
+      }
+      if (errors.length) bad.push(`${lab} @ ${size}: page errors: ${errors.join('; ')}`);
+      await own.close().catch(() => {});
+    }
+  }
+  expect(!bad.length, bad.join('\n'));
 });
 
 test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce Motion stops movement; buttons have 3 sizes and pressed, disabled and loading states', async (b) => {

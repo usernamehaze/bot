@@ -174,9 +174,10 @@ function installTapWatch() {
       if (m.type === 'attributes' && (/^data-tw/.test(m.attributeName) || m.oldValue === m.target.getAttribute(m.attributeName))) continue; // (set to what it was: nothing changed)
       if (tw.quiet) { tw.noisy.add(m.target); continue; }
       if (!tw.t0 || tw.noisy.has(m.target)) continue;
-      // Cassie's cursor and her face follow every finger anywhere: that is not this control answering
+      // Cassie's cursor and her face follow every finger anywhere, the tutor's finger follows what it
+      // points at, and a 3D picture's name tags follow the picture: that is not this control answering
       const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
-      if (el && (el.closest('#cassie-cursor') || (el.closest('svg') && el.closest('svg').querySelector('.cb-all')))) continue;
+      if (el && (el.closest('#cassie-cursor, .tut-finger, .tut-ring, .lab3d-labels, .x3d-labels') || (el.closest('svg') && el.closest('svg').querySelector('.cb-all')))) continue;
       const onCassie = tw.armed && tw.armed.closest && tw.armed.closest('#mascot'); // (unless it was Cassie herself who was tapped)
       if (el && !onCassie && ((el.id === 'mascot' && m.type === 'attributes') || el.closest('#mascot-bubble'))) continue; // (the mascot gliding to its spot, and her bubble's own timer)
       if (m.type === 'attributes' && m.target.parentElement && tw.noisy.has(m.target.parentElement) && m.attributeName === 'style') continue;
@@ -306,6 +307,14 @@ async function tapResponseIssues(page, o) {
   await page.evaluate(installTapWatch);
   const steadyKeys = await learnSteady(page);
   let list = (await page.evaluate(controlsNow)).filter((c) => !o.only || o.only.has(c.key));
+  // o.scope: only controls inside what this selector matches (a lab's top bar and the card that's open, say)
+  // (in the order the selectors are listed: the first part's controls first)
+  if (o.scope) {
+    const where = await page.evaluate(([keys, sels]) => keys.map((k) => { const e = document.querySelector(k); return e ? sels.findIndex((sel) => e.closest(sel)) : -1; }), [list.map((c) => c.key), o.scope.split(',').map((x) => x.trim())]);
+    list = list.map((c, i) => [c, where[i]]).filter(([, w]) => w >= 0).sort((a, b) => a[1] - b[1]).map(([c]) => c);
+  }
+  // o.max: at most this many controls in all (after the rules above)
+  if (o.max && !o.only) list = list.slice(0, o.max);
   // o.seen: controls already checked on another screen (the tab bar is on almost every one) are not tapped again
   if (o.seen && !o.only) list = list.filter((c) => { if (o.seen.has(c.name)) return false; o.seen.add(c.name); return true; });
   // o.perKind: at most this many controls of the same kind (the same tag and classes) on a screen

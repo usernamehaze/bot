@@ -1345,7 +1345,8 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
 .x3d-label.on { background: #fff; color: #111; }
 .x3d-label.on::before { background: #111; }
 .x3d-top {
-  position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  /* (above the tutor's card and Ask Cassie's panel, so Close and the top buttons always take a tap) */
+  position: absolute; z-index: 262; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: calc(12px + var(--safe-top, 0px)) 16px 8px;
 }
 .x3d-btn, .x3d-switch button, .x3d-chip, .x3d-act, .x3d-sheet-x {

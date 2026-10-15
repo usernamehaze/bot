@@ -337,3 +337,19 @@ export function integrate(f, a, b, n = 600) {
   return (s * h) / 3;
 }
 export const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+
+// The top bar of a lab or a 3D view (Back, Teach me, Ask Cassie…): the floating cards (the tutor, Ask
+// Cassie) stay below it, so its buttons can always be tapped. Keeps --bar-bottom (px) on the view current.
+export function watchTopBar(view) {
+  const bar = view.querySelector('.lab-head, .x3d-top');
+  const set = () => {
+    const b = bar && bar.getClientRects().length ? Math.round(bar.getBoundingClientRect().bottom) : 0;
+    view.style.setProperty('--bar-bottom', b + 'px');
+    return b;
+  };
+  set();
+  const ro = bar && window.ResizeObserver ? new ResizeObserver(set) : null;
+  if (ro) ro.observe(bar);
+  addEventListener('resize', set);
+  return { bottom: set, stop() { if (ro) ro.disconnect(); removeEventListener('resize', set); } };
+}
