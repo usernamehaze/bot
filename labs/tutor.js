@@ -85,6 +85,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
       <button type="button" class="tut-icon tut-x" aria-label="Stop teaching">✕</button></div>
     <button type="button" class="tut-pill" aria-label="Show Cassie’s card again">${CURSOR}<span class="tut-pill-text">Cassie is teaching</span></button>
     <p class="tut-say" aria-live="polite"></p>
+    <button type="button" class="tut-btn tut-hear" hidden aria-label="Hear this step again">Hear it again</button>
     <div class="tut-resume" hidden><button type="button" class="tut-btn tut-go tut-continue">Continue</button><button type="button" class="tut-btn tut-restart">Start over</button></div>
     <div class="tut-nav" hidden><button type="button" class="tut-btn tut-prev" aria-label="Back a step">‹ Back</button><span class="tut-step"></span><button type="button" class="tut-btn tut-next">Next ›</button></div>
     <form class="tut-ask"><input type="text" placeholder="Ask anything: “how do I use this?”" aria-label="Ask Cassie how to do something here" enterkeyhint="send">
@@ -240,11 +241,17 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     setTimeout(() => { if (alive && pointed === t) dodge(t); }, 400);
     return t;
   }
+  // (when a step couldn't be said, it stays on screen with a button to hear it again: never a pop up)
+  const hearBtn = $('.tut-hear');
   function voice(text) {
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } talking = null; }
+    hearBtn.hidden = true;
     if (!voiceOn || !(speak || lessonVoice)) return new Promise((r) => setTimeout(r, Math.min(9000, 1200 + text.length * 45)));
-    try { talking = lessonVoice ? lessonVoice.speak(text) : speak(text); } catch (e) { talking = null; }
-    return talking && talking.done ? talking.done : Promise.resolve();
+    let me = null;
+    try { me = talking = lessonVoice ? lessonVoice.speak(text) : speak(text); } catch (e) { talking = null; hearBtn.hidden = false; }
+    const done = me && me.done ? me.done : Promise.resolve();
+    done.then((r) => { if (alive && talking === me && r && r.status === 'error' && !r.muted) hearBtn.hidden = false; }, () => {});
+    return done;
   }
   function show(k) {
     if (!steps[k]) return;
@@ -307,6 +314,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     clearPoint();
     if (talking) { try { talking.stop(); } catch (e) { /* ignore */ } talking = null; }
     steps = []; finished = false; $('.tut-nav').hidden = true; $('.tut-resume').hidden = true;
+    hearBtn.hidden = true;
     sayEl.textContent = 'Let me look at your screen…';
     pillText.textContent = 'Cassie is thinking…';
     box.classList.add('thinking');
@@ -354,6 +362,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
     $('.tut-continue').focus({ preventScroll: true });
   }
   $('.tut-prev').addEventListener('click', () => { if (at > 0) show(at - 1); });
+  hearBtn.addEventListener('click', () => { if (steps[at]) voice(steps[at].say); });
   $('.tut-ask').addEventListener('submit', (e) => { e.preventDefault(); const q = input.value; if (!q.trim()) { input.focus(); return; } input.value = ''; teach(q); }); // (nothing typed yet: the box is where to type)
   $('.tut-voice').addEventListener('click', (e) => {
     voiceOn = !voiceOn;
