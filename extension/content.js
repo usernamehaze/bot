@@ -198,6 +198,17 @@
     .answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.25); }
     .copy-btn { background: none; border: 1px solid rgba(127,127,127,.4); color: inherit; border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .copy-btn:hover { background: rgba(127,127,127,.12); }
+    /* Code: Simple or Complete first, then the code in a box with its own copy buttons */
+    .level-row { display: flex; flex-direction: column; gap: 6px; }
+    .level-btn { background: none; color: inherit; border: 1px solid rgba(127,127,127,.45); border-radius: 8px; padding: 8px 10px; text-align: left; font: 600 12px/1.3 inherit; font-family: inherit; cursor: pointer; }
+    .level-btn:hover { background: rgba(127,127,127,.12); }
+    .level-btn.last { border-color: currentColor; border-width: 2px; }
+    .code-box { margin: 8px 0; border-radius: 8px; overflow: hidden; background: #0d0d12; }
+    .code-box .code-bar { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .code-box .code-bar button { background: none; border: 1px solid rgba(255,255,255,.4); color: #f2f2f5; border-radius: 6px; padding: 4px 10px; font: 600 11px/1.2 inherit; font-family: inherit; cursor: pointer; }
+    .code-box .code-bar button:hover { background: rgba(255,255,255,.12); }
+    .body .code-box pre { margin: 0; border-radius: 0; max-height: 320px; overflow: auto; }
+    .code-note { font-size: 11px; font-weight: 600; margin: 0 0 6px; }
     .followup-row { display: flex; gap: 6px; margin-top: 8px; }
     .followup-input { flex: 1; box-sizing: border-box; padding: 6px 9px; border: 1px solid rgba(127,127,127,.4); border-radius: 6px; font-size: 12px; font-family: inherit; background: transparent; color: inherit; }
     .followup-send { background: #1c1c24; color: #fff; border: none; border-radius: 6px; padding: 0 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -917,7 +928,9 @@
     });
     actions.appendChild(copyBtn);
     body.appendChild(actions);
-
+    followUp(rect);
+  }
+  function followUp(rect) {
     const row = document.createElement('div');
     row.className = 'followup-row';
     const input = document.createElement('input');
@@ -965,7 +978,18 @@
         if (myGen !== gen) return;
         convo.push({ role: 'assistant', content: full });
         setEmotion('happy');
-        renderAnswerView(full || '(no response)', rect);
+        if (!codeRun) { renderAnswerView(full || '(no response)', rect); return; }
+        const m = /```([a-zA-Z0-9+#.\-]*)[^\n]*\n([\s\S]*?)```/.exec(full || '');
+        const python = m && (/^(py|python3?)?$/i.test(m[1]) && !/^\s*(#include|public class|function |const |let |import java)/m.test(m[2]));
+        const problems = python ? pyCheck(m[2]) : [];
+        // a problem found: Cassie fixes it once; if it is still there, the code shows with a note
+        if (problems.length && !codeRun.retried) {
+          codeRun.retried = true;
+          convo.push({ role: 'user', content: `That code has a problem: ${problems.join('; ')}. Send the whole fixed code again in one code block, then at most 3 short sentences on how to run it. No other text.` });
+          runConversation(rect);
+          return;
+        }
+        renderCodeView(full || '(no response)', rect, problems);
       },
       onError: (err) => {
         if (myGen !== gen) return;
@@ -1041,6 +1065,7 @@
     const prompt = `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}`;
     convo = [{ role: 'user', content: prompt }];
     convoLabel = q;
+    codeRun = null;
     runConversation(rect);
   }
 
@@ -1060,6 +1085,7 @@
       const reply = await askVision(image, `This is a screenshot of what a student is looking at (it may be a PDF page, slides, or a document). Read ALL the visible text, figures, tables and diagrams carefully, then answer their request: "${q}". Use short bullets with bold key terms. If it's a question, teach the reasoning step by step. Only use what you can actually see.`, null, 1400, undefined, { kind: 'page', q });
       if (myGen !== gen) return;
       convo = [{ role: 'user', content: `About the page on my screen: ${q}` }, { role: 'assistant', content: reply }];
+      codeRun = null;
       convoLabel = q;
       setEmotion('happy');
       const extra = fileTab() ? '\n\n*I can only see the part on your screen. For the whole file, open the right-edge tab and tap the page icon. I’ll read all of it in the Cassie app.*' : '';
@@ -1719,12 +1745,164 @@
   }
 
   body.addEventListener('click', (e) => {
+    const lv = e.target.closest('.level-btn');
+    if (lv) { try { chrome.storage.local.set({ cassieCodeLevel: lv.dataset.level }); } catch (err) { /* only remembering */ } runCode(pendingText, pendingRect, lv.dataset.level); return; }
     const btn = e.target.closest('.choice-btn');
     if (!btn) return;
+    if (btn.dataset.mode === 'code') { showCodeLevels(pendingText, pendingRect); return; }
     runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
   });
 
+  /* ---------- Code: Simple or Complete, code that runs as it is, names of the student's own ---------- */
+  function showCodeLevels(text, rect) {
+    body.classList.remove('muted');
+    body.innerHTML = `
+      <div class="question">What kind of code?</div>
+      <div class="level-row">
+        <button type="button" class="level-btn" data-level="simple">Simple (short and basic)</button>
+        <button type="button" class="level-btn" data-level="complete">Complete (longer, with classes and functions)</button>
+      </div>`;
+    positionPopover(rect);
+    // the last choice is marked (and focused), so Enter picks it again
+    try {
+      chrome.storage.local.get('cassieCodeLevel').then(({ cassieCodeLevel }) => {
+        const b = body.querySelector(`.level-btn[data-level="${cassieCodeLevel === 'complete' ? 'complete' : 'simple'}"]`);
+        if (b) { b.classList.add('last'); b.focus({ preventScroll: true }); }
+      }).catch(() => {});
+    } catch (e) { /* storage gone after an update: no mark */ }
+  }
+  // Each student gets their own names: a theme and a word picked from a hash of this install's
+  // random id (the id never leaves the device). The same student always gets the same ones.
+  const CODE_THEMES = ['ocean', 'space', 'kitchen', 'music', 'garden', 'sports', 'library', 'weather', 'farm', 'city', 'jungle', 'bakery', 'trains', 'robots', 'museum', 'festival'];
+  const CODE_WORDS = ['Swift', 'Bright', 'Clever', 'Steady', 'Lucky', 'Bold', 'Quiet', 'Sunny', 'Brave', 'Nimble', 'Happy', 'Golden'];
+  async function codeNames() {
+    let id = '';
+    try {
+      ({ cassieUid: id } = await chrome.storage.local.get('cassieUid'));
+      if (!id) { id = crypto.randomUUID(); await chrome.storage.local.set({ cassieUid: id }); }
+    } catch (e) { id = String(Math.random()); }
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h >>>= 0;
+    return { theme: CODE_THEMES[h % CODE_THEMES.length], word: CODE_WORDS[Math.floor(h / CODE_THEMES.length) % CODE_WORDS.length] };
+  }
+  let codeRun = null; // { level, retried } while the conversation is about code
+  async function runCode(text, rect, level) {
+    const { theme, word } = await codeNames();
+    const complete = level === 'complete';
+    const prompt = `Write code for this situation for a student.
+Size: ${complete ? 'Complete: classes and functions with a clear structure, up to about 120 lines.' : 'Simple: short and basic, one or two functions and no classes, under 30 lines.'}
+Language: Python, unless the text names another language; then use that one.
+It must run exactly as it is when pasted into VS Code or a Google Colab cell:
+- Use only the standard library, unless the task truly needs a package; then the very first line is a comment like: # pip install requests
+- No placeholders (like your_data_here or TODO). Put small sample input right in the code.
+- End with a main block (in Python: if __name__ == "__main__":) that runs it and prints a result.
+Names: use names from the theme "${theme}" for the classes, functions and variables, and put the word "${word}" in the main ${complete ? 'class' : 'function'} name. The logic stays the usual, correct one.
+Reply with exactly one code block, then at most 3 short sentences on how to run it in VS Code or Colab. No other text.
+
+Situation: "${text}"`;
+    convo = [{ role: 'user', content: prompt }];
+    convoLabel = `Code: ${text}`;
+    codeRun = { level, retried: false };
+    runConversation(rect);
+  }
+  // A quick Python check before the code is shown (no Python runs here): brackets and quotes that
+  // close, a block after every "if/for/def…:", indents that line up, no placeholders, a main block.
+  function pyCheck(code) {
+    const out = [], stack = [], pairs = { ')': '(', ']': '[', '}': '{' };
+    let clean = '', inStr = null, line = 1;
+    const depthAt = [0]; // bracket depth at the start of each line
+    for (let i = 0; i < code.length;) {
+      const ch = code[i];
+      if (inStr) {
+        if (inStr.length === 3 ? code.startsWith(inStr, i) : ch === inStr) { i += inStr.length; inStr = null; clean += 'S'; continue; }
+        if (ch === '\\') { i += 2; continue; }
+        if (ch === '\n') {
+          if (inStr.length === 1) { out.push(`a string on line ${line} is not closed`); inStr = null; }
+          line++; depthAt[line - 1] = -1; clean += '\n'; // (a line inside a long string is not code)
+        }
+        i++; continue;
+      }
+      if (ch === '#') { while (i < code.length && code[i] !== '\n') i++; continue; }
+      if (code.startsWith('"""', i) || code.startsWith("'''", i)) { inStr = code.slice(i, i + 3); i += 3; continue; }
+      if (ch === '"' || ch === "'") { inStr = ch; i++; continue; }
+      if ('([{'.includes(ch)) stack.push([ch, line]);
+      else if (')]}'.includes(ch)) { const top = stack.pop(); if (!top || top[0] !== pairs[ch]) { out.push(`the "${ch}" on line ${line} has no match`); return out; } }
+      clean += ch;
+      if (ch === '\n') { line++; depthAt[line - 1] = stack.length; }
+      i++;
+    }
+    if (inStr) out.push('a string is never closed');
+    if (stack.length) { const [b, l] = stack[stack.length - 1]; out.push(`the "${b}" on line ${l} is never closed`); }
+    if (out.length) return out;
+    const lines = clean.split('\n'), raw = code.split('\n');
+    if (raw.some((l) => /^\t+ +\S|^ +\t+\S/.test(l)) || (raw.some((l) => /^\t/.test(l)) && raw.some((l) => /^ +\S/.test(l)))) out.push('it mixes tabs and spaces');
+    const indents = [0];
+    let opener = false;
+    for (let k = 0; k < lines.length; k++) {
+      if (depthAt[k] !== 0 || !lines[k].trim()) continue; // inside brackets or a long string, or blank
+      const ind = raw[k].match(/^[ \t]*/)[0].replace(/\t/g, '    ').length;
+      if (opener) { if (ind <= indents[indents.length - 1]) { out.push(`line ${k + 1} should be indented under the line before`); break; } indents.push(ind); }
+      else if (ind > indents[indents.length - 1]) { out.push(`line ${k + 1} is indented but nothing above it opens a block`); break; }
+      else { while (indents.length > 1 && ind < indents[indents.length - 1]) indents.pop(); if (ind !== indents[indents.length - 1]) { out.push(`line ${k + 1} doesn't line up with the lines above it`); break; } }
+      opener = /^\s*(async\s+)?(def|class|if|elif|else|for|while|try|except|finally|with|match|case)\b.*:\s*$/.test(lines[k]);
+    }
+    if (opener) out.push('the last line opens a block with nothing in it');
+    if (/your[_ ]\w*[_ ]?here|<your [^>]+>|\bTODO\b|^\s*\.\.\.\s*$/im.test(code)) out.push('it has a placeholder to fill in');
+    if (!/if\s+__name__\s*==\s*["']__main__["']\s*:/.test(code)) out.push('it has no main block (if __name__ == "__main__":) that runs it');
+    return out;
+  }
+  // copy, with a fallback where the page blocks the clipboard
+  function copyText(text, btn, label) {
+    const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = label; }, 2000); };
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* blocked too */ }
+      ta.remove();
+      if (ok) done(); else btn.textContent = 'Select the code to copy';
+    };
+    // (some pages leave the clipboard's answer hanging: the fallback copies if it hasn't answered soon)
+    let settled = false;
+    const once = (f) => () => { if (settled) return; settled = true; f(); };
+    const ok = once(done), no = once(fallback);
+    setTimeout(no, 600);
+    try { navigator.clipboard.writeText(text).then(ok, no); } catch (e) { no(); }
+  }
+  // The code in its own box: Copy code (exactly the code) and Copy for Colab (one cell: a
+  // "pip install" line becomes "!pip install"), the check's note if it still found a problem,
+  // then at most 3 sentences on how to run it.
+  function renderCodeView(full, rect, problems) {
+    const m = /```([a-zA-Z0-9+#.\-]*)[^\n]*\n([\s\S]*?)```/.exec(full);
+    if (!m) { renderAnswerView(full, rect); return; }
+    const code = m[2].replace(/\s+$/, '');
+    const colab = code.replace(/^(\s*)#?\s*pip install /gm, '$1!pip install ');
+    const rest = (full.slice(0, m.index) + ' ' + full.slice(m.index + m[0].length)).replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' ').trim();
+    const how = (rest.match(/[^.!?]+[.!?]+/g) || (rest ? [rest] : [])).slice(0, 3).join(' ').trim();
+    body.classList.remove('muted');
+    body.innerHTML = '';
+    const box = document.createElement('div'); box.className = 'code-box';
+    const bar = document.createElement('div'); bar.className = 'code-bar';
+    const copyBtn = document.createElement('button'); copyBtn.type = 'button'; copyBtn.className = 'code-copy'; copyBtn.textContent = 'Copy code';
+    copyBtn.addEventListener('click', () => copyText(code, copyBtn, 'Copy code'));
+    const colabBtn = document.createElement('button'); colabBtn.type = 'button'; colabBtn.className = 'code-colab'; colabBtn.textContent = 'Copy for Colab';
+    colabBtn.addEventListener('click', () => copyText(colab, colabBtn, 'Copy for Colab'));
+    bar.append(copyBtn, colabBtn);
+    const pre = document.createElement('pre'), c = document.createElement('code');
+    c.textContent = code; pre.appendChild(c);
+    box.append(bar, pre);
+    body.appendChild(box);
+    if (problems && problems.length) { const n = document.createElement('p'); n.className = 'code-note'; n.textContent = 'This code may need a small fix before it runs: ' + problems[0] + '.'; body.appendChild(n); }
+    if (how) { const p = document.createElement('p'); p.textContent = how; body.appendChild(p); }
+    followUp(rect);
+    // back to the top: while it was being written the popup followed the end, which left the copy
+    // buttons scrolled out of sight above
+    body.scrollTop = 0;
+  }
+
   function runExplainOrAnswer(text, rect, mode) {
+    codeRun = null;
     let prompt;
     if (mode === 'answer') {
       prompt = `Work out the correct answer to this carefully and double-check it before responding, then give ONLY the final answer. No explanation, no extra words. If it's multiple choice, give the correct option:\n\n"${text}"`;
