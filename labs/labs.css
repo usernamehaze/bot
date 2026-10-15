@@ -515,7 +515,10 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 
 /* Teach me: Cassie the tutor (labs/tutor.js) */
 .lab-teach[aria-pressed="true"] { background: #fff; color: #111; }
-.lab-tutor { position: fixed; z-index: 260; left: 16px; bottom: 16px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 12px 14px; border-radius: 18px;
+/* --tut-s: the card's size (pinched with two fingers, or Ctrl + scroll; 0.7 to 1.6): the card and its
+   words grow and shrink together, its buttons never below 44px to tap */
+.lab-tutor { --tut-s: 1; position: fixed; z-index: 260; left: 16px; bottom: 16px; width: min(calc(440px * var(--tut-s)), calc(100vw - 32px)); box-sizing: border-box; padding: calc(12px * var(--tut-s)) calc(14px * var(--tut-s)); border-radius: 18px;
+  font-size: calc(1rem * var(--tut-s)); touch-action: pan-y; max-height: calc(100vh - var(--bar-bottom, 0px) - 24px); max-height: calc(100dvh - var(--bar-bottom, 0px) - 24px); overflow-y: auto;
   background: rgba(16, 17, 22, .94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); color: #f2f2f4; }
 .tut-head { display: flex; align-items: center; gap: 8px; }
 .tut-who { display: inline-flex; align-items: center; gap: 6px; flex: 1; font-size: .82rem; letter-spacing: .02em; }
@@ -530,6 +533,8 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 .tut-step { flex: 1; text-align: center; font-size: .78rem; opacity: .65; }
 .tut-btn { border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .08); color: inherit; border-radius: 99px; padding: 7px 13px; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
 .lab-tutor .tut-next, .lab-tutor .tut-go { background: #fff; color: #111; border-color: transparent; }
+.lab-tutor .tut-who { font-size: .82em; } .lab-tutor .tut-icon { font-size: .74em; } .lab-tutor .tut-say { font-size: 1em; }
+.lab-tutor .tut-step { font-size: .78em; } .lab-tutor .tut-btn { font-size: .84em; } .lab-tutor .tut-pill { font-size: .88em; }
 .lab-tutor.tut-top { bottom: auto; top: calc(var(--bar-bottom, 60px) + 6px); }
 .tut-btn:disabled { opacity: .35; cursor: default; }
 .tut-ask { display: flex; gap: 6px; }
@@ -546,8 +551,9 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 .tut-ring { position: fixed; left: 0; top: 0; z-index: 261; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; pointer-events: none; animation: tut-glow 1.4s ease-in-out infinite; }
 .lab-view.tutoring .lab-panel { padding-bottom: 230px; }
 @media (max-width: 760px) {
-  .lab-tutor { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: auto; padding: 10px 12px; max-height: calc(100dvh - var(--bar-bottom, 0px) - 24px); overflow-y: auto; }
+  .lab-tutor { left: 10px; right: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(calc((100vw - 20px) * var(--tut-s)), calc(100vw - 20px)); padding: calc(10px * var(--tut-s)) calc(12px * var(--tut-s)); max-height: calc(100dvh - var(--bar-bottom, 0px) - 24px); overflow-y: auto; }
   .tut-say { font-size: .95rem; margin: 8px 0; }
+  .lab-tutor .tut-say { font-size: .95em; }
   .lab-view.tutoring .lab-body { padding-bottom: 210px; }
 }
 /* the card: dragged by its top, made small to a pill, and the choice to carry on after closing it */
@@ -634,7 +640,7 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 @media (pointer: coarse) {
   .labs-x { width: 44px; height: 44px; }
   .lab-back, .labs-search, .labs-chips button, .lab-btn, .lab-seg button, .tut-btn, .tut-icon, .lab-tries-toggle, .hp-opt, .hp-ask input, .hp-ask button { min-height: 44px; }
-  .tut-icon, .lab-tries-toggle { min-width: 44px; }
+  .tut-icon, .lab-tries-toggle, .lab-tutor .tut-btn { min-width: 44px; }
   /* the tick: a 44px button with the small box drawn inside it, so it never overlaps the challenge next to it */
   .lab-tick { width: 44px; height: 44px; margin: -11px -4px -11px -13px; border: 0 !important; background: transparent !important; border-radius: 12px; }
   .lab-tick::before { display: none; }

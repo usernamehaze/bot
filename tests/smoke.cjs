@@ -2958,6 +2958,93 @@ test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom
   await ctx.close();
 });
 
+// The "Cassie is teaching" card is resized with two fingers (pinch in smaller, out bigger), or Ctrl +
+// scroll on a computer: 70% to 160%, always whole on the screen, its buttons still 44px, the page never
+// zoomed, one finger still drags it, and the size is kept for next time.
+test('Teach me card: pinch in and out to resize it (70% to 160%), the page never zooms, it stays on screen, buttons stay tappable, one finger still drags it, Ctrl + scroll on a computer, and the size is remembered', async (b) => {
+  const { tapTargetIssues } = require('./ui-checks.cjs');
+  const fakeGroq = () => ({ text: JSON.stringify({ steps: [{ say: 'Add a proton to change the element.', point: 0 }, { say: 'Now look at the mass number.', point: 0 }] }) });
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq });
+  const cdp = await ctx.newCDPSession(page);
+  const teach = async () => {
+    await page.evaluate(() => openLabs('atom'));
+    await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 20000 });
+    await page.tap('.lab-teach');
+    await page.waitForFunction(() => /Add a proton/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
+    await page.waitForTimeout(300);
+  };
+  // the card's size: its words against today's 16px, and where it sits
+  const card = () => page.evaluate(() => { const c = document.querySelector('.lab-tutor'), r = c.getBoundingClientRect(); return { k: parseFloat(getComputedStyle(c).fontSize) / 16, x: r.left, y: r.top, w: r.width, h: r.height, right: r.right, bottom: r.bottom, bar: document.querySelector('.lab-view:not([hidden]) .lab-head').getBoundingClientRect().bottom, zoom: visualViewport.scale }; });
+  // two fingers on the card, from one spread to another (as a phone sends it)
+  const pinch = async (from, to) => {
+    const c = await card(), x = c.x + c.w / 2, y = c.y + Math.min(c.h / 2, 60);
+    const pts = (d) => [{ x: x - d / 2, y, id: 1 }, { x: x + d / 2, y, id: 2 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(from) });
+    for (let i = 1; i <= 10; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(from + ((to - from) * i) / 10) }); await page.waitForTimeout(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(400);
+    return card();
+  };
+  const onScreen = (c, why) => {
+    expect(c.zoom === 1, why + ': the page zoomed (' + c.zoom + ')');
+    expect(c.x >= 0 && c.right <= 390 + 0.5 && c.y >= c.bar - 0.5 && c.bottom <= 844 + 0.5, why + ': the card is not whole on the screen below the top bar: ' + JSON.stringify(c));
+  };
+  // (the card's own buttons; the lab's under the card are another matter)
+  const tappable = async (why) => { const bad = (await tapTargetIssues(page)).filter((x) => /^(\.\S+ > )?\S*tut-/.test(x)); expect(!bad.length, why + ': ' + bad.join(' | ')); };
+  await teach();
+  const c0 = await card();
+  expect(Math.abs(c0.k - 1) < 0.02, 'it starts at today’s size: ' + c0.k);
+  // pinch in: smaller, never below 70%
+  const small = await pinch(220, 40);
+  expect(small.k < c0.k - 0.05 && small.k >= 0.7 - 0.01 && small.w < c0.w, `pinching in makes it smaller (${c0.k.toFixed(2)} → ${small.k.toFixed(2)}, ${Math.round(c0.w)} → ${Math.round(small.w)}px)`);
+  onScreen(small, 'small');
+  await tappable('at its smallest every button is still tappable');
+  // pinch out: bigger, never above 160%
+  const big = await pinch(40, 300);
+  expect(big.k > small.k + 0.3 && big.k <= 1.6 + 0.01, `pinching out makes it bigger (${small.k.toFixed(2)} → ${big.k.toFixed(2)})`);
+  onScreen(big, 'big');
+  await tappable('at its biggest every button is still tappable');
+  // one finger on its top still drags it
+  const head = await page.locator('.tut-head').boundingBox();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: head.x + 40, y: head.y + head.height / 2, id: 1 }] });
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: head.x + 40, y: head.y + head.height / 2 - i * 20, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(300);
+  const dragged = await card();
+  expect(dragged.y < big.y - 40 && Math.abs(dragged.k - big.k) < 0.01, `one finger drags it (top ${Math.round(big.y)} → ${Math.round(dragged.y)}) without resizing it`);
+  onScreen(dragged, 'dragged');
+  // kept for next time
+  await page.reload();
+  await teach();
+  await page.waitForTimeout(300);
+  const again = await card();
+  expect(Math.abs(again.k - big.k) < 0.03, `the size is remembered (${big.k.toFixed(2)} → ${again.k.toFixed(2)})`);
+  onScreen(again, 'after reloading');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // on a computer: Ctrl + scroll over the card does the same
+  const pc = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq });
+  await pc.page.evaluate(() => { try { localStorage.removeItem('cassie.labs.tutorSize'); } catch (e) { /* none */ } });
+  await pc.page.evaluate(() => openLabs('atom'));
+  await pc.page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 20000 });
+  await pc.page.click('.lab-teach');
+  await pc.page.waitForFunction(() => /Add a proton/.test((document.querySelector('.tut-say') || {}).textContent || ''), null, { timeout: 15000 });
+  const size = () => pc.page.evaluate(() => { const c = document.querySelector('.lab-tutor'); return { k: parseFloat(getComputedStyle(c).fontSize) / 16, w: c.getBoundingClientRect().width, scroll: document.querySelector('.lab-view:not([hidden]) .lab-body') ? 0 : 0 }; });
+  const p0 = await size(), cb = await pc.page.locator('.lab-tutor').boundingBox();
+  await pc.page.mouse.move(cb.x + cb.width / 2, cb.y + 20);
+  await pc.page.keyboard.down('Control');
+  for (let i = 0; i < 4; i++) await pc.page.mouse.wheel(0, -120);
+  await pc.page.keyboard.up('Control');
+  await pc.page.waitForTimeout(300);
+  const p1 = await size();
+  expect(p1.k > p0.k + 0.2 && p1.w > p0.w && p1.k <= 1.6 + 0.01, `Ctrl + scroll makes it bigger on a computer (${p0.k.toFixed(2)} → ${p1.k.toFixed(2)}, ${Math.round(p0.w)} → ${Math.round(p1.w)}px)`);
+  await pc.page.mouse.wheel(0, 120); // (a scroll without Ctrl doesn't resize it)
+  await pc.page.waitForTimeout(200);
+  expect(Math.abs((await size()).k - p1.k) < 0.01, 'a plain scroll does not resize it');
+  expect(pc.errors.length === 0, 'page errors: ' + pc.errors.join('; '));
+  await pc.ctx.close();
+});
+
 test('Ask Cassie and Quiz me stay inside the lab: a question and a 2-question quiz in Build an atom and the Body System (none in the space labs), and the chat never shows', async (b) => {
   const asked = [], bodies = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
