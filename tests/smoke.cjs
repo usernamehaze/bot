@@ -4197,12 +4197,13 @@ test('highlight text in an answer → Explain; switched off, highlighting is jus
   await page.waitForSelector('#highlight-popover >> text=Simply put', { timeout: 10000 });
   await page.click('#highlight-popover-close');
   // OFF, with the switch in the sidebar: highlighting is just highlighting
-  await page.evaluate(() => setSideOpen(true));
-  await page.waitForTimeout(300);
+  await page.evaluate(() => (sideWide.matches ? setSideOpen(true) : openSidebar())); // (a phone: the menu)
+  await page.waitForTimeout(400);
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/app-hl-switch.png' });
   await page.click('.side-hl');
   expect(await page.evaluate(() => state.highlightHelp === false), 'the sidebar switch turns highlight help off');
-  await page.waitForTimeout(300);
+  await page.evaluate(() => closeSidebar());
+  await page.waitForTimeout(400);
   await a.locator('p').first().selectText(); await page.mouse.up();
   await page.waitForTimeout(800);
   expect(await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
