@@ -22,6 +22,21 @@ const MORE = {
   Uranus: [8.69, 14.5, 97.77, 'It is tipped on its side, so each pole gets about 42 years of sunlight, then 42 years of darkness.'],
   Neptune: [11.15, 17.1, 28.32, 'The windiest planet: winds over 2,000 km/h. It was the first planet found by maths: its place was worked out, and it was spotted there in 1846. (Galileo saw it in 1612 but thought it was a star.)'],
 };
+/* Where things sit in the 3D solar system. One squash for every planet, so the order and the
+   proportions stay true: "Squeezed" is 14 × √(distance in AU), so Neptune still fits; "To scale" is
+   8 × the distance. The planets themselves are drawn far bigger than to scale (planetSize). */
+export const ORBIT_SCALE = { squeezed: (au) => 14 * Math.sqrt(au), true: (au) => 8 * au };
+// how far out the camera may go in the solar system (past Neptune's path, either way)
+export const SOLAR_ZOOM = { squeezed: 260, true: 700 };
+export const planetSize = (p) => 0.18 + 0.32 * (p[6] / 12756) ** 0.5;
+// the Moon's circle round Earth: enlarged like the planets, but always less than half the gap between
+// Earth's path and the nearest point of Venus's or Mars's, so it never touches another planet's path
+export function moonOrbit(mode) {
+  const f = ORBIT_SCALE[mode] || ORBIT_SCALE.squeezed, [V, E, M] = ['Venus', 'Earth', 'Mars'].map((n) => PLANETS.find((x) => x[0] === n));
+  const near = (q) => f(q[1] * (1 - q[2])), far = (q) => f(q[1] * (1 + q[2]));
+  const gap = Math.min(near(E) - far(V), near(M) - far(E));
+  return Math.min(3.2 * planetSize(E), 0.45 * gap);
+}
 const TILT = { Sun: 7.25, Moon: 6.7, Pluto: 122.5 };
 
 /* ---------- the things you can tap at each scale ---------- */
@@ -69,7 +84,7 @@ export const space3dLab = {
   icon: '<circle cx="24" cy="24" r="5"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-20 24 24)"/><circle cx="40" cy="17" r="2.5"/><circle cx="9" cy="31" r="2"/>',
   tries: ['Fly to Jupiter and find the Great Red Spot', 'Zoom out to the Milky Way and find where the Sun is', 'Find the Andromeda Galaxy: the nearest big galaxy'],
   hints: ['Tap Jupiter (the biggest planet, the 5th from the Sun). Turn it round: the spot is a giant storm in its southern half.', 'Tap “Milky Way” under Scale, or keep zooming out past Neptune. Look for “You are here”.', 'Go to the Local Group scale and look for the biggest spiral apart from ours.'],
-  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances the far planets are pulled in; choose “To scale” for true distances (the sizes stay enlarged, at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project): Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
+  about: 'Solar system: the planets are where they really are on today’s date (and move as time runs), on their true elliptical orbits, from JPL’s approximate orbital elements. To fit everything on a screen, the planets are drawn much bigger than they really are, and with “Squeezed” distances every orbit is squashed the same way (by its square root), so the far planets are pulled in but stay in their real order and proportion. The Moon’s distance from Earth is enlarged too, but kept well inside the gap to Venus’s and Mars’s paths; choose “To scale” for true distances (the sizes stay enlarged, at true size every planet would be far smaller than a pixel). The planets wear real maps made from spacecraft pictures (NASA; Earth and the Moon from the three.js project): Earth shows its city lights on the night side, its clouds and the Sun glinting on the oceans. Mercury, Venus’s cloud tops and Uranus are drawn to match photos (there’s no free full map of them), and Saturn’s rings follow their measured layout (the bright B ring, the dark Cassini Division, the A ring). The stars behind are the 9,000 brightest from the Hipparcos satellite’s star map, in their real places.\nMilky Way: a model of a barred spiral with four main arms; the Sun and the labelled objects are placed at their real directions and distances. The exact shape of our galaxy is still being measured.\nLocal Group: galaxies at their real distances and directions (measured values, rounded). Universe: the named clusters are at their real distances; the web of galaxies around them is a model of the cosmic web, not a map.\nNumbers are rounded; moon counts change as new moons are found.',
   mount({ stage, panel, api }) {
     if (!webglOk()) { stage.appendChild(el('p', 'lab-err', esc(errorWords('webgl')))); return {}; }
     // free: 2 views a week; Plus has it always
@@ -164,7 +179,7 @@ export const space3dLab = {
       PLANETS.forEach((p, i) => {
         const name = p[0], n = noise2(i + 5), f = tex[name](n);
         const map = paintTexture(THREE, 512, 256, (g, w, h) => { const img = g.createImageData(w, h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, gg, b] = f(x / w, y / h); const k = (y * w + x) * 4; img.data[k] = r; img.data[k + 1] = gg; img.data[k + 2] = b; img.data[k + 3] = 255; } g.putImageData(img, 0, 0); });
-        const r = 0.18 + 0.32 * (p[6] / 12756) ** 0.5;
+        const r = planetSize(p);
         const pivot = new THREE.Group(); sol.add(pivot);
         const tilt = new THREE.Group(); tilt.rotation.z = (MORE[name][2] * Math.PI) / 180; pivot.add(tilt);
         const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 72, 48), new THREE.MeshStandardMaterial({ map, roughness: 0.9, metalness: 0 }));
@@ -259,7 +274,9 @@ export const space3dLab = {
     }
 
     /* ---------- the solar system moves with time ---------- */
-    const squeeze = (au) => (scaleMode === 'true' ? au * 2.3 : 7 * Math.pow(au, 0.6));
+    const squeeze = (au) => ORBIT_SCALE[scaleMode](au);
+    // (To scale reaches much further out: the zoom goes out far enough to see Neptune and Pluto)
+    const solarMax = () => SOLAR_ZOOM[scaleMode];
     function posOf(p, d) { const q = planetAt(p, d), r = Math.hypot(q.x, q.y), k = squeeze(r) / r; return new THREE.Vector3(q.x * k, 0, -q.y * k); }
     function placeOrbits() {
       if (!THREE) return;
@@ -271,13 +288,14 @@ export const space3dLab = {
       const sun = things.Sun.obj; sun.scale.setScalar(scaleMode === 'true' ? 0.35 : 1);
       const [ast, kui] = groups.solar.userData.belts;
       [[ast, 0.12], [kui, 0.25]].forEach(([b, s]) => { const pos = b.geometry.attributes.position; b.userData.belt.forEach(([a, th, y], k) => { const r = squeeze(a); pos.setXYZ(k, r * Math.cos(th), y * (r / a), r * Math.sin(th)); }); pos.needsUpdate = true; b.material.size = s * (scaleMode === 'true' ? 1.6 : 1); });
+      if (S && level === 'solar') { S.controls.maxDistance = solarMax(); S.camera.far = solarMax() * 40; S.camera.updateProjectionMatrix(); }
       placePlanets();
       if (selected && things[selected] && things[selected].level === 'solar') follow(true);
     }
     function placePlanets() {
       PLANETS.forEach((p) => { const t = things[p[0]]; t.pivot.position.copy(posOf(p, day)); });
-      const moon = things.Moon.obj, e = things.Earth, ang = ((day % 27.32) / 27.32) * Math.PI * 2;
-      moon.position.set(Math.cos(ang) * e.size * 3.2, 0, -Math.sin(ang) * e.size * 3.2);
+      const moon = things.Moon.obj, ang = ((day % 27.32) / 27.32) * Math.PI * 2, mr = moonOrbit(scaleMode);
+      moon.position.set(Math.cos(ang) * mr, 0, -Math.sin(ang) * mr);
       const pl = (day / 365.25 / 248) * Math.PI * 2 + 3.9, pr = squeeze(39.5);
       things.Pluto.obj.position.set(pr * Math.cos(pl), pr * 0.15 * Math.sin(pl * 1.3), -pr * Math.sin(pl));
     }
@@ -305,7 +323,7 @@ export const space3dLab = {
 
     /* ---------- moving between scales, and picking things ---------- */
     const CAM = {
-      solar: { pos: [0, 38, 72], min: 0.4, max: 260, near: 0.01 },
+      solar: { pos: [0, 54, 102], min: 0.4, max: 260, near: 0.01 },
       galaxy: { pos: [0, 70, 85], min: 2, max: 400, near: 0.1 },
       local: { pos: [0, 220, 360], min: 3, max: 2600, near: 0.5 },
       universe: { pos: [0, 900, 1500], min: 20, max: 4500, near: 5 },
@@ -314,9 +332,9 @@ export const space3dLab = {
       if (!S) { level = lv; return; }
       level = lv; selected = null; lastTarget = null; card.hidden = true;
       Object.entries(groups).forEach(([k, g]) => { g.visible = k === lv; });
-      const c = CAM[lv];
-      S.controls.minDistance = c.min; S.controls.maxDistance = c.max;
-      S.camera.near = c.near; S.camera.far = c.max * 40; S.camera.updateProjectionMatrix();
+      const c = CAM[lv], max = lv === 'solar' ? solarMax() : c.max;
+      S.controls.minDistance = c.min; S.controls.maxDistance = max;
+      S.camera.near = c.near; S.camera.far = max * 40; S.camera.updateProjectionMatrix();
       const from = new THREE.Vector3(...c.pos).multiplyScalar(first ? 1 : 1.0);
       S.camera.position.copy(from.clone().multiplyScalar(0.4)); S.controls.target.set(0, 0, 0);
       S.flyTo(new THREE.Vector3(), from.length(), { dir: from.clone(), dur: first ? 1.6 : 1.1 });
