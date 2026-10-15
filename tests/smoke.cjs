@@ -3049,6 +3049,53 @@ test('a pinch in Labs or the 3D body never zooms the whole page (in the chat it 
   await ctx.close();
 });
 
+test('Solar System 3D: every orbit in the real order and AU proportion (one squash for all), the Moon’s path never within one Earth radius of Venus’s or Mars’s in a full year, the zoom reaches Neptune, and the distance facts are real', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
+  const r = await page.evaluate(async () => {
+    const m = await import('./labs/space3d.js'), s = await import('./labs/space.js');
+    const out = {};
+    for (const mode of ['squeezed', 'true']) {
+      const f = m.ORBIT_SCALE[mode], P = s.PLANETS, E = P.find((p) => p[0] === 'Earth');
+      const radii = P.map((p) => [p[0], f(p[1]), p[1]]);
+      // where a planet is drawn on day d (the lab's own placing: its real ellipse, the radius squashed)
+      const at = (p, d) => { const q = s.planetAt(p, d), k = f(q.r) / q.r; return [q.x * k, q.y * k]; };
+      const path = (p) => { const n = 4000, T = s.periodDays(p); return Array.from({ length: n }, (_, k) => at(p, (k / n) * T)); };
+      const moonR = m.moonOrbit(mode), earthR = m.planetSize(E);
+      const paths = { Venus: path(P[1]), Mars: path(P[3]) };
+      let closest = { Venus: Infinity, Mars: Infinity };
+      for (let d = 0; d <= 365.25; d += 0.25) {
+        const [ex, ey] = at(E, d), ang = ((d % 27.32) / 27.32) * Math.PI * 2, mx = ex + Math.cos(ang) * moonR, my = ey + Math.sin(ang) * moonR;
+        for (const k of ['Venus', 'Mars']) for (const [x, y] of paths[k]) { const dd = Math.hypot(mx - x, my - y); if (dd < closest[k]) closest[k] = dd; }
+      }
+      // where Earth's own ball reaches out to: the Moon circles outside it
+      out[mode] = { radii, moonR, earthR, moonSize: earthR * 0.27, closest, zoom: m.SOLAR_ZOOM[mode], neptuneFar: f(P[7][1] * (1 + P[7][2])),
+        earthGapIn: f(E[1] * (1 - E[2])) - f(P[1][1] * (1 + P[1][2])), earthGapOut: f(P[3][1] * (1 - P[3][2])) - f(E[1] * (1 + E[2])) };
+    }
+    return out;
+  });
+  const sq = { squeezed: (x) => Math.sqrt(x), true: (x) => x };
+  for (const [mode, o] of Object.entries(r)) {
+    const names = o.radii.map((x) => x[0]);
+    expect(names.join() === 'Mercury,Venus,Earth,Mars,Jupiter,Saturn,Uranus,Neptune', mode + ': all eight planets in order: ' + names);
+    expect(o.radii.every((x, i) => i === 0 || x[1] > o.radii[i - 1][1]), mode + ': orbits grow outward in the real order: ' + JSON.stringify(o.radii));
+    const [, rE, aE] = o.radii[2];
+    for (const [n, rr, a] of o.radii) expect(Math.abs(rr / rE - sq[mode](a / aE)) < 1e-9, `${mode}: ${n}’s orbit is ${(rr / rE).toFixed(4)} × Earth’s, the real ${(a / aE).toFixed(4)} AU ratio squashed the same way should give ${sq[mode](a / aE).toFixed(4)}`);
+    expect(o.moonR < 0.5 * Math.min(o.earthGapIn, o.earthGapOut), `${mode}: the Moon’s circle (${o.moonR.toFixed(2)}) is under half the gap to Venus and Mars (${o.earthGapIn.toFixed(2)}, ${o.earthGapOut.toFixed(2)})`);
+    expect(o.moonR > o.earthR + o.moonSize, `${mode}: the Moon circles outside Earth’s ball: ${o.moonR.toFixed(2)} vs ${(o.earthR + o.moonSize).toFixed(2)}`);
+    expect(o.closest.Venus >= o.earthR && o.closest.Mars >= o.earthR, `${mode}: in a full year the Moon stays more than one Earth radius (${o.earthR.toFixed(2)}) from Venus’s and Mars’s paths: ` + JSON.stringify(o.closest));
+    expect(o.zoom > o.neptuneFar * 1.05, `${mode}: the zoom (${o.zoom}) reaches past Neptune (${o.neptuneFar.toFixed(1)})`);
+  }
+  // the facts the lab shows are the real distances
+  const src = fs.readFileSync(path.join(ROOT, 'labs/space3d.js'), 'utf8');
+  expect(/'Distance from Earth', 'about 384,400 km/.test(src) && /'Distance from the Sun now', `\$\{num\(now\.r, 3\)\} AU = \$\{big\(now\.r \* AU_KM\)\} km`/.test(src), 'the distance facts are the real ones (AU from the orbit, not the drawing)');
+  // and the lab opens with them, on today's date, with no errors
+  await page.evaluate(() => openLabs('space3d'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="space3d"] .lab3d-label:not([hidden])', { timeout: 30000 });
+  await page.waitForTimeout(1500);
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('iPhone: the Solar System has no Teach me, Ask Cassie or Quiz me, Back always works, and a pinch on the 3D never zooms the page', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
     const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
