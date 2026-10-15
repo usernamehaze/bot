@@ -793,6 +793,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ---- "Make a reviewer" on a PDF / Google Doc / Slides tab: hand the whole file
 // to the Cassie web app, which reads it (pictures included) and writes the reviewer.
 const CASSIE_APP_URL = 'https://askcassie.pages.dev/app.html';
+
+// A newer extension on the website? Ask for one small file, at most once a day, and only tell the
+// popup (it shows a note with a Download button). Nothing updates by itself and nothing is sent.
+const CASSIE_UPDATE_DAY = 24 * 60 * 60 * 1000;
+function newerVersion(a, b) { // is a newer than b? ("3.52.0" vs "3.51.0")
+  const x = String(a || '').split('.').map(Number), y = String(b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+async function checkForUpdate() {
+  const current = chrome.runtime.getManifest().version;
+  const { cassieUpdate } = await chrome.storage.local.get('cassieUpdate');
+  let latest = cassieUpdate?.latest || '';
+  if (!cassieUpdate || !(Date.now() - cassieUpdate.checkedAt < CASSIE_UPDATE_DAY)) {
+    try {
+      const url = self.CASSIE_UPDATE_URL || 'https://askcassie.pages.dev/extension-version.json';
+      const r = await fetch(url, { cache: 'no-store', credentials: 'omit' });
+      const v = r.ok ? String((await r.json()).version || '') : '';
+      if (/^\d+(\.\d+)*$/.test(v)) latest = v;
+    } catch (e) { /* offline: try again next time */ }
+    await chrome.storage.local.set({ cassieUpdate: { latest, checkedAt: Date.now() } });
+  }
+  return { current, latest, newer: newerVersion(latest, current) };
+}
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type !== 'CASSIE_UPDATE_CHECK') return false;
+  checkForUpdate().then(sendResponse, () => sendResponse({ newer: false }));
+  return true;
+});
+chrome.runtime.onStartup.addListener(() => { checkForUpdate().catch(() => {}); });
 const pendingImports = new Map(); // tabId -> { name, mime, base64, prompt, groqKey }
 
 async function openInApp(file, index) {

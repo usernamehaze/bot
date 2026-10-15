@@ -89,10 +89,18 @@
   .history-q { font-size: 12px; font-weight: 600; color: #1c1d2b; margin: 0 0 3px; }
   .history-a { font-size: 12px; color: #45485c; line-height: 1.4; max-height: 60px; overflow: hidden; white-space: pre-wrap; }
   .history-meta { font-size: 10px; color: #9498ad; margin-top: 4px; }
+  #update-note { border: 1px solid #1c1d2b; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }
+  #update-note p { font-size: 12px; line-height: 1.45; margin: 0 0 8px; color: #1c1d2b; }
+  #update-get { display: block; text-align: center; background: #1c1d2b; color: #fff; text-decoration: none;
+    font-weight: 600; font-size: 13px; padding: 10px; border-radius: 8px; min-height: 44px; box-sizing: border-box; line-height: 24px; }
 </style>
 </head>
 <body>
   <h1>Cassie</h1>
+  <div id="update-note" hidden>
+    <p>A new version of Cassie is ready. Download it, then press Reload on Cassie in chrome://extensions.</p>
+    <a id="update-get" href="https://askcassie.pages.dev/cassie-extension.zip" target="_blank" rel="noopener">Download</a>
+  </div>
   <p class="subtitle">Highlight text on any page, then ask Cassie to explain or answer it.</p>
 
   <label for="hl-mode">Highlight help</label>

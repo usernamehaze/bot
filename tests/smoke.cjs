@@ -686,6 +686,106 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
+test('the Chrome extension: its button sits beside Open Cassie on computers (none on phones), every download link carries the extension’s version, the built zip is that version, and an old copy is told a new one is ready', async (b) => {
+  const extver = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version;
+  // the build: the zip on the site is the extension as it is now, and extension-version.json says so
+  const built = path.join(ROOT, '_site');
+  expect(fs.existsSync(path.join(built, 'cassie-extension.zip')), 'run bash scripts/build-site.sh first');
+  const zipped = JSON.parse(require('child_process').execFileSync('unzip', ['-p', path.join(built, 'cassie-extension.zip'), 'cassie-extension/manifest.json'], { encoding: 'utf8' })).version;
+  expect(zipped === extver, `the built zip is version ${zipped}, the extension is ${extver}`);
+  expect(JSON.parse(fs.readFileSync(path.join(built, 'extension-version.json'), 'utf8')).version === extver, 'extension-version.json has the extension’s version');
+  const site = fs.readFileSync(path.join(built, 'index.html'), 'utf8');
+  const links = site.match(/cassie-extension\.zip[^"]*/g) || [];
+  expect(links.length >= 2 && links.every((l) => l === 'cassie-extension.zip?v=' + extver), 'every link to the zip ends with ?v=' + extver + ': ' + links.join(', '));
+  expect(site.includes('Version ' + extver), 'the built page shows Version ' + extver);
+  // a computer: the button is in the header, just before Open Cassie, on one line at 1024, 1280 and 1440
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const page = await ctx.newPage();
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(APP.replace('app.html', 'index.html'));
+  const head = page.locator('.nav a[href^="cassie-extension.zip"]');
+  expect(await head.count() === 1 && await head.isVisible(), 'the extension button is in the header');
+  expect(await head.getAttribute('href') === 'cassie-extension.zip?v=' + extver, 'the header link has the version: ' + await head.getAttribute('href'));
+  expect((await page.locator('[data-ext-version]').innerText()).trim() === 'Version ' + extver, 'Version ' + extver + ' under the button');
+  expect(await page.locator('.final a[href^="cassie-extension.zip"]').count() === 0, 'the last section has no extension button');
+  expect(await page.locator('details a[href^="cassie-extension.zip"]').count() === 1, 'the FAQ still has its link');
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 800 });
+    const g = await page.evaluate(() => {
+      const ext = document.querySelector('.nav a[href^="cassie-extension.zip"]').getBoundingClientRect();
+      const open = document.querySelector('.nav a[href="start.html"]').getBoundingClientRect();
+      const nav = document.querySelector('.nav'); const n = nav.getBoundingClientRect();
+      const kids = [...nav.querySelectorAll('a, .btn')].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect());
+      return { gap: open.left - ext.right, same: Math.abs((ext.top + ext.bottom) / 2 - (open.top + open.bottom) / 2), over: nav.scrollWidth > nav.clientWidth + 1 || kids.some((r) => r.right > innerWidth || r.left < 0), page: document.documentElement.scrollWidth > innerWidth, extH: ext.height, openH: open.height };
+    });
+    expect(g.gap >= 0 && g.gap <= 24 && g.same < 6, `${width}: the button sits just before Open Cassie: ` + JSON.stringify(g));
+    expect(!g.over, `${width}: the header doesn’t wrap or overflow: ` + JSON.stringify(g));
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  // the tap test on the header (a mouse; its own watcher, not the page's errors)
+  const { tapResponseIssues } = require('./ui-checks.cjs');
+  ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
+  const reopen = async () => { await page.goto(APP.replace('app.html', 'index.html')); return page; };
+  const issues = await tapResponseIssues(page, { reopen, touch: false, scope: '.nav' });
+  expect(!issues.length, 'the header’s controls answer a tap: ' + JSON.stringify(issues).slice(0, 600));
+  await ctx.close();
+  // a touch screen wide enough for it: 44px tall; a phone: no extension button
+  const tab = await b.newContext({ viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
+  const tp = await tab.newPage(); await tp.goto(APP.replace('app.html', 'index.html'));
+  const hs = await tp.evaluate(() => [...document.querySelectorAll('.nav .btn')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height)));
+  expect(hs.length >= 2 && hs.every((h) => h >= 44), 'header buttons are 44px tall on a touch screen: ' + hs);
+  await tab.close();
+  const phone = await b.newContext({ ...devices['iPhone 13'], viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  const pp = await phone.newPage(); await pp.goto(APP.replace('app.html', 'index.html'));
+  expect(!(await pp.locator('.nav a[href^="cassie-extension.zip"]').isVisible()), '390x844: no extension button in the header');
+  expect(await pp.locator('.nav a[href="start.html"]').isVisible(), '390x844: Open Cassie is still there');
+  await phone.close();
+  // the extension: a newer version on the site shows the note in the popup; the same version doesn't
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ectx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ectx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ectx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof checkForUpdate === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    const id = new URL(sw.url()).host;
+    // the site's file, faked: what the worker asks for is recorded (one request, nothing in it)
+    const fake = async (version) => sw.evaluate(async (v) => {
+      self.__asked = []; await chrome.storage.local.remove('cassieUpdate');
+      self.CASSIE_UPDATE_URL = 'https://askcassie.pages.dev/extension-version.json';
+      self.fetch = (u, o) => { self.__asked.push({ u: String(u), body: o && o.body, credentials: o && o.credentials }); return Promise.resolve(new Response(JSON.stringify({ version: v }), { headers: { 'content-type': 'application/json' } })); };
+    }, version);
+    const popup = async () => { const p = await ectx.newPage(); await p.goto(`chrome-extension://${id}/popup.html`); await p.waitForTimeout(700); return p; };
+    const [maj, min] = extver.split('.').map(Number);
+    await fake(`${maj}.${min + 1}.0`);
+    let p = await popup();
+    expect(await p.locator('#update-note').isVisible(), 'a newer version on the site: the popup says so');
+    const note = await p.locator('#update-note').innerText();
+    expect(/A new version of Cassie is ready\. Download it, then press Reload on Cassie in chrome:\/\/extensions\./.test(note) && !/[—–]/.test(note), 'the note: ' + note);
+    expect(/^https:\/\/askcassie\.pages\.dev\/cassie-extension\.zip/.test(await p.locator('#update-get').getAttribute('href')), 'Download goes to the zip on the site');
+    expect((await p.locator('#update-get').boundingBox()).height >= 44, 'Download is 44px tall');
+    let asked = await sw.evaluate(() => self.__asked);
+    expect(asked.length === 1 && /\/extension-version\.json$/.test(asked[0].u) && !asked[0].body && asked[0].credentials === 'omit', 'one request for the file, nothing sent: ' + JSON.stringify(asked));
+    await p.close();
+    // a second open the same day asks nothing
+    p = await popup(); asked = await sw.evaluate(() => self.__asked);
+    expect(asked.length === 1, 'at most once a day: ' + asked.length + ' requests');
+    await p.close();
+    await fake(extver);
+    p = await popup();
+    expect(!(await p.locator('#update-note').isVisible()), 'the same version: no note');
+    await p.close();
+  } finally { await ectx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
 test('no key: Cassie answers through the server', async (b) => {
   await serverMode({ groq: 'ok', ai: 'ok', reply: '' });
   const { ctx, page, errors } = await open(b);

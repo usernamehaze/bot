@@ -21,7 +21,7 @@ mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/
 # and stylesheet and the offline cache's name become this commit's id (no bumping by hand).
 ver="${CF_PAGES_COMMIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || date +%s)}"; ver="${ver:0:10}"
 find _site -name '*.html' -o -name '*.js' -not -path '_site/vendor/*' -not -path '_site/voice/*' -not -path '_site/explore/three*' \
-  | xargs sed -i -E "s/\?v=[0-9]+/?v=$ver/g"
+  | xargs sed -i -E "s/\?v=[0-9]+([^0-9.]|$)/?v=$ver\1/g"   # (not 3.52.0: that's the extension's version)
 sed -i -E "s/cassie-v[0-9]+/cassie-$ver/" _site/sw.js
 # the Chrome extension, ready to download from the site (a folder inside, for "Load unpacked")
 tmp="$(mktemp -d)" && cp -r extension "$tmp/cassie-extension" && rm -f "$tmp"/cassie-extension/*.zip
@@ -36,5 +36,10 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(p, os.path.relpath(p, src))
 PY
 rm -rf "$tmp"
+# Always the newest extension: its download links and the "Version" under the button carry
+# extension/manifest.json's version, and the extension checks extension-version.json for a newer one.
+extver="$(python3 -c 'import json; print(json.load(open("extension/manifest.json"))["version"])')"
+sed -i -E "s/cassie-extension\.zip\?v=[0-9a-z.]+/cassie-extension.zip?v=$extver/g; s/(data-ext-version>)Version [0-9.]+/\1Version $extver/" _site/index.html
+printf '{ "version": "%s" }\n' "$extver" > _site/extension-version.json
 echo "Built _site: $(du -sh _site | cut -f1), $(find _site -type f | wc -l) files"
 find _site -type f -size +25M -print -exec false {} + || { echo "A file is over 25 MB — Cloudflare will refuse it"; exit 1; }
