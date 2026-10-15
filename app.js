@@ -17,7 +17,7 @@ function loadState() {
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
-    accent: '',             // favorite colour (hex) — '' = marble monochrome
+    accent: '',             // favorite colour (hex) — '' = Cassie's own colours (Blush & Sage)
     audience: 'student',    // student | pro — the Student / Professional switch
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
@@ -291,15 +291,19 @@ function applyReading() {
 
 // Favorite-colour theming: when the user picks a colour, it becomes --accent
 // and every accent-aware element (buttons, highlights, the board) adopts it.
-// Empty = marble monochrome (the default). Readable text colour is auto-picked.
+// Empty = Cassie's own colours (the default). Readable text colour is auto-picked.
 function accentInk(hex) {
   const c = String(hex).replace('#', '');
   if (c.length !== 6) return '#ffffff';
   const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#111111' : '#ffffff';
 }
+// Cassie's colours follow the profile: blush leads for a girl (and when it isn't said), sage
+// leads for a boy (style.css: html[data-pal="sage"]). A colour picked in Appearance wins over both.
+function palette() { return state.profile && state.profile.gender === 'male' ? 'sage' : 'blush'; }
 function applyAccent() {
   const root = document.documentElement;
+  root.dataset.pal = palette();
   const color = (state.accent || '').trim();
   const on = /^#[0-9a-fA-F]{6}$/.test(color);
   if (on) {
@@ -323,9 +327,10 @@ const darkScheme = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)'
 function backdropColors() {
   const dark = !!(darkScheme && darkScheme.matches);
   const c = (state.accent || '').trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(c)) {
-    return dark ? { color1: '#0e0e11', color2: '#45434c', color3: '#8a8590', brightness: 0.95 }
-      : { color1: '#ece8e1', color2: '#d3cfd6', color3: '#fbf8f3', brightness: 1.25 };
+  if (!/^#[0-9a-fA-F]{6}$/.test(c)) { // Cassie's colours: cream with a breath of blush and sage
+    const sage = palette() === 'sage';
+    return dark ? { color1: '#120f0e', color2: sage ? '#24413a' : '#4a2530', color3: sage ? '#4a2530' : '#24413a', brightness: 0.95 }
+      : { color1: sage ? '#e3efe9' : '#f8e3e8', color2: '#fbf6ee', color3: sage ? '#f6e5e9' : '#e2efe9', brightness: 1.2 };
   }
   return dark ? { color1: '#0c0c0f', color2: mixHex(c, '#000000', 0.35), color3: mixHex(c, '#000000', 0.68), brightness: 1 }
     : { color1: mixHex(c, '#ffffff', 0.72), color2: mixHex(c, '#ffffff', 0.38), color3: '#fbf8f3', brightness: 1.2 };
@@ -1051,8 +1056,8 @@ function launchConfetti(x, y) {
   ensureConfetti();
   const cx = x != null ? x : window.innerWidth / 2;
   const cy = y != null ? y : window.innerHeight / 3;
-  // marble monochrome — a spread of light-to-dark greys so pieces show on any background
-  const colors = ['#111111', '#3a3a3a', '#6d6d72', '#a9a9a9', '#d9d5cf', '#f5f3ef'];
+  // Cassie's colours: blush, sage, honey and cream, so pieces show on any background
+  const colors = ['#b8395a', '#f28fa5', '#2f6f5e', '#7cc4ae', '#f2c94c', '#fbf6ee'];
   for (let i = 0; i < 90; i++) {
     const ang = Math.random() * Math.PI * 2;
     const spd = 4 + Math.random() * 7;
@@ -4845,8 +4850,8 @@ function buildAccentSwatches() {
   wrap.innerHTML = '';
   const none = document.createElement('button');
   none.type = 'button'; none.className = 'accent-sw accent-none';
-  none.dataset.accent = ''; none.title = 'None: marble monochrome';
-  none.setAttribute('aria-label', 'None (marble monochrome)');
+  none.dataset.accent = ''; none.title = 'None: Cassie’s colours';
+  none.setAttribute('aria-label', 'None (Cassie’s colours)');
   wrap.appendChild(none);
   ACCENT_COLORS.forEach((c) => {
     const b = document.createElement('button');
@@ -6345,6 +6350,7 @@ function openProfile(first) {
     save();
     try { if (window.CassieMemory) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
     if (typeof renderAudience === 'function') renderAudience();
+    applyAccent(); // (Cassie's colours follow the profile)
     dressCassie();
     wrap.remove();
     if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }

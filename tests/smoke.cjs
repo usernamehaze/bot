@@ -4605,6 +4605,56 @@ test('Liquid Glass on a phone: every tap target is at least 44px, and every word
   }
 });
 
+test('Cassie’s colours: Blush & Sage (sage leads for a boy, blush for a girl or unsaid), every word, button, chip, bubble and tab at AA in light and dark at 390x844 and 1280x800, and every colour in style.css comes from a token', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  // every colour outside the :root token blocks is a token (a hard-coded one is listed)
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (c) => ' '.repeat(c.length));
+  const left = [], stack = [];
+  let seg = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c !== '{' && c !== '}') continue;
+    const text = css.slice(seg, i);
+    if (c === '{') { stack.push(text.split(/[;}]/).pop().trim()); }
+    else {
+      if (!stack.some((x) => x.startsWith(':root'))) for (const d of text.split(';')) { const v = d.split(':').slice(1).join(':'); for (const m of v.match(/#[0-9a-f]{3,8}\b|rgba?\(\s*\d[^)]*\)/gi) || []) left.push(`${stack[stack.length - 1]} { ${d.trim().slice(0, 80)} }`); }
+      stack.pop();
+    }
+    seg = i + 1;
+  }
+  expect(!left.length, `hard-coded colours outside the tokens (${left.length}): ` + left.slice(0, 12).join(' | '));
+  const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('');
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    for (const gender of ['female', 'male', 'none']) {
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', profile: { ...PROFILE, gender } }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.\n\nQuick check: which way does the water go?' }) });
+      await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+      await ask(page, 'What is osmosis?');
+      await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }).catch(() => {});
+      const want = gender === 'male' ? 'sage' : 'blush';
+      expect(await page.evaluate(() => document.documentElement.dataset.pal) === want, `${size} ${gender}: the ${want} palette`);
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(500);
+        const primary = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim());
+        const blushLeads = scheme === 'light' ? '#b8395a' : '#f28fa5', sageLeads = scheme === 'light' ? '#2f6f5e' : '#7cc4ae';
+        expect(primary === (want === 'sage' ? sageLeads : blushLeads), `${size} ${gender} ${scheme}: the main colour is ${primary}`);
+        // the user's bubble, the send button and a chip are in the accent
+        const user = await page.evaluate(() => getComputedStyle(document.querySelector('.bubble-user')).backgroundColor);
+        expect(hex(user) === primary, `${size} ${gender} ${scheme}: your bubble is the main colour: ${user}`);
+        if (size === '390x844') { await page.evaluate(() => openSidebar()); await page.waitForTimeout(400); } else { await page.evaluate(() => setSideOpen(true)); await page.waitForTimeout(400); }
+        if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/colours-${size}-${gender}-${scheme}.png` });
+        const { checked, bad } = await contrastIssues(page);
+        expect(checked >= 10, `${size} ${gender} ${scheme}: words measured: ${checked}`);
+        expect(!bad.length, `${size} ${gender} ${scheme}: under AA: ` + bad.join(' | '));
+        if (size === '390x844') await page.evaluate(() => closeSidebar()); else await page.evaluate(() => setSideOpen(false));
+        await page.waitForTimeout(300);
+      }
+      expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+      await ctx.close();
+      if (gender === 'none' && size === '1280x800') break;
+    }
+  }
+});
+
 // the three screens every control is checked on: an iPhone, a small Android phone and a 1280x800
 // touch screen (a tablet on its side, a touch laptop: a mouse gets the smaller desktop sizes)
 const TAP_SIZES = [['iPhone 390x844', 'iPhone 13', { width: 390, height: 844 }], ['small Android 360x740', 'Pixel 7', { width: 360, height: 740 }], ['touch 1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]];
