@@ -4826,6 +4826,122 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
+// Highlight a situation and press Code: first Simple or Complete, then the code in its own box with
+// Copy code (only the code) and Copy for Colab; Python that runs as it is (checked, fixed once by
+// Cassie); and each student's own names (a theme from their install id, which is never sent).
+test('extension Code: Simple or Complete first, a code box with Copy code and Copy for Colab, a quick check with one fix, and each student’s own names', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/workers\.dev|api\.groq\.com|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.route(/example\.com/, (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>Programming class</title></head><body><h1>Lab 3</h1><p id="p" style="margin:140px 60px 0;font-size:18px">A store gives a ten percent discount when a customer buys more than five items. Compute the total price for a list of item prices.</p></body></html>' }));
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://example.com' });
+    const isCassie = async (w) => /\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof answerAny === 'function').catch(() => false);
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (await isCassie(w)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // a stand-in AI: good code, or broken code first (the check catches it, Cassie fixes it once), or always broken
+    await sw.evaluate(() => {
+      const GOOD = '```python\n# pip install requests\nclass SwiftOceanCart:\n    def __init__(self, prices):\n        self.prices = prices\n\n    def total(self):\n        cost = sum(self.prices)\n        if len(self.prices) > 5:\n            cost = cost * 0.9\n        return round(cost, 2)\n\n\nif __name__ == "__main__":\n    cart = SwiftOceanCart([10, 20, 5, 5, 5, 5])\n    print("Total:", cart.total())\n```\nPaste it into a new file in VS Code and run it. In Colab, paste it into a cell and press Run. It prints the total with the discount.';
+      const BROKEN = '```python\ndef total(prices:\n    return sum(prices)\n```\nRun it.';
+      globalThis.__asked = []; globalThis.__mode = 'good';
+      globalThis.answerAny = async (input, keys, onDelta) => {
+        const last = Array.isArray(input) ? input[input.length - 1].content : String(input);
+        globalThis.__asked.push(last);
+        const fix = /That code has a problem/.test(last);
+        const out = __mode === 'always-broken' || (__mode === 'broken-first' && !fix) ? BROKEN : GOOD;
+        if (onDelta) onDelta(out);
+        return out;
+      };
+    });
+    const asked = () => sw.evaluate(() => globalThis.__asked.slice());
+    const page = await ctx.newPage();
+    await page.goto('https://example.com/lab');
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
+    const root = 'document.getElementById("cassie-ext-host-92f1").shadowRoot';
+    const q = (sel) => page.evaluate(([r, s]) => { const e = eval(r).querySelector(s); return e && !e.hidden && e.getClientRects().length ? e.textContent : null; }, [root, sel]);
+    // a real click (copying needs a real one)
+    const click = async (sel) => { const b = await page.evaluate(([r, s]) => { const e = eval(r).querySelector(s); const q2 = e.getBoundingClientRect(); return [q2.left + q2.width / 2, q2.top + q2.height / 2]; }, [root, sel]); await page.mouse.click(b[0], b[1]); };
+    const select = async () => {
+      await page.evaluate(() => window.getSelection().removeAllRanges());
+      const b = await page.locator('#p').boundingBox();
+      await page.mouse.move(b.x + 1, b.y + 4); await page.mouse.down();
+      await page.mouse.move(b.x + b.width - 1, b.y + b.height - 4, { steps: 4 }); await page.mouse.up();
+      await page.waitForFunction(([r]) => /What should I do with this/.test(eval(r).querySelector('.popover .body').textContent), [root], { timeout: 5000 });
+    };
+    // (an open answer stays until it's closed: close it first, as a student would)
+    const closePop = () => page.evaluate(([r]) => { const x = eval(r).querySelector('.popover .header button'); if (x && !eval(r).querySelector('.popover').hidden) x.click(); }, [root]);
+    const codeFor = async (level) => {
+      await closePop();
+      await select();
+      await click('.choice-btn[data-mode="code"]');
+      await page.waitForFunction(([r]) => eval(r).querySelectorAll('.level-btn').length === 2, [root], { timeout: 5000 });
+      const levels = await page.evaluate(([r]) => [...eval(r).querySelectorAll('.level-btn')].map((b) => b.textContent.trim() + (b.classList.contains('last') ? ' (last)' : '')), [root]);
+      await click(`.level-btn[data-level="${level}"]`);
+      await page.waitForFunction(([r]) => eval(r).querySelector('.code-box'), [root], { timeout: 10000 });
+      return levels;
+    };
+    // 1. Code asks Simple or Complete first
+    await sw.evaluate(() => chrome.storage.local.set({ cassieUid: 'student-one' }));
+    let levels = await codeFor('simple');
+    expect(levels.length === 2 && /Simple \(short and basic\)/.test(levels[0]) && /Complete \(longer, with classes and functions\)/.test(levels[1]), 'the two choices: ' + levels);
+    let a = await asked();
+    expect(/Simple: short and basic/.test(a.at(-1)) && /Language: Python/.test(a.at(-1)) && /main block/.test(a.at(-1)) && /No placeholders/.test(a.at(-1)), 'the simple, runnable code is asked for: ' + a.at(-1).slice(0, 300));
+    expect(!/student-one/.test(a.at(-1)), 'the install id is never sent');
+    const names1 = /theme "(\w+)"[\s\S]*word "(\w+)"/.exec(a.at(-1));
+    expect(names1, 'a naming theme and word are given');
+    // 2. the code box: Copy code puts only the code on the clipboard; Copy for Colab one cell with !pip
+    expect(await q('.code-box .code-copy') === 'Copy code' && await q('.code-box .code-colab') === 'Copy for Colab', 'the code box has both copy buttons');
+    await click('.code-box .code-copy');
+    await page.waitForFunction(([r]) => eval(r).querySelector('.code-box .code-copy').textContent === 'Copied', [root], { timeout: 3000 });
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(/^# pip install requests\nclass SwiftOceanCart:/.test(copied) && /print\("Total:", cart\.total\(\)\)$/.test(copied) && !/```|Paste it|VS Code/.test(copied), 'only the code is copied: ' + JSON.stringify(copied.slice(0, 80)));
+    await page.waitForFunction(([r]) => eval(r).querySelector('.code-box .code-copy').textContent === 'Copy code', [root], { timeout: 4000 });
+    await click('.code-box .code-colab');
+    await page.waitForFunction(([r]) => eval(r).querySelector('.code-box .code-colab').textContent === 'Copied', [root], { timeout: 3000 });
+    const colab = await page.evaluate(() => navigator.clipboard.readText());
+    expect(/^!pip install requests\nclass SwiftOceanCart:/.test(colab), 'Copy for Colab makes one cell (the pip line runs there): ' + JSON.stringify(colab.slice(0, 60)));
+    const how = await page.evaluate(([r]) => [...eval(r).querySelectorAll('.popover .body > p')].map((p) => p.textContent).join(' '), [root]);
+    expect((how.match(/[.!?](\s|$)/g) || []).length <= 3 && /VS Code/.test(how), 'at most 3 sentences on how to run it: ' + how);
+    const visible = await page.evaluate(([r]) => eval(r).querySelector('.popover').innerText, [root]);
+    expect(!/[–—]/.test(visible.replace(/print\([^)]*\)/g, '')), 'no dashes in what the student sees');
+    // 3. the last choice is remembered (marked), and Complete asks for classes
+    levels = await codeFor('complete');
+    expect(/Simple.*\(last\)/.test(levels[0]) && !/\(last\)/.test(levels[1]), 'the last choice is marked: ' + levels);
+    a = await asked();
+    expect(/Complete: classes and functions/.test(a.at(-1)), 'Complete asks for classes and functions');
+    expect(await sw.evaluate(() => chrome.storage.local.get('cassieCodeLevel').then((o) => o.cassieCodeLevel)) === 'complete', 'the choice is remembered');
+    const again = /theme "(\w+)"[\s\S]*word "(\w+)"/.exec(a.at(-1));
+    expect(again[1] === names1[1] && again[2] === names1[2], 'the same student keeps the same names');
+    // 4. another student, the same situation: the same idea, other names
+    await sw.evaluate(() => chrome.storage.local.set({ cassieUid: 'student-two' }));
+    await codeFor('complete');
+    a = await asked();
+    const names2 = /theme "(\w+)"[\s\S]*word "(\w+)"/.exec(a.at(-1));
+    expect(names2 && (names2[1] !== names1[1] || names2[2] !== names1[2]), `two students get different names: ${names1 && names1.slice(1)} and ${names2 && names2.slice(1)}`);
+    // 5. broken code is caught by the quick check and Cassie fixes it once
+    await sw.evaluate(() => { globalThis.__mode = 'broken-first'; });
+    const n0 = (await asked()).length;
+    await codeFor('simple');
+    a = await asked();
+    expect(a.length === n0 + 2 && /That code has a problem: the "\(" on line 1 is never closed/.test(a.at(-1)), 'the check found the problem and asked once for a fix: ' + a.slice(n0).map((x) => x.slice(0, 80)).join(' | '));
+    expect(/class SwiftOceanCart/.test(await q('.code-box pre')) && !(await q('.code-note')), 'the fixed code shows, with no note');
+    // still broken after the fix: shown with a plain note
+    await sw.evaluate(() => { globalThis.__mode = 'always-broken'; });
+    const n1 = (await asked()).length;
+    await codeFor('simple');
+    expect((await asked()).length === n1 + 2, 'only one fix is asked for');
+    expect(/may need a small fix before it runs/.test(await q('.code-note') || ''), 'a plain note when it may still need a fix');
+  } finally { await ctx.close(); }
+});
+
 test('extension: drop a PDF, words or a photo on Cassie’s Island on any page', async () => {
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
