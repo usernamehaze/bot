@@ -4,7 +4,7 @@
    helper({ view, name, described, ask, format, speak, quiz, onMark })
      ask(msgs) → Promise<text> (the app's own path to Cassie); quiz(topic) → Promise<[{ q, o, a, why }]>
    → { ask(prompt, shown), quiz(topic), close(), destroy(), root, get open() } */
-import { el, esc, errorWords, errorWordsFor } from './kit.js';
+import { el, esc, errorWords, errorWordsFor, watchTopBar } from './kit.js';
 
 const HISTORY = 8; // the last few questions and answers go with each new question
 
@@ -18,6 +18,7 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
     <div class="hp-log" aria-live="polite"></div>
     <form class="hp-ask"><input type="text" placeholder="Ask about what you see" aria-label="Ask Cassie a question" enterkeyhint="send" autocomplete="off"><button type="submit" class="tut-btn tut-go">Ask</button></form>`;
   view.appendChild(box);
+  const topBar = watchTopBar(view); // (the panel never covers the top bar: Back must always work)
   const $ = (s) => box.querySelector(s);
   const log = $('.hp-log'), input = $('.hp-ask input'), title = $('.hp-title');
   const history = [];
@@ -182,6 +183,6 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
     quiz: (topic) => runQuiz(topic),
     show: () => show(title.textContent === 'Quiz me' ? 'quiz' : 'ask'),
     close,
-    destroy() { alive = false; stopTalking(); box.remove(); },
+    destroy() { alive = false; stopTalking(); box.remove(); topBar.stop(); },
   };
 }
