@@ -4831,7 +4831,7 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
     };
     let { ctx, page, errors } = await start();
     const g = await page.evaluate((h) => { const hero = document.querySelector(h + ' .hub-hero').getBoundingClientRect(), bx = [...document.querySelectorAll(h + ' .hub-box')].map((e) => e.getBoundingClientRect()); return { n: bx.length, under: Math.round(bx[0].top - hero.bottom), cols: new Set(bx.map((r) => Math.round(r.left))).size, min: Math.min(...bx.map((r) => r.height)) }; }, hub);
-    expect(g.n === 10 && g.under >= 0 && g.under < 40 && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: ten boxes right under the header, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
+    expect(g.n === 10 && (phone || (g.under >= 0 && g.under < 40)) && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: ten boxes${phone ? '' : ' right under the header'}, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
     expect(await page.locator(hub + ' .hub-q', { hasText: /^(Quiz me|Flashcards|Research a topic)$/ }).count() === 0, `${size}: no Quick action repeats a box`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await contrastIssues(page, hub + ' .hub-boxes'); expect(!bad.length, `${size} boxes (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
@@ -4848,6 +4848,59 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
   }
 });
 
+test('phone Home: a peek inside the labs slides past the hello, a live Today’s Lab card, then Today, Continue, the boxes and Quick actions; still with Reduce Motion or Lite mode; a computer’s Home is unchanged', async (b) => {
+  const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'Q', b: 'A', deck: 'Bio', box: 0, due: 0, at: 0 }] };
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed });
+    await page.waitForSelector('#home .hub-hero-phone .hub-tile[data-preview]', { timeout: 10000 });
+    await page.waitForTimeout(800);
+    const h = await page.evaluate(() => {
+      const hub = document.querySelector('#home .hub'), kids = [...hub.children];
+      const at = (sel) => kids.findIndex((k) => k.matches(sel)), atH = (re) => kids.findIndex((k) => k.matches('.hub-h') && re.test(k.textContent));
+      const run = document.querySelector('.hub-strip-run');
+      return { hello: document.querySelector('#home .hub-me').textContent, tiles: document.querySelectorAll('#home .hub-tile[data-preview]').length, anim: getComputedStyle(run).animationName,
+        order: [at('.hub-hero'), at('.hub-tlab'), atH(/^Today$/), atH(/Continue/), at('.hub-boxes'), atH(/Quick actions/)],
+        lab: document.querySelector('.hub-tlab b').textContent, want: (LAB_INFO[todayLab()] || [])[0], pv: document.querySelector('.hub-tlab-pv').dataset.preview, today: todayLab(),
+        play: document.querySelector('.hub-tlab-go').getBoundingClientRect().width };
+    });
+    expect(/^(Morning|Afternoon|Evening), Test$/.test(h.hello), 'the hello: ' + h.hello);
+    expect(h.tiles >= 8 && h.anim === 'hubStrip', 'lab previews slide past in the header: ' + JSON.stringify(h));
+    expect(h.order.every((x, i) => x >= 0 && (i === 0 || x > h.order[i - 1])), 'the header, Today’s Lab, Today, Continue, the boxes, Quick actions: ' + JSON.stringify(h.order));
+    expect(h.lab === h.want && h.pv === h.today && h.play >= 44, 'Today’s Lab is today’s lab with its live preview and a 44px play button: ' + JSON.stringify(h));
+    // the previews keep drawing
+    const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames);
+    const f0 = await fr(); await page.waitForTimeout(800);
+    const f1 = await fr(); expect(f1 > f0 + 5, 'Today’s Lab preview is moving: ' + JSON.stringify([f0, f1]));
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#home .hub-hero, #home .hub-tlab'); expect(!bad.length, `header and Today’s Lab (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // play opens today's lab
+    await page.click('.hub-tlab-go');
+    await page.waitForFunction(() => document.querySelector(`.lab-view:not([hidden])[data-lab="${todayLab()}"]`), null, { timeout: 20000 });
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // Reduce Motion and Lite mode: still previews and a still strip
+  for (const [why, lite, motion] of [['Reduce Motion', 'off', 'reduce'], ['Lite mode', 'on', null]]) {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: seed });
+    if (motion) { await page.emulateMedia({ reducedMotion: motion }); await page.reload(); }
+    await page.waitForSelector('#home .hub-tlab-pv[data-preview]', { timeout: 10000 });
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => ({ still: [...document.querySelectorAll('#home canvas[data-preview]')].every((c) => c.dataset.still === '1'), anim: getComputedStyle(document.querySelector('.hub-strip-run')).animationName }));
+    const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
+    const f0 = await fr(); await page.waitForTimeout(1000); const f1 = await fr();
+    expect(st.still && st.anim === 'none' && f1 - f0 <= 2, `${why}: still previews (one frame each, not ~30 a second): ` + JSON.stringify({ ...st, f0, f1 }));
+    await ctx.close();
+  }
+  // a computer: the same Home as before (no strip, no Today’s Lab card; the hello bar, then the boxes)
+  {
+    const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
+    await page.waitForSelector('#chat-log .hub .hub-boxes');
+    const d = await page.evaluate(() => { const hub = document.querySelector('#chat-log .hub'); return { kids: [...hub.children].slice(0, 3).map((k) => k.className), strip: !!hub.querySelector('.hub-strip, .hub-tlab, canvas[data-pv]'), hello: hub.querySelector('.hub-hero').innerText, boxes: hub.querySelectorAll('.hub-box').length }; });
+    expect(!d.strip && /Hi, welcome/.test(d.hello) && d.kids[0] === 'hub-hero' && d.kids[1].startsWith('hub-remind') && d.kids[2] === 'hub-boxes' && d.boxes === 10, 'a computer’s Home is unchanged: ' + JSON.stringify(d));
+    await ctx.close();
+  }
+});
+
 test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844, 1280x800)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -4860,14 +4913,14 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     // a new student: the hello and the name, and a 44px bell; no 3D room
     await toHome();
     await page.waitForSelector(hub + '.hub-empty .hub-hero');
-    const hero = await page.evaluate((h) => { const e = document.querySelector(h + ' .hub-hero'); return { text: e.innerText, h: e.getBoundingClientRect().height, bell: document.querySelector(h + ' .hub-bell').getBoundingClientRect().width, canvas: !!e.querySelector('canvas, svg.hub-still, .hub-scene') }; }, hub);
-    expect(/Hi, welcome/.test(hero.text) && /Test/.test(hero.text), `${size}: the hello and the name: ` + hero.text);
-    expect(hero.bell >= 44 && hero.h < 140 && !hero.canvas, `${size}: a plain bar with a 44px bell, no room: ` + JSON.stringify(hero));
+    const hero = await page.evaluate((h) => { const e = document.querySelector(h + ' .hub-hero'); return { text: e.innerText, h: e.getBoundingClientRect().height, bell: document.querySelector(h + ' .hub-bell').getBoundingClientRect().width, canvas: !!e.querySelector('svg.hub-still, .hub-scene') }; }, hub);
+    expect((phone ? /(Morning|Afternoon|Evening), Test/ : /Hi, welcome/).test(hero.text) && /Test/.test(hero.text), `${size}: the hello and the name: ` + hero.text);
+    expect(hero.bell >= 44 && hero.h < (phone ? 300 : 140), `${size}: the header with a 44px bell: ` + JSON.stringify(hero));
     // a returning student: the header, Today as a sideways row of chips, Continue and Quick actions
     await page.evaluate((s) => { state.chats = s.chats; state.cards = s.cards; save(); }, seed);
     await toHome();
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-hero');
-    expect(/Hi, welcome back/.test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
+    expect((phone ? /(Morning|Afternoon|Evening), Test/ : /Hi, welcome back/).test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
     const today = await page.evaluate((h) => { const t = document.querySelector(h + ' .hub-today'), s = getComputedStyle(t); return { n: t.querySelectorAll('.hub-w').length, dir: s.display + ' ' + s.flexDirection, x: s.overflowX, top: [...t.querySelectorAll('.hub-w')].map((w) => Math.round(w.getBoundingClientRect().top)) }; }, hub);
     expect(today.n === 3 && today.dir === 'flex row' && today.x === 'auto' && new Set(today.top).size === 1, `${size}: Today is one row of three chips that scrolls sideways: ` + JSON.stringify(today));
     // the bell: today's reminders, each going where it says
