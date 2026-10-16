@@ -1894,58 +1894,13 @@ function renderHubTimer() {
   });
 }
 setInterval(() => { if (document.querySelector('.hub-timer')) renderHubTimer(); }, 1000);
-// The header: a little study room (home-scene.js, 3D) with the hello and a bell over it. The still
-// drawing below is the same room: shown at once, and kept for Reduce Motion, Lite mode or no WebGL.
-const hubSceneSvg = (gender) => {
-  const kind = gender === 'male' ? 'm' : gender === 'female' ? 'f' : 'n';
-  // the student, a flat front view: hair (curls, long waves or a bob), big eyes, a hoodie or a jacket
-  const hairBack = kind === 'f' ? '<path class="hs-hair-f" d="M171 86c-6 30-4 58-8 74h74c-4-16-2-44-8-74z"/>' : kind === 'n' ? '<path class="hs-hair-n" d="M173 84c-4 18-2 30 2 36h50c4-6 6-18 2-36z"/>' : '';
-  const hairTop = kind === 'm'
-    ? '<g class="hs-hair-m">' + [[178, 76, 9], [188, 68, 10], [200, 65, 10], [212, 68, 10], [222, 76, 9], [226, 87, 7], [174, 87, 7], [184, 77, 7], [197, 75, 7], [210, 76, 7]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('') + '</g>'
-    : `<path class="hs-hair-${kind}" d="M174 92c-2-20 10-32 26-32s28 12 26 32c-8-10-16-14-26-14-6 6-16 12-26 14z"/>`;
-  const body = kind === 'f'
-    ? '<path class="hs-jacket" d="M160 178c0-34 16-54 40-54s40 20 40 54z"/><path class="hs-top" d="M190 126h20l4 52h-28z"/>'
-    : `<path class="hs-hood-${kind}" d="M178 120c4-8 40-8 44 0l-6 10h-32z"/><path class="hs-hoodie-${kind}" d="M160 178c0-34 16-54 40-54s40 20 40 54z"/><path class="hs-string" d="M195 130v16M205 130v16"/>`;
-  return `<svg class="hub-still hs-${kind}" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-  <g class="hs-win"><rect x="236" y="34" width="124" height="90" rx="4" class="hs-frame"/><rect x="242" y="40" width="112" height="78" class="hs-sky"/><circle cx="326" cy="60" r="11" class="hs-sun"/>
-    <g class="hs-cloud"><circle cx="262" cy="64" r="8"/><circle cx="272" cy="60" r="10"/><circle cx="283" cy="65" r="7"/></g><rect x="296" y="40" width="4" height="78" class="hs-frame"/><rect x="242" y="77" width="112" height="4" class="hs-frame"/></g>
-  ${hairBack}${body}
-  <rect x="194" y="108" width="12" height="12" class="hs-skin"/>
-  <circle cx="173" cy="94" r="5" class="hs-skin"/><circle cx="227" cy="94" r="5" class="hs-skin"/>
-  <ellipse cx="200" cy="92" rx="27" ry="25" class="hs-skin"/>
-  <g class="hs-eyes"><ellipse cx="190" cy="94" rx="6.5" ry="7.5" class="hs-white"/><ellipse cx="210" cy="94" rx="6.5" ry="7.5" class="hs-white"/>
-    <circle cx="190.5" cy="95" r="4.4" class="hs-iris"/><circle cx="209.5" cy="95" r="4.4" class="hs-iris"/><circle cx="190.5" cy="95" r="2.2" class="hs-ink"/><circle cx="209.5" cy="95" r="2.2" class="hs-ink"/>
-    <circle cx="189" cy="93" r="1.2" class="hs-white"/><circle cx="208" cy="93" r="1.2" class="hs-white"/></g>
-  <path d="M184 84.5q6-3 11 0M205 84.5q5-3 11 0" class="hs-brow hs-brow-${kind}"/><circle cx="200" cy="101" r="1.6" class="hs-nose"/><path d="M194 106q6 5 12 0" class="hs-lip"/>
-  ${hairTop}
-  <path d="M164 140l-10 30h16l8-24zM236 140l10 30h-16l-8-24z" class="${kind === 'f' ? 'hs-jacket' : `hs-hoodie-${kind}`}"/><circle cx="162" cy="170" r="5" class="hs-skin"/><circle cx="238" cy="170" r="5" class="hs-skin"/>
-  <rect x="14" y="170" width="372" height="10" rx="3" class="hs-desk"/><rect x="18" y="180" width="364" height="60" class="hs-deskf"/>
-  <path d="M168 168l32 3 32-3v4l-32 3-32-3z" class="hs-cover"/><path d="M170 166l30 3v3l-30-3zM230 166l-30 3v3l30-3z" class="hs-page"/>
-  <g class="hs-lamp"><rect x="64" y="164" width="38" height="6" rx="3"/><path d="M80 166l10-68 4 1-10 67z"/><path d="M84 96l34-8 6 16-34 6z"/></g><circle cx="112" cy="108" r="5" class="hs-bulb"/>
-  <rect x="292" y="158" width="58" height="12" rx="2" class="hs-b1"/><rect x="296" y="146" width="50" height="12" rx="2" class="hs-b2"/><rect x="290" y="134" width="56" height="12" rx="2" class="hs-b3"/>
-</svg>`;
-};
+// The header: a glass bar with the hello (your initial and name) and a bell for today's reminders
 const HUB_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg>';
-// which moment each Home button plays in the room
-const hubMoment = (act) => (act === 'ask' || act === 'start' ? 'ask' : act === 'cards' ? 'cards' : act === 'lab' || act === 'today' ? 'lab' : act === 'timer' ? 'timer' : act === 'streak' ? 'streak' : 'write');
-let hubScene = null, hubSceneMod = null; // the module: loading, then loaded (only once Home shows)
-const hubSceneWanted = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) && !window.CASSIE_LITE;
-function hubSceneStart(host) {
-  if (!hubSceneWanted() || !host.isConnected || !host.getClientRects().length) return; // (not showing: no 3D)
-  if (!hubScene) hubScene = import('./home-scene.js?v=169').then((m) => (hubSceneMod = m.webglOK() ? m : null)).catch(() => null);
-  hubScene.then((m) => { if (m && host.isConnected) { try { m.attach(host, { gender: (state.profile || {}).gender }); host.classList.add('is-3d'); } catch (e) { /* the still room stays */ } } });
-}
-function hubPlay(el, act) {
-  const host = el.querySelector('.hub-scene');
-  if (host && !host.classList.contains('is-3d')) host.dataset.pose = 'idle';
-  if (hubSceneMod && host && host.classList.contains('is-3d')) hubSceneMod.play(hubMoment(act)); // (at once: the button's job runs right after)
-}
 function hubHero(name, returning, due) {
   const hero = document.createElement('section');
   hero.className = 'hub-hero';
   hero.setAttribute('aria-label', 'Welcome');
-  hero.innerHTML = `<div class="hub-scene" data-pose="idle" aria-hidden="true">${hubSceneSvg((state.profile || {}).gender)}</div>
-    <div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><small>${returning ? 'Hi, welcome back' : 'Hi, welcome'}</small>${returning ? '<h1 class="hub-me"></h1>' : '<b class="hub-me"></b>'}</span>
+  hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><small>${returning ? 'Hi, welcome back' : 'Hi, welcome'}</small>${returning ? '<h1 class="hub-me"></h1>' : '<b class="hub-me"></b>'}</span>
     <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
   hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
   hero.querySelector('.hub-me').textContent = name || 'Student';
@@ -2019,9 +1974,7 @@ function buildHub({ ideas = false } = {}) {
   const bell = hero.querySelector('.hub-bell');
   bell.setAttribute('aria-expanded', String(hubRemindOpen));
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
-  // a button plays its moment in the room, and does its job at once (the moment never holds it up)
-  el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) { hubPlay(el, b.dataset.hub); hubAct(b.dataset.hub); } });
-  requestAnimationFrame(() => hubSceneStart(hero.querySelector('.hub-scene')));
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }

@@ -120,7 +120,9 @@ async function contrastIssues(page, sel = 'body') {
         if (st.visibility === 'hidden' || e.closest('[hidden], [aria-hidden="true"], svg')) continue;
         const range = document.createRange(); range.selectNodeContents(n); const r = range.getBoundingClientRect();
         if (r.width < 4 || r.height < 6 || r.top < 0 || r.left < 0 || r.bottom > innerHeight || r.right > innerWidth) continue;
-        if (!onTop(e, r.left + r.width / 2, r.top + r.height / 2) || clipped(e, r)) continue;
+        // (words partly under something else, a floating tab bar say, are only half showing: skip them)
+        const inset = (k, a, b) => a + (b - a) * k;
+        if (![[0.5, 0.5], [0.1, 0.15], [0.9, 0.15], [0.1, 0.85], [0.9, 0.85]].every(([kx, ky]) => onTop(e, inset(kx, r.left, r.right), inset(ky, r.top, r.bottom))) || clipped(e, r)) continue;
         out.push({ text: n.textContent.trim().slice(0, 30), color: st.color, size: parseFloat(st.fontSize), bold: +st.fontWeight >= 700, r: { x: r.left, y: r.top, w: r.width, h: r.height } });
       }
       for (const e of s.querySelectorAll('input[placeholder], textarea[placeholder]')) { // empty boxes show their placeholder
