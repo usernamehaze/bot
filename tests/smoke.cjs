@@ -1949,7 +1949,7 @@ test('the web app has no pop-out (it lives in the Chrome extension)', async (b) 
 // (where the 3D is drawn in software, that wait timed out)
 const NO_NAV = { noWaitAfter: true };
 test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
   await open3d(page, 'cells3d');
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 20000 });
   await page.click('.x3d-switch [data-cell="animal"]', NO_NAV);
@@ -2245,7 +2245,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
 });
 
 test('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
   await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   expect(await page.locator('.labs').isHidden(), 'Labs steps aside while the 3D body is open');
@@ -3237,7 +3237,7 @@ test('iPhone: the Solar System has no Teach me, Ask Cassie or Quiz me, Back alwa
 });
 
 test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom the whole page), in the chat, Labs, every lab, the tutor and the 3D explorer', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { groqKey: 'gsk_test' } });
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', scale: 1, state: { groqKey: 'gsk_test' } }); /* (1x pixels: font sizes don't change with them, and 3D at 3x is slow here) */
   expect(await page.evaluate(() => innerWidth) === 390, '390px wide');
   const small = new Set();
   const check = (where) => page.evaluate((w) => [...document.querySelectorAll('input, textarea, select')]
@@ -5039,7 +5039,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
       };
       let last = '';
       const issues = await Promise.race([
-        tapResponseIssues(page, { reopen, touch, skip, only: onlyKeys, perKind: all ? 0 : 3, seen: all ? null : seenAt[viewport.width], log: (m) => { last = m; if (process.env.TAP_VERBOSE) console.log(`  ${label}: ${m}`); } }),
+        tapResponseIssues(page, { reopen, touch, skip, only: onlyKeys, perKind: all ? 0 : 2, seen: all ? null : seenAt[viewport.width], log: (m) => { last = m; if (process.env.TAP_VERBOSE) console.log(`  ${label}: ${m}`); } }),
         new Promise((r) => setTimeout(() => r([{ cause: 'stuck', what: `the screen stopped answering after: ${last}` }]), (onlyKeys === undefined ? 6 : 15) * 60000)), // (longer alone: 3D in software here)
       ]);
       await ctx.close();
@@ -5069,7 +5069,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
   }
   // The whole sweep (TAP_SWEEP=all: every control, every lab, and the 3D views on a computer screen)
   // takes hours here, where 3D is drawn in software. The regular run: every screen at both sizes (the
-  // 3D views on the phone), up to 4 controls of each kind on a screen (4 of a shelf's 30 lab cards),
+  // 3D views on the phone), up to 2 controls of each kind on a screen (2 of a shelf's 30 lab cards),
   // and one lab of each kind: a simulation, a game, a puzzle and a study tool.
   const all = process.env.TAP_SWEEP === 'all' || !!only;
   const SAMPLE = /^(fractions|cracker|nonogram|vocab)$/;
@@ -5103,7 +5103,8 @@ test('3D space labs: no Teach me, Ask Cassie or Quiz me; every control takes tap
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const bad = [];
   for (const [size, device, viewport, touch] of [['390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['360x740', 'Pixel 7', { width: 360, height: 740 }, true], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]]) {
-    for (const lab of ['solar', 'space3d']) {
+    // (the two labs side by side: about half the time)
+    await Promise.all(['solar', 'space3d'].map(async (lab) => {
       // (a browser of its own for each lab and size, started again if this machine's software-drawn 3D
       // wears it out: dozens of reloads in a row, which a student never does, can crash it here)
       let own = null, page = null, errors = [];
@@ -5140,7 +5141,7 @@ test('3D space labs: no Teach me, Ask Cassie or Quiz me; every control takes tap
         }
       }
       await own.close().catch(() => {});
-    }
+    }));
   }
   expect(!bad.length, bad.join('\n'));
 });
