@@ -6380,28 +6380,189 @@ function openProfile(first) {
     e.preventDefault();
     const name = f.name.value.trim(), age = Math.round(+f.age.value), grade = f.grade.value;
     if (!check.check()) return;
-    const role = grade === WORKING ? 'pro' : 'student';
-    state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? (p.field || '') : '', age, gender, at: p.at || Date.now() };
-    state.audience = role === 'pro' ? 'pro' : 'student';
-    state.level = role === 'pro' ? 'auto' : levelForGrade(grade);
-    // anonymous usage counts stay as they were (changeable in Settings); never for under-13s,
-    // and topic words only ever from adults
-    const an0 = state.analytics || { usage: true, topics: true };
-    state.analytics = { usage: an0.usage !== false && age >= 13, topics: an0.topics !== false && age >= 18 };
-    save();
-    try { if (window.CassieMemory) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
-    if (typeof renderAudience === 'function') renderAudience();
-    applyAccent(); // (Cassie's colours follow the profile)
-    dressCassie();
     wrap.remove();
-    if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
-    try { mascotSay(first ? `Nice to meet you, ${name}! 👋` : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
-    renderProfileSummary();
+    saveProfile({ name, age, grade, gender }, first, p);
   });
   // the name box gets the focus, unless you're already typing in another box (it took the
   // next letters: an age typed straight away landed in the name)
   setTimeout(() => { if (!f.contains(document.activeElement)) f.name.focus(); }, 50);
 }
+/* ---------- First run: Welcome, Intro, Sign in, then four questions ----------
+   Minimal and centred, a step at a time. Where you are is kept (FR_KEY), so a reload carries on at
+   the same step; the answers end up in the same profile the old form saved. */
+const FR_KEY = 'cassie.firstRun';
+const HELP_WITH = [['homework', 'Homework'], ['exams', 'Exams'], ['notes', 'Notes'], ['flashcards', 'Flashcards'], ['labs', 'Labs']];
+function frLoad() { try { return JSON.parse(localStorage.getItem(FR_KEY) || 'null'); } catch (e) { return null; } }
+function frSave(s) { try { if (s) localStorage.setItem(FR_KEY, JSON.stringify(s)); else localStorage.removeItem(FR_KEY); } catch (e) { /* ignore */ } }
+// the profile, saved exactly as the profile form saves it (and Cassie's colours follow it)
+function saveProfile({ name, age, grade, gender }, first, prev = {}) {
+  const role = grade === WORKING ? 'pro' : 'student';
+  state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? (prev.field || '') : '', age, gender, at: prev.at || Date.now() };
+  state.audience = role === 'pro' ? 'pro' : 'student';
+  state.level = role === 'pro' ? 'auto' : levelForGrade(grade);
+  // anonymous usage counts stay as they were (changeable in Settings); never for under-13s,
+  // and topic words only ever from adults
+  const an0 = state.analytics || { usage: true, topics: true };
+  state.analytics = { usage: an0.usage !== false && age >= 13, topics: an0.topics !== false && age >= 18 };
+  save();
+  try { if (window.CassieMemory && name) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
+  if (typeof renderAudience === 'function') renderAudience();
+  applyAccent();
+  dressCassie();
+  if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
+  try { mascotSay(first ? (name ? `Nice to meet you, ${name}! 👋` : 'Nice to meet you! 👋') : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
+  renderProfileSummary();
+}
+// the screen everything sits on (one at a time); on a computer, a centred glass card
+function frShell() {
+  let el = document.querySelector('.fr');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'fr';
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Welcome to Cassie');
+    document.body.appendChild(el);
+    // the keyboard never covers the box or the button: the screen fits what's left above it
+    const vv = window.visualViewport;
+    const fit = () => { if (el.isConnected && vv) el.style.setProperty('--fr-h', vv.height + 'px'); };
+    if (vv) { vv.addEventListener('resize', fit); fit(); }
+  }
+  return el;
+}
+function frClose() { const el = document.querySelector('.fr'); if (el) el.remove(); }
+const frMascot = (host, st = 'greeting') => { try { window.CassieBot.create(host, { state: st, glow: true, pokeable: true }); } catch (e) { /* the words still work */ } };
+const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// 1. Welcome: Cassie, her name and one line, while the app gets ready (first visit only)
+function frWelcome(next) {
+  const el = frShell();
+  el.dataset.step = 'welcome';
+  el.innerHTML = `<section class="fr-welcome" aria-live="polite">
+    <div class="fr-bot" aria-hidden="true"></div>
+    <h1 class="fr-name">Cassie</h1>
+    <p class="fr-line">Your study buddy.</p>
+    <span class="fr-load" role="progressbar" aria-label="Loading"><i></i><i></i><i></i></span>
+  </section>`;
+  frMascot(el.querySelector('.fr-bot'));
+  setTimeout(next, reduceMotion() ? 900 : 1600);
+}
+// 2. Intro: one illustrated card and a big Get started
+function frIntro() {
+  frSave({ step: 'intro' });
+  const el = frShell();
+  el.dataset.step = 'intro';
+  el.innerHTML = `<section class="fr-intro">
+    <div class="fr-art" aria-hidden="true">
+      <svg class="fr-scene" viewBox="0 0 400 300" preserveAspectRatio="xMidYMax slice">
+        <path d="M0 210 C70 160 140 170 210 196 C270 218 330 176 400 186 V300 H0Z" class="fr-hill1"/>
+        <path d="M0 238 C90 206 170 236 240 230 C310 224 350 208 400 220 V300 H0Z" class="fr-hill2"/>
+        <g class="fr-books"><rect x="64" y="236" width="92" height="16" rx="3"/><rect x="72" y="220" width="80" height="16" rx="3"/><rect x="60" y="204" width="88" height="16" rx="3"/></g>
+        <path d="M282 250 l40 -40 l10 10 l-40 40 l-14 4z" class="fr-pencil"/>
+      </svg>
+      <div class="fr-bot" aria-hidden="true"></div>
+    </div>
+    <div class="fr-copy">
+      <h1>Study smarter with Cassie</h1>
+      <p>Ask anything, make flashcards, try labs and study with friends. Free.</p>
+      <button type="button" class="fr-go fr-start">Get started</button>
+    </div>
+  </section>`;
+  frMascot(el.querySelector('.fr-art .fr-bot'), 'happy');
+  el.querySelector('.fr-start').addEventListener('click', () => frSignIn());
+  setTimeout(() => { const b = el.querySelector('.fr-start'); if (b) b.focus({ preventScroll: true }); }, 50);
+}
+// 3. Sign in (with Cassie's server), or straight to the questions
+function frSignIn() {
+  if (!accountsOn() || authToken() || state.skippedAuth) { frOnboard((frLoad() || {}).at || 0); return; }
+  frSave({ step: 'auth' });
+  frClose();
+  openAuth({ first: true, mode: 'signup' });
+}
+// 4. The questions, one a screen: name, studying, help with, voice
+function frOnboard(at = 0) {
+  const prev = frLoad() || {};
+  const a = { name: '', gender: '', grade: '', age: '', help: [], voice: state.voiceGender === 'man' ? 'man' : 'woman', ...(prev.answers || {}) };
+  if (!a.name && state.account && state.account.name) a.name = state.account.name;
+  const keep = () => frSave({ step: 'ob', at, answers: a });
+  keep();
+  const el = frShell();
+  el.dataset.step = 'ob' + (at + 1);
+  const TOTAL = 4;
+  const Q = [
+    { h: 'What’s your name?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
+        <div class="fr-q2"><span id="fr-g">You are</span><div class="fr-seg" role="radiogroup" aria-labelledby="fr-g">${[['female', 'Female'], ['male', 'Male'], ['none', 'Prefer not to say']].map(([v, l]) => `<button type="button" role="radio" data-gender="${v}">${l}</button>`).join('')}</div></div>` },
+    { h: 'What are you studying?', body: `<select class="fr-big fr-select" name="grade" aria-label="What you are studying"><option value="">Choose your level</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select>
+        <label class="fr-q2"><span>Your age</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
+    { h: 'What do you want help with?', sub: 'Pick any.', body: `<div class="fr-picks">${HELP_WITH.map(([v, l]) => `<button type="button" class="fr-pick" data-help="${v}" aria-pressed="false">${l}</button>`).join('')}</div>` },
+    { h: 'How should Cassie sound?', sub: 'Tap one to hear her.', body: `<div class="fr-voices" role="radiogroup" aria-label="Cassie’s voice">${[['woman', 'Woman'], ['man', 'Man']].map(([v, l]) => `<button type="button" role="radio" class="fr-voice" data-voice="${v}"><span class="fr-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>${l}</button>`).join('')}</div>` },
+  ][at];
+  el.innerHTML = `<form class="fr-ob" novalidate>
+    <div class="fr-top">
+      <button type="button" class="fr-back"${at === 0 ? ' hidden' : ''}>‹ Back</button>
+      <div class="fr-progress"><span class="fr-bar"><i style="width:${((at + 1) / TOTAL) * 100}%"></i></span><span class="fr-count">${at + 1} of ${TOTAL}</span></div>
+      <button type="button" class="fr-skip">Skip</button>
+    </div>
+    <div class="fr-mid">
+      <h1 class="fr-h">${Q.h}</h1>
+      ${Q.sub ? `<p class="fr-sub">${Q.sub}</p>` : ''}
+      ${Q.body}
+      <p class="fr-err" role="alert" hidden></p>
+    </div>
+    <button type="submit" class="fr-go">${at === TOTAL - 1 ? 'Start studying' : 'Next'}</button>
+  </form>`;
+  const f = el.querySelector('form'), err = el.querySelector('.fr-err');
+  const say = (m) => { err.textContent = m; err.hidden = !m; };
+  // fill in what's known, and keep each answer as it changes
+  if (f.name) f.name.value = a.name;
+  if (f.grade) { f.grade.value = a.grade; f.age.value = a.age; }
+  const mark = () => {
+    f.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === a.gender)));
+    f.querySelectorAll('[data-help]').forEach((b) => b.setAttribute('aria-pressed', String(a.help.includes(b.dataset.help))));
+    f.querySelectorAll('[data-voice]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.voice === a.voice)));
+  };
+  mark();
+  f.addEventListener('input', () => { if (f.name) a.name = f.name.value.trim(); if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } say(''); keep(); });
+  f.addEventListener('change', () => { if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } keep(); });
+  f.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-gender]'), h = e.target.closest('[data-help]'), v = e.target.closest('[data-voice]');
+    if (g) a.gender = g.dataset.gender;
+    if (h) a.help = a.help.includes(h.dataset.help) ? a.help.filter((x) => x !== h.dataset.help) : [...a.help, h.dataset.help];
+    if (v) {
+      a.voice = v.dataset.voice; state.voiceGender = a.voice; save();
+      try { if (window.CassieVoice && window.CassieVoice.speak) window.CassieVoice.speak('Hi! I’m Cassie, your study buddy.', { gender: a.voice }); } catch (e2) { /* a sample is a nice extra */ }
+    }
+    if (g || h || v) { say(''); mark(); keep(); }
+  });
+  const go = (k) => { if (k >= TOTAL) frFinish(a); else { frSave({ step: 'ob', at: k, answers: a }); frOnboard(k); } };
+  el.querySelector('.fr-back').addEventListener('click', () => go(Math.max(0, at - 1)));
+  el.querySelector('.fr-skip').addEventListener('click', () => go(at + 1));
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (at === 0 && !a.name) { say('Type your name, or tap Skip.'); f.name.focus(); return; }
+    if (at === 1 && !a.grade) { say('Choose your level, or tap Skip.'); f.grade.focus(); return; }
+    if (at === 1 && a.age && !(Math.round(+a.age) >= 2 && Math.round(+a.age) <= 100)) { say('Type an age from 2 to 100, or leave it empty.'); f.age.focus(); return; }
+    go(at + 1);
+  });
+  setTimeout(() => { const first = f.querySelector('.fr-big, .fr-pick, .fr-voice'); if (first && !f.contains(document.activeElement)) first.focus({ preventScroll: true }); }, 60);
+}
+function frFinish(a) {
+  const age = Math.round(+a.age) || 0;
+  saveProfile({ name: a.name || '', age: age >= 2 && age <= 100 ? age : 0, grade: a.grade || '', gender: a.gender || 'none' }, true, state.profile || {});
+  state.helpWith = a.help || [];
+  state.voiceGender = a.voice === 'man' ? 'man' : 'woman';
+  save();
+  frSave(null);
+  frClose();
+  if (typeof syncAccount === 'function') syncAccount(true);
+}
+// where the first run starts: a returning student never sees it; a reload carries on
+function firstRun() {
+  const saved = frLoad();
+  if (saved && saved.step === 'ob') { frOnboard(saved.at || 0); return; }
+  if (saved && saved.step === 'auth') { frSignIn(); return; }
+  if (saved && saved.step === 'intro') { frIntro(); return; }
+  frWelcome(() => frIntro());
+}
+
 /* ---------- Cassie accounts: sign in once, and your profile follows you ---------- */
 // Only with Cassie's server (config.js). What syncs: profile, settings and saved quiz
 // mistakes — never chats or API keys. Without an account everything stays on the device.
@@ -6555,12 +6716,13 @@ function free3d(k, seen) {
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
   if (res.account.data && res.account.data.profile) {
+    frSave(null); // (the account already knows them: no questions)
     applyAccountData(res.account.data);
     track('open');
     try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
   } else {
     if (state.profile) syncAccount(true); // this device already has a profile → save it to the account
-    else openProfile(true);
+    else frOnboard(0); // the four questions
   }
   renderProfileSummary();
 }
@@ -6622,7 +6784,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
         <button type="submit" class="auth-go"></button>
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
-        <button type="button" class="auth-skip">Continue without an account</button>
+        <button type="button" class="auth-skip">Continue as a guest</button>
         <p class="auth-legal">Cassie is for learners of every age, from nursery to college and work. Young children: ask a parent or teacher to help you sign up. Your chats stay on your device; an account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
       </form>
     </div>
@@ -6738,7 +6900,11 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     if (!check.check()) return;
     if (linking) { linkWith({ password }); return; }
     go.disabled = true; go.setAttribute('aria-busy', 'true');
-    try { done(await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password })); }
+    try {
+      const res = await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password });
+      if (signup() && first) frSave({ step: 'ob', at: 0, answers: { ...((frLoad() || {}).answers || {}), age: String(age) } }); // (the questions won't ask the age again)
+      done(res);
+    }
     catch (e2) {
       go.disabled = false; go.removeAttribute('aria-busy');
       const field = FIELD_OF[e2.code];
@@ -6749,7 +6915,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   f.querySelector('.auth-skip').addEventListener('click', () => {
     close();
     state.skippedAuth = true; save();
-    if (!state.profile) openProfile(true);
+    if (!state.profile) frOnboard((frLoad() || {}).at || 0);
   });
   if (!first) page.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   page.querySelector('.auth-apple').addEventListener('click', () => { if (prov.apple) appleStart(prov.apple); });
@@ -7022,7 +7188,9 @@ renderProfileSummary();
 const appleBack = accountsOn() ? appleReturned() : null; // back from Sign in with Apple
 if (!state.profile) {
   // with Cassie's server: the sign-in page first (or "Continue without an account")
-  setTimeout(() => (appleBack ? openAuth({ first: true, mode: 'signup', returned: appleBack }) : accountsOn() && !authToken() && !state.skippedAuth ? openAuth({ first: true, mode: 'signup' }) : openProfile(true)), 300);
+  // Welcome, Intro, Sign in (with Cassie's server), then the four questions; a reload carries on
+  if (appleBack) setTimeout(() => openAuth({ first: true, mode: 'signup', returned: appleBack }), 300);
+  else firstRun();
 } else {
   track('open');
   if (appleBack) setTimeout(() => openAuth({ mode: 'signin', returned: appleBack }), 300);
