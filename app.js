@@ -1870,6 +1870,62 @@ function renderHubTimer() {
   });
 }
 setInterval(() => { if (document.querySelector('.hub-timer')) renderHubTimer(); }, 1000);
+// The header: a little study room (home-scene.js, 3D) with the hello and a bell over it. The still
+// drawing below is the same room: shown at once, and kept for Reduce Motion, Lite mode or no WebGL.
+const HUB_SCENE_SVG = `<svg class="hub-still" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+  <g class="hs-win"><rect x="236" y="34" width="124" height="90" rx="4" class="hs-frame"/><rect x="242" y="40" width="112" height="78" class="hs-sky"/><circle cx="326" cy="60" r="11" class="hs-sun"/>
+    <g class="hs-cloud"><circle cx="262" cy="64" r="8"/><circle cx="272" cy="60" r="10"/><circle cx="283" cy="65" r="7"/></g><rect x="296" y="40" width="4" height="78" class="hs-frame"/><rect x="242" y="77" width="112" height="4" class="hs-frame"/></g>
+  <rect x="166" y="114" width="68" height="64" rx="30" class="hs-shirt"/>
+  <circle cx="200" cy="92" r="24" class="hs-skin"/><path d="M176 90a24 24 0 0 1 48 0c-8-9-30-12-48 0z" class="hs-hair"/>
+  <rect x="190" y="90" width="5" height="8" rx="2.5" class="hs-eye"/><rect x="205" y="90" width="5" height="8" rx="2.5" class="hs-eye"/>
+  <path d="M170 132l-14 34h16l10-26zM230 132l14 34h-16l-10-26z" class="hs-shirt"/>
+  <rect x="14" y="170" width="372" height="10" rx="3" class="hs-desk"/><rect x="18" y="180" width="364" height="60" class="hs-deskf"/>
+  <path d="M168 168l32 3 32-3v4l-32 3-32-3z" class="hs-cover"/><path d="M170 166l30 3v3l-30-3zM230 166l-30 3v3l30-3z" class="hs-page"/>
+  <g class="hs-lamp"><rect x="64" y="164" width="38" height="6" rx="3"/><path d="M80 166l10-68 4 1-10 67z"/><path d="M84 96l34-8 6 16-34 6z"/></g><circle cx="112" cy="108" r="5" class="hs-bulb"/>
+  <rect x="292" y="158" width="58" height="12" rx="2" class="hs-b1"/><rect x="296" y="146" width="50" height="12" rx="2" class="hs-b2"/><rect x="290" y="134" width="56" height="12" rx="2" class="hs-b3"/>
+</svg>`;
+const HUB_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg>';
+// which moment each Home button plays in the room
+const hubMoment = (act) => (act === 'ask' || act === 'start' ? 'ask' : act === 'cards' ? 'cards' : act === 'lab' ? 'lab' : act === 'timer' ? 'timer' : act === 'streak' ? 'streak' : 'write');
+let hubScene = null, hubSceneMod = null; // the module: loading, then loaded (only once Home shows)
+const hubSceneWanted = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) && !window.CASSIE_LITE;
+function hubSceneStart(host) {
+  if (!hubSceneWanted() || !host.isConnected || !host.getClientRects().length) return; // (not showing: no 3D)
+  if (!hubScene) hubScene = import('./home-scene.js?v=169').then((m) => (hubSceneMod = m.webglOK() ? m : null)).catch(() => null);
+  hubScene.then((m) => { if (m && host.isConnected) { try { m.attach(host); host.classList.add('is-3d'); } catch (e) { /* the still room stays */ } } });
+}
+function hubPlay(el, act) {
+  const host = el.querySelector('.hub-scene');
+  if (host && !host.classList.contains('is-3d')) host.dataset.pose = 'idle';
+  if (hubSceneMod && host && host.classList.contains('is-3d')) hubSceneMod.play(hubMoment(act)); // (at once: the button's job runs right after)
+}
+function hubHero(name, returning, due) {
+  const hero = document.createElement('section');
+  hero.className = 'hub-hero';
+  hero.setAttribute('aria-label', 'Welcome');
+  hero.innerHTML = `<div class="hub-scene" data-pose="idle" aria-hidden="true">${HUB_SCENE_SVG}</div>
+    <div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><small>${returning ? 'Hi, welcome back' : 'Hi, welcome'}</small>${returning ? '<h1 class="hub-me"></h1>' : '<b class="hub-me"></b>'}</span>
+    <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
+  hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
+  hero.querySelector('.hub-me').textContent = name || 'Student';
+  return hero;
+}
+// the bell: what's waiting today (cards due, the focus timer, your streak, today's lab)
+let hubRemindOpen = false;
+function hubReminders(due, streak) {
+  const box = document.createElement('div');
+  box.className = 'hub-remind' + (hubRemindOpen ? ' open' : ''); // (Home is redrawn often on a phone: the open state lives in hubRemindOpen)
+  box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Reminders');
+  const rows = [
+    ['cards', HUB_ICON.cards, due ? `${due} ${due === 1 ? 'card' : 'cards'} to review` : 'No cards due', due ? 'Review now' : 'Make cards'],
+    ['timer', HUB_ICON.timer, 'Focus timer', 'Start a focus session'],
+    ['streak', HUB_ICON.streak, `${streak} day streak`, streak ? 'Keep it going today' : 'Start one today'],
+    ['lab', HUB_ICON.lab, 'Today’s lab', 'Open Labs'],
+  ];
+  box.innerHTML = '<h2 class="hub-h">Reminders</h2>' + rows.map(([a, i]) => `<button type="button" class="hub-chat" data-hub="${a}"><i>${i}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`).join('');
+  box.querySelectorAll('.hub-chat').forEach((b, k) => { b.querySelector('b').textContent = rows[k][2]; b.querySelector('small').textContent = rows[k][3]; });
+  return box;
+}
 function buildHub({ ideas = false } = {}) {
   const p = state.profile || {};
   const name = (p.name || '').trim().split(/\s+/)[0];
@@ -1889,8 +1945,7 @@ function buildHub({ ideas = false } = {}) {
       <button type="button" class="hub-go" data-hub="start">Start studying</button>`;
   } else {
     const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
-    el.innerHTML = `<header class="hub-head"><div class="hub-bot hub-bot-s" aria-hidden="true"></div><div><h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}</h1><p class="hub-sub"></p></div></header>
-      <button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
+    el.innerHTML = `<button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
       <h2 class="hub-h">Today</h2>
       <div class="hub-today">
         <button type="button" class="hub-w" data-hub="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
@@ -1902,7 +1957,6 @@ function buildHub({ ideas = false } = {}) {
       <div class="hub-recent"></div>
       <h2 class="hub-h">Quick actions</h2>
       <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div>`;
-    el.querySelector('.hub-sub').textContent = [p.role === 'pro' ? 'Working professional' : p.grade, 'Your study buddy is here'].filter(Boolean).join(' · ');
     el.querySelectorAll('.hub-q span').forEach((s, i) => { s.textContent = HOME_EXAMPLES[i].label; });
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
@@ -1915,7 +1969,16 @@ function buildHub({ ideas = false } = {}) {
     if (!chats.length) list.innerHTML = '<p class="hub-none">Your chats with Cassie show up here.</p>';
   }
   el.querySelectorAll('.hub-name').forEach((s) => { s.textContent = name; });
-  el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
+  // the header on top, the bell's reminders just under it
+  const streakNow = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  const hero = hubHero(name, returning, due), remind = hubReminders(due, streakNow);
+  el.prepend(hero, remind);
+  const bell = hero.querySelector('.hub-bell');
+  bell.setAttribute('aria-expanded', String(hubRemindOpen));
+  bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
+  // a button plays its moment in the room, and does its job at once (the moment never holds it up)
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) { hubPlay(el, b.dataset.hub); hubAct(b.dataset.hub); } });
+  requestAnimationFrame(() => hubSceneStart(hero.querySelector('.hub-scene')));
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
