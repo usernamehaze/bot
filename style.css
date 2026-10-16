@@ -38,6 +38,7 @@ html, :where(body, body *) { touch-action: manipulation; }
   --hi-rgb: 255, 255, 255;
   --paper-rgb: 244, 239, 228;
   --mid-rgb: 127, 127, 127;
+  --skin: #e7b591;  /* Home's study room: the student's skin */
   --white: #ffffff;
   --sw-blush: #b8395a; --sw-sage: #2f6f5e; --sw-ink: #1b1b1d; /* the Appearance swatches: always these */
   --black: #000000;
@@ -67,6 +68,7 @@ html, :where(body, body *) { touch-action: manipulation; }
   --primary: #1b1b1d; --primary-dark: #000000; --on-primary: #ffffff;
   --secondary: #3a3a3d; --on-secondary: #ffffff;
   --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 27, 27, 29;
+  --skin: #c9c9cc;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -2364,13 +2366,16 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub-ask svg { width: 21px; height: 21px; color: var(--muted); flex: none; }
 .hub-ask span { color: var(--muted); font-size: 1rem; }
 .hub-h { margin: 14px 2px 0; font-size: 1.15rem; letter-spacing: -.01em; }
-.hub-today { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 760px) { .hub-today { grid-template-columns: 1fr 1fr; } }
-.hub-w { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 150px; padding: 14px; border-radius: 22px; text-align: left;
-  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
-.hub-w b { margin-top: 10px; font-size: 1.9rem; line-height: 1; letter-spacing: -.03em; }
-.hub-w span { color: var(--muted); font-size: .85rem; }
-.hub-w em { margin-top: auto; padding-top: 8px; font-style: normal; font-weight: 650; font-size: .9rem; color: var(--primary-ink); }
+/* Today: a sideways row of glass chips (scrolls on a phone) */
+.hub-today { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 2px 10px; margin: 0 -2px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.hub-today::-webkit-scrollbar { display: none; }
+.hub-w { flex: 0 0 auto; display: grid; grid-template-columns: 42px auto; column-gap: 10px; align-items: center; align-content: center; min-width: 172px; min-height: 76px; padding: 10px 16px 10px 10px; border-radius: 22px; text-align: left; scroll-snap-align: start;
+  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge); }
+.hub-w i { grid-row: 1 / span 3; }
+.hub-w b { grid-column: 2; font-size: 1.15rem; line-height: 1.15; letter-spacing: -.02em; }
+.hub-w span { grid-column: 2; color: var(--muted); font-size: .82rem; line-height: 1.2; }
+.hub-w em { grid-column: 2; font-style: normal; font-weight: 650; font-size: .82rem; color: var(--primary-ink); }
+@media (min-width: 761px) { .hub-w { flex: 1 0 172px; } }
 .hub-recent { display: grid; gap: 8px; }
 .hub-chat { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px; border-radius: 18px; text-align: left; background: var(--surface); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge); }
 .hub-chat i { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 50%; background: var(--bg); }
@@ -2387,8 +2392,56 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .hub button:active { transform: none; } }
 .home-hub > .hub { width: 100%; flex: 1 1 100%; }
-.home-hub > .hub-empty { max-width: 520px; }
+.home-hub > .hub-empty { max-width: none; }
+.home-hub > .hub-empty > :not(.hub-hero):not(.hub-remind) { max-width: 520px; }
 /* (a computer's empty chat has the chat box below: the new hub stays compact so all of it shows) */
 .home-hub .hub-empty .hub-bot { width: 112px; height: 112px; margin-top: 0; }
 .home-hub .hub-empty .hub-card { min-height: 112px; }
 .home-hub .hub-empty .hub-hi { font-size: 1.7rem; }
+
+/* ---------- Home: the header ----------
+   A little study room (home-scene.js in 3D; the still drawing for Reduce Motion, Lite mode or no
+   WebGL) with the hello and the bell over it. Phones: edge to edge under the status bar, rounded at
+   the bottom; computers: a rounded card at the top of the column. */
+.hub-hero { position: relative; flex: none; width: 100%; height: 260px; border-radius: 28px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
+.hub-scene { position: absolute; inset: 0; background: color-mix(in srgb, var(--primary) 12%, var(--bg)); }
+.hub .hub-still { display: block; width: 100%; height: 100%; stroke: none; }
+.hub .hub-still * { stroke: none; }
+.hub-scene.is-3d .hub-still { display: none; }
+.hub-scene-3d { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
+.hs-frame { fill: color-mix(in srgb, var(--surface) 92%, var(--text)); }
+.hs-sky { fill: color-mix(in srgb, var(--secondary) 45%, var(--surface)); }
+.hs-sun { fill: color-mix(in srgb, var(--warning) 45%, var(--surface)); }
+.hs-cloud { fill: rgb(var(--hi-rgb)); opacity: .9; }
+.hs-shirt { fill: var(--primary); }
+.hs-skin { fill: var(--skin); }
+.hs-hair, .hs-eye { fill: rgb(var(--ink-rgb)); }
+.hs-desk { fill: color-mix(in srgb, var(--secondary) 58%, rgb(var(--ink-rgb))); }
+.hs-deskf { fill: color-mix(in srgb, var(--secondary) 45%, rgb(var(--ink-rgb))); }
+.hs-cover { fill: color-mix(in srgb, var(--primary) 70%, rgb(var(--ink-rgb))); }
+.hs-page { fill: color-mix(in srgb, var(--surface) 85%, var(--bg)); }
+.hs-lamp { fill: color-mix(in srgb, var(--surface) 75%, var(--text)); }
+.hs-bulb { fill: color-mix(in srgb, var(--warning) 30%, var(--surface)); }
+.hs-b1 { fill: var(--primary); } .hs-b2 { fill: var(--secondary); } .hs-b3 { fill: color-mix(in srgb, var(--primary) 55%, var(--surface)); }
+/* the hello and the bell, on glass so they read over the room */
+.hub-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; z-index: 1; }
+.hub-av { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-weight: 750; font-size: 1.15rem;
+  border: 2px solid var(--surface); box-shadow: var(--lg-lift); }
+.hub-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; padding: 6px 14px; border-radius: 16px; text-align: left;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); }
+.hub-who small { color: var(--text); font-size: .8rem; font-weight: 600; opacity: .85; }
+.hub-me { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.12rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.2; }
+.hub .hub-bell { position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; padding: 0; border: 1px solid var(--lg-line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); }
+.hub-bell svg { width: 22px; height: 22px; }
+.hub-dot { position: absolute; top: 9px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); }
+.hub-remind { display: none; gap: 8px; width: 100%; }
+.hub-remind.open { display: grid; }
+.hub-remind .hub-h { margin-top: 2px; }
+/* phones: edge to edge, under the status bar */
+@media (max-width: 760px) {
+  .hub-hero { height: 220px; border-radius: 0 0 28px 28px; border-top: 0; }
+  html.native .hub-hero { width: calc(100% + 40px); height: calc(220px + var(--safe-top)); margin: calc(-20px - var(--safe-top)) -20px 4px; }
+  html.native .hub-top { top: calc(10px + var(--safe-top)); left: 16px; right: 16px; }
+}
