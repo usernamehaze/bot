@@ -1,4 +1,4 @@
-// Cassie in 3D: the cursor with two eyes, puffed up like a soft toy. She floats, turns a little, blinks,
+// Cassie in 3D: the cursor with two eyes, puffed up like a soft toy, black and white like her icon. She floats, turns a little, blinks,
 // leans toward your pointer (or finger) and hops in when she first appears. Used on the Get started
 // screen only; app.js falls back to the flat Cassie for Reduce Motion, Lite mode or no WebGL.
 import * as THREE from './explore/three.module.min.js';
@@ -25,18 +25,6 @@ function roundedShape(pts) {
   });
   s.closePath();
   return s;
-}
-
-// a CSS colour (a palette token) as something three.js reads
-function cssColour(name, fallback) {
-  const probe = document.createElement('i');
-  probe.style.cssText = `position:absolute;visibility:hidden;color:var(${name})`;
-  document.body.appendChild(probe);
-  const c = getComputedStyle(probe).color;
-  probe.remove();
-  const ctx = document.createElement('canvas').getContext('2d');
-  ctx.fillStyle = fallback; ctx.fillStyle = c;
-  return new THREE.Color(ctx.fillStyle);
 }
 
 // a soft round shadow on the ground (drawn once into a small picture)
@@ -105,18 +93,9 @@ export function mount(host, { hop = true } = {}) {
   shadow.position.set(0.05, -1.12, -0.2);
   scene.add(cassie, shadow);
 
-  // her colours follow the palette: the body is --primary, the eyes --on-primary (white on a colour;
-  // in Monochrome, a white Cassie with dark eyes in the dark, a dark one with light eyes in the light)
-  const paint = () => {
-    bodyMat.color.copy(cssColour('--primary', '#2f7a4f'));
-    eyeMat.color.copy(cssColour('--on-primary', '#ffffff'));
-  };
-  paint();
-  const dark = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
-  const repaint = () => requestAnimationFrame(paint);
-  if (dark && dark.addEventListener) dark.addEventListener('change', repaint);
-  const themeWatch = new MutationObserver(repaint);
-  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-pal', 'style'] });
+  // black and white, like her icon: a white body with near-black eyes, in every palette
+  bodyMat.color.set(0xf7f7f8);
+  eyeMat.color.set(0x121218);
 
   // size: the host's box
   const fit = () => {
@@ -188,8 +167,6 @@ export function mount(host, { hop = true } = {}) {
     window.removeEventListener('pointermove', onPoint);
     window.removeEventListener('pointerdown', onPoint);
     document.removeEventListener('visibilitychange', onVis);
-    if (dark && dark.removeEventListener) dark.removeEventListener('change', repaint);
-    themeWatch.disconnect();
     if (io) io.disconnect();
     if (ro) ro.disconnect();
     scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
