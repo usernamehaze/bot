@@ -4235,9 +4235,18 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/side-rail-cards.png' });
   await page.click('.fc-x');
   await page.waitForFunction(() => !document.querySelector('.side-tool[data-tip="Flashcards"]').classList.contains('on'), null, { timeout: 2000 });
-  // the chevron: the full sidebar with every tool's name, kept after a reload
+  // the chevron: the full sidebar, the tool list folded at first so the timer and Recents are near the top
   await page.click('#side-toggle');
   await page.waitForTimeout(400);
+  const inView = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return 'missing'; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? 'ok' : JSON.stringify(r); }, sel);
+  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'the tool list starts folded');
+  expect(await inView('#pomo-toggle') === 'ok' && await inView('#chat-list .chat-item') === 'ok', 'folded: the timer’s Start and the first chat are in view: ' + await inView('#pomo-toggle') + ' ' + await inView('#chat-list .chat-item'));
+  // typing in Search opens it for a moment; clearing folds it again
+  await page.fill('#side-search', 'flash');
+  expect(await page.locator('.side-tool[data-tip="Flashcards"] span').isVisible(), 'flash finds Flashcards while folded');
+  await page.fill('#side-search', '');
+  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'clearing Search folds it again');
+  await page.click('#side-menu-toggle');
   const labels = await page.evaluate(() => HOME_EXAMPLES.map((x) => x.label));
   for (const l of labels) expect(await page.locator('.side-tool', { hasText: l }).locator('span').isVisible(), 'the full sidebar shows ' + l);
   g = await geo();
@@ -4270,8 +4279,8 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   // the tap test on the sidebar, both ways
   const reopen = async () => { await page.goto(APP); await page.waitForTimeout(800); return page; };
   for (const open of [false, true]) {
-    await page.evaluate((o) => setSideOpen(o), open); await page.waitForTimeout(350);
-    const bad = await tapResponseIssues(page, { reopen: async () => { const p = await reopen(); await p.evaluate((o) => setSideOpen(o), open); await p.waitForTimeout(350); return p; }, touch: false, scope: '#sidebar, #side-toggle', skip: /delete|×/i, perKind: 3 });
+    await page.evaluate((o) => { setSideOpen(o); setToolsOpen(true); }, open); await page.waitForTimeout(350);
+    const bad = await tapResponseIssues(page, { reopen: async () => { const p = await reopen(); await p.evaluate((o) => { setSideOpen(o); setToolsOpen(true); }, open); await p.waitForTimeout(350); return p; }, touch: false, scope: '#sidebar, #side-toggle', skip: /delete|×/i, perKind: 3 });
     expect(!bad.length, `the sidebar (${open ? 'full' : 'rail'}) answers taps: ` + JSON.stringify(bad).slice(0, 600));
   }
   // Ideas to get started: the home screen of a new chat shows where the tools are
@@ -4279,6 +4288,9 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   await page.evaluate(() => { setSideOpen(false); createNewChat(); });
   await page.click('.home-ideas');
   await page.waitForFunction(() => document.body.classList.contains('side-open') && document.querySelector('.side-tools.flash'), null, { timeout: 2000 });
+  // folded or not is kept too
+  await page.evaluate(() => setToolsOpen(false)); await page.reload(); await page.waitForTimeout(600);
+  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'folded after a reload');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 
@@ -4290,6 +4302,9 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   expect(await pp.evaluate(() => document.getElementById('sidebar').getBoundingClientRect().right <= 0) && !(await pp.locator('#side-toggle').isVisible()), 'no rail on a phone');
   await pp.tap('#menu-btn');
   await pp.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 2000 }); await pp.waitForTimeout(300);
+  const pin = (sel) => pp.evaluate((s) => { const e = document.querySelector(s); const r = e && e.getBoundingClientRect(); return !!r && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight - 70; }, sel); // (above the tab bar)
+  expect(await pin('#pomo-toggle') && await pin('#chat-list .chat-item'), 'phone, folded: the timer’s Start and the first chat are in view');
+  await pp.tap('#side-menu-toggle'); await pp.waitForTimeout(200);
   const pfb = await pp.locator('.side-tool[data-tip="Flashcards"]').boundingBox();
   expect(pfb && pfb.height >= 44 && pfb.y + pfb.height <= 844, 'Flashcards is in the menu, 44px tall: ' + JSON.stringify(pfb));
   if (process.env.SHOTS) await pp.screenshot({ path: process.env.SHOTS + '/side-phone.png' });
@@ -4298,7 +4313,7 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   expect(!(await pp.evaluate(() => document.getElementById('sidebar').classList.contains('open'))), 'the menu closes');
   await pp.tap('.fc-x');
   // the tap test on the phone's menu
-  const preopen = async () => { await pp.goto(APP); await pp.waitForTimeout(800); await pp.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); openSidebar(); }); await pp.waitForTimeout(400); return pp; };
+  const preopen = async () => { await pp.goto(APP); await pp.waitForTimeout(800); await pp.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); openSidebar(); setToolsOpen(true); }); await pp.waitForTimeout(400); return pp; };
   await preopen();
   // (Close menu is left out: the menu takes longer to slide away than the check waits; closing is checked above)
   const pbad = await tapResponseIssues(pp, { reopen: preopen, touch: true, scope: '#sidebar', skip: /delete|×|close menu/i, perKind: 3 });
@@ -4652,6 +4667,55 @@ test('Cassie’s colours: Blush & Sage (sage leads for a boy, blush for a girl o
       await ctx.close();
       if (gender === 'none' && size === '1280x800') break;
     }
+  }
+});
+
+test('Appearance: Monochrome is black and white, a picked colour reaches New chat, send, the timer, the open tab, your bubble and Labs, and Cassie brings back blush and sage', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const rgb = (c) => (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+  const hex = (c) => '#' + rgb(c).map((n) => Math.round(n).toString(16).padStart(2, '0')).join('');
+  const L = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, c) => { const x = L(a), y = L(c); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const CONTROLS = { 'New chat': '#new-chat-btn', send: '#send-btn', 'timer Start': '#pomo-toggle', 'your bubble': '.bubble-user', 'open tab': '.tabbar .tab.on' };
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', profile: { ...PROFILE, gender: 'male' } }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.' }) });
+    await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+    await ask(page, 'What is osmosis?');
+    await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }).catch(() => {}); // (the "Done" pill goes)
+    if (size === '1280x800') await page.evaluate(() => setSideOpen(true)); // (the timer is in the full sidebar)
+    const colours = () => page.evaluate((ctl) => Object.fromEntries(Object.entries(ctl).map(([k, sel]) => { const e = document.querySelector(sel); if (!e || !e.getClientRects().length) return [k, null]; const st = getComputedStyle(e); return [k, { bg: st.backgroundColor, fg: st.color }]; })), CONTROLS);
+    for (const pick of ['mono', '#2563eb', '#f59e0b', '']) {
+      await page.evaluate((c) => setAccent(c), pick);
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350);
+        if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/appearance-${size}-${pick.replace('#', '') || 'cassie'}-${scheme}.png` });
+        const got = await colours();
+        for (const [k, v] of Object.entries(got)) {
+          if (!v) { expect(k === 'open tab' && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; }
+          const bg = hex(v.bg), fg = hex(v.fg);
+          if (pick === 'mono') {
+            const [r, g, bl] = rgb(v.bg);
+            expect(Math.max(r, g, bl) - Math.min(r, g, bl) <= 6, `${size} Monochrome ${scheme}: ${k} has a hue: ${v.bg}`);
+          } else if (pick) expect(bg === pick, `${size} ${pick} ${scheme}: ${k} is ${bg}, not the picked colour`);
+          else expect(bg === (scheme === 'light' ? '#2f6f5e' : '#7cc4ae'), `${size} Cassie ${scheme}: ${k} is ${bg}, not sage (a boy’s profile)`);
+          expect(ratio(bg, fg) >= 4.5, `${size} ${pick || 'Cassie'} ${scheme}: ${k} words ${fg} on ${bg} = ${ratio(bg, fg).toFixed(2)}:1`);
+        }
+        if (pick === 'mono' || pick === '#f59e0b') {
+          const { bad } = await contrastIssues(page);
+          expect(!bad.length, `${size} ${pick} ${scheme}: under AA: ` + bad.join(' | '));
+        }
+      }
+    }
+    // Labs: a pressed chip takes the picked colour
+    if (size === '1280x800') {
+      await page.evaluate(() => setAccent('#2563eb'));
+      await page.evaluate(() => openLabs());
+      await page.waitForSelector('.labs-chips button[aria-pressed="true"]', { timeout: 15000 });
+      const chip = await page.evaluate(() => { const st = getComputedStyle(document.querySelector('.labs-chips button[aria-pressed="true"]')); return { bg: st.backgroundColor, fg: st.color }; });
+      expect(hex(chip.bg) === '#2563eb' && ratio(hex(chip.bg), hex(chip.fg)) >= 4.5, 'a pressed Labs chip is the picked colour: ' + JSON.stringify(chip));
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
   }
 });
 
@@ -5533,7 +5597,7 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
       if (cspViolations.length) throw new Error('blocked by the security policy: ' + [...new Set(cspViolations)].join(' | '));
       console.log('PASS', t.name);
     }
-    catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (e && e.message || e).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
+    catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (process.env.VERBOSE && e && e.stack ? e.stack : (e && e.message || e)).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
     finally { await browser.close().catch(() => {}); }
   }
   await server.close(); app.close();

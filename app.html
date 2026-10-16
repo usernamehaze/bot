@@ -35,7 +35,7 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
   </button>
   <label class="side-search rail-hide"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="side-search" type="search" placeholder="Search" aria-label="Search tools and chats" autocomplete="off" enterkeyhint="search"></label>
-  <div class="sidebar-section side-menu-label">Menu</div>
+  <button type="button" id="side-menu-toggle" class="sidebar-section side-menu-label" aria-expanded="false" aria-controls="side-tools"><span>Menu</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
   <nav id="side-tools" class="side-tools" aria-label="Study tools"></nav>
   <button id="new-chat-btn" class="new-chat-btn" data-tip="New chat">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
@@ -420,7 +420,7 @@
             <span>Favorite colour</span>
             <div class="accent-swatches" id="accent-swatches"></div>
           </label>
-          <p class="field-hint">Tints buttons, highlights and the board. Leave on <strong>None</strong> for Cassie’s own colours (blush and sage). The loading screen and Cassie herself keep their own colours.</p>
+          <p class="field-hint">Colours every button, the send button, the timer and the board. <strong>Cassie</strong> is her own blush and sage; <strong>Monochrome</strong> is black and white. The loading screen and Cassie herself keep their own colours.</p>
           <label class="field">
             <span>Lite mode: faster on slow phones and mobile data</span>
             <select id="lite-select">
