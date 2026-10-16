@@ -66,7 +66,7 @@ html, :where(body, body *) { touch-action: manipulation; }
 /* Monochrome, Cassie's main colours (Graphite: #0E0E10 #232327 #3E3E45 #63636E #9A9AA6 #C9C9D2 #F2F2F5),
    for everyone unless Blush & Sage or a colour is picked in Appearance */
 :root[data-pal="mono"] {
-  --bg: #f2f2f5; --surface: #ffffff; --surface-2: #e8e8ec; --text: #0e0e10; --muted: #63636e; --border: #c9c9d2;
+  --bg: #f2f2f5; --surface: #ffffff; --surface-2: #e8e8ec; --text: #0e0e10; --muted: #4f4f58; --border: #c9c9d2;
   --primary: #0e0e10; --primary-dark: #232327; --on-primary: #ffffff;
   --secondary: #3e3e45; --on-secondary: #ffffff;
   --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 14, 14, 16;
