@@ -6595,6 +6595,26 @@ function frShell() {
 function frClose() { const el = document.querySelector('.fr'); if (el) el.remove(); }
 const frMascot = (host, st = 'greeting') => { try { window.CassieBot.create(host, { state: st, glow: true, pokeable: true }); } catch (e) { /* the words still work */ } };
 const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+// Cassie in 3D on the Get started screen (cassie-3d.js, loaded while the welcome shows). The flat
+// Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
+let fr3d = null;
+const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=169').catch(() => null); return fr3d; };
+// (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
+// running three.js waits for the Get started screen)
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=169', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+function frMascot3d(host) {
+  let flat = null;
+  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true }); } catch (e) { /* the words still work */ }
+  if (flat && window.CASSIE_LITE) flat.pause(); // (Lite mode: drawn once, no movement; Reduce Motion: she keeps herself still)
+  host.dataset.mascot = '2d';
+  const load = fr3dLoad();
+  if (!load) return;
+  load.then((m) => {
+    if (!m || !host.isConnected || !m.webglOK()) return;
+    try { m.mount(host); host.dataset.mascot = '3d'; if (flat) flat.destroy(); } catch (e) { /* the flat Cassie stays */ }
+  });
+}
 
 // 1. Welcome: Cassie, her name and one line, while the app gets ready (first visit only)
 function frWelcome(next) {
@@ -6607,6 +6627,7 @@ function frWelcome(next) {
     <span class="fr-load" role="progressbar" aria-label="Loading"><i></i><i></i><i></i></span>
   </section>`;
   frMascot(el.querySelector('.fr-bot'));
+  fr3dFetch(); // (ready for the Get started screen)
   setTimeout(next, reduceMotion() ? 900 : 1600);
 }
 // 2. Intro: one illustrated card and a big Get started
@@ -6630,7 +6651,7 @@ function frIntro() {
       <button type="button" class="fr-go fr-start">Get started</button>
     </div>
   </section>`;
-  frMascot(el.querySelector('.fr-art .fr-bot'), 'happy');
+  frMascot3d(el.querySelector('.fr-art .fr-bot'));
   el.querySelector('.fr-start').addEventListener('click', () => frSignIn());
   setTimeout(() => { const b = el.querySelector('.fr-start'); if (b) b.focus({ preventScroll: true }); }, 50);
 }
