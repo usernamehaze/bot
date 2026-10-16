@@ -2384,3 +2384,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 @media (prefers-reduced-motion: reduce) { .hub button:active { transform: none; } }
 .home-hub > .hub { width: 100%; flex: 1 1 100%; }
 .home-hub > .hub-empty { max-width: 520px; }
+/* (a computer's empty chat has the chat box below: the new hub stays compact so all of it shows) */
+.home-hub .hub-empty .hub-bot { width: 112px; height: 112px; margin-top: 0; }
+.home-hub .hub-empty .hub-card { min-height: 112px; }
+.home-hub .hub-empty .hub-hi { font-size: 1.7rem; }
