@@ -1851,6 +1851,13 @@ const HUB_ICON = {
 // Home's big boxes: every study feature, one tap away (each opens it the way its own button does)
 const TODAY_LABS = ['pendulum', 'ph', 'fractions', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'magnets', 'build-cell', 'optics', 'units', 'ice-steam', 'vectors', 'colour', 'metals', 'interest'];
 const todayLab = () => TODAY_LABS[Math.floor(Date.now() / 864e5) % TODAY_LABS.length];
+// (names, subjects and about how long each takes, for the phone's Today's Lab card)
+const LAB_INFO = { pendulum: ['Pendulum', 'Physics', 10], ph: ['pH mixer', 'Chemistry', 10], fractions: ['Fraction pies', 'Maths', 8], punnett: ['Punnett squares', 'Biology', 12], projectile: ['Launch lab', 'Physics', 10],
+  waves: ['Wave string', 'Physics', 8], atom: ['Build an atom', 'Chemistry', 12], function: ['Function lab', 'Maths', 15], refraction: ['Bending light', 'Physics', 8], balance: ['Equation balancer', 'Chemistry', 12],
+  chance: ['Chance machine', 'Maths', 8], magnets: ['Magnetic field', 'Physics', 10], 'build-cell': ['Build a cell', 'Biology', 15], optics: ['Lenses and mirrors', 'Physics', 12], units: ['Unit converter', 'Maths', 5],
+  'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10] };
+// what slides past in the phone's header: a peek inside the labs
+const STRIP_LABS = ['build-cell', 'pendulum', 'solar', 'waves', 'atom', 'projectile', 'refraction', 'chance'];
 const HUB_BOXES = [
   ['lab', 'Labs', 'Simulations to play with', HUB_ICON.lab],
   ['games', 'Games', 'Puzzles and quick games', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01"/></svg>'],
@@ -1896,10 +1903,20 @@ function renderHubTimer() {
 setInterval(() => { if (document.querySelector('.hub-timer')) renderHubTimer(); }, 1000);
 // The header: a glass bar with the hello (your initial and name) and a bell for today's reminders
 const HUB_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg>';
-function hubHero(name, returning, due) {
+function hubHero(name, returning, due, phone) {
   const hero = document.createElement('section');
-  hero.className = 'hub-hero';
+  hero.className = 'hub-hero' + (phone ? ' hub-hero-phone' : '');
   hero.setAttribute('aria-label', 'Welcome');
+  if (phone) { // a phone: a peek inside the labs slides past behind the hello
+    const hr = new Date().getHours(), part = hr < 12 ? 'Morning' : hr < 18 ? 'Afternoon' : 'Evening';
+    const tiles = STRIP_LABS.map((id) => `<canvas class="hub-tile" data-pv="${id}" aria-hidden="true"></canvas>`).join('');
+    hero.innerHTML = `<div class="hub-strip" aria-hidden="true"><div class="hub-strip-run">${tiles}${tiles}</div></div>
+    <div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><h1 class="hub-me"></h1></span>
+    <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
+    hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
+    hero.querySelector('.hub-me').textContent = `${part}${name ? ', ' + name : ''}`;
+    return hero;
+  }
   hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><small>${returning ? 'Hi, welcome back' : 'Hi, welcome'}</small>${returning ? '<h1 class="hub-me"></h1>' : '<b class="hub-me"></b>'}</span>
     <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
   hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
@@ -1922,7 +1939,29 @@ function hubReminders(due, streak) {
   box.querySelectorAll('.hub-chat').forEach((b, k) => { b.querySelector('b').textContent = rows[k][2]; b.querySelector('small').textContent = rows[k][3]; });
   return box;
 }
-function buildHub({ ideas = false } = {}) {
+// the phone's Today's Lab: a big live preview, the lab's name and subject, and a play button
+function hubTodayLab() {
+  const id = todayLab(), [nm, subj, min] = LAB_INFO[id] || [id, 'Science', 10];
+  const card = document.createElement('section');
+  card.className = 'hub-tlab';
+  card.setAttribute('aria-label', 'Today’s Lab');
+  card.innerHTML = `<canvas class="hub-tlab-pv" data-pv="${id}" aria-hidden="true"></canvas>
+    <div class="hub-tlab-info"><span class="hub-tlab-tag">Today’s Lab</span><b></b><small></small></div>
+    <button type="button" class="hub-tlab-go" data-hub="today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>`;
+  card.querySelector('b').textContent = nm;
+  card.querySelector('small').textContent = `${subj} · about ${min} min`;
+  card.querySelector('.hub-tlab-go').setAttribute('aria-label', `Open today’s lab: ${nm}`);
+  return card;
+}
+// the live previews on the phone's Home (labs/previews.js, loaded only when Home shows on a phone)
+let hubPv = null;
+function hubPreviews(el) {
+  const cvs = [...el.querySelectorAll('canvas[data-pv]')];
+  if (!cvs.length) return;
+  if (!hubPv) hubPv = import('./labs/previews.js?v=169').catch(() => null);
+  hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv); }); });
+}
+function buildHub({ ideas = false, phone = false } = {}) {
   const p = state.profile || {};
   const name = (p.name || '').trim().split(/\s+/)[0];
   const chats = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -1966,22 +2005,27 @@ function buildHub({ ideas = false } = {}) {
   el.querySelectorAll('.hub-name').forEach((s) => { s.textContent = name; });
   // the header on top, the bell's reminders just under it
   const streakNow = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
-  const hero = hubHero(name, returning, due), remind = hubReminders(due, streakNow);
+  const hero = hubHero(name, returning, due, phone), remind = hubReminders(due, streakNow);
   const boxes = document.createElement('div');
   boxes.className = 'hub-boxes';
   boxes.innerHTML = HUB_BOXES.map(([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`).join('');
-  el.prepend(hero, remind, boxes);
+  if (phone) { // a phone: the header, Today's Lab, then (back again) Today, Continue, the boxes and Quick actions
+    el.prepend(hero, remind, hubTodayLab());
+    const quick = [...el.querySelectorAll('.hub-h')].find((h2) => /Quick actions/.test(h2.textContent));
+    if (quick) quick.before(boxes); else el.append(boxes);
+  } else el.prepend(hero, remind, boxes);
   const bell = hero.querySelector('.hub-bell');
   bell.setAttribute('aria-expanded', String(hubRemindOpen));
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
+  if (phone) requestAnimationFrame(() => hubPreviews(el));
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
   setTimeout(renderHubTimer, 0);
   return el;
 }
-function renderHub(host) { if (!host) return; host.replaceChildren(buildHub()); }
+function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ phone: true })); } // (the phone's Home tab)
 
 function renderHome() {
   if (sideWide.matches) { // computers: the hub, centred (phones: Home is its own tab)

@@ -2432,3 +2432,28 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub-box i svg { width: 21px; height: 21px; }
 .hub-box b { margin-top: 2px; font-size: 1rem; line-height: 1.2; }
 .hub-box small { color: var(--muted); font-size: .8rem; line-height: 1.3; }
+
+/* ---------- Home on a phone: a peek inside the labs, and Today's Lab ----------
+   (computers keep their own Home: these only show in the phone's Home tab) */
+.hub-hero.hub-hero-phone { position: relative; height: 196px; padding: 0; overflow: hidden; isolation: isolate; }
+.hub-strip { position: absolute; inset: auto 0 14px 0; overflow: hidden; pointer-events: none; }
+.hub-strip-run { display: flex; gap: 10px; width: max-content; animation: hubStrip 70s linear infinite; }
+.hub-tile { flex: none; display: block; width: 116px; height: 92px; border-radius: 18px; background: var(--surface); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge); }
+@keyframes hubStrip { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+html.lite .hub-strip-run { animation: none; }
+@media (prefers-reduced-motion: reduce) { .hub-strip-run { animation: none; } }
+.hub-hero-phone .hub-top { position: relative; z-index: 1; padding: 14px 14px 0; }
+.hub-hero-phone .hub-who { padding: 4px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); }
+.hub-hero-phone .hub-me { font-size: 1.35rem; letter-spacing: -.03em; }
+html.native .hub-hero.hub-hero-phone { height: calc(196px + var(--safe-top)); padding: 0; }
+html.native .hub-hero-phone .hub-top { padding: calc(12px + var(--safe-top)) 20px 0; }
+.hub-tlab { position: relative; width: 100%; border-radius: 26px; overflow: hidden;
+  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
+.hub-tlab-pv { display: block; width: 100%; height: 150px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.hub-tlab-info { display: flex; flex-direction: column; gap: 2px; padding: 12px 82px 14px 16px; text-align: left; border-top: 1px solid var(--lg-line); }
+.hub-tlab-tag { position: absolute; top: 12px; left: 12px; align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: .72rem; font-weight: 700; }
+.hub-tlab-info b { font-size: 1.08rem; line-height: 1.2; }
+.hub-tlab-info small { color: var(--muted); font-size: .82rem; }
+.hub .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
+  background: var(--primary); color: var(--on-primary); box-shadow: var(--lg-lift); }
+.hub .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
