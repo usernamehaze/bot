@@ -11,7 +11,8 @@
   }
   var done = false;
   function go() { if (done) return; done = true; window.location.href = target(); }
-  setTimeout(function () { var h = document.getElementById('hint'); if (h) h.classList.add('show'); }, 1400);
+  // (in the student's own look: Monochrome stays black and white)
+  try { var st = JSON.parse(localStorage.getItem('cassie.v2') || '{}'); if (st.accent === 'mono') document.documentElement.classList.add('mono'); } catch (e) { /* ignore */ }
   document.body.addEventListener('click', go);
-  setTimeout(go, 3900); // one full highlight-and-click, then in
+  setTimeout(go, 400); // a moment, then in (a first visit gets the app's own Welcome next)
 })();

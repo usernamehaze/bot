@@ -2158,3 +2158,97 @@ html:not(.native) #chat-log > .home { display: flex; }
 .vc-care { max-width: 34rem; margin: 6px auto 0; padding: 0 16px; text-align: left; color: var(--text); }
 .vc-care[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .care-num { transition: none; } }
+
+/* ---------- First run: Welcome, Intro, Sign in and four questions ----------
+   Minimal and centred, a step at a time, in Cassie's colours. Phones: the whole screen; computers:
+   a centred glass card about 440px wide. --fr-h is the height above the keyboard (app.js). */
+.fr, .auth-page {
+  background:
+    radial-gradient(60% 45% at 18% 12%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 70%),
+    radial-gradient(55% 45% at 88% 92%, color-mix(in srgb, var(--secondary) 16%, transparent), transparent 70%),
+    var(--bg);
+}
+.fr { position: fixed; inset: 0; z-index: 400; height: var(--fr-h, 100dvh); display: grid; place-items: center; overflow-y: auto; color: var(--text);
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 12px); }
+.fr-bot { width: 120px; height: 120px; }
+.fr-bot .cassie-bot { width: 100%; height: 100%; display: block; }
+/* 1. Welcome */
+.fr-welcome { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; animation: frIn .5s ease both; }
+.fr-name { margin: 10px 0 0; font-size: 2.6rem; font-weight: 800; letter-spacing: -.03em; }
+.fr-line { margin: 0; color: var(--muted); font-size: 1.05rem; }
+.fr-load { display: inline-flex; gap: 6px; margin-top: 22px; }
+.fr-load i { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); opacity: .3; animation: frDot 1.1s ease-in-out infinite; }
+.fr-load i:nth-child(2) { animation-delay: .15s; } .fr-load i:nth-child(3) { animation-delay: .3s; }
+@keyframes frDot { 0%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+@keyframes frIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 2. Intro: one illustrated card */
+.fr-intro { position: relative; width: min(440px, 100%); height: min(780px, calc(var(--fr-h, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom))); min-height: 520px;
+  display: flex; flex-direction: column; border-radius: 32px; overflow: hidden; animation: frIn .45s ease both;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, color-mix(in srgb, var(--secondary) 12%, var(--surface)) 62%, var(--surface) 100%);
+  box-shadow: var(--lg-edge), var(--lg-lift); border: 1px solid var(--lg-line); }
+.fr-art { position: relative; flex: 1; min-height: 220px; display: grid; place-items: center; }
+.fr-scene { position: absolute; inset: auto 0 0 0; width: 100%; height: 72%; }
+.fr-hill1 { fill: color-mix(in srgb, var(--secondary) 38%, var(--surface)); }
+.fr-hill2 { fill: color-mix(in srgb, var(--secondary) 62%, var(--surface)); }
+.fr-books rect:nth-child(1) { fill: var(--primary); } .fr-books rect:nth-child(2) { fill: color-mix(in srgb, var(--primary) 55%, var(--surface)); } .fr-books rect:nth-child(3) { fill: var(--secondary); }
+.fr-pencil { fill: color-mix(in srgb, var(--warning) 70%, var(--surface)); }
+.fr-art::before { content: ""; position: absolute; left: 50%; top: 38%; width: 210px; height: 210px; margin: -105px 0 0 -105px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 26%, transparent); } /* a soft sun behind Cassie */
+.fr-art .fr-bot { position: relative; width: 168px; height: 168px; margin-bottom: 18%; filter: drop-shadow(0 18px 24px rgba(var(--ink-rgb), .18)); }
+.fr-copy { padding: 22px 24px 26px; text-align: center; background: var(--surface); }
+.fr-copy h1 { margin: 0 0 8px; font-size: 1.85rem; line-height: 1.12; letter-spacing: -.03em; }
+.fr-copy p { margin: 0 0 20px; color: var(--muted); line-height: 1.5; }
+/* the one big button on every screen */
+.fr-go { width: 100%; min-height: 52px; border: 0; border-radius: 16px; background: var(--primary); color: var(--on-primary); font: inherit; font-size: 1.02rem; font-weight: 750; cursor: pointer; }
+.fr-go:active { background: var(--primary-dark); }
+/* 4. The questions */
+.fr-ob { width: min(440px, 100%); min-height: min(640px, calc(var(--fr-h, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom))); display: flex; flex-direction: column; gap: 16px; animation: frIn .35s ease both; }
+.fr-top { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; gap: 8px; }
+.fr-back, .fr-skip { min-height: 44px; border: 0; background: none; color: var(--text); font: inherit; font-weight: 650; cursor: pointer; padding: 0 4px; }
+.fr-back { justify-self: start; } .fr-skip { justify-self: end; grid-column: 3; color: var(--muted); }
+.fr-back[hidden] { display: block; visibility: hidden; }
+.fr-progress { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.fr-bar { width: 100%; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.fr-bar i { display: block; height: 100%; border-radius: 99px; background: var(--primary); transition: width .3s ease; }
+.fr-count { font-size: .8rem; color: var(--muted); font-weight: 650; }
+.fr-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 14px; text-align: center; }
+.fr-h { margin: 0; font-size: 1.75rem; line-height: 1.15; letter-spacing: -.03em; }
+.fr-sub { margin: -6px 0 0; color: var(--muted); }
+.fr-big { width: 100%; border: 0; border-bottom: 2px solid var(--border); background: transparent; color: var(--primary-ink); font: inherit; font-size: 2rem; font-weight: 800; text-align: center; padding: 8px 4px; border-radius: 0; }
+.fr-big:focus, .fr-big:focus-visible { outline: none; border-bottom-color: var(--primary); }
+.fr-big::placeholder { color: var(--muted); font-weight: 700; }
+.fr-select { font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 14px; padding: 13px 14px; min-height: 52px; background: var(--surface); color: var(--text); text-align: left; }
+.fr-select:focus { border-color: var(--primary); }
+.fr-q2 { display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: .9rem; font-weight: 650; color: var(--muted); margin-top: 6px; }
+.fr-age { width: 140px; min-height: 48px; text-align: center; font: inherit; font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
+.fr-age:focus { outline: none; border-color: var(--primary); }
+.fr-seg, .fr-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.fr-seg button, .fr-pick { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
+.fr-pick { min-height: 52px; padding: 0 20px; font-size: 1.02rem; }
+.fr-seg button[aria-checked="true"], .fr-pick[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.fr-voices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fr-voice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 120px; border-radius: 20px; border: 2px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+.fr-voice[aria-checked="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--primary-ink); }
+.fr-wave { display: inline-flex; align-items: center; gap: 3px; height: 26px; }
+.fr-wave i { width: 4px; border-radius: 4px; background: currentColor; height: 40%; }
+.fr-wave i:nth-child(2) { height: 75%; } .fr-wave i:nth-child(3) { height: 100%; } .fr-wave i:nth-child(4) { height: 65%; } .fr-wave i:nth-child(5) { height: 35%; }
+.fr-err { margin: 0; color: var(--danger); font-weight: 650; font-size: .92rem; }
+.fr-err[hidden] { display: none; }
+.fr :focus-visible:not(.fr-big) { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* computers and tablets: the steps sit in a centred glass card */
+@media (min-width: 600px) {
+  .fr-ob { padding: 22px 26px 26px; border-radius: 28px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift);
+    -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); min-height: 600px; }
+}
+@media (prefers-reduced-motion: reduce) { .fr-welcome, .fr-intro, .fr-ob { animation: none; } .fr-load i { animation: none; opacity: .7; } .fr-bar i { transition: none; } }
+
+/* 3. Sign in, in the same look: one centred column (Google and Apple first), a glass card on a computer */
+.auth-page { grid-template-columns: 1fr; grid-template-rows: 1fr; place-items: center; padding: calc(var(--safe-top) + 16px) 16px calc(var(--safe-bottom) + 16px); }
+.auth-right { display: none !important; }
+.auth-left { flex-direction: column; justify-content: center; gap: 14px; padding: 0; min-height: 0; width: min(440px, 100%); }
+.auth-brand { position: static; justify-content: center; font-size: 1.2rem; }
+.auth-form { width: 100%; }
+.auth-go { border-radius: 16px; min-height: 52px; }
+@media (min-width: 600px) {
+  .auth-form { padding: 28px 26px; border-radius: 28px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift);
+    -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+}

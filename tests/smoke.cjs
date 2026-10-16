@@ -134,45 +134,126 @@ function expect(cond, msg) { if (!cond) throw new Error(msg); }
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('sign-up shows on first open and saves the profile', async (b) => {
-  const { ctx, page } = await open(b, { state: null });
-  await page.waitForSelector('.auth-page', { timeout: 5000 }); // with a server: sign-in page first
+// the first run: past Welcome and Intro to the sign-in page
+async function toSignIn(page) {
+  await page.waitForSelector('.fr-start', { timeout: 8000 });
+  await page.click('.fr-start');
+  await page.waitForSelector('.auth-page', { timeout: 5000 });
+}
+// the four questions (anything left out is skipped)
+async function onboard(page, { name, gender, grade, age, help = [], voice } = {}) {
+  await page.waitForSelector('.fr-ob', { timeout: 8000 });
+  const next = async (k, fill) => { await page.waitForSelector(`.fr-count >> text=${k} of 4`, { timeout: 5000 }); if (fill) { await fill(); await page.click('.fr-go'); } else await page.click('.fr-skip'); };
+  await next(1, name && (async () => { await page.fill('.fr-ob input[name=name]', name); if (gender) await page.click(`.fr-ob [data-gender=${gender}]`); }));
+  await next(2, grade && (async () => { await page.selectOption('.fr-ob select[name=grade]', grade); if (age != null) await page.fill('.fr-ob input[name=age]', String(age)); }));
+  await next(3, help.length && (async () => { for (const h of help) await page.click(`.fr-ob [data-help=${h}]`); }));
+  await next(4, voice && (async () => { await page.click(`.fr-ob [data-voice=${voice}]`); }));
+  await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
+}
+
+test('first run: Welcome, Intro, Sign in, then four questions a screen at a time (Back, Skip, a reload carries on), saving the same profile; a returning student goes straight in', async (b) => {
+  let { ctx, page, errors } = await open(b, { state: null });
+  // 1. Welcome: Cassie, her name, one line and a loading indicator, for a moment
+  await page.waitForSelector('.fr-welcome', { timeout: 5000 });
+  const w = await page.locator('.fr-welcome').innerText();
+  expect(/Cassie/.test(w) && /Your study buddy\./.test(w) && await page.locator('.fr-welcome [role=progressbar]').count() === 1, 'the welcome: ' + w);
+  const t0 = Date.now();
+  // 2. Intro: one card and a big Get started
+  await page.waitForSelector('.fr-intro', { timeout: 4000 });
+  const waited = Date.now() - t0;
+  expect(waited < 3000, 'the welcome shows for 1 to 3 seconds: ' + waited);
+  expect(/Study smarter with Cassie/.test(await page.locator('.fr-intro').innerText()), 'the intro says what Cassie is');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-intro.png' });
+  await page.click('.fr-start');
+  // 3. Sign in: Google and Apple come first (when the server has them), then email, then a guest
+  await page.waitForSelector('.auth-page', { timeout: 5000 });
+  expect(await page.evaluate(() => { const p = document.querySelector('.auth-providers'), e = document.querySelector('.auth-page input[name=email]'); return !!(p.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Google and Apple above email');
+  expect(await page.locator('.auth-skip').innerText() === 'Continue as a guest', 'Continue as a guest');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-signin.png' });
   await page.click('.auth-skip');
-  await page.waitForSelector('.profile-overlay', { timeout: 5000 });
-  // just four questions: name (nickname), age, level, gender
-  expect(await page.locator('.profile-card input:not([type=hidden]), .profile-card select').count() === 3 && await page.locator('.profile-card [data-gender]').count() === 3, 'the profile should ask only name, age, level and gender');
-  expect(!(await page.locator('.profile-card [data-role], .profile-card input[name=field]').count()), 'no student/professional or job questions');
-  await page.fill('.profile-card input[name=name]', 'Hazel');
-  await page.fill('.profile-card input[name=age]', '15');
-  await page.selectOption('.profile-card select[name=grade]', 'Grade 10');
-  await page.click('.profile-card .pf-go');
-  const pfErr = await page.locator('.profile-card .field-err:not([hidden])').textContent();
-  expect(/Prefer not to say/.test(pfErr), 'gender is asked for, under the gender buttons: ' + pfErr);
-  await page.click('.profile-card [data-gender=female]');
-  await page.click('.profile-card .pf-go');
-  await page.waitForSelector('.profile-overlay', { state: 'detached' });
-  const p = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
-  expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15 && p.gender === 'female' && p.role === 'student', 'profile not saved: ' + JSON.stringify(p));
+  // 4. The questions: 1 of 4 to 4 of 4
+  await page.waitForSelector('.fr-ob', { timeout: 5000 });
+  expect(/1 of 4/.test(await page.locator('.fr-count').innerText()) && /What’s your name\?/.test(await page.locator('.fr-h').innerText()), 'step 1: the name');
+  await page.click('.fr-go');
+  expect(/Type your name/.test(await page.locator('.fr-err').innerText()), 'Next with no name says what to do');
+  await page.fill('.fr-ob input[name=name]', 'Hazel');
+  await page.click('.fr-ob [data-gender=female]');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-1.png' });
+  await page.click('.fr-go');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
+  expect(/What are you studying\?/.test(await page.locator('.fr-h').innerText()), 'step 2: studying');
+  // Back keeps the answer
+  await page.click('.fr-back');
+  await page.waitForSelector('.fr-count >> text=1 of 4');
+  expect(await page.inputValue('.fr-ob input[name=name]') === 'Hazel', 'Back keeps the name');
+  await page.click('.fr-go');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
+  const levels = await page.$$eval('.fr-ob select[name=grade] option', (o) => o.map((x) => x.textContent));
+  expect(levels.includes('Nursery') && levels.includes('Working professional'), 'every level, nursery to work');
+  await page.selectOption('.fr-ob select[name=grade]', 'Grade 10');
+  await page.fill('.fr-ob input[name=age]', '15');
+  // a reload carries on at the same step, with the answers
+  await page.reload();
+  await page.waitForSelector('.fr-count >> text=2 of 4', { timeout: 5000 });
+  expect(!(await page.locator('.fr-welcome, .fr-intro').count()), 'no welcome or intro again mid-way');
+  expect(await page.inputValue('.fr-ob select[name=grade]') === 'Grade 10' && await page.inputValue('.fr-ob input[name=age]') === '15', 'the answers are back after a reload');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-2.png' });
+  await page.click('.fr-go');
+  await page.waitForSelector('.fr-count >> text=3 of 4');
+  await page.click('.fr-ob [data-help=exams]'); await page.click('.fr-ob [data-help=flashcards]');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-3.png' });
+  await page.click('.fr-go');
+  await page.waitForSelector('.fr-count >> text=4 of 4');
+  expect(/Start studying/.test(await page.locator('.fr-go').innerText()), 'the last step says Start studying');
+  await page.click('.fr-ob [data-voice=man]');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-4.png' });
+  await page.click('.fr-go');
+  await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
+  const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
+  const p = st.profile;
+  expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15 && p.gender === 'female' && p.role === 'student' && p.field === '' && p.at > 0, 'the profile, as the old form saved it: ' + JSON.stringify(p));
+  expect(st.audience === 'student' && st.level === 'middle' && st.analytics.usage === true && st.analytics.topics === false, 'audience, level and counts as before: ' + JSON.stringify([st.audience, st.level, st.analytics]));
+  expect(JSON.stringify(st.helpWith) === '["exams","flashcards"]' && st.voiceGender === 'man', 'what she helps with, and her voice: ' + JSON.stringify([st.helpWith, st.voiceGender]));
+  expect(await page.evaluate(() => localStorage.getItem('cassie.firstRun')) === null, 'the first run is finished');
+  // a returning student goes straight in (no welcome)
+  await page.reload();
+  await page.waitForTimeout(1000);
+  expect(!(await page.locator('.fr, .auth-page').count()), 'no first run for a returning student');
+  // and from the website's Open Cassie: the welcome for under a second, then straight in
+  const t1 = Date.now();
+  await page.goto(APP.replace('app.html', 'start.html'));
+  await page.waitForURL(/app(\.html)?$/, { timeout: 5000 });
+  const took = Date.now() - t1;
+  expect(took < 1500, 'start.html goes in quickly: ' + took + 'ms'); // (its welcome shows 0.4s; the rest is loading)
+  await page.waitForTimeout(600);
+  expect(!(await page.locator('.fr, .auth-page').count()), 'straight to the home screen');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // Skip on every step: still a profile, with nothing made up
+  ({ ctx, page, errors } = await open(b, { state: null }));
+  await toSignIn(page);
+  await page.click('.auth-skip');
+  await onboard(page, {});
+  const q = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
+  expect(q && q.name === '' && q.grade === '' && q.age === 0 && q.gender === 'none', 'skipped: an empty profile: ' + JSON.stringify(q));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
 test('every age is welcome: nursery to work, with an account too', async (b) => {
   const { ctx, page } = await open(b, { state: null });
-  await page.waitForSelector('.auth-page');
-  expect(await page.locator('.auth-hero svg.cassie-bot').count() === 1 && !(await page.locator('img[src*="cassie-hero"]').count()), 'the sign-in page shows Cursor Cassie, not the 3D picture');
+  await toSignIn(page);
+  expect(await page.locator('.auth-brand svg').count() === 1 && !(await page.locator('img[src*="cassie-hero"]').count()), 'the sign-in page shows Cassie’s logo, not the 3D picture');
   expect(!/13 and up/.test(await page.locator('.auth-page').innerText()), 'no age limit on the sign-in page');
   const signupStatus = (body) => page.evaluate(async ([srv, bb]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bb) })).status, [SERVER, body]);
   expect(await signupStatus({ email: `kid${Date.now()}@example.com`, password: 'secret-pass-1', age: 6 }) === 200, 'a 6-year-old can make an account');
   await page.click('.auth-skip');
-  await page.waitForSelector('.profile-overlay');
-  const levels = await page.$$eval('.profile-card select[name=grade] option', (o) => o.map((x) => x.textContent));
+  await page.waitForSelector('.fr-ob');
+  await page.fill('.fr-ob input[name=name]', 'Mia'); await page.click('.fr-go');
+  const levels = await page.$$eval('.fr-ob select[name=grade] option', (o) => o.map((x) => x.textContent));
+  await page.click('.fr-back');
   expect(levels.includes('Nursery') && levels.includes('Kindergarten') && levels.includes('Grade 1') && levels.includes('4th year college') && levels.includes('Working professional'), 'levels go from nursery to work: ' + levels);
-  await page.fill('.profile-card input[name=name]', 'Mia');
-  await page.fill('.profile-card input[name=age]', '4');
-  await page.selectOption('.profile-card select[name=grade]', 'Nursery');
-  await page.click('.profile-card [data-gender=none]');
-  await page.click('.profile-card .pf-go');
-  await page.waitForSelector('.profile-overlay', { state: 'detached' });
+  await onboard(page, { name: 'Mia', age: 4, grade: 'Nursery', gender: 'none' });
   const r = await page.evaluate(() => ({ p: state.profile, an: state.analytics, line: profileLine(state.profile) }));
   expect(r.p.age === 4 && r.p.grade === 'Nursery', 'a 4-year-old in nursery can use Cassie: ' + JSON.stringify(r.p));
   expect(!r.an.usage && !r.an.topics, 'nothing is counted for a young child');
@@ -191,7 +272,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   const email = `hazel${Date.now()}@example.com`;
   // device 1: create an account, answer the profile questions
   let { ctx, page } = await open(b, { state: null });
-  await page.waitForSelector('.auth-page');
+  await toSignIn(page);
   expect(await page.locator('.auth-title').textContent() === 'Create your Cassie account', 'should open on sign up');
   await page.fill('.auth-form input[name=email]', email);
   const signupStatus = (body) => page.evaluate(async ([srv, b]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, [SERVER, body]);
@@ -202,18 +283,18 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   expect(/at least 8 letters or numbers.*Add 3 more/.test(await page.locator('.auth-pw ~ .field-err, .auth-field .field-err:not([hidden])').last().textContent()), 'short password not caught under its field');
   await page.fill('.auth-form input[name=password]', 'secret-pass-1');
   await page.click('.auth-go');
-  await page.waitForSelector('.profile-overlay', { timeout: 5000 });
-  await page.fill('.profile-card input[name=name]', 'Hazel');
-  await page.selectOption('.profile-card select[name=grade]', 'Grade 11');
-  await page.fill('.profile-card input[name=age]', '16');
-  await page.click('.profile-card [data-gender=female]');
-  await page.click('.profile-card .pf-go');
+  await page.waitForSelector('.fr-ob');
+  await page.fill('.fr-ob input[name=name]', 'Hazel'); await page.click('.fr-go');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
+  expect(await page.inputValue('.fr-ob input[name=age]') === '16', 'the age typed when signing up is filled in');
+  await page.click('.fr-back');
+  await onboard(page, { name: 'Hazel', grade: 'Grade 11', gender: 'female' });
   await page.evaluate(() => syncAccount(true));
   await page.waitForTimeout(800);
   await ctx.close();
   // device 2: sign in → the profile comes back, no questions asked
   ({ ctx, page } = await open(b, { state: null }));
-  await page.waitForSelector('.auth-page');
+  await toSignIn(page);
   await page.click('.auth-switch [data-to=signin]');
   await page.fill('.auth-form input[name=email]', email);
   await page.fill('.auth-form input[name=password]', 'wrong-password');
@@ -225,7 +306,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.waitForSelector('.auth-page', { state: 'detached' });
   const p = await page.evaluate(() => state.profile);
   expect(p && p.name === 'Hazel' && p.grade === 'Grade 11', 'profile did not come back: ' + JSON.stringify(p));
-  expect(await page.locator('.profile-overlay').count() === 0, 'asked the profile questions again');
+  expect(await page.locator('.profile-overlay, .fr').count() === 0, 'asked the profile questions again');
   await tapSettings(page);
   expect(/Signed in as/.test(await page.locator('#account-row').textContent()), 'settings should say signed in');
   await ctx.close();
@@ -252,7 +333,7 @@ test('sign in with Google: a new account, and a bad token shows a friendly messa
   await fetch(SERVER + '/__reset');
   const { ctx, page, errors } = await open(b, { state: null });
   try {
-    await page.waitForSelector('.auth-page');
+    await toSignIn(page);
     await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
     await page.waitForSelector('.auth-apple:not([hidden])');
     expect(await page.locator('.auth-or').isVisible(), 'the "or" line should show with the buttons');
@@ -269,7 +350,7 @@ test('sign in with Google: a new account, and a bad token shows a friendly messa
     await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-new-' + Date.now(), email }));
     await page.click('.fake-gsi');
     await page.waitForSelector('.auth-page', { state: 'detached' });
-    await page.waitForSelector('.profile-overlay', { timeout: 5000 });
+    await page.waitForSelector('.fr-ob', { timeout: 5000 }); // (the four questions)
     const s = await savedAccount(page);
     expect(s.token && s.account.email === email && s.account.providers.join() === 'google' && s.plan && s.plan.plan === 'free', 'new Google account not saved: ' + JSON.stringify(s));
     expect(errors.length === 0, 'page errors: ' + errors.join(' | '));
@@ -283,6 +364,7 @@ test('sign in with Google: an email account links after its password once, and t
   expect((await post('/auth/signup', { email, password: 'secret-pass-1', age: 17 })).token, 'signup failed');
   let { ctx, page } = await open(b, { state: null });
   try {
+    await toSignIn(page);
     await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
     await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
     await page.click('.fake-gsi');
@@ -306,6 +388,7 @@ test('sign in with Google: an email account links after its password once, and t
   // Google again (another device): straight in, no password asked
   ({ ctx, page } = await open(b, { state: null }));
   try {
+    await toSignIn(page);
     await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
     await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
     await page.click('.fake-gsi');
@@ -317,6 +400,7 @@ test('sign in with Google: an email account links after its password once, and t
   const old = await post('/auth/signup', { email: email2, password: 'secret-pass-2', age: 17 });
   ({ ctx, page } = await open(b, { state: null }));
   try {
+    await toSignIn(page);
     await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
     await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: sub + '-2', email: email2 }));
     await page.click('.fake-gsi');
@@ -338,6 +422,7 @@ test('sign in with Apple: there and back, cancel is explained, and the plan is t
   let { ctx, page, errors } = await open(b, { state: null, setup: fakeApple(who) });
   try {
     // cancelled at Apple: back on the sign-in page with a plain-words message
+    await toSignIn(page);
     await page.waitForSelector('.auth-apple:not([hidden])');
     await page.click('.auth-apple');
     await page.waitForURL(/app\.html$/, { timeout: 15000 });
@@ -348,10 +433,10 @@ test('sign in with Apple: there and back, cancel is explained, and the plan is t
     who.cancel = false;
     await page.click('.auth-apple');
     await page.waitForURL(/app\.html$/, { timeout: 15000 });
-    await page.waitForSelector('.profile-overlay', { timeout: 10000 });
+    await page.waitForSelector('.fr-ob', { timeout: 10000 });
     const s = await savedAccount(page);
     expect(s.token && s.account.email === who.email && s.account.providers.join() === 'apple', 'new Apple account not saved: ' + JSON.stringify(s));
-    expect(await page.evaluate(() => state.profile === null || !state.profile) && await page.inputValue('.profile-card input[name=name]') !== null, 'profile questions should open');
+    expect(await page.evaluate(() => state.profile === null || !state.profile) && await page.inputValue('.fr-ob input[name=name]') !== null, 'profile questions should open');
     expect(errors.length === 0, 'page errors: ' + errors.join(' | '));
   } finally { await ctx.close(); }
   // an answer this tab didn't ask for is ignored
@@ -359,7 +444,7 @@ test('sign in with Apple: there and back, cancel is explained, and the plan is t
   try {
     await page.goto('about:blank');
     await page.goto(APP + '#cassie-auth=' + encodeURIComponent(JSON.stringify({ type: 'cassie-auth', provider: 'apple', nonce: 'x'.repeat(32), token: 'stolen', account: { email: 'x@example.com' } })));
-    await page.waitForSelector('.auth-page');
+    await toSignIn(page);
     expect(!(await savedAccount(page)).token && !page.url().includes('cassie-auth'), 'an answer from another tab signed in');
   } finally { await ctx.close(); }
 
@@ -392,19 +477,20 @@ test('sign in with Google and Apple: a provider the server has no ID for has no 
   try {
     await serverMode({ noGoogle: true, noApple: false });
     let { ctx, page } = await open(b, { state: null });
-    await page.waitForSelector('.auth-page');
+    await toSignIn(page);
     await page.evaluate(() => authProviders());
     await page.waitForSelector('.auth-apple:not([hidden])');
     expect(await page.locator('.auth-google').isHidden() && !(await page.locator('.fake-gsi').count()), 'Google button shown with no GOOGLE_CLIENT_ID');
     await ctx.close();
     await serverMode({ noGoogle: false, noApple: true });
     ({ ctx, page } = await open(b, { state: null }));
+    await toSignIn(page);
     await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
     expect(await page.locator('.auth-apple').isHidden(), 'Apple button shown with no APPLE_SERVICES_ID');
     await ctx.close();
     await serverMode({ noGoogle: true, noApple: true });
     ({ ctx, page } = await open(b, { state: null }));
-    await page.waitForSelector('.auth-page');
+    await toSignIn(page);
     await page.evaluate(() => authProviders());
     await page.waitForTimeout(200);
     expect(await page.locator('.auth-google').isHidden() && await page.locator('.auth-apple').isHidden() && await page.locator('.auth-or').isHidden(), 'no providers: no buttons and no "or" line');
@@ -4594,10 +4680,37 @@ test('no em or en dashes in anything people read (every page, label and message,
   await ctx.close();
 });
 
+test('first run screens: every word at AA in light and dark, every control answers a tap, and nothing spills sideways, at 390x844, 768x1024 and 1280x800', async (b) => {
+  const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
+  const STEPS = [['intro', { step: 'intro' }, '.fr-intro'], ['sign in', { step: 'auth' }, '.auth-page'], ...[0, 1, 2, 3].map((k) => [`question ${k + 1}`, { step: 'ob', at: k, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10', age: '15', help: ['exams'], voice: 'woman' } }, '.fr-ob'])];
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['768x1024', 'iPad Mini', { width: 768, height: 1024 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', state: null });
+    ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
+    const go = async (fr, sel) => { if (!page.url().startsWith(APP.replace(/app\.html.*$/, ''))) await page.goto(APP); await page.evaluate((x) => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify(x)); }, fr); await page.goto(APP); await page.waitForSelector(sel, { timeout: 10000 }); await page.waitForTimeout(600); return page; };
+    for (const [name, fr, sel] of STEPS) {
+      await go(fr, sel);
+      // the main button is on screen, and nothing scrolls sideways
+      const g = await page.evaluate((s) => { const b = document.querySelector(`${s} .fr-go, ${s} .auth-go`); const r = b && b.getBoundingClientRect(); return { wide: document.documentElement.scrollWidth > innerWidth, btn: r ? r.bottom <= innerHeight + 1 && r.height >= 44 : true }; }, sel);
+      expect(!g.wide && (g.btn || name === 'sign in'), `${size} ${name}: ` + JSON.stringify(g));
+      if (size === '768x1024') continue;
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300);
+        const { checked, bad } = await contrastIssues(page);
+        expect(checked >= 2 && !bad.length, `${size} ${name} (${scheme}): under AA: ` + bad.join(' | '));
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+      const issues = await tapResponseIssues(page, { reopen: () => go(fr, sel), touch: size === '390x844', scope: '.fr, .auth-page', skip: /fake-gsi|google|apple|terms|privacy/i, perKind: 3 }); // (Google and Apple leave the page: their own tests)
+      expect(!issues.length, `${size} ${name}: taps: ` + JSON.stringify(issues).slice(0, 500));
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Liquid Glass on a phone: every tap target is at least 44px, and every word passes WCAG AA on the marble, light and dark', async (b) => {
   const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
   const screens = {
-    'sign-up': async (page) => { await page.waitForSelector('.auth-page', { timeout: 10000 }); },
+    'sign-up': async (page) => { await page.evaluate(() => localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'auth' }))); await page.reload(); await page.waitForSelector('.auth-page', { timeout: 10000 }); },
     home: async (page) => { await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="home"]'); if (t) t.click(); }); await page.waitForTimeout(600); },
     // (the answer as it rests: the "Done" island sits over the top of it for a moment, then goes)
     chat: async (page) => { await ask(page, 'what is photosynthesis'); await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }); await page.waitForTimeout(600); },
@@ -4724,7 +4837,7 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
 const TAP_SIZES = [['iPhone 390x844', 'iPhone 13', { width: 390, height: 844 }], ['small Android 360x740', 'Pixel 7', { width: 360, height: 740 }], ['touch 1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]];
 // every screen and panel, each opened on its own: [name, how to get there, what to start with]
 const TAP_SCREENS = [
-  ['sign-up', async (page) => { await page.waitForSelector('.auth-page', { timeout: 10000 }); }, { state: null, server: true }],
+  ['sign-up', async (page) => { await page.evaluate(() => localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'auth' }))); await page.reload(); await page.waitForSelector('.auth-page', { timeout: 10000 }); }, { state: null, server: true }],
   ['profile', async (page) => { await page.evaluate(() => openProfile(false)); await page.waitForSelector('.profile-card', { timeout: 8000 }); }],
   ['home', async (page) => { await page.waitForTimeout(600); }, { state: { tab: 'home' } }],
   ['chat', async (page) => { await ask(page, 'what is photosynthesis'); }],
@@ -4977,7 +5090,7 @@ test('forms check each field as you type: the reason shows under the field in pl
   expect(!raw.length, 'raw error text shown at app.js:' + raw.map(([n]) => n).join(', '));
   const taken = `taken${Date.now()}@example.com`;
   let { ctx, page } = await open(b, { state: null });
-  await page.waitForSelector('.auth-page');
+  await toSignIn(page);
   await page.evaluate(async ([srv, email]) => fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'secret-pass-1', age: 15 }) }), [SERVER, taken]);
   const under = (name) => page.locator(`.auth-form [name=${name}]`).locator('xpath=ancestor::label[1]').locator('.field-err');
   const shown = async (name) => ((await under(name).isVisible()) ? (await under(name).textContent()) : '');
