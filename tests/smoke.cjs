@@ -4738,8 +4738,6 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    const homeTaps = await tapResponseIssues(page, { reopen: async () => { await page.goto(APP); await page.waitForTimeout(600); await toHome(); return page; }, touch: phone, scope: hub, perKind: 2 });
-    expect(!homeTaps.length, `${size} home taps: ` + JSON.stringify(homeTaps).slice(0, 500));
     // You: who you are, three numbers, and rows that open their own screen
     await page.goto(APP); await page.waitForTimeout(600);
     await page.evaluate(() => openSettings('profile'));
@@ -4797,7 +4795,12 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     await page.fill('#settings-search', '');
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Settings (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    // the tap test on You, Settings and Plans
+    // the tap tests: Home, You, Settings and Plans (in Lite mode, like every tap test: this machine
+    // draws the moving background in software, which a phone or laptop doesn't)
+    await page.evaluate(() => { state.lite = 'on'; save(); });
+    await page.goto(APP); await page.waitForTimeout(600); await toHome();
+    const homeTaps = await tapResponseIssues(page, { reopen: async () => { await page.goto(APP); await page.waitForTimeout(600); await toHome(); return page; }, touch: phone, scope: hub, perKind: 2 });
+    expect(!homeTaps.length, `${size} home taps: ` + JSON.stringify(homeTaps).slice(0, 500));
     for (const pg of ['profile', 'all', 'plans']) {
       const reopen = async () => { await page.goto(APP); await page.waitForTimeout(600); await page.evaluate((x) => openSettings(x), pg); await page.waitForTimeout(300); return page; };
       await reopen();
@@ -5804,11 +5807,12 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
   for (const t of tests) {
     if (only && !t.name.includes(only)) continue;
     const browser = await launch();
+    const t0 = Date.now(); // (TIMES=1 prints how long each test takes)
     try {
       cspViolations.length = 0;
       await t.fn(browser);
       if (cspViolations.length) throw new Error('blocked by the security policy: ' + [...new Set(cspViolations)].join(' | '));
-      console.log('PASS', t.name);
+      console.log('PASS', t.name + (process.env.TIMES ? ` [${Math.round((Date.now() - t0) / 1000)}s]` : ''));
     }
     catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (process.env.VERBOSE && e && e.stack ? e.stack : (e && e.message || e)).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
     finally { await browser.close().catch(() => {}); }

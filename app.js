@@ -1883,30 +1883,30 @@ function buildHub({ ideas = false } = {}) {
     el.innerHTML = `<div class="hub-bot" aria-hidden="true"></div>
       <h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}!<small>What are we studying today?</small></h1>
       <div class="hub-cards">
-        <button type="button" id="home-ask" class="hub-card" data-act="ask"><i>${HUB_ICON.ask}</i><b>Ask a question</b><small>Cassie explains it step by step</small></button>
-        <button type="button" class="hub-card" data-act="cards"><i>${HUB_ICON.cards}</i><b>Make flashcards</b><small>From any answer, or write your own</small></button>
+        <button type="button" id="home-ask" class="hub-card" data-hub="ask"><i>${HUB_ICON.ask}</i><b>Ask a question</b><small>Cassie explains it step by step</small></button>
+        <button type="button" class="hub-card" data-hub="cards"><i>${HUB_ICON.cards}</i><b>Make flashcards</b><small>From any answer, or write your own</small></button>
       </div>
-      <button type="button" class="hub-go" data-act="start">Start studying</button>${ideasBtn}`;
+      <button type="button" class="hub-go" data-hub="start">Start studying</button>${ideasBtn}`;
   } else {
     const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
     el.innerHTML = `<header class="hub-head"><div class="hub-bot hub-bot-s" aria-hidden="true"></div><div><h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}</h1><p class="hub-sub"></p></div></header>
-      <button type="button" id="home-ask" class="hub-ask" data-act="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>
+      <button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
       <h2 class="hub-h">Today</h2>
       <div class="hub-today">
-        <button type="button" class="hub-w" data-act="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
-        <button type="button" class="hub-w" data-act="lab"><i>${HUB_ICON.lab}</i><b>New</b><span>today’s lab</span><em>Open Labs</em></button>
-        <button type="button" class="hub-w hub-timer" data-act="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>
-        <button type="button" class="hub-w" data-act="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
+        <button type="button" class="hub-w" data-hub="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
+        <button type="button" class="hub-w" data-hub="lab"><i>${HUB_ICON.lab}</i><b>New</b><span>today’s lab</span><em>Open Labs</em></button>
+        <button type="button" class="hub-w hub-timer" data-hub="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>
+        <button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
       </div>
       <h2 class="hub-h">Continue</h2>
       <div class="hub-recent"></div>
       <h2 class="hub-h">Quick actions</h2>
-      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => `<button type="button" class="hub-q" data-act="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div>${ideasBtn}`;
+      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div>`;
     el.querySelector('.hub-sub').textContent = [p.role === 'pro' ? 'Working professional' : p.grade, 'Your study buddy is here'].filter(Boolean).join(' · ');
     el.querySelectorAll('.hub-q span').forEach((s, i) => { s.textContent = HOME_EXAMPLES[i].label; });
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.act = 'chat:' + c.id;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.hub = 'chat:' + c.id;
       b.innerHTML = `<i>${HUB_ICON.chat}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
       b.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
       const n = c.messages.length; b.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${hubAgo(c.updatedAt)}`;
@@ -1915,7 +1915,7 @@ function buildHub({ ideas = false } = {}) {
     if (!chats.length) list.innerHTML = '<p class="hub-none">Your chats with Cassie show up here.</p>';
   }
   el.querySelectorAll('.hub-name').forEach((s) => { s.textContent = name; });
-  el.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b) hubAct(b.dataset.act); });
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
