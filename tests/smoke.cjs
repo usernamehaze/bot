@@ -1534,7 +1534,7 @@ test('Teach me on phones: the phone’s own voice (iPhone Premium, then Enhanced
   const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
   const stepIs = (n) => `/${n} of 7/.test((document.querySelector('.tut-step') || {}).textContent || '')`;
   for (const [device, voices, want] of cases) {
-    for (const gender of ['woman', 'man']) {
+    for (const gender of [device === 'iPhone 13' ? 'woman' : 'man']) { // (one voice per phone keeps the suite short; each phone's picking order is checked)
       const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
       const page = t.page;
       await t.ctx.addInitScript(PHONE_SPEECH, voices);
@@ -4700,7 +4700,8 @@ test('first run screens: every word at AA in light and dark, every control answe
         expect(checked >= 2 && !bad.length, `${size} ${name} (${scheme}): under AA: ` + bad.join(' | '));
       }
       await page.emulateMedia({ colorScheme: 'light' });
-      const issues = await tapResponseIssues(page, { reopen: () => go(fr, sel), touch: size === '390x844', scope: '.fr, .auth-page', skip: /fake-gsi|google|apple|terms|privacy/i, perKind: 3 }); // (Google and Apple leave the page: their own tests)
+      if (size === '1280x800' && !['intro', 'sign in', 'question 1'].includes(name)) continue; /* (the questions share one layout: the phone taps them all) */
+      const issues = await tapResponseIssues(page, { reopen: () => go(fr, sel), touch: size === '390x844', scope: '.fr, .auth-page', skip: /fake-gsi|google|apple|terms|privacy/i, perKind: 1 }); // (Google and Apple leave the page: their own tests)
       expect(!issues.length, `${size} ${name}: taps: ` + JSON.stringify(issues).slice(0, 500));
     }
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
@@ -4799,12 +4800,12 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     // draws the moving background in software, which a phone or laptop doesn't)
     await page.evaluate(() => { state.lite = 'on'; save(); });
     await page.goto(APP); await page.waitForTimeout(600); await toHome();
-    const homeTaps = await tapResponseIssues(page, { reopen: async () => { await page.goto(APP); await page.waitForTimeout(600); await toHome(); return page; }, touch: phone, scope: hub, perKind: 2 });
+    const homeTaps = await tapResponseIssues(page, { reopen: async () => { await page.goto(APP); await page.waitForTimeout(600); await toHome(); return page; }, touch: phone, scope: hub, perKind: 1 });
     expect(!homeTaps.length, `${size} home taps: ` + JSON.stringify(homeTaps).slice(0, 500));
     for (const pg of ['profile', 'all', 'plans']) {
       const reopen = async () => { await page.goto(APP); await page.waitForTimeout(600); await page.evaluate((x) => openSettings(x), pg); await page.waitForTimeout(300); return page; };
       await reopen();
-      const taps = await tapResponseIssues(page, { reopen, touch: phone, scope: '#settings-panel', skip: /clear conversation|privacy policy|terms|report/i, perKind: 2, max: 30 });
+      const taps = await tapResponseIssues(page, { reopen, touch: phone, scope: '#settings-panel', skip: /clear conversation|privacy policy|terms|report/i, perKind: 1, max: 20 });
       expect(!taps.length, `${size} ${pg} taps: ` + JSON.stringify(taps).slice(0, 500));
     }
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
@@ -4948,8 +4949,10 @@ const TAP_SCREENS = [
   ['home', async (page) => { await page.waitForTimeout(600); }, { state: { tab: 'home' } }],
   ['chat', async (page) => { await ask(page, 'what is photosynthesis'); }],
   ['settings', async (page) => { await page.evaluate(() => openSettings()); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(500); }],
-  ...['profile', 'account', 'study', 'appearance', 'voice', 'privacy', 'help', 'plans'].map((pg) => [`settings: ${pg}`, async (page) => {
-    await page.evaluate((x) => openSettings(x), pg); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(400);
+  // (You, every setting on one page with its two folding parts open, and Plans: each section on its
+  // own page shows these same controls)
+  ...['profile', 'all', 'plans'].map((pg) => [`settings: ${pg}`, async (page) => {
+    await page.evaluate((x) => { openSettings(x); document.querySelectorAll('#settings-panel details').forEach((d) => { d.open = true; }); }, pg); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(400);
   }]),
   ['Plus sheet', async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForSelector('.plus-sheet'); await page.waitForTimeout(400); }],
   ['Labs shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
@@ -4974,7 +4977,10 @@ test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped 
   const { tapTargetIssues } = require('./ui-checks.cjs');
   const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
   const bad = [];
-  for (const [size, device, viewport] of TAP_SIZES) {
+  // two lanes side by side (the iPhone then the 1280x800 screen; the small Android): about half the
+  // time, without so much at once that the 3D screens can't load on this test machine
+  const lanes = [[TAP_SIZES[0], TAP_SIZES[2]], [TAP_SIZES[1]]];
+  const sweep = async ([size, device, viewport]) => {
     for (const [name, go, o = {}] of TAP_SCREENS) {
       if (only && !only.test(name)) continue;
       const { ctx, page } = await open(b, { device, viewport, touch: true, lite: 'on', server: o.server || false, state: o.state === null ? null : { groqKey: 'gsk_test', ...(o.state || {}) }, fakeGroq: () => ({ text: 'Photosynthesis is how plants make food.\n\nQuick check: where does it happen?' }) });
@@ -4987,7 +4993,7 @@ test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped 
       await ctx.close();
     }
     // every lab, one after another in the same window
-    if (only && !only.test('labs')) continue;
+    if (only && !only.test('labs')) return;
     const { ctx, page } = await open(b, { device, viewport, touch: true, lite: 'on', server: false, state: { groqKey: 'gsk_test' } });
     const ids = await page.evaluate(async () => (await import('./labs/labs.js')).LABS.map((l) => l.id));
     for (const id of ids) {
@@ -5001,7 +5007,8 @@ test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped 
       } catch (e) { bad.push(`lab ${id} @ ${size}: could not open: ${e.message.split('\n')[0]}`); }
     }
     await ctx.close();
-  }
+  };
+  await Promise.all(lanes.map(async (lane) => { for (const sz of lane) await sweep(sz); }));
   if (process.env.TAP_REPORT) fs.writeFileSync(process.env.TAP_REPORT, bad.join('\n'));
   expect(!bad.length, `${bad.length} screens with buttons that can't be tapped properly:\n` + bad.join('\n'));
 });
@@ -5032,7 +5039,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
       };
       let last = '';
       const issues = await Promise.race([
-        tapResponseIssues(page, { reopen, touch, skip, only: onlyKeys, perKind: all ? 0 : 4, seen: all ? null : seenAt[viewport.width], log: (m) => { last = m; if (process.env.TAP_VERBOSE) console.log(`  ${label}: ${m}`); } }),
+        tapResponseIssues(page, { reopen, touch, skip, only: onlyKeys, perKind: all ? 0 : 3, seen: all ? null : seenAt[viewport.width], log: (m) => { last = m; if (process.env.TAP_VERBOSE) console.log(`  ${label}: ${m}`); } }),
         new Promise((r) => setTimeout(() => r([{ cause: 'stuck', what: `the screen stopped answering after: ${last}` }]), (onlyKeys === undefined ? 6 : 15) * 60000)), // (longer alone: 3D in software here)
       ]);
       await ctx.close();

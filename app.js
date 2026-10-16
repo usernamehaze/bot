@@ -1881,12 +1881,12 @@ function buildHub({ ideas = false } = {}) {
   const ideasBtn = ideas ? '<button type="button" class="home-ideas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg>Ideas to get started</button>' : '';
   if (!returning) {
     el.innerHTML = `<div class="hub-bot" aria-hidden="true"></div>
-      <h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}!<small>What are we studying today?</small></h1>
+      <h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}!<small>What are we studying today?</small></h1>${ideasBtn}
       <div class="hub-cards">
         <button type="button" id="home-ask" class="hub-card" data-hub="ask"><i>${HUB_ICON.ask}</i><b>Ask a question</b><small>Cassie explains it step by step</small></button>
         <button type="button" class="hub-card" data-hub="cards"><i>${HUB_ICON.cards}</i><b>Make flashcards</b><small>From any answer, or write your own</small></button>
       </div>
-      <button type="button" class="hub-go" data-hub="start">Start studying</button>${ideasBtn}`;
+      <button type="button" class="hub-go" data-hub="start">Start studying</button>`;
   } else {
     const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
     el.innerHTML = `<header class="hub-head"><div class="hub-bot hub-bot-s" aria-hidden="true"></div><div><h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}</h1><p class="hub-sub"></p></div></header>
