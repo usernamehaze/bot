@@ -109,6 +109,8 @@ async function contrastIssues(page, sel = 'body') {
   const items = await page.evaluate((sel) => {
     const out = [];
     const onTop = (e, x, y) => { const h = document.elementFromPoint(x, y); return !!h && (h === e || e.contains(h)); };
+    // words half cut off by a scrolling box (a sheet's bottom edge) aren't really showing: skip them
+    const clipped = (e, r) => { for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if (o === 'auto' || o === 'scroll' || o === 'hidden') { const q = p.getBoundingClientRect(); if (r.top < q.top - 1 || r.bottom > q.bottom + 1) return true; } } return false; };
     for (const s of document.querySelectorAll(sel)) {
       if (!s.getClientRects().length) continue;
       const walk = document.createTreeWalker(s, NodeFilter.SHOW_TEXT);
@@ -118,7 +120,7 @@ async function contrastIssues(page, sel = 'body') {
         if (st.visibility === 'hidden' || e.closest('[hidden], [aria-hidden="true"], svg')) continue;
         const range = document.createRange(); range.selectNodeContents(n); const r = range.getBoundingClientRect();
         if (r.width < 4 || r.height < 6 || r.top < 0 || r.left < 0 || r.bottom > innerHeight || r.right > innerWidth) continue;
-        if (!onTop(e, r.left + r.width / 2, r.top + r.height / 2)) continue;
+        if (!onTop(e, r.left + r.width / 2, r.top + r.height / 2) || clipped(e, r)) continue;
         out.push({ text: n.textContent.trim().slice(0, 30), color: st.color, size: parseFloat(st.fontSize), bold: +st.fontWeight >= 700, r: { x: r.left, y: r.top, w: r.width, h: r.height } });
       }
       for (const e of s.querySelectorAll('input[placeholder], textarea[placeholder]')) { // empty boxes show their placeholder

@@ -38,7 +38,7 @@
       if (t === 'chat') requestAnimationFrame(() => { chatLog.scrollTop = chatLog.scrollHeight; });
     } else if (t === 'labs' || t === 'games') { closeOthers(t); press(t === 'games' ? '#games-btn' : '#labs-btn'); }
     else if (t === 'cards') { closeOthers('cards'); if (window.CassieCards) window.CassieCards.open(); }
-    else if (t === 'you') { closeOthers('you'); if (settings.hidden) press('#settings-btn'); }
+    else if (t === 'you') { closeOthers('you'); if (settings.hidden) openSettings('profile'); } // (You: the profile first)
     sync();
   }
   bar.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
@@ -73,54 +73,8 @@
     const d = Math.round(s / 86400);
     return d === 1 ? 'yesterday' : d < 7 ? d + ' days ago' : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
-  function fill() {
-    const p = state.profile || {};
-    const name = (p.name || '').trim().split(/\s+/)[0];
-    $('#home-name').textContent = name || 'there';
-    $('#home-initial').textContent = (name || 'C')[0].toUpperCase();
-    $('#home-sub span').textContent = [p.grade || p.level, p.role === 'pro' || p.role === 'professional' ? 'Professional' : p.role ? 'Student' : ''].filter(Boolean).join(' · ') || 'Your study buddy';
-    const now = new Date();
-    $('#home-day').textContent = now.toLocaleDateString(undefined, { weekday: 'long' });
-    $('#home-date').textContent = now.getDate();
-    $('#home-month').textContent = now.toLocaleDateString(undefined, { month: 'short' });
-    const due = window.CassieCards ? window.CassieCards.dueCount() : 0, all = window.CassieCards ? window.CassieCards.count() : 0;
-    $('#home-due').textContent = due;
-    $('#home-due-txt').textContent = all ? (due === 1 ? 'card due today' : 'cards due today') : 'Make cards from any answer';
-    $('#home-due-go').textContent = due ? 'Review now ›' : all ? 'All done ✓' : 'Open ›';
-    const list = $('#home-recent');
-    const chats = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
-    list.replaceChildren();
-    if (!chats.length) {
-      const e = document.createElement('button'); e.type = 'button'; e.className = 'recent empty';
-      e.innerHTML = '<i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></i><span><b>Ask your first question</b><small>Cassie explains it step by step</small></span>';
-      e.addEventListener('click', () => ask());
-      list.appendChild(e);
-      return;
-    }
-    chats.forEach((c) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'recent';
-      b.innerHTML = '<i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg></i><span><b></b><small></small></span><svg class="recent-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
-      b.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
-      const n = c.messages.length;
-      b.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${ago(c.updatedAt)}`;
-      b.addEventListener('click', () => { selectChat(c.id); go('chat'); });
-      list.appendChild(b);
-    });
-  }
-  function ask() { go('chat'); setTimeout(() => promptInput.focus(), 60); }
-  $('#home-ask').addEventListener('click', ask);
-  $('#home-new').addEventListener('click', () => { createNewChat(); go('chat'); });
-  $('#home-me').addEventListener('click', () => go('you'));
-  $('#home-all').addEventListener('click', () => { go('chat'); press('#menu-btn'); });
-  home.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-go]'); if (!b) return;
-    const k = b.dataset.go;
-    if (k === 'labs' || k === 'cards') return go(k);
-    if (k === 'board') return press('#board-btn');
-    if (k === 'talk') return press('#voice-btn');
-    go('chat');
-    press(k === 'quiz' ? '#quiz-btn' : '#research-btn');
-  });
+  function fill() { renderHub($('#home-hub')); } // (the hub: app.js)
+  window.CassieNative = { go };
 
   // a new message (sent from anywhere: a tile, the extension, a share) opens the chat
   let seen = state.messages.length;
