@@ -1959,7 +1959,8 @@ function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
   if (!hubPv) hubPv = import('./labs/previews.js?v=169').catch(() => null);
-  hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv); }); });
+  const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
+  hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
 function buildHub({ ideas = false, phone = false } = {}) {
   const p = state.profile || {};

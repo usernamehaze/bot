@@ -1,9 +1,11 @@
 // Live mini previews of the labs: a small looping drawing for each (a pendulum swinging, a cell
 // drifting, planets turning...), not the lab itself. Drawn on a canvas in the palette's colours.
+// With { three: true } (Plus and Pro) each is a real-looking 3D scene instead (previews3d.js, the
+// labs' own 3D look), and the flat drawing shows until that is ready or if 3D can't run.
 // One shared loop draws only the previews on screen (at most MAX at once, about 30 a second) and
 // rests while the page is hidden. Reduce Motion or Lite mode: each shows one still frame.
 const TAU = Math.PI * 2;
-const MAX = 8;
+const MAX = 8, MAX3 = 5; // (at most 8 moving at once, 5 of them in 3D)
 
 // the palette, read from the page (Monochrome greys, or Blush & Sage, light or dark)
 function colours(el) {
@@ -169,6 +171,10 @@ function mixA(col, a) { mixCtx.fillStyle = '#000'; mixCtx.fillStyle = col; const
 export const PREVIEW_IDS = Object.keys(P);
 export const hasPreview = (id) => !!P[id];
 
+// the 3D scenes (Plus and Pro), loaded once, only when asked for
+let P3 = null, p3 = null;
+const load3d = () => p3 || (p3 = import('./previews3d.js').then((m) => (m.can3d() ? m.ready().then(() => (P3 = m)) : null)).catch(() => null));
+
 /* ---------- the shared loop ---------- */
 const items = new Map(); // canvas -> { id, seen, still, c, frame }
 const counts = new Map(); // frames drawn, per preview
@@ -185,7 +191,8 @@ function draw(cv, it, t) {
   if (!it.c || it.frame++ % 60 === 0) it.c = colours(cv); // (the palette is read again now and then: light, dark, a new colour)
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, cv.width, cv.height);
-  try { P[it.id](g, cv.clientWidth, cv.clientHeight, t, it.c); } catch (e) { /* a preview never breaks the page */ }
+  try { if (!(it.three && P3 && P3.draw3d(it.id, g, cv.clientWidth, cv.clientHeight, t))) P[it.id](g, cv.clientWidth, cv.clientHeight, t, it.c); } catch (e) { /* a preview never breaks the page */ }
+  cv.dataset.look = it.three && P3 && P3.has3d(it.id) ? '3d' : 'flat';
   const key = it.id + ' ' + cv.className; // (a redrawn Home carries on counting where the last one stopped)
   counts.set(key, (counts.get(key) || 0) + 1);
   cv.dataset.frames = String(counts.get(key));
@@ -193,11 +200,11 @@ function draw(cv, it, t) {
 function tick(now) {
   raf = 0;
   if (document.hidden) return;
-  let n = 0;
+  let n = 0, n3 = 0;
   for (const [cv, it] of items) {
     if (!cv.isConnected) { items.delete(cv); if (io) io.unobserve(cv); continue; }
-    if (it.still || !it.seen || n >= MAX) continue;
-    n++;
+    if (it.still || !it.seen || n >= MAX || (it.three && P3 && n3 >= MAX3)) continue;
+    n++; if (it.three && P3) n3++;
     if (now - last >= 30) draw(cv, it, now / 1000);
   }
   if (now - last >= 30) last = now;
@@ -207,9 +214,10 @@ function kick() { if (!raf && !document.hidden) raf = requestAnimationFrame(tick
 document.addEventListener('visibilitychange', kick);
 
 // Show the preview for a lab on this canvas (still with Reduce Motion or Lite mode, or { still: true })
-export function preview(cv, id, { still = false } = {}) {
+export function preview(cv, id, { still = false, three = false } = {}) {
   if (!P[id]) return false;
-  const it = { id, seen: !io, still: still || quiet(), c: null, frame: 0 };
+  const it = { id, seen: !io, still: still || quiet(), c: null, frame: 0, three: three && !window.CASSIE_LITE };
+  if (it.three) load3d().then((m) => { if (m && cv.isConnected) draw(cv, it, it.still ? 1.6 : performance.now() / 1000); });
   items.set(cv, it);
   cv.dataset.preview = id;
   cv.dataset.still = it.still ? '1' : '0';

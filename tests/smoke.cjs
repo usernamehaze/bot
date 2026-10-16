@@ -4854,6 +4854,7 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed });
     await page.waitForSelector('#home .hub-hero-phone .hub-tile[data-preview]', { timeout: 10000 });
     await page.waitForTimeout(800);
+    await page.waitForFunction(() => document.querySelectorAll('#home .hub-tile[data-preview]').length >= 8, null, { timeout: 8000 }); // (Home is redrawn now and then: its previews come straight back)
     const h = await page.evaluate(() => {
       const hub = document.querySelector('#home .hub'), kids = [...hub.children];
       const at = (sel) => kids.findIndex((k) => k.matches(sel)), atH = (re) => kids.findIndex((k) => k.matches('.hub-h') && re.test(k.textContent));
@@ -4897,6 +4898,28 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     await page.waitForSelector('#chat-log .hub .hub-boxes');
     const d = await page.evaluate(() => { const hub = document.querySelector('#chat-log .hub'); return { kids: [...hub.children].slice(0, 3).map((k) => k.className), strip: !!hub.querySelector('.hub-strip, .hub-tlab, canvas[data-pv]'), hello: hub.querySelector('.hub-hero').innerText, boxes: hub.querySelectorAll('.hub-box').length }; });
     expect(!d.strip && /Hi, welcome/.test(d.hello) && d.kids[0] === 'hub-hero' && d.kids[1].startsWith('hub-remind') && d.kids[2] === 'hub-boxes' && d.boxes === 10, 'a computer’s Home is unchanged: ' + JSON.stringify(d));
+    await ctx.close();
+  }
+});
+
+test('phone Home previews: real-looking 3D scenes (like the labs) on Plus and Pro, the flat drawings on Free and in Lite mode', async (b) => {
+  for (const [who, plan, lite, want] of [['Pro', { plan: 'pro', until: 0 }, 'off', '3d'], ['Plus', { plan: 'plus', until: 0 }, 'off', '3d'], ['Free', null, 'off', 'flat'], ['Pro in Lite mode', { plan: 'pro', until: 0 }, 'on', 'flat']]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', tab: 'home', plan } });
+    const asked = [];
+    page.on('request', (r) => { if (/previews3d\.js/.test(r.url())) asked.push(r.url()); });
+    await page.goto(APP);
+    await page.waitForSelector(`#home .hub-tlab-pv[data-look="${want}"]`, { timeout: 20000 });
+    await page.waitForTimeout(500);
+    const looks = await page.evaluate(() => [...document.querySelectorAll('#home canvas[data-preview]')].map((c) => c.dataset.look).filter(Boolean));
+    expect(looks.length >= 3 && looks.every((l) => l === want), `${who}: every preview is ${want}: ` + looks.join(','));
+    expect(want === '3d' ? asked.length > 0 : asked.length === 0, `${who}: the 3D scenes are ${want === '3d' ? '' : 'not '}loaded`);
+    if (want === '3d') { // and they move
+      const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
+      const f0 = await fr(); await page.waitForTimeout(900); expect(await fr() > f0 + 3, `${who}: the 3D preview moves`);
+      // exactly one 3D canvas for every preview (they share one renderer)
+      expect(await page.evaluate(() => document.querySelectorAll('#home canvas.hub-scene-3d, #home canvas[data-engine="webgl"]').length) === 0, `${who}: no extra 3D canvases on the page`);
+    }
+    expect(!errors.length, `${who}: page errors: ` + errors.join('; '));
     await ctx.close();
   }
 });
