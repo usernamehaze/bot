@@ -4681,7 +4681,7 @@ test('no em or en dashes in anything people read (every page, label and message,
   await ctx.close();
 });
 
-test('Get started screen: Cassie is 3D (floats, blinks, follows the pointer, hops in) at 390x844 and 1280x800, and the still flat Cassie shows with Reduce Motion or Lite mode', async (b) => {
+test('Get started screen: Cassie is 3D and black and white like her icon (floats, blinks, follows the pointer, hops in) at 390x844 and 1280x800, and the still flat Cassie shows with Reduce Motion or Lite mode', async (b) => {
   const intro = async (o, motion) => {
     const { ctx, page, errors } = await open(b, { state: null, scale: 1, ...o });
     if (motion) await page.emulateMedia({ reducedMotion: motion });
@@ -4702,6 +4702,22 @@ test('Get started screen: Cassie is 3D (floats, blinks, follows the pointer, hop
     // something is drawn there (an empty picture is a few hundred bytes)
     const shot = await page.locator('canvas.cassie-3d').screenshot();
     expect(shot.length > 4000, `${size}: Cassie is drawn (${shot.length} bytes)`);
+    // black and white like her icon, whatever the palette: plenty of white (no colour in it) and some
+    // near-black (her eyes)
+    const px = await page.evaluate(async (b64) => {
+      const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let white = 0, black = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const [r, gr, bl] = [d[i], d[i + 1], d[i + 2]], hi = Math.max(r, gr, bl), lo = Math.min(r, gr, bl);
+        if (lo > 225 && hi - lo < 12) white++;
+        if (hi < 80) black++;
+      }
+      return { white: white / (d.length / 4), black: black / (d.length / 4) };
+    }, shot.toString('base64'));
+    expect(px.white > 0.08 && px.black > 0.0008, `${size}: Cassie is white with black eyes: ` + JSON.stringify(px));
     // she follows the pointer: the picture changes when it moves across the screen
     await page.mouse.move(5, 5); await page.waitForTimeout(900);
     const left = await page.locator('canvas.cassie-3d').screenshot();
