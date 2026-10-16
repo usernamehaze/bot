@@ -301,20 +301,31 @@ function accentInk(hex) {
 // Cassie's colours follow the profile: blush leads for a girl (and when it isn't said), sage
 // leads for a boy (style.css: html[data-pal="sage"]). A colour picked in Appearance wins over both.
 function palette() { return state.profile && state.profile.gender === 'male' ? 'sage' : 'blush'; }
+// what's picked in Appearance: '' = Cassie (Blush & Sage), 'mono' = Monochrome, or a colour
+function accentChoice() { const a = String(state.accent || '').trim().toLowerCase(); return a === 'mono' ? 'mono' : /^#[0-9a-f]{6}$/.test(a) ? a : ''; }
+const accentHex = () => (accentChoice().startsWith('#') ? accentChoice() : '');
+function colorLum(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0); }
+function contrastOf(a, b) { const x = colorLum(a), y = colorLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+// One source of truth: a picked colour becomes --primary (buttons, send, the timer, the open tab,
+// your bubbles, switches, focus), with words on it in white or near-black, whichever reads better,
+// and --primary-ink: the same colour, darker or lighter until it reads as words on the page.
 function applyAccent() {
-  const root = document.documentElement;
-  root.dataset.pal = palette();
-  const color = (state.accent || '').trim();
-  const on = /^#[0-9a-fA-F]{6}$/.test(color);
-  if (on) {
-    root.style.setProperty('--accent', color);
-    root.style.setProperty('--accent-ink', accentInk(color));
-  } else {
-    root.style.removeProperty('--accent');
-    root.style.removeProperty('--accent-ink');
+  const root = document.documentElement, pick = accentChoice();
+  root.dataset.pal = pick === 'mono' ? 'mono' : palette();
+  ['--primary', '--primary-dark', '--on-primary', '--primary-ink', '--accent', '--accent-ink', '--lab-accent', '--lab-on-accent'].forEach((p) => root.style.removeProperty(p));
+  if (pick.startsWith('#')) {
+    const ink = contrastOf(pick, '#ffffff') >= contrastOf(pick, '#111111') ? '#ffffff' : '#111111';
+    const dark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    const page = getComputedStyle(root).getPropertyValue('--surface').trim() || (dark ? '#251f1c' : '#ffffff');
+    let words = pick;
+    for (let t = 0.05; contrastOf(words, page) < 4.5 && t <= 1; t += 0.05) words = mixHex(pick, dark ? '#ffffff' : '#000000', t);
+    const set = { '--primary': pick, '--primary-dark': mixHex(pick, '#000000', 0.18), '--on-primary': ink, '--primary-ink': words, '--accent': pick, '--accent-ink': ink, '--lab-accent': pick, '--lab-on-accent': ink };
+    Object.entries(set).forEach(([k, v]) => root.style.setProperty(k, v));
   }
   if (typeof updateBackdrop === 'function') updateBackdrop();
 }
+// (light and dark mode differ in the shade that reads as words)
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyAccent());
 /* ---------- the living gradient behind the chat ---------- */
 // Marble monochrome by default; when the student picks a colour the gradient
 // flows to that colour (soft tints in light mode, a deep glow in dark mode).
@@ -326,13 +337,17 @@ function mixHex(a, b, t) {
 const darkScheme = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
 function backdropColors() {
   const dark = !!(darkScheme && darkScheme.matches);
-  const c = (state.accent || '').trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(c)) { // Cassie's colours: cream with a breath of blush and sage
+  const c = accentHex();
+  if (accentChoice() === 'mono') { // Monochrome: neutral greys
+    return dark ? { color1: '#0e0e10', color2: '#333336', color3: '#5c5c60', brightness: 0.9 }
+      : { color1: '#ececec', color2: '#d4d4d6', color3: '#fafafa', brightness: 1.25 };
+  }
+  if (!c) { // Cassie's colours: cream with a breath of blush and sage
     const sage = palette() === 'sage';
     return dark ? { color1: '#120f0e', color2: sage ? '#24413a' : '#4a2530', color3: sage ? '#4a2530' : '#24413a', brightness: 0.95 }
       : { color1: sage ? '#e3efe9' : '#f8e3e8', color2: '#fbf6ee', color3: sage ? '#f6e5e9' : '#e2efe9', brightness: 1.2 };
   }
-  return dark ? { color1: '#0c0c0f', color2: mixHex(c, '#000000', 0.35), color3: mixHex(c, '#000000', 0.68), brightness: 1 }
+  return dark ? { color1: '#0c0c0f', color2: mixHex(c, '#000000', 0.55), color3: mixHex(c, '#000000', 0.78), brightness: 0.95 }
     : { color1: mixHex(c, '#ffffff', 0.72), color2: mixHex(c, '#ffffff', 0.38), color3: '#fbf8f3', brightness: 1.2 };
 }
 let backdrop = null;
@@ -455,7 +470,7 @@ function botMood(name, ms) {
 (function startCursorCassie() {
   const root = document.getElementById('cassie-2d-root');
   if (!root || !window.CassieBot || !wantsCursorCassie()) return;
-  bot2d = window.CassieBot.create(root, { accent: state.accent || '#d8343c', accessory: window.CassieBot.seasonal() });
+  bot2d = window.CassieBot.create(root, { accent: accentHex() || '#d8343c', accessory: window.CassieBot.seasonal() });
   if (mascot) mascot.classList.add('has2d');
   // her eyes follow your finger / mouse
   const follow = (x, y) => {
@@ -488,7 +503,7 @@ function islandFit() {
 }
 function islandShow(mood, text, ms) {
   if (!islandEl || !window.CassieBot) return;
-  if (!islandBot) islandBot = window.CassieBot.create(islandEl.querySelector('.island-bot'), { glow: true, accent: state.accent || '#d8343c' });
+  if (!islandBot) islandBot = window.CassieBot.create(islandEl.querySelector('.island-bot'), { glow: true, accent: accentHex() || '#d8343c' });
   clearTimeout(islandTimer);
   islandBot.pause(false);
   islandBot.setState(mood);
@@ -583,7 +598,7 @@ function makeIsleCard(doc, opts = {}) {
   const title = $('.isle-title'), input = $('.isle-input');
   let bot = null, item = null, answerBubble = null;
   const later = (fn, ms) => win.setTimeout(fn, ms); // the pop-out's own clock keeps running while the main tab is hidden
-  if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: state.accent || '#d8343c', win });
+  if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: accentHex() || '#d8343c', win });
 
   const api = {
     el: card, doc,
@@ -1056,8 +1071,11 @@ function launchConfetti(x, y) {
   ensureConfetti();
   const cx = x != null ? x : window.innerWidth / 2;
   const cy = y != null ? y : window.innerHeight / 3;
-  // Cassie's colours: blush, sage, honey and cream, so pieces show on any background
-  const colors = ['#b8395a', '#f28fa5', '#2f6f5e', '#7cc4ae', '#f2c94c', '#fbf6ee'];
+  // the app's colours: greys in Monochrome, shades of a picked colour, else blush, sage, honey and cream
+  const pick = accentHex();
+  const colors = accentChoice() === 'mono' ? ['#111111', '#3a3a3a', '#6d6d72', '#a9a9a9', '#d9d5cf', '#f5f3ef']
+    : pick ? [pick, mixHex(pick, '#ffffff', 0.4), mixHex(pick, '#000000', 0.3), mixHex(pick, '#ffffff', 0.75), '#f2c94c']
+      : ['#b8395a', '#f28fa5', '#2f6f5e', '#7cc4ae', '#f2c94c', '#fbf6ee'];
   for (let i = 0; i < 90; i++) {
     const ang = Math.random() * Math.PI * 2;
     const spd = 4 + Math.random() * 7;
@@ -1754,6 +1772,21 @@ function setSideOpen(open, keep = true) {
 }
 let sideOpenSaved = false;
 try { sideOpenSaved = localStorage.getItem(SIDE_KEY) === 'open'; } catch (e) { /* ignore */ }
+// "Menu" folds the tool list away (folded at first, so New chat, the timer and Recents are near the
+// top); the choice is kept. The rail on a computer always shows every tool.
+const TOOLS_KEY = 'cassie.toolsOpen';
+const sideMenuBtn = document.getElementById('side-menu-toggle');
+let toolsOpen = false, searchOpened = false;
+try { toolsOpen = localStorage.getItem(TOOLS_KEY) === 'open'; } catch (e) { /* ignore */ }
+function setToolsOpen(open, keep = true) {
+  toolsOpen = open;
+  document.getElementById('sidebar').classList.toggle('tools-folded', !open);
+  sideMenuBtn.setAttribute('aria-expanded', String(open));
+  sideMenuBtn.setAttribute('aria-label', open ? 'Menu: hide the study tools' : 'Menu: show the study tools');
+  if (keep) { searchOpened = false; try { localStorage.setItem(TOOLS_KEY, open ? 'open' : 'folded'); } catch (e) { /* ignore */ } }
+}
+setToolsOpen(toolsOpen, false);
+sideMenuBtn.addEventListener('click', () => setToolsOpen(!toolsOpen));
 sideReady = true;
 setSideOpen(sideOpenSaved, false);
 syncSideHl();
@@ -1777,6 +1810,8 @@ document.getElementById('sidebar').addEventListener('scroll', hideSideTip, { pas
 function applySideSearch() {
   if (!sideReady) return;
   const q = sideSearch.value.trim().toLowerCase();
+  // (typing opens a folded list for a moment; clearing the box folds it again)
+  if (q && !toolsOpen) { setToolsOpen(true, false); searchOpened = true; } else if (!q && searchOpened) { searchOpened = false; setToolsOpen(false, false); }
   toolBtns.forEach(([b, ex]) => { b.hidden = !!q && !ex.label.toLowerCase().includes(q); });
   document.querySelectorAll('#chat-list .chat-item').forEach((it) => { it.hidden = !!q && !it.querySelector('.ci-title').textContent.toLowerCase().includes(q); });
 }
@@ -1793,6 +1828,7 @@ sideHl.addEventListener('change', () => {
 function showTools() {
   if (sideWide.matches) setSideOpen(true); else openSidebar();
   sideSearch.value = ''; applySideSearch();
+  setToolsOpen(true);
   sideTools.classList.remove('flash'); void sideTools.offsetWidth; sideTools.classList.add('flash');
   setTimeout(() => sideTools.classList.remove('flash'), 1600);
   sideTools.scrollIntoView({ block: 'nearest' });
@@ -4850,9 +4886,14 @@ function buildAccentSwatches() {
   wrap.innerHTML = '';
   const none = document.createElement('button');
   none.type = 'button'; none.className = 'accent-sw accent-none';
-  none.dataset.accent = ''; none.title = 'None: Cassie’s colours';
-  none.setAttribute('aria-label', 'None (Cassie’s colours)');
+  none.dataset.accent = ''; none.title = 'Cassie: blush and sage';
+  none.setAttribute('aria-label', 'Cassie (blush and sage)');
   wrap.appendChild(none);
+  const mono = document.createElement('button');
+  mono.type = 'button'; mono.className = 'accent-sw accent-mono';
+  mono.dataset.accent = 'mono'; mono.title = 'Monochrome: black and white';
+  mono.setAttribute('aria-label', 'Monochrome (black and white)');
+  wrap.appendChild(mono);
   ACCENT_COLORS.forEach((c) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'accent-sw'; b.dataset.accent = c;
@@ -4886,8 +4927,8 @@ function syncAccentSwatches() {
 }
 function setAccent(color) {
   state.accent = color || '';
-  if (bot2d) bot2d.setAccent(color || '#d8343c');
-  if (islandBot) islandBot.setAccent(color || '#d8343c');
+  if (bot2d) bot2d.setAccent(accentHex() || '#d8343c');
+  if (islandBot) islandBot.setAccent(accentHex() || '#d8343c');
   track('feature', 'colour');
   save();
   applyAccent();
@@ -5482,7 +5523,7 @@ function buildVoiceUI() {
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
   const ui = { el, status: q('.vc-status'), you: q('.vc-you'), cassie: q('.vc-cassie'), care: q('.vc-care'), mic: q('.vc-mic'), tip: q('.vc-tip'), gender: q('.vc-gender'), stage: q('.vc-stage'), bot: null };
-  if (window.CassieBot) ui.bot = window.CassieBot.create(q('.vc-bot'), { glow: true, accent: state.accent || '#d8343c' });
+  if (window.CassieBot) ui.bot = window.CassieBot.create(q('.vc-bot'), { glow: true, accent: accentHex() || '#d8343c' });
   q('.vc-x').addEventListener('click', closeVoice);
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVoice(); });
   q('.vc-modes').addEventListener('click', (e) => { const b = e.target.closest('[data-vmode]'); if (b && voiceChat && b.dataset.vmode !== voiceChat.mode) startVoiceMode(b.dataset.vmode); });

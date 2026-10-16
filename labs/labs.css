@@ -3,6 +3,7 @@
 html.labs-open, html.labs-open body { overflow: hidden; }
 :root { --lab-accent: #f28fa5; --lab-on-accent: #2a1018; } /* (also the 3D explorer's helper card) */
 :root[data-pal="sage"] { --lab-accent: #7cc4ae; --lab-on-accent: #0f2620; }
+:root[data-pal="mono"] { --lab-accent: #ededed; --lab-on-accent: #111111; } /* (a picked colour: app.js sets both) */
 .labs {
   position: fixed; inset: 0; z-index: 235; color: #f2f2f4; overflow: hidden;
   background: radial-gradient(ellipse at 50% 30%, #23262f 0%, #14161c 55%, #0b0c10 100%);
