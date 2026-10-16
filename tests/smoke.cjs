@@ -4777,7 +4777,7 @@ test('first run screens: every word at AA in light and dark, every control answe
   }
 });
 
-test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is picked, and Home’s boxes each open their feature and play a moment (390x844, 1280x800)', async (b) => {
+test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is picked, and Home’s boxes each open their feature (390x844, 1280x800)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const tok = (page) => page.evaluate(() => { const st = getComputedStyle(document.documentElement); return Object.fromEntries(['--bg', '--surface', '--text', '--primary', '--on-primary'].map((k) => [k, st.getPropertyValue(k).trim().toLowerCase()])); });
   // a new student, a boy and a girl, and someone from before the change (accent ''): Monochrome
@@ -4835,16 +4835,12 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
     expect(await page.locator(hub + ' .hub-q', { hasText: /^(Quiz me|Flashcards|Research a topic)$/ }).count() === 0, `${size}: no Quick action repeats a box`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await contrastIssues(page, hub + ' .hub-boxes'); expect(!bad.length, `${size} boxes (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 });
-    for (const [act, pose, opened] of BOXES) {
-      if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 }); }
-      else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 }); }
-      await page.evaluate(() => { window.__poses = []; new MutationObserver((l) => l.forEach((r) => window.__poses.push(r.target.dataset.pose))).observe(document.body, { attributes: true, attributeFilter: ['data-pose'], subtree: true }); });
+    for (const [act, , opened] of BOXES) {
+      if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); }
+      else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 }); }
       await page.click(`${hub} .hub-box[data-hub="${act}"]`);
       const ok = await opened(page).then(() => true, () => false);
       expect(ok, `${size}: the ${act} box opens its feature`);
-      const poses = await page.evaluate(() => window.__poses);
-      expect(poses.includes(pose), `${size}: the ${act} box plays “${pose}”: ` + JSON.stringify(poses));
       if (act === 'timer') await page.evaluate(() => { const t = document.getElementById('pomo-toggle'); if (/pause/i.test(t.textContent)) t.click(); });
     }
     expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
@@ -4852,58 +4848,21 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
   }
 });
 
-test('Home header student: a cartoon boy (curly hair, hoodie), girl (long hair, jacket) or neither (bob, grey hoodie) from the profile, and every moment changes the face; the still drawing matches', async (b) => {
-  const seen = {};
-  for (const [gender, kind, hair, clothes] of [['male', 'boy', 'hair-curly', 'hoodie'], ['female', 'girl', 'hair-long', 'jacket'], ['none', 'kid', 'hair-bob', 'hoodie']]) {
-    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, gender } } });
-    await page.waitForSelector('#home .hub-scene.is-3d', { timeout: 20000 });
-    await page.waitForTimeout(600);
-    const d = await page.evaluate(() => hubSceneMod.describe());
-    expect(d && d.kind === kind && d.hair === hair && d.clothes === clothes, `${gender}: ${kind} with ${hair} and a ${clothes}: ` + JSON.stringify(d));
-    seen[gender] = d;
-    if (gender === 'male') {
-      // every moment shows its own face (mouth, brows, lids), different from the resting face
-      const rest = JSON.stringify(d.face);
-      const want = { ask: 'open', cards: 'small', lab: 'o', timer: 'flat', streak: 'laugh', write: 'smile' };
-      for (const [kindOf, mouth] of Object.entries(want)) {
-        await page.evaluate((k) => hubSceneMod.play(k), kindOf);
-        await page.waitForTimeout(kindOf === 'streak' ? 450 : 550);
-        const f = await page.evaluate(() => hubSceneMod.describe().face);
-        expect(f.mouth === mouth && JSON.stringify(f) !== rest, `${kindOf}: its face: ` + JSON.stringify(f));
-        if (kindOf === 'streak') expect(f.lid > 0.6, 'a laugh closes the eyes happily: ' + JSON.stringify(f));
-        if (kindOf === 'timer') expect(f.frown > 0 && f.lid > 0.2, 'focused: a frown and narrowed eyes: ' + JSON.stringify(f));
-        await page.waitForTimeout(700);
-      }
-    }
-    expect(!errors.length, `${gender}: page errors: ` + errors.join('; '));
-    await ctx.close();
-    // the still drawing (Lite mode) is the same student
-    const lite = await open(b, { device: 'iPhone 13', scale: 1, lite: 'on', server: false, state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, gender } } });
-    await lite.page.waitForSelector('#home .hub-still');
-    const still = await lite.page.evaluate(() => { const v = document.querySelector('#home .hub-still'); return { cls: v.getAttribute('class'), jacket: !!v.querySelector('.hs-jacket'), hoodie: !!v.querySelector('[class^="hs-hoodie"]'), curls: v.querySelectorAll('.hs-hair-m circle').length }; });
-    const k = gender === 'male' ? 'm' : gender === 'female' ? 'f' : 'n';
-    expect(still.cls.includes('hs-' + k) && still.jacket === (gender === 'female') && still.hoodie === (gender !== 'female') && (gender === 'male' ? still.curls > 5 : still.curls === 0), `${gender}: the still drawing: ` + JSON.stringify(still));
-    await lite.ctx.close();
-  }
-  expect(seen.male.hair !== seen.female.hair && seen.male.clothes !== seen.female.clothes, 'the boy and the girl differ in hair and clothes');
-});
-
-test('Home header: a 3D study room with the hello and a bell; every Home button plays its moment and still does its job; Today as a row of chips; the still room with Reduce Motion or Lite mode (390x844, 1280x800)', async (b) => {
+test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844, 1280x800)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const phone = size === '390x844';
     const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
+    const loaded = [];
+    page.on('request', (r) => { if (/home-scene\.js/.test(r.url())) loaded.push(r.url()); });
     const toHome = async () => { if (phone) await page.evaluate(() => CassieNative.go('home')); else await page.evaluate(() => createNewChat()); await page.waitForTimeout(400); };
     const hub = phone ? '#home .hub' : '#chat-log .hub';
-    // a new student: the header with the hello and the name, over the room in 3D
+    // a new student: the hello and the name, and a 44px bell; no 3D room
     await toHome();
-    await page.waitForSelector(hub + '.hub-empty .hub-hero .hub-scene.is-3d canvas', { timeout: 20000 });
-    const hero = await page.evaluate((h) => { const e = document.querySelector(h + ' .hub-hero'), r = e.getBoundingClientRect(); return { text: e.innerText, h: r.height, w: r.width, bell: document.querySelector(h + ' .hub-bell').getBoundingClientRect().width }; }, hub);
-    expect(/Hi, welcome/.test(hero.text) && /Test/.test(hero.text), `${size}: the hello and the name over the room: ` + hero.text);
-    expect(Math.abs(hero.h - (phone ? 220 + 47 : 260)) < 60 && hero.bell >= 44, `${size}: the header's size and a 44px bell: ` + JSON.stringify(hero));
-    const frames = () => page.evaluate(() => +document.querySelector('.hub-scene-3d').dataset.frames);
-    const f0 = await frames(); await page.waitForTimeout(1200);
-    expect(await frames() > f0, `${size}: the room keeps moving (breathing, pages, blinks)`);
+    await page.waitForSelector(hub + '.hub-empty .hub-hero');
+    const hero = await page.evaluate((h) => { const e = document.querySelector(h + ' .hub-hero'); return { text: e.innerText, h: e.getBoundingClientRect().height, bell: document.querySelector(h + ' .hub-bell').getBoundingClientRect().width, canvas: !!e.querySelector('canvas, svg.hub-still, .hub-scene') }; }, hub);
+    expect(/Hi, welcome/.test(hero.text) && /Test/.test(hero.text), `${size}: the hello and the name: ` + hero.text);
+    expect(hero.bell >= 44 && hero.h < 140 && !hero.canvas, `${size}: a plain bar with a 44px bell, no room: ` + JSON.stringify(hero));
     // a returning student: the header, Today as a sideways row of chips, Continue and Quick actions
     await page.evaluate((s) => { state.chats = s.chats; state.cards = s.cards; save(); }, seed);
     await toHome();
@@ -4917,47 +4876,27 @@ test('Home header: a 3D study room with the hello and a bell; every Home button 
     const rem = await page.locator(hub + ' .hub-remind').innerText();
     expect(await page.locator(hub + ' .hub-bell').getAttribute('aria-expanded') === 'true' && /1 card to review/.test(rem) && /Focus timer/.test(rem) && /day streak/.test(rem) && /lab/i.test(rem), `${size}: the bell's reminders: ` + rem);
     await page.click(hub + ' .hub-bell');
-    // every kind of Home button plays its moment (seen on the room's data-pose) and still does its job
-    await page.evaluate(() => { window.__poses = []; new MutationObserver((l) => l.forEach((r) => window.__poses.push(r.target.dataset.pose))).observe(document.body, { attributes: true, attributeFilter: ['data-pose'], subtree: true }); });
+    // every kind of Home button still does its job
     const jobs = [
-      ['#home-ask', 'ask', () => page.waitForFunction(() => document.activeElement === document.getElementById('prompt-input'), null, { timeout: 4000 }).then(() => true, () => false)],
-      ['.hub-w[data-hub="cards"]', 'cards', () => page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
-      ['.hub-box[data-hub="lab"]', 'lab', () => page.waitForSelector('.labs:not([hidden])', { timeout: 6000 }).then(() => true, () => false)],
-      ['.hub-timer', 'timer', () => page.evaluate(() => /pause/i.test(document.getElementById('pomo-toggle').textContent))],
-      ['.hub-w[data-hub="streak"]', 'streak', () => page.waitForSelector('#memory-panel:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
-      ['.hub-chat[data-hub^="chat:"]', 'write', () => page.waitForFunction(() => /osmosis/i.test(document.getElementById('chat-log').innerText), null, { timeout: 4000 }).then(() => true, () => false)],
+      ['#home-ask', () => page.waitForFunction(() => document.activeElement === document.getElementById('prompt-input'), null, { timeout: 4000 }).then(() => true, () => false)],
+      ['.hub-w[data-hub="cards"]', () => page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
+      ['.hub-timer', () => page.evaluate(() => /pause/i.test(document.getElementById('pomo-toggle').textContent))],
+      ['.hub-w[data-hub="streak"]', () => page.waitForSelector('#memory-panel:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
+      ['.hub-chat[data-hub^="chat:"]', () => page.waitForFunction(() => /osmosis/i.test(document.getElementById('chat-log').innerText), null, { timeout: 4000 }).then(() => true, () => false)],
     ];
-    for (const [sel, pose, did] of jobs) {
+    for (const [sel, did] of jobs) {
       await page.keyboard.press('Escape').catch(() => {});
       await page.evaluate(() => { document.querySelectorAll('.labs:not([hidden]) .labs-x, .fc:not([hidden]) .fc-x').forEach((x) => x.click()); if (typeof closeMemory === 'function') closeMemory(); });
       await toHome();
-      await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 10000 });
-      await page.evaluate(() => { window.__poses = []; });
       await page.click(`${hub} ${sel}`);
       expect(await did(), `${size}: ${sel} still does its job`);
-      const poses = await page.evaluate(() => window.__poses);
-      expect(poses.includes(pose), `${size}: ${sel} plays “${pose}” in the room: ` + JSON.stringify(poses));
-      if (pose === 'timer') await page.evaluate(() => { const t = document.getElementById('pomo-toggle'); if (/pause/i.test(t.textContent)) t.click(); });
+      if (sel === '.hub-timer') await page.evaluate(() => { const t = document.getElementById('pomo-toggle'); if (/pause/i.test(t.textContent)) t.click(); });
     }
+    expect(!loaded.length && !(await page.locator('.hub-scene-3d').count()), `${size}: no 3D room is loaded`);
     expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
     await ctx.close();
   }
-  // Reduce Motion, and Lite mode: the same room as a still drawing, and no 3D (not even loaded)
-  for (const [why, lite, motion] of [['Reduce Motion', 'off', 'reduce'], ['Lite mode', 'on', null]]) {
-    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', tab: 'home' } });
-    if (motion) await page.emulateMedia({ reducedMotion: motion });
-    const loaded = [];
-    page.on('request', (r) => { if (/home-scene\.js/.test(r.url())) loaded.push(r.url()); }); // (three.js itself may load for other parts of the app)
-    await page.goto(APP);
-    await page.waitForSelector('#home .hub-hero .hub-still');
-    await page.waitForTimeout(1200);
-    const st = await page.evaluate(() => { const s = document.querySelector('#home .hub-scene'); return { is3d: s.classList.contains('is-3d'), canvas: !!s.querySelector('canvas'), still: getComputedStyle(s.querySelector('.hub-still')).display !== 'none' }; });
-    expect(!st.is3d && !st.canvas && st.still && !loaded.length, `${why}: the still room only: ` + JSON.stringify(st) + ' ' + loaded.join(' '));
-    expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
-    await ctx.close();
-  }
 });
-
 test('Home, You, Settings and Plans: the new and the returning home, every setting under its old key, search, drill-in pages with Back, and plans with no payment; contrast and taps at 390x844 and 1280x800', async (b) => {
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });

@@ -38,12 +38,6 @@ html, :where(body, body *) { touch-action: manipulation; }
   --hi-rgb: 255, 255, 255;
   --paper-rgb: 244, 239, 228;
   --mid-rgb: 127, 127, 127;
-  /* Home's study room: the student (natural skin, eyes and hair in every palette; clothes turn grey in Monochrome) */
-  --kid-skin-m: #eaa97e; --kid-skin-f: #f3c3a0; --kid-skin-n: #efb68e;
-  --kid-hair-m: #3a2416; --kid-hair-f: #6b4128; --kid-hair-n: #2f241e;
-  --kid-iris: #6b3c1c; --kid-ink: #170d08; --kid-lip: #a04a42; --kid-eye: #ffffff;
-  --kid-hoodie-m: #2b4aa0; --kid-hood-m: #223b80; --kid-hoodie-n: #63636e; --kid-hood-n: #4f4f58; --kid-string: #ece6da;
-  --kid-jacket: #dc9f3a; --kid-top: #eee6d6;
   --white: #ffffff;
   --sw-blush: #b8395a; --sw-sage: #2f6f5e; --sw-ink: #1b1b1d; /* the Appearance swatches: always these */
   --black: #000000;
@@ -75,8 +69,6 @@ html, :where(body, body *) { touch-action: manipulation; }
   --primary: #0e0e10; --primary-dark: #232327; --on-primary: #ffffff;
   --secondary: #3e3e45; --on-secondary: #ffffff;
   --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 14, 14, 16;
-  --kid-hoodie-m: #3e3e45; --kid-hood-m: #232327; --kid-hoodie-n: #63636e; --kid-hood-n: #3e3e45; --kid-string: #f2f2f5;
-  --kid-jacket: #63636e; --kid-top: #c9c9d2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -2408,43 +2400,15 @@ html:not(.native) #chat-log > .home { display: flex; }
 .home-hub .hub-empty .hub-hi { font-size: 1.7rem; }
 
 /* ---------- Home: the header ----------
-   A little study room (home-scene.js in 3D; the still drawing for Reduce Motion, Lite mode or no
-   WebGL) with the hello and the bell over it. Phones: edge to edge under the status bar, rounded at
-   the bottom; computers: a rounded card at the top of the column. */
-.hub-hero { position: relative; flex: none; width: 100%; height: 260px; border-radius: 28px; overflow: hidden; isolation: isolate;
-  border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
-.hub-scene { position: absolute; inset: 0; background: color-mix(in srgb, var(--primary) 12%, var(--bg)); }
-.hub .hub-still { display: block; width: 100%; height: 100%; stroke: none; }
-.hub .hub-still :not(.hs-lip):not(.hs-brow):not(.hs-string) { stroke: none; }
-.hub-scene.is-3d .hub-still { display: none; }
-.hub-scene-3d { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
-.hs-frame { fill: color-mix(in srgb, var(--surface) 92%, var(--text)); }
-.hs-sky { fill: color-mix(in srgb, var(--secondary) 45%, var(--surface)); }
-.hs-sun { fill: color-mix(in srgb, var(--warning) 45%, var(--surface)); }
-.hs-cloud { fill: rgb(var(--hi-rgb)); opacity: .9; }
-.hs-skin { fill: var(--kid-skin-n); } .hs-m .hs-skin { fill: var(--kid-skin-m); } .hs-f .hs-skin { fill: var(--kid-skin-f); }
-.hs-white { fill: var(--kid-eye); } .hs-iris { fill: var(--kid-iris); } .hs-ink, .hs-nose { fill: var(--kid-ink); }
-.hub .hub-still .hs-lip, .hub .hub-still .hs-brow, .hub .hub-still .hs-string { fill: none; stroke-linecap: round; }
-.hub .hub-still .hs-lip { stroke: var(--kid-lip); stroke-width: 2.4px; }
-.hub .hub-still .hs-brow { stroke-width: 2.6px; }
-.hub .hub-still .hs-brow-m { stroke: var(--kid-hair-m); } .hub .hub-still .hs-brow-f { stroke: var(--kid-hair-f); } .hub .hub-still .hs-brow-n { stroke: var(--kid-hair-n); }
-.hub .hub-still .hs-string { stroke: var(--kid-string); stroke-width: 2px; }
-.hs-hair-m { fill: var(--kid-hair-m); } .hs-hair-f { fill: var(--kid-hair-f); } .hs-hair-n { fill: var(--kid-hair-n); }
-.hs-hoodie-m { fill: var(--kid-hoodie-m); } .hs-hood-m { fill: var(--kid-hood-m); } .hs-hoodie-n { fill: var(--kid-hoodie-n); } .hs-hood-n { fill: var(--kid-hood-n); }
-.hs-jacket { fill: var(--kid-jacket); } .hs-top { fill: var(--kid-top); }
-.hs-desk { fill: color-mix(in srgb, var(--secondary) 58%, rgb(var(--ink-rgb))); }
-.hs-deskf { fill: color-mix(in srgb, var(--secondary) 45%, rgb(var(--ink-rgb))); }
-.hs-cover { fill: color-mix(in srgb, var(--primary) 70%, rgb(var(--ink-rgb))); }
-.hs-page { fill: color-mix(in srgb, var(--surface) 85%, var(--bg)); }
-.hs-lamp { fill: color-mix(in srgb, var(--surface) 75%, var(--text)); }
-.hs-bulb { fill: color-mix(in srgb, var(--warning) 30%, var(--surface)); }
-.hs-b1 { fill: var(--primary); } .hs-b2 { fill: var(--secondary); } .hs-b3 { fill: color-mix(in srgb, var(--primary) 55%, var(--surface)); }
-/* the hello and the bell, on glass so they read over the room */
-.hub-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; z-index: 1; }
+   A glass bar: your initial, the hello and your name, and the bell. Phones: edge to edge under the
+   status bar, rounded at the bottom; computers: a rounded bar at the top of the column. */
+.hub-hero { flex: none; width: 100%; padding: 12px; border-radius: 24px;
+  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+/* the hello and the bell */
+.hub-top { display: flex; align-items: center; gap: 10px; }
 .hub-av { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-weight: 750; font-size: 1.15rem;
   border: 2px solid var(--surface); box-shadow: var(--lg-lift); }
-.hub-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; padding: 6px 14px; border-radius: 16px; text-align: left;
-  background: color-mix(in srgb, var(--surface) 90%, transparent); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); }
+.hub-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; padding: 2px 4px; text-align: left; }
 .hub-who small { color: var(--text); font-size: .8rem; font-weight: 600; opacity: .85; }
 .hub-me { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.12rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.2; }
 .hub .hub-bell { position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; padding: 0; border: 1px solid var(--lg-line);
@@ -2456,9 +2420,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub-remind .hub-h { margin-top: 2px; }
 /* phones: edge to edge, under the status bar */
 @media (max-width: 760px) {
-  .hub-hero { height: 220px; border-radius: 0 0 28px 28px; border-top: 0; }
-  html.native .hub-hero { width: calc(100% + 40px); height: calc(220px + var(--safe-top)); margin: calc(-20px - var(--safe-top)) -20px 4px; }
-  html.native .hub-top { top: calc(10px + var(--safe-top)); left: 16px; right: 16px; }
+  html.native .hub-hero { width: calc(100% + 40px); margin: calc(-20px - var(--safe-top)) -20px 4px; padding: calc(12px + var(--safe-top)) 20px 14px; border-radius: 0 0 24px 24px; border-top: 0; }
 }
 
 /* Home's big boxes: every study feature under the header (2 across on a phone, 4 on a computer) */
