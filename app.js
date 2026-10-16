@@ -1834,7 +1834,104 @@ function showTools() {
   sideTools.scrollIntoView({ block: 'nearest' });
 }
 
+/* ---------- Home: the hub (phones: the Home tab; computers: a new, empty chat) ----------
+   New here: Cassie, a hello with your name, two big cards and Start studying. Back again: a hello,
+   Today (cards due, today's lab, the focus timer, your streak), Continue (your last chats) and
+   Quick actions (the study tools). */
+const HUB_ICON = {
+  ask: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/><path d="M9 9h6M9 12h4"/></svg>',
+  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg>',
+  lab: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg>',
+  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
+  streak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1.2-3.6 2.4-4.8.3 1.6 1 2.6 2.1 3.1C11 9 11.2 6 12 3z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg>',
+  go: '<svg class="hub-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+};
+const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
+const onPhoneHome = () => !!(window.CassieNative && document.documentElement.classList.contains('native'));
+// where each part of the hub goes (on a phone, through the tab bar so the right tab lights up)
+function hubAct(act) {
+  const nav = (t) => (onPhoneHome() ? window.CassieNative.go(t) : null);
+  if (act === 'ask' || act === 'start') { if (onPhoneHome()) { nav('chat'); setTimeout(() => promptInput.focus(), 60); } else promptInput.focus(); return; } // (a phone switches tab first)
+  if (act === 'cards') { if (onPhoneHome()) nav('cards'); else if (window.CassieCards) window.CassieCards.open(); return; }
+  if (act === 'lab') { if (onPhoneHome()) nav('labs'); else openLabs(); return; }
+  if (act === 'timer') { const t = document.getElementById('pomo-toggle'); if (t) t.click(); renderHubTimer(); return; }
+  if (act === 'streak') { const m = document.getElementById('memory-btn'); if (m) m.click(); return; }
+  if (act.startsWith('chat:')) { selectChat(act.slice(5)); nav('chat'); return; }
+  if (act.startsWith('tool:')) { const ex = HOME_EXAMPLES[+act.slice(5)]; if (ex) { if (onPhoneHome() && !ex.run) nav('chat'); runTool(ex); } }
+}
+function renderHubTimer() {
+  document.querySelectorAll('.hub-timer').forEach((w) => {
+    const time = (document.getElementById('pomo-time') || {}).textContent || '25:00', mode = (document.getElementById('pomo-mode') || {}).textContent || 'Focus';
+    const on = /pause/i.test((document.getElementById('pomo-toggle') || {}).textContent || '');
+    w.querySelector('b').textContent = time;
+    w.querySelector('span').textContent = mode;
+    w.querySelector('em').textContent = on ? 'Pause' : 'Start';
+  });
+}
+setInterval(() => { if (document.querySelector('.hub-timer')) renderHubTimer(); }, 1000);
+function buildHub({ ideas = false } = {}) {
+  const p = state.profile || {};
+  const name = (p.name || '').trim().split(/\s+/)[0];
+  const chats = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const cardsAll = window.CassieCards ? window.CassieCards.count() : 0, due = window.CassieCards ? window.CassieCards.dueCount() : 0;
+  const returning = chats.length > 0 || cardsAll > 0;
+  const el = document.createElement('div');
+  el.className = 'hub' + (returning ? '' : ' hub-empty');
+  const ideasBtn = ideas ? '<button type="button" class="home-ideas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg>Ideas to get started</button>' : '';
+  if (!returning) {
+    el.innerHTML = `<div class="hub-bot" aria-hidden="true"></div>
+      <h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}!<small>What are we studying today?</small></h1>
+      <div class="hub-cards">
+        <button type="button" id="home-ask" class="hub-card" data-act="ask"><i>${HUB_ICON.ask}</i><b>Ask a question</b><small>Cassie explains it step by step</small></button>
+        <button type="button" class="hub-card" data-act="cards"><i>${HUB_ICON.cards}</i><b>Make flashcards</b><small>From any answer, or write your own</small></button>
+      </div>
+      <button type="button" class="hub-go" data-act="start">Start studying</button>${ideasBtn}`;
+  } else {
+    const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+    el.innerHTML = `<header class="hub-head"><div class="hub-bot hub-bot-s" aria-hidden="true"></div><div><h1 class="hub-hi">Hello${name ? ', <span class="hub-name"></span>' : ''}</h1><p class="hub-sub"></p></div></header>
+      <button type="button" id="home-ask" class="hub-ask" data-act="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>
+      <h2 class="hub-h">Today</h2>
+      <div class="hub-today">
+        <button type="button" class="hub-w" data-act="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
+        <button type="button" class="hub-w" data-act="lab"><i>${HUB_ICON.lab}</i><b>New</b><span>today’s lab</span><em>Open Labs</em></button>
+        <button type="button" class="hub-w hub-timer" data-act="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>
+        <button type="button" class="hub-w" data-act="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
+      </div>
+      <h2 class="hub-h">Continue</h2>
+      <div class="hub-recent"></div>
+      <h2 class="hub-h">Quick actions</h2>
+      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => `<button type="button" class="hub-q" data-act="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div>${ideasBtn}`;
+    el.querySelector('.hub-sub').textContent = [p.role === 'pro' ? 'Working professional' : p.grade, 'Your study buddy is here'].filter(Boolean).join(' · ');
+    el.querySelectorAll('.hub-q span').forEach((s, i) => { s.textContent = HOME_EXAMPLES[i].label; });
+    const list = el.querySelector('.hub-recent');
+    chats.slice(0, 3).forEach((c) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.act = 'chat:' + c.id;
+      b.innerHTML = `<i>${HUB_ICON.chat}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
+      b.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
+      const n = c.messages.length; b.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${hubAgo(c.updatedAt)}`;
+      list.appendChild(b);
+    });
+    if (!chats.length) list.innerHTML = '<p class="hub-none">Your chats with Cassie show up here.</p>';
+  }
+  el.querySelectorAll('.hub-name').forEach((s) => { s.textContent = name; });
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b) hubAct(b.dataset.act); });
+  const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
+  // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
+  try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
+  setTimeout(renderHubTimer, 0);
+  return el;
+}
+function renderHub(host) { if (!host) return; host.replaceChildren(buildHub()); }
+
 function renderHome() {
+  if (sideWide.matches) { // computers: the hub, centred (phones: Home is its own tab)
+    const w = document.createElement('div'); w.className = 'home home-hub';
+    w.appendChild(buildHub({ ideas: true }));
+    chatLog.appendChild(w);
+    requestAnimationFrame(() => { chatLog.scrollTop = 0; }); // (the hub reads from the top)
+    return;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'home';
   const intro = document.createElement('div');
@@ -4838,7 +4935,8 @@ if (talkBtn) {
 }
 
 /* ---------- settings ---------- */
-function openSettings() {
+function openSettings(page = 'all') {
+  if (settingsPanel.hidden) setTrail = [];
   groqKeyInput.value = state.groqKey;
   groqModelSelect.value = state.groqModel;
   geminiKeyInput.value = state.geminiKey;
@@ -4861,6 +4959,7 @@ function openSettings() {
   if (keysSub && SERVER) keysSub.textContent = 'Optional, for heavy use';
   syncAccentSwatches();
   settingsPanel.hidden = false;
+  setPage(page);
 }
 
 // Palette for the favorite-colour picker: many hues × 4 shades (light→dark),
@@ -4945,7 +5044,8 @@ function updateModelPill() {
   const lvl = state.level && state.level !== 'auto' ? (LEVEL_LABELS[state.level] || 'Auto') : 'Auto';
   modelPillLevel.textContent = lvl.charAt(0).toUpperCase() + lvl.slice(1);
 }
-function closeSettings() {
+// every change is kept as it's made (and again on the way out), under the same keys as always
+function commitSettings() {
   state.groqKey = groqKeyInput.value.trim();
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
@@ -4961,6 +5061,9 @@ function closeSettings() {
   save();
   updateModelPill();
   applyReading();
+}
+function closeSettings() {
+  commitSettings();
   settingsPanel.hidden = true;
   resumeFollowing();
 }
@@ -4969,6 +5072,67 @@ settingsBtn.addEventListener('click', () => {
   detourToElement(settingsBtn, { click: true, resumeAfter: 900 });
 });
 settingsCloseBtn.addEventListener('click', closeSettings);
+document.getElementById('settings-x').addEventListener('click', closeSettings);
+settingsPanel.addEventListener('change', (e) => { if (!e.target.closest('.profile-card')) commitSettings(); });
+
+/* ---------- You, Settings and Plans: one panel, a page at a time ----------
+   "profile": who you are, a few numbers and the parts of Settings about you; "all": every setting
+   in grouped glass lists, with search; a section ("account", "study", "voice", "privacy" ...) on its
+   own with a back arrow; "plans": Free and Plus. */
+const SET_TITLES = { profile: 'You', all: 'Settings', plans: 'Plans', account: 'Account', study: 'Study', appearance: 'Appearance', voice: 'Voice and sound', privacy: 'Privacy and data', help: 'Help' };
+const setCard = settingsPanel.querySelector('.settings-card');
+const setSearch = document.getElementById('settings-search');
+let setTrail = [];
+function setPage(page, { back = false } = {}) {
+  const now = setCard.dataset.page;
+  if (!back && now && now !== page && !settingsPanel.hidden) setTrail.push(now);
+  setCard.dataset.page = page;
+  document.getElementById('set-title').textContent = SET_TITLES[page] || 'Settings';
+  settingsPanel.querySelector('.set-back').hidden = !setTrail.length;
+  // a section page shows that section alone; the full list shows them all
+  settingsPanel.querySelectorAll('.set-sec').forEach((sec) => { sec.hidden = page === 'all' ? false : sec.dataset.sec !== page; });
+  settingsPanel.querySelectorAll('[data-page-only]').forEach((el) => { el.hidden = el.dataset.pageOnly !== page; });
+  const secs = settingsPanel.querySelector('.set-secs');
+  secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
+  if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
+  if (page === 'profile') fillYou();
+  setCard.scrollTop = 0;
+}
+function setBack() { const prev = setTrail.pop(); if (prev) setPage(prev, { back: true }); }
+settingsPanel.querySelector('.set-back').addEventListener('click', setBack);
+settingsPanel.addEventListener('click', (e) => { const l = e.target.closest('.set-link[data-open]'); if (l) setPage(l.dataset.open); });
+document.getElementById('set-edit-profile').addEventListener('click', () => openProfile(false));
+settingsPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (setTrail.length) setBack(); else closeSettings(); } });
+// Search: rows whose name (or section) matches; a section with none left hides
+function filterSettings() {
+  const q = setSearch.value.trim().toLowerCase();
+  let any = false;
+  settingsPanel.querySelectorAll('.set-sec').forEach((sec) => {
+    const title = sec.querySelector('.set-sec-h').textContent.toLowerCase();
+    let shown = 0;
+    sec.querySelectorAll('.set-row').forEach((r) => {
+      const name = [r.dataset.k || '', (r.querySelector('span, summary .sg-title, button') || r).textContent].join(' ').toLowerCase();
+      const ok = !q || name.includes(q) || title.includes(q);
+      r.hidden = !ok; if (ok) shown++;
+    });
+    sec.hidden = !shown; if (shown) any = true;
+  });
+  document.getElementById('settings-none').hidden = any;
+}
+setSearch.addEventListener('input', filterSettings);
+// the numbers on You: questions asked this week, cards learned, the study streak
+function fillYou() {
+  const p = state.profile || {};
+  const name = (p.name || '').trim();
+  document.getElementById('set-name').textContent = name || 'You';
+  document.getElementById('set-initial').textContent = (name || 'C')[0].toUpperCase();
+  document.getElementById('set-level').textContent = [p.role === 'pro' ? 'Working professional' : p.grade, state.account && state.account.email].filter(Boolean).join(' · ') || 'Add your level in Edit';
+  const week = Date.now() - 7 * 864e5;
+  const asked = state.chats.reduce((n, c) => n + (c.messages || []).filter((m) => m.role === 'user' && (m.at || c.updatedAt || 0) >= week).length, 0);
+  document.getElementById('st-questions').textContent = asked;
+  document.getElementById('st-cards').textContent = (state.cards || []).filter((c) => (c.box || 0) >= 4).length;
+  document.getElementById('st-streak').textContent = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+}
 // Favorite-colour swatches: preset click, "None", or a custom colour.
 settingsPanel.addEventListener('click', (e) => {
   const sw = e.target.closest('.accent-sw[data-accent]');
@@ -6963,6 +7127,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
 });
 
 function renderProfileSummary() {
+  { const card = document.querySelector('#settings-panel .settings-card'); if (card && card.dataset.page === 'profile' && typeof fillYou === 'function') setTimeout(fillYou, 0); }
   const el = document.getElementById('profile-summary'); const p = state.profile;
   if (el) el.textContent = p ? [p.name, p.role === 'pro' ? (p.field || 'Working') : p.grade, p.age ? `age ${p.age}` : '', { female: 'Female', male: 'Male' }[p.gender] || ''].filter(Boolean).join(' · ') : 'No profile yet.';
   const u = document.getElementById('share-usage-toggle'), t = document.getElementById('share-topics-toggle'), row = document.getElementById('share-topics-row');

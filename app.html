@@ -120,29 +120,8 @@
     </div>
   </header>
 
-  <!-- Phones: the Home screen (native.js). Tabs at the bottom move between Home, Chat, Labs, Cards and You. -->
-  <section id="home" class="home" hidden aria-label="Home">
-    <header class="home-head">
-      <div class="home-hi"><h1>Hello, <span id="home-name">there</span></h1><p id="home-sub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg><span></span></p></div>
-      <button type="button" id="home-new" class="home-round" aria-label="New chat" title="New chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
-      <button type="button" id="home-me" class="home-avatar" aria-label="You: your profile and settings" title="You"><span id="home-initial">C</span></button>
-    </header>
-    <button type="button" id="home-ask" class="home-ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"/></svg><span>Ask Cassie anything…</span><svg viewBox="0 0 24 24" aria-hidden="true" class="home-ask-mic"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-    <div class="home-tiles">
-      <button type="button" class="tile" data-go="labs"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg></i>Labs</button>
-      <button type="button" class="tile" data-go="cards"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg></i>Flashcards</button>
-      <button type="button" class="tile" data-go="board"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v11H4zM12 15v3M8 21l4-3 4 3M8 11l2.5-2.5 2 2L16 7"/></svg></i>Board</button>
-      <button type="button" class="tile" data-go="talk"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></i>Talk</button>
-      <button type="button" class="tile" data-go="quiz"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l2 2 4-4M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/></svg></i>Quiz me</button>
-      <button type="button" class="tile" data-go="research"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5M22 9v6"/></svg></i>Research</button>
-    </div>
-    <div class="home-today">
-      <button type="button" class="today-card dark" data-go="labs"><small id="home-day">Today</small><b id="home-date">1</b><span id="home-month"></span><em>Today’s lab</em></button>
-      <button type="button" class="today-card" data-go="cards"><small>Flashcards</small><b id="home-due">0</b><span id="home-due-txt">due today</span><em id="home-due-go">Review now ›</em></button>
-    </div>
-    <div class="home-sec"><h2>Continue</h2><button type="button" id="home-all" class="home-link">See all ›</button></div>
-    <div id="home-recent" class="home-recent"></div>
-  </section>
+  <!-- Phones: the Home screen (native.js, the hub in app.js). Tabs at the bottom move between Home, Chat, Labs, Cards and You. -->
+  <section id="home" class="home" hidden aria-label="Home"><div id="home-hub"></div></section>
 
   <div id="memory-panel" class="settings-panel" hidden></div>
 
@@ -227,10 +206,50 @@
   </form>
 
   <div id="settings-panel" class="settings-panel" hidden>
-    <div class="settings-card">
-      <h2>Settings</h2>
+    <div class="settings-card" data-page="all">
+      <div class="set-head">
+        <button type="button" class="set-back" aria-label="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <h2 id="set-title">Settings</h2>
+        <button type="button" class="set-x" id="settings-x" aria-label="Close">×</button>
+      </div>
 
-      <details class="settings-group" id="settings-keys">
+      <!-- You: who you are, a few numbers, and the parts of Settings that are about you -->
+      <section class="set-profile" data-page-only="profile" aria-label="Your profile">
+        <div class="set-me">
+          <span class="set-avatar" id="set-initial" aria-hidden="true">C</span>
+          <div class="set-who"><b id="set-name">You</b><small id="set-level"></small></div>
+          <button type="button" class="set-edit" id="set-edit-profile">Edit</button>
+        </div>
+        <div class="set-stats">
+          <div><b id="st-questions">0</b><small>questions this week</small></div>
+          <div><b id="st-cards">0</b><small>cards learned</small></div>
+          <div><b id="st-streak">0</b><small>day streak</small></div>
+        </div>
+        <div class="set-group set-links">
+          <button type="button" class="set-link" data-open="account"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span><span class="set-lt"><b>Account</b><small>Sign in, profile and API keys</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="study"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5zM6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span><span class="set-lt"><b>Study</b><small>How Cassie explains and cites</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="voice"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span class="set-lt"><b>Voice</b><small>Her voice and reading aloud</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="privacy"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><span class="set-lt"><b>Privacy</b><small>What is shared, and your chats</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="set-group set-links">
+          <button type="button" class="set-link" data-open="plans"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg></span><span class="set-lt"><b>Plans</b><small>Free and Plus</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="set-link" data-open="all"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span><span class="set-lt"><b>All settings</b><small>Everything, with search</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+      </section>
+
+      <label class="set-search" data-page-only="all"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input type="search" id="settings-search" placeholder="Search settings" aria-label="Search settings" autocomplete="off"></label>
+      <p class="set-none" id="settings-none" hidden>No setting matches that. Try another word.</p>
+
+      <div class="set-secs">
+      <section class="set-sec" data-sec="account" aria-labelledby="set-h-account">
+        <h3 class="set-sec-h" id="set-h-account">Account</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="account sign in profile name edit email">
+          <div id="account-row" hidden></div>
+          <p class="field-hint" id="profile-summary"></p>
+          <button type="button" id="edit-profile-btn" class="new-chat-btn" style="margin:6px 0 12px">Edit your profile</button>
+          </div>
+          <details class="settings-group set-row" id="settings-keys" data-k="api keys groq gemini model brains">
         <summary>
           <span class="sg-title">API keys</span>
           <span class="sg-sub" id="keys-sub">Connect Cassie's free brains</span>
@@ -279,33 +298,12 @@
           </p>
         </div>
       </details>
-
-      <details class="settings-group">
-        <summary>
-          <span class="sg-title">You</span>
-          <span class="sg-sub">Your profile &amp; privacy</span>
-        </summary>
-        <div class="sg-body">
-          <div id="account-row" hidden></div>
-          <p class="field-hint" id="profile-summary"></p>
-          <button type="button" id="edit-profile-btn" class="new-chat-btn" style="margin:6px 0 12px">Edit your profile</button>
-          <label class="field field-toggle">
-            <span>Share anonymous usage (features used, how often)</span>
-            <input type="checkbox" id="share-usage-toggle">
-          </label>
-          <label class="field field-toggle" id="share-topics-row">
-            <span>Also share topic keywords (never full messages)</span>
-            <input type="checkbox" id="share-topics-toggle">
-          </label>
         </div>
-      </details>
-
-      <details class="settings-group">
-        <summary>
-          <span class="sg-title">Answers</span>
-          <span class="sg-sub">How Cassie explains &amp; cites</span>
-        </summary>
-        <div class="sg-body">
+      </section>
+      <section class="set-sec" data-sec="study" aria-labelledby="set-h-study">
+        <h3 class="set-sec-h" id="set-h-study">Study</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="level explain explanation">
           <label class="field">
             <span>Explanation level</span>
             <select id="level-select">
@@ -316,6 +314,8 @@
               <option value="college">College</option>
             </select>
           </label>
+          </div>
+          <div class="set-row" data-k="citation research apa mla">
           <label class="field">
             <span>Citation style (for Research)</span>
             <select id="citation-select">
@@ -325,15 +325,35 @@
               <option value="Chicago">Chicago</option>
             </select>
           </label>
+          </div>
+          <div class="set-row" data-k="highlight help popup copy">
+          <label class="field row">
+            <span>Highlight help: Cassie pops up when I highlight words (off: highlight and copy like normal)</span>
+            <input type="checkbox" id="highlight-help-toggle">
+          </label>
+          </div>
         </div>
-      </details>
-
-      <details class="settings-group">
-        <summary>
-          <span class="sg-title">Reading &amp; accessibility</span>
-          <span class="sg-sub">Text size, spacing, read-aloud</span>
-        </summary>
-        <div class="sg-body">
+      </section>
+      <section class="set-sec" data-sec="appearance" aria-labelledby="set-h-appearance">
+        <h3 class="set-sec-h" id="set-h-appearance">Appearance</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="colour color theme monochrome lite mode data">
+          <label class="field">
+            <span>Favorite colour</span>
+            <div class="accent-swatches" id="accent-swatches"></div>
+          </label>
+          <p class="field-hint">Colours every button, the send button, the timer and the board. <strong>Cassie</strong> is her own blush and sage; <strong>Monochrome</strong> is black and white. The loading screen and Cassie herself keep their own colours.</p>
+          <label class="field">
+            <span>Lite mode: faster on slow phones and mobile data</span>
+            <select id="lite-select">
+              <option value="auto">Auto (turns on for slow phones or Data Saver)</option>
+              <option value="on">On: still background, lighter on data</option>
+              <option value="off">Off. Always the moving background</option>
+            </select>
+          </label>
+          <p class="field-hint" id="lite-hint"></p>
+          </div>
+          <div class="set-row" data-k="text size font">
           <label class="field">
             <span>Text size</span>
             <select id="textsize-select">
@@ -342,18 +362,25 @@
               <option value="larger">Larger</option>
             </select>
           </label>
+          </div>
+          <div class="set-row" data-k="easy read spacing">
           <label class="field row">
             <span>Easy-read spacing</span>
             <input type="checkbox" id="easyread-toggle">
           </label>
-          <label class="field row">
-            <span>Highlight help: Cassie pops up when I highlight words (off: highlight and copy like normal)</span>
-            <input type="checkbox" id="highlight-help-toggle">
-          </label>
+          </div>
+        </div>
+      </section>
+      <section class="set-sec" data-sec="voice" aria-labelledby="set-h-voice">
+        <h3 class="set-sec-h" id="set-h-voice">Voice and sound</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="voice read aloud speak sound">
           <label class="field row">
             <span>Read answers aloud</span>
             <input type="checkbox" id="voice-out-toggle">
           </label>
+          </div>
+          <div class="set-row" data-k="voice woman man bella edward">
           <label class="field">
             <span>Cassie's voice</span>
             <select id="voice-gender-select">
@@ -361,10 +388,14 @@
               <option value="man">Man (Edward, calm British)</option>
             </select>
           </label>
+          </div>
+          <div class="set-row" data-k="voice sample download">
           <div class="hv-set" id="hv-set">
             <p class="hint" id="hv-state"></p>
             <div class="hv-set-row"><button type="button" class="btn secondary" id="hv-play">▶ Play a sample</button></div>
           </div>
+          </div>
+          <div class="set-row" data-k="voice talk listen whisper microphone">
           <label class="field">
             <span>When you talk to Cassie</span>
             <select id="hearing-select">
@@ -372,10 +403,39 @@
               <option value="fast">Fastest (the browser listens)</option>
             </select>
           </label>
+          </div>
         </div>
-      </details>
-
-      <details class="settings-group" id="settings-phone">
+      </section>
+      <section class="set-sec" data-sec="privacy" aria-labelledby="set-h-privacy">
+        <h3 class="set-sec-h" id="set-h-privacy">Privacy and data</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="privacy usage share data analytics">
+          <label class="field field-toggle">
+            <span>Share anonymous usage (features used, how often)</span>
+            <input type="checkbox" id="share-usage-toggle">
+          </label>
+          </div>
+          <div class="set-row" data-k="privacy topics share keywords">
+          <label class="field field-toggle" id="share-topics-row">
+            <span>Also share topic keywords (never full messages)</span>
+            <input type="checkbox" id="share-topics-toggle">
+          </label>
+          </div>
+          <div class="set-row" data-k="clear delete conversation chat data">
+          <button type="button" class="btn secondary" id="clear-chat-btn">Clear conversation</button>
+          </div>
+          <div class="set-row" data-k="privacy policy terms">
+          <p class="field-hint set-legal"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a></p>
+          </div>
+        </div>
+      </section>
+      <section class="set-sec" data-sec="help" aria-labelledby="set-h-help">
+        <h3 class="set-sec-h" id="set-h-help">Help</h3>
+        <div class="set-group">
+          <div class="set-row" data-k="report problem suggest feedback help">
+      <div id="report-row" class="report-row"><button type="button" id="report-btn" class="btn secondary">Report a problem or suggest something</button></div>
+          </div>
+          <details class="settings-group set-row" id="settings-phone" data-k="other apps share sheet shortcut iphone android">
         <summary>
           <span class="sg-title">Use Cassie in other apps</span>
           <span class="sg-sub">Highlight on your phone or tablet</span>
@@ -409,33 +469,44 @@
           <p class="muted">Quickest anywhere: copy the words, open Cassie, and paste.</p>
         </div>
       </details>
-
-      <details class="settings-group">
-        <summary>
-          <span class="sg-title">Appearance</span>
-          <span class="sg-sub">Make Cassie your colour</span>
-        </summary>
-        <div class="sg-body">
-          <label class="field">
-            <span>Favorite colour</span>
-            <div class="accent-swatches" id="accent-swatches"></div>
-          </label>
-          <p class="field-hint">Colours every button, the send button, the timer and the board. <strong>Cassie</strong> is her own blush and sage; <strong>Monochrome</strong> is black and white. The loading screen and Cassie herself keep their own colours.</p>
-          <label class="field">
-            <span>Lite mode: faster on slow phones and mobile data</span>
-            <select id="lite-select">
-              <option value="auto">Auto (turns on for slow phones or Data Saver)</option>
-              <option value="on">On: still background, lighter on data</option>
-              <option value="off">Off. Always the moving background</option>
-            </select>
-          </label>
-          <p class="field-hint" id="lite-hint"></p>
         </div>
-      </details>
+      </section>
+      </div>
 
-      <div id="report-row" class="report-row"><button type="button" id="report-btn" class="btn secondary">Report a problem or suggest something</button></div>
-      <div class="settings-actions">
-        <button type="button" class="btn secondary" id="clear-chat-btn">Clear conversation</button>
+      <!-- Plans: Free and Plus (paid plans are coming: nothing here takes a payment) -->
+      <section class="set-plans" data-page-only="plans" aria-label="Plans">
+        <p class="set-plans-sub">Free forever, no card needed. Plus is coming soon.</p>
+        <div class="plan-grid">
+          <article class="plan">
+            <h3>Free</h3>
+            <p class="plan-price"><b>₱0</b> forever</p>
+            <ul>
+              <li>20 questions a day: chat, quiz and highlight</li>
+              <li>5 file reviewers and 10 pictures a month</li>
+              <li>Labs, the board, flashcards and the focus timer</li>
+              <li>Explore 3D: 2 free views of each a week</li>
+              <li>Unlimited with your own free API key</li>
+            </ul>
+            <span class="plan-now">Free forever</span>
+          </article>
+          <article class="plan plan-plus">
+            <span class="plan-badge">Most popular</span>
+            <h3>Plus</h3>
+            <p class="plan-price"><b>₱149</b> a month</p>
+            <ul>
+              <li>Everything in Free</li>
+              <li>Unlimited questions and voice chat</li>
+              <li>30 file reviewers and 100 pictures a month</li>
+              <li>All the 3D, any time</li>
+              <li>10 research runs a month</li>
+            </ul>
+            <a class="plan-go" href="index.html#pricing" target="_blank" rel="noopener">Coming soon</a>
+          </article>
+        </div>
+        <p class="field-hint">Unlimited means normal studying by one person. Paid plans are launching soon; everything on Free works today.</p>
+      </section>
+
+      <div class="settings-actions" data-page-only="all">
         <button type="button" class="btn" id="settings-close-btn">Done</button>
       </div>
     </div>

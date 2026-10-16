@@ -101,7 +101,7 @@ async function openCard(page, sel) {
 // the 3D models are opened from Labs (the 3D shelf)
 // Labs and Settings: a button in the top bar on a computer, a tab in the tab bar on a phone
 const tapLabs = async (page) => page.click(await page.locator('#labs-btn').isVisible() ? '#labs-btn' : '#tabbar [data-tab="labs"]');
-const tapSettings = async (page) => page.click(await page.locator('#settings-btn').isVisible() ? '#settings-btn' : '#tabbar [data-tab="you"]');
+const tapSettings = async (page) => { await page.click(await page.locator('#settings-btn').isVisible() ? '#settings-btn' : '#tabbar [data-tab="you"]'); await page.evaluate(() => setPage('all')); }; // (You opens your profile first)
 async function open3d(page, id) {
   await tapLabs(page);
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
@@ -3849,8 +3849,8 @@ test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, 
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { tab: 'home', groqKey: 'gsk_test' } });
   await page.goto(APP);
   await page.waitForSelector('#home:not([hidden])');
-  expect(/Hello, Test/.test(await page.locator('.home-hi h1').innerText()), 'Home greets you by name');
-  expect(await page.locator('.home-tiles .tile').count() === 6 && await page.locator('#tabbar .tab').count() === 6, 'six tiles and six tabs');
+  expect(/Hello, Test/.test(await page.locator('#home .hub-hi').innerText()), 'Home greets you by name');
+  expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 6, 'two big cards and six tabs');
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'home' && !(await page.locator('#prompt-input').isVisible()), 'Home is open and the chat is out of the way');
   await page.click('.tab[data-tab="labs"]');
   await page.waitForSelector('.labs:not([hidden]) .labs-card');
@@ -4408,6 +4408,7 @@ test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of ic
   await ph.ctx.close();
 });
 
+
 test('Talk mode and Hint answer', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
   await page.fill('#prompt-input', 'How do I solve 2x + 3 = 7?');
@@ -4707,6 +4708,108 @@ test('first run screens: every word at AA in light and dark, every control answe
   }
 });
 
+test('Home, You, Settings and Plans: the new and the returning home, every setting under its old key, search, drill-in pages with Back, and plans with no payment; contrast and taps at 390x844 and 1280x800', async (b) => {
+  const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
+  const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home' }, fakeGroq: reply });
+    ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
+    const toHome = async () => { if (phone) { await page.evaluate(() => CassieNative.go('home')); } else { await page.evaluate(() => { createNewChat(); }); } await page.waitForTimeout(500); };
+    const hub = phone ? '#home .hub' : '#chat-log .hub';
+    // a new student: Cassie, a hello with the name, two cards and Start studying
+    await toHome();
+    await page.waitForSelector(hub + '.hub-empty');
+    const t = await page.locator(hub).innerText();
+    expect(/Hello, Test!/.test(t) && /What are we studying today\?/.test(t) && /Ask a question/.test(t) && /Make flashcards/.test(t) && /Start studying/.test(t), `${size}: the new home: ` + t);
+    expect(await page.locator(hub + ' .hub-bot .cassie-bot').count() === 1, `${size}: Cassie is on the new home`);
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} new home (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // one chat and one due card later: Today, Continue and Quick actions
+    await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+    await ask(page, 'What is osmosis?');
+    await page.evaluate(() => { state.cards = [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }]; save(); });
+    await toHome();
+    await page.waitForSelector(hub + ':not(.hub-empty) .hub-today');
+    const r = await page.locator(hub).innerText();
+    expect(await page.locator(hub + ' .hub-w').count() === 4 && /card due/.test(r) && /today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today widgets: ` + r);
+    expect(/Continue/.test(r) && await page.locator(hub + ' .hub-chat', { hasText: 'What is osmosis?' }).count() === 1, `${size}: the chat under Continue`);
+    expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 8, `${size}: Quick actions`);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    const homeTaps = await tapResponseIssues(page, { reopen: async () => { await page.goto(APP); await page.waitForTimeout(600); await toHome(); return page; }, touch: phone, scope: hub, perKind: 2 });
+    expect(!homeTaps.length, `${size} home taps: ` + JSON.stringify(homeTaps).slice(0, 500));
+    // You: who you are, three numbers, and rows that open their own screen
+    await page.goto(APP); await page.waitForTimeout(600);
+    await page.evaluate(() => openSettings('profile'));
+    const you = await page.locator('#settings-panel').innerText();
+    expect(/Test/.test(you) && /questions this week/.test(you) && /cards learned/.test(you) && /day streak/.test(you), `${size}: You shows the name and numbers`);
+    for (const [row, title, inside] of [['account', 'Account', '#edit-profile-btn'], ['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['privacy', 'Privacy and data', '#share-usage-toggle']]) {
+      await page.click(`.set-link[data-open="${row}"]`);
+      expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator('.set-back').isVisible(), `${size}: ${row} opens on its own, with Back`);
+      expect(await page.locator('.set-sec:not([hidden])').count() === 1, `${size}: only the ${row} section`);
+      await page.click('.set-back');
+      expect(await page.locator('#set-title').innerText() === 'You', `${size}: Back returns to You`);
+    }
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} You (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // Plans: Free and Plus side by side, Plus the most popular, Coming soon, and nothing that takes a payment
+    await page.click('.set-link[data-open="plans"]');
+    const plans = await page.locator('.set-plans').innerText();
+    expect(/Free/.test(plans) && /Plus/.test(plans) && /Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
+    expect(await page.locator('.set-plans .plan-go').innerText() === 'Coming soon' && await page.locator('.set-plans .plan-go').getAttribute('href') === 'index.html#pricing', `${size}: Coming soon goes to the plans page`);
+    expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // Settings: every old setting is there, and a change is kept under its old key
+    await page.evaluate(() => setPage('all'));
+    const IDS = ['groq-key-input', 'groq-model-select', 'gemini-key-input', 'edit-profile-btn', 'share-usage-toggle', 'level-select', 'citation-select', 'highlight-help-toggle', 'accent-swatches', 'lite-select', 'textsize-select', 'easyread-toggle', 'voice-out-toggle', 'voice-gender-select', 'hearing-select', 'clear-chat-btn', 'settings-phone']; // (Report a problem shows only with Cassie's server: its own test)
+    await page.evaluate(() => { document.getElementById('settings-keys').open = true; });
+    for (const id of IDS) expect(await page.locator('#' + id).isVisible(), `${size}: ${id} is in Settings`);
+    await page.fill('#groq-key-input', 'gsk_changed');
+    await page.selectOption('#level-select', 'college');
+    await page.selectOption('#citation-select', 'MLA');
+    await page.selectOption('#textsize-select', 'large');
+    await page.selectOption('#voice-gender-select', 'man');
+    await page.selectOption('#hearing-select', 'fast');
+    await page.locator('#easyread-toggle').check();
+    await page.locator('#voice-out-toggle').check();
+    await page.locator('#highlight-help-toggle').uncheck();
+    await page.click('.accent-sw[data-accent="mono"]');
+    // (Lite mode reloads the app to take effect: last, then wait for it)
+    await Promise.all([page.waitForEvent('load', { timeout: 10000 }).catch(() => {}), page.selectOption('#lite-select', 'on')]);
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
+    expect(st.groqKey === 'gsk_changed' && st.level === 'college' && st.citationStyle === 'MLA' && st.textSize === 'large' && st.voiceGender === 'man' && st.hearing === 'fast' && st.lite === 'on' && st.easyRead === true && st.voiceOut === true && st.highlightHelp === false && st.accent === 'mono',
+      `${size}: every change is kept under its old key: ` + JSON.stringify({ groqKey: st.groqKey, level: st.level, citationStyle: st.citationStyle, textSize: st.textSize, voiceGender: st.voiceGender, hearing: st.hearing, lite: st.lite, easyRead: st.easyRead, voiceOut: st.voiceOut, highlightHelp: st.highlightHelp, accent: st.accent }));
+    await page.evaluate(() => setAccent(''));
+    await page.evaluate(() => openSettings('all'));
+    await Promise.all([page.waitForEvent('load', { timeout: 10000 }).catch(() => {}), page.selectOption('#lite-select', 'off')]); // (back to the moving background)
+    await page.waitForTimeout(600);
+    // Search: "voice" leaves only the voice rows
+    await page.evaluate(() => openSettings('all'));
+    await page.fill('#settings-search', 'voice');
+    const vis = await page.evaluate(() => [...document.querySelectorAll('#settings-panel .set-row')].filter((r) => !r.hidden && r.closest('.set-sec') && !r.closest('.set-sec').hidden).map((r) => r.closest('.set-sec').dataset.sec));
+    expect(vis.length >= 3 && vis.every((x) => x === 'voice'), `${size}: search voice leaves the voice rows only: ` + vis);
+    await page.fill('#settings-search', 'zzz');
+    expect(await page.locator('#settings-none').isVisible(), `${size}: no match says so`);
+    await page.fill('#settings-search', '');
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Settings (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // the tap test on You, Settings and Plans
+    for (const pg of ['profile', 'all', 'plans']) {
+      const reopen = async () => { await page.goto(APP); await page.waitForTimeout(600); await page.evaluate((x) => openSettings(x), pg); await page.waitForTimeout(300); return page; };
+      await reopen();
+      const taps = await tapResponseIssues(page, { reopen, touch: phone, scope: '#settings-panel', skip: /clear conversation|privacy policy|terms|report/i, perKind: 2, max: 30 });
+      expect(!taps.length, `${size} ${pg} taps: ` + JSON.stringify(taps).slice(0, 500));
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+
 test('Liquid Glass on a phone: every tap target is at least 44px, and every word passes WCAG AA on the marble, light and dark', async (b) => {
   const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
   const screens = {
@@ -4842,11 +4945,8 @@ const TAP_SCREENS = [
   ['home', async (page) => { await page.waitForTimeout(600); }, { state: { tab: 'home' } }],
   ['chat', async (page) => { await ask(page, 'what is photosynthesis'); }],
   ['settings', async (page) => { await page.evaluate(() => openSettings()); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(500); }],
-  ...[0, 1, 2, 3, 4, 5].map((i) => [`settings section ${i + 1}`, async (page) => {
-    await page.evaluate(() => openSettings()); await page.waitForSelector('#settings-panel:not([hidden])');
-    const title = await page.evaluate((i) => { const g = [...document.querySelectorAll('#settings-panel details.settings-group')]; g.forEach((d, k) => { d.open = k === i; }); return g[i] ? g[i].querySelector('summary').textContent.trim().replace(/\s+/g, ' ') : ''; }, i);
-    await page.waitForTimeout(400);
-    return title;
+  ...['profile', 'account', 'study', 'appearance', 'voice', 'privacy', 'help', 'plans'].map((pg) => [`settings: ${pg}`, async (page) => {
+    await page.evaluate((x) => openSettings(x), pg); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(400);
   }]),
   ['Plus sheet', async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForSelector('.plus-sheet'); await page.waitForTimeout(400); }],
   ['Labs shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
