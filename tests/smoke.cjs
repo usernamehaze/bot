@@ -2202,7 +2202,7 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
 });
 
 test('Explore cells are their own view: own card on the Labs shelf and in 3D, Animal or Plant inside it, opened straight away (never through the body)', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
+  const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
     // anything of the body: its model files, or the 3D view turning into the body for a moment
     await c.addInitScript(() => {
       window.__body = [];
@@ -2394,7 +2394,7 @@ test('Body 3D: eyes on both bodies (tap one for its card), and the girl has long
 });
 
 test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece apart and back, structure count, which-way letters', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
   await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden && +document.querySelector('.x3d-count b').textContent.replace(/\D/g, '') > 50, null, { timeout: 40000 });
@@ -2494,7 +2494,7 @@ test('score board: everyone’s points in every game and their total, today and 
 });
 
 test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sends what is on screen', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7', fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7', fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await tapLabs(page);
   await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
@@ -3730,7 +3730,7 @@ test('Labs 3D: the atom’s particle tray stays still when the view turns, and z
 });
 
 test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket, look up Japan and a place; pour, drag particles and disks', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   // space: the planets, then the Local Group (the real maps and stars arrive, and every shader compiles)
   const tex = new Set(), shaderErr = [];
@@ -4753,7 +4753,7 @@ test('first run screens: every word at AA in light and dark, every control answe
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const STEPS = [['intro', { step: 'intro' }, '.fr-intro'], ['sign in', { step: 'auth' }, '.auth-page'], ...[0, 1, 2, 3].map((k) => [`question ${k + 1}`, { step: 'ob', at: k, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10', age: '15', help: ['exams'], voice: 'woman' } }, '.fr-ob'])];
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['768x1024', 'iPad Mini', { width: 768, height: 1024 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
-    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', state: null });
+    const { ctx, page, errors } = await open(b, { scale: 1, device, viewport, lite: 'off', state: null });
     ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
     const go = async (fr, sel) => { if (!page.url().startsWith(APP.replace(/app\.html.*$/, ''))) await page.goto(APP); await page.evaluate((x) => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify(x)); }, fr); await page.goto(APP); await page.waitForSelector(sel, { timeout: 10000 }); await page.waitForTimeout(600); return page; };
     for (const [name, fr, sel] of STEPS) {
@@ -4852,6 +4852,42 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
   }
 });
 
+test('Home header student: a cartoon boy (curly hair, hoodie), girl (long hair, jacket) or neither (bob, grey hoodie) from the profile, and every moment changes the face; the still drawing matches', async (b) => {
+  const seen = {};
+  for (const [gender, kind, hair, clothes] of [['male', 'boy', 'hair-curly', 'hoodie'], ['female', 'girl', 'hair-long', 'jacket'], ['none', 'kid', 'hair-bob', 'hoodie']]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, gender } } });
+    await page.waitForSelector('#home .hub-scene.is-3d', { timeout: 20000 });
+    await page.waitForTimeout(600);
+    const d = await page.evaluate(() => hubSceneMod.describe());
+    expect(d && d.kind === kind && d.hair === hair && d.clothes === clothes, `${gender}: ${kind} with ${hair} and a ${clothes}: ` + JSON.stringify(d));
+    seen[gender] = d;
+    if (gender === 'male') {
+      // every moment shows its own face (mouth, brows, lids), different from the resting face
+      const rest = JSON.stringify(d.face);
+      const want = { ask: 'open', cards: 'small', lab: 'o', timer: 'flat', streak: 'laugh', write: 'smile' };
+      for (const [kindOf, mouth] of Object.entries(want)) {
+        await page.evaluate((k) => hubSceneMod.play(k), kindOf);
+        await page.waitForTimeout(kindOf === 'streak' ? 450 : 550);
+        const f = await page.evaluate(() => hubSceneMod.describe().face);
+        expect(f.mouth === mouth && JSON.stringify(f) !== rest, `${kindOf}: its face: ` + JSON.stringify(f));
+        if (kindOf === 'streak') expect(f.lid > 0.6, 'a laugh closes the eyes happily: ' + JSON.stringify(f));
+        if (kindOf === 'timer') expect(f.frown > 0 && f.lid > 0.2, 'focused: a frown and narrowed eyes: ' + JSON.stringify(f));
+        await page.waitForTimeout(700);
+      }
+    }
+    expect(!errors.length, `${gender}: page errors: ` + errors.join('; '));
+    await ctx.close();
+    // the still drawing (Lite mode) is the same student
+    const lite = await open(b, { device: 'iPhone 13', scale: 1, lite: 'on', server: false, state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, gender } } });
+    await lite.page.waitForSelector('#home .hub-still');
+    const still = await lite.page.evaluate(() => { const v = document.querySelector('#home .hub-still'); return { cls: v.getAttribute('class'), jacket: !!v.querySelector('.hs-jacket'), hoodie: !!v.querySelector('[class^="hs-hoodie"]'), curls: v.querySelectorAll('.hs-hair-m circle').length }; });
+    const k = gender === 'male' ? 'm' : gender === 'female' ? 'f' : 'n';
+    expect(still.cls.includes('hs-' + k) && still.jacket === (gender === 'female') && still.hoodie === (gender !== 'female') && (gender === 'male' ? still.curls > 5 : still.curls === 0), `${gender}: the still drawing: ` + JSON.stringify(still));
+    await lite.ctx.close();
+  }
+  expect(seen.male.hair !== seen.female.hair && seen.male.clothes !== seen.female.clothes, 'the boy and the girl differ in hair and clothes');
+});
+
 test('Home header: a 3D study room with the hello and a bell; every Home button plays its moment and still does its job; Today as a row of chips; the still room with Reduce Motion or Lite mode (390x844, 1280x800)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -4927,7 +4963,7 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
   const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const phone = size === '390x844';
-    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home' }, fakeGroq: reply });
+    const { ctx, page, errors } = await open(b, { scale: 1, device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home' }, fakeGroq: reply });
     ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
     const toHome = async () => { if (phone) { await page.evaluate(() => CassieNative.go('home')); } else { await page.evaluate(() => { createNewChat(); }); } await page.waitForTimeout(500); };
     const hub = phone ? '#home .hub' : '#chat-log .hub';

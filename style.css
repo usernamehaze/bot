@@ -38,7 +38,12 @@ html, :where(body, body *) { touch-action: manipulation; }
   --hi-rgb: 255, 255, 255;
   --paper-rgb: 244, 239, 228;
   --mid-rgb: 127, 127, 127;
-  --skin: #e7b591;  /* Home's study room: the student's skin */
+  /* Home's study room: the student (natural skin, eyes and hair in every palette; clothes turn grey in Monochrome) */
+  --kid-skin-m: #eaa97e; --kid-skin-f: #f3c3a0; --kid-skin-n: #efb68e;
+  --kid-hair-m: #3a2416; --kid-hair-f: #6b4128; --kid-hair-n: #2f241e;
+  --kid-iris: #6b3c1c; --kid-ink: #170d08; --kid-lip: #a04a42; --kid-eye: #ffffff;
+  --kid-hoodie-m: #2b4aa0; --kid-hood-m: #223b80; --kid-hoodie-n: #63636e; --kid-hood-n: #4f4f58; --kid-string: #ece6da;
+  --kid-jacket: #dc9f3a; --kid-top: #eee6d6;
   --white: #ffffff;
   --sw-blush: #b8395a; --sw-sage: #2f6f5e; --sw-ink: #1b1b1d; /* the Appearance swatches: always these */
   --black: #000000;
@@ -70,7 +75,8 @@ html, :where(body, body *) { touch-action: manipulation; }
   --primary: #0e0e10; --primary-dark: #232327; --on-primary: #ffffff;
   --secondary: #3e3e45; --on-secondary: #ffffff;
   --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 14, 14, 16;
-  --skin: #c9c9d2;
+  --kid-hoodie-m: #3e3e45; --kid-hood-m: #232327; --kid-hoodie-n: #63636e; --kid-hood-n: #3e3e45; --kid-string: #f2f2f5;
+  --kid-jacket: #63636e; --kid-top: #c9c9d2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -2409,16 +2415,23 @@ html:not(.native) #chat-log > .home { display: flex; }
   border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
 .hub-scene { position: absolute; inset: 0; background: color-mix(in srgb, var(--primary) 12%, var(--bg)); }
 .hub .hub-still { display: block; width: 100%; height: 100%; stroke: none; }
-.hub .hub-still * { stroke: none; }
+.hub .hub-still :not(.hs-lip):not(.hs-brow):not(.hs-string) { stroke: none; }
 .hub-scene.is-3d .hub-still { display: none; }
 .hub-scene-3d { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
 .hs-frame { fill: color-mix(in srgb, var(--surface) 92%, var(--text)); }
 .hs-sky { fill: color-mix(in srgb, var(--secondary) 45%, var(--surface)); }
 .hs-sun { fill: color-mix(in srgb, var(--warning) 45%, var(--surface)); }
 .hs-cloud { fill: rgb(var(--hi-rgb)); opacity: .9; }
-.hs-shirt { fill: var(--primary); }
-.hs-skin { fill: var(--skin); }
-.hs-hair, .hs-eye { fill: rgb(var(--ink-rgb)); }
+.hs-skin { fill: var(--kid-skin-n); } .hs-m .hs-skin { fill: var(--kid-skin-m); } .hs-f .hs-skin { fill: var(--kid-skin-f); }
+.hs-white { fill: var(--kid-eye); } .hs-iris { fill: var(--kid-iris); } .hs-ink, .hs-nose { fill: var(--kid-ink); }
+.hub .hub-still .hs-lip, .hub .hub-still .hs-brow, .hub .hub-still .hs-string { fill: none; stroke-linecap: round; }
+.hub .hub-still .hs-lip { stroke: var(--kid-lip); stroke-width: 2.4px; }
+.hub .hub-still .hs-brow { stroke-width: 2.6px; }
+.hub .hub-still .hs-brow-m { stroke: var(--kid-hair-m); } .hub .hub-still .hs-brow-f { stroke: var(--kid-hair-f); } .hub .hub-still .hs-brow-n { stroke: var(--kid-hair-n); }
+.hub .hub-still .hs-string { stroke: var(--kid-string); stroke-width: 2px; }
+.hs-hair-m { fill: var(--kid-hair-m); } .hs-hair-f { fill: var(--kid-hair-f); } .hs-hair-n { fill: var(--kid-hair-n); }
+.hs-hoodie-m { fill: var(--kid-hoodie-m); } .hs-hood-m { fill: var(--kid-hood-m); } .hs-hoodie-n { fill: var(--kid-hoodie-n); } .hs-hood-n { fill: var(--kid-hood-n); }
+.hs-jacket { fill: var(--kid-jacket); } .hs-top { fill: var(--kid-top); }
 .hs-desk { fill: color-mix(in srgb, var(--secondary) 58%, rgb(var(--ink-rgb))); }
 .hs-deskf { fill: color-mix(in srgb, var(--secondary) 45%, rgb(var(--ink-rgb))); }
 .hs-cover { fill: color-mix(in srgb, var(--primary) 70%, rgb(var(--ink-rgb))); }
