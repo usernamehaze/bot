@@ -4681,6 +4681,58 @@ test('no em or en dashes in anything people read (every page, label and message,
   await ctx.close();
 });
 
+test('Get started screen: Cassie is 3D (floats, blinks, follows the pointer, hops in) at 390x844 and 1280x800, and the still flat Cassie shows with Reduce Motion or Lite mode', async (b) => {
+  const intro = async (o, motion) => {
+    const { ctx, page, errors } = await open(b, { state: null, scale: 1, ...o });
+    if (motion) await page.emulateMedia({ reducedMotion: motion });
+    await page.evaluate((lite) => { localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'intro' })); if (lite) localStorage.setItem('cassie.v2', JSON.stringify({ lite })); }, o.lite);
+    await page.goto(APP);
+    await page.waitForSelector('.fr-intro .fr-start', { timeout: 10000 });
+    return { ctx, page, errors };
+  };
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await intro({ device, viewport, lite: 'off' });
+    await page.waitForSelector('.fr-art .fr-bot[data-mascot="3d"] canvas.cassie-3d', { timeout: 20000 });
+    // a WebGL picture that keeps drawing (she floats and blinks), with the flat Cassie gone
+    const at = () => page.evaluate(() => +document.querySelector('canvas.cassie-3d').dataset.frames);
+    const f0 = await at(); await page.waitForTimeout(1500); const f1 = await at();
+    expect(f1 > f0, `${size}: the 3D Cassie keeps drawing: ${f0} then ${f1}`);
+    const g = await page.evaluate(() => { const c = document.querySelector('canvas.cassie-3d'); const r = c.getBoundingClientRect(); return { gl: !!(c.getContext('webgl2') || c.getContext('webgl')), w: r.width, flat: !!document.querySelector('.fr-art .fr-bot svg') }; });
+    expect(g.gl && g.w >= 160 && !g.flat, `${size}: a WebGL canvas in place of the flat Cassie: ` + JSON.stringify(g));
+    // something is drawn there (an empty picture is a few hundred bytes)
+    const shot = await page.locator('canvas.cassie-3d').screenshot();
+    expect(shot.length > 4000, `${size}: Cassie is drawn (${shot.length} bytes)`);
+    // she follows the pointer: the picture changes when it moves across the screen
+    await page.mouse.move(5, 5); await page.waitForTimeout(900);
+    const left = await page.locator('canvas.cassie-3d').screenshot();
+    await page.mouse.move(viewport.width - 5, viewport.height - 5); await page.waitForTimeout(900);
+    const right = await page.locator('canvas.cassie-3d').screenshot();
+    expect(!left.equals(right), `${size}: Cassie turns toward the pointer`);
+    // Get started still works with her there
+    await page.click('.fr-start');
+    await page.waitForFunction(() => !document.querySelector('.fr-intro'), null, { timeout: 8000 });
+    await page.waitForTimeout(300);
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    expect(!(await page.locator('canvas.cassie-3d').count()), `${size}: the 3D Cassie is gone with the screen`);
+    await ctx.close();
+  }
+  // Reduce Motion, and Lite mode: the flat Cassie, still, and no 3D (not even loaded)
+  for (const [why, o, motion] of [['Reduce Motion', { lite: 'off' }, 'reduce'], ['Lite mode', { lite: 'on' }, null]]) {
+    const { ctx, page, errors } = await intro(o, motion);
+    const loaded = [];
+    page.on('request', (r) => { if (/cassie-3d\.js|three\.module/.test(r.url())) loaded.push(r.url()); });
+    await page.waitForTimeout(1500);
+    const st = await page.evaluate(() => { const h = document.querySelector('.fr-art .fr-bot'); return { m: h.dataset.mascot, svg: !!h.querySelector('svg'), canvas: !!h.querySelector('canvas') }; });
+    expect(st.m === '2d' && st.svg && !st.canvas && !loaded.length, `${why}: the flat Cassie only: ` + JSON.stringify(st) + ' ' + loaded.join(' '));
+    // still: two pictures a moment apart are the same
+    const a = await page.locator('.fr-art .fr-bot').screenshot(); await page.waitForTimeout(700);
+    const c = await page.locator('.fr-art .fr-bot').screenshot();
+    expect(a.equals(c), `${why}: the flat Cassie doesn't move`);
+    expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('first run screens: every word at AA in light and dark, every control answers a tap, and nothing spills sideways, at 390x844, 768x1024 and 1280x800', async (b) => {
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const STEPS = [['intro', { step: 'intro' }, '.fr-intro'], ['sign in', { step: 'auth' }, '.auth-page'], ...[0, 1, 2, 3].map((k) => [`question ${k + 1}`, { step: 'ob', at: k, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10', age: '15', help: ['exams'], voice: 'woman' } }, '.fr-ob'])];
