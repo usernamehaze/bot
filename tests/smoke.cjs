@@ -4777,6 +4777,81 @@ test('first run screens: every word at AA in light and dark, every control answe
   }
 });
 
+test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is picked, and Home’s boxes each open their feature and play a moment (390x844, 1280x800)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const tok = (page) => page.evaluate(() => { const st = getComputedStyle(document.documentElement); return Object.fromEntries(['--bg', '--surface', '--text', '--primary', '--on-primary'].map((k) => [k, st.getPropertyValue(k).trim().toLowerCase()])); });
+  // a new student, a boy and a girl, and someone from before the change (accent ''): Monochrome
+  for (const [who, extra] of [['a girl', { profile: { ...PROFILE, gender: 'female' } }], ['a boy', { profile: { ...PROFILE, gender: 'male' } }], ['from before', { accent: '' }]]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'on', server: false, state: { groqKey: 'gsk_test', tab: 'home', ...extra } });
+    expect(await page.evaluate(() => document.documentElement.dataset.pal) === 'mono', `${who}: Monochrome`);
+    await page.emulateMedia({ colorScheme: 'light' }); await page.waitForTimeout(200);
+    const l = await tok(page);
+    expect(l['--bg'] === '#f2f2f5' && l['--surface'] === '#ffffff' && l['--text'] === '#0e0e10' && l['--primary'] === '#0e0e10' && l['--on-primary'] === '#ffffff', `${who} light: Graphite: ` + JSON.stringify(l));
+    await page.emulateMedia({ colorScheme: 'dark' }); await page.waitForTimeout(200);
+    const d = await tok(page);
+    expect(d['--bg'] === '#0e0e10' && d['--surface'] === '#232327' && d['--text'] === '#f2f2f5' && d['--primary'] === '#f2f2f5' && d['--on-primary'] === '#0e0e10', `${who} dark: Graphite: ` + JSON.stringify(d));
+    expect(!errors.length, `${who}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // picking Blush & Sage in Appearance still works, saved under the same key, and Monochrome comes back
+  {
+    const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'on', server: false, state: { groqKey: 'gsk_test', profile: { ...PROFILE, gender: 'female' } } });
+    await page.evaluate(() => openSettings('all'));
+    expect(await page.locator('.accent-sw.accent-mono.active').count() === 1, 'Monochrome is the picked swatch');
+    await page.click('.accent-sw[data-accent="cassie"]');
+    expect(await page.evaluate(() => [document.documentElement.dataset.pal, JSON.parse(localStorage.getItem('cassie.v2')).accent].join()) === 'blush,cassie', 'Blush & Sage, saved as accent');
+    await page.reload(); await page.waitForTimeout(500);
+    expect(await page.evaluate(() => document.documentElement.dataset.pal) === 'blush', 'Blush & Sage stays after a reload');
+    await page.evaluate(() => openSettings('all'));
+    await page.click('.accent-sw[data-accent="mono"]');
+    expect(await page.evaluate(() => document.documentElement.dataset.pal) === 'mono', 'and back to Monochrome');
+    await ctx.close();
+  }
+  // Home's boxes: under the header, 2 across on a phone and 4 on a computer; each opens its feature
+  const BOXES = [
+    ['lab', 'lab', (p) => p.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 15000 })],
+    ['games', 'write', (p) => p.waitForSelector('.labs:not([hidden]) [data-lab="circuit"]', { timeout: 15000 })],
+    ['today', 'lab', (p) => p.waitForFunction(() => document.querySelector(`.lab-view:not([hidden])[data-lab="${todayLab()}"]`), null, { timeout: 20000 })],
+    ['cards', 'cards', (p) => p.waitForSelector('.fc:not([hidden])', { timeout: 8000 })],
+    ['research', 'write', (p) => p.waitForFunction(() => /Type a topic/.test(document.getElementById('prompt-input').placeholder), null, { timeout: 4000 })],
+    ['quiz', 'write', (p) => p.waitForFunction(() => document.getElementById('quiz-btn').classList.contains('active'), null, { timeout: 4000 })],
+    ['timer', 'timer', (p) => p.waitForFunction(() => /pause/i.test(document.getElementById('pomo-toggle').textContent), null, { timeout: 4000 })],
+    ['room', 'write', (p) => p.waitForSelector('.room-dlg', { timeout: 8000 })],
+    ['board', 'write', (p) => p.waitForSelector('.csk-live', { timeout: 15000 })],
+    ['talk', 'write', (p) => p.waitForFunction(() => { const v = document.querySelector('.vc'); return (v && !v.hidden) || /microphone|mic/i.test(document.getElementById('chat-log').innerText); }, null, { timeout: 6000 })],
+  ];
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    const hub = phone ? '#home .hub' : '#chat-log .hub';
+    const start = async (o = {}) => {
+      const r = await open(b, { device, viewport, scale: 1, lite: 'off', server: !!o.server, state: { groqKey: 'gsk_test', tab: 'home' } });
+      r.page.on('dialog', (d) => d.dismiss().catch(() => {}));
+      await r.page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 });
+      return r;
+    };
+    let { ctx, page, errors } = await start();
+    const g = await page.evaluate((h) => { const hero = document.querySelector(h + ' .hub-hero').getBoundingClientRect(), bx = [...document.querySelectorAll(h + ' .hub-box')].map((e) => e.getBoundingClientRect()); return { n: bx.length, under: Math.round(bx[0].top - hero.bottom), cols: new Set(bx.map((r) => Math.round(r.left))).size, min: Math.min(...bx.map((r) => r.height)) }; }, hub);
+    expect(g.n === 10 && g.under >= 0 && g.under < 40 && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: ten boxes right under the header, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
+    expect(await page.locator(hub + ' .hub-q', { hasText: /^(Quiz me|Flashcards|Research a topic)$/ }).count() === 0, `${size}: no Quick action repeats a box`);
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await contrastIssues(page, hub + ' .hub-boxes'); expect(!bad.length, `${size} boxes (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 });
+    for (const [act, pose, opened] of BOXES) {
+      if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 }); }
+      else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-scene.is-3d', { timeout: 20000 }); }
+      await page.evaluate(() => { window.__poses = []; new MutationObserver((l) => l.forEach((r) => window.__poses.push(r.target.dataset.pose))).observe(document.body, { attributes: true, attributeFilter: ['data-pose'], subtree: true }); });
+      await page.click(`${hub} .hub-box[data-hub="${act}"]`);
+      const ok = await opened(page).then(() => true, () => false);
+      expect(ok, `${size}: the ${act} box opens its feature`);
+      const poses = await page.evaluate(() => window.__poses);
+      expect(poses.includes(pose), `${size}: the ${act} box plays “${pose}”: ` + JSON.stringify(poses));
+      if (act === 'timer') await page.evaluate(() => { const t = document.getElementById('pomo-toggle'); if (/pause/i.test(t.textContent)) t.click(); });
+    }
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Home header: a 3D study room with the hello and a bell; every Home button plays its moment and still does its job; Today as a row of chips; the still room with Reduce Motion or Lite mode (390x844, 1280x800)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -4799,7 +4874,7 @@ test('Home header: a 3D study room with the hello and a bell; every Home button 
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-hero');
     expect(/Hi, welcome back/.test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
     const today = await page.evaluate((h) => { const t = document.querySelector(h + ' .hub-today'), s = getComputedStyle(t); return { n: t.querySelectorAll('.hub-w').length, dir: s.display + ' ' + s.flexDirection, x: s.overflowX, top: [...t.querySelectorAll('.hub-w')].map((w) => Math.round(w.getBoundingClientRect().top)) }; }, hub);
-    expect(today.n === 4 && today.dir === 'flex row' && today.x === 'auto' && new Set(today.top).size === 1, `${size}: Today is one row of four chips that scrolls sideways: ` + JSON.stringify(today));
+    expect(today.n === 3 && today.dir === 'flex row' && today.x === 'auto' && new Set(today.top).size === 1, `${size}: Today is one row of three chips that scrolls sideways: ` + JSON.stringify(today));
     // the bell: today's reminders, each going where it says
     await page.click(hub + ' .hub-bell');
     await page.waitForTimeout(300);
@@ -4811,7 +4886,7 @@ test('Home header: a 3D study room with the hello and a bell; every Home button 
     const jobs = [
       ['#home-ask', 'ask', () => page.waitForFunction(() => document.activeElement === document.getElementById('prompt-input'), null, { timeout: 4000 }).then(() => true, () => false)],
       ['.hub-w[data-hub="cards"]', 'cards', () => page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
-      ['.hub-w[data-hub="lab"]', 'lab', () => page.waitForSelector('.labs:not([hidden])', { timeout: 6000 }).then(() => true, () => false)],
+      ['.hub-box[data-hub="lab"]', 'lab', () => page.waitForSelector('.labs:not([hidden])', { timeout: 6000 }).then(() => true, () => false)],
       ['.hub-timer', 'timer', () => page.evaluate(() => /pause/i.test(document.getElementById('pomo-toggle').textContent))],
       ['.hub-w[data-hub="streak"]', 'streak', () => page.waitForSelector('#memory-panel:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
       ['.hub-chat[data-hub^="chat:"]', 'write', () => page.waitForFunction(() => /osmosis/i.test(document.getElementById('chat-log').innerText), null, { timeout: 4000 }).then(() => true, () => false)],
@@ -4871,9 +4946,9 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     await toHome();
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-today');
     const r = await page.locator(hub).innerText();
-    expect(await page.locator(hub + ' .hub-w').count() === 4 && /card due/.test(r) && /today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today widgets: ` + r);
+    expect(await page.locator(hub + ' .hub-w').count() === 3 && /card due/.test(r) && /Today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today chips (and Today’s lab in the boxes): ` + r);
     expect(/Continue/.test(r) && await page.locator(hub + ' .hub-chat', { hasText: 'What is osmosis?' }).count() === 1, `${size}: the chat under Continue`);
-    expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 8, `${size}: Quick actions`);
+    expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 4, `${size}: Quick actions`);
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
@@ -4978,7 +5053,7 @@ test('Liquid Glass on a phone: every tap target is at least 44px, and every word
   }
 });
 
-test('Cassie’s colours: Blush & Sage (sage leads for a boy, blush for a girl or unsaid), every word, button, chip, bubble and tab at AA in light and dark at 390x844 and 1280x800, and every colour in style.css comes from a token', async (b) => {
+test('Cassie’s colours: Blush & Sage, picked in Appearance (sage leads for a boy, blush for a girl or unsaid), every word, button, chip, bubble and tab at AA in light and dark at 390x844 and 1280x800, and every colour in style.css comes from a token', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   // every colour outside the :root token blocks is a token (a hard-coded one is listed)
   const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (c) => ' '.repeat(c.length));
@@ -4999,7 +5074,7 @@ test('Cassie’s colours: Blush & Sage (sage leads for a boy, blush for a girl o
   const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('');
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     for (const gender of ['female', 'male', 'none']) {
-      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', profile: { ...PROFILE, gender } }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.\n\nQuick check: which way does the water go?' }) });
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', accent: 'cassie', profile: { ...PROFILE, gender } }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.\n\nQuick check: which way does the water go?' }) });
       await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
       await ask(page, 'What is osmosis?');
       await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }).catch(() => {});
@@ -5042,7 +5117,7 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
     await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }).catch(() => {}); // (the "Done" pill goes)
     if (size === '1280x800') await page.evaluate(() => setSideOpen(true)); // (the timer is in the full sidebar)
     const colours = () => page.evaluate((ctl) => Object.fromEntries(Object.entries(ctl).map(([k, sel]) => { const e = document.querySelector(sel); if (!e || !e.getClientRects().length) return [k, null]; const st = getComputedStyle(e); return [k, { bg: st.backgroundColor, fg: st.color }]; })), CONTROLS);
-    for (const pick of ['mono', '#2563eb', '#f59e0b', '']) {
+    for (const pick of ['mono', '#2563eb', '#f59e0b', 'cassie']) {
       await page.evaluate((c) => setAccent(c), pick);
       for (const scheme of ['light', 'dark']) {
         await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350);
@@ -5054,7 +5129,7 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
           if (pick === 'mono') {
             const [r, g, bl] = rgb(v.bg);
             expect(Math.max(r, g, bl) - Math.min(r, g, bl) <= 6, `${size} Monochrome ${scheme}: ${k} has a hue: ${v.bg}`);
-          } else if (pick) expect(bg === pick, `${size} ${pick} ${scheme}: ${k} is ${bg}, not the picked colour`);
+          } else if (pick.startsWith('#')) expect(bg === pick, `${size} ${pick} ${scheme}: ${k} is ${bg}, not the picked colour`);
           else expect(bg === (scheme === 'light' ? '#2f6f5e' : '#7cc4ae'), `${size} Cassie ${scheme}: ${k} is ${bg}, not sage (a boy’s profile)`);
           expect(ratio(bg, fg) >= 4.5, `${size} ${pick || 'Cassie'} ${scheme}: ${k} words ${fg} on ${bg} = ${ratio(bg, fg).toFixed(2)}:1`);
         }

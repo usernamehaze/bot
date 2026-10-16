@@ -63,12 +63,14 @@ html, :where(body, body *) { touch-action: manipulation; }
   --glass-rgb: 246, 250, 246;
 }
 /* Monochrome (picked in Appearance): black and white, neutral greys, no tint anywhere */
+/* Monochrome, Cassie's main colours (Graphite: #0E0E10 #232327 #3E3E45 #63636E #9A9AA6 #C9C9D2 #F2F2F5),
+   for everyone unless Blush & Sage or a colour is picked in Appearance */
 :root[data-pal="mono"] {
-  --bg: #f2f2f2; --surface: #ffffff; --surface-2: #ececec; --text: #1b1b1d; --muted: #646469; --border: #e3e3e3;
-  --primary: #1b1b1d; --primary-dark: #000000; --on-primary: #ffffff;
-  --secondary: #3a3a3d; --on-secondary: #ffffff;
-  --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 27, 27, 29;
-  --skin: #c9c9cc;
+  --bg: #f2f2f5; --surface: #ffffff; --surface-2: #e8e8ec; --text: #0e0e10; --muted: #63636e; --border: #c9c9d2;
+  --primary: #0e0e10; --primary-dark: #232327; --on-primary: #ffffff;
+  --secondary: #3e3e45; --on-secondary: #ffffff;
+  --bubble-assistant: #ffffff; --glass-rgb: 255, 255, 255; --ink-rgb: 14, 14, 16;
+  --skin: #c9c9d2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -84,10 +86,10 @@ html, :where(body, body *) { touch-action: manipulation; }
     --glass-rgb: 30, 40, 36;
   }
   :root[data-pal="mono"]:not([data-theme="light"]) {
-    --bg: #141414; --surface: #1d1d1f; --surface-2: #252527; --text: #ededed; --muted: #ababaf; --border: #2d2d30;
-    --primary: #ededed; --primary-dark: #d4d4d6; --on-primary: #111111;
-    --secondary: #c9c9cc; --on-secondary: #111111;
-    --bubble-assistant: #1d1d1f; --glass-rgb: 40, 40, 44; --ink-rgb: 0, 0, 0;
+    --bg: #0e0e10; --surface: #232327; --surface-2: #2c2c31; --text: #f2f2f5; --muted: #adadb8; --border: #3e3e45;
+    --primary: #f2f2f5; --primary-dark: #c9c9d2; --on-primary: #0e0e10;
+    --secondary: #c9c9d2; --on-secondary: #0e0e10;
+    --bubble-assistant: #232327; --glass-rgb: 35, 35, 39; --ink-rgb: 0, 0, 0;
   }
 }
 :root[data-theme="dark"] {
@@ -95,7 +97,7 @@ html, :where(body, body *) { touch-action: manipulation; }
   --primary: #f28fa5; --primary-dark: #e57a92; --on-primary: #2a1018; --secondary: #7cc4ae; --on-secondary: #0f2620;
   --success: #7dd3a0; --warning: #f2b84b; --danger: #ff8a80; --bubble-assistant: #251f1c; --glass-rgb: 46, 38, 34; --ink-rgb: 0, 0, 0;
 }
-:root[data-theme="dark"][data-pal="mono"] { --bg: #141414; --surface: #1d1d1f; --surface-2: #252527; --text: #ededed; --muted: #ababaf; --border: #2d2d30; --primary: #ededed; --primary-dark: #d4d4d6; --on-primary: #111111; --secondary: #c9c9cc; --on-secondary: #111111; --bubble-assistant: #1d1d1f; --glass-rgb: 40, 40, 44; --ink-rgb: 0, 0, 0; }
+:root[data-theme="dark"][data-pal="mono"] { --bg: #0e0e10; --surface: #232327; --surface-2: #2c2c31; --text: #f2f2f5; --muted: #adadb8; --border: #3e3e45; --primary: #f2f2f5; --primary-dark: #c9c9d2; --on-primary: #0e0e10; --secondary: #c9c9d2; --on-secondary: #0e0e10; --bubble-assistant: #232327; --glass-rgb: 35, 35, 39; --ink-rgb: 0, 0, 0; }
 :root[data-theme="dark"][data-pal="sage"] { --primary: #7cc4ae; --primary-dark: #69b39c; --on-primary: #0f2620; --secondary: #f28fa5; --on-secondary: #2a1018; --glass-rgb: 30, 40, 36; }
 
 * { box-sizing: border-box; }
@@ -2393,7 +2395,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 @media (prefers-reduced-motion: reduce) { .hub button:active { transform: none; } }
 .home-hub > .hub { width: 100%; flex: 1 1 100%; }
 .home-hub > .hub-empty { max-width: none; }
-.home-hub > .hub-empty > :not(.hub-hero):not(.hub-remind) { max-width: 520px; }
+.home-hub > .hub-empty > :not(.hub-hero):not(.hub-remind):not(.hub-boxes) { max-width: 520px; }
 /* (a computer's empty chat has the chat box below: the new hub stays compact so all of it shows) */
 .home-hub .hub-empty .hub-bot { width: 112px; height: 112px; margin-top: 0; }
 .home-hub .hub-empty .hub-card { min-height: 112px; }
@@ -2445,3 +2447,13 @@ html:not(.native) #chat-log > .home { display: flex; }
   html.native .hub-hero { width: calc(100% + 40px); height: calc(220px + var(--safe-top)); margin: calc(-20px - var(--safe-top)) -20px 4px; }
   html.native .hub-top { top: calc(10px + var(--safe-top)); left: 16px; right: 16px; }
 }
+
+/* Home's big boxes: every study feature under the header (2 across on a phone, 4 on a computer) */
+.hub-boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+@media (min-width: 761px) { .hub-boxes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.hub .hub-box { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 104px; padding: 14px; border-radius: 22px; text-align: left;
+  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+.hub-box i { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 13px; background: color-mix(in srgb, var(--primary) 12%, var(--surface)); color: var(--primary-ink); }
+.hub-box i svg { width: 21px; height: 21px; }
+.hub-box b { margin-top: 2px; font-size: 1rem; line-height: 1.2; }
+.hub-box small { color: var(--muted); font-size: .8rem; line-height: 1.3; }

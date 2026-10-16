@@ -17,7 +17,7 @@ function loadState() {
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
-    accent: '',             // favorite colour (hex) — '' = Cassie's own colours (Blush & Sage)
+    accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
     audience: 'student',    // student | pro — the Student / Professional switch
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
@@ -301,8 +301,9 @@ function accentInk(hex) {
 // Cassie's colours follow the profile: blush leads for a girl (and when it isn't said), sage
 // leads for a boy (style.css: html[data-pal="sage"]). A colour picked in Appearance wins over both.
 function palette() { return state.profile && state.profile.gender === 'male' ? 'sage' : 'blush'; }
-// what's picked in Appearance: '' = Cassie (Blush & Sage), 'mono' = Monochrome, or a colour
-function accentChoice() { const a = String(state.accent || '').trim().toLowerCase(); return a === 'mono' ? 'mono' : /^#[0-9a-f]{6}$/.test(a) ? a : ''; }
+// what's picked in Appearance (saved in state.accent): nothing or 'mono' = Monochrome, Cassie's main
+// colours; 'cassie' = Blush & Sage; or a colour. Returns 'mono', '' (Blush & Sage) or the colour.
+function accentChoice() { const a = String(state.accent || '').trim().toLowerCase(); return a === 'cassie' ? '' : /^#[0-9a-f]{6}$/.test(a) ? a : 'mono'; }
 const accentHex = () => (accentChoice().startsWith('#') ? accentChoice() : '');
 function colorLum(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0); }
 function contrastOf(a, b) { const x = colorLum(a), y = colorLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
@@ -311,7 +312,7 @@ function contrastOf(a, b) { const x = colorLum(a), y = colorLum(b); return (Math
 // and --primary-ink: the same colour, darker or lighter until it reads as words on the page.
 function applyAccent() {
   const root = document.documentElement, pick = accentChoice();
-  root.dataset.pal = pick === 'mono' ? 'mono' : palette();
+  root.dataset.pal = pick === '' ? palette() : 'mono'; // (a picked colour sits on Monochrome's greys)
   ['--primary', '--primary-dark', '--on-primary', '--primary-ink', '--accent', '--accent-ink', '--lab-accent', '--lab-on-accent'].forEach((p) => root.style.removeProperty(p));
   if (pick.startsWith('#')) {
     const ink = contrastOf(pick, '#ffffff') >= contrastOf(pick, '#111111') ? '#ffffff' : '#111111';
@@ -1847,6 +1848,23 @@ const HUB_ICON = {
   chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg>',
   go: '<svg class="hub-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
 };
+// Home's big boxes: every study feature, one tap away (each opens it the way its own button does)
+const TODAY_LABS = ['pendulum', 'ph', 'fractions', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'magnets', 'build-cell', 'optics', 'units', 'ice-steam', 'vectors', 'colour', 'metals', 'interest'];
+const todayLab = () => TODAY_LABS[Math.floor(Date.now() / 864e5) % TODAY_LABS.length];
+const HUB_BOXES = [
+  ['lab', 'Labs', 'Simulations to play with', HUB_ICON.lab],
+  ['games', 'Games', 'Puzzles and quick games', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01"/></svg>'],
+  ['today', 'Today’s lab', 'A new lab every day', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M10 14.5l1.5 1.5 3-3"/></svg>'],
+  ['cards', 'Flashcards', 'Review and make cards', HUB_ICON.cards],
+  ['research', 'Research', 'Real papers for a thesis', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5M8 10.5h5M10.5 8v5"/></svg>'],
+  ['quiz', 'Quiz me', 'A practice quiz on anything', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>'],
+  ['timer', 'Focus timer', 'Study in focused rounds', HUB_ICON.timer],
+  ['room', 'Study room', 'Study with friends', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M14.5 14.3c3 .1 5.5 1.8 5.5 4.7"/></svg>'],
+  ['board', 'Board', 'Draw, sketch or graph', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4M7 13l3-3 2.5 2.5L17 8"/></svg>'],
+  ['talk', 'Talk', 'A voice chat with Cassie', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>'],
+];
+// the Quick actions the boxes already cover (each feature shows once on Home)
+const HUB_BOXED = /^(Quiz me|Research a topic|Labs: try a simulation|Study together|Flashcards)/;
 const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
 const onPhoneHome = () => !!(window.CassieNative && document.documentElement.classList.contains('native'));
 // where each part of the hub goes (on a phone, through the tab bar so the right tab lights up)
@@ -1855,6 +1873,12 @@ function hubAct(act) {
   if (act === 'ask' || act === 'start') { if (onPhoneHome()) { nav('chat'); setTimeout(() => promptInput.focus(), 60); } else promptInput.focus(); return; } // (a phone switches tab first)
   if (act === 'cards') { if (onPhoneHome()) nav('cards'); else if (window.CassieCards) window.CassieCards.open(); return; }
   if (act === 'lab') { if (onPhoneHome()) nav('labs'); else openLabs(); return; }
+  if (act === 'today') { openLabs(todayLab()); return; }
+  if (act === 'games') { openLabs(undefined, { section: 'games' }); return; }
+  if (act === 'board') { nav('chat'); const bb = document.getElementById('board-btn'); if (bb) bb.click(); return; }
+  if (act === 'room') { if (!SERVER) nav('chat'); const ex = HOME_EXAMPLES.find((x) => /study room/i.test(x.label)); if (ex) runTool(ex); return; } // (no server: the reason shows in the chat)
+  if (act === 'talk') { openVoice('chat'); return; }
+  if (act === 'research' || act === 'quiz') { nav('chat'); const cb = document.getElementById(act + '-btn'); if (cb) cb.click(); return; }
   if (act === 'timer') { const t = document.getElementById('pomo-toggle'); if (t) t.click(); renderHubTimer(); return; }
   if (act === 'streak') { const m = document.getElementById('memory-btn'); if (m) m.click(); return; }
   if (act.startsWith('chat:')) { selectChat(act.slice(5)); nav('chat'); return; }
@@ -1886,7 +1910,7 @@ const HUB_SCENE_SVG = `<svg class="hub-still" viewBox="0 0 400 220" preserveAspe
 </svg>`;
 const HUB_BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg>';
 // which moment each Home button plays in the room
-const hubMoment = (act) => (act === 'ask' || act === 'start' ? 'ask' : act === 'cards' ? 'cards' : act === 'lab' ? 'lab' : act === 'timer' ? 'timer' : act === 'streak' ? 'streak' : 'write');
+const hubMoment = (act) => (act === 'ask' || act === 'start' ? 'ask' : act === 'cards' ? 'cards' : act === 'lab' || act === 'today' ? 'lab' : act === 'timer' ? 'timer' : act === 'streak' ? 'streak' : 'write');
 let hubScene = null, hubSceneMod = null; // the module: loading, then loaded (only once Home shows)
 const hubSceneWanted = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) && !window.CASSIE_LITE;
 function hubSceneStart(host) {
@@ -1949,15 +1973,14 @@ function buildHub({ ideas = false } = {}) {
       <h2 class="hub-h">Today</h2>
       <div class="hub-today">
         <button type="button" class="hub-w" data-hub="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
-        <button type="button" class="hub-w" data-hub="lab"><i>${HUB_ICON.lab}</i><b>New</b><span>today’s lab</span><em>Open Labs</em></button>
         <button type="button" class="hub-w hub-timer" data-hub="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>
         <button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
       </div>
       <h2 class="hub-h">Continue</h2>
       <div class="hub-recent"></div>
       <h2 class="hub-h">Quick actions</h2>
-      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div>`;
-    el.querySelectorAll('.hub-q span').forEach((s, i) => { s.textContent = HOME_EXAMPLES[i].label; });
+      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
+    el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.hub = 'chat:' + c.id;
@@ -1972,7 +1995,10 @@ function buildHub({ ideas = false } = {}) {
   // the header on top, the bell's reminders just under it
   const streakNow = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
   const hero = hubHero(name, returning, due), remind = hubReminders(due, streakNow);
-  el.prepend(hero, remind);
+  const boxes = document.createElement('div');
+  boxes.className = 'hub-boxes';
+  boxes.innerHTML = HUB_BOXES.map(([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`).join('');
+  el.prepend(hero, remind, boxes);
   const bell = hero.querySelector('.hub-bell');
   bell.setAttribute('aria-expanded', String(hubRemindOpen));
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
@@ -5048,7 +5074,7 @@ function buildAccentSwatches() {
   wrap.innerHTML = '';
   const none = document.createElement('button');
   none.type = 'button'; none.className = 'accent-sw accent-none';
-  none.dataset.accent = ''; none.title = 'Cassie: blush and sage';
+  none.dataset.accent = 'cassie'; none.title = 'Cassie: blush and sage';
   none.setAttribute('aria-label', 'Cassie (blush and sage)');
   wrap.appendChild(none);
   const mono = document.createElement('button');
@@ -5072,7 +5098,7 @@ function buildAccentSwatches() {
 
 // Mark the swatch matching the saved colour (or "None") as active.
 function syncAccentSwatches() {
-  const cur = (state.accent || '').toLowerCase();
+  const pick = accentChoice(), cur = pick === 'mono' ? 'mono' : pick || 'cassie';
   const sws = settingsPanel.querySelectorAll('.accent-sw[data-accent]');
   let matched = false;
   sws.forEach((sw) => {
