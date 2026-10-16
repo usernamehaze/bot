@@ -4836,7 +4836,7 @@ test('Home header: a 3D study room with the hello and a bell; every Home button 
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', tab: 'home' } });
     if (motion) await page.emulateMedia({ reducedMotion: motion });
     const loaded = [];
-    page.on('request', (r) => { if (/home-scene\.js|three\.module/.test(r.url())) loaded.push(r.url()); });
+    page.on('request', (r) => { if (/home-scene\.js/.test(r.url())) loaded.push(r.url()); }); // (three.js itself may load for other parts of the app)
     await page.goto(APP);
     await page.waitForSelector('#home .hub-hero .hub-still');
     await page.waitForTimeout(1200);

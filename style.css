@@ -2337,7 +2337,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 /* ---------- Home: the hub ----------
    New: Cassie large, a hello, two glass cards and Start studying. Back again: Today, Continue and
    Quick actions. Phones: the Home tab; computers: an empty chat, centred, at most 960px wide. */
-#chat-log > .home.home-hub { display: block; width: 100%; max-width: 960px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 24px; min-height: 0; }
+#chat-log > .home.home-hub { display: block; flex: none; width: 100%; max-width: 960px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 24px; min-height: 0; } /* (flex: none: in the chat column it never shrinks under its own content, so the last button scrolls clear of the chips over the chat box) */
 .hub { display: flex; flex-direction: column; gap: 12px; color: var(--text); }
 .hub button { font: inherit; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .hub svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
