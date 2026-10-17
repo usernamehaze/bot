@@ -4924,6 +4924,22 @@ test('phone Home previews: real-looking 3D scenes (like the labs) on Plus and Pr
   }
 });
 
+test('phone Home is drawn again only when it needs to be (coming into view, Home tapped, or what it shows changed), not on every change elsewhere: its previews keep running', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
+  await page.waitForSelector('#home .hub-tlab-pv[data-preview]');
+  await page.evaluate(() => { window.__card = document.querySelector('#home .hub-tlab'); });
+  // unrelated changes: a class on the page, something shown and hidden elsewhere
+  await page.evaluate(() => { const r = document.documentElement; r.classList.add('test-x'); const d = document.createElement('div'); document.body.appendChild(d); d.hidden = true; d.hidden = false; r.classList.remove('test-x'); });
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.__card === document.querySelector('#home .hub-tlab')), 'Home was redrawn by a change elsewhere');
+  // what it shows changed, and Home tapped: drawn again, with the new chat
+  await page.evaluate(() => { state.chats = [{ id: 'z1', title: 'Photosynthesis', messages: [{ role: 'user', content: 'x' }], updatedAt: Date.now() }]; save(); CassieNative.go('home'); });
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__card !== document.querySelector('#home .hub-tlab') && /Photosynthesis/.test(document.querySelector('#home .hub').innerText)), 'Home tapped after a change: drawn again with it');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844, 1280x800)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {

@@ -6710,7 +6710,7 @@ const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=169', 'exp
 function frMascot3d(host) {
   let flat = null;
   try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true }); } catch (e) { /* the words still work */ }
-  if (flat && window.CASSIE_LITE) flat.pause(); // (Lite mode: drawn once, no movement; Reduce Motion: she keeps herself still)
+  if (flat && (window.CASSIE_LITE || reduceMotion())) flat.pause(); // (Lite mode or Reduce Motion: drawn once, no movement, not even a blink)
   host.dataset.mascot = '2d';
   const load = fr3dLoad();
   if (!load) return;
