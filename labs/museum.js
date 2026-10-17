@@ -1,7 +1,7 @@
 /* The Museum of Famous Arts: masterpieces by Filipino artists and from around the world —
    who made each one, when, what it is made of, where it is now, and the story behind it.
-   Every picture is a public domain copy from Wikimedia Commons, kept here (labs/museum/), so it
-   always loads, even offline; each one links to its page on Commons. */
+   Every picture is kept here (labs/museum/), so it always loads, even offline: a public domain copy
+   from Wikimedia Commons, or for works still under copyright, the copy Wikipedia shows, credited. */
 import { el, esc, group, seg, button, row, stats, shuffle, plusOnly, errorWords, errorWordsFor } from './kit.js';
 
 // [id, title, artist, year, medium, where it is, the story, Wikipedia article]
@@ -18,6 +18,20 @@ const PH = [
     'A woman sits alone in a Paris café while three men watch her from a corner. In 2002 the Philippine government pension fund (GSIS) bought it at auction for about ₱46 million.', 'The Parisian Life (painting)'],
   ['tipos', 'Tipos del País (watercolours of Filipino people)', 'Damián Domingo', '1820s', 'Watercolour on paper', '',
     'Domingo painted Filipinos of every walk of life in their everyday clothes, as careful records of how people looked and dressed. In 1821 he opened the first school of fine arts in the Philippines in his home in Tondo, Manila.', 'Damián Domingo'],
+  ['amorsolo', 'Rice Planting', 'Fernando Amorsolo', '1920s to 1950s (many versions)', 'Oil on canvas', '',
+    'Farmers plant rice in a sunny field. Amorsolo painted country life again and again, famous for his glowing backlight, the sun shining from behind his figures. He became the first National Artist of the Philippines in 1972.', 'Fernando Amorsolo'],
+  ['builders', 'The Builders', 'Victorio Edades', '1928', 'Oil on canvas', '',
+    'Rough, muscular workers fill the canvas in dark, earthy colours. Nothing like the pretty country scenes people expected. Its 1928 showing shocked Manila and started modern art in the Philippines; Edades is called its father.', 'Victorio Edades'],
+  ['madonna', 'Madonna of the Slums', 'Vicente Manansala', '1950', 'Oil on canvas', '',
+    'A mother and child from a poor neighbourhood are painted like a holy Madonna. Manansala’s style, “transparent cubism”, layers see-through shapes like sheets of coloured glass.', 'Vicente Manansala'],
+  ['medicine', 'The Progress of Medicine in the Philippines', 'Carlos “Botong” Francisco', '1953', 'Oil murals (four panels)', 'National Museum of Fine Arts, Manila',
+    'Four huge panels tell the story of healing in the Philippines, from early healers to modern hospitals. They were painted for the Philippine General Hospital. Botong is the great muralist of Philippine history.', 'Carlos Francisco'],
+  ['arabesque', 'Granadean Arabesque', 'José Joya', '1958', 'Oil on canvas', '',
+    'Bold strokes and drips of paint, inspired by the Moorish designs Joya saw in Granada, Spain. It is a landmark of Filipino abstract expressionism.', 'José Joya'],
+  ['genesis', 'Genesis', 'Hernando R. Ocampo', '1968', 'Design for a theatre curtain', 'Cultural Center of the Philippines, Manila',
+    'Its swirling shapes and hot tropical colours became the great curtain of the CCP’s main theatre. Ocampo was named a National Artist in 1991.', 'H. R. Ocampo'],
+  ['sabel', 'Sabel (series)', 'Benedicto “BenCab” Cabrera', 'from 1965', 'Oil, acrylic and prints', '',
+    'Sabel was a woman BenCab saw gathering scraps, wrapped in plastic sheets. He has painted her for decades, as a symbol of the dignity of the poor. BenCab was named a National Artist in 2006.', 'BenCab'],
 ];
 const WORLD = [
   ['monalisa', 'Mona Lisa', 'Leonardo da Vinci', 'c. 1503 to 1519', 'Oil on poplar wood', 'Louvre, Paris', 'A woman with a famously mysterious smile, painted with soft, smoky blending (“sfumato”). It is probably the most famous painting in the world.', 'Mona Lisa'],
@@ -39,10 +53,14 @@ const WORLD = [
   ['lilies', 'Water Lilies', 'Claude Monet', '1896 to 1926', 'Oil on canvas (about 250 paintings)', 'Many museums (e.g. Musée de l’Orangerie, Paris)', 'Monet painted the lily pond in his garden at Giverny again and again, in every light and season.', 'Water Lilies (Monet series)'],
   ['kiss', 'The Kiss', 'Gustav Klimt', '1907 to 1908', 'Oil and gold leaf on canvas', 'Belvedere, Vienna', 'Two lovers wrapped in robes of gold patterns, from Klimt’s “golden period”.', 'The Kiss (Klimt)'],
   ['gothic', 'American Gothic', 'Grant Wood', '1930', 'Oil on beaverboard', 'Art Institute of Chicago', 'A stern farmer with a pitchfork and a woman stand before a house with a Gothic window. One of the most copied images in America.', 'American Gothic'],
+  ['memory', 'The Persistence of Memory', 'Salvador Dalí', '1931', 'Oil on canvas', 'Museum of Modern Art, New York', 'Soft, melting pocket watches in a dream landscape, the best-known Surrealist painting.', 'The Persistence of Memory'],
+  ['guernica', 'Guernica', 'Pablo Picasso', '1937', 'Oil on canvas', 'Museo Reina Sofía, Madrid', 'Picasso’s huge black, white and grey protest against the bombing of the town of Guernica in the Spanish Civil War.', 'Guernica (Picasso)'],
+  ['fridas', 'The Two Fridas', 'Frida Kahlo', '1939', 'Oil on canvas', 'Museo de Arte Moderno, Mexico City', 'Two Frida Kahlos sit holding hands, their hearts showing, one in European dress, one in Mexican dress.', 'The Two Fridas'],
 ];
 const ALL = [...PH.map((x) => ({ from: 'ph', x })), ...WORLD.map((x) => ({ from: 'world', x }))].map(({ from, x }) => ({ from, id: x[0], title: x[1], artist: x[2], year: x[3], medium: x[4], where: x[5], story: x[6], wiki: x[7] }));
 
-// each painting's picture: a public domain copy from Wikimedia Commons (that file's name there)
+// each painting's picture, kept here (labs/museum/), and where it comes from: a public domain file on
+// Wikimedia Commons, or (works still under copyright) the small copy Wikipedia shows, credited to it
 const COMMONS = {
   spoliarium: 'Spoliarium.jpg',
   virgenes: 'Las Virgenes Cristianas Expuestas Al Populacho (The Christian Virgins Being Exposed to the Populace) by Felix Ressureccion Hidalgo 1884.jpg',
@@ -70,17 +88,26 @@ const COMMONS = {
   kiss: 'The Kiss - Gustav Klimt - Google Cultural Institute.jpg',
   gothic: 'Grant Wood - American Gothic (1930).jpg',
 };
+const WIKI = {
+  memory: 'The Persistence of Memory.jpg',
+  guernica: 'PicassoGuernica.jpg',
+  fridas: 'The Two Fridas.jpg',
+  medicine: 'The Progress of Medicine in the Philippines.jpg',
+};
+const hasPic = (a) => !!(COMMONS[a.id] || WIKI[a.id]);
 const picUrl = (a, big) => new URL(`./museum/${a.id}${big ? '' : '-s'}.webp`, import.meta.url).href; // (a small copy for the gallery)
-const commonsLink = (a) => `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(COMMONS[a.id].replace(/ /g, '_'))}`;
+const fileLink = (a) => (COMMONS[a.id] ? `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(COMMONS[a.id].replace(/ /g, '_'))}` : `https://en.wikipedia.org/wiki/File:${encodeURIComponent(WIKI[a.id].replace(/ /g, '_'))}`);
+const credit = (a) => (COMMONS[a.id] ? `Picture: public domain, from <a href="${fileLink(a)}" target="_blank" rel="noopener">Wikimedia Commons</a>`
+  : `Picture: © the artist or their estate. A copy from <a href="${fileLink(a)}" target="_blank" rel="noopener">Wikipedia</a>, shown for study.`);
 const wikiLink = (a) => `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wiki.replace(/ /g, '_'))}`;
 
 const museumLab = {
   id: 'museum', name: 'Museum of Famous Arts', subject: 'tools', wide: true,
-  blurb: 'Walk through masterpieces by Filipino artists, Juan Luna, Félix Resurrección Hidalgo and Damián Domingo, and the world’s most famous paintings: who made them, when, and the story behind each.',
-  words: 'art museum painting artist filipino juan luna spoliarium hidalgo damian domingo mona lisa starry night van gogh gallery history arts',
+  blurb: 'Walk through masterpieces by Filipino artists, Luna, Hidalgo, Amorsolo, Botong, BenCab, and the world’s most famous paintings: who made them, when, and the story behind each.',
+  words: 'art museum painting artist filipino juan luna spoliarium amorsolo national artist mona lisa starry night van gogh gallery history arts',
   topic: 'famous paintings and artists, Filipino and world',
   icon: '<rect x="6" y="9" width="36" height="28" rx="1"/><rect x="11" y="14" width="26" height="18"/><path d="M11 29l7-7 5 5 4-4 10 9"/><circle cx="30" cy="19" r="2"/><path d="M14 41h20"/>',
-  about: 'Twenty-five famous works, from Damián Domingo’s 1820s watercolours and Juan Luna’s Spoliarium to Leonardo, Van Gogh and Klimt. Every card says who made it, when, what it is made of, and where it is now. Every picture is a public domain copy from Wikimedia Commons, kept in the app so it always loads. “Who painted it?” is a quick game with the same works.',
+  about: 'Thirty-five famous works, from Damián Domingo’s 1820s watercolours to BenCab’s Sabel, and from Botticelli to Frida Kahlo. Every card says who made it, when, what it is made of, and where it is now. Every picture is kept in the app so it always loads: public domain works from Wikimedia Commons, and works still under copyright as a credited copy, shown for study. “Who painted it?” is a quick game with the same works.',
   mount({ stage, panel, api }) {
     let wing = 'all', open = null, game = null, seen = new Set();
     const page = el('div', 'tl-sheet tl-museum'); stage.appendChild(page);
@@ -100,7 +127,7 @@ const museumLab = {
     function hydrate() {
       page.querySelectorAll('[data-pic]').forEach((f) => {
         const a = ALL.find((x) => x.id === f.dataset.pic);
-        if (f.querySelector('img')) return;
+        if (f.querySelector('img') || !hasPic(a)) return;
         const img = new Image(); img.alt = `${a.title} by ${a.artist}`; img.loading = 'lazy'; img.decoding = 'async';
         img.onload = () => f.classList.add('tl-loaded'); img.src = picUrl(a, f.classList.contains('tl-big'));
         f.querySelector('.tl-canvas').appendChild(img);
@@ -121,7 +148,7 @@ const museumLab = {
         <h3>${esc(a.title)}</h3>
         <dl class="tl-facts"><div><dt>Artist</dt><dd>${esc(a.artist)}</dd></div><div><dt>Year</dt><dd>${esc(a.year)}</dd></div><div><dt>Medium</dt><dd>${esc(a.medium)}</dd></div>${a.where ? `<div><dt>Where it is</dt><dd>${esc(a.where)}</dd></div>` : ''}<div><dt>Gallery</dt><dd>${a.from === 'ph' ? 'Filipino artists' : 'Around the world'}</dd></div></dl>
         <p class="tl-story">${esc(a.story)}</p>
-        <p class="tl-hint">Picture: public domain, from <a href="${commonsLink(a)}" target="_blank" rel="noopener">Wikimedia Commons</a></p>
+        ${hasPic(a) ? `<p class="tl-hint">${credit(a)}</p>` : ''}
         <p class="tl-onebtns"><a class="lab-btn" href="${wikiLink(a)}" target="_blank" rel="noopener">Read more on Wikipedia ↗</a><button type="button" class="lab-btn" data-askart>Ask Cassie about it</button></p>
         <p class="tl-msg" hidden></p></div>`;
       hydrate();
