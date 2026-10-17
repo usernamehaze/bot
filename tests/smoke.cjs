@@ -95,7 +95,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
 }
 // A lab card says "Opening…" at once and opens its lab a frame later (so the tap shows at once): wait for it
 // Labs is open: the shelf on a computer, the Labs tab on a phone
-const LABS_READY = '.labs:not([hidden]) .labs-card, .labs:not([hidden]) .lp-card';
+const LABS_READY = '.labs:not([hidden]) :is(.labs-card, .lp-card, .lp-row) >> visible=true'; // (the first one that shows: a list can hide the others)
 async function openCard(page, sel) {
   // a phone: the Labs tab has no shelf grid; find the lab under its filter, as a student would, and tap its row
   const id = (sel.match(/data-lab="([^"]+)"/) || [])[1];
