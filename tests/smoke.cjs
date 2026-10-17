@@ -567,7 +567,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
     'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
     'commons.wikimedia.org': 'a link the student taps (where a museum picture comes from; the pictures are kept in the app)',
-    'epa.culturalcenter.gov.ph': 'a museum picture’s credit link', '21am.culturalcenter.gov.ph': 'a museum picture’s credit link', 'salcedoauctions.com': 'a museum picture’s credit link',
+    'epa.culturalcenter.gov.ph': 'a museum picture’s credit link', '21am.culturalcenter.gov.ph': 'a museum picture’s credit link', 'salcedoauctions.com': 'a museum picture’s credit link', 'www.artandmarket.net': 'a museum picture’s credit link',
     'ncmh.gov.ph': 'where care.js’s crisis numbers were checked (a note in the code)',
   };
   const SERVICES = [ // [which addresses, the name privacy.html must use]

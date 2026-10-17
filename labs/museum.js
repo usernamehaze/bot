@@ -101,6 +101,7 @@ const ELSEWHERE = {
   madonna: ['the CCP Encyclopedia of Philippine Art', 'https://epa.culturalcenter.gov.ph/3/82/2222'],
   genesis: ['the Cultural Center of the Philippines', 'https://21am.culturalcenter.gov.ph/en/accession-records/1000021'],
   sabel: ['Salcedo Auctions', 'https://salcedoauctions.com/stories/the-many-faces-of-bencabs-iconic-sabel'],
+  arabesque: ['the Ateneo Art Gallery (via Art & Market)', 'https://www.artandmarket.net/exhibition/2019/10/20/yellow-ambiguities-at-ateneo-art-gallery'],
 };
 const hasPic = (a) => !!(COMMONS[a.id] || WIKI[a.id] || ELSEWHERE[a.id]);
 const picUrl = (a, big) => new URL(`./museum/${a.id}${big ? '' : '-s'}.webp`, import.meta.url).href; // (a small copy for the gallery)
