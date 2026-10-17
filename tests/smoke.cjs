@@ -4851,9 +4851,9 @@ test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (sa
   for (const [why, lite, motion] of [['Reduce Motion', 'off', 'reduce'], ['Lite mode', 'on', null]]) {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
     if (motion) await page.emulateMedia({ reducedMotion: motion });
+    await page.reload(); // (with the setting on from the start)
     const loaded = [];
     page.on('request', (rq) => { if (/cassie-bot3d\.js|three\.module/.test(rq.url())) loaded.push(rq.url()); });
-    await page.reload();
     await page.waitForSelector('#home .hub-bot svg.cassie-bot', { timeout: 10000 });
     await page.waitForTimeout(3500);
     expect(!(await page.locator('canvas.cassie-bot-3d').count()) && !loaded.length, `${why}: the flat Cassie only, and no 3D loaded: ` + loaded.join(' '));

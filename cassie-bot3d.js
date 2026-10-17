@@ -16,8 +16,12 @@ const INK = 0x16131c;
 
 /* ---------- the shared renderer ---------- */
 let R = null;
-// (the next quiet moment: the page's own work goes first)
-const later = (f) => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 1500 }) : setTimeout(f, 50));
+// (the next quiet moment: the page's own work goes first, and never while someone is tapping or
+// typing, so a slow step can't hold up an answer to a tap)
+let lastInput = -1e9;
+['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach((k) => addEventListener(k, () => { lastInput = performance.now(); }, { capture: true, passive: true }));
+const calm = () => performance.now() - lastInput > 1500;
+const later = (f) => { const go = () => (calm() ? f() : setTimeout(() => later(f), 500)); if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 1500 }); else setTimeout(go, 50); };
 function setup() {
   const scene = new THREE.Scene();
   // a soft studio: light from the sky and the floor, a key light high on the left, a fill from the right
@@ -72,9 +76,14 @@ function setup() {
     if (steps.length) later(next);
     else { R.ready = true; R.waiting.splice(0).forEach((f) => f()); wake(); }
   };
-  // (starts once the page has loaded and settled: the flat Cassie shows until then)
-  const start = () => setTimeout(() => later(next), 1200);
-  if (document.readyState === 'complete') start(); else addEventListener('load', start, { once: true });
+  // (starts once a Cassie is on screen and the page has loaded and settled: the flat Cassie shows
+  // until then; a page whose Cassies are all hidden never makes a 3D context)
+  R.begin = () => {
+    if (R.begun) return;
+    R.begun = true;
+    const start = () => setTimeout(() => later(next), 1200);
+    if (document.readyState === 'complete') start(); else addEventListener('load', start, { once: true });
+  };
   return R;
 }
 // The soft studio reflections, for the Get started Cassie (made when she first asks, a step at a time)
@@ -89,7 +98,7 @@ export function whenEnv() {
   })));
 }
 // resolves once the one renderer is ready to draw (straight away after the first time)
-export const whenReady = () => new Promise((res) => { if (!R) setup(); if (R.ready) res(R); else R.waiting.push(() => res(R)); });
+export const whenReady = () => new Promise((res) => { if (!R) setup(); R.begin(); if (R.ready) res(R); else R.waiting.push(() => res(R)); });
 
 /* ---------- the flat Cassie's drawings, painted on a canvas (her face, her badge) ---------- */
 const parser = new DOMParser();
@@ -355,19 +364,32 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false } = {})
 /* ---------- the shared loop: about 30 frames a second, only Cassies on screen ---------- */
 function tick(now) {
   R.raf = 0;
-  if (document.hidden || !R.ready) return;
+  if (document.hidden) return;
   let any = false, firsts = 0;
   for (const b of R.bots) {
     if (!b.alive) continue;
     if (!(b.live ? b.out : b.svg).isConnected) { b.destroy(); continue; }
     if (!b.seen || !b.host.getClientRects().length) continue;
     if (b.paused && !b.dirty) continue; // (a paused Cassie is drawn once, still)
-    any = true;
-    if (!b.live) { if (firsts++) continue; } // (a first frame costs the most: one Cassie's first frame at a time)
+    if (!R.ready) { R.begin(); continue; }
+    any = true; // (keeps looking: she may be uncovered, or the tap answered, in a moment)
+    if (now - (b.coverAt || 0) > 500) { b.coverAt = now; b.covered = covered(b.host); }
+    if (b.covered) continue; // (under a sheet or a full-screen page: nothing to see)
+    if (performance.now() - lastInput < 350) continue; // (a tap or a key is answered first)
+    if (!b.live) { if (firsts++ || !calm()) continue; } // (a first frame costs the most: one Cassie's first frame at a time, never mid-tap)
     if (now - R.last >= 30) { b.dirty = false; const t0 = performance.now(); try { b.draw(); } catch (e) { R.err = String(e && e.stack || e); /* one Cassie never breaks the page */ } R.slowest = Math.max(R.slowest || 0, performance.now() - t0); }
   }
   if (now - R.last >= 30) R.last = now;
   if (any) R.raf = requestAnimationFrame(tick);
+}
+// covered by something big (a sheet, a dialog, a full-screen page) that isn't hers
+function covered(host) {
+  const r = host.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
+  const top = document.elementFromPoint(x, y);
+  if (!top || top === host || host.contains(top) || top.contains(host)) return false;
+  const t = top.getBoundingClientRect();
+  return t.width >= innerWidth * 0.5 && t.height >= innerHeight * 0.5;
 }
 function wake() { if (R && !R.raf && !document.hidden) R.raf = requestAnimationFrame(tick); }
 // The one renderer, for another Cassie drawn her own way (the Get started Cassie, cassie-3d.js): draws

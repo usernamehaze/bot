@@ -401,10 +401,13 @@
     // pop-out window, frame-by-frame video, opts.flat (a stand-in for the Get started Cassie), and
     // while the 3D one gets ready.
     if (!opts.clock && !opts.win && !opts.flat && !reduced() && !window.CASSIE_LITE && !window.CASSIE_FLAT && window.WebGLRenderingContext) {
-      import(new URL('cassie-bot3d.js', SRC).href).then((m) => {
+      // (only once she's on screen: a hidden Cassie never loads the 3D one)
+      const load = () => import(new URL('cassie-bot3d.js', SRC).href).then((m) => {
         if (!alive || !svg.isConnected) return;
         deep = m.upgrade(api, host, svg, { pokeable: !!opts.pokeable, glow: !!opts.glow }); // (she swaps in with her first 3D frame)
       }).catch(() => { /* the flat Cassie stays */ });
+      if (!window.IntersectionObserver) load();
+      else { const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && alive) { io.disconnect(); load(); } }); io.observe(svg); }
     }
     return api;
   }
