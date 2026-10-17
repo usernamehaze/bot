@@ -30,19 +30,21 @@ function setup() {
   const fill = new THREE.DirectionalLight(0xffffff, 0.6); fill.position.set(3, -1, 2); scene.add(fill);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 40);
   camera.position.set(0, 0, 10);
-  // her body: the flat Cassie's own outline, extruded with a deep round bevel (a soft pillow)
-  const shape = new THREE.Shape();
-  K.POINTER.forEach((p, i, a) => {
+  // her body: the flat Cassie's own outline with softer corners, drawn in a little and extruded with a
+  // deep round bevel that puffs it back out to her size (a round, soft pillow)
+  const shape = new THREE.Shape(), IN = 0.92, CX = 240, CY = 250;
+  const pts = K.POINTER.map(([x, y, r]) => [CX + (x - CX) * IN, CY + (y - CY) * IN, r * 1.8]);
+  pts.forEach((p, i, a) => {
     const n = a.length, [x, y, r] = p, [px, py] = a[(i - 1 + n) % n], [nx, ny] = a[(i + 1) % n];
     const l1 = Math.hypot(x - px, y - py), l2 = Math.hypot(nx - x, ny - y), t = Math.min(r, l1 / 2.05, l2 / 2.05);
     const ax = x + (px - x) / l1 * t, ay = y + (py - y) / l1 * t, bx = x + (nx - x) / l2 * t, by = y + (ny - y) / l2 * t;
     if (i) shape.lineTo(X(ax), Y(ay)); else shape.moveTo(X(ax), Y(ay));
     shape.quadraticCurveTo(X(x), Y(y), X(bx), Y(by));
   });
-  const body = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.07, bevelSegments: 10, curveSegments: 16 });
-  body.translate(0, 0, -0.04);
+  const body = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: true, bevelThickness: 0.28, bevelSize: 0.14, bevelSegments: 14, curveSegments: 20 });
+  body.translate(0, 0, -0.03);
   body.computeVertexNormals();
-  const FRONT = 0.04 + 0.2; // her front face (z)
+  const FRONT = 0.03 + 0.28; // her front face (z)
   // one kind of material for every part (one shader to build, so she's ready fast): a soft plastic
   // sheen, every part carrying a picture (plain parts a white one)
   const white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); white.needsUpdate = true; white.colorSpace = THREE.SRGBColorSpace;
@@ -192,7 +194,7 @@ function accessory(name) {
           if (pts.length < 3) return;
           const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(X(x), Y(y))));
           const geo = new THREE.ExtrudeGeometry(sh, { depth: big ? 0.06 : 0.02, bevelEnabled: true, bevelThickness: bt, bevelSize: Math.min(0.025, bt), bevelSegments: big ? 6 : 3, curveSegments: 4 });
-          geo.translate(0, 0, z0 - (big ? 0.03 : 0.01) + (big ? 0.08 : (onFace ? 0 : 0.25)));
+          geo.translate(0, 0, z0 - (big ? 0.03 : 0.01) + (big ? 0.15 : (onFace ? 0 : 0.32)));
           g.add(new THREE.Mesh(geo, mat(fill)));
         });
       } else if (st.stroke && st.stroke !== 'none') {
@@ -200,9 +202,9 @@ function accessory(name) {
         const r = (st.sw || 3) * (onFace ? 1.25 : a.layer === 'top' ? K.HAT.scale : 1) / U / 2;
         outline(n, mm).forEach(({ pts, closed }) => {
           if (pts.length < 2) return;
-          const curve = new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(X(x), Y(y), z0 + (onFace ? 0.01 : 0.27))), closed, 'centripetal');
+          const curve = new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(X(x), Y(y), z0 + (onFace ? 0.01 : 0.34))), closed, 'centripetal');
           g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, Math.min(200, pts.length * 2), r, 8, closed), mat(st.stroke)));
-          if (!closed) [pts[0], pts[pts.length - 1]].forEach(([x, y]) => { const cap = new THREE.Mesh(R.ball, mat(st.stroke)); cap.scale.setScalar(r); cap.position.set(X(x), Y(y), z0 + (onFace ? 0.01 : 0.27)); g.add(cap); });
+          if (!closed) [pts[0], pts[pts.length - 1]].forEach(([x, y]) => { const cap = new THREE.Mesh(R.ball, mat(st.stroke)); cap.scale.setScalar(r); cap.position.set(X(x), Y(y), z0 + (onFace ? 0.01 : 0.34)); g.add(cap); });
         });
       }
     });
@@ -281,15 +283,15 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false } = {})
   // her face: eyes (where she looks, blinking), mouth (talking), blush and the highlighter, from the flat drawings
   function paintFace(p, d) {
     const accent = api.accent || '#d8343c';
-    const key = [d.eyes, d.mouth, d.blush || 0.28, d.effect === 'highlight' ? Math.round(Math.min(1, p.ts / 0.7) * 20) : 0, p.ex.toFixed(2), p.ey.toFixed(2), p.blink.toFixed(2), d.mouth === 'talk' ? Math.round(p.t * 11) : 0, accent].join();
+    const key = [d.eyes, d.mouth, d.blush || 0, d.effect === 'highlight' ? Math.round(Math.min(1, p.ts / 0.7) * 20) : 0, p.ex.toFixed(2), p.ey.toFixed(2), p.blink.toFixed(2), d.mouth === 'talk' ? Math.round(p.t * 11) : 0, accent].join();
     if (key === shownFace) return;
     shownFace = key;
     const s = 512 / VIEW.w;
     fg.setTransform(1, 0, 0, 1, 0, 0); fg.clearRect(0, 0, 512, 512);
     fg.setTransform(s, 0, 0, s, -VIEW.x * s, -VIEW.y * s);
     fg.save(); fg.clip(clip);
-    // blush
-    fg.globalAlpha = d.blush || 0.28; fg.fillStyle = accent; fg.filter = 'blur(6px)';
+    // blush, only for the moods that call for it (happy, proud, in love...)
+    fg.globalAlpha = d.blush || 0; fg.fillStyle = accent; fg.filter = 'blur(6px)';
     for (const [x, y] of [D.BLUSH.l, D.BLUSH.r]) { fg.beginPath(); fg.ellipse(x, y, 20, 11, 0, 0, Math.PI * 2); fg.fill(); }
     fg.filter = 'none'; fg.globalAlpha = 1;
     if (d.effect === 'highlight') { const k = Math.min(1, p.ts / 0.7); fg.globalAlpha = 0.38; fg.fillStyle = accent; fg.fillRect(-560 + k * 600, 246, 560, 44); fg.globalAlpha = 1; }
