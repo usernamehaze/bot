@@ -1197,8 +1197,23 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
 .auth-providers { display: grid; gap: var(--sp-2); }
 .auth-providers:not(:has(> :not([hidden]))) { display: none; }
-.auth-google { display: flex; justify-content: center; min-height: 48px; align-items: center; }
-.auth-gbtn { width: 100%; display: flex; justify-content: center; align-items: center; min-height: 44px; }
+/* Continue with Google: Google's look (white or near-black, with their G), the same size as Apple's */
+.auth-google { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid #747775; background: #fff; color: #1f1f1f; font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
+.auth-google svg { width: 18px; height: 18px; flex: none; }
+.auth-google:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+@media (prefers-color-scheme: dark) { .auth-google { background: #131314; border-color: #8e918f; color: #e3e3e3; } }
+/* "Signing you in…": the form steps aside while Google or Apple answers (never a blank page) */
+.auth-form.busy > :not(.auth-busy):not(.auth-title) { display: none !important; }
+.auth-busy { display: grid; justify-items: center; gap: var(--sp-2); padding: var(--sp-5) 0; text-align: center; }
+.auth-busy[hidden] { display: none; }
+.auth-busy b { font-size: var(--fs-lg); }
+.auth-busy-sub { color: var(--muted); font-size: var(--fs-sm); }
+.auth-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--text); animation: authSpin .9s linear infinite; }
+@keyframes authSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .auth-spin { animation-duration: 2.4s; } }
+/* a sign-in that didn't finish: what happened, and one button to try again */
+.auth-retry { width: 100%; min-height: 48px; border-radius: var(--r-pill); border: 1px solid var(--text); background: var(--text); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer; }
+.auth-retry[hidden] { display: none; }
 /* Sign in with Apple: Apple's own look, which is already black and white (black in light mode, white in dark) */
 .auth-apple { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid var(--text); background: var(--text); color: var(--bg); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
 .auth-apple svg { width: 18px; height: 18px; flex: none; margin-top: -2px; }
