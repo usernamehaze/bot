@@ -4801,6 +4801,12 @@ test('3D Cassie: every state and every accessory draws a different 3D picture wi
     if (p === idle || st !== s) same.push(s);
   }
   expect(!same.length, 'these states drew the same picture as idle: ' + same.join(', '));
+  // blush only where the mood calls for it: none when idle, thinking or sad; pink cheeks when greeting, in love or proud
+  const pink = async (st) => { const url = await pic('setState', st); return page.evaluate(async (url) => { const img = new Image(); img.src = url; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && d[i] > 200 && d[i] - d[i + 1] > 70 && d[i] - d[i + 2] > 40) n++; return n; }, url); };
+  const cheeks = {};
+  for (const st of ['idle', 'thinking', 'sad', 'greeting', 'love', 'proud']) cheeks[st] = await pink(st);
+  expect(cheeks.idle < 15 && cheeks.thinking < 15 && cheeks.sad < 15, 'no blush on calm or sad moods: ' + JSON.stringify(cheeks));
+  expect(cheeks.greeting > 40 && cheeks.love > 40 && cheeks.proud > 40, 'blush on happy moods: ' + JSON.stringify(cheeks));
   await pic('setState', 'idle');
   for (const a of names.acc) {
     const p = await pic('setAccessory', a);

@@ -343,7 +343,7 @@
       parts.eyeL.setAttribute('transform', `translate(${EYES.l[0] + ex} ${EYES.l[1] + ey}) scale(${F} ${F * blink})`);
       parts.eyeR.setAttribute('transform', `translate(${EYES.r[0] + ex} ${EYES.r[1] + ey}) scale(${F} ${F * blink})`);
       parts.mouth.setAttribute('transform', `translate(${216 + ex * 0.6} ${282 + ey * 0.5}) scale(${F} ${F * (st.mouth === 'talk' ? 0.5 + Math.abs(Math.sin(t * 11)) * 0.8 : 1)})`);
-      parts.blush.setAttribute('opacity', String(st.blush || 0.28));
+      parts.blush.setAttribute('opacity', String(st.blush || 0)); // (blush only for the moods that call for it)
 
       pose.bob = bob; pose.sx = sx; pose.sy = sy; pose.rot = rot; pose.dx = dx; pose.tail = tail; pose.ex = lookX; pose.ey = lookY; pose.blink = blink; pose.t = t; pose.ts = ts; // (the 3D Cassie moves the same way)
       if (deep && deep.live) return; // (the 3D Cassie draws her: the flat one only keeps time)
