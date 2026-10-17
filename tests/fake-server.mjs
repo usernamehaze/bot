@@ -178,6 +178,12 @@ export async function startFakeServer(port = 4630) {
       await Promise.allSettled([...pending]);
       res.writeHead(204); return res.end();
     }
+    // Google sign-in when Cassie's server breaks: POST /__mode {"googleAuth": "error" | "hang" | "ok"}
+    if (req.url === '/auth/google' && req.method === 'POST' && mode.googleAuth === 'error') {
+      res.writeHead(500, { 'content-type': 'application/json', 'access-control-allow-origin': req.headers.origin || '*' });
+      return res.end(JSON.stringify({ error: 'Internal error' }));
+    }
+    if (req.url === '/auth/google' && req.method === 'POST' && mode.googleAuth === 'hang') return; // never answers
     if (req.url === '/__reset') { sq.exec('DELETE FROM quota'); res.writeHead(204); return res.end(); }
     if (req.url === '/__reset-scores') { try { sq.exec('DELETE FROM scores'); } catch (e) { /* no table yet */ } res.writeHead(204); return res.end(); }
     const r = await worker.fetch(new Request(`http://localhost:${port}${req.url}`, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env, ctx);

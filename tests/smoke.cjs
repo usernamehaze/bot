@@ -51,11 +51,26 @@ function staticServer() {
 /* ---------- helpers ---------- */
 const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
-// Google's sign-in script, faked: its button signs in with whatever ID token the test put in window.__nextGoogleCredential
-const FAKE_GSI = `window.google = { accounts: { id: {
-  initialize(o) { window.__gsi = o; },
-  renderButton(box) { const b = document.createElement('button'); b.type = 'button'; b.className = 'fake-gsi'; b.textContent = 'Continue with Google'; b.style.cssText = 'min-height:44px;width:100%;border-radius:999px'; b.onclick = () => window.__gsi.callback({ credential: window.__nextGoogleCredential }); box.appendChild(b); },
-} } };`;
+// Google's sign-in page, faked: it sends the student back to the app like Google does (#id_token=…&state=…),
+// with a token for the nonce it was given. ctx.google says who signs in: { sub, email, badSig }, { cancel: true }
+// (Google's "access_denied"), or { stay: true } (the student just sits on Google's page).
+async function fakeGoogle(ctx) {
+  await ctx.route(/accounts\.google\.com\/o\/oauth2\/v2\/auth/, async (route) => {
+    const q = new URL(route.request().url()).searchParams, who = ctx.google || {};
+    const back = q.get('redirect_uri');
+    if (who.stay) return route.fulfill({ contentType: 'text/html', body: '<title>Sign in with Google</title><p>Choose an account</p>' });
+    const answer = who.cancel ? new URLSearchParams({ state: q.get('state'), error: 'access_denied' })
+      : new URLSearchParams({ state: q.get('state'), id_token: await idToken({ provider: 'google', sub: who.sub, email: who.email, badSig: who.badSig, nonce: q.get('nonce') }), authuser: '0' });
+    ctx.googleAsked = { clientId: q.get('client_id'), back, type: q.get('response_type') };
+    return route.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(back + '#' + answer)})</script>` });
+  });
+}
+// tap "Continue with Google" as someone, and wait until Cassie's page is back
+async function googleTap(page, ctx, who) {
+  ctx.google = who;
+  await page.click('.auth-google');
+  await page.waitForURL(/app\.html$/, { timeout: 15000 });
+}
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
 async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup } = {}) {
@@ -68,7 +83,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
-  await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_GSI })); // never the real Google
+  await fakeGoogle(ctx); // never the real Google
   await ctx.route(/appleid\.apple\.com/, (route) => route.abort()); // never the real Apple (a test brings its own)
   if (setup) await setup(ctx);
   await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
@@ -345,21 +360,19 @@ test('sign in with Google: a new account, and a bad token shows a friendly messa
   const { ctx, page, errors } = await open(b, { state: null });
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
     await page.waitForSelector('.auth-apple:not([hidden])');
     expect(await page.locator('.auth-or').isVisible(), 'the "or" line should show with the buttons');
-    for (const sel of ['.fake-gsi', '.auth-apple']) expect((await page.locator(sel).boundingBox()).height >= 44, sel + ' is under 44px tall');
+    for (const sel of ['.auth-google', '.auth-apple']) expect((await page.locator(sel).boundingBox()).height >= 44, sel + ' is under 44px tall');
     expect(!/[–—]/.test(await page.locator('.auth-page').innerText()), 'a dash on the sign-in page');
     // a token that isn't really Google's: a plain-words message, not signed in
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-bad', email: 'bad@example.com', badSig: true }));
-    await page.click('.fake-gsi');
+    await googleTap(page, ctx, { sub: 'g-bad', email: 'bad@example.com', badSig: true });
     await page.waitForSelector('.auth-err:not([hidden])');
     expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('google_failed')), 'bad token message: ' + await authErr(page));
     expect(!(await savedAccount(page)).token, 'a bad token signed someone in');
     // a new person with Google: signed in, then the profile questions
     const email = `gnew${Date.now()}@example.com`;
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-new-' + Date.now(), email }));
-    await page.click('.fake-gsi');
+    await googleTap(page, ctx, { sub: 'g-new-' + Date.now(), email });
     await page.waitForSelector('.auth-page', { state: 'detached' });
     await page.waitForSelector('.fr-ob', { timeout: 5000 }); // (the four questions)
     const s = await savedAccount(page);
@@ -376,9 +389,8 @@ test('sign in with Google: an email account links after its password once, and t
   let { ctx, page } = await open(b, { state: null });
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub, email });
     // the account has a password: Cassie asks for it once
     await seen(page, '.auth-title', 'Link Google to your Cassie account', 5000);
     expect(await page.inputValue('.auth-form input[name=email]') === email && await page.locator('.auth-form input[name=email]').getAttribute('readonly') !== null, 'the email to link should show, locked');
@@ -400,9 +412,8 @@ test('sign in with Google: an email account links after its password once, and t
   ({ ctx, page } = await open(b, { state: null }));
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub, email });
     await page.waitForSelector('.auth-page', { state: 'detached' });
     expect((await savedAccount(page)).account.email === email, 'Google again should sign straight in');
   } finally { await ctx.close(); }
@@ -412,9 +423,8 @@ test('sign in with Google: an email account links after its password once, and t
   ({ ctx, page } = await open(b, { state: null }));
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: sub + '-2', email: email2 }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub: sub + '-2', email: email2 });
     await seen(page, '.auth-title', 'Link Google', 5000);
     expect(/signs out other devices/.test(await page.locator('.auth-forgot').textContent()), 'should say what “I don’t know this password” does');
     await page.click('.auth-switch [data-to=forget]');
@@ -424,6 +434,64 @@ test('sign in with Google: an email account links after its password once, and t
   expect((await post('/auth/me', null, old.token)).status === 401, 'the other device should be signed out');
   const gone = await post('/auth/login', { email: email2, password: 'secret-pass-2' });
   expect(gone.status === 401 && gone.code === 'google_account', 'the old password should be gone: ' + JSON.stringify(gone));
+});
+
+test('sign in with Google never leaves a blank screen: signed in, cancelled, a server error and a server that never answers each end within 15 seconds', async (b) => {
+  await fetch(SERVER + '/__reset');
+  const say = (page, key) => page.evaluate((k) => CassieErrors.say(k), key);
+  // the error and its Try again button, or signed in, within 15 seconds of tapping Google
+  const endsWithin = async (page, t0, what) => {
+    await page.waitForFunction(() => !document.querySelector('.auth-page') || (!document.querySelector('.auth-err').hidden && !document.querySelector('.auth-retry').hidden), null, { timeout: 15000, polling: 100 });
+    const ms = Date.now() - t0;
+    expect(ms <= 15000, `${what}: took ${ms}ms`);
+    return ms;
+  };
+  const { ctx, page, errors } = await open(b, { state: null });
+  try {
+    await toSignIn(page);
+    await page.waitForSelector('.auth-google:not([hidden])');
+    // 1. a closed popup, in today's terms: the student leaves Google's page without picking (the back button)
+    ctx.google = { stay: true };
+    let t0 = Date.now();
+    await page.click('.auth-google');
+    expect(await page.locator('.auth-busy').isVisible() || /accounts\.google/.test(page.url()), 'tapping Google shows "Opening Google…" (never a blank page)');
+    await page.waitForURL(/accounts\.google\.com/, { timeout: 10000 });
+    await page.goBack();
+    await endsWithin(page, t0, 'back from Google');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'google_cancelled'), 'back from Google: ' + await page.locator('.auth-err').innerText());
+    // ... and Google's own "cancel" answer says the same
+    ctx.google = { cancel: true };
+    t0 = Date.now();
+    await googleTap(page, ctx, { cancel: true });
+    await endsWithin(page, t0, 'cancelled at Google');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'google_cancelled'), 'cancelled at Google: ' + await page.locator('.auth-err').innerText());
+    // 2. Cassie's server breaks: plain words (never its raw "Internal error") and Try again
+    await serverMode({ googleAuth: 'error' });
+    t0 = Date.now();
+    await googleTap(page, ctx, { sub: 'g-err-' + Date.now(), email: `gerr${Date.now()}@example.com` });
+    await endsWithin(page, t0, 'server error');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'unknown'), 'server error: ' + await page.locator('.auth-err').innerText());
+    // 3. Cassie's server never answers: "Signing you in…" while waiting, then plain words and Try again
+    await serverMode({ googleAuth: 'hang' });
+    t0 = Date.now();
+    await googleTap(page, ctx, { sub: 'g-hang-' + Date.now(), email: `ghang${Date.now()}@example.com` });
+    await page.waitForSelector('.auth-busy:not([hidden])', { timeout: 3000 });
+    expect(/Signing you in/.test(await page.locator('.auth-busy').innerText()), 'the wait shows "Signing you in…"');
+    const ms = await endsWithin(page, t0, 'server never answers');
+    expect(ms >= 9000 && await page.locator('.auth-err').innerText() === await say(page, 'timeout'), `server never answers: ${ms}ms, ` + await page.locator('.auth-err').innerText());
+    // 4. it works again: Try again goes back to Google and the student is signed in
+    await serverMode({ googleAuth: 'ok' });
+    const email = `gok${Date.now()}@example.com`;
+    ctx.google = { sub: 'g-ok-' + Date.now(), email };
+    t0 = Date.now();
+    await page.click('.auth-retry');
+    await page.waitForURL(/app\.html$/, { timeout: 15000 });
+    await endsWithin(page, t0, 'signed in');
+    const s = await savedAccount(page);
+    expect(s.token && s.account.email === email && s.account.providers.join() === 'google', 'Try again then signed in: ' + JSON.stringify(s));
+    expect(ctx.googleAsked.type === 'id_token' && ctx.googleAsked.clientId === 'test-client-id' && ctx.googleAsked.back === APP, 'Google is asked for an ID token, back to this page: ' + JSON.stringify(ctx.googleAsked));
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await serverMode({ googleAuth: 'ok' }); await ctx.close(); }
 });
 
 test('sign in with Apple: there and back, cancel is explained, and the plan is the same every way in', async (b) => {
@@ -491,12 +559,12 @@ test('sign in with Google and Apple: a provider the server has no ID for has no 
     await toSignIn(page);
     await page.evaluate(() => authProviders());
     await page.waitForSelector('.auth-apple:not([hidden])');
-    expect(await page.locator('.auth-google').isHidden() && !(await page.locator('.fake-gsi').count()), 'Google button shown with no GOOGLE_CLIENT_ID');
+    expect(await page.locator('.auth-google').isHidden(), 'Google button shown with no GOOGLE_CLIENT_ID');
     await ctx.close();
     await serverMode({ noGoogle: false, noApple: true });
     ({ ctx, page } = await open(b, { state: null }));
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
     expect(await page.locator('.auth-apple').isHidden(), 'Apple button shown with no APPLE_SERVICES_ID');
     await ctx.close();
     await serverMode({ noGoogle: true, noApple: true });
@@ -5539,7 +5607,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
   const bad = [];
-  const skip = /delete (my )?account|sign out|log out|fake-gsi/i; // (fake-gsi: the tests' stand-in for Google's own button)
+  const skip = /delete (my )?account|sign out|log out|continue with google|sign in with apple/i; // (Google and Apple leave the page: they have their own tests)
   // one screen: opened fresh (the same saved data) whenever a tap changed it
   const run = async (label, device, viewport, touch, o, go, onlyKeys) => {
     // (1x pixels: this test machine draws 3D in software, 9 times slower at an iPhone's 3x)

@@ -1457,7 +1457,9 @@ async function auth(request, env, path) {
     const provider = path.slice(6), code = provider + '_failed';
     const words = provider === 'google' ? 'Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.' : 'Apple sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.';
     let id;
-    try { id = await verifyIdToken(provider, String(body.credential || ''), env, provider === 'apple' ? String(body.nonce || '') : undefined); } catch (e) { return fail(words, 401, code); }
+    // the one-time code the app made for this sign-in must be inside the token (Apple always; Google from the app's own page)
+    const nonce = body.nonce ? String(body.nonce) : provider === 'apple' ? '' : undefined;
+    try { id = await verifyIdToken(provider, String(body.credential || ''), env, nonce); } catch (e) { return fail(words, 401, code); }
     if (body.password && id.email && !(await authAllowed(request, env, 'authm:' + (await sha256(id.email)), 15))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
     const r = await signInWith(env, provider, id, { password: String(body.password || ''), forget: body.forget === true, name: String(body.name || '') });
     if (r.wrongPassword) return fail('That password doesn’t match this email’s Cassie account. Check it for typos, or tap “I don’t know this password”.', 401, 'link_wrong_password');
