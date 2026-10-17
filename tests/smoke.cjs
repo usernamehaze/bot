@@ -94,17 +94,28 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   return { ctx, page, errors, groqCalls };
 }
 // A lab card says "Opening…" at once and opens its lab a frame later (so the tap shows at once): wait for it
+// Labs is open: the shelf on a computer, the Labs tab on a phone
+const LABS_READY = '.labs:not([hidden]) .labs-card, .labs:not([hidden]) .lp-card';
 async function openCard(page, sel) {
+  // a phone: the Labs tab has no shelf grid; find the lab under its filter, as a student would, and tap its row
+  const id = (sel.match(/data-lab="([^"]+)"/) || [])[1];
+  if (id && !(await page.locator(sel).first().isVisible().catch(() => false)) && await page.locator('.labs:not([hidden]) .lp:not([hidden])').count()) {
+    for (const chip of ['3d', 'science', 'maths', 'tools', 'games']) {
+      await page.click(`.lp-chips [data-lp="${chip}"]`);
+      if (await page.locator(`.lp-row[data-lab="${id}"]`).count()) { sel = `.lp-row[data-lab="${id}"]`; break; }
+    }
+  }
   await page.click(sel);
   await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *, .x3d:not([hidden])', { timeout: 20000 });
 }
 // the 3D models are opened from Labs (the 3D shelf)
 // Labs and Settings: a button in the top bar on a computer, a tab in the tab bar on a phone
-const tapLabs = async (page) => page.click(await page.locator('#labs-btn').isVisible() ? '#labs-btn' : '#tabbar [data-tab="labs"]');
+const tapLabs = async (page) => { if (await page.locator('.labs:not([hidden]) .labs-shelf:not([hidden])').count()) return; await page.click(await page.locator('#labs-btn').isVisible() ? '#labs-btn' : '#tabbar [data-tab="labs"]'); }; // (already on the shelf: nothing to tap)
 const tapSettings = async (page) => { await page.click(await page.locator('#settings-btn').isVisible() ? '#settings-btn' : '#tabbar [data-tab="you"]'); await page.evaluate(() => setPage('all')); }; // (You opens your profile first)
 async function open3d(page, id) {
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.waitForSelector(LABS_READY, { timeout: 20000 });
+  if (await page.locator('.lp:not([hidden])').count()) { await page.click('.lp-chips [data-lp="3d"]'); await openCard(page, `.lp-row[data-lab="${id}"]`); return; } // (a phone: the Labs tab's 3D list)
   await page.click('.labs-chips [data-subject="3d"]');
   await openCard(page, `.labs-grid [data-lab="${id}"]`);
 }
@@ -2202,7 +2213,7 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
 });
 
 test('Explore cells are their own view: own card on the Labs shelf and in 3D, Animal or Plant inside it, opened straight away (never through the body)', async (b) => {
-  const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
+  const { ctx, page, errors } = await open(b, { device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */, scale: 1, server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
     // anything of the body: its model files, or the 3D view turning into the body for a moment
     await c.addInitScript(() => {
       window.__body = [];
@@ -2214,7 +2225,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
   page.on('request', (r) => { if (/\/explore\/body\//.test(r.url())) bodyFiles.push(r.url()); });
   // the Labs shelf and its 3D menu: the body and the cells are two cards
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.waitForSelector(LABS_READY, { timeout: 20000 });
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the shelf has a cells card and a body card');
   await page.click('.labs-chips [data-subject="3d"]');
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the 3D menu has both too');
@@ -2228,7 +2239,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
   await page.click('.x3d-switch [data-cell="plant"]');
   await page.waitForSelector('.x3d-chip[data-part="chloroplast"]', { timeout: 15000 });
   await page.click('.x3d-close');
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 10000 });
+  await page.waitForSelector(LABS_READY, { timeout: 10000 });
   // opened again, the cells come back on the one last looked at
   await openCard(page, '.labs-grid [data-lab="cells3d"]');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="chloroplast"]', { timeout: 30000 });
@@ -2479,7 +2490,7 @@ test('score board: everyone’s points in every game and their total, today and 
   expect(ben.games.sudoku === 80 && ben.games.mirrors === 100 && ben.total === 180, 'Ben has both games too: ' + JSON.stringify(ben));
   expect(d.week && d.week.table.some((r) => r.name === 'Ana' && r.total >= 180 && r.played >= 2), 'the week adds them up: ' + JSON.stringify(d.week));
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.waitForSelector(LABS_READY, { timeout: 20000 });
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   await page.waitForSelector('.board-table td', { timeout: 10000 });
   const head = await page.$$eval('.board-table th', (t) => t.map((x) => x.textContent));
@@ -2494,10 +2505,10 @@ test('score board: everyone’s points in every game and their total, today and 
 });
 
 test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sends what is on screen', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7', fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */, fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.waitForSelector(LABS_READY, { timeout: 20000 });
   // two shelves: Learn (simulations, 3D, atlas) and Games & puzzles
   const learn = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(!learn.includes('sudoku') && learn.includes('pendulum'), 'Learn has the simulations, not the puzzles: ' + learn);
@@ -2609,7 +2620,7 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
   expect(/Launch lab/.test(asked) && /45°/.test(asked) && /m\/s/.test(asked) && /flies/.test(asked), 'Cassie is told what is on the screen: ' + asked.slice(0, 400));
   // goals are remembered on the shelf
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card');
+  await page.waitForSelector(LABS_READY);
   expect(/[1-3]\/3 tried/i.test(await page.locator('.labs-grid [data-lab="projectile"]').innerText()), 'the shelf remembers tried goals: ' + await page.locator('.labs-grid [data-lab="projectile"]').innerText());
   // a link opens a lab straight away
   await page.goto(APP + '?lab=pendulum');
@@ -2621,10 +2632,10 @@ test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sen
 });
 
 test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes on the score board, practice ones don’t', async (b) => {
-  const { ctx, page, errors } = await open(b, { state: { groqKey: 'gsk_test', profile: { name: 'Hazel' } }, device: process.env.DEVICE || 'Pixel 7' });
+  const { ctx, page, errors } = await open(b, { state: { groqKey: 'gsk_test', profile: { name: 'Hazel' } }, device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */ });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await tapLabs(page);
-  await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 });
+  await page.waitForSelector(LABS_READY, { timeout: 20000 });
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   await page.waitForSelector('.labs-board:not([hidden])', { timeout: 5000 });
   expect(/Be the first today|playing today/.test(await page.locator('.labs-board').innerText()), 'the score board shows on the shelf');
@@ -2689,7 +2700,7 @@ test('Labs puzzles: today’s puzzle is the same for everyone, finishing it goes
 });
 
 test('Labs: goals tick only when you do them (and you can untick), colour names, flipping coins, any-size shapes, bigger puzzles, find a country', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */ });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   const stats = () => page.locator('.lab-stats').innerText();
   // Punnett starts at Yy × Yy (already 3 : 1) — that's not the student finding it, so nothing ticks
@@ -3246,7 +3257,8 @@ test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom
     .map(([e, px]) => `${w}: ${e.tagName.toLowerCase()}.${String(e.className).trim().replace(/\s+/g, '.') || e.name || e.type} ${px}px`), where).then((l) => l.forEach((x) => small.add(x)));
   await check('chat');
   await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
-  await page.waitForSelector('.labs-shelf:not([hidden]) .labs-card', { timeout: 15000 });
+  await page.waitForSelector('.labs-shelf:not([hidden]) .labs-card, .labs-shelf:not([hidden]) .lp-card', { timeout: 15000 });
+  await page.click('.lp-find'); await check('Labs tab search'); await page.click('.lp-find'); // (a phone: the Labs tab's own search box)
   const ids = new Set();
   for (const sec of ['learn', 'tools', 'games']) {
     await page.evaluate((s) => openLabs(undefined, { section: s }), sec);
@@ -3613,7 +3625,7 @@ test('Games button: the top bar on a computer and a Games tab on phones open Lab
   await page.waitForSelector('.labs.games-mode:not([hidden]) .labs-title >> text=Games', { timeout: 10000 });
   await page.waitForSelector('.tabbar [data-tab="games"].on', { timeout: 5000 });
   await page.click('.tabbar [data-tab="labs"]');
-  await page.waitForSelector('.labs:not(.games-mode):not([hidden]) [data-section="learn"][aria-selected="true"]', { timeout: 10000 });
+  await page.waitForSelector('.labs:not(.games-mode):not([hidden]) .lp:not([hidden]) .lp-card', { timeout: 10000 }); // (a phone: the Labs tab)
   expect(await page.locator('.labs-tabs [data-section="games"]:visible').count() === 0, 'no Games shelf inside Labs');
   await page.waitForSelector('.tabbar [data-tab="labs"].on', { timeout: 5000 });
   await ctx.close();
@@ -3853,7 +3865,7 @@ test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, 
   expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 6, 'two big cards and six tabs');
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'home' && !(await page.locator('#prompt-input').isVisible()), 'Home is open and the chat is out of the way');
   await page.click('.tab[data-tab="labs"]');
-  await page.waitForSelector('.labs:not([hidden]) .labs-card');
+  await page.waitForSelector(LABS_READY);
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'labs' && await page.locator('#tabbar').isVisible(), 'Labs open with the tab bar still there');
   await page.click('.tab[data-tab="cards"]');
   await page.waitForSelector('.fc:not([hidden])');
@@ -4809,7 +4821,7 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
   }
   // Home's boxes: under the header, 2 across on a phone and 4 on a computer; each opens its feature
   const BOXES = [
-    ['lab', 'lab', (p) => p.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 15000 })],
+    ['lab', 'lab', (p) => p.waitForSelector(LABS_READY, { timeout: 15000 })],
     ['games', 'write', (p) => p.waitForSelector('.labs:not([hidden]) [data-lab="circuit"]', { timeout: 15000 })],
     ['today', 'lab', (p) => p.waitForFunction(() => document.querySelector(`.lab-view:not([hidden])[data-lab="${todayLab()}"]`), null, { timeout: 20000 })],
     ['cards', 'cards', (p) => p.waitForSelector('.fc:not([hidden])', { timeout: 8000 })],
@@ -4938,6 +4950,87 @@ test('phone Home is drawn again only when it needs to be (coming into view, Home
   expect(await page.evaluate(() => window.__card !== document.querySelector('#home .hub-tlab') && /Photosynthesis/.test(document.querySelector('#home .hub').innerText)), 'Home tapped after a change: drawn again with it');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
+});
+
+test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab with a live preview), For you (Learn, Study tools) with a live preview on every row, 3 moving at once; still with Reduce Motion or Lite mode; a computer keeps its Labs shelf', async (b) => {
+  const { contrastIssues, tapTargetIssues } = require('./ui-checks.cjs');
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
+  page.on('dialog', (d) => d.dismiss().catch(() => {}));
+  await page.click('.tab[data-tab="labs"]');
+  await page.waitForSelector('.labs:not([hidden]) .lp:not([hidden]) .lp-big[data-preview]', { timeout: 15000 });
+  const top = await page.evaluate(() => ({ title: document.querySelector('.lp-head h2').textContent, find: document.querySelector('.lp-find').getBoundingClientRect().width,
+    chips: [...document.querySelectorAll('.lp-chips button')].map((c) => c.textContent), rec: document.querySelector('.lp-card .lp-info b').textContent, want: (LAB_INFO[todayLab()] || [])[0],
+    pv: document.querySelector('.lp-big').dataset.preview, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, peek: !!document.querySelector('.lp-card .lp-peek'),
+    forYou: [...document.querySelectorAll('.lp-for b')].map((x) => x.textContent), forPv: [...document.querySelectorAll('.lp-for canvas[data-preview]')].length }));
+  expect(top.title === 'Labs' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
+  expect(top.chips.join() === 'All,Science,Maths,3D,Study tools,Games', 'the filter chips: ' + top.chips.join());
+  expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
+  expect(top.forYou.join() === 'Learn,Study tools' && top.forPv === 2, 'For you: Learn and Study tools, each with a preview: ' + JSON.stringify(top));
+  const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
+  const f0 = await fr('.lp-big'); await page.waitForTimeout(900);
+  expect(await fr('.lp-big') > f0 + 3, 'the Recommended preview is moving');
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(500); const { bad } = await contrastIssues(page, '.lp'); expect(!bad.length, `Labs tab (${scheme}): ` + bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  const small = await tapTargetIssues(page); expect(!small.length, 'Labs tab: tap targets: ' + small.join(' | '));
+  // play: today's lab, and Back returns to the Labs tab
+  await page.click('.lp-play');
+  await page.waitForFunction(() => document.querySelector(`.lab-view:not([hidden])[data-lab="${todayLab()}"]`), null, { timeout: 20000 });
+  await page.click('.lab-back');
+  await page.waitForSelector('.lp:not([hidden]) .lp-home:not([hidden])');
+  // Learn: every Learn lab and 3D view, each row with its own preview; at most 3 moving at once
+  await page.click('.lp-for[data-lp-open="learn"]');
+  await page.waitForSelector('.lp-list:not([hidden]) .lp-row canvas[data-preview]');
+  await page.waitForTimeout(600);
+  const learn = await page.evaluate(() => ({ title: document.querySelector('.lp-list h3').textContent, rows: [...document.querySelectorAll('.lp-row')].map((r) => r.dataset.lab), withPv: document.querySelectorAll('.lp-row canvas[data-pv]').length }));
+  expect(learn.title === 'Learn' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'solar', 'fractions'].every((x) => learn.rows.includes(x)), 'Learn: every lab and 3D view, each with a preview: ' + JSON.stringify(learn));
+  for (let i = 0; i < 4; i++) { const moving = await page.evaluate(() => document.querySelectorAll('.lp canvas[data-moving="1"]').length); expect(moving <= 3, 'at most 3 previews move at once: ' + moving); await page.waitForTimeout(250); }
+  await page.click('.lp-row[data-lab="pendulum"]');
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"] .lab-controls > *', { timeout: 20000 });
+  await page.click('.lab-back');
+  await page.waitForSelector('.lp-list:not([hidden]) .lp-row[data-lab="pendulum"]');
+  await page.click('.lp-back');
+  await page.waitForSelector('.lp-home:not([hidden])');
+  // Study tools: every tool with its preview, and a tool opens
+  await page.click('.lp-for[data-lp-open="tools"]');
+  await page.waitForSelector('.lp-list:not([hidden]) .lp-row[data-lab="cornell"] canvas[data-preview="cornell"]');
+  const tools = await page.evaluate(() => [...document.querySelectorAll('.lp-row')].map((r) => r.dataset.lab + ':' + !!r.querySelector('canvas[data-pv]')));
+  expect(tools.length >= 6 && tools.every((x) => x.endsWith(':true')), 'Study tools, each with a preview: ' + tools.join());
+  await page.click('.lp-row[data-lab="cornell"]');
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="cornell"]', { timeout: 20000 });
+  await page.click('.lab-back');
+  // the chips and search
+  await page.click('.lp-chips [data-lp="maths"]');
+  const maths = await page.$$eval('.lp-row', (r) => r.map((x) => x.dataset.lab));
+  expect(maths.includes('fractions') && !maths.includes('pendulum'), 'Maths: the maths labs only: ' + maths.join());
+  await page.click('.lp-chips [data-lp="3d"]');
+  const three = await page.$$eval('.lp-row', (r) => r.map((x) => x.dataset.lab));
+  expect(['body3d', 'cells3d', 'space3d'].every((x) => three.includes(x)) && !three.includes('fractions'), '3D: the 3D views: ' + three.join());
+  await page.click('.lp-chips [data-lp="all"]');
+  await page.click('.lp-find'); await page.fill('.lp-q', 'pendul');
+  await page.waitForSelector('.lp-row[data-lab="pendulum"]');
+  expect((await page.$$eval('.lp-row', (r) => r.map((x) => x.dataset.lab))).join() === 'pendulum', 'search finds the pendulum');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // Reduce Motion and Lite mode: still previews
+  for (const [why, lite, motion] of [['Reduce Motion', 'off', 'reduce'], ['Lite mode', 'on', null]]) {
+    const o = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', plan: null } });
+    if (motion) await o.page.emulateMedia({ reducedMotion: motion });
+    await o.page.evaluate(() => openLabs());
+    await o.page.waitForSelector('.lp:not([hidden]) .lp-big[data-preview]', { timeout: 15000 });
+    await o.page.waitForTimeout(500);
+    const st = await o.page.evaluate(() => [...document.querySelectorAll('.lp canvas[data-preview]')].map((c) => c.dataset.still));
+    expect(st.length >= 3 && st.every((x) => x === '1'), `${why}: still previews: ` + st.join());
+    await o.ctx.close();
+  }
+  // a computer: the Labs shelf as it was (header, Learn and Study tools tabs, search, subject chips, the grid of cards)
+  {
+    const o = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+    await o.page.evaluate(() => openLabs());
+    await o.page.waitForSelector('.labs:not([hidden]) .labs-grid .labs-card');
+    const d = await o.page.evaluate(() => { const vis = (s) => { const e = document.querySelector(s); return !!e && !!e.getClientRects().length; }; return { lp: vis('.lp'), on: document.querySelector('.labs').classList.contains('lp-on'), head: vis('.labs-head'), tabs: [...document.querySelectorAll('.labs-tabs [data-section]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.section), search: vis('.labs-search'), chips: document.querySelectorAll('.labs-chips button').length, cards: document.querySelectorAll('.labs-grid .labs-card').length, feature: vis('.labs-feature'), bg: getComputedStyle(document.querySelector('.labs')).backgroundImage.slice(0, 15) }; });
+    expect(!d.lp && !d.on && d.head && d.tabs.join() === 'learn,tools' && d.search && d.chips === 8 && d.cards >= 25 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf: ' + JSON.stringify(d));
+    await o.ctx.close();
+  }
 });
 
 test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844, 1280x800)', async (b) => {
@@ -5235,10 +5328,10 @@ const TAP_SCREENS = [
     await page.evaluate((x) => { openSettings(x); document.querySelectorAll('#settings-panel details').forEach((d) => { d.open = true; }); }, pg); await page.waitForSelector('#settings-panel:not([hidden])'); await page.waitForTimeout(400);
   }]),
   ['Plus sheet', async (page) => { await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views.')); await page.waitForSelector('.plus-sheet'); await page.waitForTimeout(400); }],
-  ['Labs shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
-  ['Labs 3D', async (page) => { await page.evaluate(() => openLabs(undefined, { subject: '3d' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
-  ['Games', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
-  ['Study tools shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'tools' })); await page.waitForSelector('.labs:not([hidden]) .labs-card', { timeout: 20000 }); }],
+  ['Labs shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
+  ['Labs 3D', async (page) => { await page.evaluate(() => openLabs(undefined, { subject: '3d' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
+  ['Games', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
+  ['Study tools shelf', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'tools' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
   ['Explore body', async (page) => { await page.evaluate(() => openExplore('body')); await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 30000 }); await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 }); await page.waitForTimeout(500); }],
   ['Explore animal cell', async (page) => { await page.evaluate(() => openExplore('animal')); await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="nucleus"]', { timeout: 30000 }); await page.waitForTimeout(500); }],
   ['Explore plant cell', async (page) => { await page.evaluate(() => openExplore('plant')); await page.waitForSelector('.x3d:not([hidden]) .x3d-chip[data-part="chloroplast"]', { timeout: 30000 }); await page.waitForTimeout(500); }],
@@ -5562,7 +5655,7 @@ test('chat: when something fails Cassie says what happened, why and what to do, 
   await ctx.close();
 });
 
-test('Labs in Liquid Glass: 44px tap targets and AA words on a phone, errors from the one map in white (no colour), an empty search offers to ask Cassie', async (b) => {
+test('Labs in Liquid Glass: 44px tap targets and AA words on a phone (the Labs tab), errors from the one map in white (no colour), an empty search offers to ask Cassie', async (b) => {
   const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
   // no lab shows a raw error, and every lab error comes from the map
   const raw = [];
@@ -5572,15 +5665,16 @@ test('Labs in Liquid Glass: 44px tap targets and AA words on a phone, errors fro
   expect(!raw.length, 'labs show raw error text at ' + raw.join(', '));
   const { ctx, page } = await open(b, { device: 'iPhone 13', lite: 'off', server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Osmosis is water moving across a membrane.' }) });
   await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
-  await page.waitForSelector('.labs-card', { timeout: 20000 });
+  await page.waitForSelector('.lp:not([hidden]) .lp-card', { timeout: 20000 }); // (a phone: the Labs tab)
   let small = await tapTargetIssues(page);
-  expect(!small.length, 'Labs shelf: tap targets under 44px: ' + small.join(' | '));
-  let c = await contrastIssues(page, '.labs-shelf');
-  expect(c.checked > 5 && !c.bad.length, 'Labs shelf: words under AA: ' + c.bad.join(' | '));
+  expect(!small.length, 'Labs tab: tap targets under 44px: ' + small.join(' | '));
+  let c = await contrastIssues(page, '.lp');
+  expect(c.checked > 5 && !c.bad.length, 'Labs tab: words under AA: ' + c.bad.join(' | '));
   // a search with no lab: why, and one next step that asks Cassie in the chat
-  await page.fill('.labs-search', 'zzxqy');
-  await seen(page, '.labs-empty .es-title', 'No lab by that name yet', 8000);
-  await page.click('.labs-empty .es-go');
+  await page.click('.lp-find');
+  await page.fill('.lp-q', 'zzxqy');
+  await seen(page, '.lp .es-title', 'No lab by that name yet', 8000);
+  await page.click('.lp .es-go');
   await seen(page, '#chat-log .bubble-user', 'Explain zzxqy', 15000);
   // a lab: its controls are 44px to touch, its words readable, its error text white
   await page.evaluate(() => openLabs('projectile'));

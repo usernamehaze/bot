@@ -47,6 +47,13 @@ const shelfOf = (l) => (l.subject === 'puzzles' || l.subject === 'games' ? 'game
 const SIMS = LABS.filter((l) => shelfOf(l) === 'learn');
 const is3d = (l) => !!(l.explore || l.three);
 
+// the phone's Labs tab: a sliding row of filters, Today's Lab, and For you (Learn, Study tools),
+// each with a live mini preview (previews.js). Computers keep the shelf above.
+const LP_CHIPS = [['all', 'All'], ['science', 'Science'], ['maths', 'Maths'], ['3d', '3D'], ['tools', 'Study tools'], ['games', 'Games']];
+const SCIENCE = new Set(['biology', 'chemistry', 'physics', 'space', 'geography']);
+const phoneQ = matchMedia('(max-width: 760px)');
+let pvMod = null;
+const previews = () => pvMod || (pvMod = import('./previews.js').catch(() => null));
 let view = null;
 export function open(opts = {}) {
   if (!view) view = createView();
@@ -85,6 +92,22 @@ function createView() {
         <button type="button" class="labs-x" aria-label="Close">×</button>
         <div class="labs-title"><h2>${CURSOR}Labs</h2><p>Play with it, then ask Cassie why it works.</p></div>
       </header>
+      <div class="lp" hidden>
+        <header class="lp-head"><h2>Labs</h2><button type="button" class="lp-find" aria-label="Search labs" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button></header>
+        <input type="search" class="lp-q" placeholder="Find a lab or a study tool" aria-label="Find a lab or a study tool" autocomplete="off" hidden>
+        <div class="lp-chips" role="group" aria-label="Show">${LP_CHIPS.map(([id, n]) => `<button type="button" data-lp="${id}" aria-pressed="${id === 'all'}">${n}</button>`).join('')}</div>
+        <div class="lp-home">
+          <h3 class="lp-h">Recommended</h3>
+          <div class="lp-rec"></div>
+          <h3 class="lp-h">For you</h3>
+          <button type="button" class="lp-for" data-lp-open="learn"><canvas class="lp-pv" data-pv="build-cell" aria-hidden="true"></canvas><span><b>Learn</b><small>Simulations, 3D models and the atlas</small></span><i aria-hidden="true">›</i></button>
+          <button type="button" class="lp-for" data-lp-open="tools"><canvas class="lp-pv" data-pv="flashcards" aria-hidden="true"></canvas><span><b>Study tools</b><small>Flashcards, notes, timelines and essays</small></span><i aria-hidden="true">›</i></button>
+        </div>
+        <div class="lp-list" hidden>
+          <header class="lp-list-head"><button type="button" class="lp-back" aria-label="Back">‹</button><h3></h3></header>
+          <div class="lp-rows" role="list"></div>
+        </div>
+      </div>
       <div class="labs-tabs" role="tablist" aria-label="Labs shelves">
         <button type="button" role="tab" data-section="learn" aria-selected="true">Learn <small>simulations · 3D · atlas</small></button>
         <button type="button" role="tab" data-section="games" aria-selected="false" hidden>Games &amp; puzzles <small>daily puzzles · games</small></button>
@@ -193,6 +216,84 @@ function createView() {
       <span><small>Today’s lab</small><b>${esc(t.name)}</b><span>${esc(t.tries && t.tries[0] ? 'Try this: ' + t.tries[0] : t.blurb)}</span>${tp.of ? `<em>${tp.n}/${tp.of} tried</em>` : ''}</span></button>`;
     renderBoard(!q && section === 'games');
   }
+
+  /* ---------- the phone's Labs tab ---------- */
+  const lp = $('.lp'), lpHome = $('.lp-home'), lpList = $('.lp-list'), lpRows = $('.lp-rows');
+  const subscriber = () => typeof isSubscriber === 'function' && isSubscriber(); // (Plus and Pro: 3D previews)
+  const pv = (scope) => previews().then((m) => { if (!m) return; scope.querySelectorAll('canvas[data-pv]').forEach((cv) => { if (cv.isConnected && !cv.dataset.preview) m.preview(cv, cv.dataset.pv, { group: 'labs', three: subscriber() }); }); });
+  function phoneOn() { return phoneQ.matches && section !== 'games'; }
+  function lpRec() {
+    const id = (typeof todayLab === 'function' && todayLab()) || todays().id, lab = LABS.find((l) => l.id === id) || todays();
+    const info = (typeof LAB_INFO === 'object' && LAB_INFO[lab.id]) || [lab.name, NAMES[lab.subject] || 'Science', 10];
+    $('.lp-rec').innerHTML = `<div class="lp-card">
+      <canvas class="lp-pv lp-big" data-pv="${lab.id}" aria-hidden="true"></canvas>
+      <span class="lp-tag">Today’s Lab</span>${CURSOR.replace('labs-cur', 'labs-cur lp-peek')}
+      <div class="lp-info"><b>${esc(lab.name)}</b><small>${esc(info[1])} · about ${info[2]} min</small></div>
+      <button type="button" class="lp-play" data-lab="${lab.id}" aria-label="Open today’s lab: ${esc(lab.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button></div>`;
+  }
+  // a list: the Learn labs and 3D views, the study tools, or one filter's labs
+  function lpShow(kind, found) {
+    const learn = [...EXPLORE, ...SIMS];
+    const lists = { search: ['Search', found || []],
+      learn: ['Learn', learn], tools: ['Study tools', LABS.filter((l) => shelfOf(l) === 'tools')], science: ['Science', learn.filter((l) => SCIENCE.has(l.subject))],
+      maths: ['Maths', learn.filter((l) => l.subject === 'math')], '3d': ['3D', learn.filter(is3d)], games: ['Games', LABS.filter((l) => shelfOf(l) === 'games')],
+    };
+    const [title, list] = lists[kind] || lists.learn;
+    lpList.querySelector('h3').textContent = title;
+    lpRows.replaceChildren(...list.map((l) => {
+      const b = el('button', 'lp-row'); b.type = 'button'; b.dataset.lab = l.id; b.setAttribute('role', 'listitem');
+      const pid = l.id === 'cells3d' ? 'cells3d' : l.id;
+      b.innerHTML = `<span class="lp-thumb">${previewIds.has(pid) ? `<canvas class="lp-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : iconSvg(l.icon)}</span>
+        <span class="lp-row-text"><b>${esc(l.name)}</b><small>${esc(NAMES[l.subject] || '')}${is3d(l) ? ' · 3D' : ''}</small></span><i aria-hidden="true">›</i>`;
+      return b;
+    }));
+    lpHome.hidden = true; lpList.hidden = false; lp.dataset.view = kind;
+    lpList.scrollTop = 0; shelf.scrollTop = 0;
+    pv(lpList);
+  }
+  function lpHomeView() { lpList.hidden = true; lpHome.hidden = false; lp.dataset.view = 'home'; lpChip('all'); lpRec(); pv(lpHome); }
+  function lpChip(id) { lp.querySelectorAll('[data-lp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lp === id))); }
+  let previewIds = new Set();
+  previews().then((m) => { if (m) previewIds = new Set(m.PREVIEW_IDS); });
+  function lpSync() { // the phone's tab, or the computer's shelf
+    const on = phoneOn();
+    root.classList.toggle('lp-on', on);
+    lp.hidden = !on;
+    if (on && !lp.dataset.view) lpHomeView();
+  }
+  lp.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-lp]');
+    if (chip) {
+      const id = chip.dataset.lp;
+      $('.lp-q').hidden = true; $('.lp-find').setAttribute('aria-pressed', 'false');
+      if (id === 'all') lpHomeView(); else { lpChip(id); previews().then(() => lpShow(id)); }
+      return;
+    }
+    const go = e.target.closest('[data-lp-open]');
+    if (go) { lpChip(go.dataset.lpOpen === 'tools' ? 'tools' : 'all'); previews().then(() => lpShow(go.dataset.lpOpen)); return; }
+    if (e.target.closest('.lp-back')) { lpHomeView(); return; }
+    if (e.target.closest('.lp-find')) { // search, matching the way the shelf's search does
+      const q = $('.lp-q'), on = q.hidden;
+      q.hidden = !on; q.value = '';
+      $('.lp-find').setAttribute('aria-pressed', String(on));
+      if (on) setTimeout(() => q.focus(), 30); else lpHomeView();
+    }
+  });
+  $('.lp-q').addEventListener('input', () => {
+    const q = $('.lp-q').value.trim().toLowerCase();
+    if (!q) { lpHomeView(); return; }
+    const found = [...EXPLORE, ...LABS].filter((l) => shelfOf(l) !== 'games' && (l.name + ' ' + l.blurb + ' ' + (l.words || '') + ' ' + (NAMES[l.subject] || '')).toLowerCase().includes(q));
+    lpChip('');
+    previews().then(() => {
+      lpShow('search', found);
+      if (!found.length && window.CassieErrors) { // (as on the shelf: why, and one next step that asks Cassie)
+        const q0 = $('.lp-q').value.trim();
+        lpRows.replaceChildren(window.CassieErrors.empty({ title: 'No lab by that name yet', text: `Cassie can still explain “${q0}” to you, even without a lab.`, action: 'Ask Cassie about it',
+          onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); } }));
+      }
+    });
+  });
+  phoneQ.addEventListener?.('change', () => { if (!root.hidden) lpSync(); });
 
   /* ---------- the daily puzzles' score board ---------- */
   let board = null, boardAt = 0, boardTab = 'today';
@@ -488,7 +589,13 @@ function createView() {
       if (opts.subject === 'puzzles' || opts.section === 'games') setSection('games');
       else if (opts.section === 'learn' || opts.section === 'tools') setSection(opts.section);
       else if (opts.subject) { setSection('learn'); subject = opts.subject; root.querySelectorAll('[data-subject]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.subject === subject))); }
-      if (labView.hidden) { renderShelf(); setTimeout(() => search.focus({ preventScroll: true }), 50); }
+      if (labView.hidden) {
+        renderShelf();
+        lp.dataset.view = ''; $('.lp-q').hidden = true; $('.lp-find').setAttribute('aria-pressed', 'false'); lpSync(); // (a phone: the Labs tab, from its start)
+        if (phoneOn() && opts.section === 'tools') lpShow('tools');
+        else if (phoneOn() && opts.subject === '3d') lpShow('3d');
+        if (!phoneOn()) setTimeout(() => search.focus({ preventScroll: true }), 50);
+      }
     }
   }
   function close() {
