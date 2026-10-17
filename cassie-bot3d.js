@@ -371,10 +371,10 @@ function tick(now) {
     if (!(b.live ? b.out : b.svg).isConnected) { b.destroy(); continue; }
     if (!b.seen || !b.host.getClientRects().length) continue;
     if (b.paused && !b.dirty) continue; // (a paused Cassie is drawn once, still)
-    if (!R.ready) { R.begin(); continue; }
     any = true; // (keeps looking: she may be uncovered, or the tap answered, in a moment)
     if (now - (b.coverAt || 0) > 500) { b.coverAt = now; b.covered = covered(b.host); }
-    if (b.covered) continue; // (under a sheet or a full-screen page: nothing to see)
+    if (b.covered) continue; // (under a sheet or a full-screen page: nothing to see, and no 3D made for her)
+    if (!R.ready) { R.begin(); continue; }
     if (performance.now() - lastInput < 350) continue; // (a tap or a key is answered first)
     if (!b.live) { if (firsts++ || !calm()) continue; } // (a first frame costs the most: one Cassie's first frame at a time, never mid-tap)
     if (now - R.last >= 30) { b.dirty = false; const t0 = performance.now(); try { b.draw(); } catch (e) { R.err = String(e && e.stack || e); /* one Cassie never breaks the page */ } R.slowest = Math.max(R.slowest || 0, performance.now() - t0); }
@@ -382,14 +382,17 @@ function tick(now) {
   if (now - R.last >= 30) R.last = now;
   if (any) R.raf = requestAnimationFrame(tick);
 }
-// covered by something big (a sheet, a dialog, a full-screen page) that isn't hers
+// covered by a big layer over the page (a sheet, a dialog, a full-screen page) that isn't hers
 function covered(host) {
   const r = host.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
   if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
-  const top = document.elementFromPoint(x, y);
-  if (!top || top === host || host.contains(top) || top.contains(host)) return false;
-  const t = top.getBoundingClientRect();
-  return t.width >= innerWidth * 0.5 && t.height >= innerHeight * 0.5;
+  // (from what's on top there, up to what holds her: is any of it big?)
+  for (let e = document.elementFromPoint(x, y); e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+    if (e === host || host.contains(e) || e.contains(host)) return false;
+    const t = e.getBoundingClientRect();
+    if (t.width >= innerWidth * 0.5 && t.height >= innerHeight * 0.5 && /fixed|absolute/.test(getComputedStyle(e).position)) return true; // (a layer laid over the page)
+  }
+  return false;
 }
 function wake() { if (R && !R.raf && !document.hidden) R.raf = requestAnimationFrame(tick); }
 // The one renderer, for another Cassie drawn her own way (the Get started Cassie, cassie-3d.js): draws
