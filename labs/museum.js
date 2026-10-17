@@ -60,7 +60,7 @@ const WORLD = [
 const ALL = [...PH.map((x) => ({ from: 'ph', x })), ...WORLD.map((x) => ({ from: 'world', x }))].map(({ from, x }) => ({ from, id: x[0], title: x[1], artist: x[2], year: x[3], medium: x[4], where: x[5], story: x[6], wiki: x[7] }));
 
 // each painting's picture, kept here (labs/museum/), and where it comes from: a public domain file on
-// Wikimedia Commons, or (works still under copyright) the small copy Wikipedia shows, credited to it
+// Wikimedia Commons, or (works still under copyright) the copy Wikipedia or another public page shows, credited to it
 const COMMONS = {
   spoliarium: 'Spoliarium.jpg',
   virgenes: 'Las Virgenes Cristianas Expuestas Al Populacho (The Christian Virgins Being Exposed to the Populace) by Felix Ressureccion Hidalgo 1884.jpg',
@@ -94,11 +94,20 @@ const WIKI = {
   fridas: 'The Two Fridas.jpg',
   medicine: 'The Progress of Medicine in the Philippines.jpg',
 };
-const hasPic = (a) => !!(COMMONS[a.id] || WIKI[a.id]);
+// (and those not on Wikipedia: the page each picture comes from)
+const ELSEWHERE = {
+  amorsolo: ['the CCP Encyclopedia of Philippine Art', 'https://epa.culturalcenter.gov.ph/3/82/2272'],
+  builders: ['the CCP Encyclopedia of Philippine Art', 'https://epa.culturalcenter.gov.ph/3/82/2156/'],
+  madonna: ['the CCP Encyclopedia of Philippine Art', 'https://epa.culturalcenter.gov.ph/3/82/2222'],
+  genesis: ['the Cultural Center of the Philippines', 'https://21am.culturalcenter.gov.ph/en/accession-records/1000021'],
+  sabel: ['Salcedo Auctions', 'https://salcedoauctions.com/stories/the-many-faces-of-bencabs-iconic-sabel'],
+};
+const hasPic = (a) => !!(COMMONS[a.id] || WIKI[a.id] || ELSEWHERE[a.id]);
 const picUrl = (a, big) => new URL(`./museum/${a.id}${big ? '' : '-s'}.webp`, import.meta.url).href; // (a small copy for the gallery)
 const fileLink = (a) => (COMMONS[a.id] ? `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(COMMONS[a.id].replace(/ /g, '_'))}` : `https://en.wikipedia.org/wiki/File:${encodeURIComponent(WIKI[a.id].replace(/ /g, '_'))}`);
 const credit = (a) => (COMMONS[a.id] ? `Picture: public domain, from <a href="${fileLink(a)}" target="_blank" rel="noopener">Wikimedia Commons</a>`
-  : `Picture: © the artist or their estate. A copy from <a href="${fileLink(a)}" target="_blank" rel="noopener">Wikipedia</a>, shown for study.`);
+  : WIKI[a.id] ? `Picture: © the artist or their estate. A copy from <a href="${fileLink(a)}" target="_blank" rel="noopener">Wikipedia</a>, shown for study.`
+    : `Picture: © the artist or their estate. A copy from <a href="${ELSEWHERE[a.id][1]}" target="_blank" rel="noopener">${ELSEWHERE[a.id][0]}</a>, shown for study.`);
 const wikiLink = (a) => `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wiki.replace(/ /g, '_'))}`;
 
 const museumLab = {
