@@ -4915,7 +4915,7 @@ test('phone Home previews: real-looking 3D scenes (like the labs) on Plus and Pr
     expect(want === '3d' ? asked.length > 0 : asked.length === 0, `${who}: the 3D scenes are ${want === '3d' ? '' : 'not '}loaded`);
     if (want === '3d') { // and they move
       const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
-      const f0 = await fr(); await page.waitForTimeout(900); expect(await fr() > f0 + 3, `${who}: the 3D preview moves`);
+      const f0 = await fr(); await page.waitForTimeout(1500); const f1 = await fr(); expect(f1 > f0, `${who}: the 3D preview moves: ${f0} then ${f1}`); // (3D is drawn in software here: slow, but moving)
       // exactly one 3D canvas for every preview (they share one renderer)
       expect(await page.evaluate(() => document.querySelectorAll('#home canvas.hub-scene-3d, #home canvas[data-engine="webgl"]').length) === 0, `${who}: no extra 3D canvases on the page`);
     }
