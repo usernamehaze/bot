@@ -15,6 +15,7 @@
  */
 (function () {
   'use strict';
+  const SRC = (document.currentScript && document.currentScript.src) || location.href; // (where the 3D Cassie is: next to this file)
   const NS = 'http://www.w3.org/2000/svg';
   const INK = '#16131c', PAPER = '#fbfaf7';
   const CARET_BLINK = 530; // ms — the classic text-cursor blink
@@ -222,6 +223,9 @@
     const clock = typeof opts.clock === 'function' ? opts.clock : () => W.performance.now();
     let blinkUntil = 0, nextBlink = clock() + 2200, glanceUntil = 0, glance = [0, 0];
     let raf = 0, last = 0, t0 = clock(), alive = true, paused = false, pokeTimer = 0;
+    const pose = { bob: 0, sx: 1, sy: 1, rot: 0, dx: 0, tail: 0, ex: 0, ey: 0, blink: 1, t: 0, ts: 0 };
+    let deep = null; // the 3D Cassie, once she's ready (cassie-bot3d.js)
+    let stale = true; // (with Reduce Motion or in Lite mode she keeps still: drawn again only when something changes)
     const shown = { eyes: '', mouth: '', badge: '', fx: '' };
 
     function paintAccent() {
@@ -264,7 +268,7 @@
       if (kind === 'drop') parts.fxFront.innerHTML = `<g class="cb-doc"><path d="M-22 -28 H10 L22 -16 V28 H-22 Z" fill="#fff" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M10 -28 V-16 H22" fill="none" stroke="${INK}" stroke-width="4"/><rect x="-14" y="-6" width="28" height="10" rx="3" fill="#d8343c"/><rect x="-14" y="9" width="20" height="5" rx="2.5" fill="${INK}" opacity=".5"/></g>`;
     }
     function setAccessoryNow(name) {
-      accessory = ACC[name] ? name : null;
+      accessory = ACC[name] ? name : null; stale = true;
       parts.accTop.innerHTML = ''; parts.accFace.innerHTML = ''; parts.accNeck.innerHTML = '';
       if (!accessory) return;
       const a = ACC[accessory];
@@ -274,7 +278,7 @@
     function setState(name) {
       if (!STATES[name]) name = 'idle';
       if (name === stateName && name !== 'done' && name !== 'surprised' && name !== 'proud') return;
-      stateName = name; st = STATES[name]; stateAt = clock();
+      stateName = name; st = STATES[name]; stateAt = clock(); stale = true;
       const c = st.color;
       const base = ['#ffffff', PAPER, '#e9e5dd'];
       parts.stops.forEach((n, i) => n.setAttribute('stop-color', c ? mix(base[i], c, [0.22, 0.4, 0.58][i]) : base[i]));
@@ -286,6 +290,9 @@
       if (!alive) return;
       if (opts.clock) now = clock(); else raf = W.requestAnimationFrame(frame);
       if (!opts.clock && (paused || W.document.hidden || now - last < 32)) return; // ~30 fps is plenty, and nothing while hidden or paused
+      const still = !opts.clock && (reduced() || !!window.CASSIE_LITE);
+      if (still && !stale) return;
+      stale = false;
       last = now;
       const t = (now - t0) / 1000, ts = (now - stateAt) / 1000;
       const calm = reduced();
@@ -330,6 +337,7 @@
         if (blinkUntil - now > 200) blink = Math.floor((blinkUntil - now) / CARET_BLINK * 2) % 2 ? 0.08 : 1; // caret on / off
         else blink = 0.1;
       }
+      if (still) { lookX = wantX; lookY = wantY; blink = 1; } // (eyes open, looking straight where she means to)
       const ex = lookX * 13, ey = lookY * 10;
       const F = 1.32; // face features drawn big so she reads at 60–80 px
       parts.eyeL.setAttribute('transform', `translate(${EYES.l[0] + ex} ${EYES.l[1] + ey}) scale(${F} ${F * blink})`);
@@ -337,6 +345,8 @@
       parts.mouth.setAttribute('transform', `translate(${216 + ex * 0.6} ${282 + ey * 0.5}) scale(${F} ${F * (st.mouth === 'talk' ? 0.5 + Math.abs(Math.sin(t * 11)) * 0.8 : 1)})`);
       parts.blush.setAttribute('opacity', String(st.blush || 0.28));
 
+      pose.bob = bob; pose.sx = sx; pose.sy = sy; pose.rot = rot; pose.dx = dx; pose.tail = tail; pose.ex = lookX; pose.ey = lookY; pose.blink = blink; pose.t = t; pose.ts = ts; // (the 3D Cassie moves the same way)
+      if (deep && deep.live) return; // (the 3D Cassie draws her: the flat one only keeps time)
       const d = bodyPath(tail);
       parts.fill.setAttribute('d', d); parts.line.setAttribute('d', d); parts.inner.setAttribute('d', d); parts.clip.setAttribute('d', d);
       parts.all.setAttribute('transform', `translate(${dx} ${bob}) rotate(${rot} 240 400) translate(240 400) scale(${sx} ${sy}) translate(-240 -400)`);
@@ -371,17 +381,31 @@
 
     const api = {
       el: svg,
-      setState,
+      setState(name) { setState(name); if (deep) deep.changed(); },
       get state() { return stateName; },
-      setAccessory(name) { setAccessoryNow(name); },
+      setAccessory(name) { setAccessoryNow(name); if (deep) deep.changed(); },
       get accessory() { return accessory; },
-      setAccent(hex) { if (/^#[0-9a-f]{3,8}$/i.test(hex || '')) { accent = hex; paintAccent(); shown.fx = ''; setFx(st.effect || ''); } },
-      pause(on = true) { paused = !!on; },
+      setAccent(hex) { if (/^#[0-9a-f]{3,8}$/i.test(hex || '')) { accent = hex; paintAccent(); shown.fx = ''; stale = true; setFx(st.effect || ''); if (deep) deep.changed(); } },
+      get accent() { return accent; },
+      pause(on = true) { paused = !!on; if (deep) deep.pause(paused); },
       render() { frame(clock()); }, // with opts.clock: draw her at that moment
-      poke() { const back = stateName === 'poke' ? 'idle' : stateName; setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => setState(back), 950); },
+      poke() { const back = stateName === 'poke' ? 'idle' : stateName; api.setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => api.setState(back), 950); },
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
-      destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); },
+      destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); if (deep) deep.destroy(); },
+      get pose() { return pose; },
+      get def() { return STATES[stateName] || STATES.idle; },
+      get is3d() { return !!(deep && deep.live); },
     };
+    // The 3D Cassie (cassie-bot3d.js): the same Cassie in 3D, every state and accessory, drawn by one
+    // renderer for the whole page. The flat one stays for Reduce Motion, Lite mode, no WebGL, the
+    // pop-out window, frame-by-frame video, opts.flat (a stand-in for the Get started Cassie), and
+    // while the 3D one gets ready.
+    if (!opts.clock && !opts.win && !opts.flat && !reduced() && !window.CASSIE_LITE && !window.CASSIE_FLAT && window.WebGLRenderingContext) {
+      import(new URL('cassie-bot3d.js', SRC).href).then((m) => {
+        if (!alive || !svg.isConnected) return;
+        deep = m.upgrade(api, host, svg, { pokeable: !!opts.pokeable, glow: !!opts.glow }); // (she swaps in with her first 3D frame)
+      }).catch(() => { /* the flat Cassie stays */ });
+    }
     return api;
   }
 
@@ -401,5 +425,6 @@
     create, seasonal,
     STATES: Object.keys(STATES), COLORS: Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color || null])), ACCESSORIES: Object.keys(ACC),
     construction: { POINTER, TAIL_PIVOT, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
+    defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK }, // (the 3D Cassie draws her face from these)
   };
 })();

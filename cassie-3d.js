@@ -1,8 +1,9 @@
 // Cassie in 3D: the cursor with two eyes, puffed up like a soft toy, black and white like her icon. She floats, turns a little, blinks,
 // leans toward your pointer (or finger) and hops in when she first appears. Used on the Get started
-// screen only; app.js falls back to the flat Cassie for Reduce Motion, Lite mode or no WebGL.
+// screen only; app.js falls back to the flat Cassie for Reduce Motion, Lite mode or no WebGL. She is
+// drawn by the one renderer every Cassie on the page shares (cassie-bot3d.js): one 3D context in all.
 import * as THREE from './explore/three.module.min.js';
-import { RoomEnvironment } from './explore/RoomEnvironment.js';
+import { shared, drawInto, whenEnv } from './cassie-bot3d.js';
 
 // The icon's outline (a 1024 box): tip, right point, notch, tail end (two corners), notch, bottom left
 const OUTLINE = [[332, 296, 46], [728, 512, 40], [606, 574, 14], [664, 694, 34], [556, 752, 34], [478, 626, 14], [334, 706, 46]];
@@ -44,27 +45,14 @@ export function webglOK() {
 // Draws Cassie into host (an element with a size). Returns { stop } (also stops on its own once the
 // host leaves the page).
 export function mount(host, { hop = true } = {}) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.NeutralToneMapping;
-  const canvas = renderer.domElement;
+  const R = shared();
+  const canvas = document.createElement('canvas');
   canvas.className = 'cassie-3d';
   canvas.setAttribute('aria-hidden', 'true');
   canvas.dataset.frames = '0';
   host.appendChild(canvas);
 
   const scene = new THREE.Scene();
-  // the soft studio reflections, from a small cube of the room (a full-size one takes over a second
-  // on a slow phone; on a soft, rounded body the small one looks the same)
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const cubeRT = new THREE.WebGLCubeRenderTarget(32, { type: THREE.HalfFloatType });
-  const room = new RoomEnvironment();
-  new THREE.CubeCamera(0.1, 100, cubeRT).update(renderer, room);
-  room.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-  const envTex = pmrem.fromCubemap(cubeRT.texture).texture;
-  cubeRT.dispose();
-  scene.environment = envTex;
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   camera.position.set(0, 0.05, 5.4);
   const key = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -99,8 +87,9 @@ export function mount(host, { hop = true } = {}) {
 
   // size: the host's box
   const fit = () => {
-    const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
-    renderer.setSize(w, h, false);
+    const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
     camera.aspect = w / h; camera.updateProjectionMatrix();
   };
   fit();
@@ -118,19 +107,19 @@ export function mount(host, { hop = true } = {}) {
   window.addEventListener('pointerdown', onPoint, { passive: true });
 
   // drawing only while she can be seen
-  let onScreen = true, raf = 0, stopped = false, frames = 0;
+  let onScreen = true, raf = 0, stopped = false, frames = 0, shown = false;
   const io = window.IntersectionObserver ? new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; wake(); }) : null;
   if (io) io.observe(host);
   const onVis = () => wake();
   document.addEventListener('visibilitychange', onVis);
 
-  const t0 = performance.now();
+  let t0 = performance.now();
   let nextBlink = t0 + 1800 + Math.random() * 1500, blinkAt = 0;
   const frame = (now) => {
     raf = 0;
     if (stopped) return;
     if (!host.isConnected) { stop(); return; }
-    if (document.hidden || !onScreen) return; // (wakes again when seen)
+    if (document.hidden || !onScreen || !shown) return; // (wakes again when seen)
     const t = (now - t0) / 1000;
     // hop in: up from below with a squash on landing, then the gentle float
     let hopY = 0, sq = 1;
@@ -155,7 +144,7 @@ export function mount(host, { hop = true } = {}) {
     const s = 1 - (float + hopY) * 0.5;
     shadow.scale.set(s, s, 1);
     shadow.material.opacity = Math.max(0.3, Math.min(1, s));
-    renderer.render(scene, camera);
+    drawInto(canvas, scene, camera);
     if (++frames % 10 === 0) canvas.dataset.frames = String(frames);
     raf = requestAnimationFrame(frame);
   };
@@ -170,13 +159,28 @@ export function mount(host, { hop = true } = {}) {
     if (io) io.disconnect();
     if (ro) ro.disconnect();
     scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
-    envTex.dispose(); pmrem.dispose();
-    renderer.dispose();
     canvas.remove();
   }
   // the shaders are built without holding up the page (taps keep answering), then she appears
   canvas.style.visibility = 'hidden';
-  const show = () => { if (stopped) return; canvas.style.visibility = ''; wake(); };
-  (renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve()).then(show, show);
+  const show = () => { if (stopped) return; shown = true; t0 = performance.now(); nextBlink = t0 + 1800 + Math.random() * 1500; canvas.style.visibility = ''; wake(); };
+  // (the soft studio reflections are made once for every Cassie, a step at a time; then her own
+  // shaders are built, a step at a time too)
+  whenEnv().then((env) => {
+    scene.environment = env;
+    const parts = [];
+    scene.traverse((o) => { if (o.isMesh) parts.push(o); });
+    const warm = () => {
+      if (stopped) return;
+      const o = parts.shift();
+      if (!o) { show(); return; }
+      const solo = new THREE.Scene(); solo.environment = env; solo.add(key.clone(), new THREE.AmbientLight(0xffffff, 0.35));
+      const parent = o.parent; solo.add(o);
+      const renderer = R.renderer; renderer.setScissorTest(true); renderer.setViewport(0, 0, 1, 1); renderer.setScissor(0, 0, 1, 1); renderer.render(solo, camera);
+      parent.add(o);
+      setTimeout(warm, 16);
+    };
+    warm();
+  });
   return { stop, canvas };
 }

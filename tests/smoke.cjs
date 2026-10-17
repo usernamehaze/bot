@@ -1826,7 +1826,7 @@ test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cass
 
 test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
-  await page.waitForSelector('#mascot.has2d svg.cassie-bot', { timeout: 5000 });
+  await page.waitForSelector('#mascot.has2d .cassie-bot', { timeout: 5000 }); // (the flat drawing, then the 3D one)
   expect(await page.locator('#cassie-3d-root').count() === 0, 'the 3D bot should not load with Cursor Cassie');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.waitForTimeout(150);
@@ -1847,7 +1847,7 @@ test('Cassie Island: the top bar shows what she is doing, then says Done', async
   expect(!(await island.evaluate((n) => n.classList.contains('live'))), 'island should be tucked away at first');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.press('#prompt-input', 'Enter');
-  await page.waitForSelector('#island.live svg.cassie-bot', { timeout: 3000 });
+  await page.waitForSelector('#island.live .cassie-bot', { timeout: 3000 });
   expect(/Thinking/.test(await island.innerText()), 'island should say Thinking: ' + await island.innerText());
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/island-thinking.png', clip: { x: 0, y: 0, width: 412, height: 130 } });
   await page.waitForSelector('text=Island answer.', { timeout: 10000 });
@@ -3845,7 +3845,7 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
   await page.locator('#meet').scrollIntoViewIfNeeded();
-  await page.waitForSelector('#play-stage svg.cassie-bot');
+  await page.waitForSelector('#play-stage .cassie-bot');
   await page.waitForSelector('#meet .play.in'); await page.waitForTimeout(900); // let it finish sliding in
   expect(await page.locator('#moods button').count() >= 12, 'mood buttons missing');
   await page.click('#moods button[data-m="dance"]');
@@ -4709,8 +4709,9 @@ test('Get started screen: Cassie is 3D and black and white like her icon (floats
     const at = () => page.evaluate(() => +document.querySelector('canvas.cassie-3d').dataset.frames);
     const f0 = await at(); await page.waitForTimeout(1500); const f1 = await at();
     expect(f1 > f0, `${size}: the 3D Cassie keeps drawing: ${f0} then ${f1}`);
-    const g = await page.evaluate(() => { const c = document.querySelector('canvas.cassie-3d'); const r = c.getBoundingClientRect(); return { gl: !!(c.getContext('webgl2') || c.getContext('webgl')), w: r.width, flat: !!document.querySelector('.fr-art .fr-bot svg') }; });
-    expect(g.gl && g.w >= 160 && !g.flat, `${size}: a WebGL canvas in place of the flat Cassie: ` + JSON.stringify(g));
+    // (drawn by the one 3D renderer every Cassie on the page shares)
+    const g = await page.evaluate(async () => { const c = document.querySelector('canvas.cassie-3d'); const r = c.getBoundingClientRect(); return { gl: (await import('./cassie-bot3d.js')).contexts(), w: r.width, flat: !!document.querySelector('.fr-art .fr-bot svg') }; });
+    expect(g.gl === 1 && g.w >= 160 && !g.flat, `${size}: a 3D picture in place of the flat Cassie, from the one shared renderer: ` + JSON.stringify(g));
     // something is drawn there (an empty picture is a few hundred bytes)
     const shot = await page.locator('canvas.cassie-3d').screenshot();
     expect(shot.length > 4000, `${size}: Cassie is drawn (${shot.length} bytes)`);
@@ -4748,7 +4749,7 @@ test('Get started screen: Cassie is 3D and black and white like her icon (floats
   for (const [why, o, motion] of [['Reduce Motion', { lite: 'off' }, 'reduce'], ['Lite mode', { lite: 'on' }, null]]) {
     const { ctx, page, errors } = await intro(o, motion);
     const loaded = [];
-    page.on('request', (r) => { if (/cassie-3d\.js|three\.module/.test(r.url())) loaded.push(r.url()); });
+    page.on('request', (r) => { if (/cassie-3d\.js|cassie-bot3d\.js|three\.module/.test(r.url())) loaded.push(r.url()); });
     await page.waitForTimeout(1500);
     const st = await page.evaluate(() => { const h = document.querySelector('.fr-art .fr-bot'); return { m: h.dataset.mascot, svg: !!h.querySelector('svg'), canvas: !!h.querySelector('canvas') }; });
     expect(st.m === '2d' && st.svg && !st.canvas && !loaded.length, `${why}: the flat Cassie only: ` + JSON.stringify(st) + ' ' + loaded.join(' '));
@@ -4756,6 +4757,109 @@ test('Get started screen: Cassie is 3D and black and white like her icon (floats
     const a = await page.locator('.fr-art .fr-bot').screenshot(); await page.waitForTimeout(700);
     const c = await page.locator('.fr-art .fr-bot').screenshot();
     expect(a.equals(c), `${why}: the flat Cassie doesn't move`);
+    expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+// The 3D Cassie everywhere (cassie-bot3d.js): the flat Cassie's every state and accessory, drawn in 3D
+test('3D Cassie: every state and every accessory draws a different 3D picture with no errors, every Cassie on the page shares one WebGL context, and her first frame never freezes the page over 300ms', async (b) => {
+  const ctx = await b.newContext({ viewport: { width: 900, height: 700 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
+  // (counts every WebGL context the page makes)
+  await ctx.addInitScript(() => { window.__gl = 0; const gc = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (k, o) { const c = gc.call(this, k, o); if (c && /webgl/.test(k) && !this.__counted) { this.__counted = true; window.__gl++; } return c; }; });
+  const url = APP.replace('app.html', '__cassie3d.html');
+  await ctx.route(url, (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><style>.h{width:160px;height:160px;display:inline-block}.cassie-bot{width:100%;height:100%;display:block}</style></head><body>
+    <div class="h" id="a"></div><div class="h" id="b"></div><div class="h" id="c"></div>
+    <script>window.__long = 0; new PerformanceObserver((l) => l.getEntries().forEach((e) => { window.__long = Math.max(window.__long, e.duration); })).observe({ type: 'longtask' });</script>
+    <script src="cassie-bot.js"></script>
+    <script>window.bots = ['a', 'b', 'c'].map((id, i) => CassieBot.create(document.getElementById(id), { pokeable: i === 0, glow: i === 1, state: ['idle', 'thinking', 'love'][i] }));</script></body></html>` }));
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(url);
+  await page.waitForFunction(() => document.querySelectorAll('canvas.cassie-bot-3d').length === 3 && [...document.querySelectorAll('canvas.cassie-bot-3d')].every((c) => +c.dataset.frames > 1), null, { timeout: 30000 });
+  const t = await page.evaluate(async () => { const m = await import('./cassie-bot3d.js'); return { ...m.timings(), gl: window.__gl, contexts: m.contexts(), long: window.__long, flat: document.querySelectorAll('svg.cassie-bot').length, err: m.lastError() }; });
+  expect(t.gl === 1 && t.contexts === 1, 'three Cassies, one WebGL context: ' + JSON.stringify(t));
+  expect(t.flat === 0, 'the flat drawings are swapped out: ' + t.flat);
+  const worst = Math.max(t.setup, t.step, t.slowest);
+  expect(worst < 300, `her first frame never holds the page up 300ms or more (setup ${Math.round(t.setup)}, steps ${t.steps}, slowest frame ${Math.round(t.slowest)})`);
+  expect(t.long < 300, `no long freeze while she starts (longest task ${Math.round(t.long)}ms)`);
+  if (process.env.TIMES) console.log('    3D Cassie start: ' + JSON.stringify(t));
+  // every state and every accessory: the same API as the flat Cassie, and a different picture each time
+  // (she's held still, so only the state or the accessory changes the picture)
+  // (makes the change, then waits for the picture drawn after it)
+  const pic = (how, arg) => page.evaluate(async ([how, arg]) => { const c = document.querySelector('#a canvas.cassie-bot-3d'); const f = +c.dataset.frames; bots[0][how](arg); await new Promise((r) => { const k = () => (+c.dataset.frames > f ? r() : requestAnimationFrame(k)); k(); }); return c.toDataURL(); }, [how, arg]);
+  await page.evaluate(() => bots[0].pause(true));
+  const names = await page.evaluate(() => ({ states: CassieBot.STATES, acc: CassieBot.ACCESSORIES }));
+  expect(names.states.length >= 25 && names.acc.length >= 14 && names.acc.includes('glasses'), 'every state and accessory: ' + JSON.stringify(names));
+  const idle = await pic('setState', 'idle');
+  const same = [];
+  for (const s of names.states) {
+    if (s === 'idle') continue;
+    const p = await pic('setState', s);
+    const st = await page.evaluate(() => document.querySelector('#a canvas.cassie-bot-3d').dataset.state);
+    if (p === idle || st !== s) same.push(s);
+  }
+  expect(!same.length, 'these states drew the same picture as idle: ' + same.join(', '));
+  await pic('setState', 'idle');
+  for (const a of names.acc) {
+    const p = await pic('setAccessory', a);
+    if (p === idle || await page.evaluate(() => document.querySelector('#a canvas.cassie-bot-3d').dataset.accessory) !== a) same.push(a);
+  }
+  expect(!same.length, 'these accessories drew nothing: ' + same.join(', '));
+  await page.evaluate(() => bots[0].setAccessory(null));
+  // setAccent and look keep working; poking her (a tap) says so
+  await page.evaluate(() => { bots[0].setAccent('#2f7d5b'); bots[0].look(0.5, -0.3); bots[0].render(); bots[0].pause(false); });
+  await page.click('#a canvas.cassie-bot-3d');
+  expect(await page.evaluate(() => bots[0].state) === 'poke', 'a tap pokes her');
+  // she rests while the tab is hidden
+  const frames = () => page.evaluate(() => +document.querySelector('#b canvas.cassie-bot-3d').dataset.frames);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(200); const h0 = await frames(); await page.waitForTimeout(600);
+  expect(await frames() === h0, 'no drawing while the tab is hidden');
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(600);
+  expect(await frames() > h0, 'drawing again when the tab is back');
+  // only Cassies on screen are drawn
+  await page.evaluate(() => { document.getElementById('c').style.cssText = 'position:absolute;top:3000px'; });
+  await page.waitForTimeout(300);
+  const off = () => page.evaluate(() => +document.querySelector('#c canvas.cassie-bot-3d').dataset.frames);
+  const o0 = await off(); await page.waitForTimeout(600);
+  expect(await off() === o0, 'a Cassie off screen is not drawn');
+  // destroy takes her away
+  await page.evaluate(() => bots[2].destroy());
+  expect(await page.locator('#c canvas, #c svg').count() === 0, 'destroy removes her');
+  expect(!errors.length && !(await page.evaluate(async () => (await import('./cassie-bot3d.js')).lastError())), 'no errors: ' + errors.join('; '));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/cassie-3d-api.png' });
+  await ctx.close();
+});
+
+test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (same size and place), one WebGL context for all; Reduce Motion and Lite mode keep the flat Cassie, still, and never load the 3D one', async (b) => {
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
+    const place = size === '390x844' ? '#home .hub-bot' : '#mascot';
+    await page.waitForSelector(place + ' svg', { timeout: 10000 }); await page.waitForTimeout(700); // (where the flat Cassie sits once the page has settled)
+    const flat = await page.evaluate((sel) => { const e = document.querySelector(sel + ' svg'); const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round); }, place);
+    await page.waitForSelector(place + ' canvas.cassie-bot-3d', { timeout: 30000 });
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(async (sel) => { const c = document.querySelector(sel + ' canvas.cassie-bot-3d'), rr = c.getBoundingClientRect(); return { box: [rr.x, rr.y, rr.width, rr.height].map(Math.round), flatShown: getComputedStyle(document.querySelector(sel + ' svg')).display !== 'none', gl: (await import('./cassie-bot3d.js')).contexts(), webgl: [...document.querySelectorAll('canvas.cassie-bot-3d')].length }; }, place);
+    expect(r.box.every((v, i) => Math.abs(v - flat[i]) <= 2) && !r.flatShown, `${size}: the 3D Cassie takes the flat one's place and size: ${JSON.stringify(flat)} then ${JSON.stringify(r)}`);
+    expect(r.gl === 1, `${size}: one WebGL context for every Cassie`);
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  for (const [why, lite, motion] of [['Reduce Motion', 'off', 'reduce'], ['Lite mode', 'on', null]]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
+    if (motion) await page.emulateMedia({ reducedMotion: motion });
+    const loaded = [];
+    page.on('request', (rq) => { if (/cassie-bot3d\.js|three\.module/.test(rq.url())) loaded.push(rq.url()); });
+    await page.reload();
+    await page.waitForSelector('#home .hub-bot svg.cassie-bot', { timeout: 10000 });
+    await page.waitForTimeout(3500);
+    expect(!(await page.locator('canvas.cassie-bot-3d').count()) && !loaded.length, `${why}: the flat Cassie only, and no 3D loaded: ` + loaded.join(' '));
+    const a = await page.locator('#home .hub-bot').screenshot(); await page.waitForTimeout(1200);
+    const c = await page.locator('#home .hub-bot').screenshot();
+    expect(a.equals(c), `${why}: the flat Cassie keeps still`);
     expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
     await ctx.close();
   }

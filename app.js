@@ -6709,7 +6709,7 @@ const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.j
 const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=169', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 function frMascot3d(host) {
   let flat = null;
-  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true }); } catch (e) { /* the words still work */ }
+  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true, flat: true }); } catch (e) { /* the words still work */ }
   if (flat && (window.CASSIE_LITE || reduceMotion())) flat.pause(); // (Lite mode or Reduce Motion: drawn once, no movement, not even a blink)
   host.dataset.mascot = '2d';
   const load = fr3dLoad();
