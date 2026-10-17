@@ -3638,9 +3638,9 @@ test('Museum and games: famous paintings, a logic circuit, cracking a rule / reg
   const btn = (t) => page.click(`.lab-panel .lab-btn:has-text("${t}")`);
   // Museum: Filipino and world galleries, a work's story, and "Who painted it?"
   await lab('museum');
-  expect(await page.locator('.tl-work').count() === 35, '35 works');
+  expect(await page.locator('.tl-work').count() === 25, '25 works');
   await page.click('.lab-panel .lab-seg button:has-text("Filipino artists")');
-  expect(await page.locator('.tl-work').count() === 13, '13 by Filipino artists');
+  expect(await page.locator('.tl-work').count() === 6, '6 by Filipino artists');
   await page.click('[data-open="spoliarium"]');
   const facts = await page.locator('.tl-facts').innerText();
   expect(/Juan Luna/.test(facts) && /1884/.test(facts) && /National Museum/.test(facts), 'Spoliarium’s facts: ' + facts);
@@ -4867,6 +4867,40 @@ test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (sa
     const c = await page.locator('#home .hub-bot').screenshot();
     expect(a.equals(c), `${why}: the flat Cassie keeps still`);
     expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('museum: every painting’s picture really loads (from the app, no outside host), and every frame is the carved antique gold one', async (b) => {
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, server: false, state: { groqKey: 'gsk_test' } });
+    const outside = [];
+    page.on('request', (r) => { if (/wiki(pedia|media)\.org/.test(r.url())) outside.push(r.url()); });
+    await page.evaluate(() => openLabs('museum'));
+    await page.waitForSelector('.tl-gallery .tl-frame', { timeout: 15000 });
+    // every work, in view one by one (the pictures load as they come into view)
+    const n = await page.locator('.tl-work').count();
+    expect(n === 25, `${size}: 25 works (${n})`);
+    for (let i = 0; i < n; i++) await page.locator('.tl-work').nth(i).scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => [...document.querySelectorAll('.tl-gallery .tl-frame img')].length === 25 && [...document.querySelectorAll('.tl-gallery .tl-frame img')].every((im) => im.complete), null, { timeout: 30000 }).catch(() => {});
+    const pics = await page.evaluate(() => [...document.querySelectorAll('.tl-gallery .tl-frame')].map((f) => { const im = f.querySelector('img'); return { id: f.dataset.pic, w: im ? im.naturalWidth : 0 }; }));
+    const broken = pics.filter((p) => !(p.w > 0)).map((p) => p.id);
+    expect(pics.length === 25 && !broken.length, `${size}: every picture loads; empty frames: ${broken.join(', ')}`);
+    // the frame: carved gold moulding, a beaded band, corner ornaments (inline SVG) and a gilt lip round the picture
+    const frames = await page.evaluate(() => [...document.querySelectorAll('.tl-frame')].map((f) => {
+      const cs = getComputedStyle(f), before = getComputedStyle(f, '::before'), after = getComputedStyle(f, '::after'), lip = getComputedStyle(f.querySelector('.tl-canvas'));
+      return { id: f.dataset.pic, gold: /gradient/.test(cs.backgroundImage) && (cs.boxShadow.match(/inset/g) || []).length >= 5, corners: (before.backgroundImage.match(/data:image\/svg\+xml/g) || []).length === 4, beads: /radial-gradient/.test(after.backgroundImage), lip: (lip.boxShadow.match(/rgb/g) || []).length >= 3 };
+    }));
+    const plain = frames.filter((f) => !(f.gold && f.corners && f.beads && f.lip));
+    expect(frames.length === 25 && !plain.length, `${size}: every frame is the antique one: ` + JSON.stringify(plain.slice(0, 3)));
+    // a painting opened large: its big picture loads in the big frame
+    await page.click('[data-open="monalisa"]');
+    await page.waitForFunction(() => { const im = document.querySelector('.tl-big img'); return im && im.complete && im.naturalWidth > 0; }, null, { timeout: 15000 });
+    expect(await page.evaluate(() => document.querySelector('.tl-big img').naturalWidth) >= 600, `${size}: the large picture is the large copy`);
+    expect(await page.locator('.tl-one a[href*="commons.wikimedia.org"]').count() === 1, `${size}: the picture credits Wikimedia Commons`);
+    expect(!outside.length, `${size}: no picture is fetched from Wikipedia: ` + outside.slice(0, 2).join(' '));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/museum-${size}.png` });
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
     await ctx.close();
   }
 });
