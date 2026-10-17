@@ -471,7 +471,27 @@ li.tl-ok { color: #b8f0cf; } li.tl-bad { color: #ffc4c4; }
 /* museum */
 .tl-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
 .tl-work { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; display: grid; gap: 4px; } .tl-work b { font-size: .86rem; line-height: 1.25; } .tl-work span { font-size: .76rem; color: rgba(255, 255, 255, .6); }
-.tl-frame { padding: 8px; border-radius: 4px; background: linear-gradient(145deg, #6e5634, #3a2c18); box-shadow: inset 0 0 0 2px rgba(255, 220, 160, .25), 0 8px 18px rgba(0, 0, 0, .45); }
+.tl-frame { /* an antique Renaissance frame, carved and gilded (the only gold in the app: the frames) */
+  --gold-hi: #f6e3a2; --gold: #d2a64c; --gold-mid: #a97d2c; --gold-lo: #5e400f;
+  position: relative; padding: 14px; border-radius: 2px;
+  background: linear-gradient(135deg, var(--gold-hi) 0%, var(--gold) 22%, var(--gold-mid) 48%, var(--gold) 70%, var(--gold-hi) 86%, var(--gold-mid) 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-lo), inset 0 0 0 2.5px var(--gold-hi), inset 0 0 0 3.5px var(--gold-mid), /* the outer moulding */
+    inset 3px 3px 4px rgba(255, 244, 210, .55), inset -4px -4px 6px rgba(60, 36, 4, .75), /* deep carved edges */
+    0 10px 22px rgba(0, 0, 0, .5);
+}
+/* a band of carved beads between the moulding and the picture */
+.tl-frame::after { content: ""; position: absolute; inset: 5px; padding: 4px; pointer-events: none; border-radius: 1px;
+  background: radial-gradient(circle, var(--gold-hi) 0 1px, var(--gold-mid) 1.5px 2px, transparent 2.4px) 0 0 / 5px 5px, linear-gradient(135deg, var(--gold-mid), var(--gold-lo));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+/* carved ornaments in the four corners */
+.tl-frame::before { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: url("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><g ><path d=%22M1 1C9 1 15 2 23 2.5C16 4.5 11 5 8.5 6.5C7 9 5.5 15 2.5 23C2 15 1 9 1 1Z%22 fill=%22%23f3dc94%22 stroke=%22%236b4a14%22 stroke-width=%22.7%22/><path d=%22M4 4C9 4.6 12 5.2 15.5 6.5M4 4C4.6 9 5.2 12 6.5 15.5%22 fill=%22none%22 stroke=%22%238a6420%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%223.6%22 fill=%22%23c99a3e%22 stroke=%22%235a3d10%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%221.5%22 fill=%22%23fbecb8%22/></g></svg>") top left / 26px 26px no-repeat, url("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><g transform=%22rotate(90 12 12)%22><path d=%22M1 1C9 1 15 2 23 2.5C16 4.5 11 5 8.5 6.5C7 9 5.5 15 2.5 23C2 15 1 9 1 1Z%22 fill=%22%23f3dc94%22 stroke=%22%236b4a14%22 stroke-width=%22.7%22/><path d=%22M4 4C9 4.6 12 5.2 15.5 6.5M4 4C4.6 9 5.2 12 6.5 15.5%22 fill=%22none%22 stroke=%22%238a6420%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%223.6%22 fill=%22%23c99a3e%22 stroke=%22%235a3d10%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%221.5%22 fill=%22%23fbecb8%22/></g></svg>") top right / 26px 26px no-repeat, url("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><g transform=%22rotate(180 12 12)%22><path d=%22M1 1C9 1 15 2 23 2.5C16 4.5 11 5 8.5 6.5C7 9 5.5 15 2.5 23C2 15 1 9 1 1Z%22 fill=%22%23f3dc94%22 stroke=%22%236b4a14%22 stroke-width=%22.7%22/><path d=%22M4 4C9 4.6 12 5.2 15.5 6.5M4 4C4.6 9 5.2 12 6.5 15.5%22 fill=%22none%22 stroke=%22%238a6420%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%223.6%22 fill=%22%23c99a3e%22 stroke=%22%235a3d10%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%221.5%22 fill=%22%23fbecb8%22/></g></svg>") bottom right / 26px 26px no-repeat, url("data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><g transform=%22rotate(270 12 12)%22><path d=%22M1 1C9 1 15 2 23 2.5C16 4.5 11 5 8.5 6.5C7 9 5.5 15 2.5 23C2 15 1 9 1 1Z%22 fill=%22%23f3dc94%22 stroke=%22%236b4a14%22 stroke-width=%22.7%22/><path d=%22M4 4C9 4.6 12 5.2 15.5 6.5M4 4C4.6 9 5.2 12 6.5 15.5%22 fill=%22none%22 stroke=%22%238a6420%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%223.6%22 fill=%22%23c99a3e%22 stroke=%22%235a3d10%22 stroke-width=%22.8%22/><circle cx=%227%22 cy=%227%22 r=%221.5%22 fill=%22%23fbecb8%22/></g></svg>") bottom left / 26px 26px no-repeat; }
+.tl-frame.tl-big { padding: 22px; }
+.tl-frame.tl-big::after { inset: 8px; padding: 6px; }
+.tl-frame.tl-big::before { background-size: 40px 40px; }
+/* the inner bevel: a gilt lip where the frame meets the picture */
+.tl-frame .tl-canvas { box-shadow: 0 0 0 1px var(--gold-lo), 0 0 0 3px var(--gold-hi), 0 0 0 4px var(--gold-mid), inset 0 2px 8px rgba(0, 0, 0, .65); }
 .tl-canvas { position: relative; aspect-ratio: 4 / 3; overflow: hidden; display: grid; place-content: center; text-align: center; padding: 10px; background: linear-gradient(160deg, #2b2f3a, #14161c); }
 .tl-canvas.tl-ph-ph { background: linear-gradient(160deg, #3a2f22, #17130d); }
 .tl-canvas span { font-weight: 700; font-size: .84rem; line-height: 1.25; } .tl-canvas small { color: rgba(255, 255, 255, .55); font-size: .72rem; margin-top: 4px; }
