@@ -566,6 +566,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     'schemas.openxmlformats.org': 'names inside Word and PowerPoint files', 'www.w3.org': 'SVG and XML names',
     'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
     'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
+    'commons.wikimedia.org': 'a link the student taps (where a museum picture comes from; the pictures are kept in the app)',
     'ncmh.gov.ph': 'where care.js’s crisis numbers were checked (a note in the code)',
   };
   const SERVICES = [ // [which addresses, the name privacy.html must use]
