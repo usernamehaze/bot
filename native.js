@@ -31,6 +31,7 @@
     if (keep !== 'you' && settings && !settings.hidden) press('#settings-close-btn');
   }
   function go(t) {
+    if (t === 'home') forceFill = true; // (Home tapped: always fresh)
     if (t === 'home' || t === 'chat') {
       closeOthers(t);
       if (t === base && t === 'home') home.scrollTo({ top: 0, behavior: 'smooth' }); // tap Home again: back to the top
@@ -56,8 +57,19 @@
     root.classList.toggle('lab-in', !!(lab && !lab.hidden && root.classList.contains('labs-open')));
     home.hidden = !(on && base === 'home');
     bar.querySelectorAll('[data-tab]').forEach((b) => { const me = b.dataset.tab === t; b.classList.toggle('on', me); if (me) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-    if (on && base === 'home' && !home.hidden) fill();
+    // Home is drawn again when it comes into view, when Home is tapped, or when what it shows has
+    // changed (your chats, cards, name, plan or colours), not on every change elsewhere on the page
+    // (redrawing it each time restarted its moving previews)
+    const showing = on && base === 'home' && !home.hidden;
+    if (showing) { const sig = homeSig(); if (!homeShown || forceFill || sig !== lastSig) { lastSig = sig; fill(); } }
+    homeShown = showing; forceFill = false;
   }
+  let homeShown = false, forceFill = false, lastSig = '';
+  const homeSig = () => { try {
+    const chats = state.chats || [], cards = window.CassieCards;
+    return JSON.stringify([chats.length, chats.reduce((m, c) => Math.max(m, c.updatedAt || 0), 0), (state.cards || []).length, cards ? cards.dueCount() : 0,
+      state.profile && [state.profile.name, state.profile.gender, state.profile.grade, state.profile.role], state.plan, state.accent, window.CassieMemory ? window.CassieMemory.stats().streak : 0]);
+  } catch (e) { return String(Math.random()); } };
   const later = () => { if (!queued) { queued = true; requestAnimationFrame(sync); } };
   phone.addEventListener('change', later);
   // overlays opening and closing (Labs, Flashcards, Settings, a lab inside Labs)
