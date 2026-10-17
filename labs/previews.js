@@ -6,6 +6,7 @@
 // rests while the page is hidden. Reduce Motion or Lite mode: each shows one still frame.
 const TAU = Math.PI * 2;
 const MAX = 8, MAX3 = 5; // (at most 8 moving at once, 5 of them in 3D)
+const GROUP_MAX = { labs: 3 }; // (the Labs tab: 3 at once, the rest wait their turn)
 
 // the palette, read from the page (Monochrome greys, or Blush & Sage, light or dark)
 function colours(el) {
@@ -157,6 +158,121 @@ P.interest = (g, w, h, t, c) => {
   line(g, w * 0.08, h * 0.88, w * 0.92, h * 0.88, c.ink, 2);
 };
 
+P.space3d = (g, w, h, t, c) => {
+  for (let i = 0; i < 18; i++) dot(g, (i * 53 % 97) / 97 * w, (i * 31 % 89) / 89 * h, 1 + (i % 3) * 0.5, c.line);
+  const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.26;
+  dot(g, cx, cy, r, c.second);
+  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.clip();
+  for (let i = -2; i <= 2; i++) { const x = cx + ((i * r * 0.55 + t * 18) % (r * 2.75)) - r * 0.2; g.beginPath(); g.ellipse(x, cy, r * 0.12, r, 0, 0, TAU); fill(g, mixA(c.paper, 0.18)); }
+  g.restore();
+  g.beginPath(); g.ellipse(cx, cy, r * 1.7, r * 0.42, -0.25, 0, TAU); stroke(g, c.accent, 2.5);
+};
+P.atlas = (g, w, h, t, c) => {
+  const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.4;
+  dot(g, cx, cy, r, mixA(c.second, 0.25)); g.beginPath(); g.arc(cx, cy, r, 0, TAU); stroke(g, c.ink, 2);
+  for (let k = 0; k < 6; k++) { const a = (k / 6 * Math.PI + t * 0.4) % Math.PI, rx = Math.abs(Math.cos(a)) * r; g.beginPath(); g.ellipse(cx, cy, rx, r, 0, 0, TAU); stroke(g, c.line, 1.2); }
+  [-0.5, 0, 0.5].forEach((f) => { g.beginPath(); g.ellipse(cx, cy + f * r, Math.sqrt(1 - f * f) * r, r * 0.12, 0, 0, TAU); stroke(g, c.line, 1.2); });
+  const a = t * 0.4 + 1, x = cx + Math.sin(a) * r * 0.6; if (Math.cos(a) > 0) dot(g, x, cy - r * 0.2, h * 0.05, c.accent);
+};
+P.logic = (g, w, h, t, c) => {
+  const on = [Math.floor(t * 1.1) % 2, Math.floor(t * 0.55) % 2], out = on[0] && on[1];
+  const gx = w * 0.45, gy = h / 2, gs = h * 0.22;
+  [h * 0.32, h * 0.68].forEach((y, i) => { line(g, w * 0.12, y, gx, y, on[i] ? c.accent : c.line, 3); dot(g, w * 0.12, y, h * 0.05, on[i] ? c.accent : c.mid); });
+  g.beginPath(); g.moveTo(gx, gy - gs); g.lineTo(gx + gs * 0.8, gy - gs); g.arc(gx + gs * 0.8, gy, gs, -Math.PI / 2, Math.PI / 2); g.lineTo(gx, gy + gs); g.closePath(); fill(g, c.paper); stroke(g, c.ink, 2.5);
+  line(g, gx + gs * 1.8, gy, w * 0.9, gy, out ? c.accent : c.line, 3); dot(g, w * 0.9, gy, h * 0.07, out ? c.accent : c.page); g.beginPath(); g.arc(w * 0.9, gy, h * 0.07, 0, TAU); stroke(g, c.ink, 2);
+};
+P.rocket = (g, w, h, t, c) => {
+  for (let i = 0; i < 14; i++) { const y = ((i * 37 % 100) / 100 * h + t * 40) % h; dot(g, (i * 61 % 97) / 97 * w, y, 1.2, c.line); }
+  const x = w / 2 + Math.sin(t * 1.5) * w * 0.04, y = h * 0.45 + Math.sin(t * 2) * h * 0.04, s = h * 0.32;
+  g.beginPath(); g.moveTo(x, y - s); g.quadraticCurveTo(x + s * 0.35, y - s * 0.3, x + s * 0.25, y + s * 0.5); g.lineTo(x - s * 0.25, y + s * 0.5); g.quadraticCurveTo(x - s * 0.35, y - s * 0.3, x, y - s); fill(g, c.paper); stroke(g, c.ink, 2);
+  dot(g, x, y - s * 0.25, s * 0.11, c.second);
+  const f = 0.6 + 0.4 * Math.sin(t * 20); g.beginPath(); g.moveTo(x - s * 0.18, y + s * 0.5); g.lineTo(x, y + s * (0.5 + 0.55 * f)); g.lineTo(x + s * 0.18, y + s * 0.5); fill(g, c.accent);
+};
+P['square-proof'] = (g, w, h, t, c) => {
+  const u = Math.min(w, h) * 0.2, ox = w * 0.38, oy = h * 0.62, a = 0.75 * u, b2 = 1.0 * u, k = 0.85 + 0.15 * Math.sin(t * 1.4);
+  g.beginPath(); g.moveTo(ox, oy); g.lineTo(ox + b2, oy); g.lineTo(ox, oy - a); g.closePath(); fill(g, c.page); stroke(g, c.ink, 2);
+  g.beginPath(); g.rect(ox, oy, b2, b2 * 0.55 * k); fill(g, mixA(c.accent, 0.45));
+  g.beginPath(); g.rect(ox - a * 0.75 * k, oy - a, a * 0.75 * k, a); fill(g, mixA(c.second, 0.45));
+  g.save(); g.translate(ox, oy - a); g.rotate(Math.atan2(a, b2)); const hyp = Math.hypot(a, b2); g.beginPath(); g.rect(0, -hyp * 0.6 * k, hyp, hyp * 0.6 * k); fill(g, mixA(c.mid, 0.4)); g.restore();
+};
+P.hanoi = (g, w, h, t, c) => {
+  const base = h * 0.85, pegs = [w * 0.2, w * 0.5, w * 0.8];
+  line(g, w * 0.06, base, w * 0.94, base, c.ink, 3); pegs.forEach((x) => line(g, x, base, x, h * 0.25, c.mid, 3));
+  const p = (t * 0.5) % 1, step = Math.floor((t * 0.5) % 7);
+  const moves = [[0, 2], [0, 1], [2, 1], [0, 2], [1, 0], [1, 2], [0, 2]], on = [[3, 2, 1], [], []];
+  for (let i = 0; i < step; i++) { const [a, b] = moves[i]; on[b].push(on[a].pop()); }
+  const [fa, fb] = moves[step], moving = on[fa][on[fa].length - 1];
+  on.forEach((st, k) => st.forEach((d, i) => { if (k === fa && i === st.length - 1) return; g.beginPath(); g.rect(pegs[k] - d * w * 0.045, base - (i + 1) * h * 0.1, d * w * 0.09, h * 0.09); fill(g, d === 3 ? c.ink : d === 2 ? c.second : c.accent); }));
+  if (moving) { const x = pegs[fa] + (pegs[fb] - pegs[fa]) * ease(p), y = base - h * 0.45 - Math.sin(p * Math.PI) * h * 0.15; g.beginPath(); g.rect(x - moving * w * 0.045, y, moving * w * 0.09, h * 0.09); fill(g, moving === 3 ? c.ink : moving === 2 ? c.second : c.accent); }
+};
+P.solids = (g, w, h, t, c) => {
+  const cx = w / 2, cy = h / 2, s = Math.min(w, h) * 0.26, a = t * 0.8, b = 0.5;
+  const pts = []; for (let i = 0; i < 8; i++) { let x = i & 1 ? 1 : -1, y = i & 2 ? 1 : -1, z = i & 4 ? 1 : -1; [x, z] = [x * Math.cos(a) - z * Math.sin(a), x * Math.sin(a) + z * Math.cos(a)]; [y, z] = [y * Math.cos(b) - z * Math.sin(b), y * Math.sin(b) + z * Math.cos(b)]; pts.push([cx + x * s, cy + y * s, z]); }
+  [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]].forEach(([i, j]) => line(g, pts[i][0], pts[i][1], pts[j][0], pts[j][1], (pts[i][2] + pts[j][2]) > 0 ? c.line : c.ink, 2.2));
+  pts.forEach((p) => dot(g, p[0], p[1], 3, c.accent));
+};
+P.recursion = (g, w, h, t, c) => {
+  const depth = 1 + Math.floor((t * 1.2) % 7);
+  const br = (x, y, len, ang, d) => { if (d > depth || len < 2) return; const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len; line(g, x, y, x2, y2, d === depth ? c.accent : c.ink, Math.max(1, 4 - d * 0.5)); br(x2, y2, len * 0.7, ang - 0.45, d + 1); br(x2, y2, len * 0.7, ang + 0.45, d + 1); };
+  br(w / 2, h * 0.95, h * 0.28, -Math.PI / 2, 1);
+};
+P.body3d = (g, w, h, t, c) => {
+  const cx = w / 2, s = h / 100;
+  dot(g, cx, 16 * s, 9 * s, c.line);
+  g.beginPath(); g.moveTo(cx - 14 * s, 28 * s); g.lineTo(cx + 14 * s, 28 * s); g.lineTo(cx + 11 * s, 62 * s); g.lineTo(cx - 11 * s, 62 * s); g.closePath(); fill(g, c.line);
+  line(g, cx - 6 * s, 62 * s, cx - 8 * s, 95 * s, c.line, 7 * s); line(g, cx + 6 * s, 62 * s, cx + 8 * s, 95 * s, c.line, 7 * s);
+  line(g, cx - 14 * s, 30 * s, cx - 22 * s, 58 * s, c.line, 5 * s); line(g, cx + 14 * s, 30 * s, cx + 22 * s, 58 * s, c.line, 5 * s);
+  const beat = 1 + 0.18 * Math.max(0, Math.sin(t * 7)) ** 8; dot(g, cx + 3 * s, 38 * s, 5 * s * beat, c.accent);
+  g.beginPath(); g.ellipse(cx - 5 * s, 40 * s, 5 * s, 8 * s, 0, 0, TAU); fill(g, mixA(c.second, 0.5)); g.beginPath(); g.ellipse(cx + 8 * s, 41 * s, 5 * s, 8 * s, 0, 0, TAU); fill(g, mixA(c.second, 0.5));
+};
+P.cells3d = (g, w, h, t, c) => P['build-cell'](g, w, h, t, c);
+// the study tools
+P.vocab = (g, w, h, t, c) => {
+  const words = ['photon', 'osmosis', 'axiom', 'genome', 'lexicon'], k = (t * 0.6) % words.length, i0 = Math.floor(k), f = k - i0;
+  for (let j = -1; j <= 1; j++) { const i = (i0 + j + words.length) % words.length, x = w / 2 + (j - ease(f)) * w * 0.42, sc = 1 - Math.abs(j - ease(f)) * 0.22;
+    g.save(); g.translate(x, h / 2); g.scale(sc, sc); g.beginPath(); g.rect(-w * 0.18, -h * 0.26, w * 0.36, h * 0.52); fill(g, c.paper); stroke(g, j === 0 ? c.accent : c.line, 2); text(g, words[i], 0, 0, h * 0.13, c.ink); g.restore(); }
+};
+P.timeline = (g, w, h, t, c) => {
+  const p = (t * 0.25) % 1.2, y = h / 2, x0 = w * 0.08, x1 = x0 + Math.min(1, p) * w * 0.84;
+  line(g, x0, y, x1, y, c.ink, 3);
+  [0.1, 0.3, 0.52, 0.75, 0.95].forEach((q, i) => { if (q > p) return; const x = x0 + q * w * 0.84, up = i % 2 ? 1 : -1; line(g, x, y, x, y + up * h * 0.2, c.mid, 1.5); dot(g, x, y, h * 0.04, c.accent); g.beginPath(); g.rect(x - w * 0.07, y + up * h * 0.2 - (up < 0 ? h * 0.12 : 0), w * 0.14, h * 0.12); fill(g, c.page); stroke(g, c.line, 1.2); });
+};
+P.essay = (g, w, h, t, c) => {
+  const n = 7, hl = Math.floor((t * 1.2) % n);
+  for (let i = 0; i < n; i++) { const y = h * 0.14 + i * h * 0.11, len = w * (i === n - 1 ? 0.45 : 0.76 - (i % 3) * 0.06);
+    if (i === hl) { g.beginPath(); g.rect(w * 0.1, y - h * 0.035, len, h * 0.07); fill(g, mixA(c.accent, 0.3)); }
+    line(g, w * 0.12, y, w * 0.1 + len, y, i === hl ? c.ink : c.mid, 2.5); }
+  if (hl % 2 === 0) { const y = h * 0.14 + hl * h * 0.11; text(g, hl ? 'reason' : 'claim', w * 0.93 - w * 0.06, y, h * 0.08, c.accent); }
+};
+P.cardmatrix = (g, w, h, t, c) => {
+  const cols = 3, rows = 2, cw = w * 0.26, ch = h * 0.36, flip = (t * 0.9) % (cols * rows);
+  for (let i = 0; i < cols * rows; i++) { const x = w * 0.09 + (i % cols) * w * 0.29, y = h * 0.1 + Math.floor(i / cols) * h * 0.43, f = Math.max(0, Math.min(1, flip - i)), sx = Math.abs(Math.cos(f * Math.PI)) || 0.02, back = f > 0.5;
+    g.save(); g.translate(x + cw / 2, y + ch / 2); g.scale(sx, 1); g.beginPath(); g.rect(-cw / 2, -ch / 2, cw, ch); fill(g, back ? mixA(c.accent, 0.25) : c.paper); stroke(g, c.ink, 1.6); text(g, back ? 'A' : '?', 0, 0, ch * 0.4, c.ink); g.restore(); }
+};
+P.flashcards = P.cardmatrix;
+P.cornell = (g, w, h, t, c) => {
+  const x0 = w * 0.14, y0 = h * 0.08, pw = w * 0.72, ph = h * 0.84, p = (t * 0.35) % 1.3;
+  g.beginPath(); g.rect(x0, y0, pw, ph); fill(g, c.paper); stroke(g, c.ink, 1.8);
+  line(g, x0 + pw * 0.3, y0, x0 + pw * 0.3, y0 + ph * 0.74, c.line, 1.5); line(g, x0, y0 + ph * 0.74, x0 + pw, y0 + ph * 0.74, c.line, 1.5);
+  for (let i = 0; i < 5; i++) { const q = Math.min(1, Math.max(0, p * 6 - i)); const y = y0 + ph * (0.12 + i * 0.12); if (q > 0) line(g, x0 + pw * 0.36, y, x0 + pw * (0.36 + 0.55 * q), y, c.mid, 2); if (i % 2 === 0 && q >= 1) line(g, x0 + pw * 0.05, y, x0 + pw * 0.24, y, c.accent, 2.5); }
+  if (p > 0.9) for (let i = 0; i < 2; i++) line(g, x0 + pw * 0.06, y0 + ph * (0.83 + i * 0.08), x0 + pw * (0.06 + 0.8 * Math.min(1, (p - 0.9) * 3)), y0 + ph * (0.83 + i * 0.08), c.ink, 2);
+};
+P.thesis = (g, w, h, t, c) => {
+  const cx = w / 2, cy = h / 2, n = 5, shown = 1 + Math.floor((t * 1.1) % (n + 1));
+  for (let i = 0; i < n; i++) { if (i >= shown) break; const a = i / n * TAU - Math.PI / 2, x = cx + Math.cos(a) * w * 0.34, y = cy + Math.sin(a) * h * 0.34; line(g, cx, cy, x, y, c.line, 1.6); dot(g, x, y, h * 0.07, i % 2 ? c.second : c.mid); }
+  dot(g, cx, cy, h * 0.12, c.accent);
+};
+P.museum = (g, w, h, t, c) => {
+  const k = (t * 0.35) % 3;
+  for (let j = -1; j <= 1; j++) { const x = w / 2 + (j - (k % 1)) * w * 0.5, i = (Math.floor(k) + j + 3) % 3;
+    g.beginPath(); g.rect(x - w * 0.2, h * 0.16, w * 0.4, h * 0.6); fill(g, c.paper); g.lineWidth = 5; g.strokeStyle = c.ink; g.stroke();
+    if (i === 0) { dot(g, x - w * 0.05, h * 0.38, h * 0.1, c.accent); g.beginPath(); g.moveTo(x - w * 0.18, h * 0.74); g.lineTo(x, h * 0.5); g.lineTo(x + w * 0.18, h * 0.74); fill(g, c.second); }
+    else if (i === 1) { for (let r = 0; r < 4; r++) { g.beginPath(); g.arc(x, h * 0.46, h * (0.05 + r * 0.05), r, r + 4); stroke(g, r % 2 ? c.accent : c.mid, 3); } }
+    else { g.beginPath(); g.ellipse(x, h * 0.46, w * 0.08, h * 0.17, 0, 0, TAU); fill(g, c.mid); dot(g, x, h * 0.38, h * 0.06, c.page); }
+    line(g, x - w * 0.06, h * 0.86, x + w * 0.06, h * 0.86, c.mid, 2); }
+};
+const ease = (k) => k * k * (3 - 2 * k);
+
 // small drawing helpers
 function line(g, x1, y1, x2, y2, col, wd) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); stroke(g, col, wd); }
 function stroke(g, col, wd) { g.strokeStyle = col; g.lineWidth = wd; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); }
@@ -201,10 +317,14 @@ function tick(now) {
   raf = 0;
   if (document.hidden) return;
   let n = 0, n3 = 0;
+  const ng = {};
   for (const [cv, it] of items) {
     if (!cv.isConnected) { items.delete(cv); if (io) io.unobserve(cv); continue; }
+    cv.dataset.moving = '0';
     if (it.still || !it.seen || n >= MAX || (it.three && P3 && n3 >= MAX3)) continue;
-    n++; if (it.three && P3) n3++;
+    if (it.group && GROUP_MAX[it.group] && (ng[it.group] || 0) >= GROUP_MAX[it.group]) continue;
+    n++; if (it.three && P3) n3++; if (it.group) ng[it.group] = (ng[it.group] || 0) + 1;
+    cv.dataset.moving = '1';
     if (now - last >= 30) draw(cv, it, now / 1000);
   }
   if (now - last >= 30) last = now;
@@ -214,9 +334,9 @@ function kick() { if (!raf && !document.hidden) raf = requestAnimationFrame(tick
 document.addEventListener('visibilitychange', kick);
 
 // Show the preview for a lab on this canvas (still with Reduce Motion or Lite mode, or { still: true })
-export function preview(cv, id, { still = false, three = false } = {}) {
+export function preview(cv, id, { still = false, three = false, group = '' } = {}) {
   if (!P[id]) return false;
-  const it = { id, seen: !io, still: still || quiet(), c: null, frame: 0, three: three && !window.CASSIE_LITE };
+  const it = { id, seen: !io, still: still || quiet(), c: null, frame: 0, three: three && !window.CASSIE_LITE, group };
   if (it.three) load3d().then((m) => { if (m && cv.isConnected) draw(cv, it, it.still ? 1.6 : performance.now() / 1000); });
   items.set(cv, it);
   cv.dataset.preview = id;

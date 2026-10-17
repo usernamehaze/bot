@@ -2457,3 +2457,45 @@ html.native .hub-hero-phone .hub-top { padding: calc(12px + var(--safe-top)) 20p
 .hub .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
   background: var(--primary); color: var(--on-primary); box-shadow: var(--lg-lift); }
 .hub .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
+
+/* ---------- Labs on a phone: the Labs tab ----------
+   (labs/labs.js, only under 760px: a computer keeps the Labs shelf) Today's Lab, then For you
+   (Learn, Study tools), each with a live mini preview; the lists have a preview on every row. */
+.labs.lp-on { background: var(--bg); color: var(--text); }
+.labs.lp-on .labs-shelf > :not(.lp) { display: none; }
+.labs.lp-on button:focus-visible, .labs.lp-on input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lp { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: calc(14px + var(--safe-top)) 20px calc(110px + var(--safe-bottom)); }
+.lp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lp-head h2 { margin: 0; font-size: 1.9rem; letter-spacing: -.03em; }
+.labs .lp-find { display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border-radius: 50%; border: 1px solid var(--lg-line); background: var(--lg-fill-thick); color: var(--text); box-shadow: var(--lg-edge); cursor: pointer; }
+.lp-find svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.lp-find[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.lp-q { width: 100%; margin-top: 12px; min-height: 46px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--lg-line); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; }
+.lp-q::placeholder { color: var(--muted); }
+.lp-chips { display: flex; gap: 8px; margin: 14px -20px 4px; padding: 0 20px 4px; overflow-x: auto; scrollbar-width: none; }
+.lp-chips::-webkit-scrollbar { display: none; }
+.labs .lp-chips button { flex: none; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--lg-line); background: var(--lg-fill-thick); color: var(--text); font-weight: 650; font-size: .92rem; cursor: pointer; }
+.labs .lp-chips button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.lp-h { margin: 18px 2px 10px; font-size: 1.15rem; letter-spacing: -.01em; }
+.lp-card { position: relative; border-radius: 26px; overflow: hidden; background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
+.lp-pv { display: block; width: 100%; height: 100%; }
+.lp-big { height: 176px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.lp-tag { position: absolute; top: 12px; left: 12px; padding: 3px 10px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: .74rem; font-weight: 700; }
+.lp-peek { position: absolute; top: 10px; right: 12px; width: 30px; height: 34px; transform: rotate(-12deg); filter: drop-shadow(0 4px 6px rgba(var(--ink-rgb), .25)); }
+.lp-info { display: flex; flex-direction: column; gap: 2px; padding: 12px 84px 14px 16px; border-top: 1px solid var(--lg-line); }
+.lp-info b { font-size: 1.1rem; }
+.lp-info small, .lp-for small, .lp-row small { color: var(--muted); font-size: .84rem; }
+.labs .lp-play { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: var(--primary); color: var(--on-primary); box-shadow: var(--lg-lift); cursor: pointer; }
+.lp-play svg { width: 22px; height: 22px; fill: currentColor; }
+.labs .lp-for, .labs .lp-row { display: flex; align-items: center; gap: 14px; width: 100%; margin-bottom: 10px; padding: 10px 14px 10px 10px; border-radius: 22px; text-align: left;
+  border: 1px solid var(--lg-line); background: var(--lg-fill-thick); box-shadow: var(--lg-edge); color: var(--text); cursor: pointer; }
+.lp-for > canvas { flex: none; width: 108px; height: 80px; border-radius: 16px; background: var(--surface); }
+.lp-for > span, .lp-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lp-for b { font-size: 1.12rem; }
+.lp-for i, .lp-row i { font-style: normal; font-size: 1.5rem; color: var(--muted); }
+.lp-list-head { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; }
+.lp-list-head h3 { margin: 0; font-size: 1.3rem; }
+.labs .lp-back { display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border-radius: 50%; border: 1px solid var(--lg-line); background: var(--lg-fill-thick); color: var(--text); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+.lp-thumb { flex: none; display: grid; place-items: center; width: 72px; height: 56px; border-radius: 14px; background: var(--surface); color: var(--primary-ink); overflow: hidden; }
+.lp-thumb svg { width: 30px; height: 30px; }
+.lp-row b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
