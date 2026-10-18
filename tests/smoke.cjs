@@ -2635,6 +2635,22 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
 });
 
 // A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
+// Bella's studio voice, switched on in a page that is already open (a tiny WAV for each sentence): for
+// tests that open the voice screen, which only opens when Bella can speak
+const studioOn = (page) => page.evaluate(() => {
+  if (window.__studioOn) return window.CassieVoice.studio.refresh();
+  window.__studioOn = true;
+  const realFetch = window.fetch.bind(window);
+  const wav = () => { const n = 800, b = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true); return b.buffer; };
+  window.fetch = async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+    if (url.pathname !== '/speak') return realFetch(input, init);
+    if (!init.method || init.method === 'GET') return new Response('{"on":true,"left":9000,"back":"2026-11-01"}', { headers: { 'content-type': 'application/json' } });
+    return new Response(wav(), { headers: { 'content-type': 'audio/mpeg', 'x-speak': 'new' } });
+  };
+  return window.CassieVoice.studio.setup({ server: 'https://studio.test', uid: 'test-uid-0002' });
+});
 const FAKE_VOICE = (opts) => {
   window.__spoken = []; window.__recs = []; window.__shown = [];
   // Bella's studio voice, faked in the page: GET /speak says what's left (window.__studioCfg.left), POST
@@ -5711,6 +5727,7 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
     for (const [act, , opened] of BOXES) {
       if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); }
       else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 }); }
+      if (act === 'talk') await studioOn(page); // (the voice screen opens only when Bella can speak)
       await page.click(`${hub} .hub-box[data-hub="${act}"]`);
       const ok = await opened(page).then(() => true, () => false);
       expect(ok, `${size}: the ${act} box opens its feature`);
@@ -6205,7 +6222,7 @@ const TAP_SCREENS = [
     await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
     await page.click('[data-room-act="study"]'); await page.waitForTimeout(600);
   }, { server: true }],
-  ['Talk with Cassie', async (page) => { await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
+  ['Talk with Cassie', async (page) => { await studioOn(page); await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
 ];
 test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
   const { tapTargetIssues } = require('./ui-checks.cjs');
