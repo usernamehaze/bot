@@ -1949,6 +1949,181 @@ test('Teach me on phones: the phone’s own voice (iPhone Premium, then Enhanced
   }
 });
 
+test('exam plans: Cassie makes a dated day by day plan, today’s tasks open their feature and stay ticked after a reload, a missed day moves on (never more than 3 a day), Free keeps 1 plan and Plus 5, a bad reply shows Try again, and the plan closes with a summary', async (b) => {
+  // Cassie's plan, faked from what she was asked: the days she was given, a few tasks a day, plus some junk to leave out
+  let broken = false;
+  const fakeGroq = (body) => {
+    const t = JSON.stringify(body);
+    if (!/day by day study plan/.test(t)) return { text: 'Question 1: What is a mole?' };
+    if (broken) return { text: 'Sorry, here is a plan: day one study hard.' };
+    const [, from, last] = t.match(/Plan these days: (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})/);
+    const days = [];
+    for (let d = new Date(from + 'T00:00:00Z'), k = 0; d.toISOString().slice(0, 10) <= last; d.setUTCDate(d.getUTCDate() + 1), k++) {
+      const date = d.toISOString().slice(0, 10);
+      days.push({ date, tasks: k === 0
+        ? [{ kind: 'learn', topic: 'Stoichiometry' }, { kind: 'quiz', topic: 'Stoichiometry' }, { kind: 'cards', topic: 'Stoichiometry' }, { kind: 'focus', topic: 'Moles' }, { kind: 'dance', topic: 'x' }]
+        : [{ kind: k % 2 ? 'mistakes' : 'quiz', topic: 'Gas laws' }] });
+    }
+    days.push({ date: '1999-01-01', tasks: [{ kind: 'quiz', topic: 'Too early' }] });
+    return { text: '```json\n' + JSON.stringify({ days }) + '\n```' };
+  };
+  const seed = { groqKey: 'gsk_test', tab: 'home', plan: null, chats: [{ id: 'h1', title: 'Moles', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A count.' }], updatedAt: Date.now() }] };
+  const { ctx, page, errors, groqCalls } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed, fakeGroq });
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  const hub = '#home .hub';
+  await page.waitForSelector(`${hub} .ex-new`, { timeout: 10000 });
+  const today = await page.evaluate(() => phDay()), inDays = (n) => page.evaluate(([d, n]) => dayAdd(d, n), [today, n]);
+  // the form checks each field in plain words
+  await page.click(`${hub} .ex-new`);
+  await page.waitForSelector('.ex-sheet .ex-form');
+  for (const sel of ['.ex-field input[name=name]', '.ex-field input[name=date]', '.ex-field textarea', '.ex-make', '.ex-cancel', '.ex-file-btn']) { const bb = await page.locator('.ex-sheet ' + sel).boundingBox(); expect(bb && bb.height >= 44, `${sel} is 44px: ` + JSON.stringify(bb)); }
+  await page.click('.ex-make');
+  const errs = await page.locator('.ex-sheet .field-err:not([hidden])').allInnerTexts();
+  expect(errs.includes(await page.evaluate(() => CassieErrors.say('exam_name_needed'))) && errs.includes(await page.evaluate(() => CassieErrors.say('exam_date_needed'))), 'empty fields say what to do: ' + errs.join(' | '));
+  // Plans from your notes are Plus
+  await page.click('.ex-file-btn');
+  await page.waitForSelector('.plus-sheet');
+  expect(/Plans from your notes comes with Plus/.test(await page.locator('.plus-sheet h3').innerText()), 'a plan from a file is a Plus extra');
+  await page.click('.plus-sheet .plus-ok');
+  // a bad reply: the error in plain words, with Try again (and the form stays filled)
+  broken = true;
+  await page.fill('.ex-sheet input[name=name]', 'Gen Chem finals');
+  await page.fill('.ex-sheet input[name=date]', await inDays(5));
+  await page.fill('.ex-sheet textarea', 'Stoichiometry, gas laws');
+  await page.click('.ex-make');
+  await page.waitForSelector('.ex-sheet .ex-again', { timeout: 10000 });
+  expect((await page.locator('.ex-sheet .ex-status').innerText()).includes(await page.evaluate(() => CassieErrors.say('exam_plan_failed'))), 'a bad plan says so with Try again');
+  expect((await page.locator('.ex-again').boundingBox()).height >= 44, 'Try again is 44px');
+  broken = false;
+  await page.click('.ex-again');
+  await page.waitForSelector(`${hub} .ex-plan`, { timeout: 10000 });
+  const asked = groqCalls.filter((c) => /day by day study plan/.test(JSON.stringify(c)));
+  expect(asked.length === 2 && /Exam: \\"Gen Chem finals\\"/.test(JSON.stringify(asked[1])) && /Stoichiometry, gas laws/.test(JSON.stringify(asked[1])), 'Cassie was asked for the plan, with the exam and its topics');
+  const plan = await page.evaluate(() => state.exams[0]);
+  expect(plan.days[0].date === today && plan.days.at(-1).date === await inDays(4) && plan.days.length === 5, 'the plan runs from today to the day before the exam: ' + plan.days.map((d) => d.date).join(','));
+  expect(plan.days.every((d) => d.tasks.length >= 1 && d.tasks.length <= 3) && plan.days.flatMap((d) => d.tasks).every((t) => ['learn', 'quiz', 'cards', 'mistakes', 'focus'].includes(t.kind)), 'every day has 1 to 3 real tasks, junk left out: ' + JSON.stringify(plan.days.map((d) => d.tasks.map((t) => t.kind))));
+  expect(plan.days[1].tasks[0].kind === 'focus' && plan.days[1].tasks.length === 2, 'a 4th task on a day moves to the next day: ' + JSON.stringify(plan.days[1].tasks));
+  // today's tasks on Home
+  const labels = await page.locator(`${hub} .ex-plan .ex-task`).allInnerTexts();
+  expect(labels.join('|') === 'Learn Stoichiometry with Cassie|Quiz me on Stoichiometry|10 flashcards on Stoichiometry', 'today’s three tasks: ' + labels.join(' | '));
+  for (const sel of ['.ex-check', '.ex-task', '.ex-all', '.ex-del']) { const bb = await page.locator(`${hub} .ex-plan ${sel}`).first().boundingBox(); expect(bb.height >= 44 && bb.width >= 44, `${sel} is 44px: ` + JSON.stringify(bb)); }
+  const homeText = await page.locator(hub).innerText();
+  expect(!/[—–]/.test(homeText), 'no dashes on Home');
+  // tick one; it stays ticked after a reload
+  await page.click(`${hub} .ex-plan .ex-check >> nth=0`);
+  await page.reload();
+  await page.waitForSelector(`${hub} .ex-plan`, { timeout: 10000 });
+  expect(await page.locator(`${hub} .ex-plan .ex-check input >> nth=0`).isChecked() && !(await page.locator(`${hub} .ex-plan .ex-check input >> nth=1`).isChecked()), 'the tick is kept after a reload');
+  const total = await page.evaluate(() => state.exams[0].days.flatMap((d) => d.tasks).length);
+  expect(new RegExp(`1 of ${total} tasks done`).test(await page.locator(`${hub} .ex-head small`).innerText()) && total === 8, 'the plan counts it: ' + await page.locator(`${hub} .ex-head small`).innerText());
+  // each task opens its feature: the quiz in the chat, the flashcards
+  const n0 = groqCalls.length;
+  await page.click(`${hub} .ex-plan .ex-task >> nth=1`);
+  await page.waitForFunction((n) => window.__quizAsked || document.querySelector('#quiz-btn.active'), n0, { timeout: 8000 });
+  await page.waitForFunction(() => /Quiz me on: Stoichiometry/.test(JSON.stringify(state.messages)), null, { timeout: 8000 });
+  await page.evaluate(() => CassieNative.go('home'));
+  await page.waitForSelector(`${hub} .ex-plan`);
+  await page.click(`${hub} .ex-plan .ex-task >> nth=2`);
+  await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 });
+  await page.evaluate(() => CassieNative.go('home'));
+  // a missed day: its tasks move to the next days, never more than 3 on a day
+  const moved = await page.evaluate(([today]) => {
+    const t = (k) => ({ id: 'x' + k + Math.random(), kind: 'quiz', topic: 'T' + k, done: false });
+    const e = { id: 'm', name: 'Mock', from: dayAdd(today, -2), date: dayAdd(today, 4), days: [
+      { date: dayAdd(today, -2), tasks: [t(1), { ...t(2), done: true }] }, { date: dayAdd(today, -1), tasks: [t(3), t(4), t(5)] },
+      { date: today, tasks: [t(6), t(7)] }, { date: dayAdd(today, 1), tasks: [t(8), t(9), t(10)] }] };
+    reflowExam(e, today);
+    return e.days.map((d) => [d.date, d.tasks.map((x) => x.topic)]);
+  }, [today]);
+  const per = Object.fromEntries(moved);
+  expect(per[await inDays(-2)].length === 1 && !per[await inDays(-1)], 'missed days keep only what was done: ' + JSON.stringify(moved));
+  expect(Object.values(per).every((x) => x.length <= 3) && per[today].join() === 'T6,T7,T1' && per[await inDays(2)].join() === 'T3,T4,T5', 'missed tasks move to the next days with room (max 3 a day): ' + JSON.stringify(moved));
+  // Free keeps one plan: a 2nd shows the Plus sheet, and the plan stays
+  await page.click(`${hub} .ex-new`);
+  await page.waitForSelector('.plus-sheet');
+  expect(/More exam plans comes with Plus/.test(await page.locator('.plus-sheet h3').innerText()) && await page.locator('.ex-sheet').count() === 0, 'Free: a 2nd plan shows the Plus sheet');
+  await page.click('.plus-sheet .plus-ok');
+  expect(await page.evaluate(() => state.exams.length) === 1, 'Free keeps the plan it has');
+  // Plus can make 5
+  await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 864e5 }; save(); refreshHub(); });
+  for (let k = 2; k <= 5; k++) {
+    await page.click(`${hub} .ex-new`);
+    await page.waitForSelector('.ex-sheet .ex-form');
+    await page.fill('.ex-sheet input[name=name]', `Exam ${k}`);
+    await page.fill('.ex-sheet input[name=date]', await inDays(3 + k));
+    await page.fill('.ex-sheet textarea', 'Gas laws');
+    await page.click('.ex-make');
+    await page.waitForFunction((k) => state.exams.length === k && !document.querySelector('.ex-sheet'), k, { timeout: 10000 });
+  }
+  expect(await page.locator(`${hub} .ex-plan`).count() === 5 && await page.locator(`${hub} .ex-new`).count() === 0 && /5 exam plans, the most at once/.test(await page.locator(`${hub} .ex-full`).innerText()), 'Plus: 5 plans, then no more');
+  // after the exam: the plan closes with what was done
+  await page.evaluate(([d]) => { const e = state.exams[0]; e.date = d; e.stats = { quizzes: 2, fixed: 3 }; save(); refreshHub(); }, [await inDays(-1)]);
+  const done = await page.locator(`${hub} .ex-done`).innerText();
+  expect(/Gen Chem finals: your plan is done/.test(done) && /Tasks done: 1 of /.test(done) && /Quizzes taken: 2/.test(done) && /Mistakes fixed: 3/.test(done), 'the summary: ' + done);
+  await page.click(`${hub} .ex-done .ex-close`);
+  expect(await page.evaluate(() => state.exams.length) === 4, 'Close removes the finished plan');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('your week: real counts after a quiz, a mistake review and a flashcard session, against last week; an empty week shows what to do; it shares as a picture', async (b) => {
+  const replies = { quiz: 'Correct!\n[[GOT: What is 2+2? || 4]]\n[[MISSED: What is H2O? || water]]\nQuestion 2: next?', review: 'Yes!\n[[GOT: What is the powerhouse of the cell? || mitochondria]]' };
+  const fakeGroq = (body) => { const msgs = (body.messages || []).filter((m) => m.role === 'user'), t = JSON.stringify(msgs.at(-1) || ''); return { text: /review the quiz questions I got wrong/.test(t) ? replies.review : /Quiz me on/.test(t) ? 'Question 1: What is 2+2?' : replies.quiz }; };
+  const lastMon = (() => { const d = new Date(Date.now() + 8 * 3600e3); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) - 7); return d.toISOString().slice(0, 10); })();
+  const seed = { groqKey: 'gsk_test', tab: 'chat', chats: [{ id: 'h1', title: 'Cells', messages: [{ role: 'user', content: 'cells' }, { role: 'assistant', content: 'ok' }], updatedAt: Date.now() }],
+    mistakes: [{ q: 'What is the powerhouse of the cell?', a: 'mitochondria', at: 1, due: 1, misses: 1 }],
+    cards: [{ id: 'c1', f: 'What is a cell?', b: 'The unit of life.', deck: 'Bio', box: 0, due: 0, at: 0 }] };
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: seed, fakeGroq });
+  const home = async () => { await page.evaluate(() => createNewChat()); await page.waitForSelector('#chat-log .hub .hub-week', { timeout: 10000 }); };
+  // nothing this week yet: what to do, not zeros
+  await home();
+  expect(await page.locator('#chat-log .hub-week .empty-state').count() === 1 && /Take a quick quiz/.test(await page.locator('#chat-log .hub-week').innerText()), 'an empty week says what to do');
+  // a quiz (one right, one missed), a mistake review (the saved one, right) and a flashcard session (Good)
+  await page.fill('#prompt-input', 'maths');
+  await page.click('#quiz-btn');
+  await page.waitForSelector('text=Question 1');
+  await ask(page, '4');
+  await page.click('#quiz-btn'); // stop
+  await page.evaluate(() => reviewMistakes(true));
+  await page.waitForFunction(() => !(state.mistakes || []).some((m) => /powerhouse/.test(m.q) && !m.right), null, { timeout: 8000 });
+  await page.evaluate(() => window.CassieCards.open());
+  await page.click('.fc [data-study], .fc-study, .fc .fc-go', { timeout: 3000 }).catch(() => {});
+  await page.waitForSelector('.fc-card', { timeout: 8000 });
+  await page.click('.fc-card'); await page.click('.fc-grade.good');
+  await page.click('.fc-x');
+  await page.waitForSelector('.fc', { state: 'hidden' });
+  // seed last week, then Home
+  await page.evaluate((d) => { state.progress[d] = { quizzes: 4, fixed: 1, cardsUp: 7, focus: 50, tasks: 2, answered: 10, right: 8 }; save(); }, lastMon);
+  await home();
+  const row = async (k) => (await page.locator(`#chat-log .hub-week [data-k="${k}"]`).innerText()).replace(/\s+/g, ' ');
+  const want = { fixed: /^1 mistakes fixed last week 1$/, cardsUp: /^1 flashcards moved up a level last week 7$/, quizzes: /^2 quizzes taken, 67% right last week 4$/, days: /^1 days studied last week 1$/, focus: /^0 focus minutes last week 50$/, tasks: /^0 exam plan tasks done last week 2$/ };
+  for (const [k, re] of Object.entries(want)) { const t = await row(k); expect(re.test(t), `${k}: ` + t); }
+  const card = await page.locator('#chat-log .hub-week').innerText();
+  expect(!/[—–]/.test(card), 'no dashes on the card');
+  expect((await page.locator('#chat-log .wk-share').boundingBox()).height >= 44, 'Share my week is 44px');
+  // it shares as a picture (saved here: this browser can't share files)
+  const dl = page.waitForEvent('download', { timeout: 8000 });
+  await page.click('#chat-log .wk-share');
+  const file = await dl;
+  expect(file.suggestedFilename() === 'my-week-with-cassie.png', 'the week as a picture: ' + file.suggestedFilename());
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#chat-log .hub-week, #chat-log .hub-exam'); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | ')); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the three sizes: nothing spills off the screen, every control on it is 44px
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const st = { ...seed, tab: 'home', progress: { [lastMon]: { quizzes: 1 } }, exams: [{ id: 'e1', name: 'Physics long test', date: '2099-01-01', from: '2000-01-01', days: [{ date: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), tasks: [{ id: 't1', kind: 'quiz', topic: 'Vectors', done: false }, { id: 't2', kind: 'mistakes', topic: '', done: false }] }], stats: {} }] };
+    st.progress[new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)] = { quizzes: 1, answered: 2, right: 1 };
+    const r = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: st });
+    const hub = viewport.width < 761 ? '#home .hub' : '#chat-log .hub';
+    if (viewport.width >= 761) await r.page.evaluate(() => createNewChat()); // (a computer: Home is a new, empty chat)
+    await r.page.waitForSelector(`${hub} .wk-card`, { timeout: 10000 });
+    const g = await r.page.evaluate((h) => { const els = [...document.querySelectorAll(`${h} .hub-exam button, ${h} .hub-exam label.ex-check, ${h} .hub-week button`)].filter((e) => e.offsetParent); return { small: els.filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).map((e) => e.className + ' ' + Math.round(e.getBoundingClientRect().height)), wide: document.documentElement.scrollWidth > innerWidth + 1 }; }, hub);
+    expect(!g.small.length && !g.wide, `${viewport.width}x${viewport.height}: ` + JSON.stringify(g));
+    expect(!r.errors.length, 'page errors: ' + r.errors.join('; '));
+    await r.ctx.close();
+  }
+});
+
 test('quiz saves missed questions for Review my mistakes', async (b) => {
   const replies = [
     'Question 1: What is the powerhouse of the cell?',
