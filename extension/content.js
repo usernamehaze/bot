@@ -165,6 +165,12 @@
     .dock-hl { width: 40px; border: none; border-radius: 12px; background: #34343e; color: #fff; cursor: pointer; padding: 6px 0 5px;
       display: flex; flex-direction: column; align-items: center; gap: 3px; font: 700 9px/1 system-ui, sans-serif; letter-spacing: .04em; transition: background .15s; }
     .dock-hl:hover { background: #4a4a56; }
+    .fab.fab-teach { width: 44px; height: 44px; }
+    .fab.fab-teach svg { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .dock-hl.dock-cur { width: 44px; min-height: 44px; }
+    .dock-hl.dock-cur[aria-pressed="true"] i { background: #f4f4f5; }
+    .dock-hl.dock-cur[aria-pressed="true"] i:after { background: #141416; }
+    .teach-again { margin-top: 10px; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: #34343e; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
     .dock-hl svg { width: 19px; height: 19px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .dock-hl i { display: block; width: 24px; height: 12px; border-radius: 6px; background: rgba(255,255,255,.25); position: relative; transition: background .15s; }
     .dock-hl i:after { content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: #fff; transition: transform .15s; }
@@ -438,6 +444,33 @@
     fab.innerHTML = '<svg viewBox="0 0 32 32"><path d="M6 2 L27 15 L17 17 L22 27 L17 29 L12 19 L6 24 Z"/></svg>';
     fab.addEventListener('click', () => { const r = dock.getBoundingClientRect(); closeDock(); showPageAsk({ left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height }); });
 
+    // Teach me this page: Cassie points at the parts and draws on the page, step by step (teach.js)
+    const teachBtn = document.createElement('button');
+    teachBtn.className = 'fab fab-teach';
+    teachBtn.type = 'button';
+    teachBtn.title = 'Teach me this page';
+    teachBtn.setAttribute('aria-label', 'Teach me this page');
+    teachBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 3l14 7-6.2 1.8L10 18z"/><path d="M14 20h7M17.5 16.5v7" transform="scale(.9) translate(2 -1)"/></svg>';
+    teachBtn.addEventListener('click', () => { const r = dock.getBoundingClientRect(); closeDock(); teachHere('', { left: r.left - 8, top: r.top, right: r.left - 8, bottom: r.bottom, width: 0, height: r.height }); });
+
+    // Cassie's cursor beside the mouse: on or off (remembered; the side panel has the same switch)
+    const curBtn = document.createElement('button');
+    curBtn.className = 'dock-hl dock-cur';
+    curBtn.type = 'button';
+    curBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg><i aria-hidden="true"></i><b>OFF</b>';
+    const paintCur = (v) => {
+      const on = v === 'on';
+      curBtn.setAttribute('aria-pressed', String(on));
+      curBtn.querySelector('b').textContent = on ? 'ON' : 'OFF';
+      curBtn.title = on ? 'Cassie’s cursor is ON: she stays beside your mouse. Tap to turn her off.' : 'Cassie’s cursor is OFF. Tap to have her stay beside your mouse.';
+      curBtn.setAttribute('aria-label', 'Cassie’s cursor ' + (on ? 'on' : 'off'));
+    };
+    try {
+      chrome.storage.local.get(['teachCursor'], (o) => paintCur(o && o.teachCursor));
+      chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.teachCursor) paintCur(ch.teachCursor.newValue); });
+    } catch (e) { paintCur('off'); }
+    curBtn.addEventListener('click', () => { chrome.storage.local.get(['teachCursor'], (o) => chrome.storage.local.set({ teachCursor: o.teachCursor === 'on' ? 'off' : 'on' })); });
+
     // "Snip & explain" — drag a box around a graph/picture/question.
     annotateBtn = document.createElement('button');
     annotateBtn.className = 'annotate-fab';
@@ -518,7 +551,7 @@
     const grip = document.createElement('div');
     grip.className = 'dock-grip';
     grip.title = 'Drag to move';
-    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, annotateBtn, hlBtn, boardBtn, hideBtn);
+    tray.append(grip, ...(fileBtn ? [fileBtn] : []), fab, teachBtn, annotateBtn, hlBtn, curBtn, boardBtn, hideBtn);
     shadow.appendChild(dock);
 
     const site = location.hostname || 'local';
@@ -1053,9 +1086,42 @@
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
   }
 
+  // Teach me and Ask: she reads the page only now, then points at it and draws on it, step by step
+  // (teach.js). Her words stay in this card; the lesson is saved in the side panel when it's closed.
+  const teachUi = (hidden) => { if (dock) dock.style.visibility = hidden ? 'hidden' : ''; popover.style.visibility = hidden ? 'hidden' : ''; };
+  async function teachHere(q, rect) {
+    const T = window.CassieTeach;
+    rect = rect || bottomRightRect();
+    try { chrome.storage.local.get(['teachCursor'], (o) => { if (o.teachCursor == null) chrome.storage.local.set({ teachCursor: 'on' }); }); } catch (e) { /* ignore */ } // (her cursor comes on with the first lesson)
+    manualOpen = true;
+    popover.hidden = false;
+    setContent(q ? 'Cassie is reading your page…' : 'Cassie is looking at your page…', { muted: true });
+    positionPopover(rect);
+    const myGen = ++gen;
+    try {
+      const out = await T.run({ q, from: T.follow.on ? T.follow.at() : null, hideUi: teachUi });
+      if (myGen !== gen) return;
+      if (q) { // (follow-ups go on as a normal chat about the page's words)
+        const pageText = ((document.body && document.body.innerText) || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+        convo = [{ role: 'user', content: `Here is the text of the web page the user is currently viewing:\n\n"""\n${pageText}\n"""\n\nUsing that page, answer: ${q}` }, { role: 'assistant', content: out.answer }];
+        convoLabel = q; codeRun = null; renderAnswerView(out.answer, rect);
+      }
+      else hidePopover();
+    } catch (e) {
+      if (myGen !== gen) return;
+      setContent(T.problem(e), { muted: true });
+      const again = document.createElement('button');
+      again.type = 'button'; again.className = 'teach-again'; again.textContent = 'Try again';
+      again.addEventListener('click', () => teachHere(q, rect));
+      body.appendChild(again);
+      positionPopover(rect);
+    }
+  }
+
   function runPageAsk(question, rect) {
     rect = rect || bottomRightRect();
     if (question && careFirst(question, rect)) return;
+    if (window.CassieTeach && window.CassieTeach.run) { teachHere(question || 'Summarize this page and list the key points.', rect); return; }
     const q = question || 'Summarize this page and list the key points.';
     setContent('Reading the page…', { muted: true });
     positionPopover(rect);

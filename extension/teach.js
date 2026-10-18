@@ -22,7 +22,7 @@
   if (window.CassieTeach) return;
 
   const HOST_ID = 'cassie-teach-host-92f1';
-  const INK = '#141416', HALO = '#ffffff';
+  const INK = '#141416', HALO = '#ffffff', PAST = '#b4b4ba'; // (earlier steps fade to light grey, like a whiteboard)
   const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>';
   const SHAPES = ['circle', 'box', 'underline', 'highlight', 'arrow', 'line', 'curve', 'polygon', 'graph', 'text'];
 
@@ -168,6 +168,7 @@
     .ct-card button:disabled { opacity: .35; cursor: default; }
     .ct-card .ct-next { background: #f4f4f5; color: #111; border-color: #f4f4f5; }
     .ct-say { margin: 4px 0 10px; min-height: 2.9em; }
+    .ct-note { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: rgba(244,244,245,.78); }
     .ct-nav { display: flex; align-items: center; gap: 8px; }
     .ct-count { flex: 1; text-align: center; font-size: 13px; color: rgba(244,244,245,.75); }
     .ct-shot { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid rgba(127,127,127,.35); }
@@ -193,6 +194,7 @@
           <button type="button" class="ct-auto" aria-pressed="true" title="Go on to the next step by itself">Auto</button>
           <button type="button" class="ct-x" aria-label="Stop teaching">✕</button></div>
         <p class="ct-say" aria-live="polite"></p>
+        <p class="ct-note">When you’re done, close this. Everything Cassie taught is saved in the Cassie side panel.</p>
         <div class="ct-nav"><button type="button" class="ct-back">Back</button><span class="ct-count"></span><button type="button" class="ct-next">Next</button></div>
       </div>`;
     root.appendChild(wrap);
@@ -298,7 +300,7 @@
     }
 
     /* drawing: everything this step drew so far, each shape revealed over half a second */
-    let drawn = [], raf = 0, ptr = null;
+    let drawn = [], past = [], raf = 0, ptr = null;
     const ctx = canvas.getContext('2d');
     const paintOne = (s, k) => {
       const part = s.points && k < 1 ? { ...s, points: s.points.slice(0, Math.max(1, Math.ceil(s.points.length * k))) } : s;
@@ -321,6 +323,7 @@
         const r = t.rect;
         paintOne({ tool: 'pen', color: INK, size: 2, points: boxPts(r.left - 4, r.top - 3, r.width + 8, r.height + 6) }, 1);
       }
+      past.forEach((spec) => strokesOf(spec).forEach((s) => paintOne({ ...s, color: PAST }, 1)));
       drawn.forEach((d) => {
         const k = Math.min(1, (now - d.t0) / 550);
         if (k < 1) moving = true;
@@ -381,7 +384,9 @@
       ptr = s.point;
       const t0 = performance.now();
       drawn = s.draw.map((spec, i) => ({ spec, t0: t0 + 350 + i * 600 }));
+      past = steps.slice(0, k).flatMap((x) => x.draw); // (what she drew before stays, in grey)
       host.dataset.drawn = s.draw.map((d) => d.shape).join(',');
+      host.dataset.past = String(past.length);
       render(); later();
       s.draw.forEach((d, i) => setTimeout(later, 360 + i * 600)); // (each shape starts after the arrow arrives)
       speakThen(s.say, () => { if (autoOn && alive && at0 === k && k < steps.length - 1) go(k + 1); });
@@ -390,12 +395,14 @@
     function close() {
       if (!alive) return;
       alive = false;
+      if (lesson.save !== false) saveLesson();
       hush();
       cancelAnimationFrame(raf);
       removeEventListener('scroll', later, true); removeEventListener('resize', later);
       removeEventListener('keydown', onKey, true);
       host.remove();
       if (current && current.host === host) current = null;
+      followPaint(); // (her cursor comes back beside the mouse)
       if (opts.onClose) opts.onClose();
     }
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -415,7 +422,30 @@
       if (!autoOn) clearTimeout(timer);
     });
 
+    // the lesson, kept on this device: its title, every step's words, and a small picture with the drawings
+    const shotImg = inPanel ? $('img') : opts.shot ? Object.assign(new Image(), { src: opts.shot }) : null;
+    function saveLesson() {
+      let pic = '';
+      try {
+        render();
+        const g = opts.region, W = 480;
+        const srcW = inPanel || !g ? canvas.width : g.w * innerWidth * (devicePixelRatio || 1), srcH = inPanel || !g ? canvas.height : g.h * innerHeight * (devicePixelRatio || 1);
+        const H = Math.max(1, Math.round((W * srcH) / Math.max(1, srcW)));
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const x = c.getContext('2d');
+        x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+        if (shotImg && shotImg.complete && shotImg.naturalWidth) x.drawImage(shotImg, 0, 0, W, H);
+        if (!inPanel && g) { const d = devicePixelRatio || 1; x.drawImage(canvas, g.x * innerWidth * d, g.y * innerHeight * d, srcW, srcH, 0, 0, W, H); } else x.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, W, H);
+        pic = c.toDataURL('image/jpeg', 0.72);
+      } catch (e) { pic = ''; } // (a page that won't let its picture be read: the words are still kept)
+      const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), title: String(lesson.title || document.title || 'A page').slice(0, 120), q: String(lesson.q || '').slice(0, 300), steps: steps.map((x) => x.say), pic };
+      store.get(['teachLessons']).then((o) => { const list = Array.isArray(o.teachLessons) ? o.teachLessons : []; store.set({ teachLessons: [item, ...list].slice(0, 20) }); });
+    }
+
     current = { host, close };
+    followPaint(); // (her cursor beside the mouse waits while she teaches)
+    // she starts where her cursor was (beside the mouse), then glides to the first thing
+    if (opts.from && !inPanel) { cursor.style.transition = 'none'; cursor.style.transform = `translate(${Math.round(opts.from.x)}px, ${Math.round(opts.from.y)}px)`; cursor.classList.add('on'); void cursor.offsetWidth; cursor.style.transition = ''; }
     store.get(['teachVoice', 'teachAuto']).then((o) => {
       if (!alive) return;
       setVoice(o.teachVoice !== 'off'); setAuto(o.teachAuto !== 'off');
@@ -426,7 +456,94 @@
   }
   function stop() { if (current) current.close(); const old = document.getElementById(HOST_ID); if (old) old.remove(); current = null; }
 
-  window.CassieTeach = { parse, scan, show, stop, get active() { return !!current; } };
+
+  /* ---------- what Cassie is asked (the side panel and the page share these) ---------- */
+  const TEACH_SHAPES = (numbered) => `Each step can draw up to 3 shapes ("draw"). x, y, w, h and r are shares of the picture from 0 to 1, and (0, 0) is its top left corner.
+  ${numbered ? 'A shape can be about a numbered thing: {"shape":"circle","el":3}, {"shape":"box","el":3}, {"shape":"underline","el":3}, {"shape":"highlight","el":3}, {"shape":"arrow","to_el":3}.\n' : ''}{"shape":"circle","x":0.4,"y":0.3,"r":0.05}
+  {"shape":"box","x":0.1,"y":0.2,"w":0.3,"h":0.1}
+  {"shape":"underline","x":0.1,"y":0.25,"w":0.3}
+  {"shape":"highlight","x":0.1,"y":0.2,"w":0.3,"h":0.05}
+  {"shape":"arrow","from":[0.2,0.6],"to":[0.4,0.3]}
+  {"shape":"line","from":[0.1,0.5],"to":[0.6,0.5]}
+  {"shape":"curve","points":[[0.1,0.6],[0.3,0.4],[0.5,0.6]]}
+  {"shape":"polygon","points":[[0.2,0.2],[0.4,0.2],[0.3,0.4]]}
+  {"shape":"graph","fn":"x^2 - 4","xrange":[-4,4],"x":0.6,"y":0.1,"w":0.3,"h":0.3} (a small graph with its axes; fn uses * to multiply and ^ for powers)
+  {"shape":"text","x":0.5,"y":0.1,"text":"a short label"}
+  Draw only where it helps: circle or box the thing, an arrow to it, underline a key word, a graph for a function.`;
+  function prompt({ q = '', page = null, snipped = false }) {
+    const parts = page && !page.pictureOnly && !snipped && Array.isArray(page.items) ? page.items : [];
+    const list = parts.map((p) => `${p.n}. ${p.what} at [${p.box.join(', ')}]`).join('\n');
+    return `A student is studying ${snipped ? 'the part of their screen in this picture (they snipped it)' : 'what is on their screen right now (the picture)'}${page && page.title ? `, on a page called "${page.title}"` : ''}.
+  ${page && page.text && !snipped ? `The words on the page (maybe cut short):\n"""\n${page.text}\n"""\n` : ''}${list ? `Things on the screen you can point at, numbered, each with its box [x, y, w, h] as shares of the picture:\n${list}\n` : ''}
+  ${q ? `The student asks: "${q}"\nAnswer it, then show them on the screen, step by step, where the answer comes from.` : 'Teach it like a kind tutor sitting beside them: what it is, how to read it and the big ideas, in the order they should look at them. If there is a question on it, work it out with them step by step.'}
+  Reply with ONLY minified JSON, no other text:
+  {${q ? '"answer":"a short, clear answer in plain words, under 80 words",' : ''}"steps":[{"say":"one or two short, natural spoken sentences","point":${list ? '3' : '{"x":0.4,"y":0.3}'},"draw":[{"shape":"circle","x":0.4,"y":0.3,"r":0.05}]}]}
+  Give 2 to 6 steps. "point" is where her arrow goes: ${list ? 'the number of the thing on the list, or {"x":0.4,"y":0.3} for a spot on the picture, or 0 for nothing.' : 'a spot on the picture, {"x":0.4,"y":0.3}, or null for nothing.'}
+  ${TEACH_SHAPES(!!list)}
+  Read only what you can see; never invent words or numbers. No markdown, no emojis, no symbols that sound odd read aloud.`;
+  }
+  function answer(reply) {
+    try {
+      const t = String(reply || '').replace(/```(?:json)?/gi, ''), d = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+      return d && typeof d.answer === 'string' ? d.answer.trim().slice(0, 1500) : '';
+    } catch (e) { return ''; }
+  }
+  // what went wrong, in plain words (CassieErrors): a missing key, no internet, too slow, or "try again"
+  function problem(e) {
+    const m = String((e && e.message) || e || '');
+    if (m === 'no-key' || m === 'no-vision') return window.CassieErrors.say('teach_no_key');
+    const w = window.CassieErrors.explain({ message: m }, 'teach_failed');
+    return w === window.CassieErrors.say('unknown') ? window.CassieErrors.say('teach_failed') : w;
+  }
+
+  /* ---------- on a web page: Teach me and Ask from the floating Cassie button ---------- */
+  // run({ q, snip: { image, region }, from: { x, y }, hideUi(hidden) }) → { answer, steps }
+  // She reads the page (its numbered parts, and a picture of the screen) only now, when asked.
+  const keyed = (key) => Object.assign(new Error(key), { code: key });
+  async function run({ q = '', snip = null, from = null, hideUi = () => {} } = {}) {
+    stop();
+    const page = snip ? null : scan();
+    let image = snip ? snip.image : null;
+    if (!image) {
+      hideUi(true); followHide(true);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // (her own buttons stay out of the picture)
+      let out = null;
+      try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP' }); } catch (e) { out = null; } finally { hideUi(false); followHide(false); }
+      image = out && out.dataUrl && !(out.full && out.full.std < 4) ? out.dataUrl : null;
+      if (!image) throw keyed('teach_no_picture');
+    }
+    let r = null;
+    try { r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image, prompt: prompt({ q, page: page || { title: document.title }, snipped: !!snip }), maxTokens: 1400 }); } catch (e) { r = { error: e.message }; }
+    if (!r || r.error) throw new Error((r && r.error) || 'teach failed');
+    const steps = parse(r.reply, page && !page.pictureOnly ? page.items.length : 0);
+    const said = q ? answer(r.reply) || steps.map((x) => x.say).join(' ') : '';
+    if (steps.length) show({ steps, title: document.title, q }, { region: snip ? snip.region : null, from, shot: image });
+    else if (!said) throw keyed('teach_failed');
+    return { answer: said, steps };
+  }
+
+  /* ---------- Cursor Cassie beside the mouse (on a page; a switch turns her on or off) ---------- */
+  const FOLLOW_ID = 'cassie-follow-92f1';
+  let follow = null, followOn = false, followHidden = false, lastPointer = null;
+  function followPaint() { if (follow) follow.style.display = followOn && !followHidden && !current && lastPointer ? 'block' : 'none'; }
+  function followSet(on) {
+    followOn = !!on;
+    if (followOn && !follow && document.documentElement) {
+      follow = document.createElement('div');
+      follow.id = FOLLOW_ID;
+      Object.assign(follow.style, { position: 'fixed', left: '0', top: '0', width: '26px', height: '26px', zIndex: '2147483639', pointerEvents: 'none', display: 'none', transition: 'transform .12s ease-out' });
+      follow.attachShadow({ mode: 'open' }).innerHTML = '<style>svg{width:26px;height:26px;fill:#fff;stroke:#141416;stroke-width:1.6;stroke-linejoin:round;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}@media (prefers-reduced-motion: reduce){:host{transition:none!important}}</style>' + ARROW;
+      document.documentElement.appendChild(follow);
+      const a = followAt();
+      if (a) follow.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px)`;
+    }
+    followPaint();
+  }
+  function followHide(h) { followHidden = !!h; followPaint(); }
+  // where her cursor sits: beside the pointer, down and to the right, so it never covers what the student points at
+  const followAt = () => (lastPointer ? { x: lastPointer.x + 16, y: lastPointer.y + 18 } : null);
+
+  window.CassieTeach = { parse, scan, show, stop, prompt, answer, problem, run, follow: { set: followSet, hide: followHide, at: followAt, get on() { return followOn; } }, get active() { return !!current; } };
 
   // on a web page: the side panel asks for the parts, then shows the lesson (top frame only)
   const onCassieSite = document.querySelector('meta[name="cassie-app"]') || /(^|\.)askcassie\.pages\.dev$|(^|\.)usernamehaze\.github\.io$/.test(location.hostname);
@@ -435,9 +552,19 @@
       if (!msg) return false;
       if (msg.type === 'CASSIE_TEACH_PING') { reply({ ok: true }); return false; }
       if (msg.type === 'CASSIE_TEACH_SCAN') { stop(); reply(scan()); return false; }
-      if (msg.type === 'CASSIE_TEACH_SHOW') { reply({ ok: !!show(msg.lesson, { region: msg.region || null }) }); return false; }
+      if (msg.type === 'CASSIE_TEACH_SHOW') { reply({ ok: !!show(msg.lesson, { region: msg.region || null, shot: msg.shot || null, from: followOn ? followAt() : null }) }); return false; }
       if (msg.type === 'CASSIE_TEACH_STOP') { stop(); reply({ ok: true }); return false; }
       return false;
     });
+    // Cursor Cassie beside the mouse: on or off from the floating menu or the side panel (remembered)
+    addEventListener('pointermove', (e) => {
+      lastPointer = { x: e.clientX, y: e.clientY };
+      if (!followOn || !follow) return;
+      const a = followAt();
+      follow.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px)`;
+      followPaint();
+    }, { passive: true, capture: true });
+    store.get(['teachCursor']).then((o) => followSet(o.teachCursor === 'on'));
+    try { chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && ch.teachCursor) followSet(ch.teachCursor.newValue === 'on'); }); } catch (e) { /* ignore */ }
   }
 })();
