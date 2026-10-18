@@ -1001,7 +1001,7 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
 test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
   for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
-  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,content.js,errors.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
@@ -3132,6 +3132,318 @@ test('after the tour, on a computer: a video of how the Chrome extension works, 
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
+});
+
+// Speech, faked: the browser's speech recognition hears window.__ears.say a word at a time (or, with
+// mode 'denied', the microphone isn't allowed). Every value a box shows while it fills is kept.
+const FAKE_EARS = () => {
+  window.__ears = { say: 'how do plants make their food', mode: 'ok', starts: 0, values: [] };
+  class Ears extends EventTarget {
+    constructor() { super(); this.continuous = false; this.interimResults = false; this.done = false; }
+    fire(type, extra) { const e = new Event(type); Object.assign(e, extra || {}); this.dispatchEvent(e); if (typeof this['on' + type] === 'function') this['on' + type](e); }
+    start() {
+      window.__ears.starts++;
+      if (window.__ears.mode === 'denied') { setTimeout(() => { this.fire('error', { error: 'not-allowed' }); this.end(); }, 30); return; }
+      const words = window.__ears.say.split(' ');
+      let i = this.interimResults ? 1 : words.length;
+      const tick = () => {
+        if (this.done) return;
+        const res = [{ transcript: words.slice(0, i).join(' ') }]; res.isFinal = i === words.length;
+        this.fire('result', { resultIndex: 0, results: [res] });
+        if (i < words.length) { i++; this.t = setTimeout(tick, 120); } else this.t = setTimeout(() => this.end(), 250);
+      };
+      this.t = setTimeout(tick, 150);
+    }
+    end() { if (this.done) return; this.done = true; clearTimeout(this.t); this.fire('end'); }
+    stop() { setTimeout(() => this.end(), 10); }
+    abort() { this.end(); }
+  }
+  window.SpeechRecognition = Ears; window.webkitSpeechRecognition = Ears;
+  document.addEventListener('input', (e) => { const t = e.composedPath()[0]; if (t && typeof t.value === 'string') window.__ears.values.push(t.value); }, true);
+};
+const NO_EARS = () => { delete window.SpeechRecognition; delete window.webkitSpeechRecognition; window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined; window.MediaRecorder = undefined; };
+const SAID = 'how do plants make their food';
+const isGrey = (c) => { const m = String(c).match(/\d+(\.\d+)?/g); if (!m) return false; const [r, g, bl] = m.map(Number); return Math.abs(r - g) <= 16 && Math.abs(g - bl) <= 16; }; // (the surrounding ink: near black or near white)
+// The mic beside the box (sel; root: a shadow host when the box is inside one): how it looks, then say
+// SAID into it and wait for it to finish. inWorld(js): runs js where the fake speech lives (the
+// extension's own page script world). Returns what happened.
+async function micSay(page, sel, { root = null, inWorld = null } = {}) {
+  const look = await page.evaluate(([s, r]) => {
+    const box = (r ? document.querySelector(r).shadowRoot : document).querySelector(s); if (!box) return { missing: true };
+    box.scrollIntoView({ block: 'center' });
+    const m = box.nextElementSibling;
+    if (!m || !m.classList.contains('cmic')) return { noMic: true };
+    m.scrollIntoView({ block: 'nearest' }); // (in a panel that scrolls, the mic is just under its box)
+    const q = m.getBoundingClientRect(), cs = getComputedStyle(m);
+    return { w: q.width, h: q.height, label: m.getAttribute('aria-label'), shown: q.width > 0 && cs.display !== 'none' && cs.visibility !== 'hidden', onScreen: q.left >= 0 && q.right <= innerWidth + 1 && q.top >= 0 && q.bottom <= innerHeight + 1, color: cs.color, bg: cs.backgroundColor, border: cs.borderTopColor };
+  }, [sel, root]);
+  if (look.missing || look.noMic) return { look };
+  if (inWorld) await inWorld(`window.__ears.say = ${JSON.stringify(SAID)}; window.__ears.values = [];`);
+  else await page.evaluate((p) => { window.__ears.say = p; window.__ears.values = []; }, SAID);
+  await page.evaluate(([s, r]) => (r ? document.querySelector(r).shadowRoot : document).querySelector(s).nextElementSibling.click(), [sel, root]);
+  const during = await page.evaluate(([s, r]) => {
+    const top = r ? document.querySelector(r).shadowRoot : document, box = top.querySelector(s), m = box.nextElementSibling;
+    return { stop: /Stop/.test(m.textContent) && m.getAttribute('aria-label') === 'Stop listening', h: m.getBoundingClientRect().height, line: [...top.querySelectorAll('.cmic-line')].map((x) => x.textContent), placeholder: box.placeholder };
+  }, [sel, root]);
+  await page.waitForFunction(([s, r]) => { const box = (r ? document.querySelector(r).shadowRoot : document).querySelector(s); return !box || (box.nextElementSibling && box.nextElementSibling.getAttribute('aria-label') === 'Say it instead of typing'); }, [sel, root], { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(([s, r]) => {
+    const top = r ? document.querySelector(r).shadowRoot : document, box = top.querySelector(s);
+    return { value: box ? box.value : null, line: [...top.querySelectorAll('.cmic-line')].map((x) => x.textContent), sideways: document.documentElement.scrollWidth > innerWidth + 1 };
+  }, [sel, root]);
+  const values = inWorld ? await inWorld('window.__ears.values') : await page.evaluate(() => window.__ears.values);
+  return { look, during, after, values };
+}
+// what every mic must be: 44px, labelled, on screen, monochrome; Listening… and Stop while on; the words as they came
+function micLooksRight(where, r) {
+  expect(!r.look.missing, `${where}: the box is there`);
+  expect(!r.look.noMic, `${where}: has a mic`);
+  const L = r.look;
+  expect(L.shown && L.w >= 44 && L.h >= 44 && L.label === 'Say it instead of typing', `${where}: a 44px mic labelled "Say it instead of typing": ` + JSON.stringify(L));
+  expect(L.onScreen, `${where}: the mic is on screen: ` + JSON.stringify(L));
+  expect(isGrey(L.color) && isGrey(L.border) && (/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(L.bg) || isGrey(L.bg)), `${where}: monochrome: ` + JSON.stringify(L));
+  expect(r.during.stop && r.during.h >= 44 && r.during.line.includes('Listening…') && r.during.placeholder === 'Listening…', `${where}: Listening… and a Stop button while it listens: ` + JSON.stringify(r.during));
+  const partial = r.values.some((v) => / how do( plants)?$/.test(' ' + v.trim()) || /^how do( plants)?$/.test(v.trim()));
+  expect(partial && r.values.some((v) => v.includes(SAID)), `${where}: the words appear as they come: ` + JSON.stringify(r.values));
+  expect(!r.after.line.some((t) => /[–—]/.test(t)) && !r.after.sideways, `${where}: no dashes, nothing off screen: ` + JSON.stringify(r.after));
+}
+
+test('a mic on every box where a student writes to Cassie (app, Labs, the board): heard words fill the box as they come; ask boxes send and writing boxes keep the words to edit; not allowed or no speech: one plain line, or no mic, and typing still works; the chat’s own mic still works; 44px, monochrome, no dashes, nothing off screen at 1280x800, 390x844 and 360x740', async (b) => {
+  const fakeGroq = () => ({ text: 'Plants make food from light, water and carbon dioxide.' });
+  const reset = async (page) => { await page.goto(APP); await page.waitForSelector('#prompt-input', { timeout: 10000 }); };
+  // The boxes, every one: a missing mic fails here. ask: it sends what was said (seen in what reached Cassie)
+  const BOXES = [
+    { name: 'the Island ask box', sel: '.isle-card .isle-input', ask: true, open: async (page) => {
+      await dragIn(page, { text: 'Leaves are green' }); await dropOn(page);
+      await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 5000 });
+      await page.locator('.isle-card').getByRole('button', { name: 'Ask about it' }).click(); } },
+    { name: 'Ask about what you see (Labs)', sel: '.lab-helper .hp-ask input', ask: true, open: async (page) => {
+      await page.evaluate(() => openLabs('projectile'));
+      await page.waitForSelector('.lab-view:not([hidden]) .lab-ask', { timeout: 20000 }); await page.click('.lab-ask');
+      await page.waitForSelector('.lab-helper:not([hidden]) .hp-ask input', { timeout: 10000 }); } },
+    { name: 'the exam plan’s Topics', sel: '.ex-sheet textarea[name=topics]', open: async (page) => { await page.evaluate(() => openExamSheet()); await page.waitForSelector('.ex-sheet .ex-form'); },
+      kept: (page) => page.evaluate(() => !!document.querySelector('.ex-sheet .ex-form')) },
+    { name: 'Tell Cassie to remember something', sel: '#mem-fact', open: async (page) => { await page.evaluate(() => openMemory()); await page.waitForSelector('#mem-fact'); },
+      kept: (page) => page.evaluate(() => !window.CassieMemory.data.facts.some((f) => /plants/.test(f.text))) },
+    { name: 'Report a problem', sel: '.profile-overlay textarea[name=text]', open: async (page) => { await page.evaluate(() => openReport()); await page.waitForSelector('.profile-overlay textarea[name=text]'); },
+      kept: (page) => page.evaluate(() => !!document.querySelector('.profile-overlay textarea[name=text]')) },
+    { name: 'the study room note', sel: '.sr-foot textarea.sr-in', open: async (page) => {
+      await page.click('#board-btn'); await page.click('.csk-btn:has-text("Study together")'); await page.click('[data-room="new"]');
+      await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+      await page.click('[data-room-act="study"]'); await page.click('.sr-tabs [data-tab="notes"]'); await page.waitForSelector('.sr-foot textarea.sr-in'); },
+      kept: (page) => page.evaluate(() => !/plants make/.test((document.querySelector('.sr-body') || {}).textContent || '')) },
+    ...[['cardmatrix', '.lab-panel .tl-area', 'notes to turn into cards'], ['cornell', '.lab-panel .tl-area', 'Cornell notes'], ['thesis', '.tl-tmap textarea[data-f="thesis"]', 'the thesis'],
+      ['thesis', '.tl-tmap textarea[data-f="reason"]', 'a reason'], ['thesis', '.tl-tmap textarea[data-f="counter"]', 'the counter-argument'], ['thesis', '.tl-form textarea[data-k="quote"]', 'a quote']].map(([id, sel, what]) => ({
+      name: `Labs study tools: ${what}`, sel, open: async (page) => {
+        await page.evaluate((x) => openLabs(x), id);
+        await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 15000 });
+        if (/quote/.test(sel)) { await page.click('[data-adde="0"]'); await page.waitForSelector(sel); } } })),
+  ];
+  let { ctx, page, errors, groqCalls } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, fakeGroq, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true } });
+  await ctx.addInitScript(FAKE_EARS);
+  for (const box of BOXES) {
+    await reset(page);
+    await box.open(page);
+    const before = groqCalls.length;
+    const r = await micSay(page, box.sel);
+    micLooksRight(`1280x800 ${box.name}`, r);
+    if (process.env.SHOTS && /Island|thesis|Topics/.test(box.name)) await page.screenshot({ path: `${process.env.SHOTS}/mic-${box.name.replace(/\W+/g, '-')}.png` });
+    await page.waitForTimeout(box.ask ? 1200 : 300);
+    const reached = groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID));
+    if (box.ask) expect(reached, `${box.name}: the mic sends the question`);
+    else {
+      expect(!reached && (r.after.value || '').includes(SAID) && (box.kept ? await box.kept(page) : true), `${box.name}: the words stay in the box to edit, and nothing is sent or saved: ` + JSON.stringify(r.after));
+      // and typing still works, after the words
+      await page.locator(box.sel).first().press('End'); await page.keyboard.type(' and why');
+      expect((await page.locator(box.sel).first().inputValue()).endsWith(SAID + ' and why'), `${box.name}: typing goes on after the words`);
+    }
+  }
+  // the board: its own mic (sketch.js gets hear from the app)
+  await reset(page);
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask .csk-mic');
+  const bm = await page.locator('.csk-ask .csk-mic').boundingBox();
+  expect(bm.width >= 44 && bm.height >= 44 && await page.locator('.csk-ask .csk-mic').getAttribute('aria-label') === 'Say it instead of typing', 'the board’s mic is 44px and labelled');
+  let before = groqCalls.length;
+  await page.evaluate(() => { window.__ears.values = []; });
+  await page.click('.csk-ask .csk-mic');
+  expect(/Stop/.test(await page.locator('.csk-ask .csk-mic').innerText()) && await page.locator('.csk-ask input').getAttribute('placeholder') === 'Listening…', 'the board says Listening… with a Stop button');
+  await page.waitForFunction(() => /how do plants/.test(document.querySelector('.csk-ask input').value), null, { timeout: 5000 });
+  await page.waitForTimeout(2000);
+  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the board’s mic asks Cassie');
+  // the chat's own mic still works as before
+  await reset(page);
+  before = groqCalls.length;
+  await page.click('#mic-btn');
+  await page.waitForTimeout(1500);
+  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the chat’s mic still sends what was said');
+  // not allowed: one plain line, the box still takes typing
+  await reset(page);
+  await page.evaluate(() => { window.__ears.mode = 'denied'; openMemory(); });
+  await page.waitForSelector('#mem-fact + .cmic');
+  await page.click('#mem-fact + .cmic');
+  await page.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+  await page.fill('#mem-fact', 'My exam is on Friday');
+  expect(await page.inputValue('#mem-fact') === 'My exam is on Friday', 'typing still works after the mic can’t');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // phones: each mic on screen, 44px, nothing off the side
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }]]) {
+    ({ ctx, page, errors, groqCalls } = await open(b, { device, viewport, fakeGroq, state: { groqKey: 'gsk_test', tour: 'done' } }));
+    await ctx.addInitScript(FAKE_EARS);
+    for (const box of BOXES.filter((x) => !/study room/.test(x.name))) {
+      await reset(page);
+      await box.open(page);
+      const r = await micSay(page, box.sel);
+      micLooksRight(`${viewport.width}x${viewport.height} ${box.name}`, r);
+    }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+
+  // a browser that can't listen at all: no mic anywhere, and the boxes work as always
+  ({ ctx, page, errors } = await open(b, { device: 'Desktop Chrome', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true } }));
+  await ctx.addInitScript(NO_EARS);
+  await reset(page);
+  await page.evaluate(() => openMemory());
+  await page.waitForSelector('#mem-fact');
+  expect(!(await page.locator('#mem-fact + .cmic').isVisible()), 'no mic where the browser can’t listen');
+  await page.fill('#mem-fact', 'Typed');
+  expect(await page.inputValue('#mem-fact') === 'Typed', 'typing works');
+  await page.keyboard.press('Escape');
+  await reset(page);
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask input');
+  expect(!(await page.locator('.csk-ask .csk-mic').count()), 'the board has no mic either');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // one mic helper for the app and Labs, the same one in the extension; the board stays the same in both
+  expect(fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/mic.js'), 'utf8'), 'extension/mic.js is mic.js');
+  expect(fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/sketch.js'), 'utf8'), 'extension/sketch.js is sketch.js');
+  const mic = fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8');
+  expect(!/localStorage|indexedDB|console\.|track\(|fetch\(/.test(mic), 'the mic keeps and logs nothing');
+});
+
+test('a mic on every box where a student writes to Cassie in the extension (the side panel’s Ask Cassie and Ask a follow-up, the board, the on-page Island, the popup): the words fill the box and the question is sent; not allowed: one plain line; 44px, monochrome, no new permission', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && !manifest.optional_permissions, 'no new permission for the mic: ' + manifest.permissions.join());
+  expect(manifest.content_scripts[0].js.includes('mic.js'), 'the mic is on every page');
+  for (const f of ['panel.html', 'popup.html']) expect(/<script src="mic\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8')), `${f} loads the mic`);
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: every question that reaches it is kept
+    await sw.evaluate(() => {
+      self.__asked = [];
+      self.readPicture = async (keys, msg) => { self.__asked.push(String(msg.prompt || '')); return 'Plants make food from light.'; };
+      self.answerAny = async (input, keys, onDelta) => { self.__asked.push(JSON.stringify(input)); const t = 'Plants make food from light.'; if (onDelta) onDelta(t); return t; };
+      self.speakLeft = async () => ({ on: false, left: 0 });
+    });
+    const askedSaid = async () => (await sw.evaluate(() => self.__asked.slice())).some((x) => x.includes(SAID));
+    const id = new URL(sw.url()).host;
+
+    // 1. the side panel: Ask a follow-up, Ask Cassie, and the board
+    const panel = await ctx.newPage();
+    await panel.addInitScript(FAKE_EARS);
+    await panel.goto(`chrome-extension://${id}/panel.html`);
+    await panel.waitForSelector('#t-ask');
+    await panel.evaluate(() => { window.ask = (c) => { window.__asked = JSON.stringify(c); }; showTextJob('Leaves are green', 'explain'); });
+    let r = await micSay(panel, '.card .row input');
+    micLooksRight('the panel’s Ask a follow-up', r);
+    expect(/how do plants make their food/.test(await panel.evaluate(() => window.__asked)), 'Ask a follow-up: the mic sends it');
+    await panel.evaluate(() => { window.teach = (o) => { window.__taught = o.q; }; askPage(); });
+    r = await micSay(panel, '.ask-page form input');
+    micLooksRight('the panel’s Ask Cassie', r);
+    expect(await panel.evaluate(() => window.__taught) === SAID, 'Ask Cassie: the mic sends it');
+    await panel.evaluate(() => { window.vision = async (img, p) => { window.__vision = p; return 'ok'; }; openBoard(null); });
+    await panel.waitForSelector('.csk-ask .csk-mic');
+    const bm = await panel.locator('.csk-ask .csk-mic').boundingBox();
+    expect(bm.width >= 44 && bm.height >= 44, 'the panel board’s mic is 44px');
+    await panel.click('.csk-ask .csk-mic');
+    await panel.waitForFunction(() => /how do plants make their food/.test(window.__vision || ''), null, { timeout: 8000 });
+    await panel.close();
+
+    // 2. the popup's question box; then, not allowed: one plain line, and typing still works
+    const popup = await ctx.newPage();
+    await popup.addInitScript(FAKE_EARS);
+    await popup.goto(`chrome-extension://${id}/popup.html`);
+    await popup.waitForSelector('#page-q + .cmic');
+    r = await micSay(popup, '#page-q');
+    micLooksRight('the popup’s question box', r);
+    expect(await popup.locator('#page-answer').isVisible(), 'the popup: the mic asks about the page');
+    await popup.evaluate(() => { window.__ears.mode = 'denied'; document.getElementById('page-q').value = ''; });
+    await popup.click('#page-q + .cmic');
+    await popup.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+    await popup.fill('#page-q', 'Typed instead');
+    expect(await popup.inputValue('#page-q') === 'Typed instead', 'typing still works');
+    await popup.close();
+
+    // 3. on a page: the Island's ask box and the board (the extension's own page script: its speech is faked there)
+    const page = await ctx.newPage();
+    await page.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
+    const cdp = await ctx.newCDPSession(page);
+    const worlds = [];
+    cdp.on('Runtime.executionContextCreated', (e) => worlds.push(e.context));
+    await cdp.send('Runtime.enable');
+    await page.waitForTimeout(300);
+    const { frameTree } = await cdp.send('Page.getFrameTree');
+    const world = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
+    expect(world, 'the extension’s page script: ' + worlds.map((c) => c.name).join(', '));
+    const inWorld = async (js) => (await cdp.send('Runtime.evaluate', { contextId: world.id, expression: js, returnByValue: true })).result.value;
+    await inWorld(`(${FAKE_EARS})()`);
+    await page.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['%PDF-1.4 notes'], 'notes.pdf', { type: 'application/pdf' }));
+      window.__dt = dt;
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    });
+    await page.waitForFunction(() => { const i = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle'); return i && !i.hidden; }, null, { timeout: 3000 });
+    await page.evaluate(() => {
+      const el = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle');
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+    });
+    await page.locator('.cx-isle-chip', { hasText: 'Ask about it' }).click();
+    r = await micSay(page, '.cx-isle-ask input', { root: '#cassie-ext-host-92f1', inWorld });
+    micLooksRight('the on-page Island', r);
+    expect(/Opening in Cassie|Opened in Cassie|didn’t work/.test(await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').innerText)), 'the Island: the mic sends the question');
+    // the board, opened from a snip of the page
+    const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; const g = c.getContext('2d'); g.fillStyle = '#c00'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 5000 }).catch(() => {});
+    await page.evaluate((b64) => {
+      const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer(); dt.items.add(new File([u], 'shape.png', { type: 'image/png' })); window.__dt = dt;
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    }, png);
+    await page.waitForFunction(() => { const i = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle'); return i && !i.hidden; }, null, { timeout: 3000 });
+    await page.evaluate(() => {
+      const el = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle');
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+    });
+    const mic = page.locator('.csk-ask .csk-mic');
+    await mic.waitFor({ timeout: 10000 });
+    const pb = await mic.boundingBox();
+    expect(pb.width >= 44 && pb.height >= 44, 'the on-page board’s mic is 44px');
+    await mic.click();
+    for (let i = 0; i < 40 && !(await askedSaid()); i++) await page.waitForTimeout(250);
+    expect(await askedSaid(), 'the on-page board: the mic asks Cassie');
+  } finally { await ctx.close(); }
 });
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {

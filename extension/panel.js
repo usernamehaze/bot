@@ -209,6 +209,7 @@ function showTextJob(text, mode = 'explain') {
   };
   view.querySelector('.row .btn').addEventListener('click', follow);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') follow(); });
+  if (window.CassieMic) window.CassieMic.attach(input, { send: follow }); // (say it: it's asked)
   run(mode);
 }
 
@@ -261,6 +262,7 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
     onImage: (url) => { if (url) explainOnBoard(sess, url, '', 'paste'); },
     extra: [{ label: 'New snip', title: 'Snip the tab again', onClick: () => { window.CassieSketch.close(); snip(); } }],
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph the answer”)',
+    hear: window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null,
     onAsk: async (png, q, board) => { try { return withDrawing(q, await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their request: "${q}". Do exactly that. Answer clearly and kindly like a tutor, in under 150 words, plain text.${DRAW_HINT}`, 1200, board, { kind: 'board', q })); } catch (e) { return errorText(e); } },
     checkLabel: 'Check my work',
     onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board, { kind: 'board', q: 'Check my work' }); } catch (e) { return errorText(e); } },
@@ -407,6 +409,7 @@ function askPage() {
       <div class="answer" aria-live="polite"></div>
     </div><div class="teach-box"></div>`;
   const form = view.querySelector('form'), input = form.querySelector('input'), out = view.querySelector('.answer'), box = view.querySelector('.teach-box');
+  if (window.CassieMic) window.CassieMic.attach(input, { send: () => form.requestSubmit() });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const q = input.value.trim();

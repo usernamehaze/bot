@@ -106,6 +106,7 @@
     not_heard: 'Cassie couldn’t hear that clearly. Try again, or type it.',
     cant_listen: 'This browser can’t listen here, so talking won’t work. Type your question instead.',
     no_mic_browser: 'This browser can’t use the microphone, so talking won’t work here. Try Chrome, Edge or Safari.',
+    mic_here: 'Cassie can’t use the microphone here. Type it instead.',
     voice_no_answer: 'Sorry, Cassie couldn’t answer that just now. Can you say it again?',
 
     // Labs and the 3D views

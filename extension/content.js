@@ -1745,6 +1745,7 @@
         } catch (e) { return errorText(e); }
       },
       askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph the answer”)',
+      hear: window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null,
       onCheck: async (png, board) => {
         try {
           return await askVision(png, withBoxText(`This is a student's board: ${image ? 'a snip from their lesson, maybe with their own writing and sketches on top' : 'their own sketch / working'}. ${topic()}If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven't written anything yet, work out the question shown step by step and give the answer. Keep it short (under 120 words), plain text.`, boxText), null, 500, board, { kind: 'board', q: 'Check my work' });
@@ -2192,6 +2193,7 @@ Situation: "${text}"`;
         send(b.dataset.p);
       });
       form.addEventListener('submit', (e) => { e.preventDefault(); const q = input.value.trim(); if (q) send(q); });
+      if (window.CassieMic) window.CassieMic.attach(input, { send: () => form.requestSubmit() }); // (say it: it's asked)
     }
   }
 
