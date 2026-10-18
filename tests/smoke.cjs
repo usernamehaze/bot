@@ -751,6 +751,19 @@ test('the Pasado Pass: the pricing page opens on Semester with the pass, its pri
   for (const f of ['index.html', 'app.html', 'app.js', 'landing/landing.js']) expect(!/Most popular/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `no “Most popular” in ${f}`);
 });
 
+test('the FAQ tells the truth: what an account syncs is what the app syncs, chats stay on the device, and paying lists only what Lemon Squeezy offers (no GCash or Maya yet)', async () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const answer = (q) => { const m = html.match(new RegExp(`<summary>${q}</summary><p>([\\s\\S]*?)</p>`)); return m ? m[1].replace(/<[^>]+>/g, '') : ''; };
+  const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
+  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings' };
+  for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
+  expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
+  expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
+  expect(!/[—–]/.test(notes + pay), 'no dashes');
+});
+
 test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
   const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
   const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
