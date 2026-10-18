@@ -41,12 +41,15 @@ export async function startFakeServer(port = 4630) {
     return `${head}.${body}.${o.badSig ? sig.slice(0, -6) + 'AAAAAA' : sig}`;
   }
   const mode = { groq: 'ok', ai: 'ok', aiVision: 'ok', claude: 'off', gemini: 'off', groqVision: 'ok', calls: [], claudeCalls: [], geminiCalls: [] };
+  // Cloudflare's cache (the studio voice keeps each sentence it made): a small one in memory
+  if (!globalThis.caches) { const kept = new Map(); globalThis.caches = { default: { async match(req) { const r = kept.get(req.url); return r ? r.clone() : undefined; }, async put(req, res) { kept.set(req.url, res.clone()); } } }; }
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url);
     // fake Google and Apple public keys: ID tokens are made by POST /__idtoken with the test keys below
     if (u === 'https://www.googleapis.com/oauth2/v3/certs') return Response.json({ keys: [idp.google.pub] });
     if (u === 'https://appleid.apple.com/auth/keys') return Response.json({ keys: [idp.apple.pub] });
+    if (u.startsWith('https://api.elevenlabs.io/')) { mode.elevenCalls = (mode.elevenCalls || 0) + 1; return new Response(new Uint8Array([73, 68, 51, 4, 0, 0]), { headers: { 'content-type': 'audio/mpeg' } }); } // fake ElevenLabs: a few bytes of "MP3"
     if (u.startsWith('https://api.anthropic.com/')) { // fake Claude: mode.claude 'ok' | 'down' | 'refuse'
       if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-haiku' }, { id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
       const body = JSON.parse(init.body);
@@ -123,6 +126,8 @@ export async function startFakeServer(port = 4630) {
     get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 10)
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
+    get ELEVENLABS_API_KEY() { return mode.speakOn ? 'not-a-real-elevenlabs-key' : undefined; }, // (mode.speakOn: the studio voice is switched on)
+    get SPEAK_MONTHLY_CHARS() { return mode.speakMonth == null ? undefined : String(mode.speakMonth); },
     AI: { async run(model, input) {
       if (mode.ai !== 'ok') throw new Error('AI down');
       if (/scout|gemma-3/.test(model)) { // Workers AI picture readers (mode.aiVision)
