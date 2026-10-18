@@ -123,6 +123,14 @@
     tutor_no_brain: 'Cassie couldn’t reach her brain just now, maybe because the internet dropped. Check your connection, then ask again.',
     quiz_failed: 'Cassie couldn’t write a quiz just now because her brain didn’t reply. Try again in a moment.',
 
+    // exam plans (Home)
+    exam_plan_failed: 'Cassie couldn’t make your plan just now. Tap Try again.',
+    exam_name_needed: 'Give your exam a name, like “Gen Chem finals”.',
+    exam_date_needed: 'Pick the day of your exam.',
+    exam_date_past: 'That day has already passed. Pick the day of your exam, today or later.',
+    exam_date_far: 'That’s more than a year away. Pick a day in the next 12 months.',
+    exam_topics_needed: 'Add at least one topic, or tap one you’ve been studying.',
+    exam_file_failed: 'Cassie couldn’t read that file. Try a PDF, Word, PowerPoint or text file.',
     // Teach me and Ask Cassie on any web page (the browser extension)
     teach_failed: 'Cassie couldn’t make a lesson for this page just now. Tap Try again.',
     teach_no_picture: 'Cassie couldn’t see this tab, so she can’t teach it. Take a screenshot (Win+Shift+S, or Cmd+Shift+4 on a Mac), then open the Board and press Ctrl+V.',

@@ -58,8 +58,8 @@ Higher is better on every row: for Time Delay and Effort, 10 means fast and easy
 | "I don't know what to study" | Turn my file into a reviewer and quiz | File reviewer + Quiz me (exist) | S | Keep |
 | "I'm not sure the answer is right" | Show work step by step; check my answer | Check my work on the board (exists) | S | Keep |
 | "I forget it by the exam" | Mistakes and cards come back on time | Review my mistakes, flashcards (exist) | S | Keep |
-| "I can't see if I'm getting better" | A weekly progress card: mistakes fixed, cards mastered, streak | Home screen card (**to build**) | M | Keep |
-| "My exam is in 3 weeks and I'm lost" | Tell Cassie the exam date and topics; she makes a day by day plan | Exam plan + reminders (**to build**) | M | Keep |
+| "I can't see if I'm getting better" | A weekly progress card: mistakes fixed, cards moved up, quizzes, focus minutes, days studied | Home screen card (**built**, free for everyone, `app.js` `weekCard()`) | M | Keep |
+| "My exam is in 3 weeks and I'm lost" | Tell Cassie the exam date and topics; she makes a day by day plan | Exam plan on Home (**built**, `app.js` `examSection()`) | M | Keep |
 | "My parents won't pay for apps" | One payment per semester, a parent summary, a refund promise | Semester pass (decided), parent email (**to build**) | M | Keep |
 | "Monthly bills scare me" | No renewal on the Semester pass | Semester pass (decided) | S | Keep |
 | "Data is expensive" | Lite mode, short answers | Lite mode (exists) | S | Keep |
@@ -81,8 +81,8 @@ Higher is better on every row: for Time Delay and Effort, 10 means fast and easy
 |---|---|---|
 | Finals Reviewer Kit: any PDF or slides become a reviewer, a quiz and flashcards | Replaces buying reviewer books | ₱500 to ₱1,200 per book ([LET guide](https://supertutor.ph/blog/let-cost-2026-prc-fees-review-centres/)) |
 | All the 3D and Real 3D labs, any time | Seeing it is how science sticks | Estimate: one ₱400 tutor hour per topic it saves ([tutor listing](https://www.myprivatetutor.co.za/teacher/39948/marvin-james-a-experienced-math-teacher-and-tutor-for-high-school)) |
-| Exam plan: a day by day plan to your exam date (**to build**) | Turns "I'm lost" into "today, do this" | Estimate: what a tutor charges to plan, 1 hour, ₱400 |
-| Weekly progress card, and a parent summary email if the student turns it on (**to build**) | Proof it's working, for the student and the one paying | Hard to price; this is the trust bonus |
+| Exam plans: a day by day plan to each exam date, up to 5 at once and from your notes (**built**; Free keeps 1 plan) | Turns "I'm lost" into "today, do this" | Estimate: what a tutor charges to plan, 1 hour, ₱400 |
+| Weekly progress card (**built**, free for everyone, so it builds trust before anyone pays), and a parent summary email if the student turns it on (**to build**) | Proof it's working, for the student and the one paying | Hard to price; this is the trust bonus |
 | Save and print your notes, maps and boards | Bring your notes to class and to group study | Plus only today (`labs/tools.js`) |
 
 **Guarantee: "7 day no questions refund".** If Cassie isn't helping in the first 7 days, one message to askcassie.study@gmail.com gets every peso back. Lemon Squeezy can refund an order from its dashboard, and its `order_refunded` webhook ends the plan (planned in `docs/subscriptions-plan.md`). No conditions a student can't meet: no "must use it 30 days", no "must show your grades". Pair it with what's already promised: cancel in 3 taps, a reminder before any renewal.
@@ -121,7 +121,7 @@ For use only when payments are live. Until then, keep "Join the waitlist" and "P
   - 5 pictures a day, and photos of your notes read for you
   - All the 3D and Real 3D labs, any time
   - Save and print your notes, maps and boards
-  - Your exam plan and weekly progress card *(after they're built)*
+  - Up to 5 exam plans at once, and plans from your notes (Free keeps 1)
 - Plus button: **Get the Pasado Pass**
 - Small print under it: One payment of ₱599 for 5 months. Never renews. 7 days to change your mind.
 - Monthly small print: ₱149 a month. Renews until you cancel, in 3 taps in Settings. We remind you before each renewal.
@@ -149,8 +149,8 @@ For use only when payments are live. Until then, keep "Join the waitlist" and "P
 | Make the pricing page match the code (pictures, "up to 100 a day", remove what isn't built) | Likelihood (trust) | S | `index.html` | No (copy) |
 | Make the Semester pass the main Plus offer, named Pasado Pass | Effort (no bill, one payment) | S | `index.html`, `landing/landing.js` | Yes, small |
 | 7 day refund promise | Likelihood, Effort | S | `terms.html`, `index.html`, Lemon Squeezy dashboard | No |
-| Weekly progress card | Likelihood | M | `app.js` | Yes |
-| Exam plan to a date, with reminders | Time Delay, Likelihood | M | `app.js` | Yes |
+| Weekly progress card (**built**) | Likelihood | M | `app.js` | Yes |
+| Exam plan to a date (**built**) | Time Delay, Likelihood | M | `app.js` | Yes |
 | Parent summary email (opt in, from askcassie.study@gmail.com) | Likelihood for the buyer | M | `server/worker.src.js`, `app.js`, `privacy.html` | Yes |
 | Build "Refer a classmate" or remove it from the page | Likelihood (trust) | S to remove, M to build | `index.html`, server | Remove: no |
 | Build "Priority when busy" or remove it | Likelihood (trust) | S to remove | `index.html` | No |

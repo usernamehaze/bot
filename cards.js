@@ -8,7 +8,7 @@
  * Decks export for Anki (a tab-separated file Anki imports as-is) and Quizlet (paste into
  * "Import"), or as CSV.
  *
- *   CassieCards.init({ state: () => state, save, ask: async (prompt) => text, track, onChange })
+ *   CassieCards.init({ state: () => state, save, ask: async (prompt) => text, track, onChange, onGrade(boxBefore, boxAfter) })
  *   CassieCards.open(deck?) · CassieCards.fromText(text, deck) · CassieCards.fromMistakes()
  *   CassieCards.dueCount()
  */
@@ -88,6 +88,7 @@
     else if (how === 'hard') { card.due = now() + Math.max(10 * MIN, (GAPS[box] || 1) * DAY * 0.5); }
     else if (how === 'good') { card.box = Math.min(GAPS.length - 1, box + 1); card.due = now() + GAPS[card.box] * DAY; }
     else { card.box = Math.min(GAPS.length - 1, box + 2); card.due = now() + GAPS[card.box] * DAY * 1.3; }
+    if (ctx.onGrade) ctx.onGrade(box, card.box || 0); // (a card that moved up a level: the weekly card counts it)
     card.seen = now();
     ctx.save();
   }
