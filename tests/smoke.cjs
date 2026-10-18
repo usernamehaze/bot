@@ -2920,6 +2920,150 @@ test('Bella only: a 7-step lesson and a long Listen in Bella’s voice when ther
   expect(!/[–—]/.test(guide) && !/sk_[a-z0-9]{20,}|xi-api-key:\s*\w{20,}/i.test(guide), 'no dashes and no key in docs/voice-setup.md');
 });
 
+// Walks the whole tour with Next: at each stop the cursor is on the real control (inside its ring), the
+// card is whole on screen and not over the control, its words are 2 sentences at most with no dashes,
+// and every button is 44px. Back goes back one. Returns the stops' ids and words.
+async function walkTour(page, where) {
+  await page.waitForSelector('.tour-card', { timeout: 8000 });
+  const visited = [];
+  for (let i = 0; i < 12; i++) {
+    await page.waitForFunction((n) => (document.querySelector('.tour-count') || {}).textContent === `Stop ${n} of ${document.querySelector('.tour-count').textContent.split(' of ')[1]}`, i + 1, { timeout: 8000 });
+    await page.waitForTimeout(1300); // (the cursor glides, and a tab finishes growing)
+    const s = await page.evaluate(() => {
+      const card = document.querySelector('.tour-card'), ring = document.querySelector('.tour-ring'), cur = document.getElementById('cassie-cursor');
+      const c = card.getBoundingClientRect(), r = ring.hidden ? null : ring.getBoundingClientRect(), k = cur.getBoundingClientRect();
+      const t = window.CassieTour.target, tr = t && t.getBoundingClientRect();
+      const tip = [k.left + 1, k.top + 1], inRing = r && tr && tip[0] >= tr.left && tip[0] <= tr.right && tip[1] >= tr.top && tip[1] <= tr.bottom
+        && Math.abs(r.left - (tr.left - 6)) <= 3 && Math.abs(r.top - (tr.top - 6)) <= 3 && Math.abs(r.width - (tr.width + 12)) <= 3 && Math.abs(r.height - (tr.height + 12)) <= 3;
+      const over = r && !(c.right < r.left + 6 || c.left > r.right - 6 || c.bottom < r.top + 6 || c.top > r.bottom - 6);
+      const small = [...card.querySelectorAll('button')].filter((b) => { const q = b.getBoundingClientRect(); return q.height < 44 || q.width < 44; }).map((b) => b.textContent);
+      return { id: card.dataset.stop, count: card.querySelector('.tour-count').textContent, say: card.querySelector('.tour-say').textContent, inRing, over, cursorShown: getComputedStyle(cur).display !== 'none',
+        fits: c.left >= 0 && c.top >= 0 && c.right <= innerWidth && c.bottom <= innerHeight, small, sideways: document.documentElement.scrollWidth > innerWidth + 1, text: card.innerText };
+    });
+    expect(s.inRing && s.cursorShown, `${where} ${s.count} (${s.id}): Cassie’s cursor is on the control and the ring is around it: ` + JSON.stringify(s));
+    expect(s.fits && !s.over && !s.sideways, `${where} ${s.count} (${s.id}): the card is on screen and not over the control: ` + JSON.stringify(s));
+    expect(!s.small.length, `${where} ${s.count}: buttons under 44px: ` + s.small.join(', '));
+    expect(!/[–—]/.test(s.text), `${where} ${s.count}: no dashes: ` + s.text);
+    expect(s.say.split(/[.!?](?:\s|$)/).filter((x) => x.trim()).length <= 2, `${where} ${s.id}: 2 sentences at most: ` + s.say);
+    visited.push(s);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/tour-${where}-${i + 1}-${s.id}.png` });
+    if (i === 1) { // Back goes back one, then on again
+      await page.click('.tour-card [data-t="back"]');
+      await page.waitForFunction(() => /^Stop 1 of/.test(document.querySelector('.tour-count').textContent), null, { timeout: 5000 });
+      await page.click('.tour-card [data-t="next"]');
+      await page.waitForFunction(() => /^Stop 2 of/.test(document.querySelector('.tour-count').textContent), null, { timeout: 5000 });
+    }
+    const last = await page.evaluate(() => document.querySelector('.tour-card [data-t="next"]').textContent === 'Done');
+    await page.click('.tour-card [data-t="next"]');
+    if (last) break;
+  }
+  await page.waitForSelector('.tour-card', { state: 'detached', timeout: 5000 });
+  return visited;
+}
+const tourGone = (page) => page.evaluate(() => !document.querySelector('.tour-card, .tour-ring, .tour-veil, .tour-offer') && !document.documentElement.classList.contains('touring') && getComputedStyle(document.getElementById('cassie-cursor')).display === 'none');
+test('the tour: offered once after the first run (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
+  const PHONE = ['ask', 'quiz', 'talk', 'home', 'labs', 'games', 'cards', 'board', 'about', 'settings'];
+  // 1. a guest on a phone: the first run, then "a quick tour?" once
+  let { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, state: null });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await toSignIn(page);
+  await page.click('.auth-skip');
+  await onboard(page, { name: 'Gia' });
+  await page.waitForSelector('.tour-offer', { timeout: 5000 });
+  const offerText = await page.locator('.tour-offer').innerText();
+  expect(/Want a quick tour\? It takes about 90 seconds\./.test(offerText) && /Show me around/.test(offerText) && /Not now/.test(offerText), 'the offer: ' + offerText);
+  for (const bt of await page.locator('.tour-offer button').all()) { const bb = await bt.boundingBox(); expect(bb.height >= 44, 'offer buttons are 44px'); }
+  await page.click('.tour-offer [data-t="later"]');
+  const later = await page.locator('.tour-offer').innerText();
+  expect(/Settings, then Help, then Take the tour/.test(later) && !/[–—]/.test(later), 'Not now says where to find it: ' + later);
+  await page.reload();
+  await page.waitForTimeout(2000);
+  expect(!(await page.locator('.tour-offer, .tour-card').count()), 'never offered again after Not now');
+  // Settings, then Help, then Take the tour: the tour, with voice off (no speech at all)
+  await page.evaluate(() => { openSettings('help'); });
+  await page.waitForSelector('#tour-btn', { timeout: 5000 });
+  expect((await page.locator('#tour-btn').boundingBox()).height >= 44, 'Take the tour is 44px');
+  await page.click('#tour-btn');
+  await page.waitForSelector('.tour-card');
+  await page.click('.tour-card [data-t="voice"]');
+  expect(/Voice off/.test(await page.locator('.tour-card [data-t="voice"]').innerText()), 'the voice switch says Voice off');
+  await page.waitForTimeout(300);
+  const said0 = await page.evaluate(() => window.__studio.length);
+  let stops = await walkTour(page, '390x844');
+  expect(JSON.stringify(stops.map((s) => s.id)) === JSON.stringify(PHONE), 'the phone’s stops, along the tab bar: ' + stops.map((s) => s.id).join(', '));
+  let studio = await page.evaluate(() => window.__studio.length) - said0, spoken = await page.evaluate(() => window.__spoken.length);
+  expect(studio === 0 && spoken === 0, `voice off: nothing was spoken (${studio} studio, ${spoken} device)`);
+  expect(await tourGone(page), 'Done leaves nothing of the tour on screen');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).tourVoice === 'off' && state.tour === 'done'), 'the voice switch and the finished tour are remembered');
+  // started from Settings, it ends back in Settings (Help)
+  expect(await page.evaluate(() => !document.getElementById('settings-panel').hidden && document.querySelector('#settings-panel .settings-card').dataset.page === 'help'), 'back where it started: Settings, Help');
+  // Skip and Escape: nothing left, the app where it was (the Chat tab, Home scrolled where it was)
+  await page.evaluate(() => { closeSettings(); window.CassieNative.go('chat'); });
+  await page.waitForTimeout(400);
+  for (const how of ['skip', 'escape']) {
+    await page.evaluate(() => window.CassieTour.start());
+    await page.waitForSelector('.tour-card');
+    for (let i = 0; i < 4; i++) { await page.click('.tour-card [data-t="next"]'); await page.waitForTimeout(500); } // (to the Labs tab)
+    if (how === 'skip') await page.click('.tour-card [data-t="skip"]'); else await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    expect(await tourGone(page), `${how}: nothing of the tour is left on screen`);
+    expect(await page.evaluate(() => document.documentElement.classList.contains('tab-chat') && !document.documentElement.classList.contains('labs-open') && document.getElementById('settings-panel').hidden), `${how}: the app is back on the Chat tab`);
+  }
+  expect(await page.evaluate(() => window.__studio.length) === said0 && (await page.evaluate(() => window.__spoken.length)) === 0, 'voice off is remembered: later tours never speak');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 2. signed in, on a computer: offered once, the tour with Bella's voice, finished and synced to the account
+  ({ ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: null }));
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await toSignIn(page);
+  await page.fill('.auth-form input[name=email]', `tour${Date.now()}@example.com`);
+  await page.fill('.auth-form input[name=age]', '16');
+  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+  await page.click('.auth-go');
+  await onboard(page, { name: 'Hazel' });
+  await page.waitForSelector('.tour-offer', { timeout: 5000 });
+  await page.click('.tour-offer [data-t="go"]');
+  stops = await walkTour(page, '1280x800');
+  const computerSays = stops.map((x) => x.say);
+  expect(JSON.stringify(stops.map((s) => s.id)) === JSON.stringify(PHONE), 'the computer’s stops (the top bar, the sidebar and Home): ' + stops.map((s) => s.id).join(', '));
+  studio = await page.evaluate(() => window.__studio.filter((x) => x.ok).length);
+  expect(studio >= stops.length && (await page.evaluate(() => window.__spoken.length)) === 0, `voice on: Bella said the stops (${studio}), never the device voice`);
+  expect(await tourGone(page), 'Done leaves nothing on screen');
+  expect(await page.evaluate(() => accountData().tour === 'done'), 'the finished tour goes with the account');
+  await page.reload();
+  await page.waitForTimeout(2000);
+  expect(!(await page.locator('.tour-offer, .tour-card').count()), 'never starts by itself again');
+  // the card in light and dark: every word readable
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => window.CassieTour.start());
+    await page.waitForSelector('.tour-card'); await page.waitForTimeout(600);
+    const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.tour-card');
+    expect(!bad.length, `the tour card (${scheme}): ` + bad.join(' | '));
+    await page.keyboard.press('Escape');
+  }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 3. a small phone, with Reduce Motion: every stop still fits, and the cursor just appears
+  ({ ctx, page, errors } = await open(b, { device: 'Galaxy S9+', viewport: { width: 360, height: 740 }, server: false, state: { groqKey: 'gsk_test', tab: 'home', tour: 'done' } }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => window.CassieTour.start());
+  stops = await walkTour(page, '360x740');
+  expect(stops.length === PHONE.length, '360x740: every stop: ' + stops.map((s) => s.id).join(', '));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 4. about 90 seconds, read at 150 words a minute, on each device
+  for (const [where, say] of [['phone', stops.map((s) => s.say)], ['computer', computerSays]]) {
+    const words = say.join(' ').split(/\s+/).length, secs = words / 150 * 60;
+    expect(secs >= 75 && secs <= 105, `${where}: the tour reads in about 90 seconds: ${words} words, ${Math.round(secs)} s`);
+  }
+});
+
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
   await ctx.addInitScript(FAKE_VOICE, {});

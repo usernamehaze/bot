@@ -908,7 +908,8 @@ let anticTimer = null;
 let anticFirst = true;
 function anticBusy() {
   return !mascot || mascotDragging || mascotAsleep || document.hidden
-    || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil;
+    || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil
+    || document.documentElement.classList.contains('touring'); // (she stays put while the tour points at things)
 }
 function mascotWalk() {
   if (anticBusy()) return;
@@ -7143,7 +7144,10 @@ function frFinish(a) {
   frSave(null);
   frClose();
   if (typeof syncAccount === 'function') syncAccount(true);
+  offerTour();
 }
+// right after the first run (signed in or as a guest): a quick tour?, asked once, ever
+function offerTour() { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(); }, 700); }
 // where the first run starts: a returning student never sees it; a reload carries on
 function firstRun() {
   const saved = frLoad();
@@ -7182,7 +7186,7 @@ async function authCall(path, body, method = 'POST', { timeout = 20000, signal }
   return data;
 }
 function accountData() {
-  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics };
+  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -7197,7 +7201,7 @@ function syncAccount(now) {
 }
 function applyAccountData(d) {
   if (!d) return;
-  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
   if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
     const mine = new Map((state.cards || []).map((c) => [c.id, c]));
     d.cards.forEach((c) => { if (!c || !c.id || !c.f) return; const m = mine.get(c.id); if (!m || (c.seen || 0) > (m.seen || 0)) mine.set(c.id, c); });
@@ -7322,8 +7326,10 @@ function free3d(k, seen) {
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
   if (res.account.data && res.account.data.profile) {
+    const firstHere = !!frLoad(); // (signing in was this device's first run)
     frSave(null); // (the account already knows them: no questions)
     applyAccountData(res.account.data);
+    if (firstHere) { frClose(); offerTour(); }
     track('open');
     try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
   } else {

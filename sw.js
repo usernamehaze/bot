@@ -18,6 +18,7 @@ const ASSETS = [
   'app.js',
   'native.js',
   'listen.js',
+  'tour.js',
   'study-room.js',
   'gradient.js',
   'start.js',
