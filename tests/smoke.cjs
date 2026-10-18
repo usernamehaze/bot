@@ -855,6 +855,213 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
+test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
+  for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,content.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: it answers from what it was given (the numbered parts, a snip, a question), with some bad steps and shapes mixed in
+    await sw.evaluate(() => {
+      self.__asked = [];
+      self.readPicture = async (keys, msg) => {
+        const p = String(msg.prompt || '');
+        self.__asked.push({ prompt: p, image: String(msg.image || '').slice(0, 22), log: msg.log || null });
+        const num = (what) => { const m = p.match(new RegExp('^(\\d+)\\. ' + what, 'm')); return m ? +m[1] : 0; };
+        if (/they snipped it/.test(p)) return JSON.stringify({ steps: [{ say: 'Look at this part of your snip.', point: { x: 0.5, y: 0.5 }, draw: [{ shape: 'circle', x: 0.5, y: 0.5, r: 0.2 }, { shape: 'arrow', from: [0.1, 0.9], to: [0.45, 0.55] }] }] });
+        const h = num('heading "Photosynthesis"'), t = num('table heading "Stage"');
+        if (/The student asks/.test(p)) return JSON.stringify({ answer: 'Plants make their own food from light.', steps: [{ say: 'The heading names the topic.', point: h }] });
+        if (h) return '```json\n' + JSON.stringify({ steps: [
+          { say: 'This page is about photosynthesis.', point: h, draw: [{ shape: 'circle', el: h }, { shape: 'arrow', to_el: t }, { shape: 'explode', el: h }] },
+          { point: t }, { say: 42 },
+          { say: 'The table shows the two stages.', point: t, draw: [{ shape: 'underline', el: t }, { shape: 'graph', fn: 'x^2', x: 0.6, y: 0.5, w: 0.3, h: 0.3 }] },
+          { say: 'A bad pointer is ignored.', point: { el: 999 }, draw: [{ shape: 'circle', x: 7, y: 'a' }] },
+        ] }) + '\n```';
+        return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.25, y: 0.4 }, draw: [{ shape: 'circle', x: 0.25, y: 0.4, r: 0.05 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
+      };
+    });
+    const asked = () => sw.evaluate(() => self.__asked.splice(0));
+    const setting = (o) => sw.evaluate((o) => chrome.storage.local.set(o), o);
+    const id = new URL(sw.url()).host;
+    const tabPage = ctx.pages()[0] || await ctx.newPage();
+    // the panel in its own small window, so the test page stays the tab being looked at
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 760 }));
+    const panel = await panelOpened;
+    await panel.waitForSelector('#t-teach');
+    for (const b of ['#t-teach', '#t-ask', '#t-snip']) expect((await panel.locator(b).boundingBox()).height >= 44, b + ' is at least 44px tall');
+    const words = await panel.locator('.tools').innerText();
+    expect(/Teach me/.test(words) && /Ask Cassie/.test(words), 'the panel has Teach me and Ask Cassie: ' + words);
+    const HOST = '#cassie-teach-host-92f1';
+    const lesson = () => tabPage.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn }; }, HOST);
+    const cursorAt = (p) => p.evaluate((h) => { const c = document.querySelector(h).shadowRoot.querySelector('.ct-cursor'); return c.classList.contains('on') ? [+c.dataset.x, +c.dataset.y] : null; }, HOST);
+    const ink = (p, box) => p.evaluate(([h, box]) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let inside = 0, outside = 0;
+      for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+        if (d[(y * c.width + x) * 4 + 3] < 40) continue;
+        const X = x / k, Y = y / k;
+        if (!box || (X >= box[0] && X <= box[2] && Y >= box[1] && Y <= box[3])) inside++; else outside++;
+      }
+      return { inside, outside };
+    }, [HOST, box]);
+
+    // 1. a page with headings and a table: she speaks step 1, points at the heading, draws a circle and an arrow
+    await setting({ teachVoice: 'on', teachAuto: 'off' });
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tabPage.bringToFront(); await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => +document.querySelector(h).dataset.spoken >= 1, HOST, { timeout: 8000 });
+    let l = await lesson();
+    expect(l.step === '0' && l.drawn === 'circle,arrow', 'step 1 draws a circle and an arrow (the bad shape is left out): ' + JSON.stringify(l));
+    let q = await asked();
+    expect(q.length === 1 && /heading "Photosynthesis"/.test(q[0].prompt) && /table heading "Stage"/.test(q[0].prompt) && /^data:image\/png/.test(q[0].image), 'she was given the numbered parts and a picture of the tab: ' + JSON.stringify(q.map((x) => [x.image, x.prompt.slice(0, 200)])));
+    expect(q.every((x) => !x.log), 'nothing she was shown is kept (no log)');
+    await tabPage.waitForTimeout(1500);
+    const h1 = await tabPage.evaluate(() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+    const at1 = await cursorAt(tabPage);
+    expect(at1 && at1[0] >= h1[0] && at1[0] <= h1[2] && at1[1] >= h1[1] && at1[1] <= h1[3], `the arrow lands on the heading: ${at1} in ${h1}`);
+    const drawn1 = await ink(tabPage, null);
+    expect(drawn1.inside > 200, 'the circle and the arrow are drawn on the layer: ' + JSON.stringify(drawn1));
+    expect(await panel.locator('.teach-on').isVisible(), 'the panel says she is teaching on the page');
+    // the layer never blocks the page: a tap goes through to the page, and she never taps or types herself
+    expect(await tabPage.evaluate((h) => getComputedStyle(document.querySelector(h)).pointerEvents === 'none' && window.taps === 0 && window.keys === 0, HOST), 'the layer lets taps through, and Cassie tapped and typed nothing');
+    await tabPage.click('#tap');
+    expect(await tabPage.evaluate(() => window.taps) === 1, 'a tap on the page reaches the page while she teaches');
+    const card = tabPage.locator(`${HOST} .ct-card`);
+    for (const b of ['.ct-voice', '.ct-auto', '.ct-x', '.ct-back', '.ct-next']) { const bb = await card.locator(b).boundingBox(); expect(bb.height >= 44 && bb.width >= 44, b + ' is 44px: ' + JSON.stringify(bb)); }
+    const cardText = await card.innerText();
+    expect(!/[—–]/.test(cardText), 'no dashes on her card: ' + cardText);
+    // the steps that made no sense were skipped: 3 good steps, no error
+    expect(/1 of 3/.test(cardText), 'bad steps are skipped with nothing on screen: ' + cardText);
+
+    // 6. Escape removes the layer, the arrow and the card
+    await tabPage.keyboard.press('Escape');
+    await tabPage.waitForTimeout(300);
+    expect(await tabPage.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('.ct-card, .ct-cursor, canvas.ct-ink')), 'Escape leaves no trace of the lesson on the page');
+
+    // 2. voice off (remembered from the card's switch): no speech at all, and Next moves on
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.click(`${HOST} .ct-voice`);
+    expect(await sw.evaluate(() => chrome.storage.local.get('teachVoice').then((o) => o.teachVoice)) === 'off', 'the voice switch is remembered');
+    await tabPage.keyboard.press('Escape');
+    await asked();
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(1500);
+    l = await lesson();
+    expect(l.spoken === '0' && l.step === '0', 'voice off: no speech: ' + JSON.stringify(l));
+    expect(/Voice off/.test(await card.locator('.ct-voice').innerText()), 'the card shows Voice off');
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(400);
+    l = await lesson();
+    expect(l.step === '1' && l.spoken === '0' && l.drawn === 'underline,graph', 'Next moves to step 2, still silent: ' + JSON.stringify(l));
+    // with Auto on, steps move on by themselves (no "Keep going")
+    await tabPage.click(`${HOST} .ct-auto`);
+    await tabPage.waitForFunction((h) => document.querySelector(h).dataset.step === '2', HOST, { timeout: 12000 });
+    await tabPage.keyboard.press('Escape');
+    await asked();
+
+    // 3. a page drawn on a canvas: she reads a picture of it and points by place
+    await setting({ teachAuto: 'off' });
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/canvas.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(1500);
+    q = await asked();
+    expect(q.length === 1 && /^data:image\/png/.test(q[0].image) && !/numbered/.test(q[0].prompt) && /a spot on the picture/.test(q[0].prompt), 'the canvas page goes as a picture, with no numbered parts: ' + (q[0] && q[0].prompt.slice(0, 300)));
+    const vp = await tabPage.evaluate(() => [innerWidth, innerHeight]);
+    const at3 = await cursorAt(tabPage);
+    expect(at3 && Math.abs(at3[0] - 0.25 * vp[0]) <= 3 && Math.abs(at3[1] - 0.4 * vp[1]) <= 3, `the arrow points by place (x 25%, y 40%): ${at3} on ${vp}`);
+    await tabPage.keyboard.press('Escape');
+
+    // 4. Snip, then Teach me: she points and draws inside the snipped part
+    await panel.click('#t-snip');
+    await panel.waitForSelector('.crop img', { timeout: 15000 });
+    await panel.waitForFunction(() => document.querySelector('.crop img').naturalWidth > 0);
+    const cb = await panel.locator('.crop').boundingBox();
+    await panel.mouse.move(cb.x + cb.width * 0.25, cb.y + cb.height * 0.25);
+    await panel.mouse.down();
+    await panel.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.5, { steps: 4 });
+    await panel.mouse.move(cb.x + cb.width * 0.75, cb.y + cb.height * 0.75, { steps: 4 });
+    await panel.mouse.up();
+    await panel.waitForSelector('#snip-teach', { timeout: 5000 });
+    expect((await panel.locator('#snip-teach').boundingBox()).height >= 44, 'Teach me here is 44px');
+    await panel.click('#snip-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(2000);
+    q = await asked();
+    expect(q.length === 1 && /they snipped it/.test(q[0].prompt) && /^data:image\/jpeg/.test(q[0].image), 'the snip goes to her as the picture: ' + JSON.stringify(q.map((x) => x.image)));
+    const at4 = await cursorAt(tabPage);
+    expect(at4 && Math.abs(at4[0] - 0.5 * vp[0]) <= 6 && Math.abs(at4[1] - 0.5 * vp[1]) <= 6, `the arrow points at the middle of the snip: ${at4} on ${vp}`);
+    const inSnip = await ink(tabPage, [0.25 * vp[0] - 12, 0.25 * vp[1] - 12, 0.75 * vp[0] + 12, 0.75 * vp[1] + 12]);
+    expect(inSnip.inside > 150 && inSnip.outside === 0, 'her circle and arrow are drawn inside the snip only: ' + JSON.stringify(inSnip));
+    expect((await lesson()).drawn === 'circle,arrow', 'the snip lesson drew a circle and an arrow');
+    await tabPage.keyboard.press('Escape');
+
+    // 7. Ask Cassie about the page: the answer is in the panel, and she points at what she means
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-ask');
+    expect((await panel.locator('.ask-page input').boundingBox()).height >= 44, 'the question box is 44px');
+    await panel.fill('.ask-page input', 'What is this page about?');
+    await panel.press('.ask-page input', 'Enter');
+    await panel.waitForFunction(() => /Plants make their own food from light/.test(document.querySelector('.ask-page .answer').innerText), null, { timeout: 20000 });
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 10000 });
+    await tabPage.waitForTimeout(1500);
+    q = await asked();
+    expect(q.length === 1 && /The student asks: "What is this page about\?"/.test(q[0].prompt) && !q[0].log, 'her question went with the page, and is not kept');
+    const h1b = await tabPage.evaluate(() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+    const at7 = await cursorAt(tabPage);
+    expect(at7 && at7[0] >= h1b[0] && at7[0] <= h1b[2] && at7[1] >= h1b[1] && at7[1] <= h1b[3], `she points at what she means: ${at7} in ${h1b}`);
+    await tabPage.click(`${HOST} .ct-x`);
+    await tabPage.waitForTimeout(300);
+    expect(await tabPage.evaluate((h) => !document.querySelector(h), HOST), 'the close button removes the lesson too');
+
+    // 5. a page the extension can't draw on: the panel shows the picture of the tab, the reason, and the lesson there
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/blocked.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await panel.waitForSelector('.teach-why, .teach-err', { timeout: 20000 });
+    expect(await panel.locator('.teach-why').count(), 'the panel shows the lesson, not: ' + await panel.locator('#view').innerText());
+    const why = await panel.locator('.teach-why').innerText();
+    expect(why === await panel.evaluate(() => CassieErrors.say('teach_where_page')) && !/[—–]/.test(why), 'one plain sentence says why: ' + why);
+    await panel.waitForFunction((h) => { const n = document.querySelector(h); return n && n.dataset.step === '0'; }, HOST, { timeout: 8000 });
+    expect(/^data:image\/png/.test(await panel.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-shot img').src, HOST)), 'the panel shows the picture of the tab');
+    expect(await panel.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-cursor').classList.contains('on'), HOST), 'and points on it');
+    expect(await tabPage.evaluate((h) => !document.querySelector(h), HOST), 'nothing is put on the page');
+    // the reasons for the browser's own pages, its PDF viewer and the stores
+    const whys = await panel.evaluate(() => ['chrome://settings', '', 'https://example.com/notes.pdf', 'https://chromewebstore.google.com/detail/x', 'https://microsoftedge.microsoft.com/addons/detail/x'].map((url) => whyNotHere({ url })));
+    expect(whys.join() === 'teach_where_browser,teach_where_browser,teach_where_pdf,teach_where_store,teach_where_store', 'each place gets its reason: ' + whys.join());
+    // the AI failing: a plain words error with Try again, through CassieErrors
+    await sw.evaluate(() => { self.readPicture = async () => { throw new Error('boom'); }; });
+    await panel.click('#t-teach');
+    await panel.waitForSelector('.teach-err', { timeout: 20000 });
+    const err = await panel.locator('.teach-err').innerText();
+    expect(err.includes(await panel.evaluate(() => CassieErrors.say('teach_failed'))) && /Try again/.test(err) && !/boom/.test(err), 'a failed lesson says so in plain words with Try again: ' + err);
+    expect((await panel.locator('.teach-err button').boundingBox()).height >= 44, 'Try again is 44px');
+    // the parser on its own: only well-formed steps and shapes are kept
+    const parsed = await panel.evaluate(() => CassieTeach.parse('{"steps":[{"say":"ok","point":{"x":2,"y":0.5},"draw":[{"shape":"polygon","points":[[0,0],[1,0]]},{"shape":"curve","points":[[0,0],[0.5,0.5]]},{"shape":"graph","fn":"alert(1)","x":0.1,"y":0.1,"w":0.5,"h":0.5}]},"junk",{"say":"two","point":{"selector":"h1"}}]}', 0));
+    expect(parsed.length === 2 && parsed[0].point === null && parsed[0].draw.map((d) => d.shape).join() === 'curve' && parsed[1].point.selector === 'h1', 'the parser keeps only what makes sense: ' + JSON.stringify(parsed));
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
 test('the Chrome extension: its button sits beside Open Cassie on computers (none on phones), every download link carries the extension’s version, the built zip is that version, and an old copy is told a new one is ready', async (b) => {
   const extver = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version;
   // the build: the zip on the site is the extension as it is now, and extension-version.json says so
