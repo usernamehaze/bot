@@ -2513,3 +2513,7 @@ html.native .hub-hero-phone .hub-top { padding: calc(12px + var(--safe-top)) 20p
 .lp-thumb { flex: none; display: grid; place-items: center; width: 72px; height: 56px; border-radius: 14px; background: var(--surface); color: var(--primary-ink); overflow: hidden; }
 .lp-thumb svg { width: 30px; height: 30px; }
 .lp-row b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
+/* the profile's name and age, and Settings' key boxes and model menu: 44px to touch */
+@media (pointer: coarse) {
+  .pf-field input, .pf-field select, .field input[type="password"], .field input[type="text"], .field select { min-height: var(--tap); box-sizing: border-box; }
+}
