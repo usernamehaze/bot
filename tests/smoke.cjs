@@ -654,6 +654,37 @@ test('terms.html promises an easy cancel and a reminder before every renewal, an
   expect(!/lemonsqueezy\.com|LEMON_API_KEY|\/billing\//i.test(code), 'no payment code until the Lemon Squeezy links arrive');
 });
 
+test('the pricing page and the app’s Plans say exactly what the server allows: questions, smarter answers and pictures per plan, nothing unlimited but your own key, nothing that isn’t built', async (b) => {
+  const src = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8');
+  const num = (name) => +src.match(new RegExp(`env\\.${name}, (\\d+)\\)`))[1];
+  const lim = {
+    free: { q: num('FREE_DAILY_QUESTIONS'), smart: num('FREE_CLAUDE_LIMIT'), gpic: num('FREE_PICTURES_WEEK') },
+    plus: { q: num('PLUS_DAILY_QUESTIONS'), smart: num('PLUS_CLAUDE_LIMIT'), gpic: num('PLUS_PICTURES_DAY') },
+    pro: { q: num('PRO_DAILY_QUESTIONS'), smartest: num('PRO_CLAUDE_LIMIT'), smart: num('PRO_HAIKU_LIMIT'), gpic: num('PRO_PICTURES_DAY') },
+  };
+  const quick = +src.match(/env\.IMAGE_LIMIT \|\| (\d+)/)[1];
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/index.html`);
+  const plan = async (name) => (await page.locator('#pricing .plan', { has: page.locator(`h3:text-is("${name}")`) }).innerText()).replace(/\s+/g, ' ');
+  const [free, plus, pro] = [await plan('Free'), await plan('Plus'), await plan('Pro')];
+  expect(free.includes(`${lim.free.q} questions a day`) && free.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'Free matches the server: ' + free);
+  expect(plus.includes(`${lim.plus.q} questions a day`) && plus.includes(`${lim.plus.smart} answers a day from Cassie’s smarter model (Free gets ${lim.free.smart})`) && plus.includes(`${lim.plus.gpic} Gemini pictures a day`), 'Plus matches the server: ' + plus);
+  expect(pro.includes(`${lim.pro.q} questions a day`) && pro.includes(`${lim.pro.smartest} answers a day from Cassie’s smartest model, then ${lim.pro.smart} from the smarter one`) && pro.includes(`${lim.pro.gpic} Gemini pictures a day`), 'Pro matches the server: ' + pro);
+  const all = (await page.locator('#pricing').innerText()) + ' ' + (await page.locator('#faq').textContent());
+  const unlimited = all.match(/[^.:\n]*unlimited[^.\n]*/gi) || [];
+  expect(unlimited.every((x) => /own free (API )?key/i.test(x)), 'only your own key is unlimited: ' + unlimited.join(' | '));
+  expect(!/research runs|file reviewers? a month|minutes of listening|Refer a classmate|Priority when/i.test(all), 'nothing the code doesn’t do (monthly reviewer or research counts, listening minutes, referrals, priority)');
+  expect(/20 questions a day, 20 quick pictures a day and 3 Gemini pictures a week/.test(all), 'the FAQ says the same as the Free plan');
+  expect(!/[—–]/.test(all), 'no dashes');
+  await ctx.close();
+  // the app's Plans page says the same
+  const app = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const plans = app.slice(app.indexOf('class="set-plans"'), app.indexOf('</section>', app.indexOf('class="set-plans"'))).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  expect(plans.includes(`${lim.free.q} questions a day`) && plans.includes(`${lim.plus.q} questions a day`) && plans.includes(`${lim.plus.gpic} Gemini pictures a day`) && plans.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'the app’s Plans match the server: ' + plans);
+  expect(!/research runs|file reviewers|Unlimited (questions|voice)|Unlimited means/i.test(plans), 'the app’s Plans promise nothing the code doesn’t do: ' + plans);
+});
+
 test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
   const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
   const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
