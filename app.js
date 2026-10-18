@@ -597,6 +597,7 @@ function makeIsleCard(doc, opts = {}) {
     </div>`;
   const $ = (s) => card.querySelector(s);
   const title = $('.isle-title'), input = $('.isle-input');
+  if (window.CassieMic) window.CassieMic.attach(input, { send: () => $('.isle-ask').requestSubmit() }); // (say it: the question is sent)
   let bot = null, item = null, answerBubble = null;
   const later = (fn, ms) => win.setTimeout(fn, ms); // the pop-out's own clock keeps running while the main tab is hidden
   if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: accentHex() || '#d8343c', win });
@@ -2334,6 +2335,7 @@ function openExamSheet() {
       <div class="plus-actions"><button type="submit" class="plus-go ex-make">Make my plan</button><button type="button" class="plus-ok ex-cancel">Cancel</button></div>
     </form>`;
   const f = w.querySelector('form'), chips = w.querySelector('.ex-chips'), status = w.querySelector('.ex-status');
+  if (window.CassieMic) window.CassieMic.attach(f.topics); // (said topics stay in the box to edit)
   recent.forEach((t) => {
     const c = document.createElement('button'); c.type = 'button'; c.className = 'ex-chip'; c.textContent = t; c.setAttribute('aria-pressed', 'false');
     c.addEventListener('click', () => {
@@ -4778,6 +4780,7 @@ function openSketch(opts = {}) {
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    hear: boardHear(),
     ...boardDecks(),
     extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code, draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
   });
@@ -4875,6 +4878,7 @@ async function startRoom(code, title) {
     onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board. What did we get right, and what should we fix?'); return ''; },
     askPlaceholder: 'Ask Cassie about the board (only you see her answer)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    hear: boardHear(),
     ...boardDecks(),
     room: { me, name: roomName(), send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); } },
     onClose: () => R.stop(),
@@ -5704,6 +5708,7 @@ function renderMemory() {
       </div>
     </div>`;
   const memSlot = memoryPanel.querySelector('.mem-empty-slot');
+  if (window.CassieMic) window.CassieMic.attach(document.getElementById('mem-fact'));
   if (memSlot) memSlot.replaceWith(CassieErrors.empty({ title: 'Nothing remembered yet', text: 'Cassie remembers the topics you study, so she can help you review them later.', action: 'Ask a question', onAction: () => { memoryPanel.hidden = true; document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); } }));
 }
 
@@ -6078,6 +6083,9 @@ const VOICE_MODES = {
 };
 const voiceBtn = document.getElementById('voice-btn');
 const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
+// the mic beside the other boxes (mic.js): where the browser can't listen, Cassie's server writes it down
+if (window.CassieMic) window.CassieMic.setup({ transcribe: (blob) => transcribeAudio(blob) });
+const boardHear = () => (window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null);
 // Cassie's voice (voice.js): Bella, her studio voice, through Cassie's server. It is the only voice.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
 if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId() });
@@ -7677,6 +7685,7 @@ function openReport() {
   wrap.querySelector('.pf-cancel').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
   f.text.focus();
+  if (window.CassieMic) window.CassieMic.attach(f.text);
   const check = CassieErrors.form(f, { text: (v) => (v.trim().length < 5 ? 'need_report' : '') });
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
