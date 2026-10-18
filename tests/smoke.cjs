@@ -3446,6 +3446,71 @@ test('a mic on every box where a student writes to Cassie in the extension (the 
   } finally { await ctx.close(); }
 });
 
+test('Apple design: the loading page is a launch screen (the app’s own background, no text, no logo, a spinner only when slow); the landing page uses one system typeface and Apple’s greys; the app keeps glass for the floating controls only; nothing under Apple’s smallest sizes', async (b) => {
+  // 1. the way in: just the app's background, in light and dark, in the student's look
+  for (const [scheme, bg, look] of [['light', 'rgb(242, 242, 245)', ''], ['dark', 'rgb(14, 14, 16)', ''], ['light', 'rgb(251, 246, 238)', 'cassie']]) {
+    const ctx = await b.newContext({ colorScheme: scheme, viewport: { width: 390, height: 844 } });
+    if (look) await ctx.addInitScript((a) => localStorage.setItem('cassie.v2', JSON.stringify({ accent: a })), look);
+    // the app is slow to arrive: here it never comes (start.js without its hop into the app; that the hop
+    // happens in under a second is checked in the first run test), so the launch screen stays
+    const startJs = fs.readFileSync(path.join(ROOT, 'start.js'), 'utf8');
+    expect(/setTimeout\(go, 400\);/.test(startJs), 'start.js goes into the app after 0.4 seconds');
+    await ctx.route(/\/start\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: startJs.replace('setTimeout(go, 400);', '') }));
+    const page = await ctx.newPage();
+    await page.goto(APP.replace('app.html', 'start.html'));
+    const first = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, words: document.body.innerText.trim(), pics: [...document.querySelectorAll('img, svg, h1, p')].length, spin: getComputedStyle(document.querySelector('.spin')).opacity }));
+    expect(first.bg === bg && !first.words && !first.pics && first.spin === '0', `${scheme} ${look || 'Monochrome'}: the app’s own background (${bg}), no words, no logo, no spinner yet: ` + JSON.stringify(first));
+    await page.waitForTimeout(1100);
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.spin')).opacity) === '1' && await page.locator('[role=progressbar][aria-label="Loading Cassie"]').count() === 1, `${scheme}: a slow app gets a small spinner, labelled for screen readers`);
+    await ctx.close();
+  }
+  // 2. the landing page: one typeface (the system's), Apple's greys, nothing under 11px that a person reads
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/story.css'), 'utf8') + fs.readFileSync(path.join(ROOT, 'landing/desk.css'), 'utf8')), 'the landing page loads no web fonts');
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    const ctx = await b.newContext({ viewport });
+    await ctx.route(/workers\.dev|groq|fonts\.g/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(APP.replace('app.html', 'index.html'));
+    await page.waitForTimeout(800);
+    const L = await page.evaluate(() => {
+      const fams = new Set(), small = [];
+      for (const el of document.querySelectorAll('body *')) {
+        if (el.closest('[aria-hidden="true"], svg, canvas')) continue;
+        if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+        const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+        if (!r.width || cs.display === 'none' || cs.visibility === 'hidden') continue;
+        fams.add(cs.fontFamily.split(',')[0].trim());
+        if (parseFloat(cs.fontSize) < 11) small.push(cs.fontSize + ' ' + el.textContent.trim().slice(0, 20));
+      }
+      const h1 = getComputedStyle(document.querySelector('.hero h1'));
+      return { fams: [...fams], small: small.slice(0, 8), page: getComputedStyle(document.body).backgroundColor, h1: [h1.fontWeight, h1.fontStyle], sideways: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    expect(L.fams.every((f) => /apple-system|monospace|ui-monospace|Menlo|Courier/i.test(f)), `${viewport.width}: one system typeface: ` + L.fams.join(', '));
+    expect(L.page === 'rgb(245, 245, 247)' && L.h1[0] === '600' && L.h1[1] === 'normal', `${viewport.width}: Apple’s light grey page and a semibold headline: ` + JSON.stringify(L));
+    expect(!L.small.length && !L.sideways, `${viewport.width}: nothing a person reads under 11px, nothing off the side: ` + JSON.stringify(L.small));
+    await ctx.close();
+  }
+  // 3. the app: glass only on the floating controls (tab bar, top bar, sidebar, the ask box); Home's cards are solid
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true, tab: 'home' } }); // (Lite mode turns all glass solid)
+    await page.waitForSelector('.hub-box', { timeout: 10000 });
+    const A = await page.evaluate(() => {
+      const blur = (el) => /blur/.test(getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter || '');
+      const shown = (el) => el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none';
+      const content = [...document.querySelectorAll('.hub-box, .hub-card, .hub-hero:not(.hub-hero-phone)')].filter(shown);
+      const controls = [...document.querySelectorAll('#tabbar, .composer, .topbar')].filter(shown);
+      const menu = document.querySelector('.side-menu-label');
+      return { glassyContent: content.filter(blur).map((e) => e.className), content: content.length, glassControls: controls.filter(blur).length, controls: controls.length, menu: menu && shown(menu) ? parseFloat(getComputedStyle(menu).fontSize) : null };
+    });
+    expect(A.content > 0 && !A.glassyContent.length, `${viewport.width}: Home’s cards are solid, not glass: ` + JSON.stringify(A));
+    expect(A.controls > 0 && A.glassControls === A.controls, `${viewport.width}: the floating controls keep their glass: ` + JSON.stringify(A));
+    expect(A.menu === null || A.menu >= 10, `${viewport.width}: the sidebar’s Menu label is at least 10px: ` + A.menu);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
   await ctx.addInitScript(FAKE_VOICE, {});
