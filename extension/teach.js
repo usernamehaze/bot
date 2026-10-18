@@ -169,6 +169,8 @@
     .ct-card .ct-next { background: #f4f4f5; color: #111; border-color: #f4f4f5; }
     .ct-say { margin: 4px 0 10px; min-height: 2.9em; }
     .ct-note { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: rgba(244,244,245,.78); }
+    .ct-vnote { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: #f4f4f5; }
+    .ct-vnote[hidden] { display: none; }
     .ct-nav { display: flex; align-items: center; gap: 8px; }
     .ct-count { flex: 1; text-align: center; font-size: 13px; color: rgba(244,244,245,.75); }
     .ct-shot { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid rgba(127,127,127,.35); }
@@ -194,6 +196,7 @@
           <button type="button" class="ct-auto" aria-pressed="true" title="Go on to the next step by itself">Auto</button>
           <button type="button" class="ct-x" aria-label="Stop teaching">✕</button></div>
         <p class="ct-say" aria-live="polite"></p>
+        <p class="ct-vnote" role="status" hidden></p>
         <p class="ct-note">When you’re done, close this. Everything Cassie taught is saved in the Cassie side panel.</p>
         <div class="ct-nav"><button type="button" class="ct-back">Back</button><span class="ct-count"></span><button type="button" class="ct-next">Next</button></div>
       </div>`;
@@ -351,25 +354,62 @@
       if (hits) card.classList.toggle('ct-top');
     }
 
-    /* voice: one voice for the whole lesson, picked now */
-    let voiceOn = true, autoOn = true, at0 = 0, timer = 0, utter = null, alive = true;
-    const synth = window.speechSynthesis || null;
-    let voice = null;
-    if (synth) { try { const vs = synth.getVoices(); voice = vs.find((v) => /^en(-|_)/i.test(v.lang) && v.localService) || vs.find((v) => /^en/i.test(v.lang)) || null; } catch (e) { voice = null; } }
-    const hush = () => { clearTimeout(timer); timer = 0; if (synth && utter) { try { synth.cancel(); } catch (e) { /* ignore */ } } utter = null; };
+    /* voice: Bella's studio voice (from Cassie's server, through the background) and no other. When
+       the lesson starts she speaks only if what's left of the month's voice covers every step; otherwise,
+       or if Bella stops partway, the steps are typed and the card says so once. Nothing waits for a tap. */
+    let voiceOn = true, autoOn = true, at0 = 0, timer = 0, alive = true, studio = false, src = null, clipFor = null;
+    const vnote = $('.ct-vnote');
+    const typing = () => {
+      studio = false;
+      if (!vnote.hidden) return;
+      vnote.textContent = window.CassieErrors ? window.CassieErrors.say('voice_typing') : 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.';
+      vnote.hidden = false;
+    };
+    let actx = null;
+    const audio = () => { const AC = window.AudioContext || window.webkitAudioContext; if (!actx && AC) { try { actx = new AC(); } catch (e) { actx = null; } } return actx; };
+    const hush = () => { clearTimeout(timer); timer = 0; clipFor = null; if (src) { try { src.stop(); } catch (e) { /* ignore */ } src = null; } };
+    async function clip(text) {
+      const r = await chrome.runtime.sendMessage({ type: 'CASSIE_SPEAK', text }).catch(() => null);
+      if (!r || !r.audio) throw Object.assign(new Error('no voice'), { usedUp: !!(r && r.usedUp) });
+      const bin = atob(r.audio), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const ac = audio();
+      if (!ac) throw new Error('no audio');
+      if (ac.state === 'suspended') { try { await ac.resume(); } catch (e) { /* stays suspended */ } }
+      if (ac.state !== 'running') throw new Error('audio blocked');
+      return await new Promise((res, rej) => ac.decodeAudioData(bytes.buffer, res, rej));
+    }
+    // the whole lesson decides, once: Bella says every step, or every step is typed (said once on the card)
+    let asked = false;
+    async function decideVoice(from) {
+      asked = true;
+      const need = steps.slice(from).reduce((n, x) => n + x.say.length, 0);
+      const left = await chrome.runtime.sendMessage({ type: 'CASSIE_SPEAK_LEFT' }).catch(() => null);
+      if (!alive) return;
+      studio = !!(left && left.on && left.left >= need && audio());
+      if (!studio) typing();
+    }
+    const readPace = (text) => Math.min(9000, 1400 + text.length * 45);
     function speakThen(text, then) {
       hush();
-      if (!voiceOn || !synth) { timer = setTimeout(then, Math.min(9000, 1400 + text.length * 45)); return; }
-      const u = new SpeechSynthesisUtterance(text);
-      if (voice) u.voice = voice;
-      u.rate = 1;
-      let done = false;
-      const end = () => { if (done) return; done = true; if (utter === u) { utter = null; timer = setTimeout(then, 700); } };
-      u.onend = end; u.onerror = end;
-      utter = u;
-      host.dataset.spoken = String(+host.dataset.spoken + 1);
-      try { synth.speak(u); } catch (e) { end(); }
-      timer = setTimeout(end, Math.min(20000, 3000 + text.length * 80)); // (a voice that never says "done")
+      if (!voiceOn || !studio) { timer = setTimeout(then, readPace(text)); return; }
+      const mine = clipFor = {};
+      (async () => {
+        let buf = null;
+        for (let tries = 0; tries < 2 && !buf; tries++) {
+          try { buf = await clip(text); } catch (e) { if (e.usedUp) break; }
+          if (clipFor !== mine || !alive) return;
+        }
+        if (!buf) { typing(); timer = setTimeout(then, readPace(text)); return; } // (Bella stopped: the rest is typed)
+        if (!voiceOn) { timer = setTimeout(then, readPace(text)); return; }
+        const node = actx.createBufferSource(); node.buffer = buf; node.connect(actx.destination);
+        let done = false;
+        const end = () => { if (done) return; done = true; if (src === node) src = null; if (clipFor === mine) timer = setTimeout(then, 700); };
+        node.onended = end; src = node;
+        host.dataset.spoken = String(+host.dataset.spoken + 1);
+        try { node.start(); } catch (e) { end(); }
+        timer = setTimeout(end, buf.duration * 1000 + 1500); // (a speaker that never says "done")
+      })();
     }
 
     function go(k) {
@@ -416,6 +456,7 @@
     $('.ct-voice').addEventListener('click', () => {
       setVoice(!voiceOn); store.set({ teachVoice: voiceOn ? 'on' : 'off' });
       if (!voiceOn) { hush(); if (autoOn) speakThen(steps[at0].say, () => { if (autoOn && alive && at0 < steps.length - 1) go(at0 + 1); }); }
+      else if (!asked) decideVoice(at0 + 1); // (turned on partway: the steps still to come decide it)
     });
     $('.ct-auto').addEventListener('click', () => {
       setAuto(!autoOn); store.set({ teachAuto: autoOn ? 'on' : 'off' });
@@ -446,9 +487,11 @@
     followPaint(); // (her cursor beside the mouse waits while she teaches)
     // she starts where her cursor was (beside the mouse), then glides to the first thing
     if (opts.from && !inPanel) { cursor.style.transition = 'none'; cursor.style.transform = `translate(${Math.round(opts.from.x)}px, ${Math.round(opts.from.y)}px)`; cursor.classList.add('on'); void cursor.offsetWidth; cursor.style.transition = ''; }
-    store.get(['teachVoice', 'teachAuto']).then((o) => {
+    store.get(['teachVoice', 'teachAuto']).then(async (o) => {
       if (!alive) return;
       setVoice(o.teachVoice !== 'off'); setAuto(o.teachAuto !== 'off');
+      if (voiceOn) await decideVoice(0);
+      if (!alive) return;
       const img = inPanel ? $('img') : null;
       if (img && !img.complete) img.onload = () => go(0); else go(0);
     });

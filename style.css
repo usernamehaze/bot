@@ -1715,14 +1715,6 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
 .hv-set[hidden] { display: none; }
 .hv-set .hint { margin: 0 0 8px; }
 .hv-set-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.vc-hv { max-width: 420px; margin: 4px auto 0; padding: 11px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: .84rem; line-height: 1.4; text-align: left; }
-.vc-hv[hidden] { display: none; }
-.vc-hv small { display: block; color: var(--muted); margin-top: 4px; }
-.vc-hv-bar { display: block; height: 5px; margin-top: 8px; border-radius: 9px; background: var(--border); overflow: hidden; }
-.vc-hv-bar i { display: block; height: 100%; background: var(--primary); border-radius: 9px; transition: width .3s ease; }
-.vc-hv-row { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
-.vc-hv button { border: 0; border-radius: 99px; padding: 8px 14px; font: inherit; font-weight: 600; font-size: .82rem; cursor: pointer; background: var(--primary); color: var(--on-primary); }
-.vc-hv button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .vc-gender { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); }
 .vc-gender button { border: 0; background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 600; padding: 7px 11px; border-radius: 99px; cursor: pointer; }
 .vc-gender button[aria-checked="true"] { background: var(--primary); color: var(--on-primary); }
@@ -1961,10 +1953,8 @@ html.lite {
 .x3d .listen-btn { background: rgba(var(--hi-rgb), .1); color: var(--white); border-color: rgba(var(--hi-rgb), .22); margin-left: auto; }
 .x3d .listen-btn.on { background: var(--white); color: var(--dark-1); }
 /* her voice is downloaded and being set up: a bar that moves instead of sitting at 100% */
-.vc-hv-bar.busy i { background: linear-gradient(90deg, transparent, var(--primary), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: hvBusy 1.3s linear infinite; }
 @keyframes hvBusy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
-@media (prefers-reduced-motion: reduce) { .vc-hv-bar.busy i { animation: none; background: var(--primary); opacity: .6; } }
-
+@media (prefers-reduced-motion: reduce) { 
 /* Plus extras: what it is and how to get it (above Labs and the board) */
 .ex-sheet { position: fixed; inset: 0; z-index: 2147483630; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
 .plus-sheet { position: fixed; inset: 0; z-index: 2147483640; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
@@ -2074,8 +2064,7 @@ html.lite {
   .field-toggle, .field.row { display: flex; align-items: center; min-height: var(--tap); padding-inline: 12px; margin-inline: -12px; }
   /* Talk with Cassie */
   .vc-x { width: var(--tap); height: var(--tap); }
-  .vc-modes button, .vc-gender button, .vc-hv button { min-height: var(--tap); }
-}
+  .vc-modes button, .vc-gender button, }
 @media (max-width: 370px) { .tab { min-width: 44px; padding: 0 10px; } } /* (after the phone rule: six tabs still fit at 360) */
 
 /* Reduce Motion: no sliding, scaling or spinning, things just appear */
@@ -2139,10 +2128,8 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 /* Offline: a glass note across the top */
 .offline-note { position: fixed; z-index: 2147483000; left: 50%; top: calc(var(--safe-top) + 8px); transform: translateX(-50%); width: min(560px, calc(100% - 24px)); box-sizing: border-box; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.4; }
 .offline-note[hidden] { display: none; }
-/* Cassie's voice stopped partway (voice.js): she pauses and says so, with Keep going */
-.cv-pause { position: fixed; z-index: 2147483001; left: 50%; bottom: calc(var(--safe-bottom) + 16px); transform: translateX(-50%); width: min(480px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; }
-.cv-pause p { margin: 0; }
-.cv-pause button { align-self: flex-start; min-height: 44px; padding: 0 20px; border-radius: 99px; border: 0; background: var(--text); color: var(--bg); font: inherit; font-weight: 600; cursor: pointer; }
+/* Cassie types instead of speaking (voice.js): one plain line, said once, never waits for a tap */
+.cv-note { position: fixed; z-index: 2147483001; left: 50%; bottom: calc(var(--safe-bottom) + 16px); transform: translateX(-50%); width: min(480px, calc(100% - 32px)); box-sizing: border-box; margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: var(--lg-fill-thick); border: 1px solid var(--lg-line); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); color: var(--text); font-size: var(--fs-sm); line-height: 1.45; pointer-events: none; }
 
 /* Flashcards on touch screens: 44px to touch */
 @media (pointer: coarse) {

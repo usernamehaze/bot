@@ -153,6 +153,18 @@ async function cassieUid() {
   await chrome.storage.local.set({ cassieUid: id });
   return id;
 }
+// Bella's studio voice: what's left of it (characters, and the day it comes back), and one sentence as an MP3
+async function speakLeft() {
+  const r = await fetch(CASSIE_SERVER + '/speak?uid=' + encodeURIComponent(await cassieUid()));
+  if (!r.ok) return { on: false, left: 0 };
+  const d = await r.json();
+  return { on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '' };
+}
+async function speakClip(text) {
+  const r = await fetch(CASSIE_SERVER + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: 'woman', uid: await cassieUid() }) });
+  if (!r.ok) throw Object.assign(new Error('voice ' + r.status), { usedUp: r.status === 429 || r.status === 503 });
+  return { audio: bufToBase64(await r.arrayBuffer()) };
+}
 async function viaServer(messages, maxTokens = 2048) {
   let res;
   try {
@@ -779,6 +791,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((e) => sendResponse({ error: e.message }));
     return true;
   }
+  // Cassie's voice on a page: Bella's studio voice from Cassie's server, the only voice she speaks in
+  if (msg?.type === 'CASSIE_SPEAK_LEFT') { speakLeft().then(sendResponse, () => sendResponse({ on: false, left: 0 })); return true; }
+  if (msg?.type === 'CASSIE_SPEAK') { speakClip(String(msg.text || '').slice(0, 700)).then(sendResponse, (e) => sendResponse({ error: e.message || 'no voice', usedUp: !!e.usedUp })); return true; }
   if (msg?.type === 'CASSIE_VISION') {
     (async () => {
       const keys = await getKeys();

@@ -794,7 +794,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   const libs = /three\.module|GLTFLoader|OrbitControls|BufferGeometryUtils|RoomEnvironment|RoundedBoxGeometry|meshopt/;
   const files = [...fs.readdirSync(ROOT).filter((f) => f.endsWith('.js')),
     ...['labs', 'explore', 'extension'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f)),
-    'server/worker.src.js', 'voice/voice-worker.js'].filter((f) => !libs.test(f));
+    'server/worker.src.js'].filter((f) => !libs.test(f));
   const code = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
   const hosts = [...new Set([...code.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)].map((m) => m[1].toLowerCase()))];
   const needed = new Set(), unknown = [];
@@ -805,7 +805,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   }
   // services reached without a web address in our code
   if (/env\.AI\.run\(/.test(code)) needed.add('Cloudflare'); // Workers AI
-  if (fs.existsSync(path.join(ROOT, 'voice/kokoro.web.js'))) needed.add('Hugging Face'); // the voice model downloads from it
+  if (/voice-worker/.test(fs.readFileSync(path.join(ROOT, 'voice.js'), 'utf8'))) needed.add('Hugging Face'); // (only if the on-device voice model were used again)
   if (/SpeechRecognition/.test(code)) { needed.add('Google'); needed.add('Apple'); } // the browser's own speech-to-text
   expect(!unknown.length, 'Cassie calls a service privacy.html doesn’t know about: ' + unknown.join(', ') + '. Name it on the page (what it gets and why) and add it to this test.');
   const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
@@ -1008,7 +1008,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
-    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--autoplay-policy=no-user-gesture-required'],
   });
   try {
     await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
@@ -1037,6 +1037,15 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
         return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.25, y: 0.4 }, draw: [{ shape: 'circle', x: 0.25, y: 0.4, r: 0.05 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
       };
     });
+    // Bella's studio voice, faked in the background: what's left (self.__voice.left), and each sentence as a
+    // tiny WAV, failing from the failFrom-th one on
+    const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
+    await sw.evaluate((b64) => {
+      self.__clips = []; self.__voice = { left: 9000, failFrom: null };
+      self.speakLeft = async () => ({ on: true, left: self.__voice.left, back: '2026-11-01' });
+      self.speakClip = async (text) => { const ok = self.__voice.failFrom == null || self.__clips.length < self.__voice.failFrom; self.__clips.push({ text, ok }); if (!ok) throw new Error('voice 502'); return { audio: b64 }; };
+    }, wav.toString('base64'));
+    const clips = () => sw.evaluate(() => self.__clips.slice());
     const asked = () => sw.evaluate(() => self.__asked.splice(0));
     const setting = (o) => sw.evaluate((o) => chrome.storage.local.set(o), o);
     const id = new URL(sw.url()).host;
@@ -1093,10 +1102,46 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     // the steps that made no sense were skipped: 3 good steps, no error
     expect(/1 of 3/.test(cardText), 'bad steps are skipped with nothing on screen: ' + cardText);
 
+    let cl = await clips();
+    expect(cl.length === 1 && cl[0].ok && cl[0].text === 'This page is about photosynthesis.', 'step 1 was said in Bella’s voice: ' + JSON.stringify(cl));
+    expect(await card.locator('.ct-vnote').isHidden(), 'no line when she can speak');
+
     // 6. Escape removes the layer, the arrow and the card
     await tabPage.keyboard.press('Escape');
     await tabPage.waitForTimeout(300);
     expect(await tabPage.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('.ct-card, .ct-cursor, canvas.ct-ink')), 'Escape leaves no trace of the lesson on the page');
+
+    // Bella only: too little left for the lesson, so every step is typed and the card says so once
+    const LINE = await panel.evaluate(() => CassieErrors.say('voice_typing'));
+    await sw.evaluate(() => { self.__voice.left = 20; });
+    let n0 = (await clips()).length;
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => { const n = document.querySelector(h).shadowRoot.querySelector('.ct-vnote'); return n && !n.hidden; }, HOST, { timeout: 8000 });
+    expect(await card.locator('.ct-vnote').innerText() === LINE, 'the one line on the card: ' + await card.locator('.ct-vnote').innerText());
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(600);
+    l = await lesson();
+    expect(l.step === '1' && l.spoken === '0' && (await clips()).length === n0, 'nothing spoken, and Next moves on: ' + JSON.stringify(l));
+    await tabPage.keyboard.press('Escape');
+    await asked();
+    // Bella fails at step 2: tried once more, then the rest is typed with the line; no other voice
+    await sw.evaluate(() => { self.__voice.left = 9000; self.__voice.failFrom = self.__clips.length + 1; });
+    n0 = (await clips()).length;
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => +document.querySelector(h).dataset.spoken >= 1, HOST, { timeout: 8000 });
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForFunction((h) => { const n = document.querySelector(h).shadowRoot.querySelector('.ct-vnote'); return n && !n.hidden; }, HOST, { timeout: 8000 });
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(800);
+    cl = (await clips()).slice(n0);
+    l = await lesson();
+    expect(cl.length === 3 && cl[0].ok && cl.slice(1).every((x) => !x.ok && x.text === 'The table shows the two stages.') && l.spoken === '1' && l.step === '2', 'step 1 said, step 2 tried twice, step 3 typed: ' + JSON.stringify([cl, l]));
+    expect(await card.locator('.ct-vnote').innerText() === LINE, 'the same line');
+    await tabPage.keyboard.press('Escape');
+    await sw.evaluate(() => { self.__voice.failFrom = null; });
+    await asked();
 
     // 2. voice off (remembered from the card's switch): no speech at all, and Next moves on
     await panel.click('#t-teach');
@@ -2009,233 +2054,6 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await ctx.close();
 });
 
-test('Listen: Cassie reads answers and flashcards aloud — the studio voice while hers isn’t on the device, the device’s when it runs out', async (b) => {
-  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
-  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards, hearing: 'fast' } });
-  // a tiny real sound (a WAV), standing in for ElevenLabs' MP3
-  const wav = (() => { const n = 1600, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
-  const said = []; let credits = true;
-  await ctx.route(/\/speak$/, (route) => {
-    const r = route.request();
-    if (r.method() === 'GET') return route.fulfill({ json: { on: true }, headers: { 'access-control-allow-origin': '*' } });
-    said.push(JSON.parse(r.postData()).text);
-    return credits ? route.fulfill({ body: wav, contentType: 'audio/mpeg', headers: { 'access-control-allow-origin': '*' } }) : route.fulfill({ status: 429, json: { error: { message: 'used up' } }, headers: { 'access-control-allow-origin': '*' } });
-  });
-  await ctx.addInitScript(FAKE_VOICE, {});
-  await page.reload();
-  await page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-  await page.fill('#prompt-input', 'What do mitochondria do?');
-  await page.press('#prompt-input', 'Enter');
-  await page.waitForSelector('.bubble-assistant .listen-btn', { timeout: 10000 });
-  await page.click('.bubble-assistant .listen-btn');
-  await page.waitForFunction(() => document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 3000 });
-  await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 8000 });
-  expect(said.some((t) => /Mitochondria make ATP/.test(t)), 'the answer went to the studio voice: ' + JSON.stringify(said));
-  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'the device voice wasn’t needed');
-  // in a voice conversation the same voice answers (it used to wait for the whole answer, then switch)
-  await page.click('#voice-btn');
-  await page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  const n0 = said.length;
-  await page.evaluate(() => window.__say('What do mitochondria do?'));
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening' && window.__shown.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 15000 });
-  expect(said.slice(n0).some((t) => /Mitochondria make ATP/.test(t)), 'the studio voice speaks in the conversation too: ' + JSON.stringify(said.slice(n0)));
-  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'one voice: the device’s never cut in');
-  await page.click('.vc-x');
-  // the studio voice is used up: the device's voice reads it instead, never silence
-  credits = false;
-  await page.click('.bubble-assistant .listen-btn');
-  await page.waitForFunction(() => window.__spoken.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 8000 });
-  // flashcards: a Listen button on the card, and hands-free listening
-  await page.evaluate(() => window.CassieCards.open());
-  await page.click('[data-study="Biology"]');
-  await page.click('.fc-mini[data-say]');
-  await page.waitForFunction(() => window.__spoken.some((t) => /Powerhouse of the cell/.test(t)), null, { timeout: 5000 });
-  await page.click('.fc-back');
-  await page.click('[data-listen="Biology"]');
-  await page.waitForSelector('.fc-listening >> text=Think of the answer', { timeout: 5000 });
-  await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 12000 });
-  await page.click('[data-lstop]');
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
-});
-
-// One voice for a whole lesson or conversation: the studio voice running out at step 3 never hands the
-// rest to another voice. She tries once more, pauses with Keep going, and shows the rest on screen.
-// The next lesson starts with the device's best voice for her gender (never a robotic one), kept to the end.
-test('one voice per lesson: a 7-step Teach me (no pop up) and a 6-turn voice chat keep the same voice, for the woman and the man, when the studio voice runs out at step 3', async (b) => {
-  const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
-  // the studio voice: `allow` sentences, then used up for the day
-  const studioRoute = async (ctx, allow) => {
-    const log = [];
-    await ctx.route(/\/speak$/, (route) => {
-      const r = route.request(), cors = { 'access-control-allow-origin': '*' };
-      if (r.method() === 'GET') return route.fulfill({ json: { on: true }, headers: cors });
-      const body = JSON.parse(r.postData()), ok = log.filter((x) => x.ok).length < allow;
-      log.push({ text: body.text, voice: body.voice, ok });
-      return ok ? route.fulfill({ body: wav, contentType: 'audio/mpeg', headers: cors }) : route.fulfill({ status: 429, json: { error: { message: 'used up' } }, headers: cors });
-    });
-    return log;
-  };
-  // a device with several voices, a robotic one among them; records which voice said each sentence
-  const DEVICE_VOICES = () => {
-    const voices = [{ name: 'eSpeak English', lang: 'en-US', localService: true }, { name: 'Google US English', lang: 'en-US' }, { name: 'Google UK English Male', lang: 'en-GB' }, { name: 'Microsoft David', lang: 'en-US' }];
-    window.__spokenBy = [];
-    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-    const synth = { speaking: false, getVoices: () => voices, addEventListener() {}, removeEventListener() {}, cancel() {},
-      speak(u) { window.__spoken.push(u.text); if (u.text.trim()) window.__spokenBy.push(u.voice ? u.voice.name : '(none)'); setTimeout(() => { u.onstart && u.onstart(); u.onend && u.onend(); }, 30); } };
-    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-  };
-  const plain = (t) => !/[–—]/.test(t);
-  for (const gender of ['woman', 'man']) {
-    // ---- Teach me: 7 steps, the studio voice runs out at step 3 ----
-    const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
-    const t = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-    const tlog = await studioRoute(t.ctx, 2);
-    await t.ctx.addInitScript(FAKE_VOICE, {});
-    await t.ctx.addInitScript(DEVICE_VOICES);
-    await t.page.reload();
-    await t.page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-    await t.page.evaluate(() => openLabs('atom'));
-    await t.page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-    await t.page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-    await t.page.click('.lab-teach');
-    // step 3: tried once more in the same voice, then the lesson goes on with the words on screen (no pop up)
-    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 40000 });
-    await t.page.waitForTimeout(400);
-    expect(await t.page.evaluate(() => window.__paused) === 0 && await t.page.locator('.cv-pause').count() === 0, `${gender}: no Keep going pop up in Teach me`);
-    let played = await t.page.evaluate(() => window.CassieVoice.played());
-    expect(played.length === 2 && played.every((x) => x.kind === 'studio' && x.voice === gender), `${gender}: every step spoke in the same studio voice: ` + JSON.stringify(played));
-    expect(tlog.length === 4 && tlog.slice(2).every((x) => /Step 3/.test(x.text) && !x.ok) && tlog.every((x) => x.voice === gender), `${gender}: step 3 was tried twice in the studio voice, then no more calls: ` + JSON.stringify(tlog));
-    expect((await t.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-lesson`);
-    // the next lesson starts in the device's best voice for her gender, and keeps it for all 7 steps
-    await t.page.click('.tut-x');
-    await t.page.click('.lab-teach');
-    await t.page.click('.tut-resume:not([hidden]) .tut-restart'); // (it offers to carry on: a new lesson from step 1)
-    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || '') && window.__spokenBy.length >= 7, null, { timeout: 40000 });
-    const by = await t.page.evaluate(() => window.__spokenBy);
-    const want = gender === 'man' ? 'Google UK English Male' : 'Google US English';
-    expect(by.length === 7 && by.every((n) => n === want), `${gender}: the new lesson is all in ${want}, never the robotic one: ` + JSON.stringify(by));
-    played = await t.page.evaluate(() => window.CassieVoice.played().slice(2));
-    expect(played.length === 7 && played.every((x) => x.kind === 'device' && x.voice === want), `${gender}: one device voice for the lesson: ` + JSON.stringify(played));
-    expect(t.errors.length === 0, 'page errors: ' + t.errors.join('; '));
-    await t.ctx.close();
-
-    // ---- Talk with Cassie: 6 turns, the studio voice runs out at the 3rd answer ----
-    let n = 0;
-    const c = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast', voiceGender: gender }, fakeGroq: () => ({ text: `Turn ${++n} answer is that cells are small.` }) });
-    const clog = await studioRoute(c.ctx, 3); // the greeting and 2 answers
-    await c.ctx.addInitScript(FAKE_VOICE, {});
-    await c.ctx.addInitScript(DEVICE_VOICES);
-    await c.page.reload();
-    await c.page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-    await c.page.click('#voice-btn');
-    await c.page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-    for (let turn = 1; turn <= 6; turn++) {
-      await c.page.evaluate((q) => window.__say(q), `Question ${turn} about cells?`);
-      if (turn === 3) {
-        await c.page.waitForSelector('.cv-pause button', { timeout: 15000 });
-        expect(plain(await c.page.locator('.cv-pause').innerText()), 'no dashes in the pause note');
-        await c.page.click('.cv-pause button');
-      }
-      await c.page.waitForFunction((k) => document.querySelector('.vc').dataset.phase === 'listening' && window.__shown.some((x) => x.includes(`Turn ${k} answer`)), turn, { timeout: 15000 });
-    }
-    played = await c.page.evaluate(() => window.CassieVoice.played());
-    expect(played.length === 3 && played.every((x) => x.kind === 'studio' && x.voice === gender), `${gender}: the conversation kept the studio voice: ` + JSON.stringify(played));
-    expect(clog.every((x) => x.voice === gender) && clog.filter((x) => !x.ok).length === 2, `${gender}: the 3rd answer was tried twice, then no more calls: ` + JSON.stringify(clog));
-    expect((await c.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-conversation`);
-    expect(c.errors.length === 0, 'page errors: ' + c.errors.join('; '));
-    await c.ctx.close();
-  }
-});
-
-test('Teach me on phones: the phone’s own voice (iPhone Premium, then Enhanced; Android Google), one voice for 7 steps, started inside the tap, Next cuts the old speech, and a voice that fails never pops up', async (b) => {
-  // the phone's speech: records each cancel and sentence (with its voice, and whether it began inside a tap)
-  const PHONE_SPEECH = (list) => {
-    window.__ev = []; window.__fail = null; window.__speakMs = 200;
-    window.__inTap = false;
-    addEventListener('click', () => { window.__inTap = true; }, true);
-    addEventListener('click', () => { window.__inTap = false; }, false);
-    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-    let cur = null;
-    const synth = { speaking: false, pending: false, getVoices: () => list, addEventListener() {}, removeEventListener() {},
-      cancel() { window.__ev.push({ e: 'cancel' }); if (cur) { const u = cur; cur = null; clearTimeout(u._t); u.onerror && u.onerror({ error: 'interrupted' }); } this.speaking = false; },
-      speak(u) {
-        if (!u.text.trim()) return;
-        window.__ev.push({ e: 'speak', text: u.text, voice: u.voice ? u.voice.name : '(none)', tap: window.__inTap });
-        if (window.__fail && window.__fail.test(u.text)) { setTimeout(() => u.onerror && u.onerror({ error: 'synthesis-failed' }), 10); return; }
-        cur = u; this.speaking = true;
-        setTimeout(() => { if (cur !== u) return; u.onstart && u.onstart(); u._t = setTimeout(() => { if (cur !== u) return; cur = null; synth.speaking = false; u.onend && u.onend(); }, window.__speakMs); }, 5);
-      } };
-    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-  };
-  const APPLE = [{ name: 'Samantha', lang: 'en-US', localService: true }, { name: 'Ava (Enhanced)', lang: 'en-US', localService: true }, { name: 'Ava (Premium)', lang: 'en-US', localService: true },
-    { name: 'Daniel', lang: 'en-GB', localService: true }, { name: 'Evan (Enhanced)', lang: 'en-US', localService: true }, { name: 'Fred', lang: 'en-US', localService: true }, { name: 'Zarvox', lang: 'en-US', localService: true }];
-  const ANDROID = [{ name: 'Google US English', lang: 'en-US', localService: false }, { name: 'Google English (United States) Female', lang: 'en-US', localService: true },
-    { name: 'Google UK English Male', lang: 'en-GB', localService: true }, { name: 'eSpeak English', lang: 'en-US', localService: true }];
-  const cases = [['iPhone 13', APPLE, { woman: 'Ava (Premium)', man: 'Evan (Enhanced)' }], ['Pixel 5', ANDROID, { woman: 'Google English (United States) Female', man: 'Google UK English Male' }]];
-  const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
-  const stepIs = (n) => `/${n} of 7/.test((document.querySelector('.tut-step') || {}).textContent || '')`;
-  for (const [device, voices, want] of cases) {
-    for (const gender of [device === 'iPhone 13' ? 'woman' : 'man']) { // (one voice per phone keeps the suite short; each phone's picking order is checked)
-      const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-      const page = t.page;
-      await t.ctx.addInitScript(PHONE_SPEECH, voices);
-      await page.reload();
-      await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-      await page.evaluate(() => openLabs('atom'));
-      await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-      await page.evaluate(() => { window.__speakMs = 2500; }); // (long sentences: Next comes while she is still talking)
-      await page.tap('.lab-teach');
-      await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
-      await page.waitForFunction(() => window.__ev.some((x) => x.e === 'speak' && /Step 1/.test(x.text)), null, { timeout: 5000 });
-      // Next while she's still talking: the old sentence is cut first, the new one starts inside the tap
-      for (let k = 2; k <= 7; k++) {
-        await page.waitForTimeout(300);
-        const n0 = await page.evaluate(() => window.__ev.length);
-        await page.tap('.tut-next');
-        await page.waitForFunction((k) => window.__ev.some((x) => x.e === 'speak' && x.text === `Step ${k} is here.`), k, { timeout: 5000 });
-        const ev = (await page.evaluate(() => window.__ev)).slice(n0);
-        const sp = ev.findIndex((x) => x.e === 'speak'), cancel = ev.findIndex((x) => x.e === 'cancel');
-        expect(cancel >= 0 && cancel < sp, `${device} ${gender}: Next cancels the old speech before step ${k} starts: ` + JSON.stringify(ev));
-        expect(ev[sp].tap === true, `${device} ${gender}: step ${k} starts inside the tap on Next: ` + JSON.stringify(ev[sp]));
-      }
-      const spoken = (await page.evaluate(() => window.__ev)).filter((x) => x.e === 'speak');
-      expect(spoken.length >= 7 && spoken.every((x) => x.voice === want[gender]), `${device} ${gender}: every step in ${want[gender]}: ` + JSON.stringify(spoken.map((x) => x.voice)));
-      expect(await page.evaluate(() => window.__paused) === 0, `${device} ${gender}: no Keep going pop up`);
-      expect(t.errors.length === 0, "page errors: " + t.errors.join("; "));
-      await t.ctx.close();
-    }
-    // the voice fails from step 3 on: no pop up, the lesson still reaches step 7, and Hear it again shows
-    const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-    const page = t.page;
-    await t.ctx.addInitScript(PHONE_SPEECH, voices);
-    await page.reload();
-    await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-    await page.evaluate(() => openLabs('atom'));
-    await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-    await page.evaluate(() => { window.__fail = /Step [3-7]/; window.__speakMs = 2500; });
-    await page.tap('.lab-teach');
-    await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
-    await page.tap('.tut-next'); await page.waitForTimeout(200);
-    await page.tap('.tut-next');
-    await page.waitForFunction(new Function('return ' + stepIs(3)), null, { timeout: 5000 });
-    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
-    expect((await page.locator('.tut-hear').boundingBox()).height >= 44, `${device}: Hear it again is 44px tall`);
-    const tries = await page.evaluate(() => window.__ev.filter((x) => x.e === 'speak' && /Step 3/.test(x.text)).length);
-    expect(tries === 2, `${device}: step 3 was tried twice: ${tries}`);
-    for (let k = 4; k <= 7; k++) { await page.tap('.tut-next'); await page.waitForFunction(new Function('return ' + stepIs(k)), null, { timeout: 5000 }); }
-    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
-    expect(await page.evaluate(() => window.__paused) === 0 && await page.locator('.cv-pause').count() === 0, `${device}: no pop up when the voice fails`);
-    // the voice works again: Hear it again says the step (inside the tap)
-    await page.evaluate(() => { window.__fail = null; });
-    await page.tap('.tut-hear');
-    await page.waitForFunction(() => window.__ev.filter((x) => x.e === 'speak' && /Step 7/.test(x.text)).length === 3, null, { timeout: 5000 });
-    expect(await page.locator('.tut-hear').isHidden(), `${device}: the button goes once she can speak`);
-    expect(t.errors.length === 0, 'page errors: ' + t.errors.join('; '));
-    await t.ctx.close();
-  }
-});
-
 test('exam plans: Cassie makes a dated day by day plan, today’s tasks open their feature and stay ticked after a reload, a missed day moves on (never more than 3 a day), Free keeps 1 plan and Plus 5, a bad reply shows Try again, and the plan closes with a summary', async (b) => {
   // Cassie's plan, faked from what she was asked: the days she was given, a few tasks a day, plus some junk to leave out
   let broken = false;
@@ -2819,6 +2637,30 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
 // A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
 const FAKE_VOICE = (opts) => {
   window.__spoken = []; window.__recs = []; window.__shown = [];
+  // Bella's studio voice, faked in the page: GET /speak says what's left (window.__studioCfg.left), POST
+  // /speak answers with a tiny WAV and is logged in window.__studio ({ text, ok }); from the
+  // failFrom-th sentence on it fails. Every "Cassie types instead" line shown is counted in __notes.
+  window.__studio = []; window.__notes = [];
+  window.__studioCfg = Object.assign({ on: true, left: 9000, back: '2026-11-01', failFrom: null }, opts.studio || {});
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.classList && n.classList.contains('cv-note')) window.__notes.push(n.textContent); })))
+    .observe(document, { subtree: true, childList: true });
+  if (!opts.realStudio) {
+    const realFetch = window.fetch.bind(window);
+    const wav = () => { const n = 800, b = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+      w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true); return b.buffer; };
+    window.fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname !== '/speak') return realFetch(input, init);
+      const c = window.__studioCfg;
+      if (!init.method || init.method === 'GET') return new Response(JSON.stringify(c.on ? { on: true, left: c.left, back: c.back } : { on: false, left: 0 }), { headers: { 'content-type': 'application/json' } });
+      const body = JSON.parse(init.body), ok = c.on && !(c.failFrom != null && window.__studio.length >= c.failFrom);
+      window.__studio.push({ text: body.text, voice: body.voice, ok });
+      if (!ok) return new Response('{"error":{"message":"the studio voice failed"}}', { status: c.failStatus || 502 });
+      c.left = Math.max(0, c.left - body.text.length);
+      return new Response(wav(), { headers: { 'content-type': 'audio/mpeg', 'x-speak': 'new' } });
+    };
+    addEventListener('DOMContentLoaded', () => { if (window.CassieVoice) window.CassieVoice.studio.setup({ server: 'https://studio.test', uid: 'test-uid-0001' }); });
+  }
   // what Cassie says on the voice screen (Bella speaks it, or it's shown while her voice downloads)
   new MutationObserver(() => { const el = document.querySelector('.vc-cassie'); const t = el && el.textContent; if (t && t !== window.__lastShown) { window.__lastShown = t; window.__shown.push(t); } })
     .observe(document, { subtree: true, childList: true, characterData: true });
@@ -2836,6 +2678,135 @@ const FAKE_VOICE = (opts) => {
   window.SpeechRecognition = class extends EventTarget { constructor() { super(); window.__recs.push(this); this.live = false; } start() { this.live = true; } stop() { this.live = false; setTimeout(() => this.onend && this.onend(), 5); } abort() { this.live = false; } };
   window.__say = (text) => { const r = window.__recs.filter((x) => x.live).at(-1); const res = [{ transcript: text }]; res.isFinal = true; r.onresult({ resultIndex: 0, results: [res] }); };
 };
+
+// Cassie speaks only in Bella's studio voice. A session (a lesson, a Listen, a voice chat) uses her only
+// when what's left of the month covers all of it; otherwise she types from the start and says so once.
+// If Bella fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
+test('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
+  const LONG = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} says mitochondria turn food into energy the cell can use.`).join(' ');
+  const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
+  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', cards, hearing: 'fast' },
+    fakeGroq: (body) => ({ text: /Reply with ONLY JSON/.test(JSON.stringify(body.messages)) ? JSON.stringify({ steps }) : LONG }) });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await page.waitForFunction(() => window.CassieVoice.studio.known() && window.CassieVoice.studio.on(), null, { timeout: 5000 });
+  const LINE = await page.evaluate(() => CassieErrors.say('voice_typing'));
+  expect(LINE === 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.', 'the one line, in plain words: ' + LINE);
+  const studio = () => page.evaluate(() => window.__studio.slice());
+  const notes = () => page.evaluate(() => window.__notes.slice());
+  const clearNote = () => page.evaluate(() => document.querySelectorAll('.cv-note').forEach((n) => n.remove()));
+  const setLeft = (left, extra = {}) => page.evaluate(([l, x]) => { Object.assign(window.__studioCfg, { left: l, ...x }); return window.CassieVoice.studio.refresh(); }, [left, extra]);
+  const settingsLine = async () => { await page.evaluate(() => openSettings()); const t = await page.locator('#hv-state').innerText(); await page.evaluate(() => closeSettings && closeSettings()).catch(() => {}); return t; };
+
+  // Settings, Voice: Bella is ready
+  expect(/^Bella’s voice is ready\./.test(await settingsLine()), 'Settings says Bella is ready: ' + await page.locator('#hv-state').innerText());
+  await page.keyboard.press('Escape');
+
+  // 1. a long Listen with enough left: every sentence in Bella's voice, no line
+  await ask(page, 'What do mitochondria do?');
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 20000 });
+  let st = await studio();
+  expect(st.length >= 3 && st.every((x) => x.ok && x.voice === 'woman') && /Sentence 1 /.test(st[0].text) && /Sentence 12 /.test(st.at(-1).text), 'the whole answer went to Bella: ' + JSON.stringify(st.map((x) => x.text.slice(0, 14))));
+  expect((await notes()).length === 0, 'no line when she can speak');
+  let played = await page.evaluate(() => window.CassieVoice.played());
+  expect(played.length === st.length && played.every((x) => x.kind === 'studio' && x.voice === 'bella'), 'only Bella spoke: ' + JSON.stringify(played));
+
+  // 2. too little left: nothing is spoken, the words stay, the one line shows once
+  await setLeft(50);
+  let n0 = (await studio()).length;
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForTimeout(800);
+  await page.click('.bubble-assistant .listen-btn').catch(() => {}); // (tapped twice: still one line)
+  await page.waitForTimeout(600);
+  expect((await studio()).length === n0, 'nothing went to the studio voice');
+  expect(JSON.stringify(await notes()) === JSON.stringify([LINE]), 'the line showed once: ' + JSON.stringify(await notes()));
+  expect(/Sentence 12 says/.test(await page.locator('.bubble-assistant').last().innerText()), 'the answer is on the screen');
+  // Settings says when she is back
+  const resting = await settingsLine();
+  expect(resting === 'Cassie’s voice is resting until 1 November. Until then she types her answers.', 'Settings says when she is back: ' + resting);
+  await page.keyboard.press('Escape');
+  // voice chat: the same line, and the chat stays typed (the voice screen never opens)
+  await clearNote();
+  await page.click('#voice-btn');
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => !document.querySelector('.vc') || document.querySelector('.vc').hidden), 'the voice screen did not open');
+  expect((await notes()).length === 2 && (await notes())[1] === LINE, 'voice chat said the same line');
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'prompt-input'), 'the typed chat is ready to type in');
+  expect((await studio()).length === n0, 'still nothing spoken');
+
+  // 3. flashcards, enough left: the deck is read in Bella's voice
+  await clearNote(); await setLeft(9000);
+  await page.evaluate(() => window.CassieCards.open());
+  await page.click('[data-listen="Biology"]');
+  await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 15000 });
+  await page.click('[data-lstop]');
+  st = await studio();
+  expect(st.some((x) => /Powerhouse of the cell/.test(x.text)) && st.some((x) => /^Mitochondria/.test(x.text)), 'the cards went to Bella: ' + JSON.stringify(st.slice(-2)));
+  await page.click('.fc-back').catch(() => {});
+  await page.keyboard.press('Escape');
+
+  // 4. a 7-step lesson with enough left: every step in Bella's voice
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+  n0 = (await studio()).length;
+  const sevenOfSeven = () => page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 45000 });
+  await page.click('.lab-teach');
+  await sevenOfSeven();
+  await page.waitForFunction((n) => window.__studio.length >= n + 7, n0, { timeout: 10000 });
+  st = (await studio()).slice(n0);
+  expect(st.length === 7 && st.every((x, i) => x.ok && x.text === `Step ${i + 1} is here.`), 'all 7 steps in Bella’s voice: ' + JSON.stringify(st));
+  expect((await notes()).length === 2, 'no line in a lesson she can say');
+
+  // 5. Bella fails at step 4: tried once more in her voice, then the rest is typed with the line; no other voice
+  await page.click('.tut-x');
+  n0 = (await studio()).length;
+  await page.evaluate((n) => { window.__studioCfg.failFrom = n + 3; }, n0);
+  await page.click('.lab-teach');
+  await page.click('.tut-resume:not([hidden]) .tut-restart');
+  await sevenOfSeven();
+  await page.waitForTimeout(500);
+  st = (await studio()).slice(n0);
+  expect(st.length === 5 && st.slice(0, 3).every((x) => x.ok) && st.slice(3).every((x) => !x.ok && /Step 4/.test(x.text)), 'steps 1 to 3 said, step 4 tried twice, nothing after: ' + JSON.stringify(st));
+  expect((await notes()).length === 3 && (await notes())[2] === LINE, 'the line once when she stopped: ' + JSON.stringify(await notes()));
+  expect(/Step 7 is here/.test(await page.locator('.tut-say').innerText()), 'the rest of the lesson went on in text');
+  await page.click('.tut-x');
+
+  // 6. too little left for the lesson: typed from the start, the line once, Next still moves on
+  await clearNote(); await setLeft(60, { failFrom: null });
+  n0 = (await studio()).length;
+  const notesBefore = (await notes()).length;
+  await page.click('.lab-teach');
+  await page.click('.tut-resume:not([hidden]) .tut-restart');
+  await page.waitForFunction(() => /1 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 15000 });
+  await page.click('.tut-next');
+  await page.waitForFunction(() => /[2-7] of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 5000 });
+  await sevenOfSeven();
+  expect((await studio()).length === n0, 'nothing went to the studio voice');
+  expect((await notes()).length === notesBefore + 1, 'the line once for the whole lesson: ' + JSON.stringify((await notes()).slice(notesBefore)));
+  await page.click('.tut-x');
+
+  // 7. the device's voice was never used for anything Cassie said
+  expect((await page.evaluate(() => window.__spoken)).length === 0, 'speechSynthesis was never called: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
+  expect(await page.locator('.cv-pause').count() === 0, 'no pause box');
+  // Settings when the studio voice isn't switched on at all
+  await page.evaluate(() => { window.__studioCfg.on = false; return window.CassieVoice.studio.refresh(); });
+  expect(await settingsLine() === await page.evaluate(() => CassieErrors.say('voice_not_set_up')), 'Settings says the voice isn’t switched on');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // nowhere in the app or the extension: "Keep going", or the device's voice for Cassie's words
+  const files = [...fs.readdirSync(ROOT).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
+  const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!keep.length, '"Keep going" is still in: ' + keep.join(', '));
+  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!synth.length, 'the device voice is still used in: ' + synth.join(', '));
+  // the owner's voice guide: the numbers, what to raise in Cloudflare, no key, no dashes
+  const guide = fs.readFileSync(path.join(ROOT, 'docs/voice-setup.md'), 'utf8');
+  expect(/SPEAK_MONTHLY_CHARS/.test(guide) && /7-step/.test(guide) && /flashcard/i.test(guide) && /Checked on \d+ \w+ 20\d\d/.test(guide) && /elevenlabs\.io\/pricing/.test(guide), 'docs/voice-setup.md has the numbers, the date, the source and the variable');
+  expect(!/[–—]/.test(guide) && !/sk_[a-z0-9]{20,}|xi-api-key:\s*\w{20,}/i.test(guide), 'no dashes and no key in docs/voice-setup.md');
+});
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
@@ -2903,100 +2874,6 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await serverMode({ reply: '', heard: '' });
   await ctx.close();
-});
-
-// The voice model's files, served in place of Hugging Face: a tiny stand-in model (a tone, not speech)
-// that runs through the real kokoro-js and ONNX runtime, with the real voice styles.
-const KOKORO_FIXTURE = path.join(__dirname, 'fixtures', 'kokoro');
-const serveKokoro = (ctx) => ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\//, (route) => {
-  const rel = new URL(route.request().url()).pathname.split('/resolve/main/')[1];
-  const file = path.join(KOKORO_FIXTURE, rel);
-  if (!rel || rel.includes('..') || !fs.existsSync(file)) return route.fulfill({ status: 404, body: 'not found' });
-  return route.fulfill({ path: file, contentType: rel.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
-});
-const WATCH_VOICE_WORKER = () => {
-  window.__said = []; window.__played = 0;
-  const post = Worker.prototype.postMessage;
-  Worker.prototype.postMessage = function (m, ...rest) { if (m && m.type === 'say') window.__said.push({ text: m.text, voice: m.voice }); return post.call(this, m, ...rest); };
-  const start = AudioBufferSourceNode.prototype.start;
-  AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
-};
-
-test('Cassie’s voice is Bella (or Edward) once she’s on the device — the phone’s voice only until then, and she never makes you wait', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
-  // the voice model downloads slowly here, like on a slow connection
-  await ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\/onnx\//, async (route) => {
-    await new Promise((r) => setTimeout(r, 8000));
-    return route.fulfill({ path: path.join(KOKORO_FIXTURE, 'onnx', 'model_quantized.onnx'), contentType: 'application/octet-stream' });
-  });
-  await serveKokoro(ctx);
-  await ctx.addInitScript(FAKE_VOICE, {});
-  await ctx.addInitScript(WATCH_VOICE_WORKER);
-  await page.reload();
-  expect(await page.evaluate(() => window.crossOriginIsolated), 'the app is cross-origin isolated (her voice can use several cores)');
-  await page.click('#voice-btn');
-  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Getting Cassie’s voice ready', { timeout: 5000 });
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-human-loading.png' });
-  // she doesn't wait for her voice: the greeting is on screen and she's listening already
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 3000 });
-  expect(await page.evaluate(() => window.CassieVoice.status()) === 'loading', 'she listens while her voice is still downloading');
-  expect(/listening/.test(await page.locator('.vc-cassie').innerText()), 'the greeting shows as text');
-  await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 30000 });
-  const deviceBefore = await page.evaluate(() => window.__spoken.length); // the phone's voice filled in while she downloaded
-  // the download note becomes "her own voice is ready" (from the next conversation: this one keeps its voice), then goes away
-  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie’s own voice is ready', { timeout: 5000 });
-  expect(/next time/.test(await page.locator('.vc-hv').innerText()), 'her own voice starts next time, never mid-conversation');
-  await page.waitForSelector('.vc-hv[hidden]', { state: 'attached', timeout: 10000 });
-  expect(await page.evaluate(() => window.CassieVoice.info().isolated), 'her voice uses several cores');
-  // the next conversation is in Bella's voice
-  await page.click('.vc-x');
-  await page.click('#voice-btn');
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  await page.evaluate(() => window.__say('What do mitochondria do?'));
-  await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
-  const said = await page.evaluate(() => window.__said);
-  expect(said.every((x) => x.voice === 'af_bella'), 'the woman’s voice is Bella, like the explainer video: ' + JSON.stringify(said.map((x) => x.voice)));
-  expect(said[0].text.length <= 75, 'her first piece is short, so she starts talking quickly: ' + said[0].text);
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
-  // the man's voice
-  await page.click('.vc-gender [data-gender="man"]');
-  await page.waitForFunction(() => window.__said.some((x) => x.voice === 'bm_george' && /my voice now/.test(x.text)), null, { timeout: 8000 });
-  await page.click('.vc-gender [data-gender="woman"]');
-  await page.click('.vc-x');
-  // Settings → Voice: she's ready, and a sample plays
-  await tapSettings(page);
-  await page.evaluate(() => { const d = document.querySelector('#voice-gender-select').closest('details'); if (d) d.open = true; });
-  await page.waitForSelector('#hv-state >> text=Bella’s voice is ready', { timeout: 5000 });
-  expect(await page.locator('#voice-engine-select').count() === 0, 'no robot-voice option any more');
-  await page.click('#hv-play');
-  await page.waitForFunction(() => window.__said.some((x) => /Let’s study together/.test(x.text)), null, { timeout: 8000 });
-  await page.evaluate(() => closeSettings());
-  // reading answers aloud uses it too
-  await page.evaluate(() => { state.voiceOut = true; });
-  await page.fill('#prompt-input', 'And ribosomes?');
-  await page.press('#prompt-input', 'Enter');
-  await page.waitForFunction(() => window.__said.filter((x) => /powerhouse/.test(x.text)).length >= 2, null, { timeout: 15000 });
-  expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'once Bella is ready, only Bella speaks: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
-
-  // a phone on mobile data is asked first; if her voice can't load, the phone's own voice speaks — Cassie is never silent
-  const c2 = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Sure.' }) });
-  await c2.ctx.addInitScript(FAKE_VOICE, {});
-  await c2.page.reload();
-  await c2.page.click('#voice-btn');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Get Cassie’s own voice?', { timeout: 5000 });
-  expect(await c2.page.evaluate(() => window.CassieVoice.status()) === 'off', 'nothing downloads on a phone until asked');
-  if (process.env.SHOTS) await c2.page.screenshot({ path: process.env.SHOTS + '/voice-human-ask.png' });
-  await c2.page.click('.vc-hv [data-hv="get"]');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie is using your phone’s voice', { timeout: 20000 });
-  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  await c2.page.evaluate(() => window.__say('Hello'));
-  await c2.page.waitForFunction(() => document.querySelector('.vc-cassie').textContent === 'Sure.', null, { timeout: 10000 });
-  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await c2.page.evaluate(() => window.__spoken.some((t) => /Sure/.test(t))), 'her voice couldn’t load, so the phone’s voice said the answer: ' + JSON.stringify(await c2.page.evaluate(() => window.__spoken)));
-  await c2.ctx.close();
 });
 
 test('Talk with Cassie hears with Whisper by default (most accurate), even where the browser could listen', async (b) => {
@@ -5281,6 +5158,28 @@ test('phones: maths copied from a PDF is cleaned and rebuilt before solving', as
   await page.waitForSelector('text=I read this as', { timeout: 10000 });
   expect(/x2.*usually means x²/.test(JSON.stringify(groqCalls.at(-1).messages.at(-1))), 'Cassie is told how to rebuild flattened maths');
   await ctx.close();
+});
+
+test('server: GET /speak says how many studio characters are left (a number) and when they come back, counting nothing', async () => {
+  await fetch(SERVER + '/__reset');
+  const hdr = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' };
+  const left = async (uid = 'voice-test-uid-1') => (await fetch(`${SERVER}/speak?uid=${uid}`, { headers: hdr })).json();
+  try {
+    await serverMode({ speakOn: false });
+    let d = await left();
+    expect(d.on === false && d.left === 0, 'off: nothing left: ' + JSON.stringify(d));
+    await serverMode({ speakOn: true, speakMonth: 1000, elevenCalls: 0 });
+    d = await left();
+    const now = new Date(Date.now() + 8 * 3600e3), y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
+    const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
+    expect(JSON.stringify(Object.keys(d).sort()) === '["back","left","on"]' && d.on === true && d.left === 1000 && typeof d.left === 'number' && d.back === next, 'on: the month’s 1000 left, back on the 1st: ' + JSON.stringify(d));
+    expect((await left()).left === 1000, 'asking again counts nothing');
+    const said = await fetch(SERVER + '/speak', { method: 'POST', headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Hello there, student.', voice: 'woman', uid: 'voice-test-uid-1' }) });
+    expect(said.status === 200 && /audio\/mpeg/.test(said.headers.get('content-type')), 'a sentence is said: ' + said.status);
+    d = await left('voice-test-uid-2');
+    expect(d.left === 1000 - 'Hello there, student.'.length, 'what was said comes off the month: ' + JSON.stringify(d));
+    expect((await serverMode({})).elevenCalls === 1, 'one call to ElevenLabs');
+  } finally { await serverMode({ speakOn: false, speakMonth: null }); }
 });
 
 test('server: the Chrome / Edge extension may use it, other sites may not', async () => {
