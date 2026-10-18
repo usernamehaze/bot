@@ -1952,9 +1952,7 @@ html.lite {
 .listen-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .x3d .listen-btn { background: rgba(var(--hi-rgb), .1); color: var(--white); border-color: rgba(var(--hi-rgb), .22); margin-left: auto; }
 .x3d .listen-btn.on { background: var(--white); color: var(--dark-1); }
-/* her voice is downloaded and being set up: a bar that moves instead of sitting at 100% */
-@keyframes hvBusy { from { background-position: -50% 0; } to { background-position: 150% 0; } }
-@media (prefers-reduced-motion: reduce) { 
+
 /* Plus extras: what it is and how to get it (above Labs and the board) */
 .ex-sheet { position: fixed; inset: 0; z-index: 2147483630; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
 .plus-sheet { position: fixed; inset: 0; z-index: 2147483640; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
@@ -2064,7 +2062,8 @@ html.lite {
   .field-toggle, .field.row { display: flex; align-items: center; min-height: var(--tap); padding-inline: 12px; margin-inline: -12px; }
   /* Talk with Cassie */
   .vc-x { width: var(--tap); height: var(--tap); }
-  .vc-modes button, .vc-gender button, }
+  .vc-modes button, .vc-gender button { min-height: var(--tap); }
+}
 @media (max-width: 370px) { .tab { min-width: 44px; padding: 0 10px; } } /* (after the phone rule: six tabs still fit at 360) */
 
 /* Reduce Motion: no sliding, scaling or spinning, things just appear */
