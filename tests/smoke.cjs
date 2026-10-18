@@ -654,6 +654,16 @@ test('terms.html promises an easy cancel and a reminder before every renewal, an
   expect(!/lemonsqueezy\.com|LEMON_API_KEY|\/billing\//i.test(code), 'no payment code until the Lemon Squeezy links arrive');
 });
 
+test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
+  const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
+  const found = [...doc.matchAll(/^## (\d)\. (.+)$/gm)].map((m) => `${m[1]}. ${m[2].trim()}`);
+  expect(found.join('|') === heads.map((h, i) => `${i + 1}. ${h}`).join('|'), 'the 8 sections, in order: ' + found.join(' | '));
+  const today = doc.split(/^## 2\./m)[0].split('\n').filter((l) => /^\| (Free|Plus|Pro) \|/.test(l));
+  expect(today.length >= 10 && today.every((l) => /`[\w./-]+(\.js|\.html)`|`[\w-]+\/`/.test(l)), 'every feature row names its file: ' + today.filter((l) => !/`[\w./-]+(\.js|\.html)`|`[\w-]+\/`/.test(l)).join(' / '));
+  expect(!/[—–]/.test(doc), 'no em or en dashes in the doc');
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
