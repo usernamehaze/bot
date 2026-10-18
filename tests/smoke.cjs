@@ -1002,7 +1002,7 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
 test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
   for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
-  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,content.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,content.js,errors.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
   const ext = path.join(ROOT, 'extension');
   const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
@@ -1203,6 +1203,214 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     // the parser on its own: only well-formed steps and shapes are kept
     const parsed = await panel.evaluate(() => CassieTeach.parse('{"steps":[{"say":"ok","point":{"x":2,"y":0.5},"draw":[{"shape":"polygon","points":[[0,0],[1,0]]},{"shape":"curve","points":[[0,0],[0.5,0.5]]},{"shape":"graph","fn":"alert(1)","x":0.1,"y":0.1,"w":0.5,"h":0.5}]},"junk",{"say":"two","point":{"selector":"h1"}}]}', 0));
     expect(parsed.length === 2 && parsed[0].point === null && parsed[0].draw.map((d) => d.shape).join() === 'curve' && parsed[1].point.selector === 'h1', 'the parser keeps only what makes sense: ' + JSON.stringify(parsed));
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when on and is gone when off; Teach me this page from the floating menu points and draws one step at a time, earlier steps stay in grey, × or Escape leaves nothing; the card says where lessons are kept; the lesson is saved in Your lessons with its steps and picture, opens in the Cassie app and can be deleted; voice off never speaks; nothing is read before she is asked', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    // the real site address, served from this repo, so "Open in Cassie" reaches the app
+    await ctx.route(/askcassie\.pages\.dev/, async (route) => {
+      const u = new URL(route.request().url());
+      return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
+    });
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.addInitScript(([seed, srv]) => { if (location.hostname !== 'askcassie.pages.dev') return; window.CASSIE_SERVER = srv; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, [JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on' }), SERVER]);
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked; and every picture of the tab is counted
+    await sw.evaluate(() => {
+      self.__asked = []; self.__shots = 0;
+      const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
+      chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
+      self.readPicture = async (keys, msg) => {
+        const p = String(msg.prompt || '');
+        self.__asked.push({ prompt: p, log: msg.log || null });
+        const num = (what) => { const m = p.match(new RegExp('^(\\d+)\\. ' + what, 'm')); return m ? +m[1] : 0; };
+        const h = num('heading "Photosynthesis"'), t = num('table heading "Stage"');
+        if (/The student asks/.test(p)) return JSON.stringify({ answer: 'Plants make their own food from light.', steps: [{ say: 'The heading names the topic.', point: h, draw: [{ shape: 'underline', el: h }] }] });
+        return JSON.stringify({ steps: [
+          { say: 'This page is about photosynthesis.', point: h, draw: [{ shape: 'box', el: h }] },
+          { say: 'The table shows the two stages.', point: t, draw: [{ shape: 'box', el: t }] },
+          { say: 'That is the big idea.', point: h },
+        ] });
+      };
+    });
+    const store = (k) => sw.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), k);
+    const reads = () => sw.evaluate(() => ({ asked: self.__asked.length, shots: self.__shots }));
+    await sw.evaluate(() => chrome.storage.local.set({ teachVoice: 'off', teachAuto: 'off' }));
+    const tab = ctx.pages()[0] || await ctx.newPage();
+    await tab.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tab.bringToFront(); await tab.waitForTimeout(1000);
+    const HOST = '#cassie-teach-host-92f1', FOLLOW = '#cassie-follow-92f1';
+    const follower = () => tab.evaluate((f) => { const n = document.querySelector(f); return n ? { shown: getComputedStyle(n).display !== 'none', at: n.getBoundingClientRect().toJSON(), pe: getComputedStyle(n).pointerEvents } : null; }, FOLLOW);
+    const lesson = () => tab.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn, past: n.dataset.past }; }, HOST);
+    const box = (sel) => tab.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }, sel);
+    const openMenu = async () => { if (!await tab.locator('.dock.open').count()) { const hb = await tab.locator('.dock-handle').boundingBox(); await tab.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2, { steps: 2 }); } await tab.waitForSelector('.dock.open .dock-tray', { timeout: 5000 }); };
+    const cursorAt = () => tab.evaluate((h) => { const c = document.querySelector(h).shadowRoot.querySelector('.ct-cursor'); return c.classList.contains('on') ? [+c.dataset.x, +c.dataset.y] : null; }, HOST);
+    // the ink on her see-through layer, sorted into dark (this step) and light grey (earlier steps), inside a box or not
+    const ink = (b) => tab.evaluate(([h, b]) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const o = { darkIn: 0, darkOut: 0, greyIn: 0, greyOut: 0 };
+      for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+        const i = (y * c.width + x) * 4;
+        if (d[i + 3] < 200) continue;
+        const inside = b && x / k >= b[0] && x / k <= b[2] && y / k >= b[1] && y / k <= b[3];
+        if (d[i] < 70 && d[i + 1] < 70) o[inside ? 'darkIn' : 'darkOut']++;
+        else if (d[i] >= 160 && d[i] <= 200 && Math.abs(d[i] - d[i + 1]) < 10) o[inside ? 'greyIn' : 'greyOut']++;
+      }
+      return o;
+    }, [HOST, b]);
+
+    // 1. before she is asked: no cursor beside the mouse yet, and nothing is read from the page
+    await tab.mouse.move(300, 300); await tab.mouse.move(320, 320, { steps: 3 });
+    await tab.waitForTimeout(300);
+    let f = await follower();
+    expect(!f || !f.shown, 'her cursor is off until the first lesson: ' + JSON.stringify(f));
+    expect(await store('teachCursor') === undefined, 'the cursor switch starts unset');
+    let r0 = await reads();
+    expect(r0.asked === 0 && r0.shots === 0, 'nothing is read from the page before the student asks: ' + JSON.stringify(r0));
+
+    // 2. the floating menu: Ask Cassie about this page, Teach me this page, and the cursor switch, all 44px
+    await openMenu();
+    for (const s of ['.fab-teach', '.dock-cur']) { const bb = await tab.locator(s).boundingBox(); expect(bb.height >= 44 && bb.width >= 44, s + ' is 44px: ' + JSON.stringify(bb)); }
+    expect(await tab.locator('.fab-teach').getAttribute('aria-label') === 'Teach me this page', 'the menu says Teach me this page');
+    r0 = await reads();
+    expect(r0.asked === 0 && r0.shots === 0, 'opening the menu reads nothing: ' + JSON.stringify(r0));
+
+    // 3. Teach me this page: the arrow lands on the heading, step 1 draws only its box
+    await tab.click('.fab-teach');
+    await tab.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tab.waitForTimeout(1800);
+    const q = await sw.evaluate(() => self.__asked.slice());
+    expect(q.length === 1 && /heading "Photosynthesis"/.test(q[0].prompt) && !q[0].log, 'one look at the page, with its numbered parts, not kept: ' + q.length);
+    expect((await reads()).shots === 1, 'one picture of the tab, taken when asked');
+    let l = await lesson();
+    expect(l.step === '0' && l.drawn === 'box' && l.past === '0', 'step 1 draws one box: ' + JSON.stringify(l));
+    const h1 = await box('h1'), th = await box('th');
+    let at = await cursorAt();
+    expect(at && at[0] >= h1[0] && at[0] <= h1[2] && at[1] >= h1[1] && at[1] <= h1[3], `the arrow lands on the heading: ${at} in ${h1}`);
+    const thPad = [th[0] - 14, th[1] - 14, th[2] + 14, th[3] + 14];
+    let k1 = await ink(thPad);
+    expect(k1.darkOut > 100 && k1.darkIn === 0 && k1.greyIn === 0 && k1.greyOut < k1.darkOut / 4, 'step 1 draws at the heading only, nothing yet at the table: ' + JSON.stringify(k1));
+    f = await follower();
+    expect(await store('teachCursor') === 'on' && (!f || !f.shown), 'the first lesson turns her cursor on; it waits while she teaches: ' + JSON.stringify(f));
+    expect(await tab.evaluate(() => window.taps === 0 && window.keys === 0), 'she clicked and typed nothing');
+    const card = tab.locator(`${HOST} .ct-card`);
+    const note = await card.locator('.ct-note').innerText();
+    expect(note === 'When you’re done, close this. Everything Cassie taught is saved in the Cassie side panel.', 'the card says where the lesson is kept: ' + note);
+    expect(!/[—–]/.test(await card.innerText()), 'no dashes on her card');
+
+    // 4. Next: she glides to the table and draws there; the heading's box stays, in light grey (voice off: never speaks)
+    await tab.click(`${HOST} .ct-next`);
+    await tab.waitForTimeout(1800);
+    l = await lesson();
+    expect(l.step === '1' && l.drawn === 'box' && l.past === '1' && l.spoken === '0', 'Next moves on, with the first step kept and no speech: ' + JSON.stringify(l));
+    at = await cursorAt();
+    expect(at && at[0] >= th[0] && at[0] <= th[2] && at[1] >= th[1] && at[1] <= th[3], `the arrow moves to the table: ${at} in ${th}`);
+    const k2 = await ink(thPad);
+    expect(k2.darkIn > 20 && k2.darkOut === 0 && k2.greyOut > 400, 'this step is dark at the table, the earlier box is light grey: ' + JSON.stringify(k2));
+    await tab.click(`${HOST} .ct-next`);
+    await tab.waitForTimeout(800);
+    l = await lesson();
+    expect(l.step === '2' && l.past === '2' && l.spoken === '0', 'Next still works with voice off: ' + JSON.stringify(l));
+
+    // 5. Escape: every drawing and her arrow leave the page; her cursor comes back beside the mouse
+    await tab.keyboard.press('Escape');
+    await tab.waitForTimeout(400);
+    expect(await tab.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('canvas, .ct-card, .ct-cursor')), 'Escape leaves nothing of the lesson on the page');
+    await tab.mouse.move(400, 420, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(f && f.shown && f.pe === 'none' && Math.abs(f.at.left - 416) <= 1 && Math.abs(f.at.top - 438) <= 1, 'her cursor follows the mouse, a little down and right, and takes no taps: ' + JSON.stringify(f));
+    await tab.mouse.move(600, 200, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(f.shown && Math.abs(f.at.left - 616) <= 1 && Math.abs(f.at.top - 218) <= 1, 'and keeps following: ' + JSON.stringify(f.at));
+    // a tap under her cursor reaches the page (she never covers what the student points at)
+    const tapBox = await box('#tap');
+    await tab.mouse.click((tapBox[0] + tapBox[2]) / 2, (tapBox[1] + tapBox[3]) / 2);
+    expect(await tab.evaluate(() => window.taps) === 1, 'the button under the mouse still takes the tap');
+
+    // 6. the lesson is saved: the page title, each step's words, and a picture with the drawings
+    let saved = await store('teachLessons');
+    expect(Array.isArray(saved) && saved.length === 1 && saved[0].title === 'Photosynthesis notes' && saved[0].steps.join('|') === 'This page is about photosynthesis.|The table shows the two stages.|That is the big idea.' && /^data:image\/jpeg/.test(saved[0].pic) && saved[0].pic.length > 2000, 'the lesson is kept: ' + JSON.stringify(saved && saved.map((x) => ({ ...x, pic: String(x.pic).slice(0, 30) }))));
+
+    // 7. the cursor switch in the floating menu turns her off (gone), and back on
+    await openMenu();
+    expect(await tab.locator('.dock-cur').getAttribute('aria-pressed') === 'true', 'the menu switch shows on');
+    await tab.click('.dock-cur');
+    await tab.waitForTimeout(300);
+    await tab.mouse.move(500, 500, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(await store('teachCursor') === 'off' && (!f || !f.shown), 'off: her cursor is gone: ' + JSON.stringify(f));
+
+    // 8. Ask from the floating button: the answer shows in the popover, and she points at it
+    await openMenu();
+    await tab.click('.dock .fab:not(.fab-teach)');
+    await tab.waitForSelector('.page-input', { timeout: 5000 });
+    await tab.fill('.page-input', 'What is this page about?');
+    await tab.click('.page-ask-btn');
+    await tab.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tab.waitForFunction(() => /Plants make their own food from light/.test(document.querySelector('#cassie-ext-host-92f1').shadowRoot.textContent), null, { timeout: 10000 });
+    await tab.waitForTimeout(1500);
+    at = await cursorAt();
+    expect(at && at[0] >= h1[0] && at[0] <= h1[2] && at[1] >= h1[1] && at[1] <= h1[3], `Ask points at the heading too: ${at} in ${h1}`);
+    expect((await lesson()).drawn === 'underline', 'and draws');
+    await tab.click(`${HOST} .ct-x`);
+    await tab.waitForTimeout(400);
+    expect(await tab.evaluate(() => !document.querySelector('[id^="cassie-teach"]')), '× leaves nothing on the page');
+    saved = await store('teachLessons');
+    expect(saved.length === 2 && saved[0].q === 'What is this page about?', 'newest first, with the question: ' + saved.map((x) => x.q).join('|'));
+
+    // 9. the side panel: the cursor switch, and Your lessons with steps and picture; Open in Cassie; Delete
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 900 }));
+    const panel = await panelOpened;
+    await panel.waitForSelector('.lessons .lesson', { timeout: 10000 });
+    const sw2 = panel.locator('.cur-switch');
+    expect(await sw2.getAttribute('aria-pressed') === 'false' && (await sw2.boundingBox()).height >= 44, 'the panel switch shows off, 44px');
+    await sw2.click();
+    await tab.bringToFront();
+    await tab.mouse.move(250, 260, { steps: 3 });
+    await tab.waitForTimeout(400);
+    f = await follower();
+    expect(await store('teachCursor') === 'on' && f && f.shown, 'the panel switch turns her cursor back on: ' + JSON.stringify(f));
+    const lessons = panel.locator('.lessons .lesson');
+    expect(await lessons.count() === 2 && /Your lessons/.test(await panel.locator('.lessons').innerText()), 'Your lessons lists both');
+    const first = lessons.nth(1); // (the Teach me lesson; the newest is first)
+    expect(/Photosynthesis notes/.test(await first.innerText()), 'it has the page title');
+    await first.locator('summary').click();
+    expect((await first.locator('ol li').allInnerTexts()).join('|') === saved[1].steps.join('|'), 'it has every step');
+    expect(/^data:image\/jpeg/.test(await first.locator('img').getAttribute('src')) && await first.locator('img').evaluate((i) => i.naturalWidth === 480), 'it has the picture');
+    for (const b of await panel.locator('.lessons button, .lessons summary').all()) { const bb = await b.boundingBox(); if (bb) expect(bb.height >= 44, 'lesson buttons are 44px: ' + await b.innerText()); }
+    expect(!/[—–]/.test(await panel.locator('.lessons').innerText()), 'no dashes in Your lessons');
+    const appOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await first.locator('[data-open]').click();
+    const app = await appOpened;
+    await app.waitForLoadState().catch(() => {});
+    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto(app.url().startsWith('chrome-error') ? 'https://askcassie.pages.dev/app.html' : app.url()); // (the test's stand-in for the site is set up a moment after a new tab's first load)
+    await app.waitForFunction(() => typeof state === 'object' && state.chats.some((c) => (c.messages || []).some((m) => /lesson you taught me on a page called “Photosynthesis notes”/.test(m.content || m.text || ''))), null, { timeout: 20000 });
+    const att = await app.evaluate(() => JSON.stringify(state.chats.flatMap((c) => c.messages || []).filter((m) => /lesson you taught me/.test(m.content || m.text || ''))).slice(0, 800));
+    expect(/Cassie lesson\.txt|The table shows the two stages/.test(att), 'the lesson reached the app chat with its words: ' + att);
+    await app.close();
+    await first.locator('[data-del]').click();
+    await panel.waitForFunction(() => document.querySelectorAll('.lessons .lesson').length === 1);
+    expect((await store('teachLessons')).length === 1, 'Delete removes one lesson');
+    panel.once('dialog', (d) => d.accept());
+    await panel.click('.lessons-clear');
+    await panel.waitForFunction(() => !document.querySelector('.lessons .lesson'));
+    expect((await store('teachLessons')).length === 0, 'Delete all removes every lesson');
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 

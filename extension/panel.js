@@ -59,8 +59,60 @@ function home(extra = '') {
     <p><b>Whole file</b>: on a PDF, Google Slides or Google Doc tab, Cassie reads every page and makes a reviewer.</p>
     <p><b>Board</b>: draw, or paste any screenshot with <b>Ctrl+V</b> (Win+Shift+S makes one).</p>
     <p><b>Teach me</b>: Cassie teaches what’s on this tab step by step, pointing and drawing on it. <b>Ask Cassie</b>: ask about this tab and she shows you where the answer is.</p>
+    <button type="button" class="cur-switch tall" aria-pressed="false"><span>Cassie’s cursor beside your mouse</span><i aria-hidden="true"></i></button>
+    <section class="lessons" aria-label="Your lessons"></section>
   </div>`;
+  const sw = view.querySelector('.cur-switch');
+  chrome.storage.local.get(['teachCursor'], (o) => sw.setAttribute('aria-pressed', String(o.teachCursor === 'on')));
+  sw.addEventListener('click', () => { const on = sw.getAttribute('aria-pressed') !== 'true'; sw.setAttribute('aria-pressed', String(on)); chrome.storage.local.set({ teachCursor: on ? 'on' : 'off' }); });
+  renderLessons();
 }
+
+/* ---------- Your lessons: what Cassie taught on a page, kept on this device until deleted ---------- */
+function lessonText(l) {
+  return `Cassie’s lesson: ${l.title}${l.q ? `\nI asked: ${l.q}` : ''}\n\n${l.steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n`;
+}
+function renderLessons() {
+  const box = view.querySelector('.lessons');
+  if (!box) return;
+  chrome.storage.local.get(['teachLessons'], (o) => {
+    const list = Array.isArray(o.teachLessons) ? o.teachLessons : [];
+    box.innerHTML = list.length ? '<h2 class="lessons-h">Your lessons</h2>' : '';
+    list.forEach((l) => {
+      const card = document.createElement('article');
+      card.className = 'card lesson'; card.dataset.id = l.id;
+      card.innerHTML = `${l.pic ? '<img alt="The page with Cassie’s drawings">' : ''}<b class="lesson-t"></b><small class="lesson-d"></small>
+        <details><summary class="tall">Steps</summary><ol></ol></details>
+        <div class="row"><button class="btn tall" type="button" data-open>Open in Cassie</button><button class="btn ghost tall" type="button" data-del>Delete</button></div>`;
+      if (l.pic) card.querySelector('img').src = l.pic;
+      card.querySelector('.lesson-t').textContent = l.title;
+      card.querySelector('.lesson-d').textContent = new Date(l.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + (l.q ? ` · ${l.q}` : '');
+      const ol = card.querySelector('ol');
+      l.steps.forEach((x) => { const li = document.createElement('li'); li.textContent = x; ol.appendChild(li); });
+      card.querySelector('[data-del]').addEventListener('click', () => {
+        chrome.storage.local.get(['teachLessons'], (o2) => chrome.storage.local.set({ teachLessons: (o2.teachLessons || []).filter((x) => x.id !== l.id) }));
+      });
+      card.querySelector('[data-open]').addEventListener('click', async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.textContent = 'Opening…';
+        const base64 = btoa(unescape(encodeURIComponent(lessonText(l))));
+        const r = await chrome.runtime.sendMessage({ type: 'CASSIE_OPEN_IN_APP', name: 'Cassie lesson.txt', mime: 'text/plain', base64, prompt: `This is a lesson you taught me on a page called “${l.title}”. Go over it with me and check that I understood.` }).catch((err) => ({ error: err.message }));
+        b.disabled = false; b.textContent = r && r.ok ? 'Opened in Cassie' : 'Open in Cassie';
+      });
+      box.appendChild(card);
+    });
+    if (list.length) {
+      const all = document.createElement('button');
+      all.type = 'button'; all.className = 'btn ghost tall lessons-clear'; all.textContent = 'Delete all lessons';
+      all.addEventListener('click', () => { if (confirm('Delete all your saved lessons?')) chrome.storage.local.set({ teachLessons: [] }); });
+      box.appendChild(all);
+    }
+  });
+}
+chrome.storage.onChanged.addListener((ch, area) => {
+  if (area !== 'local') return;
+  if (ch.teachLessons) renderLessons();
+  if (ch.teachCursor) { const sw = view.querySelector('.cur-switch'); if (sw) sw.setAttribute('aria-pressed', String(ch.teachCursor.newValue === 'on')); }
+});
 
 /* ---------- tiny markdown → HTML (with Cassie's graphs) ---------- */
 function inline(s) {
@@ -279,30 +331,6 @@ async function snip() {
 // can't draw (the browser's own pages, its PDF viewer, extension stores), she teaches on a picture
 // of the tab right here. The page's words and picture go to the AI only when the student taps, and
 // are never kept: no log is asked for.
-const TEACH_SHAPES = (numbered) => `Each step can draw up to 3 shapes ("draw"). x, y, w, h and r are shares of the picture from 0 to 1, and (0, 0) is its top left corner.
-${numbered ? 'A shape can be about a numbered thing: {"shape":"circle","el":3}, {"shape":"box","el":3}, {"shape":"underline","el":3}, {"shape":"highlight","el":3}, {"shape":"arrow","to_el":3}.\n' : ''}{"shape":"circle","x":0.4,"y":0.3,"r":0.05}
-{"shape":"box","x":0.1,"y":0.2,"w":0.3,"h":0.1}
-{"shape":"underline","x":0.1,"y":0.25,"w":0.3}
-{"shape":"highlight","x":0.1,"y":0.2,"w":0.3,"h":0.05}
-{"shape":"arrow","from":[0.2,0.6],"to":[0.4,0.3]}
-{"shape":"line","from":[0.1,0.5],"to":[0.6,0.5]}
-{"shape":"curve","points":[[0.1,0.6],[0.3,0.4],[0.5,0.6]]}
-{"shape":"polygon","points":[[0.2,0.2],[0.4,0.2],[0.3,0.4]]}
-{"shape":"graph","fn":"x^2 - 4","xrange":[-4,4],"x":0.6,"y":0.1,"w":0.3,"h":0.3} (a small graph with its axes; fn uses * to multiply and ^ for powers)
-{"shape":"text","x":0.5,"y":0.1,"text":"a short label"}
-Draw only where it helps: circle or box the thing, an arrow to it, underline a key word, a graph for a function.`;
-function teachPrompt({ q = '', page = null, snipped = false }) {
-  const parts = page && !page.pictureOnly && !snipped && Array.isArray(page.items) ? page.items : [];
-  const list = parts.map((p) => `${p.n}. ${p.what} at [${p.box.join(', ')}]`).join('\n');
-  return `A student is studying ${snipped ? 'the part of their screen in this picture (they snipped it)' : 'what is on their screen right now (the picture)'}${page && page.title ? `, on a page called "${page.title}"` : ''}.
-${page && page.text && !snipped ? `The words on the page (maybe cut short):\n"""\n${page.text}\n"""\n` : ''}${list ? `Things on the screen you can point at, numbered, each with its box [x, y, w, h] as shares of the picture:\n${list}\n` : ''}
-${q ? `The student asks: "${q}"\nAnswer it, then show them on the screen, step by step, where the answer comes from.` : 'Teach it like a kind tutor sitting beside them: what it is, how to read it and the big ideas, in the order they should look at them. If there is a question on it, work it out with them step by step.'}
-Reply with ONLY minified JSON, no other text:
-{${q ? '"answer":"a short, clear answer in plain words, under 80 words",' : ''}"steps":[{"say":"one or two short, natural spoken sentences","point":${list ? '3' : '{"x":0.4,"y":0.3}'},"draw":[{"shape":"circle","x":0.4,"y":0.3,"r":0.05}]}]}
-Give 2 to 6 steps. "point" is where her arrow goes: ${list ? 'the number of the thing on the list, or {"x":0.4,"y":0.3} for a spot on the picture, or 0 for nothing.' : 'a spot on the picture, {"x":0.4,"y":0.3}, or null for nothing.'}
-${TEACH_SHAPES(!!list)}
-Read only what you can see; never invent words or numbers. No markdown, no emojis, no symbols that sound odd read aloud.`;
-}
 // a page the extension can't draw on: why, in one plain sentence (CassieErrors)
 function whyNotHere(tab) {
   const u = String((tab && tab.url) || '');
@@ -317,19 +345,6 @@ async function tabPicture(tab) {
   try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP', windowId: tab && tab.windowId }); } catch (e) { out = null; }
   return out && out.dataUrl && !(out.full && out.full.std < 4) ? out.dataUrl : null;
 }
-function teachAnswer(reply) {
-  try {
-    const t = String(reply || '').replace(/```(?:json)?/gi, ''), d = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
-    return d && typeof d.answer === 'string' ? d.answer.trim().slice(0, 1500) : '';
-  } catch (e) { return ''; }
-}
-// what went wrong, in plain words (CassieErrors): a missing key, no internet, too slow, or "try again"
-function teachProblem(e) {
-  const m = String((e && e.message) || e || '');
-  if (m === 'no-key' || m === 'no-vision') return window.CassieErrors.say('teach_no_key');
-  const w = window.CassieErrors.explain({ message: m }, 'teach_failed');
-  return w === window.CassieErrors.say('unknown') ? window.CassieErrors.say('teach_failed') : w;
-}
 function teachError(box, words, retry) {
   box.innerHTML = '<div class="card teach-err" role="alert"><p></p><div class="row"><button class="btn tall" type="button">Try again</button></div></div>';
   box.querySelector('p').textContent = words;
@@ -342,6 +357,7 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
   const run = ++teachRun, again = () => teach({ tab, q, snip: snipped, box, onAnswer });
   if (!box) { view.innerHTML = '<div class="teach-box"></div>'; box = view.querySelector('.teach-box'); }
   if (window.CassieTeach) window.CassieTeach.stop();
+  chrome.storage.local.get(['teachCursor'], (o) => { if (o.teachCursor == null) chrome.storage.local.set({ teachCursor: 'on' }); }); // (her cursor comes on with the first lesson)
   if (!tab) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
   box.innerHTML = `<p class="muted">${q ? 'Cassie is reading your tab to answer…' : 'Cassie is looking at your tab…'}</p>`;
   // 1. can she draw on this page? (it answers with what's on it, numbered)
@@ -353,13 +369,13 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
   if (!image) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
   // 3. her lesson as steps (CassieTeach.parse leaves out any bad step or shape)
   let reply;
-  try { reply = await vision(image, teachPrompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), 1400); } catch (e) {
-    if (run === teachRun) teachError(box, teachProblem(e), again);
+  try { reply = await vision(image, window.CassieTeach.prompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), 1400); } catch (e) {
+    if (run === teachRun) teachError(box, window.CassieTeach.problem(e), again);
     return;
   }
   if (run !== teachRun) return;
   const steps = window.CassieTeach.parse(reply, onPage && !snipped && !page.pictureOnly ? page.items.length : 0);
-  const answer = q ? teachAnswer(reply) || steps.map((s) => s.say).join(' ') : '';
+  const answer = q ? window.CassieTeach.answer(reply) || steps.map((s) => s.say).join(' ') : '';
   if (onAnswer && answer) onAnswer(answer);
   if (!steps.length) {
     if (answer) box.innerHTML = '';
@@ -367,7 +383,7 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
     return;
   }
   // 4. the lesson: on the page, or here on the picture when the page won't let her draw
-  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps }, region: snipped ? snipped.region : null };
+  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: tab.title || '', q }, region: snipped ? snipped.region : null, shot: image };
   if (onPage) {
     const shown = await teachReach(tab, lesson);
     if (run !== teachRun) return;
@@ -381,7 +397,7 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
   }
   box.innerHTML = '<p class="teach-why"></p><div class="teach-mount"></div>';
   box.querySelector('.teach-why').textContent = window.CassieErrors.say(whyNotHere(tab));
-  window.CassieTeach.show({ steps }, { mount: box.querySelector('.teach-mount'), image });
+  window.CassieTeach.show({ steps, title: tab.title || '', q }, { mount: box.querySelector('.teach-mount'), image });
 }
 // Ask Cassie: the answer shows here, and she points at what she means
 function askPage() {
