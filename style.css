@@ -547,7 +547,7 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .mascot-2d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%); width: 104px; height: 116px; pointer-events: none; }
 .mascot-2d svg, .mascot-2d canvas { width: 100%; height: 100%; display: block; }
 @media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } }
-#mascot:not(.has2d) { visibility: hidden; } /* (until app.js has made her: never an empty place) */
+#mascot:not(.has2d) { display: none; } /* (until app.js has made her: never an empty place; not visibility, which Reduce Motion's tiny transitions would hold back a frame) */
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 #confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
 #prompt-input.nudge { animation: inputNudge .9s ease; }
