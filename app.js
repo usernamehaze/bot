@@ -7338,7 +7338,7 @@ function plusSheet(what, why) {
       <li>Real 3D in every lab, and the Museum quiz</li>
       <li>Save or print your notes, maps and boards</li>
     </ul>
-    <p class="plus-foot">Paid plans are almost here. Everything else in Cassie stays free.</p>
+    <p class="plus-foot">Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
