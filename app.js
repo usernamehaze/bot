@@ -436,7 +436,7 @@ const mascotBubble = document.getElementById('mascot-bubble');
 let mascotHappyTimer = null;
 let mascotBubbleTimer = null;
 
-// The mascot's moods (named after the old 3D Cassie's) → Cursor Cassie's states
+// The mascot's moods → Cursor Cassie's states
 const EMOTE_TO_3D = {
   'emote-happy': 'encouraging', 'emote-love': 'encouraging', 'emote-star': 'celebratory',
   'emote-surprised': 'curious', 'emote-wink': 'neutral', 'emote-sleepy': 'neutral',
@@ -6994,17 +6994,31 @@ const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.j
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
 const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=169', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+// Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
+// frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
+// If the 3D one fails, the flat one shows in her place instead: never one then the other.
 function frMascot3d(host) {
+  const want3d = fr3dWanted() && !!window.WebGLRenderingContext && !(window.CassieBot && window.CassieBot.failed3d());
   let flat = null;
-  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true, flat: true }); } catch (e) { /* the words still work */ }
+  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true, flat: true, waitFor3d: want3d }); } catch (e) { /* the words still work */ }
   if (flat && (window.CASSIE_LITE || reduceMotion())) flat.pause(); // (Lite mode or Reduce Motion: drawn once, no movement, not even a blink)
-  host.dataset.mascot = '2d';
+  host.dataset.mascot = want3d ? 'waiting' : '2d';
+  if (!want3d) return;
+  const noThreeD = () => { host.dataset.mascot = '2d'; if (flat) flat.reveal(true); };
   const load = fr3dLoad();
-  if (!load) return;
+  if (!load) { noThreeD(); return; }
   load.then((m) => {
-    if (!m || !host.isConnected || !m.webglOK()) return;
-    try { m.mount(host); host.dataset.mascot = '3d'; if (flat) flat.destroy(); } catch (e) { /* the flat Cassie stays */ }
-  });
+    if (!host.isConnected) return;
+    if (!m || !m.webglOK()) { noThreeD(); return; }
+    let canvas = null;
+    try { m.mount(host); canvas = host.querySelector('canvas.cassie-3d'); } catch (e) { noThreeD(); return; }
+    // the flat stand-in goes once her first 3D frame is drawn (or comes back if 3D fails here)
+    const watch = setInterval(() => {
+      if (!host.isConnected) { clearInterval(watch); return; }
+      if (canvas && canvas.dataset.frames !== '0') { clearInterval(watch); host.dataset.mascot = '3d'; if (flat) flat.destroy(); }
+      else if (m.failed && m.failed()) { clearInterval(watch); if (canvas) canvas.remove(); noThreeD(); }
+    }, 100);
+  }, noThreeD);
 }
 
 // 1. Welcome: Cassie, her name and one line, while the app gets ready (first visit only)

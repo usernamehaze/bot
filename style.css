@@ -543,14 +543,11 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 /* 3D Cassie canvas mount — larger than the button and centred on it so raised
    arms are never clipped by the canvas edge. Transparent + pointer-events:none,
    so the extra area doesn't block anything. */
-/* emoji shown only when WebGL / the 3D bundle isn't available */
-.mascot-fallback { display: flex; align-items: center; justify-content: center; width: 58px; height: 68px; font-size: 38px; filter: drop-shadow(0 4px 8px rgba(var(--shade-rgb), .28)); }
-/* Cursor Cassie (2D, cassie-bot.js) */
-.mascot-2d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%); width: 104px; height: 116px; display: none; pointer-events: none; }
+/* Cursor Cassie (cassie-bot.js): 3D, or flat when 3D won't come; her place stays empty until then */
+.mascot-2d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -54%); width: 104px; height: 116px; pointer-events: none; }
 .mascot-2d svg, .mascot-2d canvas { width: 100%; height: 100%; display: block; }
-#mascot.has2d .mascot-2d { display: block; }
-#mascot.has2d .mascot-fallback { display: none; }
-@media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } .mascot-fallback { width: 48px; height: 48px; font-size: 30px; } }
+@media (max-width: 480px) { .mascot-2d { width: 88px; height: 98px; } }
+#mascot:not(.has2d) { visibility: hidden; } /* (until app.js has made her: never an empty place) */
 #mascot.dragging #mascot-btn { cursor: grabbing; }
 #confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
 #prompt-input.nudge { animation: inputNudge .9s ease; }
@@ -1184,8 +1181,6 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .pf-row { display: flex; gap: 10px; justify-content: flex-end; }
 .pf-row .pf-go { flex: 1; }
 .report-row { margin: 14px 0 4px; } .report-row .btn { width: 100%; }
-.mascot-fallback svg { width: 34px; height: 39px; fill: var(--surface, var(--white)); stroke: var(--text); stroke-width: 20; stroke-linejoin: round; paint-order: stroke; }
-@media (max-width: 480px) { .mascot-fallback svg { width: 28px; height: 32px; } }
 
 /* ---------- sign in / sign up (Cassie accounts) ---------- */
 .auth-page { position: fixed; inset: 0; z-index: 210; display: grid; grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); background: var(--surface); color: var(--text); overflow-y: auto; }
