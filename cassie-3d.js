@@ -38,6 +38,8 @@ function shadowTexture() {
   return t;
 }
 
+// the one renderer couldn't start here (no 3D after all: the flat Cassie shows instead)
+export const failed = () => { try { return !!shared().failed; } catch (e) { return true; } };
 export function webglOK() {
   try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch (e) { return false; }
 }

@@ -156,6 +156,9 @@
   const mix = (a, b, k) => { const x = hex(a), y = hex(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
   let uid = 0;
   const reduced = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // a device where the 3D Cassie failed (no 3D there, or it didn't load): the flat one from the start, for a week
+  const NO3D = 'cassie.no3d';
+  const failed3d = () => { try { const t = +localStorage.getItem(NO3D); return !!t && Date.now() - t < 7 * 864e5; } catch (e) { return false; } };
   const el = (tag, attrs = {}, html) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (html != null) n.innerHTML = html; return n; };
 
   function create(host, opts = {}) {
@@ -225,6 +228,7 @@
     let raf = 0, last = 0, t0 = clock(), alive = true, paused = false, pokeTimer = 0;
     const pose = { bob: 0, sx: 1, sy: 1, rot: 0, dx: 0, tail: 0, ex: 0, ey: 0, blink: 1, t: 0, ts: 0 };
     let deep = null; // the 3D Cassie, once she's ready (cassie-bot3d.js)
+    let flatShown = true; // (false while the 3D one is coming: the flat one keeps her place, unseen)
     let stale = true; // (with Reduce Motion or in Lite mode she keeps still: drawn again only when something changes)
     const shown = { eyes: '', mouth: '', badge: '', fx: '' };
 
@@ -395,17 +399,30 @@
       get pose() { return pose; },
       get def() { return STATES[stateName] || STATES.idle; },
       get is3d() { return !!(deep && deep.live); },
+      get flat() { return flatShown; },
+      // show the flat Cassie for good (the 3D one won't come): remember=true when 3D failed on this device
+      reveal(remember) {
+        if (flatShown) return;
+        flatShown = true; svg.style.visibility = '';
+        if (deep && !deep.live) { deep.destroy(); deep = null; }
+        if (remember) { try { localStorage.setItem(NO3D, String(Date.now())); } catch (e) { /* ignore */ } }
+      },
     };
     // The 3D Cassie (cassie-bot3d.js): the same Cassie in 3D, every state and accessory, drawn by one
-    // renderer for the whole page. The flat one stays for Reduce Motion, Lite mode, no WebGL, the
-    // pop-out window, frame-by-frame video, opts.flat (a stand-in for the Get started Cassie), and
-    // while the 3D one gets ready.
-    if (!opts.clock && !opts.win && !opts.flat && !reduced() && !window.CASSIE_LITE && !window.CASSIE_FLAT && window.WebGLRenderingContext) {
+    // renderer for the whole page. Which one she is gets decided before anything is painted, so she
+    // never changes from one to the other: the flat one is for Reduce Motion, Lite mode, no WebGL, a
+    // device where 3D failed before, the pop-out window and frame-by-frame video. While the 3D one gets
+    // ready her place stays empty; if it fails, the flat one shows there instead (and is remembered).
+    // opts.flat: a stand-in kept unseen for another 3D Cassie (Get started: opts.waitFor3d, then reveal()).
+    const will3d = !opts.clock && (!opts.win || opts.win === window) && !opts.flat && !reduced() && !window.CASSIE_LITE && !window.CASSIE_FLAT && !!window.WebGLRenderingContext && !failed3d();
+    if (will3d || (opts.flat && opts.waitFor3d)) { flatShown = false; svg.style.visibility = 'hidden'; }
+    if (will3d) {
       // (only once she's on screen: a hidden Cassie never loads the 3D one)
       const load = () => import(new URL('cassie-bot3d.js', SRC).href).then((m) => {
         if (!alive || !svg.isConnected) return;
-        deep = m.upgrade(api, host, svg, { pokeable: !!opts.pokeable, glow: !!opts.glow }); // (she swaps in with her first 3D frame)
-      }).catch(() => { /* the flat Cassie stays */ });
+        deep = m.upgrade(api, host, svg, { pokeable: !!opts.pokeable, glow: !!opts.glow, failed: () => api.reveal(true) }); // (she fades in with her first 3D frame)
+        if (!deep) api.reveal(true);
+      }).catch(() => api.reveal(true));
       if (!window.IntersectionObserver) load();
       else { const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && alive) { io.disconnect(); load(); } }); io.observe(svg); }
     }
@@ -425,7 +442,7 @@
   }
 
   window.CassieBot = {
-    create, seasonal,
+    create, seasonal, failed3d,
     STATES: Object.keys(STATES), COLORS: Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color || null])), ACCESSORIES: Object.keys(ACC),
     construction: { POINTER, TAIL_PIVOT, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
     defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK }, // (the 3D Cassie draws her face from these)

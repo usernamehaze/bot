@@ -86,7 +86,6 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await fakeGoogle(ctx); // never the real Google
   await ctx.route(/appleid\.apple\.com/, (route) => route.abort()); // never the real Apple (a test brings its own)
   if (setup) await setup(ctx);
-  await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
   await ctx.route(/wikipedia\.org|worldbank\.org/, (route) => route.abort()); // the atlas's live lookups (a test brings its own)
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
@@ -2448,9 +2447,94 @@ test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cass
   await ctx.close();
 });
 
+// Every animation frame from the first paint: is a flat Cassie (or the old cursor drawing) visible,
+// is a 3D Cassie visible, and was a Cassie's place ever empty (with Reduce Motion, Lite mode or no 3D)
+const WATCH_CASSIE = () => {
+  const m = window.__mon = { frames: 0, flatFrames: 0, d3First: -1, flatAfter3d: 0, oldDrawing: 0, emptyChat: 0, flatChatFirst: -1, chatSeen: -1 };
+  const vis = (e) => { if (!e.isConnected) return false; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const tick = () => {
+    m.frames++;
+    const flats = [...document.querySelectorAll('svg.cassie-bot')].filter(vis), d3 = [...document.querySelectorAll('canvas.cassie-bot-3d')].filter(vis);
+    if (document.querySelector('.mascot-fallback')) m.oldDrawing++;
+    if (flats.length) { m.flatFrames++; if (!m.flatWhere) { let e = flats[0], w = []; while (e && w.length < 4) { w.push((e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : '')); e = e.parentElement; } m.flatWhere = w.join(' < '); } }
+    if (d3.length && m.d3First < 0) m.d3First = m.frames;
+    if (flats.length && m.d3First >= 0) m.flatAfter3d++;
+    const root = document.getElementById('cassie-2d-root');
+    if (root && vis(root)) {
+      if (m.chatSeen < 0) m.chatSeen = m.frames;
+      const svg = root.querySelector('svg.cassie-bot'), c = root.querySelector('canvas.cassie-bot-3d');
+      if (svg && vis(svg) && m.flatChatFirst < 0) m.flatChatFirst = m.frames;
+      if (!(svg && vis(svg)) && !(c && vis(c))) m.emptyChat++;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+test('one Cassie from the first paint: with 3D, no flat Cassie or old drawing is ever seen before (or after) the 3D one, in the chat, the Island and the voice screen; with Reduce Motion, Lite mode or no 3D the flat one shows from the start and never swaps; the replaced voice files are gone', async (b) => {
+  const slowThree = (ms) => async (ctx) => ctx.route(/explore\/three\.module\.min\.js/, async (route) => { await new Promise((r) => setTimeout(r, ms)); return route.continue(); });
+  const mon = (page) => page.evaluate(() => ({ ...window.__mon }));
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    // 1. with 3D (three.js slowed down by 2.5 s): her place stays empty, then only the 3D Cassie
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'chat' }, setup: slowThree(2500), fakeGroq: async () => { await new Promise((r) => setTimeout(r, 600)); return { text: 'An answer about cells.' }; } });
+    await ctx.addInitScript(WATCH_CASSIE);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#cassie-2d-root canvas.cassie-bot-3d') && +getComputedStyle(document.querySelector('#cassie-2d-root canvas.cassie-bot-3d')).opacity > 0.9, null, { timeout: 30000 });
+    let m = await mon(page);
+    expect(m.d3First > 0 && m.flatFrames === 0 && m.oldDrawing === 0, `${size}: only the 3D Cassie, from the first frame: ` + JSON.stringify(m));
+    // the Island bot and the voice screen bot: the same
+    await page.fill('#prompt-input', 'What is a cell?');
+    await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('#island.live .cassie-bot', { state: 'attached', timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('#island canvas.cassie-bot-3d'), null, { timeout: 20000 });
+    await page.waitForSelector('text=An answer about cells.', { timeout: 10000 });
+    await studioOn(page);
+    await page.evaluate(() => openVoice('chat'));
+    await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelector('.vc-bot canvas.cassie-bot-3d'), null, { timeout: 20000 });
+    await page.waitForTimeout(500);
+    m = await mon(page);
+    expect(m.flatFrames === 0 && m.flatAfter3d === 0 && m.oldDrawing === 0, `${size}: the Island and the voice screen show only the 3D Cassie: ` + JSON.stringify(m));
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // 2. Reduce Motion, Lite mode, and three.js failing: the flat Cassie, never a 3D one
+  for (const [why, o] of [['Reduce Motion', { lite: 'off', motion: 'reduce' }], ['Lite mode', { lite: 'on' }], ['three.js failing', { lite: 'off', fail: true }]]) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, scale: 1, lite: o.lite, server: false, state: { groqKey: 'gsk_test', tab: 'chat' },
+      setup: o.fail ? (c) => c.route(/explore\/three\.module\.min\.js/, (r) => r.abort()) : null });
+    if (o.motion) await page.emulateMedia({ reducedMotion: o.motion });
+    await ctx.addInitScript(WATCH_CASSIE);
+    await page.reload();
+    await page.waitForFunction(() => { const s = document.querySelector('#cassie-2d-root svg.cassie-bot'); return s && getComputedStyle(s).visibility !== 'hidden'; }, null, { timeout: 15000 });
+    await page.waitForTimeout(3000);
+    let m = await mon(page);
+    expect(m.d3First < 0 && m.flatAfter3d === 0 && m.oldDrawing === 0, `${why}: the flat Cassie and never a 3D one: ` + JSON.stringify(m));
+    if (!o.fail) expect(m.emptyChat === 0, `${why}: the flat Cassie from the first frame her place shows: ` + JSON.stringify(m));
+    if (o.fail) {
+      // remembered: the next time she opens flat from the start, and three.js isn't even asked for
+      expect(await page.evaluate(() => window.CassieBot.failed3d()), 'the failed 3D is remembered');
+      const asked = [];
+      page.on('request', (r) => { if (/three\.module/.test(r.url())) asked.push(r.url()); });
+      await page.reload();
+      await page.waitForTimeout(2500);
+      m = await mon(page);
+      expect(m.emptyChat === 0 && m.flatChatFirst === m.chatSeen && m.d3First < 0 && !asked.length, 'next time: flat from the first frame, no 3D asked for: ' + JSON.stringify(m) + ' ' + asked.join(' '));
+    }
+    expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // 3. the replaced files are gone, nothing names them, and the site doesn't ship them
+  for (const gone of ['voice', 'tests/fixtures/kokoro']) expect(!fs.existsSync(path.join(ROOT, gone)), gone + ' is deleted');
+  const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => (['.git', 'node_modules', '_site', 'promo'].includes(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const named = walk('.').filter((f) => /\.(js|mjs|html|css|sh|json|md)$|_headers$/.test(f) && !/smoke\.cjs$/.test(f))
+    .filter((f) => /voice\/(voice-worker|kokoro|ort-wasm|README|KOKORO)|fixtures\/kokoro|mascot-fallback|huggingface\.co\b(?!\$)/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!named.length, 'still names a deleted file or the old voice host: ' + named.join(', '));
+  expect(!/\bvoice\b/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8').replace(/voice\.js/g, '')), 'the build no longer copies voice/');
+  if (fs.existsSync(path.join(ROOT, '_site'))) expect(!fs.existsSync(path.join(ROOT, '_site/voice')), 'the built site has no voice/ folder (run the build again)');
+});
+
 test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
-  await page.waitForSelector('#mascot.has2d .cassie-bot', { timeout: 5000 }); // (the flat drawing, then the 3D one)
+  await page.waitForSelector('#mascot.has2d .cassie-bot', { state: 'attached', timeout: 5000 }); // (her place, empty until the 3D one is drawn)
   expect(await page.locator('#cassie-3d-root').count() === 0, 'the 3D bot should not load with Cursor Cassie');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.waitForTimeout(150);
@@ -2471,7 +2555,7 @@ test('Cassie Island: the top bar shows what she is doing, then says Done', async
   expect(!(await island.evaluate((n) => n.classList.contains('live'))), 'island should be tucked away at first');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.press('#prompt-input', 'Enter');
-  await page.waitForSelector('#island.live .cassie-bot', { timeout: 3000 });
+  await page.waitForSelector('#island.live .cassie-bot', { state: 'attached', timeout: 3000 });
   expect(/Thinking/.test(await island.innerText()), 'island should say Thinking: ' + await island.innerText());
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/island-thinking.png', clip: { x: 0, y: 0, width: 412, height: 130 } });
   await page.waitForSelector('text=Island answer.', { timeout: 10000 });
@@ -4556,7 +4640,7 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
   await page.locator('#meet').scrollIntoViewIfNeeded();
-  await page.waitForSelector('#play-stage .cassie-bot');
+  await page.waitForSelector('#play-stage .cassie-bot', { state: 'attached' });
   await page.waitForSelector('#meet .play.in'); await page.waitForTimeout(900); // let it finish sliding in
   expect(await page.locator('#moods button').count() >= 12, 'mood buttons missing');
   await page.click('#moods button[data-m="dance"]');
