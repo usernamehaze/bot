@@ -1197,11 +1197,10 @@ html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat
 .auth-sub { margin: -4px 0 8px; color: var(--muted); font-size: .92rem; text-align: center; line-height: 1.45; }
 .auth-providers { display: grid; gap: var(--sp-2); }
 .auth-providers:not(:has(> :not([hidden]))) { display: none; }
-/* Continue with Google: Google's look (white or near-black, with their G), the same size as Apple's */
-.auth-google { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid #747775; background: #fff; color: #1f1f1f; font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
+/* Continue with Google: the app's own surface and ink (light or dark), Google's G, the same size as Apple's */
+.auth-google { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
 .auth-google svg { width: 18px; height: 18px; flex: none; }
 .auth-google:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
-@media (prefers-color-scheme: dark) { .auth-google { background: #131314; border-color: #8e918f; color: #e3e3e3; } }
 /* "Signing you in…": the form steps aside while Google or Apple answers (never a blank page) */
 .auth-form.busy > :not(.auth-busy):not(.auth-title) { display: none !important; }
 .auth-busy { display: grid; justify-items: center; gap: var(--sp-2); padding: var(--sp-5) 0; text-align: center; }
