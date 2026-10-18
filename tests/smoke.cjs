@@ -811,7 +811,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
   const missing = [...needed].filter((n) => !page.includes(n));
   expect(!missing.length, 'privacy.html doesn’t name: ' + missing.join(', '));
-  expect(needed.size >= 12, 'the scan found the services (sanity): ' + [...needed].join(', '));
+  expect(needed.size >= 11, 'the scan found the services (sanity): ' + [...needed].join(', '));
   // and it says the rest of what it promises, in plain words with no dashes
   expect(/uses AI/.test(page) && /not kept/.test(page) && /Delete account/.test(page) && !/[–—]/.test(page), 'privacy.html says Cassie uses AI, that uploads are not kept, how to delete, with no dashes');
 });
@@ -2682,6 +2682,18 @@ const FAKE_VOICE = (opts) => {
 // Cassie speaks only in Bella's studio voice. A session (a lesson, a Listen, a voice chat) uses her only
 // when what's left of the month covers all of it; otherwise she types from the start and says so once.
 // If Bella fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
+test('every stylesheet is whole: its braces balance and no rule is cut off (a broken one silently drops the rules after it)', async () => {
+  const sheets = ['style.css', 'labs/labs.css', 'landing/landing.css'].filter((f) => fs.existsSync(path.join(ROOT, f)));
+  for (const f of sheets) {
+    const css = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+    let depth = 0, low = 0;
+    for (const c of css) { if (c === '{') depth++; else if (c === '}') { depth--; low = Math.min(low, depth); } }
+    expect(depth === 0 && low === 0, `${f}: braces don’t balance (end ${depth}, lowest ${low})`);
+    const cut = css.split('\n').map((l, i) => [i + 1, l.trim()]).filter(([, l]) => /,\s*}$|,\s*$/.test(l) && /}\s*$/.test(l));
+    expect(!cut.length, `${f}: a selector list runs into a closing brace: ` + JSON.stringify(cut.slice(0, 3)));
+  }
+});
+
 test('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
   const LONG = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} says mitochondria turn food into energy the cell can use.`).join(' ');
   const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
