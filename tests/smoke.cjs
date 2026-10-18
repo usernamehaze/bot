@@ -638,7 +638,7 @@ test('terms.html promises an easy cancel and a reminder before every renewal, an
   expect(/Cancelling never takes more steps than subscribing/.test(paid) && /cancel yourself in the app, from Settings/i.test(paid), 'terms promise cancelling takes no more steps than subscribing: ' + paid);
   expect(/reminder before every renewal/i.test(paid) && /in the app and by email/.test(paid) && /never less than 3 days before/.test(paid), 'terms promise a reminder before each automatic renewal: ' + paid);
   expect(/Yearly plans also get a reminder a month before/.test(paid), 'terms promise yearly plans a reminder a month before: ' + paid);
-  expect(/A Semester pass is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms promise the Semester pass never renews and the student is told before it ends: ' + paid);
+  expect(/A Semester pass (\(the Pasado Pass\) )?is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms promise the Semester pass never renews and the student is told before it ends: ' + paid);
   const all = await page.locator('body').innerText();
   expect(!/[—–]/.test(all), 'no dashes in the terms');
   await ctx.close();
