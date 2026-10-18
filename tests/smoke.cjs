@@ -630,6 +630,26 @@ test('uploads are used to answer, then dropped: a file’s words, name and bytes
   await ctx.close();
 });
 
+test('terms.html promises an easy cancel and a reminder before every renewal, and the subscriptions plan matches it (no payment code yet)', async (b) => {
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/terms.html`);
+  const paid = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find((x) => /Paid plans/.test(x.textContent)); let t = '', n = h && h.nextElementSibling; while (n && n.tagName !== 'H2') { t += n.innerText + '\n'; n = n.nextElementSibling; } return t; });
+  expect(/Cancelling never takes more steps than subscribing/.test(paid) && /cancel yourself in the app, from Settings/i.test(paid), 'terms promise cancelling takes no more steps than subscribing: ' + paid);
+  expect(/reminder before every renewal/i.test(paid) && /in the app and by email/.test(paid) && /never less than 3 days before/.test(paid), 'terms promise a reminder before each automatic renewal: ' + paid);
+  const all = await page.locator('body').innerText();
+  expect(!/[—–]/.test(all), 'no dashes in the terms');
+  await ctx.close();
+  // the plan behind those promises, and still no payment code anywhere
+  const plan = fs.readFileSync(path.join(ROOT, 'docs/subscriptions-plan.md'), 'utf8');
+  expect(/## 2\. Cancelling: 3 taps, from Settings/.test(plan) && /shortest subscribe path is \*\*3 taps\*\*/.test(plan), 'the plan has the cancel flow and its tap count');
+  expect(/7 days before/.test(plan) && /Settings → Recovery/.test(plan), 'the plan says when the reminder goes out and where it is set');
+  for (const ev of ['subscription_created', 'subscription_updated', 'subscription_payment_success', 'subscription_payment_failed', 'subscription_cancelled', 'subscription_resumed', 'subscription_expired', 'order_created']) expect(plan.includes('`' + ev + '`'), 'the plan lists the webhook ' + ev);
+  expect(!/[—–]/.test(plan), 'no dashes in the plan');
+  const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  expect(!/lemonsqueezy\.com|LEMON_API_KEY|\/billing\//i.test(code), 'no payment code until the Lemon Squeezy links arrive');
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
