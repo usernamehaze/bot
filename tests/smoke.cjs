@@ -16,7 +16,7 @@ const APP = `http://localhost:${APP_PORT}/app.html`;
 const SERVER = `http://localhost:${SERVER_PORT}`;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.webm': 'video/webm', '.mp4': 'video/mp4', '.jpg': 'image/jpeg' };
 // The site's response headers, read from _headers. The security policy is the real one, except that
 // the page may talk to the fake Cassie server (instead of the real one) and stays on plain http.
 const SITE_HEADERS = (() => {
@@ -3061,6 +3061,76 @@ test('the tour: offered once after the first run (as a guest and signed in), Not
   for (const [where, say] of [['phone', stops.map((s) => s.say)], ['computer', computerSays]]) {
     const words = say.join(' ').split(/\s+/).length, secs = words / 150 * 60;
     expect(secs >= 75 && secs <= 105, `${where}: the tour reads in about 90 seconds: ${words} words, ${Math.round(secs)} s`);
+  }
+});
+
+// Clicks Next to the end of the tour.
+async function finishTour(page) {
+  await page.waitForSelector('.tour-card', { timeout: 8000 });
+  for (let i = 0; i < 14 && await page.locator('.tour-card').count(); i++) { await page.click('.tour-card [data-t="next"]').catch(() => {}); await page.waitForTimeout(250); }
+  await page.waitForSelector('.tour-card', { state: 'detached', timeout: 5000 });
+}
+test('after the tour, on a computer: a video of how the Chrome extension works, once (the video plays, Get the extension and Close, Escape); again from Settings, Help; never on a phone; 44px, no dashes, on screen', async (b) => {
+  // the video is real, in two forms, and goes out with the site
+  for (const f of ['extension-how.webm', 'extension-how.mp4', 'extension-how.jpg']) {
+    expect(fs.existsSync(path.join(ROOT, 'landing', f)) && fs.statSync(path.join(ROOT, 'landing', f)).size > 20000, 'landing/' + f + ' is there');
+    if (fs.existsSync(path.join(ROOT, '_site'))) expect(fs.existsSync(path.join(ROOT, '_site/landing', f)), '_site/landing/' + f + ' is published');
+  }
+  expect(/landing/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the build copies landing/');
+  // 1. a computer: Done, then the video
+  let { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test', tour: 'done', tourVoice: 'off' } });
+  await page.evaluate(() => window.CassieTour.start());
+  await finishTour(page);
+  await page.waitForSelector('.tour-video', { timeout: 3000 });
+  await page.waitForFunction(() => { const v = document.querySelector('.tour-video video'); return v && v.readyState >= 1 && v.duration > 30; }, null, { timeout: 15000 });
+  const v = await page.evaluate(() => {
+    const box = document.querySelector('.tour-video'), r = box.getBoundingClientRect(), vid = box.querySelector('video');
+    const small = [...box.querySelectorAll('a, button')].filter((x) => { const q = x.getBoundingClientRect(); return q.height < 44 || q.width < 44; }).map((x) => x.textContent);
+    const get = box.querySelector('a.tour-main');
+    return { dur: vid.duration, src: vid.currentSrc, w: vid.videoWidth, h: vid.videoHeight, text: box.innerText, small, fits: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight,
+      get: get && get.textContent, href: get && get.getAttribute('href'), download: get && get.hasAttribute('download'), focus: document.activeElement && document.activeElement.textContent, seen: state.extVideoSeen,
+      label: box.getAttribute('role') === 'dialog' && !!box.getAttribute('aria-labelledby') };
+  });
+  expect(v.dur > 30 && v.dur < 50 && v.w === 1280 && v.h === 720, 'the video loads: ' + JSON.stringify(v));
+  expect(v.get === 'Get the Chrome extension' && v.href === 'cassie-extension.zip' && v.download, 'Get the Chrome extension downloads it: ' + JSON.stringify(v));
+  expect(v.fits && !v.small.length && !/[–—]/.test(v.text) && v.label && v.focus === 'Close' && v.seen === true, 'on screen, 44px, no dashes, a labelled dialog, Close has the focus, remembered: ' + JSON.stringify(v));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tour-video.png' });
+  // in light and dark: every word readable
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.tour-video');
+    expect(!bad.length, `the video box (${scheme}): ` + bad.join(' | '));
+  }
+  await page.keyboard.press('Escape');
+  expect(!(await page.locator('.tour-video-wrap').count()), 'Escape closes it');
+  // once: the next tour ends without it
+  await page.evaluate(() => window.CassieTour.start());
+  await finishTour(page);
+  await page.waitForTimeout(900);
+  expect(!(await page.locator('.tour-video').count()), 'shown once, not after every tour');
+  // Settings, Help: "Watch how the Chrome extension works"
+  await page.evaluate(() => openSettings('help'));
+  await page.waitForSelector('#ext-video-btn', { timeout: 5000 });
+  const row = await page.locator('#ext-video-btn').boundingBox();
+  expect(row.height >= 44 && /Watch how the Chrome extension works/.test(await page.locator('#ext-video-btn').innerText()), 'the Help row is there, 44px');
+  await page.click('#ext-video-btn');
+  await page.waitForSelector('.tour-video');
+  await page.click('.tour-video [data-t="close"]');
+  expect(!(await page.locator('.tour-video-wrap').count()) && await page.evaluate(() => !document.getElementById('settings-panel').hidden), 'Close closes it, and Settings is still open');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // 2. a phone: the tour ends without it, and Help has no row for it
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }]]) {
+    ({ ctx, page, errors } = await open(b, { device, viewport, server: false, state: { groqKey: 'gsk_test', tour: 'done', tourVoice: 'off' } }));
+    await page.evaluate(() => window.CassieTour.start());
+    await finishTour(page);
+    await page.waitForTimeout(900);
+    expect(!(await page.locator('.tour-video').count()), `${viewport.width}x${viewport.height}: no extension video on a phone`);
+    await page.evaluate(() => openSettings('help'));
+    await page.waitForSelector('#tour-btn', { timeout: 5000 });
+    expect(!(await page.locator('#ext-video-btn').isVisible()), `${viewport.width}x${viewport.height}: no Help row for it on a phone`);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
   }
 });
 
