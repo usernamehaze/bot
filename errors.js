@@ -122,6 +122,15 @@
     file_unreadable: 'Cassie couldn’t read that file. It may be a kind she doesn’t know. Try a PDF, Word, PowerPoint or text file.',
     tutor_no_brain: 'Cassie couldn’t reach her brain just now, maybe because the internet dropped. Check your connection, then ask again.',
     quiz_failed: 'Cassie couldn’t write a quiz just now because her brain didn’t reply. Try again in a moment.',
+
+    // Teach me and Ask Cassie on any web page (the browser extension)
+    teach_failed: 'Cassie couldn’t make a lesson for this page just now. Tap Try again.',
+    teach_no_picture: 'Cassie couldn’t see this tab, so she can’t teach it. Take a screenshot (Win+Shift+S, or Cmd+Shift+4 on a Mac), then open the Board and press Ctrl+V.',
+    teach_no_key: 'Cassie needs a free Groq or Gemini key to read your screen. Click the Cassie icon in the toolbar to add one.',
+    teach_where_browser: 'This is one of the browser’s own pages, and browsers don’t let extensions draw on those. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_pdf: 'This PDF is open in the browser’s own PDF viewer, where extensions can’t draw. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_store: 'Extension stores don’t let extensions draw on their pages. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_page: 'This page doesn’t let Cassie draw on it. So she teaches it here, on a picture of the tab.',
   };
 
   const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : '')).replace(/\s+$/, '');

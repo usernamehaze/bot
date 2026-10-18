@@ -344,6 +344,44 @@
 
   let current = null;
 
+  // One stroke on a canvas, the board's own drawing: pen, highlighter, line, text, box, note,
+  // card or a group of them. Teach me in the extension draws on a page with it too.
+  function paintStroke(ctx, s) {
+    if (s.tool === 'group') { (s.items || []).forEach((it) => paintStroke(ctx, it)); return; }
+    ctx.save();
+    if (s.tool === 'rect') {
+      ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(s.x, s.y, s.w, s.h, s.r || 0) : ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (s.tool === 'text') {
+      ctx.fillStyle = s.color; ctx.font = `${s.weight || 600} ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
+      s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
+      ctx.restore(); return;
+    }
+    if (s.tool === 'note' || s.tool === 'card') { ctx.translate(s.x, s.y); objPieces(s, !!s.flip).forEach((it) => paintStroke(ctx, it)); ctx.restore(); return; }
+    const p = s.points;
+    if (!p || !p.length) { ctx.restore(); return; }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = s.tool === 'eraser' ? '#000' : s.color;
+    ctx.globalAlpha = s.tool === 'hl' ? 0.35 : 1;
+    ctx.lineWidth = s.tool === 'hl' ? s.size * 4 : s.tool === 'eraser' ? s.size * 4 : s.size;
+    ctx.beginPath();
+    ctx.moveTo(p[0][0], p[0][1]);
+    if (p.length === 1) ctx.lineTo(p[0][0] + .01, p[0][1]);
+    else if (s.tool === 'line') ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    else {
+      for (let i = 1; i < p.length - 1; i++) {
+        const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
+        ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my);
+      }
+      ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function loadImage(src) {
     return new Promise((resolve) => {
       if (!src) return resolve(null);
@@ -474,41 +512,7 @@
       }
       $('[data-act="grid"]').classList.toggle('on', grid);
     }
-    function paint(ctx, s) {
-      if (s.tool === 'group') { (s.items || []).forEach((it) => paint(ctx, it)); return; }
-      ctx.save();
-      if (s.tool === 'rect') {
-        ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
-        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(s.x, s.y, s.w, s.h, s.r || 0) : ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke();
-        ctx.restore(); return;
-      }
-      if (s.tool === 'text') {
-        ctx.fillStyle = s.color; ctx.font = `${s.weight || 600} ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
-        s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
-        ctx.restore(); return;
-      }
-      if (isObj(s)) { ctx.translate(s.x, s.y); objPieces(s, !!s.flip).forEach((it) => paint(ctx, it)); ctx.restore(); return; }
-      const p = s.points;
-      if (!p || !p.length) { ctx.restore(); return; }
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = s.tool === 'eraser' ? '#000' : s.color;
-      ctx.globalAlpha = s.tool === 'hl' ? 0.35 : 1;
-      ctx.lineWidth = s.tool === 'hl' ? s.size * 4 : s.tool === 'eraser' ? s.size * 4 : s.size;
-      ctx.beginPath();
-      ctx.moveTo(p[0][0], p[0][1]);
-      if (p.length === 1) ctx.lineTo(p[0][0] + .01, p[0][1]);
-      else if (s.tool === 'line') ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
-      else {
-        for (let i = 1; i < p.length - 1; i++) {
-          const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
-          ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my);
-        }
-        ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
+    function paint(ctx, s) { paintStroke(ctx, s); }
     function redraw() {
       const x = ink.getContext('2d');
       x.clearRect(0, 0, W, H);
@@ -1385,5 +1389,5 @@
     return current;
   }
 
-  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current };
+  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current, paint: paintStroke };
 })();
