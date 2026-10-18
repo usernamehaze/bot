@@ -523,7 +523,9 @@ test('sign in with Apple: there and back, cancel is explained, and the plan is t
   try {
     await page.goto('about:blank');
     await page.goto(APP + '#cassie-auth=' + encodeURIComponent(JSON.stringify({ type: 'cassie-auth', provider: 'apple', nonce: 'x'.repeat(32), token: 'stolen', account: { email: 'x@example.com' } })));
-    await toSignIn(page);
+    // never used, never silent: the sign-in page says why, with Try again
+    await page.waitForSelector('.auth-page .auth-retry:not([hidden])', { timeout: 8000 });
+    expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('signin_mismatch')), 'a stolen answer is explained: ' + await authErr(page));
     expect(!(await savedAccount(page)).token && !page.url().includes('cassie-auth'), 'an answer from another tab signed in');
   } finally { await ctx.close(); }
 
