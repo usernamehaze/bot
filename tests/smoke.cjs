@@ -685,6 +685,72 @@ test('the pricing page and the app’s Plans say exactly what the server allows:
   expect(!/research runs|file reviewers|Unlimited (questions|voice)|Unlimited means/i.test(plans), 'the app’s Plans promise nothing the code doesn’t do: ' + plans);
 });
 
+test('the Pasado Pass: the pricing page opens on Semester with the pass, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
+  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/index.html`);
+  await page.click('#pricing [data-cur="php"]');
+  const plus = async () => (await page.locator('#pricing .plan', { has: page.locator('h3:text-is("Plus")') }).innerText()).replace(/\s+/g, ' ');
+  expect(await page.locator('#pricing [data-bill="sem"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Semester');
+  let p = await plus();
+  expect(/Pasado Pass/.test(p) && /₱599/.test(p) && /about ₱4 a day/.test(p) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(p), 'the Plus card is the Pasado Pass: ' + p);
+  expect(/Best for school/i.test(p) && /Everything in Free, including the Finals Reviewer Kit/.test(p) && /Up to 5 exam plans/.test(p), 'the bonus stack, with what Free has under Everything in Free: ' + p);
+  expect(await page.locator('#pricing [data-anchor]').innerText() === '₱599 for the whole semester: about ₱4 a day, less than one hour with a tutor.', 'the comparison line: ' + await page.locator('#pricing [data-anchor]').innerText());
+  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub');
+  await page.click('#pricing [data-cur="usd"]');
+  p = await plus();
+  expect(/\$31\.99/.test(p) && /about \$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === '$31.99 for the whole semester: about $0.21 a day.', 'Worldwide: the $ price a day: ' + p);
+  await page.click('#pricing [data-cur="php"]');
+  await page.click('#pricing [data-bill="month"]');
+  p = await plus();
+  expect(!(await page.locator('#pricing [data-pass]').isVisible()) && /₱149/.test(p) && /Renews each month until you cancel in Settings\. 7 days to change your mind\./.test(p), 'Monthly: no Pasado Pass label, and it says it renews until you cancel: ' + p);
+  // every promise on the page is in the terms
+  const faq = (await page.locator('#faq').textContent()).replace(/\s+/g, ' ');
+  expect(/What is the Pasado Pass\?/.test(faq) && /5 months for one payment of ₱599/.test(faq), 'the FAQ explains the Pasado Pass');
+  const promises = [
+    [/Never renews/i, /Semester pass \(the Pasado Pass\) is one payment and never renews/],
+    [/One payment for 5 months/, /lasts 5 months/],
+    [/7 days to change your mind/, /7 days to change your mind\. If you're not happy with the first payment for any plan, email askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked\./],
+    [/Renews each month until you cancel in Settings/, /renews automatically until you cancel/],
+    [/about a week before it does/, /about a week before it ends/],
+    [/askcassie\.study@gmail\.com within 7 days of paying and you get all of it back, no questions asked/, /askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked/],
+  ];
+  const monthly = await page.locator('#pricing').innerText();
+  await page.click('#pricing [data-bill="sem"]');
+  const onPage = monthly + ' ' + (await page.locator('#pricing').innerText()) + ' ' + faq;
+  for (const [said, inTerms] of promises) expect(said.test(onPage) && inTerms.test(terms), `the page says ${said} and the terms say ${inTerms}`);
+  expect(/Founding price\. A Monthly or Yearly plan keeps the price you started with for as long as it keeps renewing/.test(terms), 'the founding price is in the terms');
+  expect(!/[—–]/.test(onPage), 'no dashes on the pricing page');
+  await ctx.close();
+  // the phone sizes: nothing spills sideways, every pricing button is 44px
+  for (const vp of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 1280, height: 800 }]) {
+    const c = await b.newContext({ viewport: vp, hasTouch: vp.width < 500 });
+    const pg = await c.newPage();
+    await pg.goto(`http://localhost:${APP_PORT}/index.html#pricing`);
+    await pg.waitForTimeout(600);
+    const g = await pg.evaluate(() => ({ wide: document.documentElement.scrollWidth > innerWidth + 1, small: [...document.querySelectorAll('#pricing button, #pricing .btn')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() + ' ' + Math.round(e.getBoundingClientRect().height)) }));
+    expect(!g.wide && !g.small.length, `${vp.width}x${vp.height}: ` + JSON.stringify(g));
+    await c.close();
+  }
+  // the app says the same: Settings, Plans and the Plus sheet
+  const { ctx: actx, page: app, errors } = await open(b, { server: false, state: { plan: null } });
+  await app.evaluate(() => openSettings('plans'));
+  await app.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
+  const plans = (await app.locator('.set-plans').innerText()).replace(/\s+/g, ' ');
+  expect(/Best for school/.test(plans) && /Pasado Pass/.test(plans) && /₱599 a semester, about ₱4 a day/.test(plans) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(plans) && !/Most popular/.test(plans), 'the app’s Plans: ' + plans);
+  await app.evaluate(() => { closeSettings(); plusSheet('The 3D human body'); });
+  const foot = await app.locator('.plus-sheet .plus-foot').innerText();
+  expect(/Pasado Pass, one payment of ₱599 for your whole semester\. It never renews, and you have 7 days to change your mind\./.test(foot), 'the Plus sheet: ' + foot);
+  expect(await app.locator('.plus-sheet .plus-go').getAttribute('href') === 'index.html#pricing', 'its link still goes to the plans');
+  const [go, ok] = [await app.locator('.plus-sheet .plus-go').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
+  expect(ok.height >= 44 && Math.abs(ok.height - go.height) < 1, 'Not now is the same size: ' + JSON.stringify([go, ok]));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await actx.close();
+  // "Most popular" is gone everywhere
+  for (const f of ['index.html', 'app.html', 'app.js', 'landing/landing.js']) expect(!/Most popular/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `no “Most popular” in ${f}`);
+});
+
 test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
   const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
   const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
@@ -5789,10 +5855,10 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     }
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} You (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    // Plans: Free and Plus side by side, Plus the most popular, Coming soon, and nothing that takes a payment
+    // Plans: Free and Plus side by side, Plus best for school, Coming soon, and nothing that takes a payment
     await page.click('.set-link[data-open="plans"]');
     const plans = await page.locator('.set-plans').innerText();
-    expect(/Free/.test(plans) && /Plus/.test(plans) && /Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
+    expect(/Free/.test(plans) && /Plus/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
     expect(await page.locator('.set-plans .plan-go').innerText() === 'Coming soon' && await page.locator('.set-plans .plan-go').getAttribute('href') === 'index.html#pricing', `${size}: Coming soon goes to the plans page`);
     expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }

@@ -133,6 +133,18 @@ Every request is checked first. `X-Signature` must equal the HMAC SHA256 of the 
 | `order_refunded`, `subscription_payment_refunded` | Ends the plan, or shortens it to match the refund. Unsent reminders are dropped. |
 | `subscription_paused`, `subscription_unpaused` | Only if pausing is ever turned on. They're logged and treated like cancelled and resumed. |
 
+**Refunds: 7 days to change your mind** (promised in `terms.html`).
+- Any plan's first payment is refunded in full when the student emails askcassie.study@gmail.com within 7 days of paying. No questions, no conditions.
+- How: in the Lemon Squeezy dashboard, open the order (Store, Orders) and refund the full amount. For a Monthly or Yearly plan, also cancel the subscription there so it doesn't renew.
+- Lemon Squeezy then sends `order_refunded` (and `subscription_payment_refunded` for a subscription payment). The webhook ends the plan straight away (`plans.until` = now) and drops any unsent reminders, so the student is back on Free with everything they saved.
+- A refund after 7 days, or of a later renewal, is the owner's choice, case by case.
+
+**Founding price** (promised in `terms.html`).
+- A Monthly or Yearly plan keeps the price it started with for as long as it keeps renewing. Lemon Squeezy already does this: changing a variant's price only applies to new subscriptions, and existing ones keep being billed at their starting price ([Lemon Squeezy docs](https://docs.lemonsqueezy.com/help/products/subscriptions)).
+- So a price rise is made by changing the variant's price in the dashboard, never by moving existing subscribers to a new variant.
+- If a student cancels and comes back after the plan ended, the price at that time applies.
+- The Semester pass is a one-time payment, so it has no founding price: each pass costs what the pass costs that day.
+
 ## 6. Server changes (later, in `server/worker.src.js`, then `python3 build.py`)
 
 - **New table (approved):**
