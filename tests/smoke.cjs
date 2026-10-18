@@ -2464,7 +2464,7 @@ const WATCH_CASSIE = () => {
       if (m.chatSeen < 0) m.chatSeen = m.frames;
       const svg = root.querySelector('svg.cassie-bot'), c = root.querySelector('canvas.cassie-bot-3d');
       if (svg && vis(svg) && m.flatChatFirst < 0) m.flatChatFirst = m.frames;
-      if (!(svg && vis(svg)) && !(c && vis(c))) m.emptyChat++;
+      if (!(svg && vis(svg)) && !(c && vis(c))) { m.emptyChat++; if (!m.emptyWhy) m.emptyWhy = svg ? (() => { const cs = getComputedStyle(svg), r = svg.getBoundingClientRect(); return [cs.visibility, svg.style.visibility, matchMedia('(prefers-reduced-motion: reduce)').matches, getComputedStyle(document.getElementById('mascot')).visibility, document.getElementById('mascot').className, Math.round(r.width), document.readyState].join(','); })() : 'no svg yet ' + document.readyState; }
     }
     requestAnimationFrame(tick);
   };
@@ -5661,7 +5661,7 @@ test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (sa
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
     const place = size === '390x844' ? '#home .hub-bot' : '#mascot';
-    await page.waitForSelector(place + ' svg', { timeout: 10000 }); await page.waitForTimeout(700); // (where the flat Cassie sits once the page has settled)
+    await page.waitForSelector(place + ' svg', { state: 'attached', timeout: 10000 }); await page.waitForTimeout(700); // (where her place is once the page has settled: kept, unseen, until the 3D one is drawn)
     const flat = await page.evaluate((sel) => { const e = document.querySelector(sel + ' svg'); const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round); }, place);
     await page.waitForSelector(place + ' canvas.cassie-bot-3d', { timeout: 30000 });
     await page.waitForTimeout(300);
