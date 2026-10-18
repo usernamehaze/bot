@@ -6,7 +6,9 @@
    Her voice is Bella's studio voice or typing, never another voice (voice.js), and nothing waits.
    Escape or Skip puts the app back exactly where it was. Uses app.js's state, save, syncAccount,
    detourToElement, resumeFollowing, openSettings, closeSettings, voiceGender and cleanForSpeech.
-   window.CassieTour = { offer(), start(), stop(), get active } */
+   After the tour, on a computer, a short video shows how the Chrome extension works (once; again from
+   Settings, then Help).
+   window.CassieTour = { offer(), start(), stop(), video(), get active } */
 (function () {
   'use strict';
   const phone = () => document.documentElement.classList.contains('native');
@@ -195,9 +197,48 @@
     }
     if (b.settings) { openSettings('all'); if (b.settings !== 'all' && typeof setPage === 'function') setPage(b.settings); }
     try { if (b.focus && b.focus.isConnected) b.focus.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    if (how === 'done' && !b.phone && !phone() && !state.extVideoSeen) setTimeout(video, 400);
   }
 
-  window.CassieTour = { offer, start, stop: () => end('skipped'), get active() { return !!run; }, get target() { return run && run.target; }, STOPS };
+  /* ---------- the Chrome extension, in a 38 second video (computers only: it needs Chrome or Edge) ---------- */
+  let videoBox = null;
+  function video() {
+    if (videoBox || run) return;
+    state.extVideoSeen = true; save();
+    const back = document.activeElement;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    videoBox = document.createElement('div');
+    videoBox.className = 'tour-video-wrap';
+    videoBox.innerHTML = `<div class="tour-video" role="dialog" aria-modal="true" aria-labelledby="tv-h">
+      <h2 id="tv-h">Cassie on every page you read</h2>
+      <video poster="landing/extension-how.jpg" controls muted playsinline preload="metadata"${still ? '' : ' autoplay'} aria-label="How the Cassie Chrome extension works"><source src="landing/extension-how.webm" type="video/webm"><source src="landing/extension-how.mp4" type="video/mp4"></video>
+      <p>With the Chrome extension, highlight any words and Cassie explains them, or tap Teach me and she teaches the whole page. Free, for Chrome and Edge on a computer.</p>
+      <div class="tour-row"><a class="tour-btn tour-main" href="cassie-extension.zip" download>Get the Chrome extension</a><button type="button" class="tour-btn" data-t="close">Close</button></div>
+    </div>`;
+    document.body.appendChild(videoBox);
+    const close = () => {
+      if (!videoBox) return;
+      const v = videoBox.querySelector('video'); try { v.pause(); } catch (e) { /* ignore */ }
+      videoBox.remove(); videoBox = null;
+      document.removeEventListener('keydown', key, true);
+      try { if (back && back.isConnected) back.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    };
+    const key = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'Tab') { // (focus stays in the box)
+        const f = [...videoBox.querySelectorAll('video, a, button')];
+        const i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', key, true);
+    videoBox.addEventListener('click', (e) => { if (e.target === videoBox || e.target.closest('[data-t="close"]')) close(); });
+    videoBox.querySelector('[data-t="close"]').focus({ preventScroll: true });
+  }
+
+  window.CassieTour = { offer, start, stop: () => end('skipped'), video, get active() { return !!run; }, get target() { return run && run.target; }, STOPS };
   const btn = document.getElementById('tour-btn');
   if (btn) btn.addEventListener('click', () => start());
+  const vbtn = document.getElementById('ext-video-btn');
+  if (vbtn) vbtn.addEventListener('click', () => video());
 })();

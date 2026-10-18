@@ -2563,3 +2563,11 @@ html.native .tour-card:not([style*="top"]), html.native .tour-offer { bottom: ca
 .tour-btn.tour-main { background: var(--text); color: var(--bg); border-color: var(--text); }
 .tour-btn:disabled { opacity: .45; cursor: default; }
 .tour-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+a.tour-btn { display: inline-flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; }
+/* after the tour, on a computer: how the Chrome extension works */
+.tour-video-wrap { position: fixed; inset: 0; z-index: 2147483640; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: rgba(var(--shade-rgb), .45); }
+.tour-video { width: min(720px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; padding: var(--sp-4); border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--lg-lift); color: var(--text); }
+.tour-video h2 { margin: 0 0 var(--sp-3); font-size: 1.15rem; }
+.tour-video video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-md, 10px); background: #000; }
+.tour-video p { margin: var(--sp-3) 0; line-height: 1.45; }
+html.native #ext-video-row { display: none; } /* (the extension is for Chrome and Edge on a computer) */
