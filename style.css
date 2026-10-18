@@ -1578,7 +1578,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
   body:not(.side-open) .sidebar-head { justify-content: center; padding: 0; }
   body:not(.side-open) .side-search-btn { display: grid; place-items: center; width: 100%; height: 40px; margin: 0 0 12px; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); cursor: pointer; }
   body:not(.side-open) .side-search-btn:hover { color: var(--text); }
-  body:not(.side-open) .side-menu-label { justify-content: center; padding: 0 0 6px; font-size: .58rem; letter-spacing: .04em; pointer-events: none; }
+  body:not(.side-open) .side-menu-label { justify-content: center; padding: 0 0 6px; font-size: 11px; letter-spacing: .02em; pointer-events: none; } /* (Apple's smallest on a computer: 10pt) */
   body:not(.side-open) .side-menu-label svg { display: none; }
   body:not(.side-open) .sidebar.tools-folded .side-tools { display: flex; } /* (the rail always shows every tool) */
   body:not(.side-open) .side-tool { justify-content: center; padding: 8px 0; }
@@ -2347,7 +2347,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub-name { color: var(--primary-ink); }
 .hub-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-top: 10px; }
 .hub-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 140px; padding: 16px; border-radius: 22px; text-align: left;
-  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 45%, transparent); box-shadow: 0 1px 2px rgba(var(--shade-rgb), .04); }
 .hub-card i, .hub-w i { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary-ink); }
 .hub-card i svg, .hub-w i svg { width: 22px; height: 22px; }
 .hub-card b { margin-top: auto; font-size: 1.05rem; }
@@ -2435,11 +2435,13 @@ html:not(.native) #chat-log > .home { display: flex; }
 .home-hub .hub-empty .hub-card { min-height: 112px; }
 .home-hub .hub-empty .hub-hi { font-size: 1.7rem; }
 
+/* Home's cards and header are content, so they are solid (Apple: Liquid Glass is only for the
+   controls that float above content: the tab bar, the top bar, the sidebar and the ask box). */
 /* ---------- Home: the header ----------
    A glass bar: your initial, the hello and your name, and the bell. Phones: edge to edge under the
    status bar, rounded at the bottom; computers: a rounded bar at the top of the column. */
 .hub-hero { flex: none; width: 100%; padding: 12px; border-radius: 24px;
-  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 45%, transparent); box-shadow: 0 1px 2px rgba(var(--shade-rgb), .04); }
 /* the hello and the bell */
 .hub-top { display: flex; align-items: center; gap: 10px; }
 .hub-av { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-weight: 750; font-size: 1.15rem;
@@ -2463,7 +2465,7 @@ html:not(.native) #chat-log > .home { display: flex; }
 .hub-boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
 @media (min-width: 761px) { .hub-boxes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .hub .hub-box { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 104px; padding: 14px; border-radius: 22px; text-align: left;
-  background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 45%, transparent); box-shadow: 0 1px 2px rgba(var(--shade-rgb), .04); }
 .hub-box i { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 13px; background: color-mix(in srgb, var(--primary) 12%, var(--surface)); color: var(--primary-ink); }
 .hub-box i svg { width: 21px; height: 21px; }
 .hub-box b { margin-top: 2px; font-size: 1rem; line-height: 1.2; }

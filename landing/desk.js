@@ -212,7 +212,7 @@ DEMOS.snip = async (stage) => {
   }
   axes(g, W, H, X, Y);
   g.strokeStyle = '#121117'; g.lineWidth = 3; g.beginPath(); for (let x = -2.2; x <= 4.2; x += 0.05) { const px = X(x), py = Y(f(x)); x === -2.2 ? g.moveTo(px, py) : g.lineTo(px, py); } g.stroke();
-  g.fillStyle = '#121117'; g.font = '600 15px Inter, sans-serif'; g.fillText('y = x² − 2x − 3', X(1.6), Y(5.4));
+  g.fillStyle = '#121117'; g.font = '600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'; g.fillText('y = x² − 2x − 3', X(1.6), Y(5.4));
   const box = $('.sn-box', stage), page = $('.sn-page', stage);
   let start = null, done = false, dead = false;
   const rel = (e) => { const r = page.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
@@ -237,7 +237,7 @@ DEMOS.snip = async (stage) => {
     for (const r of [-1, 3]) { b.fillStyle = '#d93a3a'; b.beginPath(); b.arc(BX(r), BY(0), 6, 0, Math.PI * 2); b.fill(); }
     await say('Vertex at x = −b ÷ 2a = 2 ÷ 2 = 1, so y = 1 − 2 − 3 = −4');
     b.fillStyle = '#2e9e5b'; b.beginPath(); b.arc(BX(1), BY(-4), 6, 0, Math.PI * 2); b.fill();
-    b.fillStyle = '#121117'; b.font = '600 13px Inter, sans-serif'; b.fillText('(−1, 0)', BX(-1) - 52, BY(0) - 8); b.fillText('(3, 0)', BX(3) + 8, BY(0) - 8); b.fillText('vertex (1, −4)', BX(1) + 10, BY(-4) + 4);
+    b.fillStyle = '#121117'; b.font = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'; b.fillText('(−1, 0)', BX(-1) - 52, BY(0) - 8); b.fillText('(3, 0)', BX(3) + 8, BY(0) - 8); b.fillText('vertex (1, −4)', BX(1) + 10, BY(-4) + 4);
     await say('Now you try: where does it cross the y-axis?');
     bot.setState('done');
     const again = document.createElement('button'); again.type = 'button'; again.className = 'dk-btn'; again.textContent = 'Snip again';

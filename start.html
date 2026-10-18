@@ -6,7 +6,8 @@
 <meta name="cassie-app" content="1">
 <title>Cassie</title>
 <meta name="description" content="Cassie: your free AI study buddy.">
-<meta name="theme-color" content="#fbf6ee">
+<meta name="theme-color" content="#f2f2f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
@@ -16,38 +17,30 @@
 <link rel="prefetch" href="app.js?v=169">
 <link rel="prefetch" href="style.css?v=169">
 <style>
-  /* The way in from the website: Cassie's welcome, in her colours, for a moment (under half a
-     second), then the app. A first visit gets the app's own Welcome and Intro next. */
+  /* The way in from the website, as a launch screen (Apple's guidance: nearly identical to the
+     app's first screen, no text, no logo, not a branding moment). Just the app's own background,
+     in the student's look and the device's light or dark mode, then the app. Only when the app is
+     slow to arrive does a small spinner appear. */
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  :root { --bg: #fbf6ee; --ink: #2a2320; --muted: #6b5e57; --blush: #b8395a; --sage: #2f6f5e; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #1a1614; --ink: #f6eee8; --muted: #b8aaa1; --blush: #f28fa5; --sage: #7cc4ae; } }
-  html.mono { --blush: #1b1b1d; --sage: #6b6b70; --bg: #f2f2f2; }
-  @media (prefers-color-scheme: dark) { html.mono { --blush: #ededed; --sage: #9a9a9e; --bg: #141414; } }
-  body {
-    min-height: 100vh; min-height: 100dvh; color: var(--ink); cursor: pointer;
-    background:
-      radial-gradient(60% 45% at 18% 12%, color-mix(in srgb, var(--blush) 16%, transparent), transparent 70%),
-      radial-gradient(55% 45% at 88% 92%, color-mix(in srgb, var(--sage) 16%, transparent), transparent 70%),
-      var(--bg);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  .logo { width: 96px; height: 96px; filter: drop-shadow(0 14px 20px rgba(0, 0, 0, .14)); }
-  h1 { margin: 12px 0 0; font-size: 2.6rem; font-weight: 800; letter-spacing: -.03em; }
-  p { margin: 0; color: var(--muted); font-size: 1.05rem; }
-  .load { display: inline-flex; gap: 6px; margin-top: 22px; }
-  .load i { width: 8px; height: 8px; border-radius: 50%; background: var(--blush); opacity: .3; animation: dot 1.1s ease-in-out infinite; }
-  .load i:nth-child(2) { animation-delay: .15s; } .load i:nth-child(3) { animation-delay: .3s; }
-  @keyframes dot { 0%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
-  @media (prefers-reduced-motion: reduce) { .load i { animation: none; opacity: .7; } }
+  :root { --bg: #f2f2f5; --ink: #0e0e10; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0e0e10; --ink: #f2f2f5; } }
+  html.cassie { --bg: #fbf6ee; --ink: #2a2320; } /* (Blush & Sage, picked in Appearance) */
+  @media (prefers-color-scheme: dark) { html.cassie { --bg: #1a1614; --ink: #f6eee8; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  body { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; cursor: pointer; }
+  .spin { position: relative; width: 28px; height: 28px; opacity: 0; transition: opacity .2s; }
+  .spin.on { opacity: 1; }
+  .spin i { position: absolute; left: 12.5px; top: 1px; width: 3px; height: 8px; border-radius: 2px; background: var(--ink); transform-origin: 1.5px 13px; opacity: .18; animation: spoke .8s linear infinite; }
+  .spin i:nth-child(1) { transform: rotate(0deg); animation-delay: -.7s; } .spin i:nth-child(2) { transform: rotate(45deg); animation-delay: -.6s; }
+  .spin i:nth-child(3) { transform: rotate(90deg); animation-delay: -.5s; } .spin i:nth-child(4) { transform: rotate(135deg); animation-delay: -.4s; }
+  .spin i:nth-child(5) { transform: rotate(180deg); animation-delay: -.3s; } .spin i:nth-child(6) { transform: rotate(225deg); animation-delay: -.2s; }
+  .spin i:nth-child(7) { transform: rotate(270deg); animation-delay: -.1s; } .spin i:nth-child(8) { transform: rotate(315deg); animation-delay: 0s; }
+  @keyframes spoke { 0% { opacity: .85; } 100% { opacity: .18; } }
+  @media (prefers-reduced-motion: reduce) { .spin i { animation: none; opacity: .5; } }
 </style>
 </head>
 <body>
-  <svg class="logo" viewBox="0 0 512 512" role="img" aria-label="Cassie"><rect width="512" height="512" rx="116" fill="var(--blush)"/><g transform="translate(73.3 72.8) scale(.74)"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff8f0" stroke="#fff8f0" stroke-width="56" stroke-linejoin="round"/><g fill="var(--blush)"><rect x="168" y="196" width="22" height="70" rx="11"/><rect x="236" y="214" width="22" height="70" rx="11"/></g></g></svg>
-  <h1>Cassie</h1>
-  <p>Your study buddy.</p>
-  <span class="load" role="progressbar" aria-label="Loading"><i></i><i></i><i></i></span>
+  <span class="spin" role="progressbar" aria-label="Loading Cassie"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
 
   <script src="start.js?v=169"></script>
 </body>
