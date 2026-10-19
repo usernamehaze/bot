@@ -19,7 +19,6 @@
 
 <!-- the living gradient behind the chat (follows the student's colour) -->
 <div id="app-bg" aria-hidden="true"></div>
-<div id="aud-bg" aria-hidden="true"><div class="pat pat-student"></div><div class="pat pat-pro"></div></div>
 <div id="sidebar-overlay"></div>
 <aside id="sidebar" class="sidebar" aria-label="Your conversations">
   <div class="sidebar-head">
@@ -432,6 +431,12 @@
       <section class="set-sec" data-sec="help" aria-labelledby="set-h-help">
         <h3 class="set-sec-h" id="set-h-help">Help</h3>
         <div class="set-group">
+          <div class="set-row" data-k="tour help guide show me around start">
+          <button type="button" class="set-link" id="tour-btn"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2 L20 11 L13 12.5 L17 20 L13.5 21.5 L10 14 L6 18 Z"/></svg></span><span class="set-lt"><b>Take the tour</b><small>Cassie shows you around, in about 90 seconds</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
+          <div class="set-row" id="ext-video-row" data-k="chrome extension video how it works watch help">
+          <button type="button" class="set-link" id="ext-video-btn"><span class="set-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span><span class="set-lt"><b>Watch how the Chrome extension works</b><small>A 38 second video</small></span><svg class="set-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
           <div class="set-row" data-k="report problem suggest feedback help">
       <div id="report-row" class="report-row"><button type="button" id="report-btn" class="btn secondary">Report a problem or suggest something</button></div>
           </div>
@@ -475,14 +480,14 @@
 
       <!-- Plans: Free and Plus (paid plans are coming: nothing here takes a payment) -->
       <section class="set-plans" data-page-only="plans" aria-label="Plans">
-        <p class="set-plans-sub">Free forever, no card needed. Plus is coming soon.</p>
+        <p class="set-plans-sub">Free forever, no card needed. When you want more, one payment covers your whole semester. Plus is coming soon.</p>
         <div class="plan-grid">
           <article class="plan">
             <h3>Free</h3>
             <p class="plan-price"><b>₱0</b> forever</p>
             <ul>
               <li>20 questions a day: chat, quiz and highlight</li>
-              <li>5 file reviewers and 10 pictures a month</li>
+              <li>20 quick pictures a day, plus 3 Gemini pictures a week</li>
               <li>Labs, the board, flashcards and the focus timer</li>
               <li>Explore 3D: 2 free views of each a week</li>
               <li>Unlimited with your own free API key</li>
@@ -490,20 +495,23 @@
             <span class="plan-now">Free forever</span>
           </article>
           <article class="plan plan-plus">
-            <span class="plan-badge">Most popular</span>
+            <span class="plan-badge">Best for school</span>
             <h3>Plus</h3>
-            <p class="plan-price"><b>₱149</b> a month</p>
+            <span class="plan-pass">Pasado Pass</span>
+            <p class="plan-price"><b>₱599</b> a semester, about ₱4 a day</p>
+            <p class="plan-under">One payment for 5 months. Never renews. 7 days to change your mind. Or ₱149 a month.</p>
             <ul>
-              <li>Everything in Free</li>
-              <li>Unlimited questions and voice chat</li>
-              <li>30 file reviewers and 100 pictures a month</li>
+              <li>Everything in Free, including the Finals Reviewer Kit, an exam plan and your weekly progress card</li>
+              <li>100 questions a day</li>
+              <li>5 Gemini pictures a day</li>
               <li>All the 3D, any time</li>
-              <li>10 research runs a month</li>
+              <li>Save and print boards and notes</li>
+              <li>Up to 5 exam plans, and plans from your notes</li>
             </ul>
             <a class="plan-go" href="index.html#pricing" target="_blank" rel="noopener">Coming soon</a>
           </article>
         </div>
-        <p class="field-hint">Unlimited means normal studying by one person. Paid plans are launching soon; everything on Free works today.</p>
+        <p class="field-hint">Daily limits start again at midnight, Philippine time. Paid plans are launching soon; everything on Free works today.</p>
       </section>
 
       <div class="settings-actions" data-page-only="all">
@@ -523,13 +531,13 @@
     <div id="mascot-bubble" class="mascot-bubble" hidden></div>
     <button id="mascot-btn" type="button" aria-label="Cassie" title="Cassie">
       <div id="cassie-2d-root" class="mascot-2d"></div>
-      <span class="mascot-fallback" aria-hidden="true"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z"/></svg></span>
     </button>
   </div>
 
 </div>
 
 <script src="errors.js?v=169"></script>
+<script src="mic.js?v=169"></script>
 <script src="care.js?v=169"></script>
 <script src="memory.js?v=169"></script>
 <script src="board.js?v=169"></script>
@@ -544,6 +552,7 @@
 <script src="app.js?v=169"></script>
 <script src="native.js?v=169"></script>
 <script src="listen.js?v=169"></script>
+<script src="tour.js?v=169"></script>
 <script src="study-room.js?v=169"></script>
 <script src="gradient.js?v=169"></script>
 </body>

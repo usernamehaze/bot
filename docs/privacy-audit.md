@@ -53,7 +53,7 @@ Three ways, picked by the device and the student's settings (`app.js:5554-5560`)
 | Research | **OpenAlex** (`api.openalex.org`, `app.js:3777`) | the topic |
 | Web answers | **Google Gemini with Google Search** (`app.js:3899`) | the question |
 | Studio voice (Bella) | Cassie's server `/speak`, then **ElevenLabs** (`worker.src.js:822-866`) | **Cassie's answer text**. The made audio is kept in Cloudflare's edge cache for up to 30 days (`worker.src.js:864`), so the same sentence isn't paid for twice. **NOTE** |
-| Phone voice (Kokoro) | made **on the device**; the model is downloaded once from **Hugging Face** | nothing is sent but the download request |
+| Studio voice (ElevenLabs, Bella) | through Cassie's server; only Cassie's own words are sent | when it can't speak, Cassie types (the on-device voice was removed on 18 October 2026) |
 | World atlas | **Wikipedia** and the **World Bank** | a country or place name |
 | Sign in | **Google** or **Apple** | their sign-in, checked by our server |
 | iPhone Shortcut `/ask?text=…` | Cassie's server → Groq, then Workers AI | the highlighted text, **in the web address**. Not stored by our code, but if Cloudflare "Workers Logs" is switched on for the worker, web addresses are logged there. **NOTE** (please check the dashboard: Workers → cassie → Settings → Observability) |
@@ -96,7 +96,7 @@ There is no way today for someone **without an account** to delete what is tied 
 | localStorage | `cassie.auth` | the sign-in token |
 | localStorage | `cassie.labs`, `cassie.labs.ui`, `cassie.labs.view`, `cassie.labs.tutorVoice`, `cassie.logic`, `cassie.bodyMore`, `cassie.geminiModels`, `cassie.humanVoice` | lab progress and small settings |
 | sessionStorage | `cassie.claude`, `cassie.pictures`, `cassie.hvLater` | small flags for this visit |
-| Cache Storage | the app's own files, `kokoro-voices`, `transformers-cache` (voice model), `cassie-share` (emptied right away) | |
+| Cache Storage | the app's own files, `cassie-share` (emptied right away) | |
 | Extension `chrome.storage.local` | `groqKey`, `geminiKey`, `cassieHistory` (last 60 questions and answers, page address and title, small thumbnails of the last 10 snips), highlight settings | |
 | IndexedDB | not used by Cassie's own code | |
 
@@ -105,17 +105,17 @@ There is no way today for someone **without an account** to delete what is tied 
 ## 3. Exposure
 
 ### 3.1 What `scripts/build-site.sh` publishes to askcassie.pages.dev (`_site/`, 485 files, 62 MB)
-Pages: `index.html app.html start.html privacy.html terms.html bot.html`. Scripts: `app.js errors.js board.js bot-page.js cards.js cassie-bot.js cite.js config.js export.js gradient.js listen.js memory.js native.js sketch.js start.js study-room.js sw.js voice.js`, `style.css`, `manifest.json`, `_headers`. Folders: `icons/ landing/ patterns/ explore/ voice/ labs/ vendor/`. Also `promo/cassie-ad-60s.mp4` and `cassie-extension.zip`.
+Pages: `index.html app.html start.html privacy.html terms.html bot.html`. Scripts: `app.js errors.js board.js bot-page.js cards.js cassie-bot.js cite.js config.js export.js gradient.js listen.js memory.js native.js sketch.js start.js study-room.js sw.js voice.js`, `style.css`, `manifest.json`, `_headers`. Folders: `icons/ landing/ patterns/ explore/ labs/ vendor/`. Also `promo/cassie-ad-60s.mp4` and `cassie-extension.zip`.
 
 Not published: `server/`, `tests/`, `docs/`, `founder/`, `extension/` source (only the zip), `promo/` sources, `README.md`, `SECURITY.md`, `STORES.md`.
 
 Checked in the build: **no** API keys or secrets (searched for Groq, Google, Anthropic and ElevenLabs key patterns and `ADMIN_TOKEN`), **no** source maps, **no** server code, tests or dashboard.
 
 Published but not needed to run the site:
-- `voice/README.md`, `explore/body/README.md` (notes for developers)
+- `explore/body/README.md` (notes for developers)
 - `icons/logo.svg` (nothing uses it)
 
-Published and needed (keep): the licence and credit files (`vendor/licenses/`, `voice/KOKORO-JS-LICENSE.txt`, `explore/THREE-LICENSE.txt`, `explore/body/LICENSES.md`, `explore/body/ATTRIBUTION.md`, `labs/CREDITS.md`, `labs/atlas/LICENSE-*`). The body and globe credits link to them, and the licences require them.
+Published and needed (keep): the licence and credit files (`vendor/licenses/`, `explore/THREE-LICENSE.txt`, `explore/body/LICENSES.md`, `explore/body/ATTRIBUTION.md`, `labs/CREDITS.md`, `labs/atlas/LICENSE-*`). The body and globe credits link to them, and the licences require them.
 
 ### 3.2 The server
 - `/stats`, `/health`, `/admin/plan` all check `ADMIN_TOKEN` (16+ characters, with a limit on wrong guesses): `worker.src.js:438`, `1357`, `1364`, `adminOk` at `1345`. **OK**
@@ -159,7 +159,7 @@ Code:
 2. Make server problem logs and transcription errors carry the service name and status only, never the service's own error text.
 3. Delete old rooms on a schedule that doesn't depend on someone making a room (on room poll and join too).
 4. "Delete my account" also removes the account's `plans` row. **This changes what a table holds (a delete), not the table itself. I'll ask you first.**
-5. Build: stop publishing `voice/README.md`, `explore/body/README.md` and `icons/logo.svg` (left in the repo, only left out of `_site`).
+5. Build: stop publishing `explore/body/README.md` and `icons/logo.svg` (left in the repo, only left out of `_site`).
 
 Tests:
 - Upload a photo, a PDF and a Word file with a unique marker word, get answers (including a failing one), then search **every** database table and the server's problem log for the marker and the file bytes: none found.
@@ -177,7 +177,7 @@ Not mine to change (needs you): GitHub Pages and repo visibility, and Cloudflare
 - Server problem logs keep a reason picked by the server (`429 over its limit`), never a service's own error text; crash logs keep the error type and code locations, not its message.
 - `tidy()` deletes day-old rooms, finished daily and hourly limit counts (the IP addresses) and old scores, every 10 minutes while the server is busy and from the Cron Trigger. It keeps weekly and monthly allowances, which the old random sweep used to wipe.
 - "Delete my account" also deletes the account's `plans` row (approved).
-- The site build leaves out `voice/README.md`, `explore/body/README.md` and `icons/logo.svg`.
+- The site build leaves out `explore/body/README.md` and `icons/logo.svg`.
 - No fake reviews or made-up numbers were found, so none were removed.
 - `privacy.html` rewritten in plain words; `terms.html` updated to match.
 - Tests: an upload's words, name and bytes are in no table and no log after answers (and a failed one); `privacy.html` names every service the code calls; rooms, limit counts and a deleted account's plan go when their time is up.

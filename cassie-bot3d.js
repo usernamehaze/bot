@@ -3,7 +3,7 @@
 // (cassie-bot.js). The flat Cassie keeps time and works out her pose and her face each frame; this
 // draws the same thing in 3D. One WebGL renderer draws every Cassie on the page into her own
 // canvas, only while she's on screen, and rests while the page is hidden.
-//   upgrade(api, host, svg, { pokeable, glow }) → { changed(), pause(on), destroy() } or null
+//   upgrade(api, host, svg, { pokeable, glow, failed }) → { changed(), pause(on), destroy() } or null (failed(): no 3D after all)
 import * as THREE from './explore/three.module.min.js';
 import { RoomEnvironment } from './explore/RoomEnvironment.js';
 
@@ -54,7 +54,7 @@ function setup() {
   R = { renderer: null, env: null, size: 512, scene, camera, body, FRONT, M, BODY, MAP, ready: false, waiting: [], ball: new THREE.SphereGeometry(1, 24, 16), cyl: new THREE.CylinderGeometry(1, 1, 1, 28), cone: new THREE.ConeGeometry(1, 1, 28), torus: new THREE.TorusGeometry(1, 0.18, 12, 40), box: new THREE.BoxGeometry(1, 1, 1), bots: new Set(), raf: 0, last: 0 };
   document.addEventListener('visibilitychange', wake);
   // The slow parts (making the 3D context, and building each kind of shader), one small step at a time, so the
-  // page never freezes for long; the flat Cassie shows meanwhile.
+  // page never freezes for long; her place stays empty meanwhile.
   let renderer = null;
   const warm = (mat) => () => { // (draws one small thing with that kind of material, so its shader is built now)
     const m = new THREE.Mesh(R.box, mat); scene.add(m);
@@ -73,12 +73,12 @@ function setup() {
   ];
   const next = () => {
     const t0 = performance.now();
-    try { steps.shift()(); } catch (e) { R.err = String(e && e.stack || e); R.failed = true; return; } // (no 3D here: the flat Cassies stay)
+    try { steps.shift()(); } catch (e) { R.err = String(e && e.stack || e); R.failed = true; R.bots.forEach((b) => b.failed && b.failed()); return; } // (no 3D here: the flat Cassies show)
     R.stepMs = Math.max(R.stepMs || 0, performance.now() - t0); (R.steps = R.steps || []).push(Math.round(performance.now() - t0));
     if (steps.length) later(next);
     else { R.ready = true; R.waiting.splice(0).forEach((f) => f()); wake(); }
   };
-  // (starts once a Cassie is on screen and the page has loaded and settled: the flat Cassie shows
+  // (starts once a Cassie is on screen and the page has loaded and settled: her place stays empty
   // until then; a page whose Cassies are all hidden never makes a 3D context)
   R.begin = () => {
     if (R.begun) return;
@@ -237,13 +237,14 @@ function effect(kind, color, accent) {
 }
 
 /* ---------- one Cassie ---------- */
-export function upgrade(api, host, svg, { pokeable = false, glow = false } = {}) {
+export function upgrade(api, host, svg, { pokeable = false, glow = false, failed = null } = {}) {
   try { if (!R) { const t0 = performance.now(); setup(); R.setupMs = performance.now() - t0; } } catch (e) { return null; }
   if (R.failed) return null;
   const out = document.createElement('canvas');
   out.className = 'cassie-bot cassie-bot-3d';
   out.setAttribute('role', 'img'); out.setAttribute('aria-label', 'Cassie');
   out.style.display = 'block';
+  out.style.opacity = '0'; out.style.transition = 'opacity .25s ease'; // (she fades into her empty place)
   if (pokeable) { out.style.cursor = 'pointer'; out.style.pointerEvents = 'auto'; out.addEventListener('click', () => api.poke()); }
   const og = out.getContext('2d');
   // her parts: the body (tinted by her mood), a face painted from the flat drawings, a badge, an accessory, an effect
@@ -268,7 +269,7 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false } = {})
   group.add(badge);
   let acc = null, accName = undefined, fx = null, fxKey = '', stName = '', shownFace = '';
   const clip = new Path2D(K.roundedPath(K.POINTER));
-  const bot = { api, out, og, group, bodyMat, face, faceTex, badge, badgeTex, seen: true, paused: false, alive: true, dirty: true };
+  const bot = { api, out, og, group, bodyMat, face, faceTex, badge, badgeTex, seen: true, paused: false, alive: true, dirty: true, failed };
 
   function syncParts() {
     const d = api.def, accent = api.accent || '#d8343c';
@@ -321,7 +322,7 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false } = {})
   bot.draw = () => {
     const { renderer, scene, camera } = R, p = api.pose, d = api.def;
     // her first 3D frame: her canvas takes the flat Cassie's place
-    if (!bot.live) { host.insertBefore(out, svg); svg.style.display = 'none'; svg.setAttribute('class', 'cassie-bot-flat'); bot.live = true; }
+    if (!bot.live) { host.insertBefore(out, svg); svg.style.display = 'none'; svg.setAttribute('class', 'cassie-bot-flat'); bot.live = true; requestAnimationFrame(() => { out.style.opacity = '1'; }); }
     const dpr = Math.min(2, window.devicePixelRatio || 1), cw = Math.max(1, Math.round(out.clientWidth * dpr)), ch = Math.max(1, Math.round(out.clientHeight * dpr));
     if (out.width !== cw || out.height !== ch) { out.width = cw; out.height = ch; }
     syncParts(); paintFace(p, d); animateFx(p, d);

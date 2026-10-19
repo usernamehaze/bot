@@ -68,11 +68,18 @@
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
   let cur = tz === 'Asia/Manila' || /-ph$|^fil|^tl/.test(lang) ? 'php' : 'usd';
-  let bill = 'month';
+  let bill = 'sem'; // (the Pasado Pass first: one payment for the semester)
   const fmt = (c, n) => {
     const p = PRICES[c];
     if (c === 'php') return p.sym + Math.round(n).toLocaleString('en-PH');
     return p.sym + (Number.isInteger(n) ? n : n.toFixed(2));
+  };
+  // about how much a day: 5 months is about 152 days
+  const perDay = (c, n) => (c === 'php' ? PRICES[c].sym + Math.max(1, Math.round(n / 152)) : PRICES[c].sym + (n / 152).toFixed(2));
+  const UNDER = {
+    sem: 'One payment for 5 months. Never renews. 7 days to change your mind.',
+    month: 'Renews each month until you cancel in Settings. 7 days to change your mind.',
+    year: 'Renews each year until you cancel in Settings. 7 days to change your mind.',
   };
   function renderPrices() {
     const p = PRICES[cur];
@@ -82,8 +89,12 @@
       $(`[data-price="${k}"]`).textContent = fmt(cur, v);
       const per = $(`[data-price="${k}"]`).nextElementSibling; per.textContent = { month: '/ month', sem: '/ semester', year: '/ year' }[bill];
       $(`[data-bill-note="${k}"]`).textContent = bill === 'month' ? 'billed monthly · cancel anytime'
-        : bill === 'sem' ? `5 months · that’s ${fmt(cur, v / 5)} a month · one payment` : `that’s ${fmt(cur, v / 12)} a month · billed yearly`;
+        : bill === 'sem' ? `about ${perDay(cur, v)} a day` : `that’s ${fmt(cur, v / 12)} a month · billed yearly`;
+      const under = $(`[data-under="${k}"]`); if (under) under.textContent = UNDER[bill];
     });
+    const pass = $('[data-pass]'); if (pass) pass.hidden = bill !== 'sem'; // (the Semester pass is the Pasado Pass)
+    const anchor = $('[data-anchor]');
+    if (anchor) anchor.textContent = `${fmt(cur, p.plus.sem)} for the whole semester: about ${perDay(cur, p.plus.sem)} a day${cur === 'php' ? ', less than one hour with a tutor' : ''}.`;
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }

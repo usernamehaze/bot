@@ -8,6 +8,9 @@ import { el, esc, group, seg, button, row, stats, shuffle, fmtTime, plusOnly, er
 
 /* ---------- shared ---------- */
 // the JSON inside one of Cassie's replies ([…] or {…})
+// a mic beside a writing box (mic.js): what is said stays in the box to edit
+const mic = (box) => { if (window.CassieMic) window.CassieMic.attach(box); };
+
 export function jsonIn(reply, open = '[') {
   const s = String(reply || ''), close = open === '[' ? ']' : '}', a = s.indexOf(open), b = s.lastIndexOf(close);
   if (a < 0 || b <= a) return null;
@@ -616,6 +619,7 @@ const matrixLab = {
     const g = group(panel, 'Your notes');
     const area = el('textarea', 'tl-area'); area.rows = 6; area.placeholder = 'Paste notes, a passage, or text you highlighted…'; area.setAttribute('aria-label', 'Notes to turn into cards');
     g.appendChild(area);
+    mic(area);
     if (api.readFile) {
       const f = el('label', 'lab-btn tl-file');
       f.innerHTML = 'Open a PDF, Word, PowerPoint or text file<input type="file" accept=".pdf,.docx,.pptx,.txt,.md" hidden>';
@@ -751,6 +755,7 @@ const cornellLab = {
     const area = el('textarea', 'tl-area'); area.rows = 7; area.setAttribute('aria-label', 'Raw notes');
     area.placeholder = 'Paste lecture notes, slide text, or a chapter…';
     g.appendChild(area);
+    mic(area);
     if (api.readFile) {
       const f = el('label', 'lab-btn tl-file');
       f.innerHTML = 'Open a file (PDF, Word, PowerPoint)<input type="file" accept=".pdf,.docx,.pptx,.txt,.md" hidden>';
@@ -987,6 +992,8 @@ const thesisLab = {
         ${f('url', 'Link (DOI or URL)', 'https://…', true)}
         <div class="tl-formbtns"><button type="button" class="lab-btn main" data-savee>Save</button><button type="button" class="lab-btn" data-cancel>Cancel</button></div></div>`;
     }
+    // a mic on the thesis, each reason, the counter-argument and a quote (the map redraws, so as they appear)
+    if (window.CassieMic) window.CassieMic.watch(page, 'textarea[data-f], .tl-form textarea[data-k="quote"]');
     page.addEventListener('input', (e) => {
       const t = e.target;
       if (t.dataset.f === 'thesis') map.thesis = t.value.slice(0, 600);

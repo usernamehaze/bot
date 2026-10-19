@@ -29,10 +29,12 @@
     google_failed: 'Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.',
     apple_account: 'This account was made with Apple, so it has no password. Tap “Sign in with Apple” instead.',
     apple_failed: 'Apple sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.',
-    apple_cancelled: 'Apple sign-in was cancelled. Tap the button to try again.',
+    apple_cancelled: 'Apple sign-in was cancelled, so you aren’t signed in yet. Tap Try again to pick your account.',
+    google_cancelled: 'Google sign-in was cancelled, so you aren’t signed in yet. Tap Try again to pick your account.',
+    signin_mismatch: 'That sign-in didn’t come from this page, so Cassie didn’t use it to keep your account safe. Tap Try again.',
     link_wrong_password: 'That password doesn’t match this email’s Cassie account. Check it for typos, or tap “I don’t know this password”.',
     too_many_tries: 'There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.',
-    signed_out: 'You’ve been signed out, so Cassie can’t save to your account. Sign in again to keep going.',
+    signed_out: 'You’ve been signed out, so Cassie can’t save to your account. Sign in again to carry on.',
     password_long: 'That password is too long. Use one with fewer than 200 letters and numbers.',
     bad_request: 'Cassie didn’t understand that request. Close this and try again.',
     nothing_to_save: 'There was nothing to save yet. Change something first, then save.',
@@ -96,12 +98,15 @@
     webgl: 'This browser can’t show 3D right now because its graphics are turned off. Try Chrome, or turn on “Use graphics acceleration” in its settings.',
     open_3d_failed: 'Cassie couldn’t open the 3D view, maybe because the internet dropped. Check your connection, then try again.',
     open_labs_failed: 'Cassie couldn’t open Labs, maybe because the internet dropped. Check your connection, then try again.',
-    voice_unsupported: 'This browser can’t make Cassie’s voice, so her answers are shown as text. Try Chrome, Edge or Safari 16.4 or newer.',
-    voice_download_failed: 'Cassie’s voice didn’t download, maybe because the internet dropped. Check your connection, then tap Play a sample to try again.',
+    voice_unsupported: 'This browser can’t play Cassie’s voice, so she types her answers instead. Try Chrome, Edge or Safari.',
+    voice_typing: 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.',
+    voice_resting: 'Cassie’s voice is resting until {date}. Until then she types her answers.',
+    voice_not_set_up: 'Cassie’s voice isn’t switched on yet, so she types her answers.',
     mic_blocked: 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.',
     not_heard: 'Cassie couldn’t hear that clearly. Try again, or type it.',
     cant_listen: 'This browser can’t listen here, so talking won’t work. Type your question instead.',
     no_mic_browser: 'This browser can’t use the microphone, so talking won’t work here. Try Chrome, Edge or Safari.',
+    mic_here: 'Cassie can’t use the microphone here. Type it instead.',
     voice_no_answer: 'Sorry, Cassie couldn’t answer that just now. Can you say it again?',
 
     // Labs and the 3D views
@@ -120,6 +125,24 @@
     file_unreadable: 'Cassie couldn’t read that file. It may be a kind she doesn’t know. Try a PDF, Word, PowerPoint or text file.',
     tutor_no_brain: 'Cassie couldn’t reach her brain just now, maybe because the internet dropped. Check your connection, then ask again.',
     quiz_failed: 'Cassie couldn’t write a quiz just now because her brain didn’t reply. Try again in a moment.',
+
+    // exam plans (Home)
+    exam_plan_failed: 'Cassie couldn’t make your plan just now. Tap Try again.',
+    exam_name_needed: 'Give your exam a name, like “Gen Chem finals”.',
+    exam_date_needed: 'Pick the day of your exam.',
+    exam_date_past: 'That day has already passed. Pick the day of your exam, today or later.',
+    exam_date_far: 'That’s more than a year away. Pick a day in the next 12 months.',
+    exam_topics_needed: 'Add at least one topic, or tap one you’ve been studying.',
+    exam_file_failed: 'Cassie couldn’t read that file. Try a PDF, Word, PowerPoint or text file.',
+    // Teach me and Ask Cassie on any web page (the browser extension)
+    teach_failed: 'Cassie couldn’t make a lesson for this page just now. Tap Try again.',
+    teach_ask_failed: 'Cassie couldn’t answer that just now. Try asking again.',
+    teach_no_picture: 'Cassie couldn’t see this tab, so she can’t teach it. Take a screenshot (Win+Shift+S, or Cmd+Shift+4 on a Mac), then open the Board and press Ctrl+V.',
+    teach_no_key: 'Cassie needs a free Groq or Gemini key to read your screen. Click the Cassie icon in the toolbar to add one.',
+    teach_where_browser: 'This is one of the browser’s own pages, and browsers don’t let extensions draw on those. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_pdf: 'This PDF is open in the browser’s own PDF viewer, where extensions can’t draw. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_store: 'Extension stores don’t let extensions draw on their pages. So Cassie teaches it here, on a picture of the tab.',
+    teach_where_page: 'This page doesn’t let Cassie draw on it. So she teaches it here, on a picture of the tab.',
   };
 
   const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : '')).replace(/\s+$/, '');

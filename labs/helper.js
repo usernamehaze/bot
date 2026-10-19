@@ -21,6 +21,7 @@ export function helper({ view, name, described, ask, format, speak, quiz, onMark
   const topBar = watchTopBar(view); // (the panel never covers the top bar: Back must always work)
   const $ = (s) => box.querySelector(s);
   const log = $('.hp-log'), input = $('.hp-ask input'), title = $('.hp-title');
+  if (window.CassieMic) window.CassieMic.attach(input, { send: () => $('.hp-ask').requestSubmit() }); // (say it: it's asked)
   const history = [];
   let talking = null, alive = true, busy = 0, quizRun = 0;
 

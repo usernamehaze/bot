@@ -830,7 +830,7 @@ async function chat(request, env, ctx) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
     if (question && usedQ > L.questions) ctx.waitUntil(refund().catch(() => {})); // a refused question isn't counted
     return chatError(plan === 'free'
-      ? `You've used today's ${shown} free questions. They come back at midnight, or add your own free Groq key in Settings to keep going right now.`
+      ? `You've used today's ${shown} free questions. They come back at midnight, or add your own free Groq key in Settings to carry on right now.`
       : `You've reached today's fair-use limit (${shown}). It resets at midnight. Thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
   }
   const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
@@ -1052,20 +1052,40 @@ const autoCode = (t) => (/^[a-z][a-z0-9_]{0,39}$/.test(String(t || '')) ? String
 
 /* ------------------------------------------------------------------ Cassie's studio voice */
 // Reads text aloud with ElevenLabs when the secret ELEVENLABS_API_KEY is set (Cloudflare → the
-// worker → Settings → Variables and Secrets; never in the app). GET /speak says whether it's on;
-// POST /speak { text, voice: 'woman' | 'man', uid } answers with an MP3.
+// worker → Settings → Variables and Secrets; never in the app). GET /speak?uid=… says whether it's
+// on, how many studio characters are left (this month's, or this student's today if that is less),
+// and the day the allowance comes back; POST /speak { text, voice: 'woman' | 'man', uid } answers with an MP3.
 // Credits cost money, so: each student gets SPEAK_DAILY_CHARS a day (default 3000), the whole app
 // SPEAK_MONTHLY_CHARS a month (default 9500, under ElevenLabs' free 10,000), and the same words
 // (a flashcard, a quiz question) are kept in Cloudflare's cache for 30 days, so they're paid for
-// once. When it's off or used up, the app speaks with Bella or the device's voice instead.
+// once. When it's off or used up, the app types instead: Cassie never speaks in another voice.
 const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
 // Sarah, and Daniel for the man's voice: calm, precise, British — an "AI butler" feel (ElevenLabs' own voices;
 // George is the spare if Daniel ever isn't there)
 const ELEVEN_VOICES = { woman: 'EXAVITQu4vr4xnSDxMaL', man: 'onwK4e9ZLuTAKqWW03F9', manSpare: 'JBFqnCBsd6RMkjVDRZzb' };
+// What's left of the studio voice, read without counting a use: the app decides at the start of a
+// lesson, a Listen or a voice chat whether Bella can say all of it. Only numbers and a date go back.
+async function speakLeft(env, uidRaw) {
+  if (!env.ELEVENLABS_API_KEY) return { on: false, left: 0 };
+  const monthMax = +env.SPEAK_MONTHLY_CHARS || 9500, dayMax = +env.SPEAK_DAILY_CHARS || 3000;
+  const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
+  const uid = /^[\w-]{8,64}$/.test(String(uidRaw || '')) ? String(uidRaw) : 'anon';
+  let usedMonth = 0, usedDay = 0;
+  if (env.DB) {
+    await ensureSchema(env.DB);
+    const read = (k, period) => env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind(k, period).first().then((r) => (r && r.n) || 0);
+    [usedMonth, usedDay] = await Promise.all([read('SP:month', month), read('sp:' + uid, day)]);
+  }
+  const monthLeft = Math.max(0, monthMax - usedMonth), dayLeft = Math.max(0, dayMax - usedDay);
+  const [y, m] = month.split('-').map(Number);
+  const nextMonth = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
+  const tomorrow = dayOf(now + 864e5);
+  return { on: true, left: Math.min(monthLeft, dayLeft), back: monthLeft <= dayLeft ? nextMonth : tomorrow };
+}
 async function speak(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  if (request.method === 'GET') return json({ on: !!env.ELEVENLABS_API_KEY }, 200, h);
+  if (request.method === 'GET') return json(await speakLeft(env, new URL(request.url).searchParams.get('uid')), 200, h);
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   if (!env.ELEVENLABS_API_KEY) return chatError('Cassie’s studio voice isn’t set up.', 503, h, { 'x-speak': 'off' });
   let b; try { b = await request.json(); } catch (e) { return chatError('bad json', 400, h); }
@@ -1085,7 +1105,7 @@ async function speak(request, env, ctx) {
     await ensureSchema(env.DB);
     const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
     if (all > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
-    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today. Cassie uses her other voice until tomorrow.', 429, h, { 'x-speak': 'day' });
+    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today. Cassie types her answers until tomorrow.', 429, h, { 'x-speak': 'day' });
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively
@@ -1457,7 +1477,9 @@ async function auth(request, env, path) {
     const provider = path.slice(6), code = provider + '_failed';
     const words = provider === 'google' ? 'Google sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.' : 'Apple sign-in didn’t finish, so you aren’t signed in yet. Try again, or use your email and password.';
     let id;
-    try { id = await verifyIdToken(provider, String(body.credential || ''), env, provider === 'apple' ? String(body.nonce || '') : undefined); } catch (e) { return fail(words, 401, code); }
+    // the one-time code the app made for this sign-in must be inside the token (Apple always; Google from the app's own page)
+    const nonce = body.nonce ? String(body.nonce) : provider === 'apple' ? '' : undefined;
+    try { id = await verifyIdToken(provider, String(body.credential || ''), env, nonce); } catch (e) { return fail(words, 401, code); }
     if (body.password && id.email && !(await authAllowed(request, env, 'authm:' + (await sha256(id.email)), 15))) return fail('There were too many tries, so signing in is paused to keep accounts safe. Wait an hour, then try again.', 429, 'too_many_tries');
     const r = await signInWith(env, provider, id, { password: String(body.password || ''), forget: body.forget === true, name: String(body.name || '') });
     if (r.wrongPassword) return fail('That password doesn’t match this email’s Cassie account. Check it for typos, or tap “I don’t know this password”.', 401, 'link_wrong_password');
@@ -1499,7 +1521,7 @@ async function auth(request, env, path) {
   }
 
   const acc = await accountFromRequest(request, env);
-  if (!acc) return fail('You’ve been signed out, so Cassie can’t save to your account. Sign in again to keep going.', 401, 'signed_out');
+  if (!acc) return fail('You’ve been signed out, so Cassie can’t save to your account. Sign in again to carry on.', 401, 'signed_out');
   if (path === '/auth/me') {
     await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
     let plan = { plan: 'free', until: 0 };

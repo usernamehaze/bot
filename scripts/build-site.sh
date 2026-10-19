@@ -9,23 +9,23 @@ cd "$(dirname "$0")/.."
 rm -rf _site && mkdir _site
 # (a list, not *.js: a stray script in the folder never ships by accident)
 cp index.html app.html start.html privacy.html terms.html bot.html style.css manifest.json _site/
-cp app.js errors.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js \
-   native.js sketch.js start.js study-room.js sw.js voice.js _site/
-cp _headers _site/   # Cloudflare Pages response headers (lets Bella's voice use several cores)
-cp -r icons landing patterns explore voice labs vendor _site/
+cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js \
+   native.js sketch.js start.js study-room.js sw.js tour.js voice.js _site/
+cp _headers _site/   # Cloudflare Pages response headers (security)
+cp -r icons landing explore labs vendor _site/
 # notes for developers and an unused logo aren't needed to run the site (they stay in the repo)
-rm -f _site/voice/README.md _site/explore/body/README.md _site/icons/logo.svg
+rm -f _site/explore/body/README.md _site/icons/logo.svg
 [ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)
 mkdir -p _site/promo && cp promo/cassie-ad-60s.mp4 _site/promo/
 # A new version on every deploy, so phones never keep yesterday's files: the ?v= on every script
 # and stylesheet and the offline cache's name become this commit's id (no bumping by hand).
 ver="${CF_PAGES_COMMIT_SHA:-$(git rev-parse --short HEAD 2>/dev/null || date +%s)}"; ver="${ver:0:10}"
-find _site -name '*.html' -o -name '*.js' -not -path '_site/vendor/*' -not -path '_site/voice/*' -not -path '_site/explore/three*' \
+find _site -name '*.html' -o -name '*.js' -not -path '_site/vendor/*' -not -path '_site/explore/three*' \
   | xargs sed -i -E "s/\?v=[0-9]+([^0-9.]|$)/?v=$ver\1/g"   # (not 3.52.0: that's the extension's version)
 sed -i -E "s/cassie-v[0-9]+/cassie-$ver/" _site/sw.js
 # the Chrome extension, ready to download from the site (a folder inside, for "Load unpacked")
 tmp="$(mktemp -d)" && cp -r extension "$tmp/cassie-extension" && rm -f "$tmp"/cassie-extension/*.zip
-cp board.js sketch.js care.js "$tmp/cassie-extension/"   # the board is the app's own (one copy of it to keep up)
+cp board.js sketch.js care.js mic.js "$tmp/cassie-extension/"   # the board and the mic are the app's own (one copy of each to keep up)
 python3 - "$tmp" "$PWD/_site/cassie-extension.zip" <<'PY'
 import os, sys, zipfile
 src, out = sys.argv[1], sys.argv[2]

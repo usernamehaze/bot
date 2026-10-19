@@ -191,7 +191,7 @@
       body.innerHTML = list.length ? list.map(([id, n]) => `<div class="sr-note">${esc(n.text)}<small>${esc(nameOf(n.uid, n.name))}</small>${n.uid === o.me ? `<button type="button" data-unnote="${esc(id)}" aria-label="Remove this note">×</button>` : ''}</div>`).join('')
         : '<p class="sr-empty">Pin what the group finds while researching, a definition, a source, a formula, who does which part.</p>';
       foot.hidden = false;
-      if (foot.dataset.view !== 'notes') { foot.dataset.view = 'notes'; foot.innerHTML = '<textarea class="sr-in" rows="2" maxlength="600" placeholder="A note for everyone…"></textarea><button type="button" class="sr-btn" data-act="note">Pin</button>'; }
+      if (foot.dataset.view !== 'notes') { foot.dataset.view = 'notes'; foot.innerHTML = '<textarea class="sr-in" rows="2" maxlength="600" placeholder="A note for everyone…"></textarea><button type="button" class="sr-btn" data-act="note">Pin</button>'; if (window.CassieMic) window.CassieMic.attach(foot.querySelector('.sr-in')); }
     }
     // the focus timer, the same for everyone
     let tick = 0;
