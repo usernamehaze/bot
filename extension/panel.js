@@ -70,7 +70,8 @@ function home(extra = '') {
 
 /* ---------- Your lessons: what Cassie taught on a page, kept on this device until deleted ---------- */
 function lessonText(l) {
-  return `Cassie’s lesson: ${l.title}${l.q ? `\nI asked: ${l.q}` : ''}\n\n${l.steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n`;
+  const qa = Array.isArray(l.qa) ? l.qa : [];
+  return `Cassie’s lesson: ${l.title}${l.q ? `\nI asked: ${l.q}` : ''}\n\n${l.steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n${qa.length ? `\nMy questions:\n${qa.map((x) => `Q: ${x.q}\nA: ${x.a}`).join('\n\n')}\n` : ''}`;
 }
 function renderLessons() {
   const box = view.querySelector('.lessons');
@@ -82,13 +83,15 @@ function renderLessons() {
       const card = document.createElement('article');
       card.className = 'card lesson'; card.dataset.id = l.id;
       card.innerHTML = `${l.pic ? '<img alt="The page with Cassie’s drawings">' : ''}<b class="lesson-t"></b><small class="lesson-d"></small>
-        <details><summary class="tall">Steps</summary><ol></ol></details>
+        <details><summary class="tall">Steps</summary><ol></ol><dl class="lesson-qa" hidden></dl></details>
         <div class="row"><button class="btn tall" type="button" data-open>Open in Cassie</button><button class="btn ghost tall" type="button" data-del>Delete</button></div>`;
       if (l.pic) card.querySelector('img').src = l.pic;
       card.querySelector('.lesson-t').textContent = l.title;
       card.querySelector('.lesson-d').textContent = new Date(l.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + (l.q ? ` · ${l.q}` : '');
       const ol = card.querySelector('ol');
       l.steps.forEach((x) => { const li = document.createElement('li'); li.textContent = x; ol.appendChild(li); });
+      const dl = card.querySelector('.lesson-qa');
+      (Array.isArray(l.qa) ? l.qa : []).forEach((x) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = 'You asked: ' + x.q; dd.textContent = x.a; dl.append(dt, dd); dl.hidden = false; });
       card.querySelector('[data-del]').addEventListener('click', () => {
         chrome.storage.local.get(['teachLessons'], (o2) => chrome.storage.local.set({ teachLessons: (o2.teachLessons || []).filter((x) => x.id !== l.id) }));
       });
@@ -352,7 +355,9 @@ function teachError(box, words, retry) {
   box.querySelector('p').textContent = words;
   box.querySelector('button').addEventListener('click', retry);
 }
-let teachRun = 0;
+let teachRun = 0, lookAgain = null;
+// Look again (her card on the page, when the page moved under her drawings): the same lesson, with a fresh look
+chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.type === 'CASSIE_TEACH_AGAIN' && lookAgain) lookAgain(); return false; });
 // teach({ tab, q, snip: { image, region }, box, onAnswer }) runs one lesson (box: where her words go in the panel)
 async function teach({ tab = null, q = '', snip: snipped = null, box = null, onAnswer = null } = {}) {
   tab = tab || (await activeTab());
@@ -369,23 +374,22 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
   const image = snipped ? snipped.image : await tabPicture(tab);
   if (run !== teachRun) return;
   if (!image) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
-  // 3. her lesson as steps (CassieTeach.parse leaves out any bad step or shape)
-  let reply;
-  try { reply = await vision(image, window.CassieTeach.prompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), 1400); } catch (e) {
+  // 3. her lesson as steps (CassieTeach.parse leaves out any bad step or shape; a reply that can't be
+  // used is asked for once more before she says she couldn't)
+  const numbered = onPage && !snipped && !page.pictureOnly;
+  let steps, answer;
+  try {
+    ({ steps, answer } = await window.CassieTeach.lessonFrom({ send: (ask, n) => vision(image, ask, n), prompt: window.CassieTeach.prompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), count: numbered ? page.items.length : 0, q }));
+  } catch (e) {
     if (run === teachRun) teachError(box, window.CassieTeach.problem(e), again);
     return;
   }
   if (run !== teachRun) return;
-  const steps = window.CassieTeach.parse(reply, onPage && !snipped && !page.pictureOnly ? page.items.length : 0);
-  const answer = q ? window.CassieTeach.answer(reply) || steps.map((s) => s.say).join(' ') : '';
   if (onAnswer && answer) onAnswer(answer);
-  if (!steps.length) {
-    if (answer) box.innerHTML = '';
-    else teachError(box, window.CassieErrors.say('teach_failed'), again);
-    return;
-  }
+  if (!steps.length) { box.innerHTML = ''; return; }
+  lookAgain = again;
   // 4. the lesson: on the page, or here on the picture when the page won't let her draw
-  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: tab.title || '', q }, region: snipped ? snipped.region : null, shot: image };
+  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: tab.title || '', q }, region: snipped ? snipped.region : null, shot: image, numbered };
   if (onPage) {
     const shown = await teachReach(tab, lesson);
     if (run !== teachRun) return;

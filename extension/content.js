@@ -1099,7 +1099,7 @@
     positionPopover(rect);
     const myGen = ++gen;
     try {
-      const out = await T.run({ q, from: T.follow.on ? T.follow.at() : null, hideUi: teachUi });
+      const out = await T.run({ q, from: T.follow.on ? T.follow.at() : null, hideUi: teachUi, again: () => teachHere(q, rect) });
       if (myGen !== gen) return;
       if (q) { // (follow-ups go on as a normal chat about the page's words)
         const pageText = ((document.body && document.body.innerText) || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);

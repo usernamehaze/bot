@@ -1033,7 +1033,9 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
           { say: 'The table shows the two stages.', point: t, draw: [{ shape: 'underline', el: t }, { shape: 'graph', fn: 'x^2', x: 0.6, y: 0.5, w: 0.3, h: 0.3 }] },
           { say: 'A bad pointer is ignored.', point: { el: 999 }, draw: [{ shape: 'circle', x: 7, y: 'a' }] },
         ] }) + '\n```';
-        return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.25, y: 0.4 }, draw: [{ shape: 'circle', x: 0.25, y: 0.4, r: 0.05 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
+        const tabs = await chrome.tabs.query({ active: true }).catch(() => []);
+        if (tabs.some((t) => /blocked\.html/.test(t.url || ''))) return JSON.stringify({ steps: [{ say: 'The heading names the law.', point: { x: 0.1, y: 0.09 } }] });
+        return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.05, y: 0.5 }, draw: [{ shape: 'circle', x: 0.05, y: 0.5, r: 0.03 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
       };
     });
     // Bella's studio voice, faked in the background: what's left (self.__voice.left), and each sentence as a
@@ -1058,7 +1060,7 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     const words = await panel.locator('.tools').innerText();
     expect(/Teach me/.test(words) && /Ask Cassie/.test(words), 'the panel has Teach me and Ask Cassie: ' + words);
     const HOST = '#cassie-teach-host-92f1';
-    const lesson = () => tabPage.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn }; }, HOST);
+    const lesson = () => tabPage.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn, frame: n.dataset.frame || "" }; }, HOST);
     const cursorAt = (p) => p.evaluate((h) => { const c = document.querySelector(h).shadowRoot.querySelector('.ct-cursor'); return c.classList.contains('on') ? [+c.dataset.x, +c.dataset.y] : null; }, HOST);
     const ink = (p, box) => p.evaluate(([h, box]) => {
       const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -1176,7 +1178,9 @@ test('Teach me and Ask Cassie in the extension: she speaks, points at the right 
     expect(q.length === 1 && /^data:image\/png/.test(q[0].image) && !/numbered/.test(q[0].prompt) && /a spot on the picture/.test(q[0].prompt), 'the canvas page goes as a picture, with no numbered parts: ' + (q[0] && q[0].prompt.slice(0, 300)));
     const vp = await tabPage.evaluate(() => [innerWidth, innerHeight]);
     const at3 = await cursorAt(tabPage);
-    expect(at3 && Math.abs(at3[0] - 0.25 * vp[0]) <= 3 && Math.abs(at3[1] - 0.4 * vp[1]) <= 3, `the arrow points by place (x 25%, y 40%): ${at3} on ${vp}`);
+    // (shares of the screenshot, which can be smaller than the window; she points at the chart's axis, not blank canvas)
+    const fr = (await lesson()).frame.split('x').map(Number);
+    expect(at3 && Math.abs(at3[0] - 0.05 * fr[0]) <= 3 && Math.abs(at3[1] - 0.5 * fr[1]) <= 3, `the arrow points by place (x 5%, y 50%) on the chart's axis: ${at3} on ${fr}`);
     await tabPage.keyboard.press('Escape');
 
     // 4. Snip, then Teach me: she points and draws inside the snipped part
@@ -3510,6 +3514,229 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
+});
+
+test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar, thumbnails or the list under it), loops hug their part, nothing is drawn on blank space or the top bar, drawings follow the page or offer Look again; the card drags, resizes, minimizes, is remembered and moves off what she points at; follow-up questions typed or said (care first), saved in Your lessons; a cut-off reply keeps its whole steps and an unusable one is asked for once more', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permission: ' + manifest.permissions.join());
+  for (const f of ['errors.js', 'sketch.js', 'mic.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} is the app’s ${f}`);
+  const ext = path.join(ROOT, 'extension');
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
+    headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    // the viewer page, at a Drive address and at an ordinary one
+    const viewer = fs.readFileSync(path.join(ROOT, 'tests/fixtures/teach/viewer.html'), 'utf8');
+    await ctx.route(/drive\.google\.com|example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: viewer }));
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: each call takes the next reply in line (self.__replies), and every prompt is kept
+    await sw.evaluate(() => {
+      self.__prompts = []; self.__replies = []; self.__fails = [];
+      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); return self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}'; };
+      self.speakLeft = async () => ({ on: false, left: 0 });
+      self.teachFail = async (code) => { self.__fails.push(code); };
+      return chrome.storage.local.set({ teachVoice: 'off', teachAuto: 'off' });
+    });
+    const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; }, list);
+    const prompts = () => sw.evaluate(() => self.__prompts.slice());
+    const page = ctx.pages()[0] || await ctx.newPage();
+    const HOST = '#cassie-teach-host-92f1';
+    const world = async () => {
+      const cdp = await ctx.newCDPSession(page), worlds = [];
+      cdp.on('Runtime.executionContextCreated', (e) => worlds.push(e.context));
+      await cdp.send('Runtime.enable'); await page.waitForTimeout(300);
+      const { frameTree } = await cdp.send('Page.getFrameTree');
+      const w = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
+      return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 300)); return r.result.value; };
+    };
+    const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
+    const lessonNow = () => page.evaluate((h) => { const n = document.querySelector(h); if (!n) return null; const r = n.shadowRoot, c = r.querySelector('.ct-card').getBoundingClientRect(); return { step: n.dataset.step, drawn: n.dataset.drawn, lost: n.dataset.lost || '', count: r.querySelector('.ct-count').textContent, say: r.querySelector('.ct-say').textContent, card: { left: c.left, top: c.top, right: c.right, bottom: c.bottom, width: c.width, height: c.height }, cursor: r.querySelector('.ct-cursor').classList.contains('on'), text: r.querySelector('.ct-card').innerText }; }, HOST);
+    // the dark ink on her drawing layer (grey earlier steps and the white edge are left out)
+    const ink = () => page.evaluate((h) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+      for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; if (d[i + 3] > 200 && d[i] < 60) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } }
+      return x1 < 0 ? null : [x0 / k, y0 / k, x1 / k, y1 / k].map(Math.round);
+    }, HOST);
+    const boxOf = (sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map(Math.round); }, sel);
+    const head = (text) => page.evaluate((t) => { const h = [...document.querySelectorAll('h3, h2')].find((x) => x.textContent === t); h.id = h.id || 'h-' + t.replace(/\W+/g, ''); return '#' + h.id; }, text);
+    const settle = () => page.waitForTimeout(1700);
+    // the size of the picture she is shown, in the page's pixels (her spots are shares of it, like the AI's)
+    const picture = (w) => w('chrome.runtime.sendMessage({ type: "CASSIE_SNIP" }).then((o) => new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth / devicePixelRatio, i.naturalHeight / devicePixelRatio]); i.src = o.dataUrl; }))');
+    const shadowClick = (sel) => page.evaluate(([h, s]) => document.querySelector(h).shadowRoot.querySelector(s).click(), [HOST, sel]);
+
+    // 1. Google Drive's PDF viewer: taught from the picture; nothing drawn on its toolbar, thumbnails or blank space
+    let inWorld = await open('https://drive.google.com/file/d/abc/view');
+    expect(await inWorld('CassieTeach.scan().pictureOnly') === true, 'Drive’s PDF viewer is a picture-only page');
+    let euler = await boxOf(await head('Euler circuit'));
+    const [PW, PH] = await picture(inWorld);
+    const share = (x, y) => ({ x: +(x / PW).toFixed(4), y: +(y / PH).toFixed(4) });
+    const at = share((euler[0] + euler[2]) / 2, (euler[1] + euler[3]) / 2);
+    await replies([{ steps: [{ say: 'Look at the Euler circuit card.', point: at, draw: [{ shape: 'circle', ...share(700, 30), r: 0.04 }, { shape: 'circle', ...share(60, 500), r: 0.03 }, { shape: 'circle', ...share(640, 390), r: 0.03 }, { shape: 'box', x: at.x - 0.09, y: at.y - 0.02, w: 0.18, h: 0.04 }] }] }]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 1, 'the Drive lesson starts');
+    await settle();
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/teach-drive.png' });
+    let L = await lessonNow(), I = await ink();
+    expect(L.drawn === 'box', 'only the box on the card is drawn: not on the toolbar, the thumbnails or the blank gap: ' + JSON.stringify(L));
+    expect(I && I[1] >= 72 && I[0] >= 150, 'no ink on Drive’s toolbar or thumbnails: ' + JSON.stringify(I));
+    expect(!/[–—]/.test(L.text), 'no dashes on the card: ' + L.text);
+    await inWorld('CassieTeach.stop(), 1');
+
+    // 2. an ordinary page with the same layout: only the lesson's own parts are numbered
+    inWorld = await open('https://example.com/notes');
+    const items = await inWorld('CassieTeach.scan().items.map((x) => x.what)');
+    const chrome = items.filter((w) => /Comment|Share|Open with|audio overview|Page 2 \/ 45|"Page [123]"|Final exam notes|Model answers|"Name"|"Owner"/.test(w));
+    expect(!chrome.length && items.some((w) => /Euler circuit/.test(w)), 'only the lesson is numbered: ' + JSON.stringify(items));
+    const n = items.findIndex((w) => /heading "Euler circuit"/.test(w)) + 1, np = items.findIndex((w) => /heading "Euler path"/.test(w)) + 1;
+    euler = await boxOf(await head('Euler circuit'));
+    const path_ = await boxOf(await head('Euler path'));
+    const gap = await page.evaluate(([w, h]) => { const r = document.querySelector('.gap').getBoundingClientRect(); return [(r.left + r.right) / 2 / w, (r.top + r.bottom) / 2 / h]; }, [PW, PH]);
+    await replies([{ steps: [
+      { say: 'The Euler circuit card.', point: n, draw: [{ shape: 'circle', el: n }] },
+      { say: 'Here is some blank space.', point: { x: gap[0], y: gap[1] }, draw: [{ shape: 'circle', x: gap[0], y: gap[1], r: 0.03 }] },
+      { say: 'This points at nothing real.', point: 999, draw: [{ shape: 'circle', el: 999 }] },
+      { say: 'And the Euler path heading.', point: np, draw: [{ shape: 'circle', x: (path_[0] + path_[2]) / 2 / PW, y: (path_[1] + path_[3]) / 2 / PH, r: 0.06 }, { shape: 'circle', el: np }] },
+    ] }]);
+    await inWorld('chrome.storage.local.remove("teachCard"), 1');
+    expect(await inWorld('CassieTeach.run({ again: () => { window.__again = (window.__again || 0) + 1; } }).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 4, 'the lesson starts with 4 steps');
+    await settle();
+    L = await lessonNow(); I = await ink();
+    expect(L.drawn === 'circle' && I, 'step 1 circles the heading: ' + JSON.stringify(L));
+    const pad = [euler[0] - I[0], euler[1] - I[1], I[2] - euler[2], I[3] - euler[3]];
+    expect(pad.every((p) => p >= 0 && p <= 8), `the loop hugs the heading, at most 8px out: heading ${euler}, ink ${I}, padding ${pad}`);
+    // the card moved off what she points at (it started bottom right, over this heading)
+    expect(!(L.card.right > euler[0] && L.card.left < euler[2] && L.card.bottom > euler[1] && L.card.top < euler[3]), 'the card moved off the heading: ' + JSON.stringify(L.card));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === '' && !L.cursor && /blank space/.test(L.say) && !(await ink()), 'blank space: the words stay, no circle and no arrow: ' + JSON.stringify(L));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === '' && !L.cursor && /nothing real/.test(L.say), 'part 999: the words stay, nothing drawn: ' + JSON.stringify(L));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === 'circle,circle', 'step 4 draws both its circles: ' + JSON.stringify(L));
+    // 3. the page scrolls 300px inside its own box: the drawings go with it
+    const before = await ink();
+    await page.evaluate(() => { document.getElementById('scroller').scrollTop += 300; });
+    await page.waitForTimeout(500);
+    const after = await ink(), moved = await boxOf(await head('Euler path'));
+    expect(after && Math.abs(after[1] - (before[1] - 300)) <= 3 && after[1] <= moved[1] && after[3] >= moved[3], `the drawings follow the scroll: before ${before}, after ${after}, heading now ${moved}`);
+    // the window changes size: she can't follow that, so the drawings fade and Look again shows
+    await page.setViewportSize({ width: 1200, height: 760 }); await page.waitForTimeout(500);
+    L = await lessonNow();
+    expect(L.lost === '1' && /Look again/.test(L.text) && /no longer line up/.test(L.text), 'Look again after the page moved under her: ' + L.text);
+    await shadowClick('.ct-again');
+    expect(await inWorld('window.__again') === 1, 'Look again starts the lesson over');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.evaluate(() => { document.getElementById('scroller').scrollTop = 0; }); // (the parts are numbered as at first again)
+
+    // 4. the card: drag, resize, stays on screen, remembered; and Minimize
+    await replies([{ steps: [{ say: 'First.', point: n, draw: [] }, { say: 'Second.', point: n, draw: [] }] }]);
+    await inWorld('CassieTeach.run({}).then((r) => r.steps.length)');
+    await settle();
+    let c0 = (await lessonNow()).card;
+    const hb = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot.querySelector('.ct-who').getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; }, HOST);
+    await page.mouse.move(hb[0], hb[1]); await page.mouse.down(); await page.mouse.move(hb[0] - 300, hb[1] + 200, { steps: 6 }); await page.mouse.up();
+    let c1 = (await lessonNow()).card;
+    expect(Math.abs(c1.left - (c0.left - 300)) <= 3 && Math.abs(c1.top - (c0.top + 200)) <= 3, `the card drags by its header: ${JSON.stringify(c0)} to ${JSON.stringify(c1)}`);
+    const gb = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot.querySelector('.ct-size').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, r.width, r.height]; }, HOST);
+    expect(gb[2] >= 44 && gb[3] >= 44, 'the resize corner is 44px');
+    const under = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot, g = r.querySelector('.ct-size').getBoundingClientRect(); return [...r.querySelectorAll('.ct-card button:not(.ct-size), .ct-card input')].filter((b) => { const q = b.getBoundingClientRect(); return q.width && !(q.right <= g.left || q.left >= g.right || q.bottom <= g.top || q.top >= g.bottom); }).map((b) => b.className || b.tagName); }, HOST);
+    expect(!under.length, 'the resize corner sits on no other control: ' + under.join(', '));
+    await page.mouse.move(gb[0], gb[1]); await page.mouse.down(); await page.mouse.move(gb[0] + 120, gb[1] + 60, { steps: 6 }); await page.mouse.up();
+    const c2 = (await lessonNow()).card;
+    expect(Math.abs(c2.width - (c1.width + 120)) <= 3 && Math.abs(c2.height - (c1.height + 60)) <= 3, `the card resizes from its corner: ${JSON.stringify(c1)} to ${JSON.stringify(c2)}`);
+    await page.mouse.move(c2.left + 30, c2.top + 15); await page.mouse.down(); await page.mouse.move(-400, -400, { steps: 6 }); await page.mouse.up();
+    const c3 = (await lessonNow()).card;
+    expect(c3.left >= 0 && c3.top >= 0 && c3.right <= 1280 && c3.bottom <= 800, 'dragged off the edge, it stays fully on screen: ' + JSON.stringify(c3));
+    // with the keyboard: the header takes the arrow keys
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-head').focus(), HOST);
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowDown');
+    const c4 = (await lessonNow()).card;
+    expect(c4.left - c3.left >= 19 && c4.top - c3.top >= 19, 'the arrow keys move it: ' + JSON.stringify([c3, c4]));
+    // it was moved by hand in this lesson, so the next step leaves it where the student put it
+    await shadowClick('.ct-next'); await settle();
+    expect(JSON.stringify((await lessonNow()).card) === JSON.stringify(c4), 'moved by hand: it stays put');
+    // Minimize shrinks it to its header, and back
+    await shadowClick('.ct-min-b');
+    const small = (await lessonNow()).card;
+    expect(small.height < 110 && !(await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-body').offsetHeight, HOST)), 'Minimize shrinks it to its header: ' + JSON.stringify(small));
+    await shadowClick('.ct-min-b');
+    expect(Math.abs((await lessonNow()).card.height - c2.height) <= 3, 'and back to its size');
+    await shadowClick('.ct-x');
+    // remembered: the next lesson opens where it was left, at its size
+    await replies([{ steps: [{ say: 'Again.', point: null, draw: [] }] }]);
+    await inWorld('CassieTeach.run({}).then((r) => r.steps.length)');
+    await settle();
+    const c5 = (await lessonNow()).card;
+    expect(Math.abs(c5.left - c4.left) <= 3 && Math.abs(c5.top - c4.top) <= 3 && Math.abs(c5.width - c2.width) <= 3, 'the next lesson remembers its place and size: ' + JSON.stringify([c4, c5]));
+
+    // 5. questions about a step: typed, said, and care first; all saved with the lesson
+    const sizes = await page.evaluate((h) => [...document.querySelector(h).shadowRoot.querySelectorAll('.ct-card button, .ct-card input')].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return [b.className || b.getAttribute('aria-label') || b.tagName, Math.round(r.width), Math.round(r.height)]; }), HOST);
+    expect(sizes.every(([, w, h]) => w >= 44 && h >= 44), 'every control on the card is 44px: ' + JSON.stringify(sizes));
+    await replies([{ answer: 'Every vertex in the example has degree 2, which is even, so there is an Euler circuit.', point: n, draw: [{ shape: 'underline', el: n }] }]);
+    await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.ct-ask input').value = 'Why is there an Euler circuit?'; r.querySelector('.ct-ask').requestSubmit(); }, HOST);
+    await page.waitForFunction((h) => /degree 2/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), HOST, { timeout: 8000 });
+    await page.waitForTimeout(900);
+    L = await lessonNow();
+    let P = await prompts();
+    expect(P.length === 1 && /The student asks: "Why is there an Euler circuit\?"/.test(P[0]) && /Again\./.test(P[0]) && /never add facts/.test(P[0]), 'the question goes with the step and the accuracy rules: ' + (P[0] || '').slice(0, 300));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/teach-followup.png' });
+    expect(L.drawn === 'underline' && /You asked: Why is there an Euler circuit\?/.test(L.text), 'the answer shows in the card, and she points and draws: ' + JSON.stringify(L));
+    // said, with the mic (the extension's own page script hears the faked speech)
+    await inWorld(`(${FAKE_EARS})(); 1`);
+    await replies([{ answer: 'A circuit is a closed path that starts and ends at the same vertex.', point: 0, draw: [] }]);
+    const said = await micSay(page, '.ct-ask input', { root: HOST, inWorld });
+    micLooksRight('the lesson card', said);
+    await page.waitForFunction((h) => /closed path/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), HOST, { timeout: 8000 });
+    P = await prompts();
+    expect(P.length === 1 && P[0].includes(SAID), 'the mic sends what was said');
+    // care first: no AI is asked
+    await replies([]);
+    await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.ct-ask input').value = 'I want to hurt myself'; r.querySelector('.ct-ask').requestSubmit(); }, HOST);
+    await page.waitForTimeout(500);
+    const careText = await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent, HOST);
+    expect(/1553|Hopeline|NCMH/i.test(careText) && (await prompts()).length === 0, 'care first, with no AI call: ' + careText.slice(0, 160));
+    await shadowClick('.ct-x');
+    await page.waitForTimeout(400);
+    const saved = await sw.evaluate(() => chrome.storage.local.get('teachLessons').then((o) => o.teachLessons[0]));
+    expect(saved.qa && saved.qa.length === 3 && /Euler circuit/.test(saved.qa[0].q) && saved.qa[1].q === SAID, 'the questions are saved with the lesson: ' + JSON.stringify(saved.qa));
+    // and Your lessons in the side panel shows them
+    const id = new URL(sw.url()).host;
+    const panel = await ctx.newPage();
+    await panel.goto(`chrome-extension://${id}/panel.html`);
+    await panel.waitForSelector('.lessons .lesson', { timeout: 10000 });
+    await panel.locator('.lessons .lesson').first().locator('summary').click();
+    expect(/You asked: Why is there an Euler circuit\?/.test(await panel.locator('.lessons .lesson').first().innerText()), 'Your lessons shows the questions');
+    await panel.close();
+
+    // 6. replies that can't be used
+    await page.bringToFront();
+    const whole = JSON.stringify({ steps: [1, 2, 3, 4].map((i) => ({ say: `Step ${i} of the Euler lesson.`, point: n, draw: [] })) });
+    await replies([whole.slice(0, whole.indexOf('Step 4') + 12)]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 3 && (await prompts()).length === 1, 'cut off: its 3 whole steps are taught, with 1 call');
+    await inWorld('CassieTeach.stop(), 1');
+    await replies(['Sorry, I cannot help with that page right now.', { steps: [{ say: 'Now it works.', point: n, draw: [] }] }]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 1, 'unusable, then good: the lesson shows');
+    P = await prompts();
+    expect(P.length === 2 && !/could not be read/.test(P[0]) && /your last reply could not be read/.test(P[1]) && /At most 5 steps/.test(P[1]), 'exactly 2 calls, the second stricter');
+    await inWorld('CassieTeach.stop(), 1');
+    await replies(['No idea.', 'Still no JSON here.']);
+    const err = await inWorld('CassieTeach.run({}).then(() => "shown", (e) => e.code)');
+    expect(err === 'teach_failed' && (await prompts()).length === 2, 'both unusable: teach_failed after exactly 2 calls: ' + err);
+    await page.waitForTimeout(300);
+    expect(JSON.stringify(await sw.evaluate(() => self.__fails)) === '["teach_not_json"]', 'only the reason code is reported: ' + JSON.stringify(await sw.evaluate(() => self.__fails)));
+    // the lesson request: true to the page
+    const ask = await inWorld('CassieTeach.prompt({ q: "", page: { title: "t", items: [] } })');
+    expect(/Teach only what this page or picture shows/.test(ask) && /never add facts/.test(ask) && /say so in that step instead of guessing/.test(ask) && /never on the app's or browser's own toolbars/.test(ask), 'the lesson request asks for accuracy');
+  } finally { await ctx.close(); }
 });
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {

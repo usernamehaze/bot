@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Graph_Theory_Reviewer.pdf</title>
+<style>
+  /* Like a PDF open in Google Drive: the Drive file list underneath, a dark viewer over it with its own
+     toolbar and page thumbnails, and the document scrolling inside its own box. */
+  body { margin: 0; font: 14px/1.4 Arial, sans-serif; background: #fff; color: #222; }
+  .files { padding: 90px 40px; }
+  .files table { width: 100%; border-collapse: collapse; } .files td, .files th { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+  .viewer { position: fixed; inset: 0; background: rgba(32, 33, 36, .94); }
+  .bar { position: fixed; top: 0; left: 0; right: 0; height: 72px; display: flex; align-items: center; gap: 14px; padding: 0 20px; color: #eee; background: #2b2c30; }
+  .bar button { background: #3c3d42; color: #eee; border: 0; border-radius: 18px; padding: 8px 14px; font: inherit; }
+  .bar .title { font-weight: 700; margin-right: auto; }
+  .thumbs { position: fixed; top: 72px; left: 0; bottom: 0; width: 140px; overflow: hidden; padding: 10px; box-sizing: border-box; }
+  .thumbs img { display: block; width: 100px; height: 130px; margin: 0 0 12px 14px; background: #fff; }
+  .thumbs span { color: #ccc; }
+  .scroller { position: fixed; top: 72px; left: 160px; right: 20px; bottom: 0; overflow: auto; }
+  .pdfpage { width: 780px; margin: 20px auto 600px; background: #fff; color: #111; padding: 30px; box-sizing: border-box; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; min-height: 160px; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; } .card p { margin: 0; font-size: 13px; }
+  .gap { height: 160px; } /* (blank space between the parts) */
+  .rule { border-left: 4px solid #222; padding: 8px 14px; margin: 12px 0; }
+</style>
+</head>
+<body>
+  <div class="files"><table><tr><th>Name</th><th>Owner</th></tr><tr><td>Final exam notes</td><td>me</td></tr><tr><td>Graph_Theory_Reviewer.pdf</td><td>me</td></tr><tr><td>Model answers</td><td>me</td></tr></table></div>
+  <div class="viewer">
+    <div class="bar"><span class="title">Graph_Theory_Reviewer.pdf</span><button>Page 2 / 45</button><button>Comment</button><button>Create an audio overview</button><button>Open with Google Docs</button><button>Share</button></div>
+    <div class="thumbs"><img alt="Page 1"><span>1</span><img alt="Page 2"><span>2</span><img alt="Page 3"><span>3</span></div>
+    <div class="scroller" id="scroller">
+      <div class="pdfpage">
+        <div class="grid">
+          <div class="card"><h3>Equivalent graphs</h3><p>Two drawings are equivalent if their edges make the same connections, even if they look different.</p></div>
+          <div class="card"><h3>Path</h3><p>A sequence of edges joining distinct vertices, e.g. u1-u5-u2-u3.</p></div>
+          <div class="card"><h3>Circuit</h3><p>A closed path that starts and ends at the same vertex.</p></div>
+        </div>
+        <div class="gap"></div>
+        <div class="grid">
+          <div class="card"><h3>Degree of a vertex</h3><p>The number of edges touching that vertex.</p></div>
+          <div class="card"><h3>Euler path</h3><p>Uses every edge exactly once, starting and ending at different vertices.</p></div>
+          <div class="card"><h3 id="euler-circuit">Euler circuit</h3><p>Uses every edge exactly once and starts and ends at the same vertex.</p></div>
+        </div>
+        <h2>Theorems and rules</h2>
+        <div class="rule"><b>Eulerian Graph Theorem</b><p>A connected graph is Eulerian if and only if every vertex has even degree.</p></div>
+        <div class="rule"><b>Euler Path Theorem</b><p>A connected graph has an Euler path if and only if exactly two vertices have odd degree.</p></div>
+        <div class="rule"><b>Quick check when counting degrees</b><p>Each edge touches two vertices, so the degrees always add up to twice the number of edges.</p></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
