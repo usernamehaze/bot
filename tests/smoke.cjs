@@ -353,6 +353,50 @@ function fakeApple(who) {
 const savedAccount = (page) => page.evaluate(() => ({ account: state.account, plan: state.plan, token: localStorage.getItem('cassie.auth') }));
 const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
 
+// Google sends the student back only to addresses listed under "Authorized redirect URIs" for the
+// OAuth client in Google Cloud Console, exactly. These are the ones registered there (server/README.md):
+// change the app's return address and this list (and the console) together.
+const GOOGLE_REDIRECT_URIS = ['https://askcassie.pages.dev/app.html', 'https://usernamehaze.github.io/bot/app.html'];
+test('sign in with Google: the return address sent to Google is one registered in Google Cloud, on every site Cassie runs on', async (b) => {
+  await serverMode({ noGoogle: false, noApple: false });
+  // each site, served from this folder at its real address (Cloudflare Pages serves the app at /app)
+  const SITES = [['Cloudflare Pages', 'https://askcassie.pages.dev', '', '/app'], ['GitHub Pages', 'https://usernamehaze.github.io', '/bot', '/bot/app.html']];
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' };
+  for (const [name, origin, base, start] of SITES) {
+    const { ctx, page, errors } = await open(b, { state: null, setup: async (c) => {
+      // (an https page can't call the http test server: the real server's address stands in, and every
+      // call to it goes to the test server, never the real one)
+      await c.addInitScript(() => { window.CASSIE_SERVER = 'https://cassie.failanzahazel.workers.dev'; });
+      await c.route(/^https:\/\/cassie\.failanzahazel\.workers\.dev\//, async (route) => {
+        const rq = route.request(), u = SERVER + new URL(rq.url()).pathname + new URL(rq.url()).search;
+        const r = await fetch(u, { method: rq.method(), headers: { ...rq.headers() }, body: ['GET', 'HEAD'].includes(rq.method()) ? undefined : rq.postDataBuffer() });
+        return route.fulfill({ status: r.status, headers: Object.fromEntries(r.headers), body: Buffer.from(await r.arrayBuffer()) });
+      });
+      await c.route((u) => u.origin === origin, (route) => {
+        let f = new URL(route.request().url()).pathname.slice(base.length) || '/';
+        if (f === '/' || f === '/app') f = '/app.html';
+        const file = path.join(ROOT, decodeURIComponent(f));
+        if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
+        return route.fulfill({ body: fs.readFileSync(file), contentType: types[path.extname(file)] || 'application/octet-stream' });
+      });
+    } });
+    try {
+      await page.goto(origin + start);
+      await page.evaluate(() => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'auth' })); });
+      await page.goto(origin + start);
+      await page.waitForSelector('.auth-google:not([hidden])', { timeout: 15000 });
+      ctx.google = { stay: true }; ctx.googleAsked = null;
+      await page.click('.auth-google');
+      await page.waitForFunction(() => /Choose an account/.test(document.body.innerText), null, { timeout: 15000 });
+      const asked = ctx.googleAsked || {};
+      const sent = await page.evaluate(() => new URL(location.href).searchParams.get('redirect_uri'));
+      expect(GOOGLE_REDIRECT_URIS.includes(sent), `${name}: Cassie asks Google to send the student back to ${sent}, which isn't one of the registered addresses: ${GOOGLE_REDIRECT_URIS.join(', ')}`);
+      expect(!/[?#]/.test(sent) && sent.startsWith(origin + '/'), `${name}: the return address is plain, on this site: ${sent}`);
+      expect(errors.length === 0, `${name}: page errors: ` + errors.join(' | '));
+    } finally { await ctx.close(); }
+  }
+});
+
 test('sign in with Google: a new account, and a bad token shows a friendly message', async (b) => {
   await serverMode({ noGoogle: false, noApple: false });
   await fetch(SERVER + '/__reset');

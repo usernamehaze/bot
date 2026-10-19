@@ -76,6 +76,14 @@ To add **Continue with Google**:
    client ID** → **Web application**.
    - Under **Authorized JavaScript origins**, add `https://askcassie.pages.dev`
      and `https://usernamehaze.github.io`.
+   - Under **Authorized redirect URIs**, add exactly (Cassie sends the student to Google
+     and Google sends them back here; without these Google shows
+     "Error 400: redirect_uri_mismatch"):
+     - `https://askcassie.pages.dev/app.html`
+     - `https://usernamehaze.github.io/bot/app.html`
+     Google allows no wildcards, so sign-in with Google works on these two sites only, not on
+     Cloudflare's preview addresses (`*.askcassie.pages.dev`). The smoke test
+     "the return address sent to Google…" keeps this list and the app in step.
    - Click **Create**, then copy the **Client ID**. It ends in
      `.apps.googleusercontent.com`.
 4. In this Worker → **Settings** → **Variables and Secrets** → add a **Text**
