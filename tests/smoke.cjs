@@ -4907,6 +4907,48 @@ test('museum: every painting’s picture really loads (all 35, from the app, no 
   }
 });
 
+test('first run on a phone: with the keyboard open, the first-run screen still covers the whole screen and nothing behind it shows or scrolls (every step)', async (b) => {
+  // iOS: the keyboard shrinks only the visible part of the page (visualViewport), not the page, and
+  // scrolls the page up to the field. Here that is acted out on a 390x844 phone.
+  const STEPS = [['name', { step: 'ob', at: 0 }, '.fr-ob input'], ['grade', { step: 'ob', at: 1, answers: { name: 'Hazel', gender: 'female' } }, '.fr-ob input, .fr-ob select, .fr-ob button'],
+    ['age', { step: 'ob', at: 2, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10' } }, '.fr-ob input, .fr-ob button'], ['sign in', { step: 'auth' }, '.auth-page input[name=email]']];
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, scale: 1, lite: 'off', state: null });
+  for (const [name, fr, field] of STEPS) {
+    await page.evaluate((x) => { localStorage.removeItem('cassie.v2'); localStorage.setItem('cassie.firstRun', JSON.stringify(x)); }, fr);
+    await page.goto(APP);
+    await page.waitForSelector(field, { timeout: 10000 });
+    await page.waitForTimeout(400);
+    await page.locator(field).first().focus();
+    // the keyboard opens: 344px of the screen are under it, and the page scrolls up
+    await page.evaluate(() => {
+      const vv = window.visualViewport;
+      Object.defineProperty(vv, 'height', { configurable: true, get: () => 500 });
+      Object.defineProperty(vv, 'offsetTop', { configurable: true, get: () => 0 });
+      vv.dispatchEvent(new Event('resize'));
+      window.scrollTo(0, 99999); document.scrollingElement.scrollTop = 99999;
+      const sh = document.querySelector('.fr, .auth-page:not([hidden])'); if (sh) sh.scrollTop = 99999;
+    });
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => {
+      const shell = document.querySelector('.fr') || document.querySelector('.auth-page:not([hidden])');
+      const leaks = [];
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 10; j++) {
+        const x = Math.round((i + 0.5) * innerWidth / 5), y = Math.round((j + 0.5) * innerHeight / 10);
+        const e = document.elementFromPoint(x, y);
+        if (!e || !shell || !shell.contains(e)) leaks.push(`${x},${y}:${e ? (e.id || e.className || e.tagName).toString().slice(0, 30) : 'nothing'}`);
+      }
+      const app = document.getElementById('app');
+      return { leaks, inert: !!(app && app.inert), scrolled: Math.round(document.scrollingElement.scrollTop) };
+    });
+    expect(!r.leaks.length, `${name}: the app shows through at ${r.leaks.slice(0, 4).join(' | ')} (${r.leaks.length} of 50 points)`);
+    expect(r.inert, `${name}: the app behind is inert while first run is open`);
+    expect(r.scrolled === 0, `${name}: the page behind does not scroll (${r.scrolled}px)`);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/fr-keyboard-${name.replace(/ /g, '-')}.png` });
+  }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('first run screens: every word at AA in light and dark, every control answers a tap, and nothing spills sideways, at 390x844, 768x1024 and 1280x800', async (b) => {
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const STEPS = [['intro', { step: 'intro' }, '.fr-intro'], ['sign in', { step: 'auth' }, '.auth-page'], ...[0, 1, 2, 3].map((k) => [`question ${k + 1}`, { step: 'ob', at: k, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10', age: '15', help: ['exams'], voice: 'woman' } }, '.fr-ob'])];
