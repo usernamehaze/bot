@@ -1604,17 +1604,15 @@ test('daily limit shows a friendly message with Try again', async (b) => {
   await ctx.close();
 });
 
-test('Student / Professional switch is top right and changes the background', async (b) => {
+test('Student / Professional switch is top right and switches the audience; no doodle wallpaper behind the chat', async (b) => {
   const { ctx, page } = await open(b);
   const sw = await page.locator('.topbar-actions #aud-switch').boundingBox();
   const brand = await page.locator('.topbar .brand').boundingBox();
   expect(sw && sw.x > brand.x + brand.width && sw.y < 80, 'switch is not in the top right: ' + JSON.stringify(sw));
   expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'student', 'not student by default');
   await page.click('#aud-switch [data-aud=pro]');
-  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'background did not switch to pro');
-  await page.waitForTimeout(900); // it fades in
-  const op = await page.evaluate(() => getComputedStyle(document.querySelector('.pat-pro')).opacity);
-  expect(+op > 0, 'pro pattern not visible');
+  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'the switch did not change to Professional');
+  expect(await page.locator('#aud-bg, .pat').count() === 0, 'the doodle wallpaper is gone (Apple: branding defers to content)');
   expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
   await ctx.close();
 });
@@ -3466,6 +3464,9 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   }
   // 2. the landing page: one typeface (the system's), Apple's greys, nothing under 11px that a person reads
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  // the deleted web fonts and doodle wallpaper: nothing still asks for them
+  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/story.css', 'landing/desk.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  expect(!/landing\/fonts|patterns\/|"Inter|'Inter|Instrument Serif/.test(shipped), 'no page or build step refers to the deleted fonts or wallpaper');
   expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/story.css'), 'utf8') + fs.readFileSync(path.join(ROOT, 'landing/desk.css'), 'utf8')), 'the landing page loads no web fonts');
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const ctx = await b.newContext({ viewport });

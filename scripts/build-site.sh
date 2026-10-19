@@ -12,7 +12,7 @@ cp index.html app.html start.html privacy.html terms.html bot.html style.css man
 cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js \
    native.js sketch.js start.js study-room.js sw.js tour.js voice.js _site/
 cp _headers _site/   # Cloudflare Pages response headers (security)
-cp -r icons landing patterns explore labs vendor _site/
+cp -r icons landing explore labs vendor _site/
 # notes for developers and an unused logo aren't needed to run the site (they stay in the repo)
 rm -f _site/explore/body/README.md _site/icons/logo.svg
 [ -d .well-known ] && cp -r .well-known _site/ || true   # Play Store app link (assetlinks.json)

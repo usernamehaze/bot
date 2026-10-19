@@ -117,14 +117,6 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 #app-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; }
 #app-bg.live { opacity: 1; }
 #app-bg canvas { display: block; }
-/* Student / Professional doodles drawn over the gradient (the gradient itself never changes) */
-#aud-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-#aud-bg .pat { position: absolute; inset: 0; background: var(--text); opacity: 0; transition: opacity .7s ease;
-  -webkit-mask-repeat: repeat; mask-repeat: repeat; -webkit-mask-size: 360px 360px; mask-size: 360px 360px; }
-#aud-bg .pat-student { -webkit-mask-image: url(patterns/student.svg); mask-image: url(patterns/student.svg); }
-#aud-bg .pat-pro { -webkit-mask-image: url(patterns/pro.svg); mask-image: url(patterns/pro.svg); }
-html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat-pro { opacity: .055; }
-@media (prefers-color-scheme: dark) { html[data-aud="student"] #aud-bg .pat-student, html[data-aud="pro"] #aud-bg .pat-pro { opacity: .075; } }
 #app {
   z-index: 1;
   max-width: 100%;
@@ -1787,7 +1779,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
    on glass above the content, tabs only move between sections, controls are at least 44 pt,
    body text 17 pt. Black and white like the rest of Cassie. Only on phones (html.native). */
 .tabbar, .home { display: none; }
-html.native #app-bg, html.native #aud-bg { display: none; }
+html.native #app-bg { display: none; }
 html.native #labs-btn, html.native #games-btn, html.native #settings-btn { display: none; } /* they're tabs now */
 
 /* --- the tab bar: a dark glass pill; the open tab is a white pill with its name --- */
