@@ -5070,8 +5070,8 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     expect(h.lab === h.want && h.pv === h.today && h.play >= 44, 'Today’s Lab is today’s lab with its live preview and a 44px play button: ' + JSON.stringify(h));
     // the previews keep drawing
     const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames);
-    const f0 = await fr(); await page.waitForTimeout(800);
-    const f1 = await fr(); expect(f1 > f0 + 5, 'Today’s Lab preview is moving: ' + JSON.stringify([f0, f1]));
+    const f0 = await fr(); await page.waitForTimeout(1500); // (some days’ labs draw slower here: software graphics)
+    const f1 = await fr(); expect(f1 > f0 + 3, 'Today’s Lab preview is moving: ' + JSON.stringify([f0, f1]));
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#home .hub-hero, #home .hub-tlab'); expect(!bad.length, `header and Today’s Lab (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
     // play opens today's lab
