@@ -6689,14 +6689,35 @@ function frShell() {
     el.className = 'fr';
     el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Welcome to Cassie');
     document.body.appendChild(el);
-    // the keyboard never covers the box or the button: the screen fits what's left above it
+    // the keyboard never covers the box or the button: the screen stays full size (nothing behind it
+    // shows) and its content fits what's left above the keyboard (--fr-h), with room for the keyboard
+    // below it (--fr-kb)
     const vv = window.visualViewport;
-    const fit = () => { if (el.isConnected && vv) el.style.setProperty('--fr-h', vv.height + 'px'); };
-    if (vv) { vv.addEventListener('resize', fit); fit(); }
+    const fit = () => {
+      if (!el.isConnected || !vv) return;
+      el.style.setProperty('--fr-h', vv.height + 'px');
+      el.style.setProperty('--fr-kb', Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) + 'px');
+    };
+    if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit(); }
   }
   return el;
 }
 function frClose() { const el = document.querySelector('.fr'); if (el) el.remove(); }
+// While a full-screen first-run or sign-in page is open, the app behind it is locked: it can't scroll
+// (iOS scrolls the page up to a field when the keyboard opens) and taps and screen readers skip it.
+(function lockBehindFullScreen() {
+  const app = document.getElementById('app'), root = document.documentElement;
+  const unscroll = () => { if (root.classList.contains('fr-open') && (window.scrollY || root.scrollTop)) window.scrollTo(0, 0); };
+  const sync = () => {
+    const on = !!document.querySelector('body > .fr, body > .auth-page');
+    root.classList.toggle('fr-open', on);
+    if (app) app.inert = on;
+    unscroll();
+  };
+  new MutationObserver(sync).observe(document.body, { childList: true });
+  window.addEventListener('scroll', unscroll, { passive: true });
+  sync();
+})();
 const frMascot = (host, st = 'greeting') => { try { window.CassieBot.create(host, { state: st, glow: true, pokeable: true }); } catch (e) { /* the words still work */ } };
 const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 // Cassie in 3D on the Get started screen (cassie-3d.js, loaded while the welcome shows). The flat
