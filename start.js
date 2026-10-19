@@ -11,8 +11,10 @@
   }
   var done = false;
   function go() { if (done) return; done = true; window.location.href = target(); }
-  // (in the student's own look: Monochrome stays black and white)
-  try { var st = JSON.parse(localStorage.getItem('cassie.v2') || '{}'); if (st.accent === 'mono') document.documentElement.classList.add('mono'); } catch (e) { /* ignore */ }
+  // (the app's own background: Monochrome's greys, or cream when Blush & Sage is picked in Appearance)
+  try { var st = JSON.parse(localStorage.getItem('cassie.v2') || '{}'); if (String(st.accent || '').toLowerCase() === 'cassie') document.documentElement.classList.add('cassie'); } catch (e) { /* ignore */ }
   document.body.addEventListener('click', go);
+  // a small spinner only if the app is slow to arrive (on a fast connection nothing shows at all)
+  setTimeout(function () { var s = document.querySelector('.spin'); if (s) s.classList.add('on'); }, 700);
   setTimeout(go, 400); // a moment, then in (a first visit gets the app's own Welcome next)
 })();

@@ -1,6 +1,7 @@
 /* Listen: for students who learn by ear. Every answer from Cassie (explanations, quiz questions,
    reviewers) and every part card in the 3D explorers gets a 🔊 Listen button; Cassie reads it in
-   her best voice there is (the studio voice, Bella, or the device's — voice.js). Tap again to stop.
+   Bella's studio voice (voice.js); when it can't cover the answer she types instead and says so once.
+   Tap again to stop.
    Uses app.js's cleanForSpeech and voiceGender. */
 (function () {
   'use strict';

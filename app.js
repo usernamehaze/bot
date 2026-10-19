@@ -436,7 +436,7 @@ const mascotBubble = document.getElementById('mascot-bubble');
 let mascotHappyTimer = null;
 let mascotBubbleTimer = null;
 
-// The mascot's moods (named after the old 3D Cassie's) → Cursor Cassie's states
+// The mascot's moods → Cursor Cassie's states
 const EMOTE_TO_3D = {
   'emote-happy': 'encouraging', 'emote-love': 'encouraging', 'emote-star': 'celebratory',
   'emote-surprised': 'curious', 'emote-wink': 'neutral', 'emote-sleepy': 'neutral',
@@ -597,6 +597,7 @@ function makeIsleCard(doc, opts = {}) {
     </div>`;
   const $ = (s) => card.querySelector(s);
   const title = $('.isle-title'), input = $('.isle-input');
+  if (window.CassieMic) window.CassieMic.attach(input, { send: () => $('.isle-ask').requestSubmit() }); // (say it: the question is sent)
   let bot = null, item = null, answerBubble = null;
   const later = (fn, ms) => win.setTimeout(fn, ms); // the pop-out's own clock keeps running while the main tab is hidden
   if (window.CassieBot) bot = window.CassieBot.create($('.isle-bot'), { glow: true, accent: accentHex() || '#d8343c', win });
@@ -908,7 +909,8 @@ let anticTimer = null;
 let anticFirst = true;
 function anticBusy() {
   return !mascot || mascotDragging || mascotAsleep || document.hidden
-    || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil;
+    || mascot.classList.contains('thinking') || Date.now() < emotionHoldUntil
+    || document.documentElement.classList.contains('touring'); // (she stays put while the tour points at things)
 }
 function mascotWalk() {
   if (anticBusy()) return;
@@ -1017,7 +1019,7 @@ const MASCOT_REACTIONS = {
   ],
   click: [
     { t: "You've got this!", e: 'emote-happy' },
-    { t: 'Keep going!', e: 'emote-star' },
+    { t: 'One step at a time!', e: 'emote-star' },
     { t: 'Stay curious!', e: 'emote-surprised' },
     { t: "You're doing great!", e: 'emote-love' },
     { t: 'Believe in you!', e: 'emote-star' },
@@ -1967,7 +1969,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const name = (p.name || '').trim().split(/\s+/)[0];
   const chats = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   const cardsAll = window.CassieCards ? window.CassieCards.count() : 0, due = window.CassieCards ? window.CassieCards.dueCount() : 0;
-  const returning = chats.length > 0 || cardsAll > 0;
+  const returning = chats.length > 0 || cardsAll > 0 || examsNow().length > 0 || Object.keys(state.progress || {}).length > 0;
   const el = document.createElement('div');
   el.className = 'hub' + (returning ? '' : ' hub-empty');
   const ideasBtn = ideas ? '<button type="button" class="home-ideas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.9 5.6c.2.6.7 1.1 1.3 1.3L20.8 11l-5.6 1.9c-.6.2-1.1.7-1.3 1.3L12 19.8l-1.9-5.6c-.2-.6-.7-1.1-1.3-1.3L3.2 11l5.6-1.9c.6-.2 1.1-.7 1.3-1.3z"/></svg>Ideas to get started</button>' : '';
@@ -1993,6 +1995,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
       <h2 class="hub-h">Quick actions</h2>
       <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
     el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
+    el.querySelector('.hub-today').after(examSection(), weekCard()); // (the exam plans, then the week, under Today)
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.hub = 'chat:' + c.id;
@@ -2027,6 +2030,370 @@ function buildHub({ ideas = false, phone = false } = {}) {
   return el;
 }
 function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ phone: true })); } // (the phone's Home tab)
+
+/* ---------- Exam plans and the weekly progress card (Home) ----------
+   An exam plan: the student names an exam, its day and its topics; Cassie writes a day by day plan
+   (1 to 3 small tasks a day, each one something Cassie already does) and Home shows today's tasks.
+   A missed day's tasks move to the next days with room (never more than 3 a day). After the exam
+   the plan closes with what was done. Free keeps 1 plan at a time; Plus up to 5, and plans from a file.
+   The weekly card counts what the student did this week (Monday to Sunday, Philippine time) against
+   last week, from counters kept as things happen on this device. Nothing is estimated. */
+const PH_MS = 8 * 3600e3;
+const phDay = (ms = Date.now()) => new Date(ms + PH_MS).toISOString().slice(0, 10);
+const dayAdd = (day, n) => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const dayGap = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+const weekStart = (day = phDay()) => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+const dayName = (day, o = { weekday: 'short', day: 'numeric', month: 'short' }) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-PH', { ...o, timeZone: 'UTC' });
+
+// counters, by day (the last 3 weeks); exam plans running now count the same things for their summary
+function progressAdd(add) {
+  const day = phDay();
+  const p = state.progress && typeof state.progress === 'object' && !Array.isArray(state.progress) ? state.progress : (state.progress = {});
+  const d = p[day] || (p[day] = {});
+  Object.entries(add).forEach(([k, n]) => { d[k] = Math.max(0, (d[k] || 0) + n); });
+  const keep = dayAdd(day, -20);
+  Object.keys(p).forEach((x) => { if (x < keep) delete p[x]; });
+  (state.exams || []).forEach((e) => {
+    if (e.closed || day > e.date) return;
+    e.stats = e.stats || {};
+    Object.entries(add).forEach(([k, n]) => { e.stats[k] = Math.max(0, (e.stats[k] || 0) + n); });
+  });
+  save();
+}
+// a quiz: the marks after a quiz starts (or after a 30 minute gap) are one quiz
+let quizFresh = false, lastMarkAt = 0;
+const quizStarted = () => { quizFresh = true; };
+function progressMark(right, fixed) {
+  const add = { answered: 1, right: right ? 1 : 0, fixed: fixed ? 1 : 0 };
+  if (quizFresh || Date.now() - lastMarkAt > 30 * 6e4) add.quizzes = 1;
+  quizFresh = false; lastMarkAt = Date.now();
+  progressAdd(add);
+}
+function weekSums(from, to) {
+  const out = { fixed: 0, cardsUp: 0, quizzes: 0, answered: 0, right: 0, focus: 0, tasks: 0, days: 0 };
+  Object.entries(state.progress || {}).forEach(([day, d]) => {
+    if (day < from || day > to || !d) return;
+    Object.keys(out).forEach((k) => { if (k !== 'days') out[k] += +d[k] || 0; });
+    if (Object.values(d).some((n) => +n > 0)) out.days++;
+  });
+  return out;
+}
+const WEEK_ROWS = [
+  ['fixed', 'mistakes fixed'], ['cardsUp', 'flashcards moved up a level'], ['quizzes', 'quizzes taken'],
+  ['focus', 'focus minutes'], ['days', 'days studied'], ['tasks', 'exam plan tasks done'],
+];
+function weekData() {
+  const today = phDay(), from = weekStart(today), lastFrom = dayAdd(from, -7);
+  return { from, to: today, now: weekSums(from, today), last: weekSums(lastFrom, dayAdd(from, -1)) };
+}
+const avgScore = (s) => (s.answered ? Math.round((100 * s.right) / s.answered) : null);
+function weekCard() {
+  const w = weekData(), box = document.createElement('section');
+  box.className = 'hub-week';
+  box.setAttribute('aria-label', 'Your week');
+  box.innerHTML = '<h2 class="hub-h">Your week</h2>';
+  if (!w.now.days) {
+    box.appendChild(CassieErrors.empty({ title: 'Your week starts here', text: 'Quizzes, flashcards, focus time and fixed mistakes show up here as you study this week.', action: 'Take a quick quiz', onAction: () => hubAct('quiz') }));
+    return box;
+  }
+  const card = document.createElement('div');
+  card.className = 'wk-card';
+  card.innerHTML = `<p class="wk-dates"></p><ul class="wk-rows">${WEEK_ROWS.map(([k]) => `<li data-k="${k}"><b></b><span></span><small></small></li>`).join('')}</ul><button type="button" class="wk-share">Share my week</button>`;
+  card.querySelector('.wk-dates').textContent = `${dayName(w.from, { day: 'numeric', month: 'short' })} to ${dayName(w.to, { day: 'numeric', month: 'short' })} · this week`;
+  WEEK_ROWS.forEach(([k, label]) => {
+    const li = card.querySelector(`[data-k="${k}"]`);
+    li.querySelector('b').textContent = String(w.now[k]);
+    const avg = k === 'quizzes' ? avgScore(w.now) : null;
+    li.querySelector('span').textContent = avg != null ? `${label}, ${avg}% right` : label;
+    li.querySelector('small').textContent = `last week ${w.last[k]}`;
+  });
+  card.querySelector('.wk-share').addEventListener('click', () => shareWeek(w));
+  box.appendChild(card);
+  return box;
+}
+// the week as a picture (to share, or saved when the device can't share)
+async function shareWeek(w) {
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
+  const x = c.getContext('2d');
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#141416'; x.textBaseline = 'alphabetic';
+  x.font = '700 64px system-ui, sans-serif'; x.fillText('My week with Cassie', 80, 150);
+  x.font = '400 36px system-ui, sans-serif'; x.fillStyle = '#55555c';
+  x.fillText(`${dayName(w.from, { day: 'numeric', month: 'long' })} to ${dayName(w.to, { day: 'numeric', month: 'long' })}`, 80, 210);
+  WEEK_ROWS.forEach(([k, label], i) => {
+    const y = 360 + i * 140, avg = k === 'quizzes' ? avgScore(w.now) : null;
+    x.fillStyle = '#141416'; x.font = '800 88px system-ui, sans-serif'; x.fillText(String(w.now[k]), 80, y);
+    x.font = '500 40px system-ui, sans-serif'; x.fillText(avg != null ? `${label}, ${avg}% right` : label, 300, y - 28);
+    x.fillStyle = '#55555c'; x.font = '400 32px system-ui, sans-serif'; x.fillText(`last week ${w.last[k]}`, 300, y + 18);
+  });
+  x.fillStyle = '#141416'; x.font = '600 34px system-ui, sans-serif'; x.fillText('askcassie.pages.dev', 80, 1270);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+  if (!blob) return;
+  const file = new File([blob], 'my-week-with-cassie.png', { type: 'image/png' });
+  const touch = matchMedia('(pointer: coarse)').matches; // (phones and tablets share; a computer saves the picture)
+  try { if (touch && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'My week with Cassie' }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  downloadBlob('my-week-with-cassie.png', blob);
+}
+
+/* exam plans */
+const EXAM_KINDS = ['learn', 'quiz', 'cards', 'mistakes', 'focus'];
+const examsNow = () => (Array.isArray(state.exams) ? state.exams : (state.exams = []));
+const activeExams = () => examsNow().filter((e) => !e.closed);
+const examLimit = () => (isSubscriber() ? 5 : 1);
+const examLast = (e) => (dayGap(e.from, e.date) >= 1 ? dayAdd(e.date, -1) : e.date); // (the day before the exam; the exam day itself when it's today)
+function taskLabel(t) {
+  const topic = t.topic || '';
+  if (t.kind === 'quiz') return `Quiz me on ${topic || 'what I studied'}`;
+  if (t.kind === 'learn') return `Learn ${topic} with Cassie`;
+  if (t.kind === 'cards') return `10 flashcards${topic ? ` on ${topic}` : ''}`;
+  if (t.kind === 'mistakes') return 'Review my mistakes';
+  return `${(state.pomo && state.pomo.focus) || 25} minute focus session${topic ? `: ${topic}` : ''}`;
+}
+// Cassie's reply → the plan's days (only what makes sense is kept; at most 3 tasks a day)
+function parseExamPlan(reply, from, last) {
+  const s = noDashes(String(reply || '')).replace(/```(?:json)?/gi, ''), i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if (i < 0 || j <= i) return null;
+  let d; try { d = JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; }
+  const days = {};
+  (Array.isArray(d && d.days) ? d.days : []).forEach((day) => {
+    const date = String((day && day.date) || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < from || date > last) return;
+    (Array.isArray(day.tasks) ? day.tasks : []).forEach((t) => {
+      if (!t || !EXAM_KINDS.includes(t.kind)) return;
+      const topic = String(t.topic || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if ((t.kind === 'quiz' || t.kind === 'learn') && !topic) return;
+      (days[date] = days[date] || []).push({ kind: t.kind, topic });
+    });
+  });
+  const plan = [];
+  let spill = [];
+  for (let day = from; day <= last; day = dayAdd(day, 1)) { // (a day given too many tasks passes the rest on)
+    const tasks = [...spill, ...(days[day] || [])];
+    spill = tasks.slice(3);
+    if (tasks.length) plan.push({ date: day, tasks: tasks.slice(0, 3).map((t, k) => ({ id: `${day}-${k}-${Math.random().toString(36).slice(2, 6)}`, ...t, done: false })) });
+  }
+  return plan.length ? plan : null;
+}
+// a missed day: its unfinished tasks move to the next days with room, never more than 3 on a day
+function reflowExam(e, today = phDay()) {
+  if (e.closed) return false;
+  const last = examLast(e);
+  const late = [];
+  e.days.forEach((d) => { if (d.date < today) { const keep = []; d.tasks.forEach((t) => (t.done ? keep : late).push(t)); if (keep.length !== d.tasks.length) d.tasks = keep; } });
+  if (!late.length) return false;
+  for (let day = today > e.from ? today : e.from; day <= last && late.length; day = dayAdd(day, 1)) {
+    let d = e.days.find((x) => x.date === day);
+    if (!d) { d = { date: day, tasks: [] }; e.days.push(d); }
+    while (d.tasks.length < 3 && late.length) d.tasks.push({ ...late.shift(), moved: true });
+  }
+  e.dropped = (e.dropped || 0) + late.length; // (no room left before the exam)
+  e.days = e.days.filter((d) => d.tasks.length).sort((a, b) => (a.date < b.date ? -1 : 1));
+  return true;
+}
+function tidyExams() {
+  const today = phDay();
+  let changed = false;
+  examsNow().forEach((e) => {
+    if (!e.closed && today > e.date) { e.closed = true; changed = true; }
+    if (reflowExam(e, today)) changed = true;
+  });
+  if (changed) save();
+}
+function examPrompt({ name, date, topics, notes }, from, last) {
+  const n = dayGap(from, last) + 1, p = state.profile || {};
+  const level = [p.grade, p.level].filter(Boolean).join(' ') || 'high school';
+  return `Make a day by day study plan for a ${level} student's exam.
+Exam: "${name}". Exam day: ${date}. Today: ${from}. Plan these days: ${from} to ${last} (${n} day${n === 1 ? '' : 's'}).
+Topics: ${topics || 'the topics in the notes below'}
+${notes ? `Their notes (maybe cut short):\n"""\n${notes.slice(0, 6000)}\n"""\n` : ''}
+Each day has 1 to 3 small tasks. Each task is one of these kinds:
+"learn" (Cassie explains a topic), "quiz" (a short quiz on a topic), "cards" (flashcards on a topic), "mistakes" (review the quiz questions they got wrong), "focus" (a focus session on a topic).
+Learn a topic before quizzing it, review mistakes after quizzes, and keep the last day light.
+Reply with ONLY JSON, no other text:
+{"days":[{"date":"YYYY-MM-DD","tasks":[{"kind":"learn","topic":"short topic name"}]}]}
+Use short topic names, under 40 letters, from the topics given.`;
+}
+async function makeExamPlan(form) {
+  const from = phDay(), e = { id: 'ex' + Date.now().toString(36), name: form.name, date: form.date, topics: form.topics, from, at: Date.now(), days: [], stats: {} };
+  const last = examLast(e);
+  const reply = await askCassie([{ role: 'user', content: examPrompt(form, from, last) }]);
+  const days = parseExamPlan(reply, from, last);
+  if (!days) throw new Error('bad plan');
+  e.days = days;
+  examsNow().push(e);
+  track('feature', 'exam-plan');
+  save();
+  return e;
+}
+function refreshHub() {
+  const h = document.getElementById('home-hub');
+  if (h && h.querySelector('.hub')) renderHub(h);
+  if (!state.messages.length && chatLog.querySelector('.hub')) renderHistory();
+}
+// what a task opens: the thing Cassie already does
+function openExamTask(t, e) {
+  const nav = (tab) => (onPhoneHome() ? window.CassieNative.go(tab) : null);
+  if (t.kind === 'quiz') { nav('chat'); startQuizOn(t.topic); return; }
+  if (t.kind === 'learn') { nav('chat'); if (!canChat()) { openSettings(); return; } handleSend(`Teach me ${t.topic} for my ${e.name} exam, step by step, then check that I understood.`); return; }
+  if (t.kind === 'mistakes') { nav('chat'); reviewMistakes(!dueMistakes().length); return; }
+  if (t.kind === 'cards') {
+    const deck = (state.cards || []).map((c) => c.deck).find((d) => t.topic && d && d.toLowerCase().includes(t.topic.toLowerCase()));
+    if (onPhoneHome()) window.CassieNative.go('cards');
+    if (window.CassieCards) window.CassieCards.open(deck);
+    return;
+  }
+  hubAct('timer');
+}
+function examSection() {
+  tidyExams();
+  const wrap = document.createElement('section');
+  wrap.className = 'hub-exam';
+  wrap.setAttribute('aria-label', 'Exam plans');
+  const list = examsNow(), today = phDay();
+  if (list.length) wrap.innerHTML = '<h2 class="hub-h">Today’s plan</h2>';
+  list.forEach((e) => {
+    const card = document.createElement('div');
+    card.className = 'ex-plan' + (e.closed ? ' ex-done' : '');
+    card.dataset.id = e.id;
+    const all = e.days.flatMap((d) => d.tasks), done = all.filter((t) => t.done).length;
+    if (e.closed) {
+      const s = e.stats || {};
+      card.innerHTML = '<div class="ex-head"><b></b><small></small></div><p class="ex-sum"></p><div class="ex-actions"><button type="button" class="ex-close">Close</button></div>';
+      card.querySelector('b').textContent = `${e.name}: your plan is done`;
+      card.querySelector('small').textContent = `Exam day was ${dayName(e.date)}`;
+      card.querySelector('.ex-sum').textContent = `Tasks done: ${done} of ${all.length + (e.dropped || 0)}. Quizzes taken: ${s.quizzes || 0}. Mistakes fixed: ${s.fixed || 0}.`;
+      card.querySelector('.ex-close').addEventListener('click', () => { state.exams = examsNow().filter((x) => x.id !== e.id); save(); refreshHub(); });
+      wrap.appendChild(card);
+      return;
+    }
+    const left = dayGap(today, e.date), todays = (e.days.find((d) => d.date === today) || { tasks: [] }).tasks;
+    card.innerHTML = `<div class="ex-head"><b></b><small></small></div><ul class="ex-tasks"></ul>
+      <div class="ex-actions"><button type="button" class="ex-all" aria-expanded="false">See the whole plan</button><button type="button" class="ex-del">Delete</button></div><ol class="ex-days" hidden></ol>`;
+    card.querySelector('.ex-head b').textContent = e.name;
+    card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${done} of ${all.length} tasks done`;
+    const ul = card.querySelector('.ex-tasks');
+    if (!todays.length) ul.innerHTML = `<li class="ex-rest">${left === 0 ? 'Exam day. You’ve got this.' : 'Nothing planned today. Rest, or review anything you like.'}</li>`;
+    todays.forEach((t) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<label class="ex-check"><input type="checkbox"><span class="ex-tick" aria-hidden="true"></span></label><button type="button" class="ex-task"></button>';
+      const box = li.querySelector('input'), go = li.querySelector('.ex-task');
+      box.checked = !!t.done; box.setAttribute('aria-label', `Done: ${taskLabel(t)}`);
+      go.textContent = taskLabel(t);
+      li.classList.toggle('done', !!t.done);
+      box.addEventListener('change', () => { t.done = box.checked; li.classList.toggle('done', t.done); progressAdd({ tasks: t.done ? 1 : -1 }); card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${all.filter((x) => x.done).length} of ${all.length} tasks done`; });
+      go.addEventListener('click', () => openExamTask(t, e));
+      ul.appendChild(li);
+    });
+    const ol = card.querySelector('.ex-days');
+    e.days.forEach((d) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<b></b><span></span>';
+      li.querySelector('b').textContent = d.date === today ? 'Today' : dayName(d.date);
+      li.querySelector('span').textContent = d.tasks.map((t) => (t.done ? '✓ ' : '') + taskLabel(t)).join(' · ');
+      ol.appendChild(li);
+    });
+    const allBtn = card.querySelector('.ex-all');
+    allBtn.addEventListener('click', () => { ol.hidden = !ol.hidden; allBtn.setAttribute('aria-expanded', String(!ol.hidden)); allBtn.textContent = ol.hidden ? 'See the whole plan' : 'Hide the whole plan'; });
+    card.querySelector('.ex-del').addEventListener('click', () => {
+      if (!confirm(`Delete your plan for ${e.name}?`)) return;
+      state.exams = examsNow().filter((x) => x.id !== e.id); save(); refreshHub();
+    });
+    wrap.appendChild(card);
+  });
+  const n = activeExams().length;
+  if (n >= 5) { const p = document.createElement('p'); p.className = 'ex-full'; p.textContent = 'You have 5 exam plans, the most at once. Delete one to add another.'; wrap.appendChild(p); }
+  else {
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'hub-chat ex-new';
+    add.innerHTML = `<i>${HUB_ICON.timer}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
+    add.querySelector('b').textContent = n ? 'Plan for another exam' : 'Got an exam coming up?';
+    add.querySelector('small').textContent = n ? 'Plan more than one exam at once' : 'Cassie makes you a day by day plan';
+    add.addEventListener('click', () => openExamSheet());
+    wrap.appendChild(add);
+  }
+  return wrap;
+}
+// the form: name, day, topics (or tap ones you've been studying), and on Plus, your notes
+function openExamSheet() {
+  if (activeExams().length >= examLimit()) {
+    if (!isSubscriber()) plusSheet('More exam plans', 'Free keeps one exam plan at a time. Plus can plan up to 5 exams at once, and build a plan from your notes.');
+    return;
+  }
+  document.querySelector('.ex-sheet')?.remove();
+  const today = phDay();
+  const recent = window.CassieMemory ? Object.entries(window.CassieMemory.data.topics || {}).sort((a, b) => (b[1].last || 0) - (a[1].last || 0)).map(([k]) => k).filter((k) => k.length < 40).slice(0, 8) : [];
+  const w = document.createElement('div');
+  w.className = 'ex-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'ex-sheet-h');
+  w.innerHTML = `<form class="plus-card ex-form" novalidate>
+      <h3 id="ex-sheet-h">Plan for an exam</h3>
+      <label class="field ex-field"><span>Exam</span><input name="name" type="text" maxlength="60" placeholder="Gen Chem finals" autocomplete="off"></label>
+      <label class="field ex-field"><span>Exam day</span><input name="date" type="date" min="${today}" max="${dayAdd(today, 365)}"></label>
+      <label class="field ex-field"><span>Topics</span><textarea name="topics" rows="3" maxlength="600" placeholder="Stoichiometry, gas laws, moles"></textarea></label>
+      ${recent.length ? '<div class="ex-chips" role="group" aria-label="Topics you’ve been studying"></div>' : ''}
+      <div class="ex-file"><button type="button" class="ex-file-btn">Use my notes (Plus)</button><input type="file" accept=".pdf,.docx,.pptx,.txt" hidden><small class="ex-file-name"></small></div>
+      <p class="ex-status" aria-live="polite"></p>
+      <div class="plus-actions"><button type="submit" class="plus-go ex-make">Make my plan</button><button type="button" class="plus-ok ex-cancel">Cancel</button></div>
+    </form>`;
+  const f = w.querySelector('form'), chips = w.querySelector('.ex-chips'), status = w.querySelector('.ex-status');
+  if (window.CassieMic) window.CassieMic.attach(f.topics); // (said topics stay in the box to edit)
+  recent.forEach((t) => {
+    const c = document.createElement('button'); c.type = 'button'; c.className = 'ex-chip'; c.textContent = t; c.setAttribute('aria-pressed', 'false');
+    c.addEventListener('click', () => {
+      const on = c.getAttribute('aria-pressed') !== 'true'; c.setAttribute('aria-pressed', String(on));
+      const list = f.topics.value.split(',').map((x) => x.trim()).filter(Boolean).filter((x) => x.toLowerCase() !== t.toLowerCase());
+      if (on) list.push(t);
+      f.topics.value = list.join(', ');
+      f.topics.dispatchEvent(new Event('input'));
+    });
+    chips.appendChild(c);
+  });
+  let notes = null;
+  const fileIn = w.querySelector('input[type=file]');
+  w.querySelector('.ex-file-btn').addEventListener('click', () => {
+    if (!isSubscriber()) { plusSheet('Plans from your notes', 'Plus builds your exam plan from your notes, slides or reviewer.'); return; }
+    fileIn.click();
+  });
+  fileIn.addEventListener('change', async () => {
+    const file = fileIn.files && fileIn.files[0];
+    if (!file) return;
+    status.textContent = 'Reading your notes…';
+    try { const doc = await readDocument(file); if (!doc.text) throw new Error('empty'); notes = doc.text; w.querySelector('.ex-file-name').textContent = file.name; status.textContent = ''; f.topics.dispatchEvent(new Event('input')); }
+    catch (e) { notes = null; status.textContent = CassieErrors.say('exam_file_failed'); }
+  });
+  const check = CassieErrors.form(f, {
+    name: (v) => (v.trim() ? '' : 'exam_name_needed'),
+    date: (v) => (!v ? 'exam_date_needed' : v < today ? 'exam_date_past' : v > dayAdd(today, 365) ? 'exam_date_far' : ''),
+    topics: (v) => (v.trim() || notes ? '' : 'exam_topics_needed'),
+  });
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.plus-sheet')) { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.querySelector('.ex-cancel').addEventListener('click', close);
+  w.addEventListener('click', (e) => { if (e.target === w) close(); });
+  const make = async () => {
+    if (!check.check()) return;
+    if (!canChat()) { close(); openSettings(); return; }
+    const btn = w.querySelector('.ex-make');
+    btn.disabled = true; status.textContent = 'Cassie is making your plan…';
+    try {
+      const e = await makeExamPlan({ name: noDashes(f.name.value.trim()).slice(0, 60), date: f.date.value, topics: noDashes(f.topics.value.trim()).slice(0, 600), notes });
+      close();
+      if (onPhoneHome()) window.CassieNative.go('home');
+      refreshHub();
+      return e;
+    } catch (err) {
+      btn.disabled = false;
+      status.innerHTML = '';
+      const p = document.createElement('span'); p.textContent = CassieErrors.explain(err, 'exam_plan_failed');
+      const again = document.createElement('button'); again.type = 'button'; again.className = 'ex-again'; again.textContent = 'Try again';
+      again.addEventListener('click', make);
+      status.append(p, again);
+    }
+  };
+  f.addEventListener('submit', (e) => { e.preventDefault(); make(); });
+  document.body.appendChild(w);
+  f.name.focus();
+}
 
 function renderHome() {
   if (sideWide.matches) { // computers: the hub, centred (phones: Home is its own tab)
@@ -3583,6 +3950,7 @@ function captureQuizMarks(reply) {
     if (!q) return '';
     const key = norm(q);
     const i = state.mistakes.findIndex((m) => norm(m.q) === key);
+    progressMark(!/missed/i.test(kind), !/missed/i.test(kind) && i >= 0);
     if (/missed/i.test(kind)) {
       const m = i >= 0 ? state.mistakes[i] : null;
       if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
@@ -3611,7 +3979,7 @@ function reviewMistakes(all = false) {
   }
   if (!canChat()) { openSettings(); return; }
   track('feature', 'review');
-  quizMode = true;
+  quizMode = true; quizStarted();
   if (quizBtn) quizBtn.classList.add('active');
   if (typeof setQuizLabel === 'function') setQuizLabel('Stop quiz');
   dressCassie();
@@ -3717,6 +4085,7 @@ async function handleSend(text, opts = {}) {
       window.CassieMemory.recordQuestion(sendText);
     }
   } catch (e) { /* ignore */ }
+  progressAdd({ asked: 1 }); // (a day you asked Cassie something is a day you studied)
 
   setCursorMode('thinking');
   if (doc || many) botMood('reading');
@@ -4411,6 +4780,7 @@ function openSketch(opts = {}) {
     },
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph y = x² − 4”)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    hear: boardHear(),
     ...boardDecks(),
     extra: SERVER && !opts.noRoom ? [{ label: 'Study together', title: 'Start a study room: classmates join with a code, draw, chat, quiz each other and study flashcards together', onClick: () => openRoomChooser() }] : [],
   });
@@ -4508,6 +4878,7 @@ async function startRoom(code, title) {
     onCheck: (png) => { attachDataUrl(png, 'Check our work on this study-room board. What did we get right, and what should we fix?'); return ''; },
     askPlaceholder: 'Ask Cassie about the board (only you see her answer)',
     onAsk: (png, q, parts) => askBoard(png, q, parts),
+    hear: boardHear(),
     ...boardDecks(),
     room: { me, name: roomName(), send: (op) => { R.queue.push(op); clearTimeout(R.timer); R.timer = setTimeout(tick, 150); } },
     onClose: () => R.stop(),
@@ -4797,20 +5168,18 @@ let exploreMod = null;
 /* Ask Cassie and Quiz me inside Labs and the 3D views (labs/helper.js): the same path to Cassie as the
    chat (askCassie), her answers drawn like the chat's, a quiz written as data, missed questions kept
    for "Review my mistakes". */
-// Teach me: one voice for a whole lesson (voice.js picks it when the lesson starts and keeps it)
+// Teach me: one decision for a whole lesson (voice.js): Bella says every step when what's left of her
+// voice covers the lesson (plan), otherwise she types the steps and says so once
 function lessonVoice() {
   const CV = window.CassieVoice;
   if (!CV || !CV.session) return null;
-  // phones and tablets: the phone's own voice (it starts inside the tap, so it always gets to speak);
-  // no Keep going note: a step that can't be said stays on screen with a button to hear it again
-  const phone = !!(CV.device && CV.device.onPhone && CV.device.onPhone() && CV.device.supported());
-  const s = CV.session({ gender: voiceGender(), pause: false, ...(phone ? { voice: 'device', phone: true } : {}) });
-  return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() };
+  const s = CV.session({ gender: voiceGender() });
+  return { speak: (t) => s.speak(cleanForSpeech(t)), plan: (t) => s.plan(cleanForSpeech(t)), end: () => s.end() };
 }
 const IN_LAB = {
   converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   format: (node, text) => renderFormatted(node, text),
-  makeQuiz: (topic) => (canChat() ? quizQuestions(topic, 5) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
+  makeQuiz: (topic) => (canChat() ? (quizStarted(), quizQuestions(topic, 5)) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   onMark: (q, a, right) => { captureQuizMarks(`[[${right ? 'GOT' : 'MISSED'}: ${q} || ${a}]]`); },
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
@@ -4831,7 +5200,7 @@ async function help3dFor(view) {
 function dropHelp3d() { if (help3d) { help3d.h.destroy(); help3d = null; } }
 function startQuizOn(topic) {
   if (!canChat()) { openSettings(); return; }
-  quizMode = true;
+  quizMode = true; quizStarted();
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   dressCassie();
@@ -4992,6 +5361,7 @@ if (quizBtn) {
       return;
     }
     quizMode = !quizMode;
+    if (quizMode) quizStarted();
     quizBtn.classList.toggle('active', quizMode);
     dressCassie();
     setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
@@ -5338,6 +5708,7 @@ function renderMemory() {
       </div>
     </div>`;
   const memSlot = memoryPanel.querySelector('.mem-empty-slot');
+  if (window.CassieMic) window.CassieMic.attach(document.getElementById('mem-fact'));
   if (memSlot) memSlot.replaceWith(CassieErrors.empty({ title: 'Nothing remembered yet', text: 'Cassie remembers the topics you study, so she can help you review them later.', action: 'Ask a question', onAction: () => { memoryPanel.hidden = true; document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); } }));
 }
 
@@ -5469,6 +5840,7 @@ if (memoryPanel) {
     if (mode === 'focus') {
       cycles += 1;
       try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(times.focus); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
+      progressAdd({ focus: times.focus }); // (the weekly card)
       const long = cycles % 4 === 0;
       switchMode(long ? 'long' : 'break');
       nudge(long ? `Awesome focus! Take a ${times.long}-minute break: stretch and breathe.` : `Nice work! ${times.brk}-minute break: drink some water and rest your eyes.`, 'encouraging');
@@ -5683,23 +6055,16 @@ if (SpeechRecognitionCtor) {
 
 /* ---------- voice output ---------- */
 let readAloud = null; // the answer being read aloud right now
-// Read an answer aloud in Cassie's voice: her own (Bella or Edward) once she's on this device, else
-// the studio voice or the device's as a stand-in (voice.js picks, and keeps one voice per answer).
+// Read an answer aloud in Bella's studio voice (voice.js). When what's left of the month's voice
+// can't cover it, she types instead and says so once: never another voice.
 function speak(text) {
   if (!state.voiceOut || voiceChat) return; // the voice screen speaks for itself
   if (readAloud) { readAloud.stop(); readAloud = null; }
-  const chunks = bellaChunks(cleanForSpeech(text));
-  if (!chunks.length || !humanVoiceWanted()) return;
-  const CV = window.CassieVoice;
-  const go = () => {
-    const h = CV.speak(chunks.join(' '), { gender: voiceGender(), onStart: () => botMood('talking') });
-    readAloud = h;
-    h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
-  };
-  // her own voice is on this device but asleep: a few seconds to wake her, so it's her voice every time
-  if (CV.status() === 'off' && CV.got()) { CV.prepare().then(go, go); return; }
-  go();
-  if (CV.status() === 'off' && humanVoiceAutoOK()) CV.prepare().catch(() => {}); // get it now, for the next answers
+  const clean = cleanForSpeech(text);
+  if (!clean || !humanVoiceWanted()) return;
+  const h = window.CassieVoice.speak(clean, { gender: voiceGender(), onStart: () => botMood('talking') });
+  readAloud = h;
+  h.done.then(() => { if (readAloud === h) readAloud = null; if (bot2d && bot2d.state === 'talking') botMood('idle'); });
 }
 
 /* ---------- Talk with Cassie: a real voice conversation ----------
@@ -5710,7 +6075,7 @@ function speak(text) {
      Quiz me      — she quizzes you out loud and tells you if you got it right
    Hearing you: the browser's own speech recognition (Chrome, Edge, Safari). Where there
    isn't one, the app records and the Cassie server (or your own Groq key) writes it down.
-   Talking: the device's own voices (pick one on the screen). Everything is saved in the chat. */
+   Talking: Bella's studio voice only; when it isn't there, the chat goes on typed. Everything is saved in the chat. */
 const VOICE_MODES = {
   chat: { label: 'Chat', hello: 'Hi! I’m listening. Ask me anything.', tip: 'Ask anything out loud. Tap Cassie to stop her talking.' },
   teach: { label: 'Teach Cassie', hello: 'Okay, I’m your student today! What are you going to teach me?', tip: 'Explain a topic like you’re teaching a friend. Cassie asks questions and catches what you missed. Say “I’m done” for your report.' },
@@ -5718,12 +6083,12 @@ const VOICE_MODES = {
 };
 const voiceBtn = document.getElementById('voice-btn');
 const canHear = () => !!SpeechRecognitionCtor || !!(navigator.mediaDevices && window.MediaRecorder);
-// Cassie's voice (voice.js): Bella, made on the device by a small AI voice model, so she
-// sounds like a person. While Bella isn't ready on a device, its own best voice speaks instead.
+// the mic beside the other boxes (mic.js): where the browser can't listen, Cassie's server writes it down
+if (window.CassieMic) window.CassieMic.setup({ transcribe: (blob) => transcribeAudio(blob) });
+const boardHear = () => (window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null);
+// Cassie's voice (voice.js): Bella, her studio voice, through Cassie's server. It is the only voice.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
-// the studio voice (ElevenLabs, through Cassie's server) goes first when the server has it
 if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId() });
-const studioVoice = () => !!window.CassieVoice && window.CassieVoice.studio.ready();
 let voiceUI = null;
 
 // Turn an answer into something that sounds right read aloud.
@@ -5743,24 +6108,6 @@ function cleanForSpeech(t) {
     .replace(/\\[a-zA-Z]+/g, ' ').replace(/[$\\{}]/g, '')
     .replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*#+\s*/gm, '').replace(/[*_#>|]+/g, ' ')
     .replace(/\s+/g, ' ').trim();
-}
-// Bella's pieces: a short first one (so she starts talking quickly), then about a sentence each
-// (made while the one before is playing).
-function bellaChunks(t) {
-  const sentences = (t.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) || [t]).map((x) => x.trim()).filter(Boolean);
-  const out = [];
-  for (let s of sentences) {
-    // very long sentences are cut at a comma, so no single piece takes long to make
-    while (s.length > (out.length ? 220 : 90)) {
-      const lim = out.length ? 220 : 90;
-      const cut = Math.max(s.lastIndexOf(', ', lim), s.lastIndexOf('; ', lim), s.lastIndexOf(' - ', lim));
-      const at = cut > 25 ? cut + 1 : s.lastIndexOf(' ', lim);
-      if (at < 20) break;
-      out.push(s.slice(0, at).trim()); s = s.slice(at).trim();
-    }
-    if (out.length > 1 && (out[out.length - 1] + ' ' + s).length < 120) out[out.length - 1] += ' ' + s; else out.push(s);
-  }
-  return out;
 }
 // Cassie's voice can be a woman's (Bella) or a man's (Edward, a calm British voice): Settings, or the switch on the voice screen.
 const voiceGender = () => (state.voiceGender === 'man' ? 'man' : 'woman');
@@ -5786,7 +6133,6 @@ function buildVoiceUI() {
     <div class="vc-bar">
       <button type="button" class="vc-mic" aria-label="Pause listening"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/></svg></button>
     </div>
-    <div class="vc-hv" hidden aria-live="polite"></div>
     <p class="vc-tip"></p>`;
   document.body.appendChild(el);
   const q = (s) => el.querySelector(s);
@@ -5820,108 +6166,57 @@ function buildVoiceUI() {
     if (voiceChat && voiceChat.phase !== 'thinking') { voiceChat.stopSpeaking && voiceChat.stopSpeaking(); stopHearing(); newConversationVoice(voiceChat); sayThenListen('Hi! This is my voice now.'); }
   });
   ui.markGender = markGender;
-  ui.hv = q('.vc-hv');
-  ui.hv.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-hv]');
-    if (!b) return;
-    if (b.dataset.hv === 'get') { track('feature', 'human-voice'); getHumanVoice(); }
-    else { try { sessionStorage.setItem('cassie.hvLater', '1'); } catch (err) { /* ignore */ } showHumanVoice(); }
-  });
-  if (window.CassieVoice) window.CassieVoice.onChange(() => showHumanVoice());
   return ui;
 }
 
-/* Settings → Voice: is her human voice on this device, and how does it sound? */
+/* Settings → Voice: is Bella's voice there, and when is she back if she's resting? */
 const HV_SAMPLE = 'Hi! I’m Cassie. Let’s study together. Ask me anything, and I’ll explain it step by step.';
+const VOICE_ENOUGH = 400; // (about one spoken answer)
+function voiceBackDate(back) {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(back || '') ? new Date(back + 'T12:00:00') : null;
+  return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : 'tomorrow';
+}
+function voiceLine() {
+  const CV = window.CassieVoice;
+  if (!CV || !CV.supported()) return CassieErrors.say('voice_unsupported');
+  if (!CV.studio.known()) return SERVER ? 'Checking Cassie’s voice…' : CassieErrors.say('voice_not_set_up');
+  if (!CV.studio.on()) return CassieErrors.say('voice_not_set_up');
+  if (CV.studio.left() < VOICE_ENOUGH) return CassieErrors.say('voice_resting', { date: voiceBackDate(CV.studio.back()) });
+  return `${voiceGender() === 'man' ? 'Cassie’s' : 'Bella’s'} voice is ready. Cassie reads her answers aloud in it.`;
+}
 function showHumanVoiceSetting() {
   const box = document.getElementById('hv-state');
-  if (!box) return;
-  const CV = window.CassieVoice;
-  const st = CV && CV.supported() ? CV.status() : 'unsupported';
-  const name = voiceGender() === 'man' ? 'Edward' : 'Bella';
-  box.textContent = st === 'unsupported' ? CassieErrors.say('voice_unsupported')
-    : st === 'ready' ? `✓ ${name}’s voice is ready.`
-      : st === 'loading' ? (CV.warming && CV.warming() ? `Downloaded ✓ Setting up ${name}’s voice on this device (up to a minute)…` : `Getting ${name}’s voice… ${Math.round(CV.progress() * 100)}% (only this once)`)
-        : st === 'failed' ? CassieErrors.say('voice_download_failed')
-          : CV.got() ? `${name}’s voice is on this device. Tap Play a sample to hear it.` : 'Not downloaded yet. Tap Play a sample to get it (about 90 MB, once. Wi-Fi is best).';
-  if (CV && CV.studio && CV.studio.on() && st !== 'ready') box.textContent = `Cassie’s studio voice stands in until her own voice is on this device. ${box.textContent}`;
+  if (box) box.textContent = voiceLine();
 }
 function playHumanSample() {
   const CV = window.CassieVoice;
   if (!CV || !CV.supported()) { showHumanVoiceSetting(); return; }
   CV.unlock(); // inside the tap
-  if (CV.studio && CV.studio.ready()) { CV.speak(HV_SAMPLE, { gender: voiceGender() }); return; }
-  CV.prepare().then(() => {
-    const h = CV.say(bellaChunks(HV_SAMPLE), { gender: voiceGender() });
-    h.done.then(showHumanVoiceSetting);
-  }).catch(showHumanVoiceSetting);
-  showHumanVoiceSetting();
+  CV.speak(HV_SAMPLE, { gender: voiceGender() });
 }
 document.getElementById('hv-play')?.addEventListener('click', playHumanSample);
 document.getElementById('voice-gender-select')?.addEventListener('change', () => { state.voiceGender = document.getElementById('voice-gender-select').value; showHumanVoiceSetting(); });
 if (window.CassieVoice) window.CassieVoice.onChange(showHumanVoiceSetting);
 
-/* The human voice on the voice screen: get it (once), show the download, or say why not. */
-function humanVoiceAutoOK() {
-  // on Wi-Fi or a computer it just downloads; on mobile data Cassie asks first
-  const c = navigator.connection;
-  if (c && c.saveData) return false;
-  if (c && c.type) return c.type === 'wifi' || c.type === 'ethernet';
-  return !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-}
-function getHumanVoice() {
-  if (!humanVoiceWanted()) return;
-  window.CassieVoice.prepare().catch(() => {});
-  showHumanVoice();
-}
-function startHumanVoice() {
-  if (!humanVoiceWanted()) { showHumanVoice(); return; }
-  if (window.CassieVoice.got() || humanVoiceAutoOK()) getHumanVoice(); else showHumanVoice();
-}
-function showHumanVoice() {
-  const box = voiceUI && voiceUI.hv;
-  if (!box) return;
-  if (!humanVoiceWanted()) { box.hidden = true; return; }
-  const CV = window.CassieVoice, st = CV.status();
-  let later = false;
-  try { later = sessionStorage.getItem('cassie.hvLater') === '1'; } catch (e) { /* ignore */ }
-  const wasNote = box.dataset.st === 'note';
-  box.dataset.st = st;
-  const v = voiceChat;
-  if (st === 'ready' && v && v.voice && v.voice.voice !== 'bella' && !v.toldReady) {
-    // she just became ready, mid-conversation: say so; this conversation keeps the voice it started with
-    v.toldReady = true; v.readyAt = Date.now();
-    box.dataset.st = 'note'; box.hidden = false;
-    box.innerHTML = '✓ <b>Cassie’s own voice is ready</b>: she’ll use it the next time you talk with her.';
-    clearTimeout(v.noteTimer); v.noteTimer = setTimeout(() => { v.readyAt = 0; if (voiceChat === v) showHumanVoice(); }, 6000);
-    return;
-  }
-  if (wasNote && v && v.readyAt) { box.dataset.st = 'note'; return; } // (the note stays a moment)
-  if (st === 'ready') {
-    box.hidden = !CV.slow();
-    box.innerHTML = 'This device is a little slow at making her voice, so she may pause between sentences. Closing other tabs and apps helps.';
-  } else if (st === 'loading') {
-    box.hidden = false;
-    const pct = Math.round(CV.progress() * 100), standIn = studioVoice() ? 'a stand-in voice' : 'your phone’s voice';
-    box.innerHTML = CV.warming && CV.warming()
-      ? `<b>Downloaded ✓ Setting up Cassie’s voice on this ${/iPhone|iPad|Android/.test(navigator.userAgent) ? 'phone' : 'device'}…</b><span class="vc-hv-bar busy"><i style="width:100%"></i></span><small>Almost there. This part can take up to a minute. This conversation keeps ${standIn}.</small>`
-      : `<b>Getting Cassie’s voice ready…</b> ${pct ? pct + '%' : ''}<span class="vc-hv-bar"><i style="width:${pct}%"></i></span><small>Only this once. Keep talking: this conversation keeps ${standIn}, and her own voice starts next time.</small>`;
-  } else if (st === 'failed') {
-    box.hidden = false;
-    box.innerHTML = 'Cassie is using your phone’s voice because her own voice couldn’t load on this device. <button type="button" data-hv="get">Try again</button>';
-  } else if (later) {
-    box.hidden = true;
-  } else {
-    box.hidden = false;
-    box.innerHTML = '<b>Get Cassie’s own voice?</b> A one-time download, about 90 MB (Wi-Fi is best), then it works offline. Until then she uses your phone’s voice. <span class="vc-hv-row"><button type="button" data-hv="get">Get her voice</button><button type="button" data-hv="later" class="ghost">Not now</button></span>';
-  }
-}
-
-// The voice screen keeps one voice for the whole conversation (voice.js picks it when it opens):
-// it never changes partway, only when the student picks the other voice themselves.
+// The voice screen decides when it opens: Bella for the whole conversation, or a typed chat when
+// what's left of her voice can't cover it. She never speaks in another voice.
 function newConversationVoice(v) {
   if (v.voice) v.voice.end();
-  v.voice = window.CassieVoice && window.CassieVoice.session ? window.CassieVoice.session({ gender: voiceGender() }) : null;
+  v.voice = window.CassieVoice && window.CassieVoice.session ? window.CassieVoice.session({ gender: voiceGender(), onText: () => voiceToTyped(v) }) : null;
+  if (!v.voice) { voiceToTyped(v); return false; }
+  return v.voice.start() === 'studio';
+}
+// Bella stopped partway: what she was saying is in the chat, the voice screen closes, the chat goes
+// on typed, and the one line says why (once)
+function voiceToTyped(v) {
+  if (v.typed) return;
+  v.typed = true;
+  if (voiceChat === v) closeVoice();
+  toTypedChat();
+}
+function toTypedChat() {
+  if (window.CassieVoice) window.CassieVoice.notice();
+  try { promptInput.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
 }
 function setVoicePhase(phase, text) {
   const v = voiceChat, ui = voiceUI;
@@ -5960,12 +6255,11 @@ function sayThenListen(text) {
       clearTimeout(v.speakTimer);
       v.stopSpeaking = null;
       resolve();
-      if (voiceChat === v) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
+      if (voiceChat === v && !v.typed) { if (v.wantPause) setVoicePhase('paused'); else listenVoice(); }
     };
-    // Bella speaks it. If her voice isn't ready on this device (still downloading, or her engine
-    // can't run here), the device's own best voice says it — Cassie is never silent.
-    if (!clean) { finish(); return; }
-    const h = v.voice ? v.voice.speak(clean) : window.CassieVoice.speak(clean, { gender: voiceGender() });
+    // Bella says it; if she can't, the words are on the screen and the chat goes on typed
+    if (!clean || v.typed || !v.voice) { finish(); return; }
+    const h = v.voice.speak(clean);
     v.stopSpeaking = () => { h.stop(); finish(); };
     h.done.then(() => { if (!done && voiceChat === v) finish(); });
   });
@@ -6268,7 +6562,7 @@ async function askOutLoud(text) {
     if (v.phase !== 'speaking') setVoicePhase('speaking');
     v.stopSpeaking = () => { live.stop(); };
     await live.done;
-    if (voiceChat !== v) return;
+    if (voiceChat !== v || v.typed) return; // (Bella stopped partway: the rest is on screen, and the chat goes on typed)
     v.stopSpeaking = null;
     if (v.wantPause) setVoicePhase('paused'); else listenVoice();
     return;
@@ -6293,9 +6587,13 @@ function startVoiceMode(mode) {
   sayThenListen(VOICE_MODES[v.mode].hello);
 }
 
-function openVoice(mode = 'chat') {
+function openVoice(mode = 'chat', checked = false) {
   if (!canChat()) { openSettings(); return; }
   if (!canHear()) { renderMessage('assistant', CassieErrors.say('no_mic_browser')); return; }
+  // what's left of Bella's voice can't cover a conversation: Cassie says so once and the chat stays typed
+  const CV = window.CassieVoice;
+  if (CV && SERVER && !CV.studio.known() && !checked) { CV.unlock(); CV.studio.refresh().finally(() => openVoice(mode, true)); return; }
+  if (!CV || !CV.canSay(CV.CHAT_CHARS)) { toTypedChat(); return; }
   if (!voiceUI) voiceUI = buildVoiceUI();
   if (voiceChat) closeVoice();
   voiceChat = { mode, phase: 'paused', quizBefore: quizMode, useRecorder: !SpeechRecognitionCtor || !!accurateHearing() };
@@ -6304,8 +6602,7 @@ function openVoice(mode = 'chat') {
   if (voiceUI.bot) voiceUI.bot.pause(false);
   track('feature', 'voice:' + mode);
   if (window.CassieVoice) window.CassieVoice.unlock(); // inside the tap, so phones let her speak later
-  newConversationVoice(voiceChat); // one voice from here to the end of the conversation
-  startHumanVoice();
+  if (!newConversationVoice(voiceChat)) return; // (no voice left: she says so once, and the chat goes on typed)
   startVoiceMode(mode); // speaks right away, inside the tap, so phones allow the sound
   setTimeout(() => { try { voiceUI.mic.focus(); } catch (e) { /* ignore */ } }, 60);
 }
@@ -6315,7 +6612,6 @@ function closeVoice() {
   v.stopSpeaking && v.stopSpeaking();
   if (v.voice) v.voice.end();
   voiceChat = null;
-  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
   if (v.rec) { try { v.rec.onend = null; v.rec.abort(); } catch (e) { /* ignore */ } }
   if (v.recorder) { try { v.recorder.onstop = null; v.recorder.stop(); } catch (e) { /* ignore */ } }
   clearInterval(v.vadTimer); clearTimeout(v.speakTimer);
@@ -6728,17 +7024,31 @@ const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.j
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
 const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=169', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+// Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
+// frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
+// If the 3D one fails, the flat one shows in her place instead: never one then the other.
 function frMascot3d(host) {
+  const want3d = fr3dWanted() && !!window.WebGLRenderingContext && !(window.CassieBot && window.CassieBot.failed3d());
   let flat = null;
-  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true, flat: true }); } catch (e) { /* the words still work */ }
+  try { flat = window.CassieBot.create(host, { state: 'happy', glow: true, pokeable: true, flat: true, waitFor3d: want3d }); } catch (e) { /* the words still work */ }
   if (flat && (window.CASSIE_LITE || reduceMotion())) flat.pause(); // (Lite mode or Reduce Motion: drawn once, no movement, not even a blink)
-  host.dataset.mascot = '2d';
+  host.dataset.mascot = want3d ? 'waiting' : '2d';
+  if (!want3d) return;
+  const noThreeD = () => { host.dataset.mascot = '2d'; if (flat) flat.reveal(true); };
   const load = fr3dLoad();
-  if (!load) return;
+  if (!load) { noThreeD(); return; }
   load.then((m) => {
-    if (!m || !host.isConnected || !m.webglOK()) return;
-    try { m.mount(host); host.dataset.mascot = '3d'; if (flat) flat.destroy(); } catch (e) { /* the flat Cassie stays */ }
-  });
+    if (!host.isConnected) return;
+    if (!m || !m.webglOK()) { noThreeD(); return; }
+    let canvas = null;
+    try { m.mount(host); canvas = host.querySelector('canvas.cassie-3d'); } catch (e) { noThreeD(); return; }
+    // the flat stand-in goes once her first 3D frame is drawn (or comes back if 3D fails here)
+    const watch = setInterval(() => {
+      if (!host.isConnected) { clearInterval(watch); return; }
+      if (canvas && canvas.dataset.frames !== '0') { clearInterval(watch); host.dataset.mascot = '3d'; if (flat) flat.destroy(); }
+      else if (m.failed && m.failed()) { clearInterval(watch); if (canvas) canvas.remove(); noThreeD(); }
+    }, 100);
+  }, noThreeD);
 }
 
 // 1. Welcome: Cassie, her name and one line, while the app gets ready (first visit only)
@@ -6863,7 +7173,10 @@ function frFinish(a) {
   frSave(null);
   frClose();
   if (typeof syncAccount === 'function') syncAccount(true);
+  offerTour();
 }
+// right after the first run (signed in or as a guest): a quick tour?, asked once, ever
+function offerTour() { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(); }, 700); }
 // where the first run starts: a returning student never sees it; a reload carries on
 function firstRun() {
   const saved = frLoad();
@@ -6880,23 +7193,29 @@ function firstRun() {
 function accountsOn() { return !!SERVER; }
 var AUTH_KEY = 'cassie.auth';
 function authToken() { try { return localStorage.getItem(AUTH_KEY) || ''; } catch (e) { return ''; } }
-async function authCall(path, body, method = 'POST') {
+async function authCall(path, body, method = 'POST', { timeout = 20000, signal } = {}) {
   const token = authToken();
   let res;
+  // a server that never answers is given up on (the student then sees why, with Try again)
+  const ctl = new AbortController(), late = setTimeout(() => ctl.abort(), timeout);
+  if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
   try {
     res = await fetch(SERVER + path, {
       method,
       headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(token ? { authorization: 'Bearer ' + token } : {}) },
       body: body ? JSON.stringify(body) : undefined,
+      signal: ctl.signal,
     });
-  } catch (e) { const x = friendlyError(CassieErrors.say('network')); x.code = 'network'; throw x; }
+  } catch (e) { const timedOut = ctl.signal.aborted; const x = friendlyError(CassieErrors.say(timedOut ? 'timeout' : 'network')); x.code = timedOut ? 'timeout' : 'network'; throw x; }
+  finally { clearTimeout(late); }
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty */ }
-  if (!res.ok) { const e = friendlyError(data.error || CassieErrors.say('unknown')); e.status = res.status; e.code = data.code || ''; throw e; }
+  // (a broken server's own words, like "Internal error", are never shown: only Cassie's plain ones)
+  if (!res.ok) { const e = friendlyError((data.code || res.status < 500) && data.error ? data.error : CassieErrors.say('unknown')); e.status = res.status; e.code = data.code || ''; throw e; }
   return data;
 }
 function accountData() {
-  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics };
+  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -6911,7 +7230,7 @@ function syncAccount(now) {
 }
 function applyAccountData(d) {
   if (!d) return;
-  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
   if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
     const mine = new Map((state.cards || []).map((c) => [c.id, c]));
     d.cards.forEach((c) => { if (!c || !c.id || !c.f) return; const m = mine.get(c.id); if (!m || (c.seen || 0) > (m.seen || 0)) mine.set(c.id, c); });
@@ -6920,6 +7239,16 @@ function applyAccountData(d) {
   if (Array.isArray(d.mistakes)) { // keep both devices' saved mistakes
     const have = new Set((state.mistakes || []).map((m) => (m.q || '').toLowerCase()));
     state.mistakes = [...(state.mistakes || []), ...d.mistakes.filter((m) => m && m.q && !have.has(m.q.toLowerCase()))].slice(0, 200);
+  }
+  if (Array.isArray(d.exams)) { // exam plans from both devices (the plan with more ticks wins)
+    const ticks = (e) => (e.days || []).reduce((n, x) => n + (x.tasks || []).filter((t) => t.done).length, 0);
+    const mine = new Map((state.exams || []).map((e) => [e.id, e]));
+    d.exams.forEach((e) => { if (!e || !e.id || !Array.isArray(e.days)) return; const m = mine.get(e.id); if (!m || ticks(e) > ticks(m)) mine.set(e.id, e); });
+    state.exams = [...mine.values()].slice(-10);
+  }
+  if (d.progress && typeof d.progress === 'object') { // the week's counts: the bigger count of each day wins
+    const p = state.progress && typeof state.progress === 'object' ? state.progress : (state.progress = {});
+    Object.entries(d.progress).forEach(([day, c]) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !c) return; const m = p[day] || (p[day] = {}); Object.entries(c).forEach(([k, n]) => { if (Number.isFinite(+n)) m[k] = Math.max(m[k] || 0, +n); }); });
   }
   lastSynced = JSON.stringify(accountData());
   save();
@@ -6975,7 +7304,7 @@ function plusSheet(what, why) {
       <li>Real 3D in every lab, and the Museum quiz</li>
       <li>Save or print your notes, maps and boards</li>
     </ul>
-    <p class="plus-foot">Paid plans are almost here. Everything else in Cassie stays free.</p>
+    <p class="plus-foot">Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.</p>
     <div class="plus-actions">
       <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
@@ -7026,8 +7355,10 @@ function free3d(k, seen) {
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
   if (res.account.data && res.account.data.profile) {
+    const firstHere = !!frLoad(); // (signing in was this device's first run)
     frSave(null); // (the account already knows them: no questions)
     applyAccountData(res.account.data);
+    if (firstHere) { frClose(); offerTour(); }
     track('open');
     try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
   } else {
@@ -7035,11 +7366,6 @@ function afterSignIn(res) {
     else frOnboard(0); // the four questions
   }
   renderProfileSummary();
-}
-
-function loadGoogle() {
-  if (window.google && window.google.accounts) return Promise.resolve();
-  return new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = ok; sc.onerror = bad; document.head.appendChild(sc); });
 }
 
 // Which sign-in buttons to show: the server says which providers have a client ID set (asked once a visit)
@@ -7050,26 +7376,62 @@ function authProviders() {
   return providersAsk;
 }
 const PROVIDER_NAME = { google: 'Google', apple: 'Apple' };
-// Sign in with Apple: the whole page goes to Apple, Apple posts back to Cassie's server, and the
-// server sends the answer back here in the address (#cassie-auth=...). Not a popup: this site keeps
-// other windows apart (so the voice can use several cores), and a popup couldn't answer back.
-var APPLE_KEY = 'cassie.apple';
+/* Sign in with Google or Apple: the whole page goes to them and comes back here. Never a popup:
+   this site keeps other windows apart (so the voice can use several cores), so a popup can't hand
+   its answer back, which left students on a blank white window. Google comes straight back to this
+   page (#id_token=…); Apple has to post to Cassie's server first, which sends the answer on here
+   (#cassie-auth=…). Within 15 seconds the student is signed in, sees "Signing you in…", or sees
+   what went wrong with a Try again button. */
+var SIGNIN_KEY = 'cassie.signin';
+const SIGNIN_CALL_LIMIT = 10000, SIGNIN_LIMIT = 15000; // (Cassie's server gets 10s; nothing stays up past 15s)
 function b64url(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-function appleStart(apple) {
-  const n = b64url(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))));
-  try { sessionStorage.setItem(APPLE_KEY, n); } catch (e) { /* the answer is then ignored, and the button just works again */ }
-  const st = b64url(JSON.stringify({ o: location.origin, p: location.pathname, n }));
-  location.assign('https://appleid.apple.com/auth/authorize?' + new URLSearchParams({ client_id: apple.clientId, redirect_uri: apple.redirectURI, response_type: 'code id_token', scope: 'name email', response_mode: 'form_post', state: st, nonce: n }));
+function unb64url(s) { return decodeURIComponent(escape(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')))); }
+// the sign-in this device started (kept in both stores: an installed app may drop one of them)
+function pendingSignin() {
+  for (const store of [sessionStorage, localStorage]) {
+    try { const p = JSON.parse(store.getItem(SIGNIN_KEY) || 'null'); if (p && p.n && Date.now() - p.at < 10 * 60e3) return p; } catch (e) { /* none */ }
+  }
+  return null;
 }
-// back from Apple: read the answer, take it out of the address, and keep it only if this tab asked
-function appleReturned() {
-  const m = location.hash.match(/^#cassie-auth=(.+)$/);
-  if (!m) return null;
+function setPendingSignin(p) {
+  for (const store of [sessionStorage, localStorage]) { try { if (p) store.setItem(SIGNIN_KEY, JSON.stringify(p)); else store.removeItem(SIGNIN_KEY); } catch (e) { /* none */ } }
+}
+// where Google sends the student back: this page, without anything after it (register it in Google Cloud)
+function googleReturnURL() { const u = new URL('app.html', location.href); u.search = ''; u.hash = ''; return u.href; }
+function signinStart(provider, cfg) {
+  const n = b64url(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))));
+  setPendingSignin({ p: provider, n, at: Date.now() });
+  if (provider === 'google') {
+    location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({ client_id: cfg.clientId, redirect_uri: googleReturnURL(), response_type: 'id_token', scope: 'openid email profile', nonce: n, state: b64url(JSON.stringify({ n })), prompt: 'select_account' }));
+  } else {
+    const st = b64url(JSON.stringify({ o: location.origin, p: location.pathname, n }));
+    location.assign('https://appleid.apple.com/auth/authorize?' + new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.redirectURI, response_type: 'code id_token', scope: 'name email', response_mode: 'form_post', state: st, nonce: n }));
+  }
+}
+// back from Google or Apple: read the answer, take it out of the address, and use it only if this
+// device asked for it. Back with no answer (the back button, the window closed) says it was cancelled.
+function signinReturned() {
+  const h = location.hash.slice(1), q = new URLSearchParams(h), p = pendingSignin();
+  let out = null;
+  if (/^cassie-auth=/.test(h)) {
+    let msg = null;
+    try { msg = JSON.parse(decodeURIComponent(h.slice(12))); } catch (e) { /* not ours */ }
+    if (msg && msg.type === 'cassie-auth' && msg.provider === 'apple') out = { provider: 'apple', nonce: msg.nonce, msg };
+  } else if (q.has('state') && (q.has('id_token') || q.has('error'))) {
+    let st = {};
+    try { st = JSON.parse(unb64url(q.get('state'))); } catch (e) { /* not ours */ }
+    out = { provider: 'google', nonce: st.n, idToken: q.get('id_token'), error: q.get('error') };
+  }
+  if (!out) {
+    if (!p) return null;
+    setPendingSignin(null);
+    return { provider: p.p, code: p.p + '_cancelled' };
+  }
   history.replaceState(null, '', location.pathname + location.search);
-  let msg = null, mine = '';
-  try { msg = JSON.parse(decodeURIComponent(m[1])); } catch (e) { return null; }
-  try { mine = sessionStorage.getItem(APPLE_KEY) || ''; sessionStorage.removeItem(APPLE_KEY); } catch (e) { /* none */ }
-  return msg && msg.type === 'cassie-auth' && msg.provider === 'apple' && mine && msg.nonce === mine ? msg : null;
+  setPendingSignin(null);
+  if (out.error) return { provider: 'google', code: out.error === 'access_denied' ? 'google_cancelled' : 'google_failed' };
+  if (!p || p.p !== out.provider || !out.nonce || out.nonce !== p.n) return { provider: out.provider, code: 'signin_mismatch' };
+  return out;
 }
 
 function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
@@ -7083,14 +7445,16 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
         <h1 class="auth-title"></h1>
         <p class="auth-sub"></p>
         <div class="auth-providers">
-          <div class="auth-google" hidden><div class="auth-gbtn"></div></div>
+          <button type="button" class="auth-google" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></button>
           <button type="button" class="auth-apple" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span>Sign in with Apple</span></button>
         </div>
         <div class="auth-or" hidden><span>or</span></div>
         <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
         <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
         <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+        <div class="auth-busy" role="status" hidden><span class="auth-spin" aria-hidden="true"></span><b>Signing you in…</b><span class="auth-busy-sub">This takes a few seconds.</span></div>
         <p class="auth-err" role="alert" hidden></p>
+        <button type="button" class="auth-retry" hidden>Try again</button>
         <button type="submit" class="auth-go"></button>
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
@@ -7112,7 +7476,20 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   const f = page.querySelector('form');
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');
-  const showErr = (m) => { err.textContent = m; err.hidden = !m; };
+  const retryBtn = f.querySelector('.auth-retry');
+  let retry = null;
+  const showErr = (m, again) => { err.textContent = m; err.hidden = !m; retry = m && again ? again : null; retryBtn.hidden = !retry; };
+  retryBtn.addEventListener('click', () => { const r = retry; showErr(''); if (r) r(); });
+  // "Signing you in…": the form steps aside; a watchdog makes sure it never stays up for long
+  let busyTimer = 0, busyStop = null, busyAgain = null;
+  const busy = (on, words, again) => {
+    if (on) busyAgain = again || busyAgain;
+    f.classList.toggle('busy', !!on);
+    f.querySelector('.auth-busy').hidden = !on;
+    if (on) f.querySelector('.auth-busy b').textContent = words || 'Signing you in…';
+    clearTimeout(busyTimer);
+    if (on) busyTimer = setTimeout(() => { if (busyStop) busyStop(); busy(false); showErr(CassieErrors.say('timeout'), busyAgain || (() => location.reload())); }, SIGNIN_LIMIT);
+  };
   const signup = () => mode === 'signup';
   const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const check = CassieErrors.form(f, {
@@ -7164,13 +7541,21 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     setMode(to);
   });
   f.querySelector('.auth-eye').addEventListener('click', () => { f.password.type = f.password.type === 'password' ? 'text' : 'password'; });
-  f.addEventListener('input', () => showErr(''));
-  const close = () => page.remove();
+  f.addEventListener('input', () => { if (!retry) showErr(''); });
+  const close = () => { clearTimeout(busyTimer); page.remove(); };
   const done = (res) => { close(); afterSignIn(res); };
   // An answer from Google or Apple: signed in, or (the first time on an email account with a
   // password) ask for that password once, so nobody else's Google or Apple can take the account.
+  const startAgain = (provider) => async () => {
+    if (navigator.onLine === false) { showErr(CassieErrors.say('offline'), startAgain(provider)); return; }
+    busy(true, 'Opening ' + PROVIDER_NAME[provider] + '…', startAgain(provider));
+    const p = await authProviders();
+    if (!p[provider]) { busy(false); showErr(CassieErrors.say('network'), startAgain(provider)); return; }
+    signinStart(provider, p[provider]);
+  };
   const providerResult = (provider, res, extra) => {
-    if (res.code) { showErr(CassieErrors.STRINGS[res.code] ? CassieErrors.say(res.code) : CassieErrors.say(provider + '_failed')); return; }
+    busy(false);
+    if (res.code) { showErr(CassieErrors.STRINGS[res.code] ? CassieErrors.say(res.code) : CassieErrors.say(provider + '_failed'), startAgain(provider)); return; }
     if (!res.needsPassword) { done(res); return; }
     const P = PROVIDER_NAME[provider];
     setMode('signin');
@@ -7188,19 +7573,23 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     setTimeout(() => f.password.focus(), 30);
   };
   const providerCall = async (provider, body) => {
-    try { providerResult(provider, await authCall('/auth/' + provider, body), { credential: body.credential, nonce: body.nonce, name: body.name }); }
-    catch (e) { showErr(CassieErrors.explain(e, provider + '_failed')); }
+    busy(true, 'Signing you in…', startAgain(provider));
+    const stop = new AbortController();
+    busyStop = () => stop.abort();
+    try { providerResult(provider, await authCall('/auth/' + provider, body, 'POST', { timeout: SIGNIN_CALL_LIMIT, signal: stop.signal }), { credential: body.credential, nonce: body.nonce, name: body.name }); }
+    catch (e) { busy(false); showErr(CassieErrors.explain(e, provider + '_failed'), startAgain(provider)); }
+    finally { busyStop = null; }
   };
   const linkWith = async (how) => {
     const l = linking;
     if (!l) return;
     showErr('');
     go.disabled = true; go.setAttribute('aria-busy', 'true');
-    try { done(await authCall('/auth/' + l.provider, { credential: l.credential, nonce: l.nonce, name: l.name, ...how })); }
+    try { done(await authCall('/auth/' + l.provider, { credential: l.credential, nonce: l.nonce, name: l.name, ...how }, 'POST', { timeout: SIGNIN_CALL_LIMIT })); }
     catch (e) {
       go.disabled = false; go.removeAttribute('aria-busy');
       if (FIELD_OF[e.code] === 'password' && !how.forget) check.show('password', e.code);
-      else showErr(CassieErrors.explain(e, l.provider + '_failed'));
+      else showErr(CassieErrors.explain(e, l.provider + '_failed'), () => linkWith(how));
     }
   };
   f.addEventListener('submit', async (e) => {
@@ -7228,25 +7617,29 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     if (!state.profile) frOnboard((frLoad() || {}).at || 0);
   });
   if (!first) page.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  page.querySelector('.auth-apple').addEventListener('click', () => { if (prov.apple) appleStart(prov.apple); });
+  const tapProvider = (provider) => {
+    if (!prov[provider]) return;
+    if (navigator.onLine === false) { showErr(CassieErrors.say('offline'), startAgain(provider)); return; }
+    busy(true, 'Opening ' + PROVIDER_NAME[provider] + '…', startAgain(provider));
+    signinStart(provider, prov[provider]);
+  };
+  page.querySelector('.auth-apple').addEventListener('click', () => tapProvider('apple'));
+  page.querySelector('.auth-google').addEventListener('click', () => tapProvider('google'));
+  // back here from Google with the page kept as it was (the back button): it was cancelled
+  page.addEventListener('signin-back', (e) => { busy(false); showErr(CassieErrors.say(e.detail.code), startAgain(e.detail.provider)); });
   authProviders().then((p) => {
     if (!page.isConnected) return;
     prov.google = p.google && p.google.clientId ? p.google : null;
     prov.apple = p.apple && p.apple.clientId && p.apple.redirectURI ? p.apple : null;
     showProviders();
-    if (!prov.google) return;
-    loadGoogle().then(() => {
-      window.google.accounts.id.initialize({
-        client_id: prov.google.clientId,
-        use_fedcm_for_button: true, // Chrome signs in without a popup (popups can't answer back on this site)
-        callback: ({ credential }) => providerCall('google', { credential }),
-      });
-      const box = page.querySelector('.auth-gbtn');
-      window.google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', width: Math.min(360, box.clientWidth || 320) });
-    }).catch(() => { prov.google = null; showProviders(); }); // Google didn't load: no broken button
   });
   setMode(mode);
-  if (returned) providerResult('apple', returned, { credential: returned.credential, nonce: returned.nonce, name: returned.name });
+  // back from Google or Apple: sign in (Google's answer is checked by Cassie's server first), or say why not
+  if (returned) {
+    if (returned.code) providerResult(returned.provider, { code: returned.code });
+    else if (returned.provider === 'google') providerCall('google', { credential: returned.idToken, nonce: returned.nonce });
+    else providerResult('apple', returned.msg, { credential: returned.msg.credential, nonce: returned.msg.nonce, name: returned.msg.name });
+  }
   setTimeout(() => f.email.focus(), 60);
 }
 
@@ -7313,6 +7706,7 @@ function openReport() {
   wrap.querySelector('.pf-cancel').addEventListener('click', close);
   wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
   f.text.focus();
+  if (window.CassieMic) window.CassieMic.attach(f.text);
   const check = CassieErrors.form(f, { text: (v) => (v.trim().length < 5 ? 'need_report' : '') });
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -7357,8 +7751,11 @@ if (window.CassieCards) {
     save,
     ask: (prompt) => askCassie([{ role: 'user', content: prompt }]),
     speak: (text) => window.CassieVoice.speak(cleanForSpeech(text), { gender: voiceGender() }),
+    // Listen to a whole deck: one decision for all of it (Bella reads every card, or none and says so once)
+    session: (all) => { const s = window.CassieVoice.session({ gender: voiceGender() }); s.plan(cleanForSpeech(all)); return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() }; },
     track,
     onChange: () => { if (!state.messages.length) renderHistory(); }, // the home screen shows what's due
+    onGrade: (before, after) => { if (after > before) progressAdd({ cardsUp: 1 }); }, // (the weekly card)
   });
 }
 
@@ -7496,16 +7893,22 @@ renderHistory();
 updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
-const appleBack = accountsOn() ? appleReturned() : null; // back from Sign in with Apple
-if (!state.profile) {
-  // with Cassie's server: the sign-in page first (or "Continue without an account")
+const signinBack = accountsOn() ? signinReturned() : null; // back from Google or Apple
+if (signinBack) openAuth({ first: !state.profile, mode: 'signin', returned: signinBack }); // at once: "Signing you in…", never a bare page
+else if (!state.profile) {
   // Welcome, Intro, Sign in (with Cassie's server), then the four questions; a reload carries on
-  if (appleBack) setTimeout(() => openAuth({ first: true, mode: 'signup', returned: appleBack }), 300);
-  else firstRun();
-} else {
-  track('open');
-  if (appleBack) setTimeout(() => openAuth({ mode: 'signin', returned: appleBack }), 300);
+  firstRun();
 }
+if (state.profile) track('open');
+// back from Google with the page kept as it was (the back button on a phone): say it was cancelled
+window.addEventListener('pageshow', (e) => {
+  if (!e.persisted || !accountsOn()) return;
+  const r = signinReturned();
+  if (!r) return;
+  const page = document.querySelector('.auth-page');
+  if (page && r.code) page.dispatchEvent(new CustomEvent('signin-back', { detail: r }));
+  else openAuth({ first: !state.profile, mode: 'signin', returned: r });
+});
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
   authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = accountOf(r.account); if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })

@@ -20,6 +20,9 @@
  *     onAsk,       // optional async (png, question, parts) => string | { reply, draw }
  *                  //   draw = a board spec ({type:'graph', fn, xrange…} / shape / steps):
  *                  //   Cassie draws it ON the board, as one stroke the student can undo or erase
+ *     hear,        // optional (onWords) => Promise<text> (with .stop()): a mic beside Ask. Words show in
+ *                  //   the box as they come, and when the student stops talking the question is asked.
+ *                  //   The app and the extension each pass their own (this file stays the same in both).
  *   })
  *   The returned session also has draw(spec) — Cassie draws on the board directly.
  */
@@ -27,6 +30,8 @@
   'use strict';
   if (window.CassieSketch) return;
 
+  const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const MIC_STOP = '<svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg><span>Stop</span>';
   const CSS = `
   .csk-wrap { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center;
     background: rgba(12,12,14,.46); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1b1d; }
@@ -78,6 +83,8 @@
   .csk-text { position: absolute; z-index: 3; min-width: 60px; border: 1px dashed rgba(127,127,127,.7); background: rgba(255,255,255,.85);
     padding: 2px 4px; font-family: system-ui, sans-serif; outline: none; }
   .csk-ask { display: flex; gap: 6px; padding: 7px 12px; border-bottom: 1px solid rgba(127,127,127,.2); }
+  .csk-ask .csk-mic { min-width: 44px; height: 44px; align-self: center; gap: 6px; }
+  .csk-ask .csk-mic svg { width: 20px; height: 20px; }
   .csk-ask input { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: 0 11px; font: 13px system-ui, sans-serif; }
   .csk-hint { font-size: 11.5px; opacity: .65; padding: 0 12px 8px; }
   .csk-hidden { display: none !important; }
@@ -344,6 +351,44 @@
 
   let current = null;
 
+  // One stroke on a canvas, the board's own drawing: pen, highlighter, line, text, box, note,
+  // card or a group of them. Teach me in the extension draws on a page with it too.
+  function paintStroke(ctx, s) {
+    if (s.tool === 'group') { (s.items || []).forEach((it) => paintStroke(ctx, it)); return; }
+    ctx.save();
+    if (s.tool === 'rect') {
+      ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(s.x, s.y, s.w, s.h, s.r || 0) : ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (s.tool === 'text') {
+      ctx.fillStyle = s.color; ctx.font = `${s.weight || 600} ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
+      s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
+      ctx.restore(); return;
+    }
+    if (s.tool === 'note' || s.tool === 'card') { ctx.translate(s.x, s.y); objPieces(s, !!s.flip).forEach((it) => paintStroke(ctx, it)); ctx.restore(); return; }
+    const p = s.points;
+    if (!p || !p.length) { ctx.restore(); return; }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = s.tool === 'eraser' ? '#000' : s.color;
+    ctx.globalAlpha = s.tool === 'hl' ? 0.35 : 1;
+    ctx.lineWidth = s.tool === 'hl' ? s.size * 4 : s.tool === 'eraser' ? s.size * 4 : s.size;
+    ctx.beginPath();
+    ctx.moveTo(p[0][0], p[0][1]);
+    if (p.length === 1) ctx.lineTo(p[0][0] + .01, p[0][1]);
+    else if (s.tool === 'line') ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    else {
+      for (let i = 1; i < p.length - 1; i++) {
+        const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
+        ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my);
+      }
+      ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function loadImage(src) {
     return new Promise((resolve) => {
       if (!src) return resolve(null);
@@ -402,7 +447,7 @@
           <input type="file" accept="image/*" class="csk-hidden csk-picfile">
           <input type="file" accept=".json,application/json" class="csk-hidden csk-boardfile">
         </div>
-        ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie"><button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
+        ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie">${opts.hear ? `<button class="csk-btn csk-mic" type="button" aria-label="Say it instead of typing" title="Say it instead of typing">${MIC}</button>` : ''}<button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
         <div class="csk-stage"><div class="csk-board">
           <canvas class="csk-bg"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-obj"></canvas><canvas class="csk-live"></canvas><canvas class="csk-fx"></canvas>
         </div></div>
@@ -474,41 +519,7 @@
       }
       $('[data-act="grid"]').classList.toggle('on', grid);
     }
-    function paint(ctx, s) {
-      if (s.tool === 'group') { (s.items || []).forEach((it) => paint(ctx, it)); return; }
-      ctx.save();
-      if (s.tool === 'rect') {
-        ctx.fillStyle = s.fill || 'rgba(255,255,255,.94)'; ctx.strokeStyle = s.color || 'rgba(0,0,0,.15)'; ctx.lineWidth = s.size || 2;
-        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(s.x, s.y, s.w, s.h, s.r || 0) : ctx.rect(s.x, s.y, s.w, s.h); ctx.fill(); ctx.stroke();
-        ctx.restore(); return;
-      }
-      if (s.tool === 'text') {
-        ctx.fillStyle = s.color; ctx.font = `${s.weight || 600} ${s.size}px system-ui, sans-serif`; ctx.textBaseline = 'top';
-        s.text.split('\n').forEach((ln, i) => ctx.fillText(ln, s.x, s.y + i * s.size * 1.25));
-        ctx.restore(); return;
-      }
-      if (isObj(s)) { ctx.translate(s.x, s.y); objPieces(s, !!s.flip).forEach((it) => paint(ctx, it)); ctx.restore(); return; }
-      const p = s.points;
-      if (!p || !p.length) { ctx.restore(); return; }
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = s.tool === 'eraser' ? '#000' : s.color;
-      ctx.globalAlpha = s.tool === 'hl' ? 0.35 : 1;
-      ctx.lineWidth = s.tool === 'hl' ? s.size * 4 : s.tool === 'eraser' ? s.size * 4 : s.size;
-      ctx.beginPath();
-      ctx.moveTo(p[0][0], p[0][1]);
-      if (p.length === 1) ctx.lineTo(p[0][0] + .01, p[0][1]);
-      else if (s.tool === 'line') ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
-      else {
-        for (let i = 1; i < p.length - 1; i++) {
-          const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
-          ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my);
-        }
-        ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
+    function paint(ctx, s) { paintStroke(ctx, s); }
     function redraw() {
       const x = ink.getContext('2d');
       x.clearRect(0, 0, W, H);
@@ -1191,6 +1202,21 @@
       if (n.reply) note.appendChild(mdBlock(n.reply));
     }
     const askForm = $('.csk-ask');
+    // the mic beside Ask: say it, and it's asked
+    const mic = askForm && askForm.querySelector('.csk-mic');
+    let hearing = null;
+    if (mic) mic.addEventListener('click', async () => {
+      if (hearing) { if (hearing.stop) hearing.stop(); return; }
+      const input = askForm.querySelector('input'), before = input.value.trim(), ph = input.placeholder;
+      const put = (w) => { input.value = before && w ? before + ' ' + w : before || w || ''; };
+      mic.innerHTML = MIC_STOP; mic.setAttribute('aria-label', 'Stop listening'); mic.title = 'Stop listening'; input.placeholder = 'Listening…';
+      showNote({ reply: 'Listening…' });
+      let said = '', failed = false;
+      try { hearing = opts.hear(put); said = String((await hearing) || '').trim(); }
+      catch (err) { failed = true; showNote({ reply: (err && err.message) || 'Cassie can’t use the microphone here. Type it instead.' }); }
+      finally { hearing = null; mic.innerHTML = MIC; mic.setAttribute('aria-label', 'Say it instead of typing'); mic.title = 'Say it instead of typing'; input.placeholder = ph; }
+      if (said && input.isConnected) { put(said); askForm.requestSubmit(); } else if (!failed) { showNote(null); input.focus(); }
+    });
     if (askForm) {
       askForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1385,5 +1411,5 @@
     return current;
   }
 
-  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current };
+  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current, paint: paintStroke };
 })();

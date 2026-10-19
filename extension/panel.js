@@ -55,11 +55,67 @@ function home(extra = '') {
   view.innerHTML = `<div class="help">
     ${extra ? `<div class="card">${extra}</div>` : ''}
     <p><b>Highlighted text</b>: right-click it and choose <b>Explain with Cassie</b> or <b>Answer with Cassie</b>. This works inside PDFs too.</p>
-    <p><b>Snip</b>: take a picture of this tab, drag over the part you need, and Cassie explains it on her board.</p>
+    <p><b>Snip</b>: take a picture of this tab, drag over the part you need, then Cassie teaches it right there or on her board.</p>
     <p><b>Whole file</b>: on a PDF, Google Slides or Google Doc tab, Cassie reads every page and makes a reviewer.</p>
     <p><b>Board</b>: draw, or paste any screenshot with <b>Ctrl+V</b> (Win+Shift+S makes one).</p>
+    <p><b>Teach me</b>: Cassie teaches what’s on this tab step by step, pointing and drawing on it. <b>Ask Cassie</b>: ask about this tab and she shows you where the answer is.</p>
+    <button type="button" class="cur-switch tall" aria-pressed="false"><span>Cassie’s cursor beside your mouse</span><i aria-hidden="true"></i></button>
+    <section class="lessons" aria-label="Your lessons"></section>
   </div>`;
+  const sw = view.querySelector('.cur-switch');
+  chrome.storage.local.get(['teachCursor'], (o) => sw.setAttribute('aria-pressed', String(o.teachCursor === 'on')));
+  sw.addEventListener('click', () => { const on = sw.getAttribute('aria-pressed') !== 'true'; sw.setAttribute('aria-pressed', String(on)); chrome.storage.local.set({ teachCursor: on ? 'on' : 'off' }); });
+  renderLessons();
 }
+
+/* ---------- Your lessons: what Cassie taught on a page, kept on this device until deleted ---------- */
+function lessonText(l) {
+  const qa = Array.isArray(l.qa) ? l.qa : [];
+  return `Cassie’s lesson: ${l.title}${l.q ? `\nI asked: ${l.q}` : ''}\n\n${l.steps.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n${qa.length ? `\nMy questions:\n${qa.map((x) => `Q: ${x.q}\nA: ${x.a}`).join('\n\n')}\n` : ''}`;
+}
+function renderLessons() {
+  const box = view.querySelector('.lessons');
+  if (!box) return;
+  chrome.storage.local.get(['teachLessons'], (o) => {
+    const list = Array.isArray(o.teachLessons) ? o.teachLessons : [];
+    box.innerHTML = list.length ? '<h2 class="lessons-h">Your lessons</h2>' : '';
+    list.forEach((l) => {
+      const card = document.createElement('article');
+      card.className = 'card lesson'; card.dataset.id = l.id;
+      card.innerHTML = `${l.pic ? '<img alt="The page with Cassie’s drawings">' : ''}<b class="lesson-t"></b><small class="lesson-d"></small>
+        <details><summary class="tall">Steps</summary><ol></ol><dl class="lesson-qa" hidden></dl></details>
+        <div class="row"><button class="btn tall" type="button" data-open>Open in Cassie</button><button class="btn ghost tall" type="button" data-del>Delete</button></div>`;
+      if (l.pic) card.querySelector('img').src = l.pic;
+      card.querySelector('.lesson-t').textContent = l.title;
+      card.querySelector('.lesson-d').textContent = new Date(l.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + (l.q ? ` · ${l.q}` : '');
+      const ol = card.querySelector('ol');
+      l.steps.forEach((x) => { const li = document.createElement('li'); li.textContent = x; ol.appendChild(li); });
+      const dl = card.querySelector('.lesson-qa');
+      (Array.isArray(l.qa) ? l.qa : []).forEach((x) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = 'You asked: ' + x.q; dd.textContent = x.a; dl.append(dt, dd); dl.hidden = false; });
+      card.querySelector('[data-del]').addEventListener('click', () => {
+        chrome.storage.local.get(['teachLessons'], (o2) => chrome.storage.local.set({ teachLessons: (o2.teachLessons || []).filter((x) => x.id !== l.id) }));
+      });
+      card.querySelector('[data-open]').addEventListener('click', async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.textContent = 'Opening…';
+        const base64 = btoa(unescape(encodeURIComponent(lessonText(l))));
+        const r = await chrome.runtime.sendMessage({ type: 'CASSIE_OPEN_IN_APP', name: 'Cassie lesson.txt', mime: 'text/plain', base64, prompt: `This is a lesson you taught me on a page called “${l.title}”. Go over it with me and check that I understood.` }).catch((err) => ({ error: err.message }));
+        b.disabled = false; b.textContent = r && r.ok ? 'Opened in Cassie' : 'Open in Cassie';
+      });
+      box.appendChild(card);
+    });
+    if (list.length) {
+      const all = document.createElement('button');
+      all.type = 'button'; all.className = 'btn ghost tall lessons-clear'; all.textContent = 'Delete all lessons';
+      all.addEventListener('click', () => { if (confirm('Delete all your saved lessons?')) chrome.storage.local.set({ teachLessons: [] }); });
+      box.appendChild(all);
+    }
+  });
+}
+chrome.storage.onChanged.addListener((ch, area) => {
+  if (area !== 'local') return;
+  if (ch.teachLessons) renderLessons();
+  if (ch.teachCursor) { const sw = view.querySelector('.cur-switch'); if (sw) sw.setAttribute('aria-pressed', String(ch.teachCursor.newValue === 'on')); }
+});
 
 /* ---------- tiny markdown → HTML (with Cassie's graphs) ---------- */
 function inline(s) {
@@ -156,6 +212,7 @@ function showTextJob(text, mode = 'explain') {
   };
   view.querySelector('.row .btn').addEventListener('click', follow);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') follow(); });
+  if (window.CassieMic) window.CassieMic.attach(input, { send: follow }); // (say it: it's asked)
   run(mode);
 }
 
@@ -208,6 +265,7 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
     onImage: (url) => { if (url) explainOnBoard(sess, url, '', 'paste'); },
     extra: [{ label: 'New snip', title: 'Snip the tab again', onClick: () => { window.CassieSketch.close(); snip(); } }],
     askPlaceholder: 'Ask Cassie, or tell her what to draw (e.g. “graph the answer”)',
+    hear: window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null,
     onAsk: async (png, q, board) => { try { return withDrawing(q, await vision(png, `This is a student's board (a snip of their lesson, possibly with their own writing on it). Their request: "${q}". Do exactly that. Answer clearly and kindly like a tutor, in under 150 words, plain text.${DRAW_HINT}`, 1200, board, { kind: 'board', q })); } catch (e) { return errorText(e); } },
     checkLabel: 'Check my work',
     onCheck: async (png, board) => { try { return await vision(png, 'This is a student\'s board, maybe with their own writing and sketches. If they wrote or drew an answer, check it like a kind but honest tutor: what is right, any mistake and why, and a hint for the next step. If they haven\'t written anything yet, work out the question shown step by step and give the answer. Under 120 words, plain text.', 500, board, { kind: 'board', q: 'Check my work' }); } catch (e) { return errorText(e); } },
@@ -220,6 +278,7 @@ function openBoard(image, { title = 'Your board', explain = false, ctx = '', not
 async function snip() {
   const tab = await activeTab();
   view.innerHTML = '<p class="muted">Taking a picture of the tab…</p>';
+  if (tab) await chrome.tabs.sendMessage(tab.id, { type: 'CASSIE_TEACH_STOP' }, { frameId: 0 }).catch(() => null); // (her old drawing stays out of the picture)
   let out;
   try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP', windowId: tab && tab.windowId }); } catch (e) { out = { error: e.message }; }
   if (!out || out.error || !out.dataUrl) {
@@ -245,8 +304,13 @@ async function snip() {
     const c = document.createElement('canvas'); c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
     const x = c.getContext('2d', { willReadFrequently: true }); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
     x.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    home();
-    openBoard(c.toDataURL('image/jpeg', 0.9), { title: 'Your snip', explain: true, ctx });
+    const crop = c.toDataURL('image/jpeg', 0.9);
+    // the snipped part, as shares of the tab: Cassie teaches inside it on the page
+    const region = { x: sx / img.naturalWidth, y: sy / img.naturalHeight, w: sw / img.naturalWidth, h: sh / img.naturalHeight };
+    view.innerHTML = `<div class="card"><p class="hint">What should Cassie do with your snip?</p>
+      <div class="row"><button class="btn tall" id="snip-teach">Teach me here</button><button class="btn ghost tall" id="snip-board">On the board</button></div></div>`;
+    view.querySelector('#snip-teach').addEventListener('click', () => teach({ tab, snip: { image: crop, region } }));
+    view.querySelector('#snip-board').addEventListener('click', () => { home(); openBoard(crop, { title: 'Your snip', explain: true, ctx }); });
   };
   let start = null;
   wrap.addEventListener('pointerdown', (e) => { const b = wrap.getBoundingClientRect(); start = { x: e.clientX - b.left, y: e.clientY - b.top }; wrap.setPointerCapture(e.pointerId); });
@@ -264,6 +328,107 @@ async function snip() {
   });
   view.querySelector('#whole').addEventListener('click', () => finish(0, 0, img.clientWidth, img.clientHeight));
   view.querySelector('#cancel').addEventListener('click', () => home());
+}
+
+/* ---------- Teach me and Ask Cassie: she teaches the tab you have open ---------- */
+// Cassie reads the page (its words and a picture of it), then teaches it step by step on the page
+// itself: her arrow points and she draws on a see-through layer (teach.js). Where the extension
+// can't draw (the browser's own pages, its PDF viewer, extension stores), she teaches on a picture
+// of the tab right here. The page's words and picture go to the AI only when the student taps, and
+// are never kept: no log is asked for.
+// a page the extension can't draw on: why, in one plain sentence (CassieErrors)
+function whyNotHere(tab) {
+  const u = String((tab && tab.url) || '');
+  if (/^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore|microsoftedge\.microsoft\.com\/addons)/i.test(u)) return 'teach_where_store';
+  if (/\.pdf([?#]|$)/i.test(u)) return 'teach_where_pdf';
+  if (!u || /^(chrome|edge|about|chrome-extension|extension|devtools|view-source|chrome-search):/i.test(u)) return 'teach_where_browser';
+  return 'teach_where_page';
+}
+const teachReach = (tab, msg) => chrome.tabs.sendMessage(tab.id, msg, { frameId: 0 }).catch(() => null);
+async function tabPicture(tab) {
+  let out = null;
+  try { out = await chrome.runtime.sendMessage({ type: 'CASSIE_SNIP', windowId: tab && tab.windowId }); } catch (e) { out = null; }
+  return out && out.dataUrl && !(out.full && out.full.std < 4) ? out.dataUrl : null;
+}
+function teachError(box, words, retry) {
+  box.innerHTML = '<div class="card teach-err" role="alert"><p></p><div class="row"><button class="btn tall" type="button">Try again</button></div></div>';
+  box.querySelector('p').textContent = words;
+  box.querySelector('button').addEventListener('click', retry);
+}
+let teachRun = 0, lookAgain = null;
+// Look again (her card on the page, when the page moved under her drawings): the same lesson, with a fresh look
+chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.type === 'CASSIE_TEACH_AGAIN' && lookAgain) lookAgain(); return false; });
+// teach({ tab, q, snip: { image, region }, box, onAnswer }) runs one lesson (box: where her words go in the panel)
+async function teach({ tab = null, q = '', snip: snipped = null, box = null, onAnswer = null } = {}) {
+  tab = tab || (await activeTab());
+  const run = ++teachRun, again = () => teach({ tab, q, snip: snipped, box, onAnswer });
+  if (!box) { view.innerHTML = '<div class="teach-box"></div>'; box = view.querySelector('.teach-box'); }
+  if (window.CassieTeach) window.CassieTeach.stop();
+  chrome.storage.local.get(['teachCursor'], (o) => { if (o.teachCursor == null) chrome.storage.local.set({ teachCursor: 'on' }); }); // (her cursor comes on with the first lesson)
+  if (!tab) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
+  box.innerHTML = `<p class="muted">${q ? 'Cassie is reading your tab to answer…' : 'Cassie is looking at your tab…'}</p>`;
+  // 1. can she draw on this page? (it answers with what's on it, numbered)
+  const page = snipped ? ((await teachReach(tab, { type: 'CASSIE_TEACH_PING' })) ? { pictureOnly: true, items: [] } : null) : await teachReach(tab, { type: 'CASSIE_TEACH_SCAN' });
+  const onPage = !!(page && Array.isArray(page.items));
+  // 2. what she sees: the snip, or a picture of the tab
+  const image = snipped ? snipped.image : await tabPicture(tab);
+  if (run !== teachRun) return;
+  if (!image) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
+  // 3. her lesson as steps (CassieTeach.parse leaves out any bad step or shape; a reply that can't be
+  // used is asked for once more before she says she couldn't)
+  const numbered = onPage && !snipped && !page.pictureOnly;
+  let steps, answer;
+  try {
+    ({ steps, answer } = await window.CassieTeach.lessonFrom({ send: (ask, n) => vision(image, ask, n), prompt: window.CassieTeach.prompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), count: numbered ? page.items.length : 0, q }));
+  } catch (e) {
+    if (run === teachRun) teachError(box, window.CassieTeach.problem(e), again);
+    return;
+  }
+  if (run !== teachRun) return;
+  if (onAnswer && answer) onAnswer(answer);
+  if (!steps.length) { box.innerHTML = ''; return; }
+  lookAgain = again;
+  // 4. the lesson: on the page, or here on the picture when the page won't let her draw
+  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: tab.title || '', q }, region: snipped ? snipped.region : null, shot: image, numbered };
+  if (onPage) {
+    const shown = await teachReach(tab, lesson);
+    if (run !== teachRun) return;
+    if (shown && shown.ok) {
+      box.innerHTML = `<div class="card teach-on"><p>Cassie is teaching on the page${snipped ? ', inside your snip' : ''}. Tap Next on her card, or press Escape to stop.</p>
+        <div class="row"><button class="btn ghost tall" type="button" data-stop>Stop</button><button class="btn ghost tall" type="button" data-again>Start again</button></div></div>`;
+      box.querySelector('[data-stop]').addEventListener('click', () => { teachReach(tab, { type: 'CASSIE_TEACH_STOP' }); box.innerHTML = '<p class="muted">Cassie stopped teaching.</p>'; });
+      box.querySelector('[data-again]').addEventListener('click', () => teachReach(tab, lesson));
+      return;
+    }
+  }
+  box.innerHTML = '<p class="teach-why"></p><div class="teach-mount"></div>';
+  box.querySelector('.teach-why').textContent = window.CassieErrors.say(whyNotHere(tab));
+  window.CassieTeach.show({ steps, title: tab.title || '', q }, { mount: box.querySelector('.teach-mount'), image });
+}
+// Ask Cassie: the answer shows here, and she points at what she means
+function askPage() {
+  view.innerHTML = `<div class="card ask-page">
+      <p class="hint">Ask Cassie about this tab. She answers here and points at what she means.</p>
+      <form class="row"><input class="tall" type="text" placeholder="Ask about this page…" aria-label="Your question about this page"><button class="btn tall" type="submit">Ask</button></form>
+      <div class="answer" aria-live="polite"></div>
+    </div><div class="teach-box"></div>`;
+  const form = view.querySelector('form'), input = form.querySelector('input'), out = view.querySelector('.answer'), box = view.querySelector('.teach-box');
+  if (window.CassieMic) window.CassieMic.attach(input, { send: () => form.requestSubmit() });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (!q) { input.focus(); return; }
+    out.innerHTML = '';
+    // a student at risk: care before anything else, no AI is asked (care.js)
+    const hit = window.CassieCare && window.CassieCare.check(q);
+    if (hit) {
+      renderMd(out, window.CassieCare.reply(hit.lang));
+      try { chrome.runtime.sendMessage({ type: 'CASSIE_CARE' }); } catch (err) { /* best effort */ }
+      return;
+    }
+    teach({ q, box, onAnswer: (a) => renderMd(out, a) });
+  });
+  input.focus();
 }
 
 /* ---------- Whole file ---------- */
@@ -343,6 +508,8 @@ popBtn.addEventListener('click', popOut);
 if (FLOATING) popBtn.hidden = true;
 
 $('#t-snip').addEventListener('click', snip);
+$('#t-teach').addEventListener('click', () => teach());
+$('#t-ask').addEventListener('click', askPage);
 $('#t-file').addEventListener('click', wholeFile);
 $('#t-board').addEventListener('click', () => openBoard(null));
 home();

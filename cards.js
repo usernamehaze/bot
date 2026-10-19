@@ -8,7 +8,7 @@
  * Decks export for Anki (a tab-separated file Anki imports as-is) and Quizlet (paste into
  * "Import"), or as CSV.
  *
- *   CassieCards.init({ state: () => state, save, ask: async (prompt) => text, track, onChange })
+ *   CassieCards.init({ state: () => state, save, ask: async (prompt) => text, track, onChange, onGrade(boxBefore, boxAfter) })
  *   CassieCards.open(deck?) · CassieCards.fromText(text, deck) · CassieCards.fromMistakes()
  *   CassieCards.dueCount()
  */
@@ -88,6 +88,7 @@
     else if (how === 'hard') { card.due = now() + Math.max(10 * MIN, (GAPS[box] || 1) * DAY * 0.5); }
     else if (how === 'good') { card.box = Math.min(GAPS.length - 1, box + 1); card.due = now() + GAPS[card.box] * DAY; }
     else { card.box = Math.min(GAPS.length - 1, box + 2); card.due = now() + GAPS[card.box] * DAY * 1.3; }
+    if (ctx.onGrade) ctx.onGrade(box, card.box || 0); // (a card that moved up a level: the weekly card counts it)
     card.seen = now();
     ctx.save();
   }
@@ -236,8 +237,8 @@
     if (session.i >= session.list.length) {
       const left = dueOf(session.deck).length;
       body().innerHTML = `<div class="fc-done"><div class="fc-big">🎉</div><h3>Done! ${session.done} card${session.done === 1 ? '' : 's'} reviewed.</h3>
-        <p>${left ? `${left} more ${left === 1 ? 'is' : 'are'} due. Keep going, or come back later.` : 'Nothing else is due in this deck. Cassie will bring the cards back right when you’re about to forget them.'}</p>
-        <div class="fc-row"><button type="button" class="fc-btn" data-back-home="1">All decks</button>${left ? `<button type="button" class="fc-btn main" data-study="${esc(session.deck)}">Keep going</button>` : ''}</div></div>`;
+        <p>${left ? `${left} more ${left === 1 ? 'is' : 'are'} due. Study a few more, or come back later.` : 'Nothing else is due in this deck. Cassie will bring the cards back right when you’re about to forget them.'}</p>
+        <div class="fc-row"><button type="button" class="fc-btn" data-back-home="1">All decks</button>${left ? `<button type="button" class="fc-btn main" data-study="${esc(session.deck)}">Study more</button>` : ''}</div></div>`;
       body().querySelector('[data-back-home]').addEventListener('click', () => { session = null; renderHome(); });
       session = { ...session, list: [], card: null };
       return;
@@ -265,9 +266,9 @@
   }
 
   /* ---------- listening: for students who learn by ear ---------- */
-  let voice = null, listening = null;
+  let voice = null, listening = null, deckVoice = null;
   function hush() { if (voice) { voice.stop(); voice = null; } }
-  function say(text) { hush(); if (!ctx.speak) return null; voice = ctx.speak(text); return voice; }
+  function say(text) { hush(); if (!ctx.speak) return null; voice = deckVoice ? deckVoice.speak(text) : ctx.speak(text); return voice; }
   // Hands-free: Cassie reads each card's question, gives you a moment to answer in your head,
   // then reads the answer — like a study partner quizzing you. Nothing about your schedule changes.
   function startListen(deck) {
@@ -276,6 +277,9 @@
     session = null;
     ui.querySelector('.fc-back').hidden = false;
     if (ctx.track) ctx.track('feature', 'flashcards:listen');
+    // one decision for the whole deck: Bella reads every card, or Cassie shows them and says so once
+    if (deckVoice) deckVoice.end();
+    deckVoice = ctx.session ? ctx.session(list.map((c) => c.f + '. ' + c.b).join(' ')) : null;
     let i = 0, stopped = false, wait = 0, skipNow = null;
     const pause = (ms) => new Promise((r) => { skipNow = r; wait = setTimeout(r, ms); });
     const show = (c, side) => {
@@ -284,7 +288,7 @@
         <div class="fc-row"><button type="button" class="fc-btn" data-lstop="1">Stop</button><button type="button" class="fc-btn main" data-lnext="1">Next card</button></div>`;
     };
     listening = {
-      stop() { stopped = true; clearTimeout(wait); hush(); if (skipNow) skipNow(); listening = null; },
+      stop() { stopped = true; clearTimeout(wait); hush(); if (skipNow) skipNow(); listening = null; if (deckVoice) { deckVoice.end(); deckVoice = null; } },
       skip() { clearTimeout(wait); hush(); if (skipNow) skipNow(); },
     };
     (async () => {
@@ -300,6 +304,7 @@
         if (stopped) return;
         await pause(1800);
       }
+      if (deckVoice) { deckVoice.end(); deckVoice = null; }
       if (!stopped) { listening = null; renderHome('That’s the whole deck. Study it now to lock it in.'); }
     })();
   }

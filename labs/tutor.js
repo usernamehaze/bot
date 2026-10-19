@@ -98,8 +98,14 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   document.body.append(finger, ring);
   finger.hidden = ring.hidden = true;
 
-  // one voice for the whole lesson: picked now, kept to the end (speaker() comes from voice.js)
-  const lessonVoice = speaker ? speaker() : null;
+  // one decision per lesson (speaker() comes from voice.js): Bella says every step when what's left of
+  // her voice covers the whole lesson, otherwise the steps are typed and she says so once
+  let lessonVoice = null;
+  function newLesson(from) {
+    if (lessonVoice) lessonVoice.end();
+    lessonVoice = speaker ? speaker() : null;
+    if (lessonVoice && lessonVoice.plan) lessonVoice.plan(steps.slice(from || 0).map((x) => x.say).join(' '));
+  }
   let steps = [], at = 0, targets = [], pointed = null, talking = null, waitOff = null, raf = 0, alive = true, asking = 0, finished = false;
   const pill = $('.tut-pill'), pillText = $('.tut-pill-text');
 
@@ -324,6 +330,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
       if (!alive || me !== asking) return;
       steps = parse(reply);
       if (!steps.length) throw new Error('empty');
+      newLesson(0);
       show(0);
     } catch (e) {
       if (!alive || me !== asking) return;
@@ -346,6 +353,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
       return { say: x.say, point: want ? targets.findIndex((t) => same(t.what) === want) + 1 : 0 };
     });
     finished = false;
+    newLesson(Math.max(0, Math.min(steps.length - 1, k)));
     show(Math.max(0, Math.min(steps.length - 1, k)));
   }
   function offer(saved) {

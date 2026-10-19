@@ -85,6 +85,7 @@ document.getElementById('dock-show')?.addEventListener('click', (e) => {
 const pageQ = document.getElementById('page-q');
 const pageAsk = document.getElementById('page-ask');
 const pageAnswer = document.getElementById('page-answer');
+if (window.CassieMic) window.CassieMic.attach(pageQ, { send: () => pageAsk.click() }); // (say it: it's asked)
 
 function showPageAnswer(text) {
   pageAnswer.hidden = false;

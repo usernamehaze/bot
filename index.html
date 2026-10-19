@@ -12,17 +12,17 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="preload" href="landing/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="landing/fonts.css">
 <link rel="stylesheet" href="landing/desk.css?v=169">
 <link rel="stylesheet" href="landing/story.css?v=169">
 <link rel="prefetch" href="start.html">
 <style>
   :root {
-    --ink: #121117; --ink-2: #26252c; --mute: #6f6c74; --pearl: #f4efe7; --pearl-2: #ebe5db; --card: #fffdf9;
-    --line: rgba(18,17,23,.10); --glass: rgba(255,255,255,.10); --glass-line: rgba(255,255,255,.18);
-    --sans: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* Apple's neutrals: near black ink, a cool light grey page, white cards */
+    --ink: #1d1d1f; --ink-2: #2c2c2e; --mute: #6e6e73; --pearl: #f5f5f7; --pearl-2: #e8e8ed; --card: #ffffff;
+    --line: rgba(29,29,31,.10); --glass: rgba(255,255,255,.10); --glass-line: rgba(255,255,255,.18);
+    /* one typeface, the system's own (SF Pro on Apple devices), like Apple's pages */
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --r: 22px;
   }
   * { box-sizing: border-box; }
@@ -88,7 +88,7 @@
   /* (the version sits in the space under the button, so the button lines up with Open Cassie) */
   .ext-get { position: relative; display: flex; padding: 14px 0; margin: -9px 0; }
   .ext-get + .btn { margin-left: -8px; }
-  .ext-get small { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font: 500 10px/1 var(--sans); opacity: .7; white-space: nowrap; }
+  .ext-get small { position: absolute; left: 0; right: 0; bottom: 1px; text-align: center; font: 500 11px/1 var(--sans); opacity: .78; white-space: nowrap; }
   .nav.light .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); box-shadow: none; }
   @media (max-width: 760px) { .ext-get { display: none; } .ext-get + .btn { margin-left: auto; } }
   @media (pointer: coarse) { .nav .btn { min-height: 44px; } }
@@ -102,13 +102,14 @@
   .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(10,9,13,.55) 0%, rgba(10,9,13,.2) 40%, rgba(10,9,13,.7) 100%); pointer-events: none; }
   .hero-top { display: grid; grid-template-columns: 1.25fr .75fr; align-items: end; gap: 40px; padding: 150px 0 0; }
   .hero-side { padding-bottom: 14px; }
-  .eyebrow { display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px 7px 10px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); font-size: 14px; font-weight: 600; backdrop-filter: blur(8px); }
+  .eyebrow { display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px 7px 10px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); font-size: 14px; font-weight: 600; } /* (a label in the content: no glass, which is for the floating controls) */
   .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.18); }
-  .hero h1 { font: 400 clamp(56px, 7.6vw, 116px)/.94 'Instrument Serif', Georgia, serif; letter-spacing: -.025em; margin: 22px 0 0; }
-  .hero h1 em.s { font-style: italic; }
+  .hero h1 { font: 600 clamp(44px, 6.2vw, 88px)/1.05 var(--sans); letter-spacing: -.025em; margin: 22px 0 0; }
+  h1 em, h2 em, h3 em { font-style: normal; } /* (emphasis is the grey second tone, never italics) */
+  h1, h2 { text-wrap: balance; } /* (no word left alone on a line) */
   @media (min-width: 600px) { .hero h1 .nw { white-space: nowrap; } }
   .hero p.lead { font-size: clamp(17px, 1.4vw, 19px); line-height: 1.55; color: rgba(255,255,255,.8); max-width: 460px; margin: 0 0 24px; }
-  .hero p.lead em { font-family: 'Instrument Serif', Georgia, serif; font-size: 1.15em; }
+  .hero p.lead em { font-style: normal; font-weight: 600; color: #fff; }
   .cta { display: flex; flex-wrap: wrap; gap: 12px; }
   .trust { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 28px; font-size: 14.5px; color: rgba(255,255,255,.72); }
   .trust span { display: inline-flex; align-items: center; gap: 7px; }
@@ -135,8 +136,7 @@
   /* ---------- sections ---------- */
   section { padding: 120px 0; }
   .kicker { font-size: 13px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--mute); }
-  h2 { font: 400 clamp(42px, 5.4vw, 72px)/1 'Instrument Serif', Georgia, serif; letter-spacing: -.02em; margin: 14px 0 18px; }
-  h2 em.s { font-style: italic; }
+  h2 { font: 600 clamp(42px, 5.4vw, 72px)/1.05 var(--sans); letter-spacing: -.025em; margin: 14px 0 18px; }
   .sub { font-size: 19px; color: var(--mute); max-width: 620px; margin: 0; }
   .head { margin-bottom: 54px; }
 
@@ -172,7 +172,7 @@
   /* ---------- pricing ---------- */
   .toggles { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 34px; }
   .seg { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--pearl-2); border: 1px solid var(--line); }
-  .seg button { border: 0; background: transparent; color: var(--mute); font: 650 14.5px/1 var(--sans); padding: 10px 16px; border-radius: 999px; cursor: pointer; }
+  .seg button { border: 0; background: transparent; color: var(--mute); font: 650 14.5px/1 var(--sans); min-height: 44px; padding: 10px 16px; border-radius: 999px; cursor: pointer; }
   .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   .seg button small { font-weight: 700; color: var(--ink); background: var(--pearl); border-radius: 999px; padding: 2px 7px; margin-left: 6px; font-size: 11.5px; }
   .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: stretch; }
@@ -197,6 +197,11 @@
   .plan.pop ul { border-color: rgba(255,255,255,.18); }
   .badge { position: absolute; top: 9px; right: 14px; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; background: var(--pearl); color: var(--ink); }
   .fine { margin-top: 22px; color: var(--mute); font-size: 14.5px; }
+  .plan .pass { display: inline-block; margin: 0 0 8px; padding: 4px 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 12.5px; font-weight: 800; letter-spacing: .04em; }
+  .plan .pass[hidden] { display: none; }
+  .plan .under { margin: 10px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--mute); }
+  .plan.pop .under { color: rgba(255,255,255,.72); }
+  .anchor { margin-top: 26px; font-size: 17px; font-weight: 650; text-align: center; }
   .refer { margin-top: 26px; padding: 14px 18px; border-radius: 14px; border: 1px dashed rgba(18,17,23,.22); font-size: 15.5px; text-align: center; }
 
   /* ---------- faq ---------- */
@@ -237,7 +242,7 @@
     .hl .sel { animation: none; clip-path: inset(0 0 0 0); } .hl .cur { display: none; }
   }
   /* touch screens: the nav's links and button are 44px to touch */
-  @media (pointer: coarse) { .nav .brand, .nav .btn, .nav .links a { min-height: 44px; display: inline-flex; align-items: center; } .moods button, .seg button, [data-forget] { min-height: 44px; } footer a { min-height: 44px; display: inline-flex; align-items: center; } }
+  @media (pointer: coarse) { .nav .brand, .nav .btn, .nav .links a { min-height: 44px; display: inline-flex; align-items: center; } .moods button, .seg button, [data-forget] { min-height: 44px; } footer a { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; } }
 </style>
 </head>
 <body>
@@ -248,7 +253,7 @@
     Cassie
   </a>
   <nav class="links"><a href="#try">Try it</a><a href="#desk">Features</a><a href="#more">More</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
-  <span class="ext-get"><a class="btn ghost" href="cassie-extension.zip?v=3.52.0" download>Get the Chrome extension</a><small data-ext-version>Version 3.52.0</small></span>
+  <span class="ext-get"><a class="btn ghost" href="cassie-extension.zip?v=3.57.0" download>Get the Chrome extension</a><small data-ext-version>Version 3.57.0</small></span>
   <a class="btn pearl" href="start.html">Open Cassie</a>
 </header>
 
@@ -258,7 +263,7 @@
     <div class="wrap hero-top">
       <div class="hero-copy">
         <span class="eyebrow rv"><i></i>Free for students · Philippines &amp; worldwide</span>
-        <h1 class="rv">Highlight <span class="hl"><span class="t">anything.</span><span class="sel" aria-hidden="true">anything.</span><span class="cur" aria-hidden="true"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span></span><br><span class="nw"><em class="s">Cassie</em> explains it.</span></h1>
+        <h1 class="rv">Highlight <span class="hl"><span class="t">anything.</span><span class="sel" aria-hidden="true">anything.</span><span class="cur" aria-hidden="true"><svg viewBox="100 80 305 350"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg></span></span><br><span class="nw"><em class="s">Cassie</em> explains&nbsp;it.</span></h1>
       </div>
       <div class="hero-side rv">
         <p class="lead">Your AI study buddy for readings, homework and reviewers, on any website, PDF, slide deck or photo. She explains the <em>why</em>, so it actually sticks.</p>
@@ -518,10 +523,10 @@
 
   <section id="pricing" style="padding-top:60px">
     <div class="wrap">
-      <div class="head rv"><div class="kicker">Pricing</div><h2>Student prices. <em class="s">Seriously.</em></h2><p class="sub">Free forever, no card needed. Upgrade when Cassie becomes part of how you study.</p></div>
+      <div class="head rv"><div class="kicker">Pricing</div><h2>Pasado ka <em class="s">dito.</em></h2><p class="sub">Free forever, no card needed. When you want more, one payment covers your whole semester.</p></div>
       <div class="toggles rv">
         <div class="seg" role="group" aria-label="Currency"><button type="button" data-cur="php">₱ Philippines</button><button type="button" data-cur="usd">$ Worldwide</button></div>
-        <div class="seg" role="group" aria-label="Billing"><button type="button" data-bill="month" class="on">Monthly</button><button type="button" data-bill="sem">Semester<small>save 20%</small></button><button type="button" data-bill="year">Yearly<small>2 months free</small></button></div>
+        <div class="seg" role="group" aria-label="Billing"><button type="button" data-bill="month">Monthly</button><button type="button" data-bill="sem" class="on">Semester<small>save 20%</small></button><button type="button" data-bill="year">Yearly<small>2 months free</small></button></div>
       </div>
       <div class="plans">
         <div class="plan rv">
@@ -533,60 +538,61 @@
             <a class="btn line" href="start.html">Start free</a>
             <ul>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>20 questions a day</b>: chat, quiz &amp; highlight</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>5 file reviewers</b> a month (PDF, slides, Word)</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>10 pictures a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Reviewers from your PDFs, slides &amp; Word files</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>20 quick pictures a day</b>, plus 3 Gemini pictures a week</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Reads photos, diagrams &amp; handwriting</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Save chats as Word, PDF or image</span></li>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Explore 3D:</b> the human body (all 10 systems, boy &amp; girl), cells, the solar system &amp; the globe, 2 free views of each a week</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Talk with Cassie</b> in Bella’s voice: 30 minutes of listening a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Talk with Cassie</b> by voice: Bella’s studio voice while this month’s lasts, then Cassie types her answers</span></li>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Quiz me, Review my mistakes &amp; Teach Cassie</span></li>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Labs:</b> every simulation, puzzle, game &amp; study tool, plus Real 3D twice a week in each lab</span></li>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Board, graphs, focus timer, memory &amp; sync</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Chrome extension: highlight, snip &amp; ask about any page</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>2 research runs a month: real papers &amp; citations</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Chrome extension: highlight, snip, Teach me &amp; ask about any page</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Research with real papers &amp; citations</span></li>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Unlimited with your own free API key</span></li>
             </ul>
           </div>
         </div>
         <div class="plan pop rv">
-          <span class="badge">Most popular</span>
+          <span class="badge">Best for school</span>
           <div class="chrome"><i></i><i></i><i></i></div>
           <div class="body">
-            <h3>Plus</h3><div class="tag">Study as much as you want. Best for everyday school.</div>
-            <div class="price"><b data-price="plus">₱149</b><span data-per>/ month</span></div>
-            <div class="bill" data-bill-note="plus">billed monthly · cancel anytime</div>
+            <h3>Plus</h3><div class="tag">Five times the questions. Best for everyday school.</div>
+            <span class="pass" data-pass>Pasado Pass</span>
+            <div class="price"><b data-price="plus">₱599</b><span data-per>/ semester</span></div>
+            <div class="bill" data-bill-note="plus">about ₱4 a day</div>
             <a class="btn pearl" href="#" data-plan="plus">Join the waitlist</a>
+            <p class="under" data-under="plus">One payment for 5 months. Never renews. 7 days to change your mind.</p>
             <ul>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Everything in Free</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited questions*</b></span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>30 file reviewers</b> a month</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>100 pictures a month</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited voice chat*</b></span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Reads photos, diagrams &amp; handwriting</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Save as Word, PDF or image</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>All the 3D, any time:</b> the body, cells, solar system, globe &amp; Real 3D labs, plus the Museum quiz and save &amp; print</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>10 research runs a month</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Everything in Free, including the <b>Finals Reviewer Kit</b> (your files become reviewers, quizzes &amp; flashcards), an exam plan and your weekly progress card</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>100 questions a day</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>100 answers a day</b> from Cassie’s smarter model (Free gets 10)</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>5 Gemini pictures a day</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>All the 3D, any time:</b> the body, cells, solar system, globe &amp; Real 3D labs, plus the Museum quiz</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Save &amp; print: boards as PDF, Cornell notes &amp; reference lists</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Up to 5 exam plans</b> at once, and plans from your notes</span></li>
             </ul>
           </div>
         </div>
         <div class="plan rv">
           <div class="chrome"><i></i><i></i><i></i></div>
           <div class="body">
-            <h3>Pro</h3><div class="tag">Everything, unlimited. Best for finals season. Every season.</div>
-            <div class="price"><b data-price="pro">₱499</b><span data-per>/ month</span></div>
-            <div class="bill" data-bill-note="pro">billed monthly · cancel anytime</div>
+            <h3>Pro</h3><div class="tag">The most of everything, and the smartest answers. Best for finals season.</div>
+            <div class="price"><b data-price="pro">₱1,999</b><span data-per>/ semester</span></div>
+            <div class="bill" data-bill-note="pro">about ₱13 a day</div>
             <a class="btn ink" href="#" data-plan="pro">Join the waitlist</a>
+            <p class="under" data-under="pro">One payment for 5 months. Never renews. 7 days to change your mind.</p>
             <ul>
               <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Everything in Plus</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited file reviewers*</b>, including whole books</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited pictures*</b></span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Unlimited research*:</b> real papers, organized sources &amp; citations</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Smartest models first</span></li>
-              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Priority when Cassie is busy</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>150 questions a day</b></span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>15 answers a day</b> from Cassie’s smartest model, then 100 from the smarter one</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>20 Gemini pictures a day</b></span></li>
             </ul>
           </div>
         </div>
       </div>
-      <p class="refer rv"><b>Refer a classmate:</b> when they join, you both get a week of Plus free.</p>
-      <p class="fine rv">*Unlimited means normal studying by one person, not shared accounts or automated use. A Semester pass is one payment for 5 months. Nothing is charged over the break. Paid plans are launching soon. Everything on Free works today.</p>
+      <p class="anchor rv" data-anchor>₱599 for the whole semester: about ₱4 a day, less than one hour with a tutor.</p>
+      <p class="fine rv">Daily limits start again at midnight, Philippine time, and weekly ones on Monday. They are for one person studying, not shared accounts or automated use. Paid plans are launching soon. Everything on Free works today.</p>
     </div>
   </section>
 
@@ -594,13 +600,14 @@
     <div class="wrap">
       <div class="head rv"><div class="kicker">FAQ</div><h2>Questions, <em class="s">answered.</em></h2></div>
       <div class="faq">
-        <details class="rv"><summary>Is Cassie really free?</summary><p>Yes, forever, with no card needed: 20 questions a day, 5 file reviewers and 10 pictures a month, plus a taste of the 3D (2 views of each a week) and talking with Cassie. If you add your own free Groq or Gemini key, you can use Cassie as much as you like.</p></details>
+        <details class="rv"><summary>What is the Pasado Pass?</summary><p>It’s Cassie Plus for your whole semester: 5 months for one payment of ₱599. It never renews, so nothing is charged when it ends, and we tell you in the app and by email about a week before it does. If it isn’t for you, email askcassie.study@gmail.com within 7 days of paying and you get all of it back, no questions asked.</p></details>
+        <details class="rv"><summary>Is Cassie really free?</summary><p>Yes, forever, with no card needed: 20 questions a day, 20 quick pictures a day and 3 Gemini pictures a week, plus a taste of the 3D (2 views of each a week) and talking with Cassie. If you add your own free Groq or Gemini key, you can use Cassie as much as you like.</p></details>
         <details class="rv"><summary>What can she read?</summary><p>Any website you highlight or snip, PDFs, PowerPoint and Google Slides, Word files and Google Docs, and photos or screenshots of your notes, including the diagrams and graphs in them.</p></details>
         <details class="rv"><summary>Does it work on my phone or tablet?</summary><p>Yes. Open Cassie in your browser and add it to your home screen. For PDFs, Word and PowerPoint, attach the file and tap <b>📖 Read &amp; highlight</b>: read it inside Cassie and highlight any part. In other apps: on <b>Android</b>, select the words → <b>Share</b> → <b>Cassie</b>. On <b>iPhone and iPad</b>, set up the one-time “Ask Cassie” Shortcut (steps in Cassie → Settings → Use Cassie in other apps). Screenshots and photos of your notes work too. The on-page popup and snipping on a computer come with the Chrome extension.</p></details>
-        <details class="rv"><summary>How do I add Cassie to Chrome?</summary><p><a href="cassie-extension.zip?v=3.52.0" download>Download the Cassie extension</a>, then unzip it. Open <b>chrome://extensions</b>, turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and pick the <b>cassie-extension</b> folder. Pin Cassie from the puzzle-piece menu and you’re done. No key needed. Works in Chrome and Edge on a computer.</p></details>
-        <details class="rv"><summary>Where do my notes and chats go?</summary><p>They’re saved in your own browser, not on our servers. Your question and any file you attach are sent to the AI service to get an answer, and that’s it. If you make an account, only your profile, settings and saved quiz mistakes sync. You can export a backup or clear everything at any time.</p></details>
+        <details class="rv"><summary>How do I add Cassie to Chrome?</summary><p><a href="cassie-extension.zip?v=3.57.0" download>Download the Cassie extension</a>, then unzip it. Open <b>chrome://extensions</b>, turn on <b>Developer mode</b> (top right), click <b>Load unpacked</b> and pick the <b>cassie-extension</b> folder. Pin Cassie from the puzzle-piece menu and you’re done. No key needed. Works in Chrome and Edge on a computer.</p></details>
+        <details class="rv"><summary>Where do my notes and chats go?</summary><p>They’re saved in your own browser, not on our servers. Your question and any file you attach are sent to the AI service to get an answer, and that’s it. If you make an account, these sync so you have them on every device: your profile, settings, saved quiz mistakes, flashcards, exam plans and your weekly study counts. Your chats stay on your device. You can export a backup or clear everything at any time.</p></details>
         <details class="rv"><summary>Can I use Cassie during a test or quiz?</summary><p>No, and please don’t. Cassie is built for studying: understanding readings, practising, and making reviewers. Using her during a graded test or quiz isn’t what she’s for.</p></details>
-        <details class="rv"><summary>How do I pay from the Philippines?</summary><p>When paid plans launch you’ll be able to pay in pesos with local options like GCash and Maya, or by card. Everyone else pays in US dollars.</p></details>
+        <details class="rv"><summary>How do I pay from the Philippines?</summary><p>When paid plans launch, you’ll pay through Lemon Squeezy, Cassie’s payment partner, with a debit or credit card, Google Pay or Apple Pay. GCash and Maya aren’t offered yet; if that changes, this answer will say so. Everything on Free works today with no card.</p></details>
       </div>
     </div>
   </section>

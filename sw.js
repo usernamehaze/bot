@@ -18,6 +18,8 @@ const ASSETS = [
   'app.js',
   'native.js',
   'listen.js',
+  'tour.js',
+  'mic.js',
   'study-room.js',
   'gradient.js',
   'start.js',
@@ -29,8 +31,6 @@ const ASSETS = [
   'cite.js',
   'voice.js',
   'manifest.json',
-  'patterns/student.svg',
-  'patterns/pro.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
 ];

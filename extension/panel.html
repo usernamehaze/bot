@@ -13,12 +13,12 @@
   header { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 6px; }
   header b { font-size: 18px; letter-spacing: -.01em; }
   header span { color: var(--mute); font-size: 12px; }
-  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 16px 12px; border-bottom: 1px solid var(--line); }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 16px 12px; border-bottom: 1px solid var(--line); }
   .tool { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 12px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 12.5px/1.2 inherit; font-family: inherit; cursor: pointer; }
   .tool:hover { border-color: var(--mute); }
   .tool[aria-pressed="true"] { opacity: .55; }
   .tool[hidden] { display: none; }
-  .tools:has(.tool[hidden]) { grid-template-columns: repeat(3, 1fr); }
+  .tool { min-height: 44px; }
   .popped { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--mute); }
   .tool svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   #view { flex: 1; overflow: auto; padding: 14px 16px 24px; }
@@ -45,6 +45,24 @@
   .keyfix { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
   .keyfix input { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; }
   .keyfix .row { margin-top: 2px; }
+  /* Teach me and Ask Cassie: every control at least 44px */
+  .tall { min-height: 44px; }
+  .teach-why { color: var(--mute); font-size: 13px; margin: 0 0 8px; }
+  .teach-err p { margin: 0 0 10px; }
+  .ask-page .answer { margin-top: 10px; }
+  .cur-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; margin: 4px 0 14px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; text-align: left; }
+  .cur-switch i { flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--line); position: relative; }
+  .cur-switch i:after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); box-shadow: 0 0 0 1px var(--mute); transition: transform .15s; }
+  .cur-switch[aria-pressed="true"] i { background: var(--ink); }
+  .cur-switch[aria-pressed="true"] i:after { transform: translateX(14px); box-shadow: none; }
+  .lessons-h { font-size: 15px; margin: 18px 0 8px; }
+  .lesson img { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 8px; }
+  .lesson-t { display: block; }
+  .lesson-d { display: block; color: var(--mute); font-size: 12px; margin: 2px 0 6px; }
+  .lesson summary { display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+  .lesson ol { margin: 4px 0 6px; padding-left: 20px; }
+  .lesson-qa { margin: 8px 0 6px; } .lesson-qa dt { font-weight: 700; margin-top: 8px; } .lesson-qa dd { margin: 2px 0 0; } .lesson-qa[hidden] { display: none; }
+  .lessons-clear { width: 100%; }
   /* Cassie's graphs inside answers */
   .cassie-board { margin: 8px 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .cb-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-weight: 700; font-size: 12px; border-bottom: 1px solid var(--line); }
@@ -60,12 +78,17 @@
     <button class="tool" id="t-snip" title="Grab part of this tab and have Cassie explain it"><svg viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3"/></svg>Snip</button>
     <button class="tool" id="t-file" title="Read this whole PDF / Slides / Doc and make a reviewer"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Whole file</button>
     <button class="tool" id="t-board" title="Open Cassie's board"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>Board</button>
+    <button class="tool" id="t-teach" title="Cassie teaches what is on this tab, step by step, pointing and drawing on it"><svg viewBox="0 0 24 24"><path d="M5 3l14 7-6.2 1.8L10 18z"/></svg>Teach me</button>
+    <button class="tool" id="t-ask" title="Ask Cassie about this tab: she answers here and points at what she means"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4M12 16h.01"/></svg>Ask Cassie</button>
     <button class="tool" id="t-pop" aria-pressed="false" title="Pop Cassie out: a small window that floats on top of your other apps"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12" y="12" width="6" height="5" rx="1"/></svg>Pop out</button>
   </div>
   <div id="view"></div>
   <script src="sketch.js"></script>
   <script src="board.js"></script>
   <script src="care.js"></script>
+  <script src="errors.js"></script>
+  <script src="mic.js"></script>
+  <script src="teach.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

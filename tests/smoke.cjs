@@ -16,7 +16,7 @@ const APP = `http://localhost:${APP_PORT}/app.html`;
 const SERVER = `http://localhost:${SERVER_PORT}`;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.webm': 'video/webm', '.mp4': 'video/mp4', '.jpg': 'image/jpeg' };
 // The site's response headers, read from _headers. The security policy is the real one, except that
 // the page may talk to the fake Cassie server (instead of the real one) and stays on plain http.
 const SITE_HEADERS = (() => {
@@ -51,11 +51,26 @@ function staticServer() {
 /* ---------- helpers ---------- */
 const APP_VERSION = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
 const PROFILE = { name: 'Test', role: 'student', grade: 'Grade 10', field: '', age: 16, at: 1 };
-// Google's sign-in script, faked: its button signs in with whatever ID token the test put in window.__nextGoogleCredential
-const FAKE_GSI = `window.google = { accounts: { id: {
-  initialize(o) { window.__gsi = o; },
-  renderButton(box) { const b = document.createElement('button'); b.type = 'button'; b.className = 'fake-gsi'; b.textContent = 'Continue with Google'; b.style.cssText = 'min-height:44px;width:100%;border-radius:999px'; b.onclick = () => window.__gsi.callback({ credential: window.__nextGoogleCredential }); box.appendChild(b); },
-} } };`;
+// Google's sign-in page, faked: it sends the student back to the app like Google does (#id_token=…&state=…),
+// with a token for the nonce it was given. ctx.google says who signs in: { sub, email, badSig }, { cancel: true }
+// (Google's "access_denied"), or { stay: true } (the student just sits on Google's page).
+async function fakeGoogle(ctx) {
+  await ctx.route(/accounts\.google\.com\/o\/oauth2\/v2\/auth/, async (route) => {
+    const q = new URL(route.request().url()).searchParams, who = ctx.google || {};
+    const back = q.get('redirect_uri');
+    if (who.stay) return route.fulfill({ contentType: 'text/html', body: '<title>Sign in with Google</title><p>Choose an account</p>' });
+    const answer = who.cancel ? new URLSearchParams({ state: q.get('state'), error: 'access_denied' })
+      : new URLSearchParams({ state: q.get('state'), id_token: await idToken({ provider: 'google', sub: who.sub, email: who.email, badSig: who.badSig, nonce: q.get('nonce') }), authuser: '0' });
+    ctx.googleAsked = { clientId: q.get('client_id'), back, type: q.get('response_type') };
+    return route.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(back + '#' + answer)})</script>` });
+  });
+}
+// tap "Continue with Google" as someone, and wait until Cassie's page is back
+async function googleTap(page, ctx, who) {
+  ctx.google = who;
+  await page.click('.auth-google');
+  await page.waitForURL(/app\.html$/, { timeout: 15000 });
+}
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
 async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup } = {}) {
@@ -68,10 +83,9 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
-  await ctx.route('https://accounts.google.com/gsi/client', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_GSI })); // never the real Google
+  await fakeGoogle(ctx); // never the real Google
   await ctx.route(/appleid\.apple\.com/, (route) => route.abort()); // never the real Apple (a test brings its own)
   if (setup) await setup(ctx);
-  await ctx.route(/huggingface\.co/, (route) => route.abort()); // the human voice's model (a test brings its own)
   await ctx.route(/wikipedia\.org|worldbank\.org/, (route) => route.abort()); // the atlas's live lookups (a test brings its own)
   const groqCalls = [];
   await ctx.route(/api\.groq\.com/, async (route) => {
@@ -345,21 +359,19 @@ test('sign in with Google: a new account, and a bad token shows a friendly messa
   const { ctx, page, errors } = await open(b, { state: null });
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
     await page.waitForSelector('.auth-apple:not([hidden])');
     expect(await page.locator('.auth-or').isVisible(), 'the "or" line should show with the buttons');
-    for (const sel of ['.fake-gsi', '.auth-apple']) expect((await page.locator(sel).boundingBox()).height >= 44, sel + ' is under 44px tall');
+    for (const sel of ['.auth-google', '.auth-apple']) expect((await page.locator(sel).boundingBox()).height >= 44, sel + ' is under 44px tall');
     expect(!/[–—]/.test(await page.locator('.auth-page').innerText()), 'a dash on the sign-in page');
     // a token that isn't really Google's: a plain-words message, not signed in
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-bad', email: 'bad@example.com', badSig: true }));
-    await page.click('.fake-gsi');
+    await googleTap(page, ctx, { sub: 'g-bad', email: 'bad@example.com', badSig: true });
     await page.waitForSelector('.auth-err:not([hidden])');
     expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('google_failed')), 'bad token message: ' + await authErr(page));
     expect(!(await savedAccount(page)).token, 'a bad token signed someone in');
     // a new person with Google: signed in, then the profile questions
     const email = `gnew${Date.now()}@example.com`;
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: 'g-new-' + Date.now(), email }));
-    await page.click('.fake-gsi');
+    await googleTap(page, ctx, { sub: 'g-new-' + Date.now(), email });
     await page.waitForSelector('.auth-page', { state: 'detached' });
     await page.waitForSelector('.fr-ob', { timeout: 5000 }); // (the four questions)
     const s = await savedAccount(page);
@@ -376,9 +388,8 @@ test('sign in with Google: an email account links after its password once, and t
   let { ctx, page } = await open(b, { state: null });
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub, email });
     // the account has a password: Cassie asks for it once
     await seen(page, '.auth-title', 'Link Google to your Cassie account', 5000);
     expect(await page.inputValue('.auth-form input[name=email]') === email && await page.locator('.auth-form input[name=email]').getAttribute('readonly') !== null, 'the email to link should show, locked');
@@ -400,9 +411,8 @@ test('sign in with Google: an email account links after its password once, and t
   ({ ctx, page } = await open(b, { state: null }));
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub, email }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub, email });
     await page.waitForSelector('.auth-page', { state: 'detached' });
     expect((await savedAccount(page)).account.email === email, 'Google again should sign straight in');
   } finally { await ctx.close(); }
@@ -412,9 +422,8 @@ test('sign in with Google: an email account links after its password once, and t
   ({ ctx, page } = await open(b, { state: null }));
   try {
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
-    await page.evaluate((t) => { window.__nextGoogleCredential = t; }, await idToken({ provider: 'google', sub: sub + '-2', email: email2 }));
-    await page.click('.fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
+    await googleTap(page, ctx, { sub: sub + '-2', email: email2 });
     await seen(page, '.auth-title', 'Link Google', 5000);
     expect(/signs out other devices/.test(await page.locator('.auth-forgot').textContent()), 'should say what “I don’t know this password” does');
     await page.click('.auth-switch [data-to=forget]');
@@ -424,6 +433,64 @@ test('sign in with Google: an email account links after its password once, and t
   expect((await post('/auth/me', null, old.token)).status === 401, 'the other device should be signed out');
   const gone = await post('/auth/login', { email: email2, password: 'secret-pass-2' });
   expect(gone.status === 401 && gone.code === 'google_account', 'the old password should be gone: ' + JSON.stringify(gone));
+});
+
+test('sign in with Google never leaves a blank screen: signed in, cancelled, a server error and a server that never answers each end within 15 seconds', async (b) => {
+  await fetch(SERVER + '/__reset');
+  const say = (page, key) => page.evaluate((k) => CassieErrors.say(k), key);
+  // the error and its Try again button, or signed in, within 15 seconds of tapping Google
+  const endsWithin = async (page, t0, what) => {
+    await page.waitForFunction(() => !document.querySelector('.auth-page') || (!document.querySelector('.auth-err').hidden && !document.querySelector('.auth-retry').hidden), null, { timeout: 15000, polling: 100 });
+    const ms = Date.now() - t0;
+    expect(ms <= 15000, `${what}: took ${ms}ms`);
+    return ms;
+  };
+  const { ctx, page, errors } = await open(b, { state: null });
+  try {
+    await toSignIn(page);
+    await page.waitForSelector('.auth-google:not([hidden])');
+    // 1. a closed popup, in today's terms: the student leaves Google's page without picking (the back button)
+    ctx.google = { stay: true };
+    let t0 = Date.now();
+    await page.click('.auth-google');
+    expect(await page.locator('.auth-busy').isVisible() || /accounts\.google/.test(page.url()), 'tapping Google shows "Opening Google…" (never a blank page)');
+    await page.waitForURL(/accounts\.google\.com/, { timeout: 10000 });
+    await page.goBack();
+    await endsWithin(page, t0, 'back from Google');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'google_cancelled'), 'back from Google: ' + await page.locator('.auth-err').innerText());
+    // ... and Google's own "cancel" answer says the same
+    ctx.google = { cancel: true };
+    t0 = Date.now();
+    await googleTap(page, ctx, { cancel: true });
+    await endsWithin(page, t0, 'cancelled at Google');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'google_cancelled'), 'cancelled at Google: ' + await page.locator('.auth-err').innerText());
+    // 2. Cassie's server breaks: plain words (never its raw "Internal error") and Try again
+    await serverMode({ googleAuth: 'error' });
+    t0 = Date.now();
+    await googleTap(page, ctx, { sub: 'g-err-' + Date.now(), email: `gerr${Date.now()}@example.com` });
+    await endsWithin(page, t0, 'server error');
+    expect(await page.locator('.auth-err').innerText() === await say(page, 'unknown'), 'server error: ' + await page.locator('.auth-err').innerText());
+    // 3. Cassie's server never answers: "Signing you in…" while waiting, then plain words and Try again
+    await serverMode({ googleAuth: 'hang' });
+    t0 = Date.now();
+    await googleTap(page, ctx, { sub: 'g-hang-' + Date.now(), email: `ghang${Date.now()}@example.com` });
+    await page.waitForSelector('.auth-busy:not([hidden])', { timeout: 3000 });
+    expect(/Signing you in/.test(await page.locator('.auth-busy').innerText()), 'the wait shows "Signing you in…"');
+    const ms = await endsWithin(page, t0, 'server never answers');
+    expect(ms >= 9000 && await page.locator('.auth-err').innerText() === await say(page, 'timeout'), `server never answers: ${ms}ms, ` + await page.locator('.auth-err').innerText());
+    // 4. it works again: Try again goes back to Google and the student is signed in
+    await serverMode({ googleAuth: 'ok' });
+    const email = `gok${Date.now()}@example.com`;
+    ctx.google = { sub: 'g-ok-' + Date.now(), email };
+    t0 = Date.now();
+    await page.click('.auth-retry');
+    await page.waitForURL(/app\.html$/, { timeout: 15000 });
+    await endsWithin(page, t0, 'signed in');
+    const s = await savedAccount(page);
+    expect(s.token && s.account.email === email && s.account.providers.join() === 'google', 'Try again then signed in: ' + JSON.stringify(s));
+    expect(ctx.googleAsked.type === 'id_token' && ctx.googleAsked.clientId === 'test-client-id' && ctx.googleAsked.back === APP, 'Google is asked for an ID token, back to this page: ' + JSON.stringify(ctx.googleAsked));
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  } finally { await serverMode({ googleAuth: 'ok' }); await ctx.close(); }
 });
 
 test('sign in with Apple: there and back, cancel is explained, and the plan is the same every way in', async (b) => {
@@ -455,7 +522,9 @@ test('sign in with Apple: there and back, cancel is explained, and the plan is t
   try {
     await page.goto('about:blank');
     await page.goto(APP + '#cassie-auth=' + encodeURIComponent(JSON.stringify({ type: 'cassie-auth', provider: 'apple', nonce: 'x'.repeat(32), token: 'stolen', account: { email: 'x@example.com' } })));
-    await toSignIn(page);
+    // never used, never silent: the sign-in page says why, with Try again
+    await page.waitForSelector('.auth-page .auth-retry:not([hidden])', { timeout: 8000 });
+    expect(await authErr(page) === await page.evaluate(() => CassieErrors.say('signin_mismatch')), 'a stolen answer is explained: ' + await authErr(page));
     expect(!(await savedAccount(page)).token && !page.url().includes('cassie-auth'), 'an answer from another tab signed in');
   } finally { await ctx.close(); }
 
@@ -491,12 +560,12 @@ test('sign in with Google and Apple: a provider the server has no ID for has no 
     await toSignIn(page);
     await page.evaluate(() => authProviders());
     await page.waitForSelector('.auth-apple:not([hidden])');
-    expect(await page.locator('.auth-google').isHidden() && !(await page.locator('.fake-gsi').count()), 'Google button shown with no GOOGLE_CLIENT_ID');
+    expect(await page.locator('.auth-google').isHidden(), 'Google button shown with no GOOGLE_CLIENT_ID');
     await ctx.close();
     await serverMode({ noGoogle: false, noApple: true });
     ({ ctx, page } = await open(b, { state: null }));
     await toSignIn(page);
-    await page.waitForSelector('.auth-google:not([hidden]) .fake-gsi');
+    await page.waitForSelector('.auth-google:not([hidden])');
     expect(await page.locator('.auth-apple').isHidden(), 'Apple button shown with no APPLE_SERVICES_ID');
     await ctx.close();
     await serverMode({ noGoogle: true, noApple: true });
@@ -560,6 +629,150 @@ test('uploads are used to answer, then dropped: a file’s words, name and bytes
   await ctx.close();
 });
 
+test('terms.html promises an easy cancel and a reminder before every renewal, and the subscriptions plan matches it (no payment code yet)', async (b) => {
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/terms.html`);
+  const paid = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find((x) => /Paid plans/.test(x.textContent)); let t = '', n = h && h.nextElementSibling; while (n && n.tagName !== 'H2') { t += n.innerText + '\n'; n = n.nextElementSibling; } return t; });
+  expect(/Cancelling never takes more steps than subscribing/.test(paid) && /cancel yourself in the app, from Settings/i.test(paid), 'terms promise cancelling takes no more steps than subscribing: ' + paid);
+  expect(/reminder before every renewal/i.test(paid) && /in the app and by email/.test(paid) && /never less than 3 days before/.test(paid), 'terms promise a reminder before each automatic renewal: ' + paid);
+  expect(/Yearly plans also get a reminder a month before/.test(paid), 'terms promise yearly plans a reminder a month before: ' + paid);
+  expect(/A Semester pass (\(the Pasado Pass\) )?is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms promise the Semester pass never renews and the student is told before it ends: ' + paid);
+  const all = await page.locator('body').innerText();
+  expect(!/[—–]/.test(all), 'no dashes in the terms');
+  await ctx.close();
+  // the plan behind those promises, and still no payment code anywhere
+  const plan = fs.readFileSync(path.join(ROOT, 'docs/subscriptions-plan.md'), 'utf8');
+  expect(/## 2\. Cancelling: 3 taps, from Settings/.test(plan) && /shortest subscribe path is \*\*3 taps\*\*/.test(plan), 'the plan has the cancel flow and its tap count');
+  expect(/\*\*7 days before\*\* the renewal/.test(plan) && /\*\*30 days before\*\* and \*\*7 days before\*\*/.test(plan) && /\*\*7 days before\*\* it ends/.test(plan), 'the plan says when each reminder email goes out (monthly, yearly, semester)');
+  expect(/from \*\*askcassie\.study@gmail\.com\*\*/.test(plan) && /Renewal reminder email \*\*off\*\*/.test(plan), 'Cassie sends the emails from askcassie.study@gmail.com, and Lemon Squeezy\'s own reminder is off (no double emails)');
+  expect(/Semester\*\* \(single payment\)/.test(plan) && /\| 2 \| A new database table `subscriptions`\. \| \*\*Approved\.\*\* \|/.test(plan), 'the Semester pass is a single payment, and the new table is approved');
+  for (const ev of ['subscription_created', 'subscription_updated', 'subscription_payment_success', 'subscription_payment_failed', 'subscription_cancelled', 'subscription_resumed', 'subscription_expired', 'order_created']) expect(plan.includes('`' + ev + '`'), 'the plan lists the webhook ' + ev);
+  expect(!/[—–]/.test(plan), 'no dashes in the plan');
+  const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  expect(!/lemonsqueezy\.com|LEMON_API_KEY|\/billing\//i.test(code), 'no payment code until the Lemon Squeezy links arrive');
+});
+
+test('the pricing page and the app’s Plans say exactly what the server allows: questions, smarter answers and pictures per plan, nothing unlimited but your own key, nothing that isn’t built', async (b) => {
+  const src = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8');
+  const num = (name) => +src.match(new RegExp(`env\\.${name}, (\\d+)\\)`))[1];
+  const lim = {
+    free: { q: num('FREE_DAILY_QUESTIONS'), smart: num('FREE_CLAUDE_LIMIT'), gpic: num('FREE_PICTURES_WEEK') },
+    plus: { q: num('PLUS_DAILY_QUESTIONS'), smart: num('PLUS_CLAUDE_LIMIT'), gpic: num('PLUS_PICTURES_DAY') },
+    pro: { q: num('PRO_DAILY_QUESTIONS'), smartest: num('PRO_CLAUDE_LIMIT'), smart: num('PRO_HAIKU_LIMIT'), gpic: num('PRO_PICTURES_DAY') },
+  };
+  const quick = +src.match(/env\.IMAGE_LIMIT \|\| (\d+)/)[1];
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/index.html`);
+  const plan = async (name) => (await page.locator('#pricing .plan', { has: page.locator(`h3:text-is("${name}")`) }).innerText()).replace(/\s+/g, ' ');
+  const [free, plus, pro] = [await plan('Free'), await plan('Plus'), await plan('Pro')];
+  expect(free.includes(`${lim.free.q} questions a day`) && free.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'Free matches the server: ' + free);
+  expect(plus.includes(`${lim.plus.q} questions a day`) && plus.includes(`${lim.plus.smart} answers a day from Cassie’s smarter model (Free gets ${lim.free.smart})`) && plus.includes(`${lim.plus.gpic} Gemini pictures a day`), 'Plus matches the server: ' + plus);
+  expect(pro.includes(`${lim.pro.q} questions a day`) && pro.includes(`${lim.pro.smartest} answers a day from Cassie’s smartest model, then ${lim.pro.smart} from the smarter one`) && pro.includes(`${lim.pro.gpic} Gemini pictures a day`), 'Pro matches the server: ' + pro);
+  const all = (await page.locator('#pricing').innerText()) + ' ' + (await page.locator('#faq').textContent());
+  const unlimited = all.match(/[^.:\n]*unlimited[^.\n]*/gi) || [];
+  expect(unlimited.every((x) => /own free (API )?key/i.test(x)), 'only your own key is unlimited: ' + unlimited.join(' | '));
+  expect(!/research runs|file reviewers? a month|minutes of listening|Refer a classmate|Priority when/i.test(all), 'nothing the code doesn’t do (monthly reviewer or research counts, listening minutes, referrals, priority)');
+  expect(/20 questions a day, 20 quick pictures a day and 3 Gemini pictures a week/.test(all), 'the FAQ says the same as the Free plan');
+  expect(!/[—–]/.test(all), 'no dashes');
+  await ctx.close();
+  // the app's Plans page says the same
+  const app = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  const plans = app.slice(app.indexOf('class="set-plans"'), app.indexOf('</section>', app.indexOf('class="set-plans"'))).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  expect(plans.includes(`${lim.free.q} questions a day`) && plans.includes(`${lim.plus.q} questions a day`) && plans.includes(`${lim.plus.gpic} Gemini pictures a day`) && plans.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'the app’s Plans match the server: ' + plans);
+  expect(!/research runs|file reviewers|Unlimited (questions|voice)|Unlimited means/i.test(plans), 'the app’s Plans promise nothing the code doesn’t do: ' + plans);
+});
+
+test('the Pasado Pass: the pricing page opens on Semester with the pass, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
+  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`http://localhost:${APP_PORT}/index.html`);
+  await page.click('#pricing [data-cur="php"]');
+  const plus = async () => (await page.locator('#pricing .plan', { has: page.locator('h3:text-is("Plus")') }).innerText()).replace(/\s+/g, ' ');
+  expect(await page.locator('#pricing [data-bill="sem"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Semester');
+  let p = await plus();
+  expect(/Pasado Pass/.test(p) && /₱599/.test(p) && /about ₱4 a day/.test(p) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(p), 'the Plus card is the Pasado Pass: ' + p);
+  expect(/Best for school/i.test(p) && /Everything in Free, including the Finals Reviewer Kit/.test(p) && /Up to 5 exam plans/.test(p), 'the bonus stack, with what Free has under Everything in Free: ' + p);
+  expect(await page.locator('#pricing [data-anchor]').innerText() === '₱599 for the whole semester: about ₱4 a day, less than one hour with a tutor.', 'the comparison line: ' + await page.locator('#pricing [data-anchor]').innerText());
+  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub');
+  await page.click('#pricing [data-cur="usd"]');
+  p = await plus();
+  expect(/\$31\.99/.test(p) && /about \$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === '$31.99 for the whole semester: about $0.21 a day.', 'Worldwide: the $ price a day: ' + p);
+  await page.click('#pricing [data-cur="php"]');
+  await page.click('#pricing [data-bill="month"]');
+  p = await plus();
+  expect(!(await page.locator('#pricing [data-pass]').isVisible()) && /₱149/.test(p) && /Renews each month until you cancel in Settings\. 7 days to change your mind\./.test(p), 'Monthly: no Pasado Pass label, and it says it renews until you cancel: ' + p);
+  // every promise on the page is in the terms
+  const faq = (await page.locator('#faq').textContent()).replace(/\s+/g, ' ');
+  expect(/What is the Pasado Pass\?/.test(faq) && /5 months for one payment of ₱599/.test(faq), 'the FAQ explains the Pasado Pass');
+  const promises = [
+    [/Never renews/i, /Semester pass \(the Pasado Pass\) is one payment and never renews/],
+    [/One payment for 5 months/, /lasts 5 months/],
+    [/7 days to change your mind/, /7 days to change your mind\. If you're not happy with the first payment for any plan, email askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked\./],
+    [/Renews each month until you cancel in Settings/, /renews automatically until you cancel/],
+    [/about a week before it does/, /about a week before it ends/],
+    [/askcassie\.study@gmail\.com within 7 days of paying and you get all of it back, no questions asked/, /askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked/],
+  ];
+  const monthly = await page.locator('#pricing').innerText();
+  await page.click('#pricing [data-bill="sem"]');
+  const onPage = monthly + ' ' + (await page.locator('#pricing').innerText()) + ' ' + faq;
+  for (const [said, inTerms] of promises) expect(said.test(onPage) && inTerms.test(terms), `the page says ${said} and the terms say ${inTerms}`);
+  expect(/Founding price\. A Monthly or Yearly plan keeps the price you started with for as long as it keeps renewing/.test(terms), 'the founding price is in the terms');
+  expect(!/[—–]/.test(onPage), 'no dashes on the pricing page');
+  await ctx.close();
+  // the phone sizes: nothing spills sideways, every pricing button is 44px
+  for (const vp of [{ width: 390, height: 844 }, { width: 360, height: 740 }, { width: 1280, height: 800 }]) {
+    const c = await b.newContext({ viewport: vp, hasTouch: vp.width < 500 });
+    const pg = await c.newPage();
+    await pg.goto(`http://localhost:${APP_PORT}/index.html#pricing`);
+    await pg.waitForTimeout(600);
+    const g = await pg.evaluate(() => ({ wide: document.documentElement.scrollWidth > innerWidth + 1, small: [...document.querySelectorAll('#pricing button, #pricing .btn')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() + ' ' + Math.round(e.getBoundingClientRect().height)) }));
+    expect(!g.wide && !g.small.length, `${vp.width}x${vp.height}: ` + JSON.stringify(g));
+    await c.close();
+  }
+  // the app says the same: Settings, Plans and the Plus sheet
+  const { ctx: actx, page: app, errors } = await open(b, { server: false, state: { plan: null } });
+  await app.evaluate(() => openSettings('plans'));
+  await app.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
+  const plans = (await app.locator('.set-plans').innerText()).replace(/\s+/g, ' ');
+  expect(/Best for school/.test(plans) && /Pasado Pass/.test(plans) && /₱599 a semester, about ₱4 a day/.test(plans) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(plans) && !/Most popular/.test(plans), 'the app’s Plans: ' + plans);
+  await app.evaluate(() => { closeSettings(); plusSheet('The 3D human body'); });
+  const foot = await app.locator('.plus-sheet .plus-foot').innerText();
+  expect(/Pasado Pass, one payment of ₱599 for your whole semester\. It never renews, and you have 7 days to change your mind\./.test(foot), 'the Plus sheet: ' + foot);
+  expect(await app.locator('.plus-sheet .plus-go').getAttribute('href') === 'index.html#pricing', 'its link still goes to the plans');
+  const [go, ok] = [await app.locator('.plus-sheet .plus-go').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
+  expect(ok.height >= 44 && Math.abs(ok.height - go.height) < 1, 'Not now is the same size: ' + JSON.stringify([go, ok]));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await actx.close();
+  // "Most popular" is gone everywhere
+  for (const f of ['index.html', 'app.html', 'app.js', 'landing/landing.js']) expect(!/Most popular/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `no “Most popular” in ${f}`);
+});
+
+test('the FAQ tells the truth: what an account syncs is what the app syncs, chats stay on the device, and paying lists only what Lemon Squeezy offers (no GCash or Maya yet)', async () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const answer = (q) => { const m = html.match(new RegExp(`<summary>${q}</summary><p>([\\s\\S]*?)</p>`)); return m ? m[1].replace(/<[^>]+>/g, '') : ''; };
+  const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
+  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings' };
+  for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
+  expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
+  expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
+  expect(!/[—–]/.test(notes + pay), 'no dashes');
+});
+
+test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie gives today, and has no dashes', async () => {
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/grand-slam-offer.md'), 'utf8');
+  const heads = ['What Cassie gives today', 'Dream outcomes by audience', 'Value equation scores', 'Obstacles to solutions', 'The offer', 'Copy ready to paste', 'Changes ranked by impact', 'What not to do, and why'];
+  const found = [...doc.matchAll(/^## (\d)\. (.+)$/gm)].map((m) => `${m[1]}. ${m[2].trim()}`);
+  expect(found.join('|') === heads.map((h, i) => `${i + 1}. ${h}`).join('|'), 'the 8 sections, in order: ' + found.join(' | '));
+  const today = doc.split(/^## 2\./m)[0].split('\n').filter((l) => /^\| (Free|Plus|Pro) \|/.test(l));
+  expect(today.length >= 10 && today.every((l) => /`[\w./-]+(\.js|\.html)`|`[\w-]+\/`/.test(l)), 'every feature row names its file: ' + today.filter((l) => !/`[\w./-]+(\.js|\.html)`|`[\w-]+\/`/.test(l)).join(' / '));
+  expect(!/[—–]/.test(doc), 'no em or en dashes in the doc');
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
@@ -580,7 +793,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   const libs = /three\.module|GLTFLoader|OrbitControls|BufferGeometryUtils|RoomEnvironment|RoundedBoxGeometry|meshopt/;
   const files = [...fs.readdirSync(ROOT).filter((f) => f.endsWith('.js')),
     ...['labs', 'explore', 'extension'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => f.endsWith('.js')).map((f) => d + '/' + f)),
-    'server/worker.src.js', 'voice/voice-worker.js'].filter((f) => !libs.test(f));
+    'server/worker.src.js'].filter((f) => !libs.test(f));
   const code = files.map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
   const hosts = [...new Set([...code.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)].map((m) => m[1].toLowerCase()))];
   const needed = new Set(), unknown = [];
@@ -591,13 +804,13 @@ test('privacy.html names every outside service the code calls (a new one fails u
   }
   // services reached without a web address in our code
   if (/env\.AI\.run\(/.test(code)) needed.add('Cloudflare'); // Workers AI
-  if (fs.existsSync(path.join(ROOT, 'voice/kokoro.web.js'))) needed.add('Hugging Face'); // the voice model downloads from it
+  if (/voice-worker/.test(fs.readFileSync(path.join(ROOT, 'voice.js'), 'utf8'))) needed.add('Hugging Face'); // (only if the on-device voice model were used again)
   if (/SpeechRecognition/.test(code)) { needed.add('Google'); needed.add('Apple'); } // the browser's own speech-to-text
   expect(!unknown.length, 'Cassie calls a service privacy.html doesn’t know about: ' + unknown.join(', ') + '. Name it on the page (what it gets and why) and add it to this test.');
   const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ');
   const missing = [...needed].filter((n) => !page.includes(n));
   expect(!missing.length, 'privacy.html doesn’t name: ' + missing.join(', '));
-  expect(needed.size >= 12, 'the scan found the services (sanity): ' + [...needed].join(', '));
+  expect(needed.size >= 11, 'the scan found the services (sanity): ' + [...needed].join(', '));
   // and it says the rest of what it promises, in plain words with no dashes
   expect(/uses AI/.test(page) && /not kept/.test(page) && /Delete account/.test(page) && !/[–—]/.test(page), 'privacy.html says Cassie uses AI, that uploads are not kept, how to delete, with no dashes');
 });
@@ -785,6 +998,470 @@ test('care in the Chrome extension: a typed question gets care and the lines bef
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
+test('Teach me and Ask Cassie in the extension: she speaks, points at the right part and draws on the page; voice off never speaks and Next moves on; a canvas page is taught from a picture; a snip is taught inside the snip; a page she can’t draw on is taught in the panel with the reason; Escape leaves no trace; Ask answers in the panel and points', async () => {
+  for (const f of ['errors.js', 'sketch.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} differs from ${f}: copy it over`);
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.content_scripts[0].js.join() === 'sketch.js,board.js,care.js,mic.js,content.js,errors.js,teach.js', 'teach.js runs after the board on every page: ' + manifest.content_scripts[0].js.join());
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permissions: ' + manifest.permissions.join());
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`, '--autoplay-policy=no-user-gesture-required'],
+  });
+  try {
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: it answers from what it was given (the numbered parts, a snip, a question), with some bad steps and shapes mixed in
+    await sw.evaluate(() => {
+      self.__asked = [];
+      self.readPicture = async (keys, msg) => {
+        const p = String(msg.prompt || '');
+        self.__asked.push({ prompt: p, image: String(msg.image || '').slice(0, 22), log: msg.log || null });
+        const num = (what) => { const m = p.match(new RegExp('^(\\d+)\\. ' + what, 'm')); return m ? +m[1] : 0; };
+        if (/they snipped it/.test(p)) return JSON.stringify({ steps: [{ say: 'Look at this part of your snip.', point: { x: 0.5, y: 0.5 }, draw: [{ shape: 'circle', x: 0.5, y: 0.5, r: 0.2 }, { shape: 'arrow', from: [0.1, 0.9], to: [0.45, 0.55] }] }] });
+        const h = num('heading "Photosynthesis"'), t = num('table heading "Stage"');
+        if (/The student asks/.test(p)) return JSON.stringify({ answer: 'Plants make their own food from light.', steps: [{ say: 'The heading names the topic.', point: h }] });
+        if (h) return '```json\n' + JSON.stringify({ steps: [
+          { say: 'This page is about photosynthesis.', point: h, draw: [{ shape: 'circle', el: h }, { shape: 'arrow', to_el: t }, { shape: 'explode', el: h }] },
+          { point: t }, { say: 42 },
+          { say: 'The table shows the two stages.', point: t, draw: [{ shape: 'underline', el: t }, { shape: 'graph', fn: 'x^2', x: 0.6, y: 0.5, w: 0.3, h: 0.3 }] },
+          { say: 'A bad pointer is ignored.', point: { el: 999 }, draw: [{ shape: 'circle', x: 7, y: 'a' }] },
+        ] }) + '\n```';
+        const tabs = await chrome.tabs.query({ active: true }).catch(() => []);
+        if (tabs.some((t) => /blocked\.html/.test(t.url || ''))) return JSON.stringify({ steps: [{ say: 'The heading names the law.', point: { x: 0.1, y: 0.09 } }] });
+        return JSON.stringify({ steps: [{ say: 'The chart shows sales going up.', point: { x: 0.05, y: 0.5 }, draw: [{ shape: 'circle', x: 0.05, y: 0.5, r: 0.03 }] }, { say: 'It rises faster at the end.', point: { x: 0.8, y: 0.2 } }] });
+      };
+    });
+    // Bella's studio voice, faked in the background: what's left (self.__voice.left), and each sentence as a
+    // tiny WAV, failing from the failFrom-th one on
+    const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
+    await sw.evaluate((b64) => {
+      self.__clips = []; self.__voice = { left: 9000, failFrom: null };
+      self.speakLeft = async () => ({ on: true, left: self.__voice.left, back: '2026-11-01' });
+      self.speakClip = async (text) => { const ok = self.__voice.failFrom == null || self.__clips.length < self.__voice.failFrom; self.__clips.push({ text, ok }); if (!ok) throw new Error('voice 502'); return { audio: b64 }; };
+    }, wav.toString('base64'));
+    const clips = () => sw.evaluate(() => self.__clips.slice());
+    const asked = () => sw.evaluate(() => self.__asked.splice(0));
+    const setting = (o) => sw.evaluate((o) => chrome.storage.local.set(o), o);
+    const id = new URL(sw.url()).host;
+    const tabPage = ctx.pages()[0] || await ctx.newPage();
+    // the panel in its own small window, so the test page stays the tab being looked at
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 760 }));
+    const panel = await panelOpened;
+    await panel.waitForSelector('#t-teach');
+    for (const b of ['#t-teach', '#t-ask', '#t-snip']) expect((await panel.locator(b).boundingBox()).height >= 44, b + ' is at least 44px tall');
+    const words = await panel.locator('.tools').innerText();
+    expect(/Teach me/.test(words) && /Ask Cassie/.test(words), 'the panel has Teach me and Ask Cassie: ' + words);
+    const HOST = '#cassie-teach-host-92f1';
+    const lesson = () => tabPage.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn, frame: n.dataset.frame || "" }; }, HOST);
+    const cursorAt = (p) => p.evaluate((h) => { const c = document.querySelector(h).shadowRoot.querySelector('.ct-cursor'); return c.classList.contains('on') ? [+c.dataset.x, +c.dataset.y] : null; }, HOST);
+    const ink = (p, box) => p.evaluate(([h, box]) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let inside = 0, outside = 0;
+      for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+        if (d[(y * c.width + x) * 4 + 3] < 40) continue;
+        const X = x / k, Y = y / k;
+        if (!box || (X >= box[0] && X <= box[2] && Y >= box[1] && Y <= box[3])) inside++; else outside++;
+      }
+      return { inside, outside };
+    }, [HOST, box]);
+
+    // 1. a page with headings and a table: she speaks step 1, points at the heading, draws a circle and an arrow
+    await setting({ teachVoice: 'on', teachAuto: 'off' });
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tabPage.bringToFront(); await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => +document.querySelector(h).dataset.spoken >= 1, HOST, { timeout: 8000 });
+    let l = await lesson();
+    expect(l.step === '0' && l.drawn === 'circle,arrow', 'step 1 draws a circle and an arrow (the bad shape is left out): ' + JSON.stringify(l));
+    let q = await asked();
+    expect(q.length === 1 && /heading "Photosynthesis"/.test(q[0].prompt) && /table heading "Stage"/.test(q[0].prompt) && /^data:image\/png/.test(q[0].image), 'she was given the numbered parts and a picture of the tab: ' + JSON.stringify(q.map((x) => [x.image, x.prompt.slice(0, 200)])));
+    expect(q.every((x) => !x.log), 'nothing she was shown is kept (no log)');
+    await tabPage.waitForTimeout(1500);
+    const h1 = await tabPage.evaluate(() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+    const at1 = await cursorAt(tabPage);
+    expect(at1 && at1[0] >= h1[0] && at1[0] <= h1[2] && at1[1] >= h1[1] && at1[1] <= h1[3], `the arrow lands on the heading: ${at1} in ${h1}`);
+    const drawn1 = await ink(tabPage, null);
+    expect(drawn1.inside > 200, 'the circle and the arrow are drawn on the layer: ' + JSON.stringify(drawn1));
+    expect(await panel.locator('.teach-on').isVisible(), 'the panel says she is teaching on the page');
+    // the layer never blocks the page: a tap goes through to the page, and she never taps or types herself
+    expect(await tabPage.evaluate((h) => getComputedStyle(document.querySelector(h)).pointerEvents === 'none' && window.taps === 0 && window.keys === 0, HOST), 'the layer lets taps through, and Cassie tapped and typed nothing');
+    await tabPage.click('#tap');
+    expect(await tabPage.evaluate(() => window.taps) === 1, 'a tap on the page reaches the page while she teaches');
+    const card = tabPage.locator(`${HOST} .ct-card`);
+    for (const b of ['.ct-voice', '.ct-auto', '.ct-x', '.ct-back', '.ct-next']) { const bb = await card.locator(b).boundingBox(); expect(bb.height >= 44 && bb.width >= 44, b + ' is 44px: ' + JSON.stringify(bb)); }
+    const cardText = await card.innerText();
+    expect(!/[—–]/.test(cardText), 'no dashes on her card: ' + cardText);
+    // the steps that made no sense were skipped: 3 good steps, no error
+    expect(/1 of 3/.test(cardText), 'bad steps are skipped with nothing on screen: ' + cardText);
+
+    let cl = await clips();
+    expect(cl.length === 1 && cl[0].ok && cl[0].text === 'This page is about photosynthesis.', 'step 1 was said in Bella’s voice: ' + JSON.stringify(cl));
+    expect(await card.locator('.ct-vnote').isHidden(), 'no line when she can speak');
+
+    // 6. Escape removes the layer, the arrow and the card
+    await tabPage.keyboard.press('Escape');
+    await tabPage.waitForTimeout(300);
+    expect(await tabPage.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('.ct-card, .ct-cursor, canvas.ct-ink')), 'Escape leaves no trace of the lesson on the page');
+
+    // Bella only: too little left for the lesson, so every step is typed and the card says so once
+    const LINE = await panel.evaluate(() => CassieErrors.say('voice_typing'));
+    await sw.evaluate(() => { self.__voice.left = 20; });
+    let n0 = (await clips()).length;
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => { const n = document.querySelector(h).shadowRoot.querySelector('.ct-vnote'); return n && !n.hidden; }, HOST, { timeout: 8000 });
+    expect(await card.locator('.ct-vnote').innerText() === LINE, 'the one line on the card: ' + await card.locator('.ct-vnote').innerText());
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(600);
+    l = await lesson();
+    expect(l.step === '1' && l.spoken === '0' && (await clips()).length === n0, 'nothing spoken, and Next moves on: ' + JSON.stringify(l));
+    await tabPage.keyboard.press('Escape');
+    await asked();
+    // Bella fails at step 2: tried once more, then the rest is typed with the line; no other voice
+    await sw.evaluate(() => { self.__voice.left = 9000; self.__voice.failFrom = self.__clips.length + 1; });
+    n0 = (await clips()).length;
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForFunction((h) => +document.querySelector(h).dataset.spoken >= 1, HOST, { timeout: 8000 });
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForFunction((h) => { const n = document.querySelector(h).shadowRoot.querySelector('.ct-vnote'); return n && !n.hidden; }, HOST, { timeout: 8000 });
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(800);
+    cl = (await clips()).slice(n0);
+    l = await lesson();
+    expect(cl.length === 3 && cl[0].ok && cl.slice(1).every((x) => !x.ok && x.text === 'The table shows the two stages.') && l.spoken === '1' && l.step === '2', 'step 1 said, step 2 tried twice, step 3 typed: ' + JSON.stringify([cl, l]));
+    expect(await card.locator('.ct-vnote').innerText() === LINE, 'the same line');
+    await tabPage.keyboard.press('Escape');
+    await sw.evaluate(() => { self.__voice.failFrom = null; });
+    await asked();
+
+    // 2. voice off (remembered from the card's switch): no speech at all, and Next moves on
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.click(`${HOST} .ct-voice`);
+    expect(await sw.evaluate(() => chrome.storage.local.get('teachVoice').then((o) => o.teachVoice)) === 'off', 'the voice switch is remembered');
+    await tabPage.keyboard.press('Escape');
+    await asked();
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(1500);
+    l = await lesson();
+    expect(l.spoken === '0' && l.step === '0', 'voice off: no speech: ' + JSON.stringify(l));
+    expect(/Voice off/.test(await card.locator('.ct-voice').innerText()), 'the card shows Voice off');
+    await tabPage.click(`${HOST} .ct-next`);
+    await tabPage.waitForTimeout(400);
+    l = await lesson();
+    expect(l.step === '1' && l.spoken === '0' && l.drawn === 'underline,graph', 'Next moves to step 2, still silent: ' + JSON.stringify(l));
+    // with Auto on, steps move on by themselves (no "Keep going")
+    await tabPage.click(`${HOST} .ct-auto`);
+    await tabPage.waitForFunction((h) => document.querySelector(h).dataset.step === '2', HOST, { timeout: 12000 });
+    await tabPage.keyboard.press('Escape');
+    await asked();
+
+    // 3. a page drawn on a canvas: she reads a picture of it and points by place
+    await setting({ teachAuto: 'off' });
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/canvas.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(1500);
+    q = await asked();
+    expect(q.length === 1 && /^data:image\/png/.test(q[0].image) && !/numbered/.test(q[0].prompt) && /a spot on the picture/.test(q[0].prompt), 'the canvas page goes as a picture, with no numbered parts: ' + (q[0] && q[0].prompt.slice(0, 300)));
+    const vp = await tabPage.evaluate(() => [innerWidth, innerHeight]);
+    const at3 = await cursorAt(tabPage);
+    // (shares of the screenshot, which can be smaller than the window; she points at the chart's axis, not blank canvas)
+    const fr = (await lesson()).frame.split('x').map(Number);
+    expect(at3 && Math.abs(at3[0] - 0.05 * fr[0]) <= 3 && Math.abs(at3[1] - 0.5 * fr[1]) <= 3, `the arrow points by place (x 5%, y 50%) on the chart's axis: ${at3} on ${fr}`);
+    await tabPage.keyboard.press('Escape');
+
+    // 4. Snip, then Teach me: she points and draws inside the snipped part
+    await panel.click('#t-snip');
+    await panel.waitForSelector('.crop img', { timeout: 15000 });
+    await panel.waitForFunction(() => document.querySelector('.crop img').naturalWidth > 0);
+    const cb = await panel.locator('.crop').boundingBox();
+    await panel.mouse.move(cb.x + cb.width * 0.25, cb.y + cb.height * 0.25);
+    await panel.mouse.down();
+    await panel.mouse.move(cb.x + cb.width * 0.5, cb.y + cb.height * 0.5, { steps: 4 });
+    await panel.mouse.move(cb.x + cb.width * 0.75, cb.y + cb.height * 0.75, { steps: 4 });
+    await panel.mouse.up();
+    await panel.waitForSelector('#snip-teach', { timeout: 5000 });
+    expect((await panel.locator('#snip-teach').boundingBox()).height >= 44, 'Teach me here is 44px');
+    await panel.click('#snip-teach');
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tabPage.waitForTimeout(2000);
+    q = await asked();
+    expect(q.length === 1 && /they snipped it/.test(q[0].prompt) && /^data:image\/jpeg/.test(q[0].image), 'the snip goes to her as the picture: ' + JSON.stringify(q.map((x) => x.image)));
+    const at4 = await cursorAt(tabPage);
+    expect(at4 && Math.abs(at4[0] - 0.5 * vp[0]) <= 6 && Math.abs(at4[1] - 0.5 * vp[1]) <= 6, `the arrow points at the middle of the snip: ${at4} on ${vp}`);
+    const inSnip = await ink(tabPage, [0.25 * vp[0] - 12, 0.25 * vp[1] - 12, 0.75 * vp[0] + 12, 0.75 * vp[1] + 12]);
+    expect(inSnip.inside > 150 && inSnip.outside === 0, 'her circle and arrow are drawn inside the snip only: ' + JSON.stringify(inSnip));
+    expect((await lesson()).drawn === 'circle,arrow', 'the snip lesson drew a circle and an arrow');
+    await tabPage.keyboard.press('Escape');
+
+    // 7. Ask Cassie about the page: the answer is in the panel, and she points at what she means
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-ask');
+    expect((await panel.locator('.ask-page input').boundingBox()).height >= 44, 'the question box is 44px');
+    await panel.fill('.ask-page input', 'What is this page about?');
+    await panel.press('.ask-page input', 'Enter');
+    await panel.waitForFunction(() => /Plants make their own food from light/.test(document.querySelector('.ask-page .answer').innerText), null, { timeout: 20000 });
+    await tabPage.waitForSelector(HOST, { state: 'attached', timeout: 10000 });
+    await tabPage.waitForTimeout(1500);
+    q = await asked();
+    expect(q.length === 1 && /The student asks: "What is this page about\?"/.test(q[0].prompt) && !q[0].log, 'her question went with the page, and is not kept');
+    const h1b = await tabPage.evaluate(() => { const r = document.querySelector('h1').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+    const at7 = await cursorAt(tabPage);
+    expect(at7 && at7[0] >= h1b[0] && at7[0] <= h1b[2] && at7[1] >= h1b[1] && at7[1] <= h1b[3], `she points at what she means: ${at7} in ${h1b}`);
+    await tabPage.click(`${HOST} .ct-x`);
+    await tabPage.waitForTimeout(300);
+    expect(await tabPage.evaluate((h) => !document.querySelector(h), HOST), 'the close button removes the lesson too');
+
+    // 5. a page the extension can't draw on: the panel shows the picture of the tab, the reason, and the lesson there
+    await tabPage.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/blocked.html`);
+    await tabPage.waitForTimeout(800);
+    await panel.click('#t-teach');
+    await panel.waitForSelector('.teach-why, .teach-err', { timeout: 20000 });
+    expect(await panel.locator('.teach-why').count(), 'the panel shows the lesson, not: ' + await panel.locator('#view').innerText());
+    const why = await panel.locator('.teach-why').innerText();
+    expect(why === await panel.evaluate(() => CassieErrors.say('teach_where_page')) && !/[—–]/.test(why), 'one plain sentence says why: ' + why);
+    await panel.waitForFunction((h) => { const n = document.querySelector(h); return n && n.dataset.step === '0'; }, HOST, { timeout: 8000 });
+    expect(/^data:image\/png/.test(await panel.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-shot img').src, HOST)), 'the panel shows the picture of the tab');
+    expect(await panel.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-cursor').classList.contains('on'), HOST), 'and points on it');
+    expect(await tabPage.evaluate((h) => !document.querySelector(h), HOST), 'nothing is put on the page');
+    // the reasons for the browser's own pages, its PDF viewer and the stores
+    const whys = await panel.evaluate(() => ['chrome://settings', '', 'https://example.com/notes.pdf', 'https://chromewebstore.google.com/detail/x', 'https://microsoftedge.microsoft.com/addons/detail/x'].map((url) => whyNotHere({ url })));
+    expect(whys.join() === 'teach_where_browser,teach_where_browser,teach_where_pdf,teach_where_store,teach_where_store', 'each place gets its reason: ' + whys.join());
+    // the AI failing: a plain words error with Try again, through CassieErrors
+    await sw.evaluate(() => { self.readPicture = async () => { throw new Error('boom'); }; });
+    await panel.click('#t-teach');
+    await panel.waitForSelector('.teach-err', { timeout: 20000 });
+    const err = await panel.locator('.teach-err').innerText();
+    expect(err.includes(await panel.evaluate(() => CassieErrors.say('teach_failed'))) && /Try again/.test(err) && !/boom/.test(err), 'a failed lesson says so in plain words with Try again: ' + err);
+    expect((await panel.locator('.teach-err button').boundingBox()).height >= 44, 'Try again is 44px');
+    // the parser on its own: only well-formed steps and shapes are kept
+    const parsed = await panel.evaluate(() => CassieTeach.parse('{"steps":[{"say":"ok","point":{"x":2,"y":0.5},"draw":[{"shape":"polygon","points":[[0,0],[1,0]]},{"shape":"curve","points":[[0,0],[0.5,0.5]]},{"shape":"graph","fn":"alert(1)","x":0.1,"y":0.1,"w":0.5,"h":0.5}]},"junk",{"say":"two","point":{"selector":"h1"}}]}', 0));
+    expect(parsed.length === 2 && parsed[0].point === null && parsed[0].draw.map((d) => d.shape).join() === 'curve' && parsed[1].point.selector === 'h1', 'the parser keeps only what makes sense: ' + JSON.stringify(parsed));
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when on and is gone when off; Teach me this page from the floating menu points and draws one step at a time, earlier steps stay in grey, × or Escape leaves nothing; the card says where lessons are kept; the lesson is saved in Your lessons with its steps and picture, opens in the Cassie app and can be deleted; voice off never speaks; nothing is read before she is asked', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    // the real site address, served from this repo, so "Open in Cassie" reaches the app
+    await ctx.route(/askcassie\.pages\.dev/, async (route) => {
+      const u = new URL(route.request().url());
+      return route.fulfill({ response: await route.fetch({ url: `http://localhost:${APP_PORT}${u.pathname}` }) });
+    });
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    await ctx.addInitScript(([seed, srv]) => { if (location.hostname !== 'askcassie.pages.dev') return; window.CASSIE_SERVER = srv; if (!localStorage.getItem('cassie.v2')) localStorage.setItem('cassie.v2', seed); }, [JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'on' }), SERVER]);
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked; and every picture of the tab is counted
+    await sw.evaluate(() => {
+      self.__asked = []; self.__shots = 0;
+      const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
+      chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
+      self.readPicture = async (keys, msg) => {
+        const p = String(msg.prompt || '');
+        self.__asked.push({ prompt: p, log: msg.log || null });
+        const num = (what) => { const m = p.match(new RegExp('^(\\d+)\\. ' + what, 'm')); return m ? +m[1] : 0; };
+        const h = num('heading "Photosynthesis"'), t = num('table heading "Stage"');
+        if (/The student asks/.test(p)) return JSON.stringify({ answer: 'Plants make their own food from light.', steps: [{ say: 'The heading names the topic.', point: h, draw: [{ shape: 'underline', el: h }] }] });
+        return JSON.stringify({ steps: [
+          { say: 'This page is about photosynthesis.', point: h, draw: [{ shape: 'box', el: h }] },
+          { say: 'The table shows the two stages.', point: t, draw: [{ shape: 'box', el: t }] },
+          { say: 'That is the big idea.', point: h },
+        ] });
+      };
+    });
+    const store = (k) => sw.evaluate((k) => chrome.storage.local.get(k).then((o) => o[k]), k);
+    const reads = () => sw.evaluate(() => ({ asked: self.__asked.length, shots: self.__shots }));
+    await sw.evaluate(() => chrome.storage.local.set({ teachVoice: 'off', teachAuto: 'off' }));
+    const tab = ctx.pages()[0] || await ctx.newPage();
+    await tab.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await tab.bringToFront(); await tab.waitForTimeout(1000);
+    const HOST = '#cassie-teach-host-92f1', FOLLOW = '#cassie-follow-92f1';
+    const follower = () => tab.evaluate((f) => { const n = document.querySelector(f); return n ? { shown: getComputedStyle(n).display !== 'none', at: n.getBoundingClientRect().toJSON(), pe: getComputedStyle(n).pointerEvents } : null; }, FOLLOW);
+    const lesson = () => tab.evaluate((h) => { const n = document.querySelector(h); return n && { step: n.dataset.step, spoken: n.dataset.spoken, drawn: n.dataset.drawn, past: n.dataset.past }; }, HOST);
+    const box = (sel) => tab.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }, sel);
+    const openMenu = async () => { if (!await tab.locator('.dock.open').count()) { const hb = await tab.locator('.dock-handle').boundingBox(); await tab.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2, { steps: 2 }); } await tab.waitForSelector('.dock.open .dock-tray', { timeout: 5000 }); };
+    const cursorAt = () => tab.evaluate((h) => { const c = document.querySelector(h).shadowRoot.querySelector('.ct-cursor'); return c.classList.contains('on') ? [+c.dataset.x, +c.dataset.y] : null; }, HOST);
+    // the ink on her see-through layer, sorted into dark (this step) and light grey (earlier steps), inside a box or not
+    const ink = (b) => tab.evaluate(([h, b]) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const o = { darkIn: 0, darkOut: 0, greyIn: 0, greyOut: 0 };
+      for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) {
+        const i = (y * c.width + x) * 4;
+        if (d[i + 3] < 200) continue;
+        const inside = b && x / k >= b[0] && x / k <= b[2] && y / k >= b[1] && y / k <= b[3];
+        if (d[i] < 70 && d[i + 1] < 70) o[inside ? 'darkIn' : 'darkOut']++;
+        else if (d[i] >= 160 && d[i] <= 200 && Math.abs(d[i] - d[i + 1]) < 10) o[inside ? 'greyIn' : 'greyOut']++;
+      }
+      return o;
+    }, [HOST, b]);
+
+    // 1. before she is asked: no cursor beside the mouse yet, and nothing is read from the page
+    await tab.mouse.move(300, 300); await tab.mouse.move(320, 320, { steps: 3 });
+    await tab.waitForTimeout(300);
+    let f = await follower();
+    expect(!f || !f.shown, 'her cursor is off until the first lesson: ' + JSON.stringify(f));
+    expect(await store('teachCursor') === undefined, 'the cursor switch starts unset');
+    let r0 = await reads();
+    expect(r0.asked === 0 && r0.shots === 0, 'nothing is read from the page before the student asks: ' + JSON.stringify(r0));
+
+    // 2. the floating menu: Ask Cassie about this page, Teach me this page, and the cursor switch, all 44px
+    await openMenu();
+    for (const s of ['.fab-teach', '.dock-cur']) { const bb = await tab.locator(s).boundingBox(); expect(bb.height >= 44 && bb.width >= 44, s + ' is 44px: ' + JSON.stringify(bb)); }
+    expect(await tab.locator('.fab-teach').getAttribute('aria-label') === 'Teach me this page', 'the menu says Teach me this page');
+    r0 = await reads();
+    expect(r0.asked === 0 && r0.shots === 0, 'opening the menu reads nothing: ' + JSON.stringify(r0));
+
+    // 3. Teach me this page: the arrow lands on the heading, step 1 draws only its box
+    await tab.click('.fab-teach');
+    await tab.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tab.waitForTimeout(1800);
+    const q = await sw.evaluate(() => self.__asked.slice());
+    expect(q.length === 1 && /heading "Photosynthesis"/.test(q[0].prompt) && !q[0].log, 'one look at the page, with its numbered parts, not kept: ' + q.length);
+    expect((await reads()).shots === 1, 'one picture of the tab, taken when asked');
+    let l = await lesson();
+    expect(l.step === '0' && l.drawn === 'box' && l.past === '0', 'step 1 draws one box: ' + JSON.stringify(l));
+    const h1 = await box('h1'), th = await box('th');
+    let at = await cursorAt();
+    expect(at && at[0] >= h1[0] && at[0] <= h1[2] && at[1] >= h1[1] && at[1] <= h1[3], `the arrow lands on the heading: ${at} in ${h1}`);
+    const thPad = [th[0] - 14, th[1] - 14, th[2] + 14, th[3] + 14];
+    let k1 = await ink(thPad);
+    expect(k1.darkOut > 100 && k1.darkIn === 0 && k1.greyIn === 0 && k1.greyOut < k1.darkOut / 4, 'step 1 draws at the heading only, nothing yet at the table: ' + JSON.stringify(k1));
+    f = await follower();
+    expect(await store('teachCursor') === 'on' && (!f || !f.shown), 'the first lesson turns her cursor on; it waits while she teaches: ' + JSON.stringify(f));
+    expect(await tab.evaluate(() => window.taps === 0 && window.keys === 0), 'she clicked and typed nothing');
+    const card = tab.locator(`${HOST} .ct-card`);
+    const note = await card.locator('.ct-note').innerText();
+    expect(note === 'When you’re done, close this. Everything Cassie taught is saved in the Cassie side panel.', 'the card says where the lesson is kept: ' + note);
+    expect(!/[—–]/.test(await card.innerText()), 'no dashes on her card');
+
+    // 4. Next: she glides to the table and draws there; the heading's box stays, in light grey (voice off: never speaks)
+    await tab.click(`${HOST} .ct-next`);
+    await tab.waitForTimeout(1800);
+    l = await lesson();
+    expect(l.step === '1' && l.drawn === 'box' && l.past === '1' && l.spoken === '0', 'Next moves on, with the first step kept and no speech: ' + JSON.stringify(l));
+    at = await cursorAt();
+    expect(at && at[0] >= th[0] && at[0] <= th[2] && at[1] >= th[1] && at[1] <= th[3], `the arrow moves to the table: ${at} in ${th}`);
+    const k2 = await ink(thPad);
+    expect(k2.darkIn > 20 && k2.darkOut === 0 && k2.greyOut > 400, 'this step is dark at the table, the earlier box is light grey: ' + JSON.stringify(k2));
+    await tab.click(`${HOST} .ct-next`);
+    await tab.waitForTimeout(800);
+    l = await lesson();
+    expect(l.step === '2' && l.past === '2' && l.spoken === '0', 'Next still works with voice off: ' + JSON.stringify(l));
+
+    // 5. Escape: every drawing and her arrow leave the page; her cursor comes back beside the mouse
+    await tab.keyboard.press('Escape');
+    await tab.waitForTimeout(400);
+    expect(await tab.evaluate(() => !document.querySelector('[id^="cassie-teach"]') && !document.querySelector('canvas, .ct-card, .ct-cursor')), 'Escape leaves nothing of the lesson on the page');
+    await tab.mouse.move(400, 420, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(f && f.shown && f.pe === 'none' && Math.abs(f.at.left - 416) <= 1 && Math.abs(f.at.top - 438) <= 1, 'her cursor follows the mouse, a little down and right, and takes no taps: ' + JSON.stringify(f));
+    await tab.mouse.move(600, 200, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(f.shown && Math.abs(f.at.left - 616) <= 1 && Math.abs(f.at.top - 218) <= 1, 'and keeps following: ' + JSON.stringify(f.at));
+    // a tap under her cursor reaches the page (she never covers what the student points at)
+    const tapBox = await box('#tap');
+    await tab.mouse.click((tapBox[0] + tapBox[2]) / 2, (tapBox[1] + tapBox[3]) / 2);
+    expect(await tab.evaluate(() => window.taps) === 1, 'the button under the mouse still takes the tap');
+
+    // 6. the lesson is saved: the page title, each step's words, and a picture with the drawings
+    let saved = await store('teachLessons');
+    expect(Array.isArray(saved) && saved.length === 1 && saved[0].title === 'Photosynthesis notes' && saved[0].steps.join('|') === 'This page is about photosynthesis.|The table shows the two stages.|That is the big idea.' && /^data:image\/jpeg/.test(saved[0].pic) && saved[0].pic.length > 2000, 'the lesson is kept: ' + JSON.stringify(saved && saved.map((x) => ({ ...x, pic: String(x.pic).slice(0, 30) }))));
+
+    // 7. the cursor switch in the floating menu turns her off (gone), and back on
+    await openMenu();
+    expect(await tab.locator('.dock-cur').getAttribute('aria-pressed') === 'true', 'the menu switch shows on');
+    await tab.click('.dock-cur');
+    await tab.waitForTimeout(300);
+    await tab.mouse.move(500, 500, { steps: 3 });
+    await tab.waitForTimeout(300);
+    f = await follower();
+    expect(await store('teachCursor') === 'off' && (!f || !f.shown), 'off: her cursor is gone: ' + JSON.stringify(f));
+
+    // 8. Ask from the floating button: the answer shows in the popover, and she points at it
+    await openMenu();
+    await tab.click('.dock .fab:not(.fab-teach)');
+    await tab.waitForSelector('.page-input', { timeout: 5000 });
+    await tab.fill('.page-input', 'What is this page about?');
+    await tab.click('.page-ask-btn');
+    await tab.waitForSelector(HOST, { state: 'attached', timeout: 20000 });
+    await tab.waitForFunction(() => /Plants make their own food from light/.test(document.querySelector('#cassie-ext-host-92f1').shadowRoot.textContent), null, { timeout: 10000 });
+    await tab.waitForTimeout(1500);
+    at = await cursorAt();
+    expect(at && at[0] >= h1[0] && at[0] <= h1[2] && at[1] >= h1[1] && at[1] <= h1[3], `Ask points at the heading too: ${at} in ${h1}`);
+    expect((await lesson()).drawn === 'underline', 'and draws');
+    await tab.click(`${HOST} .ct-x`);
+    await tab.waitForTimeout(400);
+    expect(await tab.evaluate(() => !document.querySelector('[id^="cassie-teach"]')), '× leaves nothing on the page');
+    saved = await store('teachLessons');
+    expect(saved.length === 2 && saved[0].q === 'What is this page about?', 'newest first, with the question: ' + saved.map((x) => x.q).join('|'));
+
+    // 9. the side panel: the cursor switch, and Your lessons with steps and picture; Open in Cassie; Delete
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 900 }));
+    const panel = await panelOpened;
+    await panel.waitForSelector('.lessons .lesson', { timeout: 10000 });
+    const sw2 = panel.locator('.cur-switch');
+    expect(await sw2.getAttribute('aria-pressed') === 'false' && (await sw2.boundingBox()).height >= 44, 'the panel switch shows off, 44px');
+    await sw2.click();
+    await tab.bringToFront();
+    await tab.mouse.move(250, 260, { steps: 3 });
+    await tab.waitForTimeout(400);
+    f = await follower();
+    expect(await store('teachCursor') === 'on' && f && f.shown, 'the panel switch turns her cursor back on: ' + JSON.stringify(f));
+    const lessons = panel.locator('.lessons .lesson');
+    expect(await lessons.count() === 2 && /Your lessons/.test(await panel.locator('.lessons').innerText()), 'Your lessons lists both');
+    const first = lessons.nth(1); // (the Teach me lesson; the newest is first)
+    expect(/Photosynthesis notes/.test(await first.innerText()), 'it has the page title');
+    await first.locator('summary').click();
+    expect((await first.locator('ol li').allInnerTexts()).join('|') === saved[1].steps.join('|'), 'it has every step');
+    expect(/^data:image\/jpeg/.test(await first.locator('img').getAttribute('src')) && await first.locator('img').evaluate((i) => i.naturalWidth === 480), 'it has the picture');
+    for (const b of await panel.locator('.lessons button, .lessons summary').all()) { const bb = await b.boundingBox(); if (bb) expect(bb.height >= 44, 'lesson buttons are 44px: ' + await b.innerText()); }
+    expect(!/[—–]/.test(await panel.locator('.lessons').innerText()), 'no dashes in Your lessons');
+    const appOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await first.locator('[data-open]').click();
+    const app = await appOpened;
+    await app.waitForLoadState().catch(() => {});
+    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto(app.url().startsWith('chrome-error') ? 'https://askcassie.pages.dev/app.html' : app.url()); // (the test's stand-in for the site is set up a moment after a new tab's first load)
+    await app.waitForFunction(() => typeof state === 'object' && state.chats.some((c) => (c.messages || []).some((m) => /lesson you taught me on a page called “Photosynthesis notes”/.test(m.content || m.text || ''))), null, { timeout: 20000 });
+    const att = await app.evaluate(() => JSON.stringify(state.chats.flatMap((c) => c.messages || []).filter((m) => /lesson you taught me/.test(m.content || m.text || ''))).slice(0, 800));
+    expect(/Cassie lesson\.txt|The table shows the two stages/.test(att), 'the lesson reached the app chat with its words: ' + att);
+    await app.close();
+    await first.locator('[data-del]').click();
+    await panel.waitForFunction(() => document.querySelectorAll('.lessons .lesson').length === 1);
+    expect((await store('teachLessons')).length === 1, 'Delete removes one lesson');
+    panel.once('dialog', (d) => d.accept());
+    await panel.click('.lessons-clear');
+    await panel.waitForFunction(() => !document.querySelector('.lessons .lesson'));
+    expect((await store('teachLessons')).length === 0, 'Delete all removes every lesson');
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
 test('the Chrome extension: its button sits beside Open Cassie on computers (none on phones), every download link carries the extension’s version, the built zip is that version, and an old copy is told a new one is ready', async (b) => {
   const extver = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version;
   // the build: the zip on the site is the extension as it is now, and extension-version.json says so
@@ -931,17 +1608,15 @@ test('daily limit shows a friendly message with Try again', async (b) => {
   await ctx.close();
 });
 
-test('Student / Professional switch is top right and changes the background', async (b) => {
+test('Student / Professional switch is top right and switches the audience; no doodle wallpaper behind the chat', async (b) => {
   const { ctx, page } = await open(b);
   const sw = await page.locator('.topbar-actions #aud-switch').boundingBox();
   const brand = await page.locator('.topbar .brand').boundingBox();
   expect(sw && sw.x > brand.x + brand.width && sw.y < 80, 'switch is not in the top right: ' + JSON.stringify(sw));
   expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'student', 'not student by default');
   await page.click('#aud-switch [data-aud=pro]');
-  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'background did not switch to pro');
-  await page.waitForTimeout(900); // it fades in
-  const op = await page.evaluate(() => getComputedStyle(document.querySelector('.pat-pro')).opacity);
-  expect(+op > 0, 'pro pattern not visible');
+  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'the switch did not change to Professional');
+  expect(await page.locator('#aud-bg, .pat').count() === 0, 'the doodle wallpaper is gone (Apple: branding defers to content)');
   expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
   await ctx.close();
 });
@@ -1380,230 +2055,178 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await ctx.close();
 });
 
-test('Listen: Cassie reads answers and flashcards aloud — the studio voice while hers isn’t on the device, the device’s when it runs out', async (b) => {
-  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
-  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', fakeGroq: () => ({ text: 'Mitochondria make ATP, the energy of the cell.' }), state: { groqKey: 'gsk_test', cards, hearing: 'fast' } });
-  // a tiny real sound (a WAV), standing in for ElevenLabs' MP3
-  const wav = (() => { const n = 1600, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
-  const said = []; let credits = true;
-  await ctx.route(/\/speak$/, (route) => {
-    const r = route.request();
-    if (r.method() === 'GET') return route.fulfill({ json: { on: true }, headers: { 'access-control-allow-origin': '*' } });
-    said.push(JSON.parse(r.postData()).text);
-    return credits ? route.fulfill({ body: wav, contentType: 'audio/mpeg', headers: { 'access-control-allow-origin': '*' } }) : route.fulfill({ status: 429, json: { error: { message: 'used up' } }, headers: { 'access-control-allow-origin': '*' } });
-  });
-  await ctx.addInitScript(FAKE_VOICE, {});
+test('exam plans: Cassie makes a dated day by day plan, today’s tasks open their feature and stay ticked after a reload, a missed day moves on (never more than 3 a day), Free keeps 1 plan and Plus 5, a bad reply shows Try again, and the plan closes with a summary', async (b) => {
+  // Cassie's plan, faked from what she was asked: the days she was given, a few tasks a day, plus some junk to leave out
+  let broken = false;
+  const fakeGroq = (body) => {
+    const t = JSON.stringify(body);
+    if (!/day by day study plan/.test(t)) return { text: 'Question 1: What is a mole?' };
+    if (broken) return { text: 'Sorry, here is a plan: day one study hard.' };
+    const [, from, last] = t.match(/Plan these days: (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})/);
+    const days = [];
+    for (let d = new Date(from + 'T00:00:00Z'), k = 0; d.toISOString().slice(0, 10) <= last; d.setUTCDate(d.getUTCDate() + 1), k++) {
+      const date = d.toISOString().slice(0, 10);
+      days.push({ date, tasks: k === 0
+        ? [{ kind: 'learn', topic: 'Stoichiometry' }, { kind: 'quiz', topic: 'Stoichiometry' }, { kind: 'cards', topic: 'Stoichiometry' }, { kind: 'focus', topic: 'Moles' }, { kind: 'dance', topic: 'x' }]
+        : [{ kind: k % 2 ? 'mistakes' : 'quiz', topic: 'Gas laws' }] });
+    }
+    days.push({ date: '1999-01-01', tasks: [{ kind: 'quiz', topic: 'Too early' }] });
+    return { text: '```json\n' + JSON.stringify({ days }) + '\n```' };
+  };
+  const seed = { groqKey: 'gsk_test', tab: 'home', plan: null, chats: [{ id: 'h1', title: 'Moles', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A count.' }], updatedAt: Date.now() }] };
+  const { ctx, page, errors, groqCalls } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed, fakeGroq });
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  const hub = '#home .hub';
+  await page.waitForSelector(`${hub} .ex-new`, { timeout: 10000 });
+  const today = await page.evaluate(() => phDay()), inDays = (n) => page.evaluate(([d, n]) => dayAdd(d, n), [today, n]);
+  // the form checks each field in plain words
+  await page.click(`${hub} .ex-new`);
+  await page.waitForSelector('.ex-sheet .ex-form');
+  for (const sel of ['.ex-field input[name=name]', '.ex-field input[name=date]', '.ex-field textarea', '.ex-make', '.ex-cancel', '.ex-file-btn']) { const bb = await page.locator('.ex-sheet ' + sel).boundingBox(); expect(bb && bb.height >= 44, `${sel} is 44px: ` + JSON.stringify(bb)); }
+  await page.click('.ex-make');
+  const errs = await page.locator('.ex-sheet .field-err:not([hidden])').allInnerTexts();
+  expect(errs.includes(await page.evaluate(() => CassieErrors.say('exam_name_needed'))) && errs.includes(await page.evaluate(() => CassieErrors.say('exam_date_needed'))), 'empty fields say what to do: ' + errs.join(' | '));
+  // Plans from your notes are Plus
+  await page.click('.ex-file-btn');
+  await page.waitForSelector('.plus-sheet');
+  expect(/Plans from your notes comes with Plus/.test(await page.locator('.plus-sheet h3').innerText()), 'a plan from a file is a Plus extra');
+  await page.click('.plus-sheet .plus-ok');
+  // a bad reply: the error in plain words, with Try again (and the form stays filled)
+  broken = true;
+  await page.fill('.ex-sheet input[name=name]', 'Gen Chem finals');
+  await page.fill('.ex-sheet input[name=date]', await inDays(5));
+  await page.fill('.ex-sheet textarea', 'Stoichiometry, gas laws');
+  await page.click('.ex-make');
+  await page.waitForSelector('.ex-sheet .ex-again', { timeout: 10000 });
+  expect((await page.locator('.ex-sheet .ex-status').innerText()).includes(await page.evaluate(() => CassieErrors.say('exam_plan_failed'))), 'a bad plan says so with Try again');
+  expect((await page.locator('.ex-again').boundingBox()).height >= 44, 'Try again is 44px');
+  broken = false;
+  await page.click('.ex-again');
+  await page.waitForSelector(`${hub} .ex-plan`, { timeout: 10000 });
+  const asked = groqCalls.filter((c) => /day by day study plan/.test(JSON.stringify(c)));
+  expect(asked.length === 2 && /Exam: \\"Gen Chem finals\\"/.test(JSON.stringify(asked[1])) && /Stoichiometry, gas laws/.test(JSON.stringify(asked[1])), 'Cassie was asked for the plan, with the exam and its topics');
+  const plan = await page.evaluate(() => state.exams[0]);
+  expect(plan.days[0].date === today && plan.days.at(-1).date === await inDays(4) && plan.days.length === 5, 'the plan runs from today to the day before the exam: ' + plan.days.map((d) => d.date).join(','));
+  expect(plan.days.every((d) => d.tasks.length >= 1 && d.tasks.length <= 3) && plan.days.flatMap((d) => d.tasks).every((t) => ['learn', 'quiz', 'cards', 'mistakes', 'focus'].includes(t.kind)), 'every day has 1 to 3 real tasks, junk left out: ' + JSON.stringify(plan.days.map((d) => d.tasks.map((t) => t.kind))));
+  expect(plan.days[1].tasks[0].kind === 'focus' && plan.days[1].tasks.length === 2, 'a 4th task on a day moves to the next day: ' + JSON.stringify(plan.days[1].tasks));
+  // today's tasks on Home
+  const labels = await page.locator(`${hub} .ex-plan .ex-task`).allInnerTexts();
+  expect(labels.join('|') === 'Learn Stoichiometry with Cassie|Quiz me on Stoichiometry|10 flashcards on Stoichiometry', 'today’s three tasks: ' + labels.join(' | '));
+  for (const sel of ['.ex-check', '.ex-task', '.ex-all', '.ex-del']) { const bb = await page.locator(`${hub} .ex-plan ${sel}`).first().boundingBox(); expect(bb.height >= 44 && bb.width >= 44, `${sel} is 44px: ` + JSON.stringify(bb)); }
+  const homeText = await page.locator(hub).innerText();
+  expect(!/[—–]/.test(homeText), 'no dashes on Home');
+  // tick one; it stays ticked after a reload
+  await page.click(`${hub} .ex-plan .ex-check >> nth=0`);
   await page.reload();
-  await page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-  await page.fill('#prompt-input', 'What do mitochondria do?');
-  await page.press('#prompt-input', 'Enter');
-  await page.waitForSelector('.bubble-assistant .listen-btn', { timeout: 10000 });
-  await page.click('.bubble-assistant .listen-btn');
-  await page.waitForFunction(() => document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 3000 });
-  await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 8000 });
-  expect(said.some((t) => /Mitochondria make ATP/.test(t)), 'the answer went to the studio voice: ' + JSON.stringify(said));
-  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'the device voice wasn’t needed');
-  // in a voice conversation the same voice answers (it used to wait for the whole answer, then switch)
-  await page.click('#voice-btn');
-  await page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  const n0 = said.length;
-  await page.evaluate(() => window.__say('What do mitochondria do?'));
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening' && window.__shown.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 15000 });
-  expect(said.slice(n0).some((t) => /Mitochondria make ATP/.test(t)), 'the studio voice speaks in the conversation too: ' + JSON.stringify(said.slice(n0)));
-  expect(await page.evaluate(() => window.__spoken.filter((t) => t.trim()).length) === 0, 'one voice: the device’s never cut in');
-  await page.click('.vc-x');
-  // the studio voice is used up: the device's voice reads it instead, never silence
-  credits = false;
-  await page.click('.bubble-assistant .listen-btn');
-  await page.waitForFunction(() => window.__spoken.some((t) => /Mitochondria make ATP/.test(t)), null, { timeout: 8000 });
-  // flashcards: a Listen button on the card, and hands-free listening
-  await page.evaluate(() => window.CassieCards.open());
-  await page.click('[data-study="Biology"]');
-  await page.click('.fc-mini[data-say]');
-  await page.waitForFunction(() => window.__spoken.some((t) => /Powerhouse of the cell/.test(t)), null, { timeout: 5000 });
-  await page.click('.fc-back');
-  await page.click('[data-listen="Biology"]');
-  await page.waitForSelector('.fc-listening >> text=Think of the answer', { timeout: 5000 });
-  await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 12000 });
-  await page.click('[data-lstop]');
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await page.waitForSelector(`${hub} .ex-plan`, { timeout: 10000 });
+  expect(await page.locator(`${hub} .ex-plan .ex-check input >> nth=0`).isChecked() && !(await page.locator(`${hub} .ex-plan .ex-check input >> nth=1`).isChecked()), 'the tick is kept after a reload');
+  const total = await page.evaluate(() => state.exams[0].days.flatMap((d) => d.tasks).length);
+  expect(new RegExp(`1 of ${total} tasks done`).test(await page.locator(`${hub} .ex-head small`).innerText()) && total === 8, 'the plan counts it: ' + await page.locator(`${hub} .ex-head small`).innerText());
+  // each task opens its feature: the quiz in the chat, the flashcards
+  const n0 = groqCalls.length;
+  await page.click(`${hub} .ex-plan .ex-task >> nth=1`);
+  await page.waitForFunction((n) => window.__quizAsked || document.querySelector('#quiz-btn.active'), n0, { timeout: 8000 });
+  await page.waitForFunction(() => /Quiz me on: Stoichiometry/.test(JSON.stringify(state.messages)), null, { timeout: 8000 });
+  await page.evaluate(() => CassieNative.go('home'));
+  await page.waitForSelector(`${hub} .ex-plan`);
+  await page.click(`${hub} .ex-plan .ex-task >> nth=2`);
+  await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 });
+  await page.evaluate(() => CassieNative.go('home'));
+  // a missed day: its tasks move to the next days, never more than 3 on a day
+  const moved = await page.evaluate(([today]) => {
+    const t = (k) => ({ id: 'x' + k + Math.random(), kind: 'quiz', topic: 'T' + k, done: false });
+    const e = { id: 'm', name: 'Mock', from: dayAdd(today, -2), date: dayAdd(today, 4), days: [
+      { date: dayAdd(today, -2), tasks: [t(1), { ...t(2), done: true }] }, { date: dayAdd(today, -1), tasks: [t(3), t(4), t(5)] },
+      { date: today, tasks: [t(6), t(7)] }, { date: dayAdd(today, 1), tasks: [t(8), t(9), t(10)] }] };
+    reflowExam(e, today);
+    return e.days.map((d) => [d.date, d.tasks.map((x) => x.topic)]);
+  }, [today]);
+  const per = Object.fromEntries(moved);
+  expect(per[await inDays(-2)].length === 1 && !per[await inDays(-1)], 'missed days keep only what was done: ' + JSON.stringify(moved));
+  expect(Object.values(per).every((x) => x.length <= 3) && per[today].join() === 'T6,T7,T1' && per[await inDays(2)].join() === 'T3,T4,T5', 'missed tasks move to the next days with room (max 3 a day): ' + JSON.stringify(moved));
+  // Free keeps one plan: a 2nd shows the Plus sheet, and the plan stays
+  await page.click(`${hub} .ex-new`);
+  await page.waitForSelector('.plus-sheet');
+  expect(/More exam plans comes with Plus/.test(await page.locator('.plus-sheet h3').innerText()) && await page.locator('.ex-sheet').count() === 0, 'Free: a 2nd plan shows the Plus sheet');
+  await page.click('.plus-sheet .plus-ok');
+  expect(await page.evaluate(() => state.exams.length) === 1, 'Free keeps the plan it has');
+  // Plus can make 5
+  await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 864e5 }; save(); refreshHub(); });
+  for (let k = 2; k <= 5; k++) {
+    await page.click(`${hub} .ex-new`);
+    await page.waitForSelector('.ex-sheet .ex-form');
+    await page.fill('.ex-sheet input[name=name]', `Exam ${k}`);
+    await page.fill('.ex-sheet input[name=date]', await inDays(3 + k));
+    await page.fill('.ex-sheet textarea', 'Gas laws');
+    await page.click('.ex-make');
+    await page.waitForFunction((k) => state.exams.length === k && !document.querySelector('.ex-sheet'), k, { timeout: 10000 });
+  }
+  expect(await page.locator(`${hub} .ex-plan`).count() === 5 && await page.locator(`${hub} .ex-new`).count() === 0 && /5 exam plans, the most at once/.test(await page.locator(`${hub} .ex-full`).innerText()), 'Plus: 5 plans, then no more');
+  // after the exam: the plan closes with what was done
+  await page.evaluate(([d]) => { const e = state.exams[0]; e.date = d; e.stats = { quizzes: 2, fixed: 3 }; save(); refreshHub(); }, [await inDays(-1)]);
+  const done = await page.locator(`${hub} .ex-done`).innerText();
+  expect(/Gen Chem finals: your plan is done/.test(done) && /Tasks done: 1 of /.test(done) && /Quizzes taken: 2/.test(done) && /Mistakes fixed: 3/.test(done), 'the summary: ' + done);
+  await page.click(`${hub} .ex-done .ex-close`);
+  expect(await page.evaluate(() => state.exams.length) === 4, 'Close removes the finished plan');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
-// One voice for a whole lesson or conversation: the studio voice running out at step 3 never hands the
-// rest to another voice. She tries once more, pauses with Keep going, and shows the rest on screen.
-// The next lesson starts with the device's best voice for her gender (never a robotic one), kept to the end.
-test('one voice per lesson: a 7-step Teach me (no pop up) and a 6-turn voice chat keep the same voice, for the woman and the man, when the studio voice runs out at step 3', async (b) => {
-  const wav = (() => { const n = 800, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; })();
-  // the studio voice: `allow` sentences, then used up for the day
-  const studioRoute = async (ctx, allow) => {
-    const log = [];
-    await ctx.route(/\/speak$/, (route) => {
-      const r = route.request(), cors = { 'access-control-allow-origin': '*' };
-      if (r.method() === 'GET') return route.fulfill({ json: { on: true }, headers: cors });
-      const body = JSON.parse(r.postData()), ok = log.filter((x) => x.ok).length < allow;
-      log.push({ text: body.text, voice: body.voice, ok });
-      return ok ? route.fulfill({ body: wav, contentType: 'audio/mpeg', headers: cors }) : route.fulfill({ status: 429, json: { error: { message: 'used up' } }, headers: cors });
-    });
-    return log;
-  };
-  // a device with several voices, a robotic one among them; records which voice said each sentence
-  const DEVICE_VOICES = () => {
-    const voices = [{ name: 'eSpeak English', lang: 'en-US', localService: true }, { name: 'Google US English', lang: 'en-US' }, { name: 'Google UK English Male', lang: 'en-GB' }, { name: 'Microsoft David', lang: 'en-US' }];
-    window.__spokenBy = [];
-    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-    const synth = { speaking: false, getVoices: () => voices, addEventListener() {}, removeEventListener() {}, cancel() {},
-      speak(u) { window.__spoken.push(u.text); if (u.text.trim()) window.__spokenBy.push(u.voice ? u.voice.name : '(none)'); setTimeout(() => { u.onstart && u.onstart(); u.onend && u.onend(); }, 30); } };
-    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-  };
-  const plain = (t) => !/[–—]/.test(t);
-  for (const gender of ['woman', 'man']) {
-    // ---- Teach me: 7 steps, the studio voice runs out at step 3 ----
-    const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
-    const t = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-    const tlog = await studioRoute(t.ctx, 2);
-    await t.ctx.addInitScript(FAKE_VOICE, {});
-    await t.ctx.addInitScript(DEVICE_VOICES);
-    await t.page.reload();
-    await t.page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-    await t.page.evaluate(() => openLabs('atom'));
-    await t.page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-    await t.page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-    await t.page.click('.lab-teach');
-    // step 3: tried once more in the same voice, then the lesson goes on with the words on screen (no pop up)
-    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 40000 });
-    await t.page.waitForTimeout(400);
-    expect(await t.page.evaluate(() => window.__paused) === 0 && await t.page.locator('.cv-pause').count() === 0, `${gender}: no Keep going pop up in Teach me`);
-    let played = await t.page.evaluate(() => window.CassieVoice.played());
-    expect(played.length === 2 && played.every((x) => x.kind === 'studio' && x.voice === gender), `${gender}: every step spoke in the same studio voice: ` + JSON.stringify(played));
-    expect(tlog.length === 4 && tlog.slice(2).every((x) => /Step 3/.test(x.text) && !x.ok) && tlog.every((x) => x.voice === gender), `${gender}: step 3 was tried twice in the studio voice, then no more calls: ` + JSON.stringify(tlog));
-    expect((await t.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-lesson`);
-    // the next lesson starts in the device's best voice for her gender, and keeps it for all 7 steps
-    await t.page.click('.tut-x');
-    await t.page.click('.lab-teach');
-    await t.page.click('.tut-resume:not([hidden]) .tut-restart'); // (it offers to carry on: a new lesson from step 1)
-    await t.page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || '') && window.__spokenBy.length >= 7, null, { timeout: 40000 });
-    const by = await t.page.evaluate(() => window.__spokenBy);
-    const want = gender === 'man' ? 'Google UK English Male' : 'Google US English';
-    expect(by.length === 7 && by.every((n) => n === want), `${gender}: the new lesson is all in ${want}, never the robotic one: ` + JSON.stringify(by));
-    played = await t.page.evaluate(() => window.CassieVoice.played().slice(2));
-    expect(played.length === 7 && played.every((x) => x.kind === 'device' && x.voice === want), `${gender}: one device voice for the lesson: ` + JSON.stringify(played));
-    expect(t.errors.length === 0, 'page errors: ' + t.errors.join('; '));
-    await t.ctx.close();
-
-    // ---- Talk with Cassie: 6 turns, the studio voice runs out at the 3rd answer ----
-    let n = 0;
-    const c = await open(b, { device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast', voiceGender: gender }, fakeGroq: () => ({ text: `Turn ${++n} answer is that cells are small.` }) });
-    const clog = await studioRoute(c.ctx, 3); // the greeting and 2 answers
-    await c.ctx.addInitScript(FAKE_VOICE, {});
-    await c.ctx.addInitScript(DEVICE_VOICES);
-    await c.page.reload();
-    await c.page.waitForFunction(() => window.CassieVoice.studio.on(), null, { timeout: 5000 });
-    await c.page.click('#voice-btn');
-    await c.page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-    for (let turn = 1; turn <= 6; turn++) {
-      await c.page.evaluate((q) => window.__say(q), `Question ${turn} about cells?`);
-      if (turn === 3) {
-        await c.page.waitForSelector('.cv-pause button', { timeout: 15000 });
-        expect(plain(await c.page.locator('.cv-pause').innerText()), 'no dashes in the pause note');
-        await c.page.click('.cv-pause button');
-      }
-      await c.page.waitForFunction((k) => document.querySelector('.vc').dataset.phase === 'listening' && window.__shown.some((x) => x.includes(`Turn ${k} answer`)), turn, { timeout: 15000 });
-    }
-    played = await c.page.evaluate(() => window.CassieVoice.played());
-    expect(played.length === 3 && played.every((x) => x.kind === 'studio' && x.voice === gender), `${gender}: the conversation kept the studio voice: ` + JSON.stringify(played));
-    expect(clog.every((x) => x.voice === gender) && clog.filter((x) => !x.ok).length === 2, `${gender}: the 3rd answer was tried twice, then no more calls: ` + JSON.stringify(clog));
-    expect((await c.page.evaluate(() => window.__spoken.filter((x) => x.trim()))).length === 0, `${gender}: the device’s voice never cut in mid-conversation`);
-    expect(c.errors.length === 0, 'page errors: ' + c.errors.join('; '));
-    await c.ctx.close();
-  }
-});
-
-test('Teach me on phones: the phone’s own voice (iPhone Premium, then Enhanced; Android Google), one voice for 7 steps, started inside the tap, Next cuts the old speech, and a voice that fails never pops up', async (b) => {
-  // the phone's speech: records each cancel and sentence (with its voice, and whether it began inside a tap)
-  const PHONE_SPEECH = (list) => {
-    window.__ev = []; window.__fail = null; window.__speakMs = 200;
-    window.__inTap = false;
-    addEventListener('click', () => { window.__inTap = true; }, true);
-    addEventListener('click', () => { window.__inTap = false; }, false);
-    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
-    let cur = null;
-    const synth = { speaking: false, pending: false, getVoices: () => list, addEventListener() {}, removeEventListener() {},
-      cancel() { window.__ev.push({ e: 'cancel' }); if (cur) { const u = cur; cur = null; clearTimeout(u._t); u.onerror && u.onerror({ error: 'interrupted' }); } this.speaking = false; },
-      speak(u) {
-        if (!u.text.trim()) return;
-        window.__ev.push({ e: 'speak', text: u.text, voice: u.voice ? u.voice.name : '(none)', tap: window.__inTap });
-        if (window.__fail && window.__fail.test(u.text)) { setTimeout(() => u.onerror && u.onerror({ error: 'synthesis-failed' }), 10); return; }
-        cur = u; this.speaking = true;
-        setTimeout(() => { if (cur !== u) return; u.onstart && u.onstart(); u._t = setTimeout(() => { if (cur !== u) return; cur = null; synth.speaking = false; u.onend && u.onend(); }, window.__speakMs); }, 5);
-      } };
-    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-  };
-  const APPLE = [{ name: 'Samantha', lang: 'en-US', localService: true }, { name: 'Ava (Enhanced)', lang: 'en-US', localService: true }, { name: 'Ava (Premium)', lang: 'en-US', localService: true },
-    { name: 'Daniel', lang: 'en-GB', localService: true }, { name: 'Evan (Enhanced)', lang: 'en-US', localService: true }, { name: 'Fred', lang: 'en-US', localService: true }, { name: 'Zarvox', lang: 'en-US', localService: true }];
-  const ANDROID = [{ name: 'Google US English', lang: 'en-US', localService: false }, { name: 'Google English (United States) Female', lang: 'en-US', localService: true },
-    { name: 'Google UK English Male', lang: 'en-GB', localService: true }, { name: 'eSpeak English', lang: 'en-US', localService: true }];
-  const cases = [['iPhone 13', APPLE, { woman: 'Ava (Premium)', man: 'Evan (Enhanced)' }], ['Pixel 5', ANDROID, { woman: 'Google English (United States) Female', man: 'Google UK English Male' }]];
-  const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
-  const stepIs = (n) => `/${n} of 7/.test((document.querySelector('.tut-step') || {}).textContent || '')`;
-  for (const [device, voices, want] of cases) {
-    for (const gender of [device === 'iPhone 13' ? 'woman' : 'man']) { // (one voice per phone keeps the suite short; each phone's picking order is checked)
-      const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test', voiceGender: gender }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-      const page = t.page;
-      await t.ctx.addInitScript(PHONE_SPEECH, voices);
-      await page.reload();
-      await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-      await page.evaluate(() => openLabs('atom'));
-      await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-      await page.evaluate(() => { window.__speakMs = 2500; }); // (long sentences: Next comes while she is still talking)
-      await page.tap('.lab-teach');
-      await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
-      await page.waitForFunction(() => window.__ev.some((x) => x.e === 'speak' && /Step 1/.test(x.text)), null, { timeout: 5000 });
-      // Next while she's still talking: the old sentence is cut first, the new one starts inside the tap
-      for (let k = 2; k <= 7; k++) {
-        await page.waitForTimeout(300);
-        const n0 = await page.evaluate(() => window.__ev.length);
-        await page.tap('.tut-next');
-        await page.waitForFunction((k) => window.__ev.some((x) => x.e === 'speak' && x.text === `Step ${k} is here.`), k, { timeout: 5000 });
-        const ev = (await page.evaluate(() => window.__ev)).slice(n0);
-        const sp = ev.findIndex((x) => x.e === 'speak'), cancel = ev.findIndex((x) => x.e === 'cancel');
-        expect(cancel >= 0 && cancel < sp, `${device} ${gender}: Next cancels the old speech before step ${k} starts: ` + JSON.stringify(ev));
-        expect(ev[sp].tap === true, `${device} ${gender}: step ${k} starts inside the tap on Next: ` + JSON.stringify(ev[sp]));
-      }
-      const spoken = (await page.evaluate(() => window.__ev)).filter((x) => x.e === 'speak');
-      expect(spoken.length >= 7 && spoken.every((x) => x.voice === want[gender]), `${device} ${gender}: every step in ${want[gender]}: ` + JSON.stringify(spoken.map((x) => x.voice)));
-      expect(await page.evaluate(() => window.__paused) === 0, `${device} ${gender}: no Keep going pop up`);
-      expect(t.errors.length === 0, "page errors: " + t.errors.join("; "));
-      await t.ctx.close();
-    }
-    // the voice fails from step 3 on: no pop up, the lesson still reaches step 7, and Hear it again shows
-    const t = await open(b, { device, touch: true, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: JSON.stringify({ steps }) }) });
-    const page = t.page;
-    await t.ctx.addInitScript(PHONE_SPEECH, voices);
-    await page.reload();
-    await page.evaluate(() => { window.__paused = 0; new MutationObserver(() => { if (document.querySelector('.cv-pause')) window.__paused++; }).observe(document.body, { childList: true, subtree: true }); });
-    await page.evaluate(() => openLabs('atom'));
-    await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
-    await page.evaluate(() => { window.__fail = /Step [3-7]/; window.__speakMs = 2500; });
-    await page.tap('.lab-teach');
-    await page.waitForFunction(new Function('return ' + stepIs(1)), null, { timeout: 15000 });
-    await page.tap('.tut-next'); await page.waitForTimeout(200);
-    await page.tap('.tut-next');
-    await page.waitForFunction(new Function('return ' + stepIs(3)), null, { timeout: 5000 });
-    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
-    expect((await page.locator('.tut-hear').boundingBox()).height >= 44, `${device}: Hear it again is 44px tall`);
-    const tries = await page.evaluate(() => window.__ev.filter((x) => x.e === 'speak' && /Step 3/.test(x.text)).length);
-    expect(tries === 2, `${device}: step 3 was tried twice: ${tries}`);
-    for (let k = 4; k <= 7; k++) { await page.tap('.tut-next'); await page.waitForFunction(new Function('return ' + stepIs(k)), null, { timeout: 5000 }); }
-    await page.waitForSelector('.tut-hear:not([hidden])', { timeout: 5000 });
-    expect(await page.evaluate(() => window.__paused) === 0 && await page.locator('.cv-pause').count() === 0, `${device}: no pop up when the voice fails`);
-    // the voice works again: Hear it again says the step (inside the tap)
-    await page.evaluate(() => { window.__fail = null; });
-    await page.tap('.tut-hear');
-    await page.waitForFunction(() => window.__ev.filter((x) => x.e === 'speak' && /Step 7/.test(x.text)).length === 3, null, { timeout: 5000 });
-    expect(await page.locator('.tut-hear').isHidden(), `${device}: the button goes once she can speak`);
-    expect(t.errors.length === 0, 'page errors: ' + t.errors.join('; '));
-    await t.ctx.close();
+test('your week: real counts after a quiz, a mistake review and a flashcard session, against last week; an empty week shows what to do; it shares as a picture', async (b) => {
+  const replies = { quiz: 'Correct!\n[[GOT: What is 2+2? || 4]]\n[[MISSED: What is H2O? || water]]\nQuestion 2: next?', review: 'Yes!\n[[GOT: What is the powerhouse of the cell? || mitochondria]]' };
+  const fakeGroq = (body) => { const msgs = (body.messages || []).filter((m) => m.role === 'user'), t = JSON.stringify(msgs.at(-1) || ''); return { text: /review the quiz questions I got wrong/.test(t) ? replies.review : /Quiz me on/.test(t) ? 'Question 1: What is 2+2?' : replies.quiz }; };
+  const lastMon = (() => { const d = new Date(Date.now() + 8 * 3600e3); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) - 7); return d.toISOString().slice(0, 10); })();
+  const seed = { groqKey: 'gsk_test', tab: 'chat', chats: [{ id: 'h1', title: 'Cells', messages: [{ role: 'user', content: 'cells' }, { role: 'assistant', content: 'ok' }], updatedAt: Date.now() }],
+    mistakes: [{ q: 'What is the powerhouse of the cell?', a: 'mitochondria', at: 1, due: 1, misses: 1 }],
+    cards: [{ id: 'c1', f: 'What is a cell?', b: 'The unit of life.', deck: 'Bio', box: 0, due: 0, at: 0 }] };
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: seed, fakeGroq });
+  const home = async () => { await page.evaluate(() => createNewChat()); await page.waitForSelector('#chat-log .hub .hub-week', { timeout: 10000 }); };
+  // nothing this week yet: what to do, not zeros
+  await home();
+  expect(await page.locator('#chat-log .hub-week .empty-state').count() === 1 && /Take a quick quiz/.test(await page.locator('#chat-log .hub-week').innerText()), 'an empty week says what to do');
+  // a quiz (one right, one missed), a mistake review (the saved one, right) and a flashcard session (Good)
+  await page.fill('#prompt-input', 'maths');
+  await page.click('#quiz-btn');
+  await page.waitForSelector('text=Question 1');
+  await ask(page, '4');
+  await page.click('#quiz-btn'); // stop
+  await page.evaluate(() => reviewMistakes(true));
+  await page.waitForFunction(() => !(state.mistakes || []).some((m) => /powerhouse/.test(m.q) && !m.right), null, { timeout: 8000 });
+  await page.evaluate(() => window.CassieCards.open());
+  await page.click('.fc [data-study], .fc-study, .fc .fc-go', { timeout: 3000 }).catch(() => {});
+  await page.waitForSelector('.fc-card', { timeout: 8000 });
+  await page.click('.fc-card'); await page.click('.fc-grade.good');
+  await page.click('.fc-x');
+  await page.waitForSelector('.fc', { state: 'hidden' });
+  // seed last week, then Home
+  await page.evaluate((d) => { state.progress[d] = { quizzes: 4, fixed: 1, cardsUp: 7, focus: 50, tasks: 2, answered: 10, right: 8 }; save(); }, lastMon);
+  await home();
+  const row = async (k) => (await page.locator(`#chat-log .hub-week [data-k="${k}"]`).innerText()).replace(/\s+/g, ' ');
+  const want = { fixed: /^1 mistakes fixed last week 1$/, cardsUp: /^1 flashcards moved up a level last week 7$/, quizzes: /^2 quizzes taken, 67% right last week 4$/, days: /^1 days studied last week 1$/, focus: /^0 focus minutes last week 50$/, tasks: /^0 exam plan tasks done last week 2$/ };
+  for (const [k, re] of Object.entries(want)) { const t = await row(k); expect(re.test(t), `${k}: ` + t); }
+  const card = await page.locator('#chat-log .hub-week').innerText();
+  expect(!/[—–]/.test(card), 'no dashes on the card');
+  expect((await page.locator('#chat-log .wk-share').boundingBox()).height >= 44, 'Share my week is 44px');
+  // it shares as a picture (saved here: this browser can't share files)
+  const dl = page.waitForEvent('download', { timeout: 8000 });
+  await page.click('#chat-log .wk-share');
+  const file = await dl;
+  expect(file.suggestedFilename() === 'my-week-with-cassie.png', 'the week as a picture: ' + file.suggestedFilename());
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#chat-log .hub-week, #chat-log .hub-exam'); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | ')); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the three sizes: nothing spills off the screen, every control on it is 44px
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const st = { ...seed, tab: 'home', progress: { [lastMon]: { quizzes: 1 } }, exams: [{ id: 'e1', name: 'Physics long test', date: '2099-01-01', from: '2000-01-01', days: [{ date: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), tasks: [{ id: 't1', kind: 'quiz', topic: 'Vectors', done: false }, { id: 't2', kind: 'mistakes', topic: '', done: false }] }], stats: {} }] };
+    st.progress[new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)] = { quizzes: 1, answered: 2, right: 1 };
+    const r = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: st });
+    const hub = viewport.width < 761 ? '#home .hub' : '#chat-log .hub';
+    if (viewport.width >= 761) await r.page.evaluate(() => createNewChat()); // (a computer: Home is a new, empty chat)
+    await r.page.waitForSelector(`${hub} .wk-card`, { timeout: 10000 });
+    const g = await r.page.evaluate((h) => { const els = [...document.querySelectorAll(`${h} .hub-exam button, ${h} .hub-exam label.ex-check, ${h} .hub-week button`)].filter((e) => e.offsetParent); return { small: els.filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).map((e) => e.className + ' ' + Math.round(e.getBoundingClientRect().height)), wide: document.documentElement.scrollWidth > innerWidth + 1 }; }, hub);
+    expect(!g.small.length && !g.wide, `${viewport.width}x${viewport.height}: ` + JSON.stringify(g));
+    expect(!r.errors.length, 'page errors: ' + r.errors.join('; '));
+    await r.ctx.close();
   }
 });
 
@@ -1826,9 +2449,94 @@ test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cass
   await ctx.close();
 });
 
+// Every animation frame from the first paint: is a flat Cassie (or the old cursor drawing) visible,
+// is a 3D Cassie visible, and was a Cassie's place ever empty (with Reduce Motion, Lite mode or no 3D)
+const WATCH_CASSIE = () => {
+  const m = window.__mon = { frames: 0, flatFrames: 0, d3First: -1, flatAfter3d: 0, oldDrawing: 0, emptyChat: 0, flatChatFirst: -1, chatSeen: -1 };
+  const vis = (e) => { if (!e.isConnected) return false; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const tick = () => {
+    m.frames++;
+    const flats = [...document.querySelectorAll('svg.cassie-bot')].filter(vis), d3 = [...document.querySelectorAll('canvas.cassie-bot-3d')].filter(vis);
+    if (document.querySelector('.mascot-fallback')) m.oldDrawing++;
+    if (flats.length) { m.flatFrames++; if (!m.flatWhere) { let e = flats[0], w = []; while (e && w.length < 4) { w.push((e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : '')); e = e.parentElement; } m.flatWhere = w.join(' < '); } }
+    if (d3.length && m.d3First < 0) m.d3First = m.frames;
+    if (flats.length && m.d3First >= 0) m.flatAfter3d++;
+    const root = document.getElementById('cassie-2d-root');
+    if (root && vis(root)) {
+      if (m.chatSeen < 0) m.chatSeen = m.frames;
+      const svg = root.querySelector('svg.cassie-bot'), c = root.querySelector('canvas.cassie-bot-3d');
+      if (svg && vis(svg) && m.flatChatFirst < 0) m.flatChatFirst = m.frames;
+      if (!(svg && vis(svg)) && !(c && vis(c))) { m.emptyChat++; if (!m.emptyWhy) m.emptyWhy = svg ? (() => { const cs = getComputedStyle(svg), r = svg.getBoundingClientRect(); return [cs.visibility, svg.style.visibility, matchMedia('(prefers-reduced-motion: reduce)').matches, getComputedStyle(document.getElementById('mascot')).visibility, document.getElementById('mascot').className, Math.round(r.width), document.readyState].join(','); })() : 'no svg yet ' + document.readyState; }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+test('one Cassie from the first paint: with 3D, no flat Cassie or old drawing is ever seen before (or after) the 3D one, in the chat, the Island and the voice screen; with Reduce Motion, Lite mode or no 3D the flat one shows from the start and never swaps; the replaced voice files are gone', async (b) => {
+  const slowThree = (ms) => async (ctx) => ctx.route(/explore\/three\.module\.min\.js/, async (route) => { await new Promise((r) => setTimeout(r, ms)); return route.continue(); });
+  const mon = (page) => page.evaluate(() => ({ ...window.__mon }));
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    // 1. with 3D (three.js slowed down by 2.5 s): her place stays empty, then only the 3D Cassie
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'chat' }, setup: slowThree(2500), fakeGroq: async () => { await new Promise((r) => setTimeout(r, 600)); return { text: 'An answer about cells.' }; } });
+    await ctx.addInitScript(WATCH_CASSIE);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#cassie-2d-root canvas.cassie-bot-3d') && +getComputedStyle(document.querySelector('#cassie-2d-root canvas.cassie-bot-3d')).opacity > 0.9, null, { timeout: 30000 });
+    let m = await mon(page);
+    expect(m.d3First > 0 && m.flatFrames === 0 && m.oldDrawing === 0, `${size}: only the 3D Cassie, from the first frame: ` + JSON.stringify(m));
+    // the Island bot and the voice screen bot: the same
+    await page.fill('#prompt-input', 'What is a cell?');
+    await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('#island.live .cassie-bot', { state: 'attached', timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('#island canvas.cassie-bot-3d'), null, { timeout: 20000 });
+    await page.waitForSelector('text=An answer about cells.', { timeout: 10000 });
+    await studioOn(page);
+    await page.evaluate(() => openVoice('chat'));
+    await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelector('.vc-bot canvas.cassie-bot-3d'), null, { timeout: 20000 });
+    await page.waitForTimeout(500);
+    m = await mon(page);
+    expect(m.flatFrames === 0 && m.flatAfter3d === 0 && m.oldDrawing === 0, `${size}: the Island and the voice screen show only the 3D Cassie: ` + JSON.stringify(m));
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // 2. Reduce Motion, Lite mode, and three.js failing: the flat Cassie, never a 3D one
+  for (const [why, o] of [['Reduce Motion', { lite: 'off', motion: 'reduce' }], ['Lite mode', { lite: 'on' }], ['three.js failing', { lite: 'off', fail: true }]]) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, scale: 1, lite: o.lite, server: false, state: { groqKey: 'gsk_test', tab: 'chat' },
+      setup: o.fail ? (c) => c.route(/explore\/three\.module\.min\.js/, (r) => r.abort()) : null });
+    if (o.motion) await page.emulateMedia({ reducedMotion: o.motion });
+    await ctx.addInitScript(WATCH_CASSIE);
+    await page.reload();
+    await page.waitForFunction(() => { const s = document.querySelector('#cassie-2d-root svg.cassie-bot'); return s && getComputedStyle(s).visibility !== 'hidden'; }, null, { timeout: 15000 });
+    await page.waitForTimeout(3000);
+    let m = await mon(page);
+    expect(m.d3First < 0 && m.flatAfter3d === 0 && m.oldDrawing === 0, `${why}: the flat Cassie and never a 3D one: ` + JSON.stringify(m));
+    if (!o.fail) expect(m.emptyChat === 0, `${why}: the flat Cassie from the first frame her place shows: ` + JSON.stringify(m));
+    if (o.fail) {
+      // remembered: the next time she opens flat from the start, and three.js isn't even asked for
+      expect(await page.evaluate(() => window.CassieBot.failed3d()), 'the failed 3D is remembered');
+      const asked = [];
+      page.on('request', (r) => { if (/three\.module/.test(r.url())) asked.push(r.url()); });
+      await page.reload();
+      await page.waitForTimeout(2500);
+      m = await mon(page);
+      expect(m.emptyChat === 0 && m.flatChatFirst === m.chatSeen && m.d3First < 0 && !asked.length, 'next time: flat from the first frame, no 3D asked for: ' + JSON.stringify(m) + ' ' + asked.join(' '));
+    }
+    expect(!errors.length, `${why}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // 3. the replaced files are gone, nothing names them, and the site doesn't ship them
+  for (const gone of ['voice', 'tests/fixtures/kokoro']) expect(!fs.existsSync(path.join(ROOT, gone)), gone + ' is deleted');
+  const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap((e) => (['.git', 'node_modules', '_site', 'promo'].includes(e.name) ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+  const named = walk('.').filter((f) => /\.(js|mjs|html|css|sh|json|md)$|_headers$/.test(f) && !/smoke\.cjs$/.test(f))
+    .filter((f) => /voice\/(voice-worker|kokoro|ort-wasm|README|KOKORO)|fixtures\/kokoro|mascot-fallback|huggingface\.co\b(?!\$)/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!named.length, 'still names a deleted file or the old voice host: ' + named.join(', '));
+  expect(!/\bvoice\b/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8').replace(/voice\.js/g, '')), 'the build no longer copies voice/');
+  if (fs.existsSync(path.join(ROOT, '_site'))) expect(!fs.existsSync(path.join(ROOT, '_site/voice')), 'the built site has no voice/ folder (run the build again)');
+});
+
 test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 800)); return { text: 'An answer.' }; } });
-  await page.waitForSelector('#mascot.has2d .cassie-bot', { timeout: 5000 }); // (the flat drawing, then the 3D one)
+  await page.waitForSelector('#mascot.has2d .cassie-bot', { state: 'attached', timeout: 5000 }); // (her place, empty until the 3D one is drawn)
   expect(await page.locator('#cassie-3d-root').count() === 0, 'the 3D bot should not load with Cursor Cassie');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.waitForTimeout(150);
@@ -1849,7 +2557,7 @@ test('Cassie Island: the top bar shows what she is doing, then says Done', async
   expect(!(await island.evaluate((n) => n.classList.contains('live'))), 'island should be tucked away at first');
   await page.fill('#prompt-input', 'What is a cell?');
   await page.press('#prompt-input', 'Enter');
-  await page.waitForSelector('#island.live .cassie-bot', { timeout: 3000 });
+  await page.waitForSelector('#island.live .cassie-bot', { state: 'attached', timeout: 3000 });
   expect(/Thinking/.test(await island.innerText()), 'island should say Thinking: ' + await island.innerText());
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/island-thinking.png', clip: { x: 0, y: 0, width: 412, height: 130 } });
   await page.waitForSelector('text=Island answer.', { timeout: 10000 });
@@ -2013,8 +2721,48 @@ test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the
 });
 
 // A stand-in microphone and speaker: tests can "say" things and read what Cassie said aloud.
+// Bella's studio voice, switched on in a page that is already open (a tiny WAV for each sentence): for
+// tests that open the voice screen, which only opens when Bella can speak
+const studioOn = (page) => page.evaluate(() => {
+  if (window.__studioOn) return window.CassieVoice.studio.refresh();
+  window.__studioOn = true;
+  const realFetch = window.fetch.bind(window);
+  const wav = () => { const n = 800, b = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true); return b.buffer; };
+  window.fetch = async (input, init = {}) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+    if (url.pathname !== '/speak') return realFetch(input, init);
+    if (!init.method || init.method === 'GET') return new Response('{"on":true,"left":9000,"back":"2026-11-01"}', { headers: { 'content-type': 'application/json' } });
+    return new Response(wav(), { headers: { 'content-type': 'audio/mpeg', 'x-speak': 'new' } });
+  };
+  return window.CassieVoice.studio.setup({ server: 'https://studio.test', uid: 'test-uid-0002' });
+});
 const FAKE_VOICE = (opts) => {
   window.__spoken = []; window.__recs = []; window.__shown = [];
+  // Bella's studio voice, faked in the page: GET /speak says what's left (window.__studioCfg.left), POST
+  // /speak answers with a tiny WAV and is logged in window.__studio ({ text, ok }); from the
+  // failFrom-th sentence on it fails. Every "Cassie types instead" line shown is counted in __notes.
+  window.__studio = []; window.__notes = [];
+  window.__studioCfg = Object.assign({ on: true, left: 9000, back: '2026-11-01', failFrom: null }, opts.studio || {});
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.classList && n.classList.contains('cv-note')) window.__notes.push(n.textContent); })))
+    .observe(document, { subtree: true, childList: true });
+  if (!opts.realStudio) {
+    const realFetch = window.fetch.bind(window);
+    const wav = () => { const n = 800, b = new DataView(new ArrayBuffer(44 + n * 2)), w = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+      w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, 8000, true); b.setUint32(28, 16000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true); return b.buffer; };
+    window.fetch = async (input, init = {}) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname !== '/speak') return realFetch(input, init);
+      const c = window.__studioCfg;
+      if (!init.method || init.method === 'GET') return new Response(JSON.stringify(c.on ? { on: true, left: c.left, back: c.back } : { on: false, left: 0 }), { headers: { 'content-type': 'application/json' } });
+      const body = JSON.parse(init.body), ok = c.on && !(c.failFrom != null && window.__studio.length >= c.failFrom);
+      window.__studio.push({ text: body.text, voice: body.voice, ok });
+      if (!ok) return new Response('{"error":{"message":"the studio voice failed"}}', { status: c.failStatus || 502 });
+      c.left = Math.max(0, c.left - body.text.length);
+      return new Response(wav(), { headers: { 'content-type': 'audio/mpeg', 'x-speak': 'new' } });
+    };
+    addEventListener('DOMContentLoaded', () => { if (window.CassieVoice) window.CassieVoice.studio.setup({ server: 'https://studio.test', uid: 'test-uid-0001' }); });
+  }
   // what Cassie says on the voice screen (Bella speaks it, or it's shown while her voice downloads)
   new MutationObserver(() => { const el = document.querySelector('.vc-cassie'); const t = el && el.textContent; if (t && t !== window.__lastShown) { window.__lastShown = t; window.__shown.push(t); } })
     .observe(document, { subtree: true, childList: true, characterData: true });
@@ -2032,6 +2780,964 @@ const FAKE_VOICE = (opts) => {
   window.SpeechRecognition = class extends EventTarget { constructor() { super(); window.__recs.push(this); this.live = false; } start() { this.live = true; } stop() { this.live = false; setTimeout(() => this.onend && this.onend(), 5); } abort() { this.live = false; } };
   window.__say = (text) => { const r = window.__recs.filter((x) => x.live).at(-1); const res = [{ transcript: text }]; res.isFinal = true; r.onresult({ resultIndex: 0, results: [res] }); };
 };
+
+// Cassie speaks only in Bella's studio voice. A session (a lesson, a Listen, a voice chat) uses her only
+// when what's left of the month covers all of it; otherwise she types from the start and says so once.
+// If Bella fails partway, the rest is typed with the same line. No other voice, no Keep going, ever.
+test('every stylesheet is whole: its braces balance and no rule is cut off (a broken one silently drops the rules after it)', async () => {
+  const sheets = ['style.css', 'labs/labs.css', 'landing/landing.css'].filter((f) => fs.existsSync(path.join(ROOT, f)));
+  for (const f of sheets) {
+    const css = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+    let depth = 0, low = 0;
+    for (const c of css) { if (c === '{') depth++; else if (c === '}') { depth--; low = Math.min(low, depth); } }
+    expect(depth === 0 && low === 0, `${f}: braces don’t balance (end ${depth}, lowest ${low})`);
+    const cut = css.split('\n').map((l, i) => [i + 1, l.trim()]).filter(([, l]) => /,\s*}$|,\s*$/.test(l) && /}\s*$/.test(l));
+    expect(!cut.length, `${f}: a selector list runs into a closing brace: ` + JSON.stringify(cut.slice(0, 3)));
+  }
+});
+
+test('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
+  const LONG = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} says mitochondria turn food into energy the cell can use.`).join(' ');
+  const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
+  const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', cards, hearing: 'fast' },
+    fakeGroq: (body) => ({ text: /Reply with ONLY JSON/.test(JSON.stringify(body.messages)) ? JSON.stringify({ steps }) : LONG }) });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await page.waitForFunction(() => window.CassieVoice.studio.known() && window.CassieVoice.studio.on(), null, { timeout: 5000 });
+  const LINE = await page.evaluate(() => CassieErrors.say('voice_typing'));
+  expect(LINE === 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.', 'the one line, in plain words: ' + LINE);
+  const studio = () => page.evaluate(() => window.__studio.slice());
+  const notes = () => page.evaluate(() => window.__notes.slice());
+  const clearNote = () => page.evaluate(() => document.querySelectorAll('.cv-note').forEach((n) => n.remove()));
+  const setLeft = (left, extra = {}) => page.evaluate(([l, x]) => { Object.assign(window.__studioCfg, { left: l, ...x }); return window.CassieVoice.studio.refresh(); }, [left, extra]);
+  const settingsLine = async () => { await page.evaluate(() => openSettings()); const t = await page.locator('#hv-state').innerText(); await page.evaluate(() => closeSettings && closeSettings()).catch(() => {}); return t; };
+
+  // Settings, Voice: Bella is ready
+  expect(/^Bella’s voice is ready\./.test(await settingsLine()), 'Settings says Bella is ready: ' + await page.locator('#hv-state').innerText());
+  await page.keyboard.press('Escape');
+
+  // 1. a long Listen with enough left: every sentence in Bella's voice, no line
+  await ask(page, 'What do mitochondria do?');
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForFunction(() => !document.querySelector('.bubble-assistant .listen-btn.on'), null, { timeout: 20000 });
+  let st = await studio();
+  expect(st.length >= 3 && st.every((x) => x.ok && x.voice === 'woman') && /Sentence 1 /.test(st[0].text) && /Sentence 12 /.test(st.at(-1).text), 'the whole answer went to Bella: ' + JSON.stringify(st.map((x) => x.text.slice(0, 14))));
+  expect((await notes()).length === 0, 'no line when she can speak');
+  let played = await page.evaluate(() => window.CassieVoice.played());
+  expect(played.length === st.length && played.every((x) => x.kind === 'studio' && x.voice === 'bella'), 'only Bella spoke: ' + JSON.stringify(played));
+
+  // 2. too little left: nothing is spoken, the words stay, the one line shows once
+  await setLeft(50);
+  let n0 = (await studio()).length;
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForTimeout(800);
+  await page.click('.bubble-assistant .listen-btn').catch(() => {}); // (tapped twice: still one line)
+  await page.waitForTimeout(600);
+  expect((await studio()).length === n0, 'nothing went to the studio voice');
+  expect(JSON.stringify(await notes()) === JSON.stringify([LINE]), 'the line showed once: ' + JSON.stringify(await notes()));
+  expect(/Sentence 12 says/.test(await page.locator('.bubble-assistant').last().innerText()), 'the answer is on the screen');
+  // Settings says when she is back
+  const resting = await settingsLine();
+  expect(resting === 'Cassie’s voice is resting until 1 November. Until then she types her answers.', 'Settings says when she is back: ' + resting);
+  await page.keyboard.press('Escape');
+  // voice chat: the same line, and the chat stays typed (the voice screen never opens)
+  await clearNote();
+  await page.click('#voice-btn');
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => !document.querySelector('.vc') || document.querySelector('.vc').hidden), 'the voice screen did not open');
+  expect((await notes()).length === 2 && (await notes())[1] === LINE, 'voice chat said the same line');
+  expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'prompt-input'), 'the typed chat is ready to type in');
+  expect((await studio()).length === n0, 'still nothing spoken');
+
+  // 3. flashcards, enough left: the deck is read in Bella's voice
+  await clearNote(); await setLeft(9000);
+  await page.evaluate(() => window.CassieCards.open());
+  await page.click('[data-listen="Biology"]');
+  await page.waitForSelector('.fc-listening .fc-text >> text=Mitochondria', { timeout: 15000 });
+  await page.click('[data-lstop]');
+  st = await studio();
+  expect(st.some((x) => /Powerhouse of the cell/.test(x.text)) && st.some((x) => /^Mitochondria/.test(x.text)), 'the cards went to Bella: ' + JSON.stringify(st.slice(-2)));
+  await page.click('.fc-back').catch(() => {});
+  await page.keyboard.press('Escape');
+
+  // 4. a 7-step lesson with enough left: every step in Bella's voice
+  await page.evaluate(() => openLabs('atom'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="atom"] .lab-controls > *', { timeout: 15000 });
+  n0 = (await studio()).length;
+  const sevenOfSeven = () => page.waitForFunction(() => /7 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 45000 });
+  await page.click('.lab-teach');
+  await sevenOfSeven();
+  await page.waitForFunction((n) => window.__studio.length >= n + 7, n0, { timeout: 10000 });
+  st = (await studio()).slice(n0);
+  expect(st.length === 7 && st.every((x, i) => x.ok && x.text === `Step ${i + 1} is here.`), 'all 7 steps in Bella’s voice: ' + JSON.stringify(st));
+  expect((await notes()).length === 2, 'no line in a lesson she can say');
+
+  // 5. Bella fails at step 4: tried once more in her voice, then the rest is typed with the line; no other voice
+  await page.click('.tut-x');
+  n0 = (await studio()).length;
+  await page.evaluate((n) => { window.__studioCfg.failFrom = n + 3; }, n0);
+  await page.click('.lab-teach');
+  await page.click('.tut-resume:not([hidden]) .tut-restart');
+  await sevenOfSeven();
+  await page.waitForTimeout(500);
+  st = (await studio()).slice(n0);
+  expect(st.length === 5 && st.slice(0, 3).every((x) => x.ok) && st.slice(3).every((x) => !x.ok && /Step 4/.test(x.text)), 'steps 1 to 3 said, step 4 tried twice, nothing after: ' + JSON.stringify(st));
+  expect((await notes()).length === 3 && (await notes())[2] === LINE, 'the line once when she stopped: ' + JSON.stringify(await notes()));
+  expect(/Step 7 is here/.test(await page.locator('.tut-say').innerText()), 'the rest of the lesson went on in text');
+  await page.click('.tut-x');
+
+  // 6. too little left for the lesson: typed from the start, the line once, Next still moves on
+  await clearNote(); await setLeft(60, { failFrom: null });
+  n0 = (await studio()).length;
+  const notesBefore = (await notes()).length;
+  await page.click('.lab-teach');
+  await page.click('.tut-resume:not([hidden]) .tut-restart');
+  await page.waitForFunction(() => /1 of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 15000 });
+  await page.click('.tut-next');
+  await page.waitForFunction(() => /[2-7] of 7/.test((document.querySelector('.tut-step') || {}).textContent || ''), null, { timeout: 5000 });
+  await sevenOfSeven();
+  expect((await studio()).length === n0, 'nothing went to the studio voice');
+  expect((await notes()).length === notesBefore + 1, 'the line once for the whole lesson: ' + JSON.stringify((await notes()).slice(notesBefore)));
+  await page.click('.tut-x');
+
+  // 7. the device's voice was never used for anything Cassie said
+  expect((await page.evaluate(() => window.__spoken)).length === 0, 'speechSynthesis was never called: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
+  expect(await page.locator('.cv-pause').count() === 0, 'no pause box');
+  // Settings when the studio voice isn't switched on at all
+  await page.evaluate(() => { window.__studioCfg.on = false; return window.CassieVoice.studio.refresh(); });
+  expect(await settingsLine() === await page.evaluate(() => CassieErrors.say('voice_not_set_up')), 'Settings says the voice isn’t switched on');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // nowhere in the app or the extension: "Keep going", or the device's voice for Cassie's words
+  const files = [...fs.readdirSync(ROOT).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
+  const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!keep.length, '"Keep going" is still in: ' + keep.join(', '));
+  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  expect(!synth.length, 'the device voice is still used in: ' + synth.join(', '));
+  // the owner's voice guide: the numbers, what to raise in Cloudflare, no key, no dashes
+  const guide = fs.readFileSync(path.join(ROOT, 'docs/voice-setup.md'), 'utf8');
+  expect(/SPEAK_MONTHLY_CHARS/.test(guide) && /7-step/.test(guide) && /flashcard/i.test(guide) && /Checked on \d+ \w+ 20\d\d/.test(guide) && /elevenlabs\.io\/pricing/.test(guide), 'docs/voice-setup.md has the numbers, the date, the source and the variable');
+  expect(!/[–—]/.test(guide) && !/sk_[a-z0-9]{20,}|xi-api-key:\s*\w{20,}/i.test(guide), 'no dashes and no key in docs/voice-setup.md');
+});
+
+// Walks the whole tour with Next: at each stop the cursor is on the real control (inside its ring), the
+// card is whole on screen and not over the control, its words are 2 sentences at most with no dashes,
+// and every button is 44px. Back goes back one. Returns the stops' ids and words.
+async function walkTour(page, where) {
+  await page.waitForSelector('.tour-card', { timeout: 8000 });
+  const visited = [];
+  for (let i = 0; i < 12; i++) {
+    await page.waitForFunction((n) => (document.querySelector('.tour-count') || {}).textContent === `Stop ${n} of ${document.querySelector('.tour-count').textContent.split(' of ')[1]}`, i + 1, { timeout: 8000 });
+    await page.waitForTimeout(1300); // (the cursor glides, and a tab finishes growing)
+    const s = await page.evaluate(() => {
+      const card = document.querySelector('.tour-card'), ring = document.querySelector('.tour-ring'), cur = document.getElementById('cassie-cursor');
+      const c = card.getBoundingClientRect(), r = ring.hidden ? null : ring.getBoundingClientRect(), k = cur.getBoundingClientRect();
+      const t = window.CassieTour.target, tr = t && t.getBoundingClientRect();
+      const tip = [k.left + 1, k.top + 1], inRing = r && tr && tip[0] >= tr.left && tip[0] <= tr.right && tip[1] >= tr.top && tip[1] <= tr.bottom
+        && Math.abs(r.left - (tr.left - 6)) <= 3 && Math.abs(r.top - (tr.top - 6)) <= 3 && Math.abs(r.width - (tr.width + 12)) <= 3 && Math.abs(r.height - (tr.height + 12)) <= 3;
+      const over = r && !(c.right < r.left + 6 || c.left > r.right - 6 || c.bottom < r.top + 6 || c.top > r.bottom - 6);
+      const small = [...card.querySelectorAll('button')].filter((b) => { const q = b.getBoundingClientRect(); return q.height < 44 || q.width < 44; }).map((b) => b.textContent);
+      return { id: card.dataset.stop, count: card.querySelector('.tour-count').textContent, say: card.querySelector('.tour-say').textContent, inRing, over, cursorShown: getComputedStyle(cur).display !== 'none',
+        fits: c.left >= 0 && c.top >= 0 && c.right <= innerWidth && c.bottom <= innerHeight, small, sideways: document.documentElement.scrollWidth > innerWidth + 1, text: card.innerText };
+    });
+    expect(s.inRing && s.cursorShown, `${where} ${s.count} (${s.id}): Cassie’s cursor is on the control and the ring is around it: ` + JSON.stringify(s));
+    expect(s.fits && !s.over && !s.sideways, `${where} ${s.count} (${s.id}): the card is on screen and not over the control: ` + JSON.stringify(s));
+    expect(!s.small.length, `${where} ${s.count}: buttons under 44px: ` + s.small.join(', '));
+    expect(!/[–—]/.test(s.text), `${where} ${s.count}: no dashes: ` + s.text);
+    expect(s.say.split(/[.!?](?:\s|$)/).filter((x) => x.trim()).length <= 2, `${where} ${s.id}: 2 sentences at most: ` + s.say);
+    visited.push(s);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/tour-${where}-${i + 1}-${s.id}.png` });
+    if (i === 1) { // Back goes back one, then on again
+      await page.click('.tour-card [data-t="back"]');
+      await page.waitForFunction(() => /^Stop 1 of/.test(document.querySelector('.tour-count').textContent), null, { timeout: 5000 });
+      await page.click('.tour-card [data-t="next"]');
+      await page.waitForFunction(() => /^Stop 2 of/.test(document.querySelector('.tour-count').textContent), null, { timeout: 5000 });
+    }
+    const last = await page.evaluate(() => document.querySelector('.tour-card [data-t="next"]').textContent === 'Done');
+    await page.click('.tour-card [data-t="next"]');
+    if (last) break;
+  }
+  await page.waitForSelector('.tour-card', { state: 'detached', timeout: 5000 });
+  return visited;
+}
+const tourGone = (page) => page.evaluate(() => !document.querySelector('.tour-card, .tour-ring, .tour-veil, .tour-offer') && !document.documentElement.classList.contains('touring') && getComputedStyle(document.getElementById('cassie-cursor')).display === 'none');
+test('the tour: offered once after the first run (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
+  const PHONE = ['ask', 'quiz', 'talk', 'home', 'labs', 'games', 'cards', 'board', 'about', 'settings'];
+  // 1. a guest on a phone: the first run, then "a quick tour?" once
+  let { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, state: null });
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await toSignIn(page);
+  await page.click('.auth-skip');
+  await onboard(page, { name: 'Gia' });
+  await page.waitForSelector('.tour-offer', { timeout: 5000 });
+  const offerText = await page.locator('.tour-offer').innerText();
+  expect(/Want a quick tour\? It takes about 90 seconds\./.test(offerText) && /Show me around/.test(offerText) && /Not now/.test(offerText), 'the offer: ' + offerText);
+  for (const bt of await page.locator('.tour-offer button').all()) { const bb = await bt.boundingBox(); expect(bb.height >= 44, 'offer buttons are 44px'); }
+  await page.click('.tour-offer [data-t="later"]');
+  const later = await page.locator('.tour-offer').innerText();
+  expect(/Settings, then Help, then Take the tour/.test(later) && !/[–—]/.test(later), 'Not now says where to find it: ' + later);
+  await page.reload();
+  await page.waitForTimeout(2000);
+  expect(!(await page.locator('.tour-offer, .tour-card').count()), 'never offered again after Not now');
+  // Settings, then Help, then Take the tour: the tour, with voice off (no speech at all)
+  await page.evaluate(() => { openSettings('help'); });
+  await page.waitForSelector('#tour-btn', { timeout: 5000 });
+  expect((await page.locator('#tour-btn').boundingBox()).height >= 44, 'Take the tour is 44px');
+  await page.click('#tour-btn');
+  await page.waitForSelector('.tour-card');
+  await page.click('.tour-card [data-t="voice"]');
+  expect(/Voice off/.test(await page.locator('.tour-card [data-t="voice"]').innerText()), 'the voice switch says Voice off');
+  await page.waitForTimeout(300);
+  const said0 = await page.evaluate(() => window.__studio.length);
+  let stops = await walkTour(page, '390x844');
+  expect(JSON.stringify(stops.map((s) => s.id)) === JSON.stringify(PHONE), 'the phone’s stops, along the tab bar: ' + stops.map((s) => s.id).join(', '));
+  let studio = await page.evaluate(() => window.__studio.length) - said0, spoken = await page.evaluate(() => window.__spoken.length);
+  expect(studio === 0 && spoken === 0, `voice off: nothing was spoken (${studio} studio, ${spoken} device)`);
+  expect(await tourGone(page), 'Done leaves nothing of the tour on screen');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).tourVoice === 'off' && state.tour === 'done'), 'the voice switch and the finished tour are remembered');
+  // started from Settings, it ends back in Settings (Help)
+  expect(await page.evaluate(() => !document.getElementById('settings-panel').hidden && document.querySelector('#settings-panel .settings-card').dataset.page === 'help'), 'back where it started: Settings, Help');
+  // Skip and Escape: nothing left, the app where it was (the Chat tab, Home scrolled where it was)
+  await page.evaluate(() => { closeSettings(); window.CassieNative.go('chat'); });
+  await page.waitForTimeout(400);
+  for (const how of ['skip', 'escape']) {
+    await page.evaluate(() => window.CassieTour.start());
+    await page.waitForSelector('.tour-card');
+    for (let i = 0; i < 4; i++) { await page.click('.tour-card [data-t="next"]'); await page.waitForTimeout(500); } // (to the Labs tab)
+    if (how === 'skip') await page.click('.tour-card [data-t="skip"]'); else await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    expect(await tourGone(page), `${how}: nothing of the tour is left on screen`);
+    expect(await page.evaluate(() => document.documentElement.classList.contains('tab-chat') && !document.documentElement.classList.contains('labs-open') && document.getElementById('settings-panel').hidden), `${how}: the app is back on the Chat tab`);
+  }
+  expect(await page.evaluate(() => window.__studio.length) === said0 && (await page.evaluate(() => window.__spoken.length)) === 0, 'voice off is remembered: later tours never speak');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 2. signed in, on a computer: offered once, the tour with Bella's voice, finished and synced to the account
+  ({ ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: null }));
+  await ctx.addInitScript(FAKE_VOICE, {});
+  await page.reload();
+  await toSignIn(page);
+  await page.fill('.auth-form input[name=email]', `tour${Date.now()}@example.com`);
+  await page.fill('.auth-form input[name=age]', '16');
+  await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+  await page.click('.auth-go');
+  await onboard(page, { name: 'Hazel' });
+  await page.waitForSelector('.tour-offer', { timeout: 5000 });
+  await page.click('.tour-offer [data-t="go"]');
+  stops = await walkTour(page, '1280x800');
+  const computerSays = stops.map((x) => x.say);
+  expect(JSON.stringify(stops.map((s) => s.id)) === JSON.stringify(PHONE), 'the computer’s stops (the top bar, the sidebar and Home): ' + stops.map((s) => s.id).join(', '));
+  studio = await page.evaluate(() => window.__studio.filter((x) => x.ok).length);
+  expect(studio >= stops.length && (await page.evaluate(() => window.__spoken.length)) === 0, `voice on: Bella said the stops (${studio}), never the device voice`);
+  expect(await tourGone(page), 'Done leaves nothing on screen');
+  expect(await page.evaluate(() => accountData().tour === 'done'), 'the finished tour goes with the account');
+  await page.reload();
+  await page.waitForTimeout(2000);
+  expect(!(await page.locator('.tour-offer, .tour-card').count()), 'never starts by itself again');
+  // the card in light and dark: every word readable
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => window.CassieTour.start());
+    await page.waitForSelector('.tour-card'); await page.waitForTimeout(600);
+    const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.tour-card');
+    expect(!bad.length, `the tour card (${scheme}): ` + bad.join(' | '));
+    await page.keyboard.press('Escape');
+  }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 3. a small phone, with Reduce Motion: every stop still fits, and the cursor just appears
+  ({ ctx, page, errors } = await open(b, { device: 'Galaxy S9+', viewport: { width: 360, height: 740 }, server: false, state: { groqKey: 'gsk_test', tab: 'home', tour: 'done' } }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => window.CassieTour.start());
+  stops = await walkTour(page, '360x740');
+  expect(stops.length === PHONE.length, '360x740: every stop: ' + stops.map((s) => s.id).join(', '));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // 4. about 90 seconds, read at 150 words a minute, on each device
+  for (const [where, say] of [['phone', stops.map((s) => s.say)], ['computer', computerSays]]) {
+    const words = say.join(' ').split(/\s+/).length, secs = words / 150 * 60;
+    expect(secs >= 75 && secs <= 105, `${where}: the tour reads in about 90 seconds: ${words} words, ${Math.round(secs)} s`);
+  }
+});
+
+// Clicks Next to the end of the tour.
+async function finishTour(page) {
+  await page.waitForSelector('.tour-card', { timeout: 8000 });
+  for (let i = 0; i < 14 && await page.locator('.tour-card').count(); i++) { await page.click('.tour-card [data-t="next"]').catch(() => {}); await page.waitForTimeout(250); }
+  await page.waitForSelector('.tour-card', { state: 'detached', timeout: 5000 });
+}
+test('after the tour, on a computer: a video of how the Chrome extension works, once (the video plays, Get the extension and Close, Escape); again from Settings, Help; never on a phone; 44px, no dashes, on screen', async (b) => {
+  // the video is real, in two forms, and goes out with the site
+  for (const f of ['extension-how.webm', 'extension-how.mp4', 'extension-how.jpg']) {
+    expect(fs.existsSync(path.join(ROOT, 'landing', f)) && fs.statSync(path.join(ROOT, 'landing', f)).size > 20000, 'landing/' + f + ' is there');
+    if (fs.existsSync(path.join(ROOT, '_site'))) expect(fs.existsSync(path.join(ROOT, '_site/landing', f)), '_site/landing/' + f + ' is published');
+  }
+  expect(/landing/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the build copies landing/');
+  // 1. a computer: Done, then the video
+  let { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test', tour: 'done', tourVoice: 'off' } });
+  await page.evaluate(() => window.CassieTour.start());
+  await finishTour(page);
+  await page.waitForSelector('.tour-video', { timeout: 3000 });
+  await page.waitForFunction(() => { const v = document.querySelector('.tour-video video'); return v && v.readyState >= 1 && v.duration > 30; }, null, { timeout: 15000 });
+  const v = await page.evaluate(() => {
+    const box = document.querySelector('.tour-video'), r = box.getBoundingClientRect(), vid = box.querySelector('video');
+    const small = [...box.querySelectorAll('a, button')].filter((x) => { const q = x.getBoundingClientRect(); return q.height < 44 || q.width < 44; }).map((x) => x.textContent);
+    const get = box.querySelector('a.tour-main');
+    return { dur: vid.duration, src: vid.currentSrc, w: vid.videoWidth, h: vid.videoHeight, text: box.innerText, small, fits: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight,
+      get: get && get.textContent, href: get && get.getAttribute('href'), download: get && get.hasAttribute('download'), focus: document.activeElement && document.activeElement.textContent, seen: state.extVideoSeen,
+      label: box.getAttribute('role') === 'dialog' && !!box.getAttribute('aria-labelledby') };
+  });
+  expect(v.dur > 30 && v.dur < 50 && v.w === 1280 && v.h === 720, 'the video loads: ' + JSON.stringify(v));
+  expect(v.get === 'Get the Chrome extension' && v.href === 'cassie-extension.zip' && v.download, 'Get the Chrome extension downloads it: ' + JSON.stringify(v));
+  expect(v.fits && !v.small.length && !/[–—]/.test(v.text) && v.label && v.focus === 'Close' && v.seen === true, 'on screen, 44px, no dashes, a labelled dialog, Close has the focus, remembered: ' + JSON.stringify(v));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tour-video.png' });
+  // in light and dark: every word readable
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.tour-video');
+    expect(!bad.length, `the video box (${scheme}): ` + bad.join(' | '));
+  }
+  await page.keyboard.press('Escape');
+  expect(!(await page.locator('.tour-video-wrap').count()), 'Escape closes it');
+  // once: the next tour ends without it
+  await page.evaluate(() => window.CassieTour.start());
+  await finishTour(page);
+  await page.waitForTimeout(900);
+  expect(!(await page.locator('.tour-video').count()), 'shown once, not after every tour');
+  // Settings, Help: "Watch how the Chrome extension works"
+  await page.evaluate(() => openSettings('help'));
+  await page.waitForSelector('#ext-video-btn', { timeout: 5000 });
+  const row = await page.locator('#ext-video-btn').boundingBox();
+  expect(row.height >= 44 && /Watch how the Chrome extension works/.test(await page.locator('#ext-video-btn').innerText()), 'the Help row is there, 44px');
+  await page.click('#ext-video-btn');
+  await page.waitForSelector('.tour-video');
+  await page.click('.tour-video [data-t="close"]');
+  expect(!(await page.locator('.tour-video-wrap').count()) && await page.evaluate(() => !document.getElementById('settings-panel').hidden), 'Close closes it, and Settings is still open');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // 2. a phone: the tour ends without it, and Help has no row for it
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }]]) {
+    ({ ctx, page, errors } = await open(b, { device, viewport, server: false, state: { groqKey: 'gsk_test', tour: 'done', tourVoice: 'off' } }));
+    await page.evaluate(() => window.CassieTour.start());
+    await finishTour(page);
+    await page.waitForTimeout(900);
+    expect(!(await page.locator('.tour-video').count()), `${viewport.width}x${viewport.height}: no extension video on a phone`);
+    await page.evaluate(() => openSettings('help'));
+    await page.waitForSelector('#tour-btn', { timeout: 5000 });
+    expect(!(await page.locator('#ext-video-btn').isVisible()), `${viewport.width}x${viewport.height}: no Help row for it on a phone`);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+// Speech, faked: the browser's speech recognition hears window.__ears.say a word at a time (or, with
+// mode 'denied', the microphone isn't allowed). Every value a box shows while it fills is kept.
+const FAKE_EARS = () => {
+  window.__ears = { say: 'how do plants make their food', mode: 'ok', starts: 0, values: [] };
+  class Ears extends EventTarget {
+    constructor() { super(); this.continuous = false; this.interimResults = false; this.done = false; }
+    fire(type, extra) { const e = new Event(type); Object.assign(e, extra || {}); this.dispatchEvent(e); if (typeof this['on' + type] === 'function') this['on' + type](e); }
+    start() {
+      window.__ears.starts++;
+      if (window.__ears.mode === 'denied') { setTimeout(() => { this.fire('error', { error: 'not-allowed' }); this.end(); }, 30); return; }
+      const words = window.__ears.say.split(' ');
+      let i = this.interimResults ? 1 : words.length;
+      const tick = () => {
+        if (this.done) return;
+        const res = [{ transcript: words.slice(0, i).join(' ') }]; res.isFinal = i === words.length;
+        this.fire('result', { resultIndex: 0, results: [res] });
+        if (i < words.length) { i++; this.t = setTimeout(tick, 120); } else this.t = setTimeout(() => this.end(), 250);
+      };
+      this.t = setTimeout(tick, 150);
+    }
+    end() { if (this.done) return; this.done = true; clearTimeout(this.t); this.fire('end'); }
+    stop() { setTimeout(() => this.end(), 10); }
+    abort() { this.end(); }
+  }
+  window.SpeechRecognition = Ears; window.webkitSpeechRecognition = Ears;
+  document.addEventListener('input', (e) => { const t = e.composedPath()[0]; if (t && typeof t.value === 'string') window.__ears.values.push(t.value); }, true);
+};
+const NO_EARS = () => { delete window.SpeechRecognition; delete window.webkitSpeechRecognition; window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined; window.MediaRecorder = undefined; };
+const SAID = 'how do plants make their food';
+const isGrey = (c) => { const m = String(c).match(/\d+(\.\d+)?/g); if (!m) return false; const [r, g, bl] = m.map(Number); return Math.abs(r - g) <= 16 && Math.abs(g - bl) <= 16; }; // (the surrounding ink: near black or near white)
+// The mic beside the box (sel; root: a shadow host when the box is inside one): how it looks, then say
+// SAID into it and wait for it to finish. inWorld(js): runs js where the fake speech lives (the
+// extension's own page script world). Returns what happened.
+async function micSay(page, sel, { root = null, inWorld = null } = {}) {
+  const look = await page.evaluate(([s, r]) => {
+    const box = (r ? document.querySelector(r).shadowRoot : document).querySelector(s); if (!box) return { missing: true };
+    box.scrollIntoView({ block: 'center' });
+    const m = box.nextElementSibling;
+    if (!m || !m.classList.contains('cmic')) return { noMic: true };
+    m.scrollIntoView({ block: 'nearest' }); // (in a panel that scrolls, the mic is just under its box)
+    const q = m.getBoundingClientRect(), cs = getComputedStyle(m);
+    return { w: q.width, h: q.height, label: m.getAttribute('aria-label'), shown: q.width > 0 && cs.display !== 'none' && cs.visibility !== 'hidden', onScreen: q.left >= 0 && q.right <= innerWidth + 1 && q.top >= 0 && q.bottom <= innerHeight + 1, color: cs.color, bg: cs.backgroundColor, border: cs.borderTopColor };
+  }, [sel, root]);
+  if (look.missing || look.noMic) return { look };
+  if (inWorld) await inWorld(`window.__ears.say = ${JSON.stringify(SAID)}; window.__ears.values = [];`);
+  else await page.evaluate((p) => { window.__ears.say = p; window.__ears.values = []; }, SAID);
+  await page.evaluate(([s, r]) => (r ? document.querySelector(r).shadowRoot : document).querySelector(s).nextElementSibling.click(), [sel, root]);
+  const during = await page.evaluate(([s, r]) => {
+    const top = r ? document.querySelector(r).shadowRoot : document, box = top.querySelector(s), m = box.nextElementSibling;
+    return { stop: /Stop/.test(m.textContent) && m.getAttribute('aria-label') === 'Stop listening', h: m.getBoundingClientRect().height, line: [...top.querySelectorAll('.cmic-line')].map((x) => x.textContent), placeholder: box.placeholder };
+  }, [sel, root]);
+  await page.waitForFunction(([s, r]) => { const box = (r ? document.querySelector(r).shadowRoot : document).querySelector(s); return !box || (box.nextElementSibling && box.nextElementSibling.getAttribute('aria-label') === 'Say it instead of typing'); }, [sel, root], { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(([s, r]) => {
+    const top = r ? document.querySelector(r).shadowRoot : document, box = top.querySelector(s);
+    return { value: box ? box.value : null, line: [...top.querySelectorAll('.cmic-line')].map((x) => x.textContent), sideways: document.documentElement.scrollWidth > innerWidth + 1 };
+  }, [sel, root]);
+  const values = inWorld ? await inWorld('window.__ears.values') : await page.evaluate(() => window.__ears.values);
+  return { look, during, after, values };
+}
+// what every mic must be: 44px, labelled, on screen, monochrome; Listening… and Stop while on; the words as they came
+function micLooksRight(where, r) {
+  expect(!r.look.missing, `${where}: the box is there`);
+  expect(!r.look.noMic, `${where}: has a mic`);
+  const L = r.look;
+  expect(L.shown && L.w >= 44 && L.h >= 44 && L.label === 'Say it instead of typing', `${where}: a 44px mic labelled "Say it instead of typing": ` + JSON.stringify(L));
+  expect(L.onScreen, `${where}: the mic is on screen: ` + JSON.stringify(L));
+  expect(isGrey(L.color) && isGrey(L.border) && (/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(L.bg) || isGrey(L.bg)), `${where}: monochrome: ` + JSON.stringify(L));
+  expect(r.during.stop && r.during.h >= 44 && r.during.line.includes('Listening…') && r.during.placeholder === 'Listening…', `${where}: Listening… and a Stop button while it listens: ` + JSON.stringify(r.during));
+  const partial = r.values.some((v) => / how do( plants)?$/.test(' ' + v.trim()) || /^how do( plants)?$/.test(v.trim()));
+  expect(partial && r.values.some((v) => v.includes(SAID)), `${where}: the words appear as they come: ` + JSON.stringify(r.values));
+  expect(!r.after.line.some((t) => /[–—]/.test(t)) && !r.after.sideways, `${where}: no dashes, nothing off screen: ` + JSON.stringify(r.after));
+}
+
+test('a mic on every box where a student writes to Cassie (app, Labs, the board): heard words fill the box as they come; ask boxes send and writing boxes keep the words to edit; not allowed or no speech: one plain line, or no mic, and typing still works; the chat’s own mic still works; 44px, monochrome, no dashes, nothing off screen at 1280x800, 390x844 and 360x740', async (b) => {
+  const fakeGroq = () => ({ text: 'Plants make food from light, water and carbon dioxide.' });
+  const reset = async (page) => { await page.goto(APP); await page.waitForSelector('#prompt-input', { timeout: 10000 }); };
+  // The boxes, every one: a missing mic fails here. ask: it sends what was said (seen in what reached Cassie)
+  const BOXES = [
+    { name: 'the Island ask box', sel: '.isle-card .isle-input', ask: true, open: async (page) => {
+      await dragIn(page, { text: 'Leaves are green' }); await dropOn(page);
+      await page.waitForFunction(() => document.querySelector('.isle-card').dataset.step === 'ready', null, { timeout: 5000 });
+      await page.locator('.isle-card').getByRole('button', { name: 'Ask about it' }).click(); } },
+    { name: 'Ask about what you see (Labs)', sel: '.lab-helper .hp-ask input', ask: true, open: async (page) => {
+      await page.evaluate(() => openLabs('projectile'));
+      await page.waitForSelector('.lab-view:not([hidden]) .lab-ask', { timeout: 20000 }); await page.click('.lab-ask');
+      await page.waitForSelector('.lab-helper:not([hidden]) .hp-ask input', { timeout: 10000 }); } },
+    { name: 'the exam plan’s Topics', sel: '.ex-sheet textarea[name=topics]', open: async (page) => { await page.evaluate(() => openExamSheet()); await page.waitForSelector('.ex-sheet .ex-form'); },
+      kept: (page) => page.evaluate(() => !!document.querySelector('.ex-sheet .ex-form')) },
+    { name: 'Tell Cassie to remember something', sel: '#mem-fact', open: async (page) => { await page.evaluate(() => openMemory()); await page.waitForSelector('#mem-fact'); },
+      kept: (page) => page.evaluate(() => !window.CassieMemory.data.facts.some((f) => /plants/.test(f.text))) },
+    { name: 'Report a problem', sel: '.profile-overlay textarea[name=text]', open: async (page) => { await page.evaluate(() => openReport()); await page.waitForSelector('.profile-overlay textarea[name=text]'); },
+      kept: (page) => page.evaluate(() => !!document.querySelector('.profile-overlay textarea[name=text]')) },
+    { name: 'the study room note', sel: '.sr-foot textarea.sr-in', open: async (page) => {
+      await page.click('#board-btn'); await page.click('.csk-btn:has-text("Study together")'); await page.click('[data-room="new"]');
+      await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+      await page.click('[data-room-act="study"]'); await page.click('.sr-tabs [data-tab="notes"]'); await page.waitForSelector('.sr-foot textarea.sr-in'); },
+      kept: (page) => page.evaluate(() => !/plants make/.test((document.querySelector('.sr-body') || {}).textContent || '')) },
+    ...[['cardmatrix', '.lab-panel .tl-area', 'notes to turn into cards'], ['cornell', '.lab-panel .tl-area', 'Cornell notes'], ['thesis', '.tl-tmap textarea[data-f="thesis"]', 'the thesis'],
+      ['thesis', '.tl-tmap textarea[data-f="reason"]', 'a reason'], ['thesis', '.tl-tmap textarea[data-f="counter"]', 'the counter-argument'], ['thesis', '.tl-form textarea[data-k="quote"]', 'a quote']].map(([id, sel, what]) => ({
+      name: `Labs study tools: ${what}`, sel, open: async (page) => {
+        await page.evaluate((x) => openLabs(x), id);
+        await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 15000 });
+        if (/quote/.test(sel)) { await page.click('[data-adde="0"]'); await page.waitForSelector(sel); } } })),
+  ];
+  let { ctx, page, errors, groqCalls } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, fakeGroq, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true } });
+  await ctx.addInitScript(FAKE_EARS);
+  for (const box of BOXES) {
+    await reset(page);
+    await box.open(page);
+    const before = groqCalls.length;
+    const r = await micSay(page, box.sel);
+    micLooksRight(`1280x800 ${box.name}`, r);
+    if (process.env.SHOTS && /Island|thesis|Topics/.test(box.name)) await page.screenshot({ path: `${process.env.SHOTS}/mic-${box.name.replace(/\W+/g, '-')}.png` });
+    await page.waitForTimeout(box.ask ? 1200 : 300);
+    const reached = groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID));
+    if (box.ask) expect(reached, `${box.name}: the mic sends the question`);
+    else {
+      expect(!reached && (r.after.value || '').includes(SAID) && (box.kept ? await box.kept(page) : true), `${box.name}: the words stay in the box to edit, and nothing is sent or saved: ` + JSON.stringify(r.after));
+      // and typing still works, after the words
+      await page.locator(box.sel).first().press('End'); await page.keyboard.type(' and why');
+      expect((await page.locator(box.sel).first().inputValue()).endsWith(SAID + ' and why'), `${box.name}: typing goes on after the words`);
+    }
+  }
+  // the board: its own mic (sketch.js gets hear from the app)
+  await reset(page);
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask .csk-mic');
+  const bm = await page.locator('.csk-ask .csk-mic').boundingBox();
+  expect(bm.width >= 44 && bm.height >= 44 && await page.locator('.csk-ask .csk-mic').getAttribute('aria-label') === 'Say it instead of typing', 'the board’s mic is 44px and labelled');
+  let before = groqCalls.length;
+  await page.evaluate(() => { window.__ears.values = []; });
+  await page.click('.csk-ask .csk-mic');
+  expect(/Stop/.test(await page.locator('.csk-ask .csk-mic').innerText()) && await page.locator('.csk-ask input').getAttribute('placeholder') === 'Listening…', 'the board says Listening… with a Stop button');
+  await page.waitForFunction(() => /how do plants/.test(document.querySelector('.csk-ask input').value), null, { timeout: 5000 });
+  await page.waitForTimeout(2000);
+  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the board’s mic asks Cassie');
+  // the chat's own mic still works as before
+  await reset(page);
+  before = groqCalls.length;
+  await page.click('#mic-btn');
+  await page.waitForTimeout(1500);
+  expect(groqCalls.slice(before).some((c) => JSON.stringify(c).includes(SAID)), 'the chat’s mic still sends what was said');
+  // not allowed: one plain line, the box still takes typing
+  await reset(page);
+  await page.evaluate(() => { window.__ears.mode = 'denied'; openMemory(); });
+  await page.waitForSelector('#mem-fact + .cmic');
+  await page.click('#mem-fact + .cmic');
+  await page.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+  await page.fill('#mem-fact', 'My exam is on Friday');
+  expect(await page.inputValue('#mem-fact') === 'My exam is on Friday', 'typing still works after the mic can’t');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+
+  // phones: each mic on screen, 44px, nothing off the side
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Galaxy S9+', { width: 360, height: 740 }]]) {
+    ({ ctx, page, errors, groqCalls } = await open(b, { device, viewport, fakeGroq, state: { groqKey: 'gsk_test', tour: 'done' } }));
+    await ctx.addInitScript(FAKE_EARS);
+    for (const box of BOXES.filter((x) => !/study room/.test(x.name))) {
+      await reset(page);
+      await box.open(page);
+      const r = await micSay(page, box.sel);
+      micLooksRight(`${viewport.width}x${viewport.height} ${box.name}`, r);
+    }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+
+  // a browser that can't listen at all: no mic anywhere, and the boxes work as always
+  ({ ctx, page, errors } = await open(b, { device: 'Desktop Chrome', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true } }));
+  await ctx.addInitScript(NO_EARS);
+  await reset(page);
+  await page.evaluate(() => openMemory());
+  await page.waitForSelector('#mem-fact');
+  expect(!(await page.locator('#mem-fact + .cmic').isVisible()), 'no mic where the browser can’t listen');
+  await page.fill('#mem-fact', 'Typed');
+  expect(await page.inputValue('#mem-fact') === 'Typed', 'typing works');
+  await page.keyboard.press('Escape');
+  await reset(page);
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-ask input');
+  expect(!(await page.locator('.csk-ask .csk-mic').count()), 'the board has no mic either');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // one mic helper for the app and Labs, the same one in the extension; the board stays the same in both
+  expect(fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/mic.js'), 'utf8'), 'extension/mic.js is mic.js');
+  expect(fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8') === fs.readFileSync(path.join(ROOT, 'extension/sketch.js'), 'utf8'), 'extension/sketch.js is sketch.js');
+  const mic = fs.readFileSync(path.join(ROOT, 'mic.js'), 'utf8');
+  expect(!/localStorage|indexedDB|console\.|track\(|fetch\(/.test(mic), 'the mic keeps and logs nothing');
+});
+
+test('a mic on every box where a student writes to Cassie in the extension (the side panel’s Ask Cassie and Ask a follow-up, the board, the on-page Island, the popup): the words fill the box and the question is sent; not allowed: one plain line; 44px, monochrome, no new permission', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && !manifest.optional_permissions, 'no new permission for the mic: ' + manifest.permissions.join());
+  expect(manifest.content_scripts[0].js.includes('mic.js'), 'the mic is on every page');
+  for (const f of ['panel.html', 'popup.html']) expect(/<script src="mic\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8')), `${f} loads the mic`);
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, viewport: { width: 1200, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: every question that reaches it is kept
+    await sw.evaluate(() => {
+      self.__asked = [];
+      self.readPicture = async (keys, msg) => { self.__asked.push(String(msg.prompt || '')); return 'Plants make food from light.'; };
+      self.answerAny = async (input, keys, onDelta) => { self.__asked.push(JSON.stringify(input)); const t = 'Plants make food from light.'; if (onDelta) onDelta(t); return t; };
+      self.speakLeft = async () => ({ on: false, left: 0 });
+    });
+    const askedSaid = async () => (await sw.evaluate(() => self.__asked.slice())).some((x) => x.includes(SAID));
+    const id = new URL(sw.url()).host;
+
+    // 1. the side panel: Ask a follow-up, Ask Cassie, and the board
+    const panel = await ctx.newPage();
+    await panel.addInitScript(FAKE_EARS);
+    await panel.goto(`chrome-extension://${id}/panel.html`);
+    await panel.waitForSelector('#t-ask');
+    await panel.evaluate(() => { window.ask = (c) => { window.__asked = JSON.stringify(c); }; showTextJob('Leaves are green', 'explain'); });
+    let r = await micSay(panel, '.card .row input');
+    micLooksRight('the panel’s Ask a follow-up', r);
+    expect(/how do plants make their food/.test(await panel.evaluate(() => window.__asked)), 'Ask a follow-up: the mic sends it');
+    await panel.evaluate(() => { window.teach = (o) => { window.__taught = o.q; }; askPage(); });
+    r = await micSay(panel, '.ask-page form input');
+    micLooksRight('the panel’s Ask Cassie', r);
+    expect(await panel.evaluate(() => window.__taught) === SAID, 'Ask Cassie: the mic sends it');
+    await panel.evaluate(() => { window.vision = async (img, p) => { window.__vision = p; return 'ok'; }; openBoard(null); });
+    await panel.waitForSelector('.csk-ask .csk-mic');
+    const bm = await panel.locator('.csk-ask .csk-mic').boundingBox();
+    expect(bm.width >= 44 && bm.height >= 44, 'the panel board’s mic is 44px');
+    await panel.click('.csk-ask .csk-mic');
+    await panel.waitForFunction(() => /how do plants make their food/.test(window.__vision || ''), null, { timeout: 8000 });
+    await panel.close();
+
+    // 2. the popup's question box; then, not allowed: one plain line, and typing still works
+    const popup = await ctx.newPage();
+    await popup.addInitScript(FAKE_EARS);
+    await popup.goto(`chrome-extension://${id}/popup.html`);
+    await popup.waitForSelector('#page-q + .cmic');
+    r = await micSay(popup, '#page-q');
+    micLooksRight('the popup’s question box', r);
+    expect(await popup.locator('#page-answer').isVisible(), 'the popup: the mic asks about the page');
+    await popup.evaluate(() => { window.__ears.mode = 'denied'; document.getElementById('page-q').value = ''; });
+    await popup.click('#page-q + .cmic');
+    await popup.waitForSelector('.cmic-line >> text=Cassie can’t use the microphone here. Type it instead.', { timeout: 5000 });
+    await popup.fill('#page-q', 'Typed instead');
+    expect(await popup.inputValue('#page-q') === 'Typed instead', 'typing still works');
+    await popup.close();
+
+    // 3. on a page: the Island's ask box and the board (the extension's own page script: its speech is faked there)
+    const page = await ctx.newPage();
+    await page.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/page.html`);
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
+    const cdp = await ctx.newCDPSession(page);
+    const worlds = [];
+    cdp.on('Runtime.executionContextCreated', (e) => worlds.push(e.context));
+    await cdp.send('Runtime.enable');
+    await page.waitForTimeout(300);
+    const { frameTree } = await cdp.send('Page.getFrameTree');
+    const world = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
+    expect(world, 'the extension’s page script: ' + worlds.map((c) => c.name).join(', '));
+    const inWorld = async (js) => (await cdp.send('Runtime.evaluate', { contextId: world.id, expression: js, returnByValue: true })).result.value;
+    await inWorld(`(${FAKE_EARS})()`);
+    await page.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['%PDF-1.4 notes'], 'notes.pdf', { type: 'application/pdf' }));
+      window.__dt = dt;
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    });
+    await page.waitForFunction(() => { const i = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle'); return i && !i.hidden; }, null, { timeout: 3000 });
+    await page.evaluate(() => {
+      const el = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle');
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+    });
+    await page.locator('.cx-isle-chip', { hasText: 'Ask about it' }).click();
+    r = await micSay(page, '.cx-isle-ask input', { root: '#cassie-ext-host-92f1', inWorld });
+    micLooksRight('the on-page Island', r);
+    expect(/Opening in Cassie|Opened in Cassie|didn’t work/.test(await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').innerText)), 'the Island: the mic sends the question');
+    // the board, opened from a snip of the page
+    const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; const g = c.getContext('2d'); g.fillStyle = '#c00'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle').hidden, null, { timeout: 5000 }).catch(() => {});
+    await page.evaluate((b64) => {
+      const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer(); dt.items.add(new File([u], 'shape.png', { type: 'image/png' })); window.__dt = dt;
+      document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    }, png);
+    await page.waitForFunction(() => { const i = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle'); return i && !i.hidden; }, null, { timeout: 3000 });
+    await page.evaluate(() => {
+      const el = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.cx-isle');
+      el.dispatchEvent(new DragEvent('dragover', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+      el.dispatchEvent(new DragEvent('drop', { bubbles: true, composed: true, cancelable: true, dataTransfer: window.__dt }));
+    });
+    const mic = page.locator('.csk-ask .csk-mic');
+    await mic.waitFor({ timeout: 10000 });
+    const pb = await mic.boundingBox();
+    expect(pb.width >= 44 && pb.height >= 44, 'the on-page board’s mic is 44px');
+    await mic.click();
+    for (let i = 0; i < 40 && !(await askedSaid()); i++) await page.waitForTimeout(250);
+    expect(await askedSaid(), 'the on-page board: the mic asks Cassie');
+  } finally { await ctx.close(); }
+});
+
+test('Apple design: the loading page is a launch screen (the app’s own background, no text, no logo, a spinner only when slow); the landing page uses one system typeface and Apple’s greys; the app keeps glass for the floating controls only; nothing under Apple’s smallest sizes', async (b) => {
+  // 1. the way in: just the app's background, in light and dark, in the student's look
+  for (const [scheme, bg, look] of [['light', 'rgb(242, 242, 245)', ''], ['dark', 'rgb(14, 14, 16)', ''], ['light', 'rgb(251, 246, 238)', 'cassie']]) {
+    const ctx = await b.newContext({ colorScheme: scheme, viewport: { width: 390, height: 844 } });
+    if (look) await ctx.addInitScript((a) => localStorage.setItem('cassie.v2', JSON.stringify({ accent: a })), look);
+    // the app is slow to arrive: here it never comes (start.js without its hop into the app; that the hop
+    // happens in under a second is checked in the first run test), so the launch screen stays
+    const startJs = fs.readFileSync(path.join(ROOT, 'start.js'), 'utf8');
+    expect(/setTimeout\(go, 400\);/.test(startJs), 'start.js goes into the app after 0.4 seconds');
+    await ctx.route(/\/start\.js/, (r) => r.fulfill({ contentType: 'text/javascript', body: startJs.replace('setTimeout(go, 400);', '') }));
+    const page = await ctx.newPage();
+    await page.goto(APP.replace('app.html', 'start.html'));
+    const first = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, words: document.body.innerText.trim(), pics: [...document.querySelectorAll('img, svg, h1, p')].length, spin: getComputedStyle(document.querySelector('.spin')).opacity }));
+    expect(first.bg === bg && !first.words && !first.pics && first.spin === '0', `${scheme} ${look || 'Monochrome'}: the app’s own background (${bg}), no words, no logo, no spinner yet: ` + JSON.stringify(first));
+    await page.waitForTimeout(1100);
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.spin')).opacity) === '1' && await page.locator('[role=progressbar][aria-label="Loading Cassie"]').count() === 1, `${scheme}: a slow app gets a small spinner, labelled for screen readers`);
+    await ctx.close();
+  }
+  // 2. the landing page: one typeface (the system's), Apple's greys, nothing under 11px that a person reads
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  // the deleted web fonts and doodle wallpaper: nothing still asks for them
+  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/story.css', 'landing/desk.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  expect(!/landing\/fonts|patterns\/|"Inter|'Inter|Instrument Serif/.test(shipped), 'no page or build step refers to the deleted fonts or wallpaper');
+  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/story.css'), 'utf8') + fs.readFileSync(path.join(ROOT, 'landing/desk.css'), 'utf8')), 'the landing page loads no web fonts');
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    const ctx = await b.newContext({ viewport });
+    await ctx.route(/workers\.dev|groq|fonts\.g/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(APP.replace('app.html', 'index.html'));
+    await page.waitForTimeout(800);
+    const L = await page.evaluate(() => {
+      const fams = new Set(), small = [];
+      for (const el of document.querySelectorAll('body *')) {
+        if (el.closest('[aria-hidden="true"], svg, canvas')) continue;
+        if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+        const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+        if (!r.width || cs.display === 'none' || cs.visibility === 'hidden') continue;
+        fams.add(cs.fontFamily.split(',')[0].trim());
+        if (parseFloat(cs.fontSize) < 11) small.push(cs.fontSize + ' ' + el.textContent.trim().slice(0, 20));
+      }
+      const h1 = getComputedStyle(document.querySelector('.hero h1'));
+      return { fams: [...fams], small: small.slice(0, 8), page: getComputedStyle(document.body).backgroundColor, h1: [h1.fontWeight, h1.fontStyle], sideways: document.documentElement.scrollWidth > innerWidth + 1 };
+    });
+    expect(L.fams.every((f) => /apple-system|monospace|ui-monospace|Menlo|Courier/i.test(f)), `${viewport.width}: one system typeface: ` + L.fams.join(', '));
+    expect(L.page === 'rgb(245, 245, 247)' && L.h1[0] === '600' && L.h1[1] === 'normal', `${viewport.width}: Apple’s light grey page and a semibold headline: ` + JSON.stringify(L));
+    expect(!L.small.length && !L.sideways, `${viewport.width}: nothing a person reads under 11px, nothing off the side: ` + JSON.stringify(L.small));
+    await ctx.close();
+  }
+  // 3. the app: glass only on the floating controls (tab bar, top bar, sidebar, the ask box); Home's cards are solid
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true, tab: 'home' } }); // (Lite mode turns all glass solid)
+    await page.waitForSelector('.hub-box', { timeout: 10000 });
+    const A = await page.evaluate(() => {
+      const blur = (el) => /blur/.test(getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter || '');
+      const shown = (el) => el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none';
+      const content = [...document.querySelectorAll('.hub-box, .hub-card, .hub-hero:not(.hub-hero-phone)')].filter(shown);
+      const controls = [...document.querySelectorAll('#tabbar, .composer, .topbar')].filter(shown);
+      const menu = document.querySelector('.side-menu-label');
+      return { glassyContent: content.filter(blur).map((e) => e.className), content: content.length, glassControls: controls.filter(blur).length, controls: controls.length, menu: menu && shown(menu) ? parseFloat(getComputedStyle(menu).fontSize) : null };
+    });
+    expect(A.content > 0 && !A.glassyContent.length, `${viewport.width}: Home’s cards are solid, not glass: ` + JSON.stringify(A));
+    expect(A.controls > 0 && A.glassControls === A.controls, `${viewport.width}: the floating controls keep their glass: ` + JSON.stringify(A));
+    expect(A.menu === null || A.menu >= 10, `${viewport.width}: the sidebar’s Menu label is at least 10px: ` + A.menu);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar, thumbnails or the list under it), loops hug their part, nothing is drawn on blank space or the top bar, drawings follow the page or offer Look again; the card drags, resizes, minimizes, is remembered and moves off what she points at; follow-up questions typed or said (care first), saved in Your lessons; a cut-off reply keeps its whole steps and an unusable one is asked for once more', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permission: ' + manifest.permissions.join());
+  for (const f of ['errors.js', 'sketch.js', 'mic.js']) expect(fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8') === fs.readFileSync(path.join(ROOT, f), 'utf8'), `extension/${f} is the app’s ${f}`);
+  const ext = path.join(ROOT, 'extension');
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
+    headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    // the viewer page, at a Drive address and at an ordinary one
+    const viewer = fs.readFileSync(path.join(ROOT, 'tests/fixtures/teach/viewer.html'), 'utf8');
+    await ctx.route(/drive\.google\.com|example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: viewer }));
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    // the AI, faked: each call takes the next reply in line (self.__replies), and every prompt is kept
+    await sw.evaluate(() => {
+      self.__prompts = []; self.__replies = []; self.__fails = [];
+      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); return self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}'; };
+      self.speakLeft = async () => ({ on: false, left: 0 });
+      self.teachFail = async (code) => { self.__fails.push(code); };
+      return chrome.storage.local.set({ teachVoice: 'off', teachAuto: 'off' });
+    });
+    const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; }, list);
+    const prompts = () => sw.evaluate(() => self.__prompts.slice());
+    const page = ctx.pages()[0] || await ctx.newPage();
+    const HOST = '#cassie-teach-host-92f1';
+    const world = async () => {
+      const cdp = await ctx.newCDPSession(page), worlds = [];
+      cdp.on('Runtime.executionContextCreated', (e) => worlds.push(e.context));
+      await cdp.send('Runtime.enable'); await page.waitForTimeout(300);
+      const { frameTree } = await cdp.send('Page.getFrameTree');
+      const w = worlds.find((c) => c.auxData && c.auxData.frameId === frameTree.frame.id && c.auxData.type === 'isolated' && /Cassie/.test(c.name));
+      return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 300)); return r.result.value; };
+    };
+    const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
+    const lessonNow = () => page.evaluate((h) => { const n = document.querySelector(h); if (!n) return null; const r = n.shadowRoot, c = r.querySelector('.ct-card').getBoundingClientRect(); return { step: n.dataset.step, drawn: n.dataset.drawn, lost: n.dataset.lost || '', count: r.querySelector('.ct-count').textContent, say: r.querySelector('.ct-say').textContent, card: { left: c.left, top: c.top, right: c.right, bottom: c.bottom, width: c.width, height: c.height }, cursor: r.querySelector('.ct-cursor').classList.contains('on'), text: r.querySelector('.ct-card').innerText }; }, HOST);
+    // the dark ink on her drawing layer (grey earlier steps and the white edge are left out)
+    const ink = () => page.evaluate((h) => {
+      const c = document.querySelector(h).shadowRoot.querySelector('canvas'), k = c.width / c.clientWidth, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+      for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; if (d[i + 3] > 200 && d[i] < 60) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } }
+      return x1 < 0 ? null : [x0 / k, y0 / k, x1 / k, y1 / k].map(Math.round);
+    }, HOST);
+    const boxOf = (sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map(Math.round); }, sel);
+    const head = (text) => page.evaluate((t) => { const h = [...document.querySelectorAll('h3, h2')].find((x) => x.textContent === t); h.id = h.id || 'h-' + t.replace(/\W+/g, ''); return '#' + h.id; }, text);
+    const settle = () => page.waitForTimeout(1700);
+    // the size of the picture she is shown, in the page's pixels (her spots are shares of it, like the AI's)
+    const picture = (w) => w('chrome.runtime.sendMessage({ type: "CASSIE_SNIP" }).then((o) => new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth / devicePixelRatio, i.naturalHeight / devicePixelRatio]); i.src = o.dataUrl; }))');
+    const shadowClick = (sel) => page.evaluate(([h, s]) => document.querySelector(h).shadowRoot.querySelector(s).click(), [HOST, sel]);
+
+    // 1. Google Drive's PDF viewer: taught from the picture; nothing drawn on its toolbar, thumbnails or blank space
+    let inWorld = await open('https://drive.google.com/file/d/abc/view');
+    expect(await inWorld('CassieTeach.scan().pictureOnly') === true, 'Drive’s PDF viewer is a picture-only page');
+    let euler = await boxOf(await head('Euler circuit'));
+    const [PW, PH] = await picture(inWorld);
+    const share = (x, y) => ({ x: +(x / PW).toFixed(4), y: +(y / PH).toFixed(4) });
+    const at = share((euler[0] + euler[2]) / 2, (euler[1] + euler[3]) / 2);
+    await replies([{ steps: [{ say: 'Look at the Euler circuit card.', point: at, draw: [{ shape: 'circle', ...share(700, 30), r: 0.04 }, { shape: 'circle', ...share(60, 500), r: 0.03 }, { shape: 'circle', ...share(640, 390), r: 0.03 }, { shape: 'box', x: at.x - 0.09, y: at.y - 0.02, w: 0.18, h: 0.04 }] }] }]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 1, 'the Drive lesson starts');
+    await settle();
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/teach-drive.png' });
+    let L = await lessonNow(), I = await ink();
+    expect(L.drawn === 'box', 'only the box on the card is drawn: not on the toolbar, the thumbnails or the blank gap: ' + JSON.stringify(L));
+    expect(I && I[1] >= 72 && I[0] >= 150, 'no ink on Drive’s toolbar or thumbnails: ' + JSON.stringify(I));
+    expect(!/[–—]/.test(L.text), 'no dashes on the card: ' + L.text);
+    await inWorld('CassieTeach.stop(), 1');
+
+    // 2. an ordinary page with the same layout: only the lesson's own parts are numbered
+    inWorld = await open('https://example.com/notes');
+    const items = await inWorld('CassieTeach.scan().items.map((x) => x.what)');
+    const chrome = items.filter((w) => /Comment|Share|Open with|audio overview|Page 2 \/ 45|"Page [123]"|Final exam notes|Model answers|"Name"|"Owner"/.test(w));
+    expect(!chrome.length && items.some((w) => /Euler circuit/.test(w)), 'only the lesson is numbered: ' + JSON.stringify(items));
+    const n = items.findIndex((w) => /heading "Euler circuit"/.test(w)) + 1, np = items.findIndex((w) => /heading "Euler path"/.test(w)) + 1;
+    euler = await boxOf(await head('Euler circuit'));
+    const path_ = await boxOf(await head('Euler path'));
+    const gap = await page.evaluate(([w, h]) => { const r = document.querySelector('.gap').getBoundingClientRect(); return [(r.left + r.right) / 2 / w, (r.top + r.bottom) / 2 / h]; }, [PW, PH]);
+    await replies([{ steps: [
+      { say: 'The Euler circuit card.', point: n, draw: [{ shape: 'circle', el: n }] },
+      { say: 'Here is some blank space.', point: { x: gap[0], y: gap[1] }, draw: [{ shape: 'circle', x: gap[0], y: gap[1], r: 0.03 }] },
+      { say: 'This points at nothing real.', point: 999, draw: [{ shape: 'circle', el: 999 }] },
+      { say: 'And the Euler path heading.', point: np, draw: [{ shape: 'circle', x: (path_[0] + path_[2]) / 2 / PW, y: (path_[1] + path_[3]) / 2 / PH, r: 0.06 }, { shape: 'circle', el: np }] },
+    ] }]);
+    await inWorld('chrome.storage.local.remove("teachCard"), 1');
+    expect(await inWorld('CassieTeach.run({ again: () => { window.__again = (window.__again || 0) + 1; } }).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 4, 'the lesson starts with 4 steps');
+    await settle();
+    L = await lessonNow(); I = await ink();
+    expect(L.drawn === 'circle' && I, 'step 1 circles the heading: ' + JSON.stringify(L));
+    const pad = [euler[0] - I[0], euler[1] - I[1], I[2] - euler[2], I[3] - euler[3]];
+    expect(pad.every((p) => p >= 0 && p <= 8), `the loop hugs the heading, at most 8px out: heading ${euler}, ink ${I}, padding ${pad}`);
+    // the card moved off what she points at (it started bottom right, over this heading)
+    expect(!(L.card.right > euler[0] && L.card.left < euler[2] && L.card.bottom > euler[1] && L.card.top < euler[3]), 'the card moved off the heading: ' + JSON.stringify(L.card));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === '' && !L.cursor && /blank space/.test(L.say) && !(await ink()), 'blank space: the words stay, no circle and no arrow: ' + JSON.stringify(L));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === '' && !L.cursor && /nothing real/.test(L.say), 'part 999: the words stay, nothing drawn: ' + JSON.stringify(L));
+    await shadowClick('.ct-next'); await settle();
+    L = await lessonNow();
+    expect(L.drawn === 'circle,circle', 'step 4 draws both its circles: ' + JSON.stringify(L));
+    // 3. the page scrolls 300px inside its own box: the drawings go with it
+    const before = await ink();
+    await page.evaluate(() => { document.getElementById('scroller').scrollTop += 300; });
+    await page.waitForTimeout(500);
+    const after = await ink(), moved = await boxOf(await head('Euler path'));
+    expect(after && Math.abs(after[1] - (before[1] - 300)) <= 3 && after[1] <= moved[1] && after[3] >= moved[3], `the drawings follow the scroll: before ${before}, after ${after}, heading now ${moved}`);
+    // the window changes size: she can't follow that, so the drawings fade and Look again shows
+    await page.setViewportSize({ width: 1200, height: 760 }); await page.waitForTimeout(500);
+    L = await lessonNow();
+    expect(L.lost === '1' && /Look again/.test(L.text) && /no longer line up/.test(L.text), 'Look again after the page moved under her: ' + L.text);
+    await shadowClick('.ct-again');
+    expect(await inWorld('window.__again') === 1, 'Look again starts the lesson over');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.evaluate(() => { document.getElementById('scroller').scrollTop = 0; }); // (the parts are numbered as at first again)
+
+    // 4. the card: drag, resize, stays on screen, remembered; and Minimize
+    await replies([{ steps: [{ say: 'First.', point: n, draw: [] }, { say: 'Second.', point: n, draw: [] }] }]);
+    await inWorld('CassieTeach.run({}).then((r) => r.steps.length)');
+    await settle();
+    let c0 = (await lessonNow()).card;
+    const hb = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot.querySelector('.ct-who').getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; }, HOST);
+    await page.mouse.move(hb[0], hb[1]); await page.mouse.down(); await page.mouse.move(hb[0] - 300, hb[1] + 200, { steps: 6 }); await page.mouse.up();
+    let c1 = (await lessonNow()).card;
+    expect(Math.abs(c1.left - (c0.left - 300)) <= 3 && Math.abs(c1.top - (c0.top + 200)) <= 3, `the card drags by its header: ${JSON.stringify(c0)} to ${JSON.stringify(c1)}`);
+    const gb = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot.querySelector('.ct-size').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, r.width, r.height]; }, HOST);
+    expect(gb[2] >= 44 && gb[3] >= 44, 'the resize corner is 44px');
+    const under = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot, g = r.querySelector('.ct-size').getBoundingClientRect(); return [...r.querySelectorAll('.ct-card button:not(.ct-size), .ct-card input')].filter((b) => { const q = b.getBoundingClientRect(); return q.width && !(q.right <= g.left || q.left >= g.right || q.bottom <= g.top || q.top >= g.bottom); }).map((b) => b.className || b.tagName); }, HOST);
+    expect(!under.length, 'the resize corner sits on no other control: ' + under.join(', '));
+    await page.mouse.move(gb[0], gb[1]); await page.mouse.down(); await page.mouse.move(gb[0] + 120, gb[1] + 60, { steps: 6 }); await page.mouse.up();
+    const c2 = (await lessonNow()).card;
+    expect(Math.abs(c2.width - (c1.width + 120)) <= 3 && Math.abs(c2.height - (c1.height + 60)) <= 3, `the card resizes from its corner: ${JSON.stringify(c1)} to ${JSON.stringify(c2)}`);
+    await page.mouse.move(c2.left + 30, c2.top + 15); await page.mouse.down(); await page.mouse.move(-400, -400, { steps: 6 }); await page.mouse.up();
+    const c3 = (await lessonNow()).card;
+    expect(c3.left >= 0 && c3.top >= 0 && c3.right <= 1280 && c3.bottom <= 800, 'dragged off the edge, it stays fully on screen: ' + JSON.stringify(c3));
+    // with the keyboard: the header takes the arrow keys
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-head').focus(), HOST);
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowDown');
+    const c4 = (await lessonNow()).card;
+    expect(c4.left - c3.left >= 19 && c4.top - c3.top >= 19, 'the arrow keys move it: ' + JSON.stringify([c3, c4]));
+    // it was moved by hand in this lesson, so the next step leaves it where the student put it
+    await shadowClick('.ct-next'); await settle();
+    expect(JSON.stringify((await lessonNow()).card) === JSON.stringify(c4), 'moved by hand: it stays put');
+    // Minimize shrinks it to its header, and back
+    await shadowClick('.ct-min-b');
+    const small = (await lessonNow()).card;
+    expect(small.height < 110 && !(await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-body').offsetHeight, HOST)), 'Minimize shrinks it to its header: ' + JSON.stringify(small));
+    await shadowClick('.ct-min-b');
+    expect(Math.abs((await lessonNow()).card.height - c2.height) <= 3, 'and back to its size');
+    await shadowClick('.ct-x');
+    // remembered: the next lesson opens where it was left, at its size
+    await replies([{ steps: [{ say: 'Again.', point: null, draw: [] }] }]);
+    await inWorld('CassieTeach.run({}).then((r) => r.steps.length)');
+    await settle();
+    const c5 = (await lessonNow()).card;
+    expect(Math.abs(c5.left - c4.left) <= 3 && Math.abs(c5.top - c4.top) <= 3 && Math.abs(c5.width - c2.width) <= 3, 'the next lesson remembers its place and size: ' + JSON.stringify([c4, c5]));
+
+    // 5. questions about a step: typed, said, and care first; all saved with the lesson
+    const sizes = await page.evaluate((h) => [...document.querySelector(h).shadowRoot.querySelectorAll('.ct-card button, .ct-card input')].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return [b.className || b.getAttribute('aria-label') || b.tagName, Math.round(r.width), Math.round(r.height)]; }), HOST);
+    expect(sizes.every(([, w, h]) => w >= 44 && h >= 44), 'every control on the card is 44px: ' + JSON.stringify(sizes));
+    await replies([{ answer: 'Every vertex in the example has degree 2, which is even, so there is an Euler circuit.', point: n, draw: [{ shape: 'underline', el: n }] }]);
+    await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.ct-ask input').value = 'Why is there an Euler circuit?'; r.querySelector('.ct-ask').requestSubmit(); }, HOST);
+    await page.waitForFunction((h) => /degree 2/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), HOST, { timeout: 8000 });
+    await page.waitForTimeout(900);
+    L = await lessonNow();
+    let P = await prompts();
+    expect(P.length === 1 && /The student asks: "Why is there an Euler circuit\?"/.test(P[0]) && /Again\./.test(P[0]) && /never add facts/.test(P[0]), 'the question goes with the step and the accuracy rules: ' + (P[0] || '').slice(0, 300));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/teach-followup.png' });
+    expect(L.drawn === 'underline' && /You asked: Why is there an Euler circuit\?/.test(L.text), 'the answer shows in the card, and she points and draws: ' + JSON.stringify(L));
+    // said, with the mic (the extension's own page script hears the faked speech)
+    await inWorld(`(${FAKE_EARS})(); 1`);
+    await replies([{ answer: 'A circuit is a closed path that starts and ends at the same vertex.', point: 0, draw: [] }]);
+    const said = await micSay(page, '.ct-ask input', { root: HOST, inWorld });
+    micLooksRight('the lesson card', said);
+    await page.waitForFunction((h) => /closed path/.test(document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent), HOST, { timeout: 8000 });
+    P = await prompts();
+    expect(P.length === 1 && P[0].includes(SAID), 'the mic sends what was said');
+    // care first: no AI is asked
+    await replies([]);
+    await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.ct-ask input').value = 'I want to hurt myself'; r.querySelector('.ct-ask').requestSubmit(); }, HOST);
+    await page.waitForTimeout(500);
+    const careText = await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.ct-ans').textContent, HOST);
+    expect(/1553|Hopeline|NCMH/i.test(careText) && (await prompts()).length === 0, 'care first, with no AI call: ' + careText.slice(0, 160));
+    await shadowClick('.ct-x');
+    await page.waitForTimeout(400);
+    const saved = await sw.evaluate(() => chrome.storage.local.get('teachLessons').then((o) => o.teachLessons[0]));
+    expect(saved.qa && saved.qa.length === 3 && /Euler circuit/.test(saved.qa[0].q) && saved.qa[1].q === SAID, 'the questions are saved with the lesson: ' + JSON.stringify(saved.qa));
+    // and Your lessons in the side panel shows them
+    const id = new URL(sw.url()).host;
+    const panel = await ctx.newPage();
+    await panel.goto(`chrome-extension://${id}/panel.html`);
+    await panel.waitForSelector('.lessons .lesson', { timeout: 10000 });
+    await panel.locator('.lessons .lesson').first().locator('summary').click();
+    expect(/You asked: Why is there an Euler circuit\?/.test(await panel.locator('.lessons .lesson').first().innerText()), 'Your lessons shows the questions');
+    await panel.close();
+
+    // 6. replies that can't be used
+    await page.bringToFront();
+    const whole = JSON.stringify({ steps: [1, 2, 3, 4].map((i) => ({ say: `Step ${i} of the Euler lesson.`, point: n, draw: [] })) });
+    await replies([whole.slice(0, whole.indexOf('Step 4') + 12)]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 3 && (await prompts()).length === 1, 'cut off: its 3 whole steps are taught, with 1 call');
+    await inWorld('CassieTeach.stop(), 1');
+    await replies(['Sorry, I cannot help with that page right now.', { steps: [{ say: 'Now it works.', point: n, draw: [] }] }]);
+    expect(await inWorld('CassieTeach.run({}).then((r) => r.steps.length, (e) => "ERR " + e.message)') === 1, 'unusable, then good: the lesson shows');
+    P = await prompts();
+    expect(P.length === 2 && !/could not be read/.test(P[0]) && /your last reply could not be read/.test(P[1]) && /At most 5 steps/.test(P[1]), 'exactly 2 calls, the second stricter');
+    await inWorld('CassieTeach.stop(), 1');
+    await replies(['No idea.', 'Still no JSON here.']);
+    const err = await inWorld('CassieTeach.run({}).then(() => "shown", (e) => e.code)');
+    expect(err === 'teach_failed' && (await prompts()).length === 2, 'both unusable: teach_failed after exactly 2 calls: ' + err);
+    await page.waitForTimeout(300);
+    expect(JSON.stringify(await sw.evaluate(() => self.__fails)) === '["teach_not_json"]', 'only the reason code is reported: ' + JSON.stringify(await sw.evaluate(() => self.__fails)));
+    // the lesson request: true to the page
+    const ask = await inWorld('CassieTeach.prompt({ q: "", page: { title: "t", items: [] } })');
+    expect(/Teach only what this page or picture shows/.test(ask) && /never add facts/.test(ask) && /say so in that step instead of guessing/.test(ask) && /never on the app's or browser's own toolbars/.test(ask), 'the lesson request asks for accuracy');
+  } finally { await ctx.close(); }
+});
 
 test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questions, no formatting read aloud)', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: (body) => ({ text: /teaching YOU/.test(body.messages[0].content) ? 'Ooh, so plants make **food** from light? Why do they need water then?' : 'Sure! x = 4, because 2x equals 8.' }) });
@@ -2099,100 +3805,6 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await serverMode({ reply: '', heard: '' });
   await ctx.close();
-});
-
-// The voice model's files, served in place of Hugging Face: a tiny stand-in model (a tone, not speech)
-// that runs through the real kokoro-js and ONNX runtime, with the real voice styles.
-const KOKORO_FIXTURE = path.join(__dirname, 'fixtures', 'kokoro');
-const serveKokoro = (ctx) => ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\//, (route) => {
-  const rel = new URL(route.request().url()).pathname.split('/resolve/main/')[1];
-  const file = path.join(KOKORO_FIXTURE, rel);
-  if (!rel || rel.includes('..') || !fs.existsSync(file)) return route.fulfill({ status: 404, body: 'not found' });
-  return route.fulfill({ path: file, contentType: rel.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
-});
-const WATCH_VOICE_WORKER = () => {
-  window.__said = []; window.__played = 0;
-  const post = Worker.prototype.postMessage;
-  Worker.prototype.postMessage = function (m, ...rest) { if (m && m.type === 'say') window.__said.push({ text: m.text, voice: m.voice }); return post.call(this, m, ...rest); };
-  const start = AudioBufferSourceNode.prototype.start;
-  AudioBufferSourceNode.prototype.start = function (...a) { window.__played++; return start.apply(this, a); };
-};
-
-test('Cassie’s voice is Bella (or Edward) once she’s on the device — the phone’s voice only until then, and she never makes you wait', async (b) => {
-  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Mitochondria make energy for the cell. They are the powerhouse.' }) });
-  // the voice model downloads slowly here, like on a slow connection
-  await ctx.route(/huggingface\.co\/onnx-community\/Kokoro-82M-v1\.0-ONNX\/resolve\/main\/onnx\//, async (route) => {
-    await new Promise((r) => setTimeout(r, 8000));
-    return route.fulfill({ path: path.join(KOKORO_FIXTURE, 'onnx', 'model_quantized.onnx'), contentType: 'application/octet-stream' });
-  });
-  await serveKokoro(ctx);
-  await ctx.addInitScript(FAKE_VOICE, {});
-  await ctx.addInitScript(WATCH_VOICE_WORKER);
-  await page.reload();
-  expect(await page.evaluate(() => window.crossOriginIsolated), 'the app is cross-origin isolated (her voice can use several cores)');
-  await page.click('#voice-btn');
-  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Getting Cassie’s voice ready', { timeout: 5000 });
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/voice-human-loading.png' });
-  // she doesn't wait for her voice: the greeting is on screen and she's listening already
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 3000 });
-  expect(await page.evaluate(() => window.CassieVoice.status()) === 'loading', 'she listens while her voice is still downloading');
-  expect(/listening/.test(await page.locator('.vc-cassie').innerText()), 'the greeting shows as text');
-  await page.waitForFunction(() => window.CassieVoice.status() === 'ready', null, { timeout: 30000 });
-  const deviceBefore = await page.evaluate(() => window.__spoken.length); // the phone's voice filled in while she downloaded
-  // the download note becomes "her own voice is ready" (from the next conversation: this one keeps its voice), then goes away
-  await page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie’s own voice is ready', { timeout: 5000 });
-  expect(/next time/.test(await page.locator('.vc-hv').innerText()), 'her own voice starts next time, never mid-conversation');
-  await page.waitForSelector('.vc-hv[hidden]', { state: 'attached', timeout: 10000 });
-  expect(await page.evaluate(() => window.CassieVoice.info().isolated), 'her voice uses several cores');
-  // the next conversation is in Bella's voice
-  await page.click('.vc-x');
-  await page.click('#voice-btn');
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  await page.evaluate(() => window.__say('What do mitochondria do?'));
-  await page.waitForFunction(() => window.__said.some((x) => /powerhouse/.test(x.text)), null, { timeout: 15000 });
-  const said = await page.evaluate(() => window.__said);
-  expect(said.every((x) => x.voice === 'af_bella'), 'the woman’s voice is Bella, like the explainer video: ' + JSON.stringify(said.map((x) => x.voice)));
-  expect(said[0].text.length <= 75, 'her first piece is short, so she starts talking quickly: ' + said[0].text);
-  await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await page.evaluate(() => window.__played) >= 1, 'the voice made by the model was played');
-  // the man's voice
-  await page.click('.vc-gender [data-gender="man"]');
-  await page.waitForFunction(() => window.__said.some((x) => x.voice === 'bm_george' && /my voice now/.test(x.text)), null, { timeout: 8000 });
-  await page.click('.vc-gender [data-gender="woman"]');
-  await page.click('.vc-x');
-  // Settings → Voice: she's ready, and a sample plays
-  await tapSettings(page);
-  await page.evaluate(() => { const d = document.querySelector('#voice-gender-select').closest('details'); if (d) d.open = true; });
-  await page.waitForSelector('#hv-state >> text=Bella’s voice is ready', { timeout: 5000 });
-  expect(await page.locator('#voice-engine-select').count() === 0, 'no robot-voice option any more');
-  await page.click('#hv-play');
-  await page.waitForFunction(() => window.__said.some((x) => /Let’s study together/.test(x.text)), null, { timeout: 8000 });
-  await page.evaluate(() => closeSettings());
-  // reading answers aloud uses it too
-  await page.evaluate(() => { state.voiceOut = true; });
-  await page.fill('#prompt-input', 'And ribosomes?');
-  await page.press('#prompt-input', 'Enter');
-  await page.waitForFunction(() => window.__said.filter((x) => /powerhouse/.test(x.text)).length >= 2, null, { timeout: 15000 });
-  expect(await page.evaluate(() => window.__spoken.length) === deviceBefore, 'once Bella is ready, only Bella speaks: ' + JSON.stringify(await page.evaluate(() => window.__spoken)));
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
-
-  // a phone on mobile data is asked first; if her voice can't load, the phone's own voice speaks — Cassie is never silent
-  const c2 = await open(b, { server: false, state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: 'Sure.' }) });
-  await c2.ctx.addInitScript(FAKE_VOICE, {});
-  await c2.page.reload();
-  await c2.page.click('#voice-btn');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Get Cassie’s own voice?', { timeout: 5000 });
-  expect(await c2.page.evaluate(() => window.CassieVoice.status()) === 'off', 'nothing downloads on a phone until asked');
-  if (process.env.SHOTS) await c2.page.screenshot({ path: process.env.SHOTS + '/voice-human-ask.png' });
-  await c2.page.click('.vc-hv [data-hv="get"]');
-  await c2.page.waitForSelector('.vc-hv:not([hidden]) >> text=Cassie is using your phone’s voice', { timeout: 20000 });
-  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  await c2.page.evaluate(() => window.__say('Hello'));
-  await c2.page.waitForFunction(() => document.querySelector('.vc-cassie').textContent === 'Sure.', null, { timeout: 10000 });
-  await c2.page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 8000 });
-  expect(await c2.page.evaluate(() => window.__spoken.some((t) => /Sure/.test(t))), 'her voice couldn’t load, so the phone’s voice said the answer: ' + JSON.stringify(await c2.page.evaluate(() => window.__spoken)));
-  await c2.ctx.close();
 });
 
 test('Talk with Cassie hears with Whisper by default (most accurate), even where the browser could listen', async (b) => {
@@ -3847,7 +5459,7 @@ test('landing: Meet Cassie mood buttons change her mood', async (b) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
   await page.locator('#meet').scrollIntoViewIfNeeded();
-  await page.waitForSelector('#play-stage .cassie-bot');
+  await page.waitForSelector('#play-stage .cassie-bot', { state: 'attached' });
   await page.waitForSelector('#meet .play.in'); await page.waitForTimeout(900); // let it finish sliding in
   expect(await page.locator('#moods button').count() >= 12, 'mood buttons missing');
   await page.click('#moods button[data-m="dance"]');
@@ -4479,6 +6091,28 @@ test('phones: maths copied from a PDF is cleaned and rebuilt before solving', as
   await ctx.close();
 });
 
+test('server: GET /speak says how many studio characters are left (a number) and when they come back, counting nothing', async () => {
+  await fetch(SERVER + '/__reset');
+  const hdr = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' };
+  const left = async (uid = 'voice-test-uid-1') => (await fetch(`${SERVER}/speak?uid=${uid}`, { headers: hdr })).json();
+  try {
+    await serverMode({ speakOn: false });
+    let d = await left();
+    expect(d.on === false && d.left === 0, 'off: nothing left: ' + JSON.stringify(d));
+    await serverMode({ speakOn: true, speakMonth: 1000, elevenCalls: 0 });
+    d = await left();
+    const now = new Date(Date.now() + 8 * 3600e3), y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
+    const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
+    expect(JSON.stringify(Object.keys(d).sort()) === '["back","left","on"]' && d.on === true && d.left === 1000 && typeof d.left === 'number' && d.back === next, 'on: the month’s 1000 left, back on the 1st: ' + JSON.stringify(d));
+    expect((await left()).left === 1000, 'asking again counts nothing');
+    const said = await fetch(SERVER + '/speak', { method: 'POST', headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Hello there, student.', voice: 'woman', uid: 'voice-test-uid-1' }) });
+    expect(said.status === 200 && /audio\/mpeg/.test(said.headers.get('content-type')), 'a sentence is said: ' + said.status);
+    d = await left('voice-test-uid-2');
+    expect(d.left === 1000 - 'Hello there, student.'.length, 'what was said comes off the month: ' + JSON.stringify(d));
+    expect((await serverMode({})).elevenCalls === 1, 'one call to ElevenLabs');
+  } finally { await serverMode({ speakOn: false, speakMonth: null }); }
+});
+
 test('server: the Chrome / Edge extension may use it, other sites may not', async () => {
   await fetch(SERVER + '/__reset');
   const body = JSON.stringify({ uid: 'ext-test-uid-123', messages: [{ role: 'user', content: 'hi' }] });
@@ -4846,7 +6480,7 @@ test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (sa
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
     const place = size === '390x844' ? '#home .hub-bot' : '#mascot';
-    await page.waitForSelector(place + ' svg', { timeout: 10000 }); await page.waitForTimeout(700); // (where the flat Cassie sits once the page has settled)
+    await page.waitForSelector(place + ' svg', { state: 'attached', timeout: 10000 }); await page.waitForTimeout(700); // (where her place is once the page has settled: kept, unseen, until the 3D one is drawn)
     const flat = await page.evaluate((sel) => { const e = document.querySelector(sel + ' svg'); const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round); }, place);
     await page.waitForSelector(place + ' canvas.cassie-bot-3d', { timeout: 30000 });
     await page.waitForTimeout(300);
@@ -5038,6 +6672,7 @@ test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is p
     for (const [act, , opened] of BOXES) {
       if (act === 'room') { await ctx.close(); ({ ctx, page, errors } = await start({ server: true })); }
       else { await page.goto(APP); await page.waitForTimeout(400); await page.evaluate((ph) => { if (ph) CassieNative.go('home'); else createNewChat(); }, phone); await page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 }); }
+      if (act === 'talk') await studioOn(page); // (the voice screen opens only when Bella can speak)
       await page.click(`${hub} .hub-box[data-hub="${act}"]`);
       const ok = await opened(page).then(() => true, () => false);
       expect(ok, `${size}: the ${act} box opens its feature`);
@@ -5314,10 +6949,10 @@ test('Home, You, Settings and Plans: the new and the returning home, every setti
     }
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} You (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    // Plans: Free and Plus side by side, Plus the most popular, Coming soon, and nothing that takes a payment
+    // Plans: Free and Plus side by side, Plus best for school, Coming soon, and nothing that takes a payment
     await page.click('.set-link[data-open="plans"]');
     const plans = await page.locator('.set-plans').innerText();
-    expect(/Free/.test(plans) && /Plus/.test(plans) && /Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
+    expect(/Free/.test(plans) && /Plus/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
     expect(await page.locator('.set-plans .plan-go').innerText() === 'Coming soon' && await page.locator('.set-plans .plan-go').getAttribute('href') === 'index.html#pricing', `${size}: Coming soon goes to the plans page`);
     expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }
@@ -5532,7 +7167,7 @@ const TAP_SCREENS = [
     await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
     await page.click('[data-room-act="study"]'); await page.waitForTimeout(600);
   }, { server: true }],
-  ['Talk with Cassie', async (page) => { await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
+  ['Talk with Cassie', async (page) => { await studioOn(page); await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
 ];
 test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
   const { tapTargetIssues } = require('./ui-checks.cjs');
@@ -5581,7 +7216,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
   const bad = [];
-  const skip = /delete (my )?account|sign out|log out|fake-gsi/i; // (fake-gsi: the tests' stand-in for Google's own button)
+  const skip = /delete (my )?account|sign out|log out|continue with google|sign in with apple/i; // (Google and Apple leave the page: they have their own tests)
   // one screen: opened fresh (the same saved data) whenever a tap changed it
   const run = async (label, device, viewport, touch, o, go, onlyKeys) => {
     // (1x pixels: this test machine draws 3D in software, 9 times slower at an iPhone's 3x)
