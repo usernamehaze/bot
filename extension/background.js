@@ -436,6 +436,13 @@ function careOf(reply, msg) {
   return CassieCare.reply(CassieCare.langOf(lastUserWords(msg)), f.aiWords);
 }
 chrome.runtime.onMessage.addListener((msg) => { if (msg?.type === 'CASSIE_CARE') countCare(); return false; });
+// A lesson that couldn't be made after two tries: only the reason code goes to Cassie's server
+// ("teach_cut_off", "teach_not_json", "teach_no_steps"), never the page's words or its picture
+self.teachFail = async (code) => {
+  if (!/^teach_[a-z_]{2,30}$/.test(String(code || ''))) return;
+  await fetch(CASSIE_SERVER + '/f', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ uid: await cassieUid(), kind: 'auto', feature: 'teach', text: code }) }).catch(() => {});
+};
+chrome.runtime.onMessage.addListener((msg) => { if (msg?.type === 'CASSIE_TEACH_FAIL') self.teachFail(msg.code); return false; });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'CASSIE_ASK') return false;

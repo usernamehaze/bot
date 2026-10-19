@@ -136,6 +136,7 @@
     exam_file_failed: 'Cassie couldn’t read that file. Try a PDF, Word, PowerPoint or text file.',
     // Teach me and Ask Cassie on any web page (the browser extension)
     teach_failed: 'Cassie couldn’t make a lesson for this page just now. Tap Try again.',
+    teach_ask_failed: 'Cassie couldn’t answer that just now. Try asking again.',
     teach_no_picture: 'Cassie couldn’t see this tab, so she can’t teach it. Take a screenshot (Win+Shift+S, or Cmd+Shift+4 on a Mac), then open the Board and press Ctrl+V.',
     teach_no_key: 'Cassie needs a free Groq or Gemini key to read your screen. Click the Cassie icon in the toolbar to add one.',
     teach_where_browser: 'This is one of the browser’s own pages, and browsers don’t let extensions draw on those. So Cassie teaches it here, on a picture of the tab.',
