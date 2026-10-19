@@ -41,8 +41,12 @@ void main(){
     let cols = ['color1', 'color2', 'color3'].map((k) => rgb(props[k]));
     let from = cols, to = cols, fadeAt = 0;
     const dpr = Math.min(opts.pixelDensity || 1, window.devicePixelRatio || 1);
+    // its size, kept up to date by the ResizeObserver below (reading it every frame made the page lay itself
+    // out every frame, a freeze of about 100 ms on a slow phone right after a jump down the page)
+    let cw = el.clientWidth, ch = el.clientHeight, seen = true;
     function size() {
-      const w = Math.max(1, Math.round(el.clientWidth * dpr * 0.5)), h = Math.max(1, Math.round(el.clientHeight * dpr * 0.5)); // half resolution: it's a soft blur anyway
+      if (!ro) { cw = el.clientWidth; ch = el.clientHeight; }
+      const w = Math.max(1, Math.round(cw * dpr * 0.5)), h = Math.max(1, Math.round(ch * dpr * 0.5)); // half resolution: it's a soft blur anyway
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
     }
     const t0 = performance.now();
@@ -61,20 +65,22 @@ void main(){
     function loop(now) {
       if (!alive) return;
       raf = requestAnimationFrame(loop);
-      if (document.hidden) return;
+      if (document.hidden || !seen) return; // (scrolled out of sight: nothing to draw)
       if (now - last < 33) return; // about 30 frames a second is plenty for a slow drift
       last = now; draw(now);
     }
-    if (opts.still) requestAnimationFrame(draw); else raf = requestAnimationFrame(loop);
-    const ro = window.ResizeObserver ? new ResizeObserver(() => { if (opts.still) requestAnimationFrame(draw); }) : null;
+    const ro = window.ResizeObserver ? new ResizeObserver(() => { cw = el.clientWidth; ch = el.clientHeight; if (opts.still) requestAnimationFrame(draw); }) : null;
     if (ro) ro.observe(el);
+    const io = window.IntersectionObserver ? new IntersectionObserver((es) => { seen = es[es.length - 1].isIntersecting; }) : null;
+    if (io) io.observe(el);
+    if (opts.still) requestAnimationFrame(draw); else raf = requestAnimationFrame(loop);
     return {
       update(p = {}) {
         props = { ...props, ...p };
         from = cols; to = ['color1', 'color2', 'color3'].map((k) => rgb(props[k])); fadeAt = performance.now();
         if (opts.still) { fadeAt = 0; from = to; requestAnimationFrame(draw); }
       },
-      destroy() { alive = false; cancelAnimationFrame(raf); if (ro) ro.disconnect(); canvas.remove(); const x = gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); },
+      destroy() { alive = false; cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (io) io.disconnect(); canvas.remove(); const x = gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); },
     };
   }
   window.CassieGradient = { mount, MARBLE };

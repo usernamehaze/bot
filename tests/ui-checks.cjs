@@ -387,6 +387,17 @@ async function tapResponseIssues(page, o) {
     }
     if (!dirty) { try { dirty = (await sig(page)) !== base; } catch (e) { dirty = true; } }
   }
+  // A tap measured slow, or a freeze, is measured twice more (the screen opened afresh each time): it
+  // counts only if it happens in at least 2 of the 3, the typical result. A real slowdown shows up
+  // every time; a one-off hiccup of this (graphics-chip-less) test machine does not.
+  const timing = out.filter((i) => i.cause === 'slow' || i.cause === 'blocked');
+  if (timing.length && o.reopen && !o.recheck) {
+    const keys = new Set(timing.map((i) => i.key)), again = [];
+    for (let k = 0; k < 2; k++) {
+      try { page = await o.reopen(); again.push(await tapResponseIssues(page, { ...o, only: keys, recheck: true })); } catch (e) { again.push(timing); }
+    }
+    return out.filter((i) => !timing.includes(i) || again.filter((r) => r.some((j) => j.key === i.key && j.cause === i.cause)).length >= 1);
+  }
   return out;
 }
 

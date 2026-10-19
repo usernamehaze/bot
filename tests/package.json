@@ -3,7 +3,8 @@
   "private": true,
   "description": "Opens Cassie in a real browser and checks the main features still work.",
   "scripts": {
-    "test": "node smoke.cjs"
+    "test": "node smoke.cjs",
+    "test:fast": "SUITE=fast node smoke.cjs"
   },
   "devDependencies": {
     "playwright": "1.56.1"

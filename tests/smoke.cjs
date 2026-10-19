@@ -158,6 +158,8 @@ function expect(cond, msg) { if (!cond) throw new Error(msg); }
 /* ---------- the tests ---------- */
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
+// the slowest tests (40 seconds or more each): the full suite runs them, the fast one (SUITE=fast) skips them
+test.slow = (name, fn) => tests.push({ name, fn, slow: true });
 
 // the first run: past Welcome and Intro to the sign-in page
 async function toSignIn(page) {
@@ -1506,6 +1508,40 @@ test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when
   } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
 });
 
+test('the landing page’s moving background: it doesn’t measure the page every frame, and stops drawing once scrolled out of sight (a jump down the page froze for about 100 ms)', async (b) => {
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const page = await ctx.newPage();
+  // count the background's frames, and every time its box is measured
+  await page.addInitScript(() => {
+    window.__bg = { draws: 0, reads: 0 };
+    for (const P of [window.WebGLRenderingContext, window.WebGL2RenderingContext].filter(Boolean)) {
+      const d = P.prototype.drawArrays;
+      P.prototype.drawArrays = function (...a) { if (this.canvas.parentElement && this.canvas.parentElement.id === 'hero-bg') window.__bg.draws++; return d.apply(this, a); };
+    }
+    for (const k of ['clientWidth', 'clientHeight']) {
+      const g = Object.getOwnPropertyDescriptor(Element.prototype, k).get;
+      Object.defineProperty(Element.prototype, k, { configurable: true, get() { if (this.id === 'hero-bg') window.__bg.reads++; return g.call(this); } });
+    }
+  });
+  await page.goto(APP.replace('app.html', 'index.html'));
+  await page.waitForFunction(() => window.__bg.draws > 3, null, { timeout: 15000 });
+  const a = await page.evaluate(() => ({ ...window.__bg }));
+  await page.waitForTimeout(1500);
+  const c = await page.evaluate(() => ({ ...window.__bg }));
+  expect(c.draws - a.draws >= 5, 'the background moves while on screen: ' + JSON.stringify([a, c]));
+  expect(c.reads - a.reads <= 2, 'its box isn’t measured every frame: ' + JSON.stringify([a, c]));
+  await page.locator('.nav a', { hasText: 'FAQ' }).first().click();
+  await page.waitForTimeout(800);
+  const d = await page.evaluate(() => ({ ...window.__bg }));
+  await page.waitForTimeout(1500);
+  const e = await page.evaluate(() => ({ ...window.__bg }));
+  expect(e.draws - d.draws <= 1, 'scrolled out of sight, it stops drawing: ' + JSON.stringify([d, e]));
+  await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(1500);
+  const f = await page.evaluate(() => ({ ...window.__bg }));
+  expect(f.draws - e.draws >= 5, 'back in sight, it moves again: ' + JSON.stringify([e, f]));
+  await ctx.close();
+});
+
 test('the Chrome extension: its button sits beside Open Cassie on computers (none on phones), every download link carries the extension’s version, the built zip is that version, and an old copy is told a new one is ready', async (b) => {
   const extver = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8')).version;
   // the build: the zip on the site is the extension as it is now, and extension-version.json says so
@@ -2713,7 +2749,7 @@ test('the web app has no pop-out (it lives in the Chrome extension)', async (b) 
 // a click in the 3D view never navigates: don't wait for a navigation on a page busy drawing 3D
 // (where the 3D is drawn in software, that wait timed out)
 const NO_NAV = { noWaitAfter: true };
-test('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
+test.slow('Explore 3D: turn a cell, tap a part, ask Cassie about it, then quiz on the plant cell', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'The Golgi apparatus packages proteins, like a post office.' }) });
   await open3d(page, 'cells3d');
   await page.waitForSelector('.x3d:not([hidden])', { timeout: 20000 });
@@ -2840,7 +2876,7 @@ test('every stylesheet is whole: its braces balance and no rule is cut off (a br
   }
 });
 
-test('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
+test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when there is enough left; too little left types with one line; Bella failing midway types the rest; the device voice is never used; no Keep going anywhere; Settings says when she is back', async (b) => {
   const LONG = Array.from({ length: 12 }, (_, i) => `Sentence ${i + 1} says mitochondria turn food into energy the cell can use.`).join(' ');
   const steps = Array.from({ length: 7 }, (_, i) => ({ say: `Step ${i + 1} is here.`, point: 0 }));
   const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }];
@@ -3007,7 +3043,7 @@ async function walkTour(page, where) {
   return visited;
 }
 const tourGone = (page) => page.evaluate(() => !document.querySelector('.tour-card, .tour-ring, .tour-veil, .tour-offer') && !document.documentElement.classList.contains('touring') && getComputedStyle(document.getElementById('cassie-cursor')).display === 'none');
-test('the tour: offered once after the first run (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
+test.slow('the tour: offered once after the first run (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
   const PHONE = ['ask', 'quiz', 'talk', 'home', 'labs', 'games', 'cards', 'board', 'about', 'settings'];
   // 1. a guest on a phone: the first run, then "a quick tour?" once
   let { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, state: null });
@@ -3254,7 +3290,7 @@ function micLooksRight(where, r) {
   expect(!r.after.line.some((t) => /[–—]/.test(t)) && !r.after.sideways, `${where}: no dashes, nothing off screen: ` + JSON.stringify(r.after));
 }
 
-test('a mic on every box where a student writes to Cassie (app, Labs, the board): heard words fill the box as they come; ask boxes send and writing boxes keep the words to edit; not allowed or no speech: one plain line, or no mic, and typing still works; the chat’s own mic still works; 44px, monochrome, no dashes, nothing off screen at 1280x800, 390x844 and 360x740', async (b) => {
+test.slow('a mic on every box where a student writes to Cassie (app, Labs, the board): heard words fill the box as they come; ask boxes send and writing boxes keep the words to edit; not allowed or no speech: one plain line, or no mic, and typing still works; the chat’s own mic still works; 44px, monochrome, no dashes, nothing off screen at 1280x800, 390x844 and 360x740', async (b) => {
   const fakeGroq = () => ({ text: 'Plants make food from light, water and carbon dioxide.' });
   const reset = async (page) => { await page.goto(APP); await page.waitForSelector('#prompt-input', { timeout: 10000 }); };
   // The boxes, every one: a missing mic fails here. ask: it sends what was said (seen in what reached Cassie)
@@ -3870,7 +3906,7 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
   await ctx.close();
 });
 
-test('Explore cells are their own view: own card on the Labs shelf and in 3D, Animal or Plant inside it, opened straight away (never through the body)', async (b) => {
+test.slow('Explore cells are their own view: own card on the Labs shelf and in 3D, Animal or Plant inside it, opened straight away (never through the body)', async (b) => {
   const { ctx, page, errors } = await open(b, { device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */, scale: 1, server: false, state: { groqKey: 'gsk_test' }, setup: async (c) => {
     // anything of the body: its model files, or the 3D view turning into the body for a moment
     await c.addInitScript(() => {
@@ -3913,7 +3949,7 @@ test('Explore cells are their own view: own card on the Labs shelf and in 3D, An
   await ctx.close();
 });
 
-test('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
+test.slow('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
   await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
@@ -3992,7 +4028,7 @@ test('Explore 3D: the human body — 10 systems, tap or find a part to learn wha
   await ctx.close();
 });
 
-test('Body 3D: eyes on both bodies (tap one for its card), and the girl has long hair and her own shape', async (b) => {
+test.slow('Body 3D: eyes on both bodies (tap one for its card), and the girl has long hair and her own shape', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' } });
   const dir = process.env.SHOTS || '';
   await open3d(page, 'body3d');
@@ -4062,7 +4098,7 @@ test('Body 3D: eyes on both bodies (tap one for its card), and the girl has long
   await ctx.close();
 });
 
-test('Explore 3D body like an atlas: Front/Back/Side views, spread every piece apart and back, structure count, which-way letters', async (b) => {
+test.slow('Explore 3D body like an atlas: Front/Back/Side views, spread every piece apart and back, structure count, which-way letters', async (b) => {
   const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
   await open3d(page, 'body3d');
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
@@ -4162,7 +4198,7 @@ test('score board: everyone’s points in every game and their total, today and 
   await ctx.close();
 });
 
-test('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sends what is on screen', async (b) => {
+test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassie sends what is on screen', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Desktop Chrome' /* (the Labs shelf: a computer's; a phone has the Labs tab) */, fakeGroq: () => ({ text: 'At 45 degrees the ball goes farthest because the speed is split evenly between up and forward.' }) });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   await tapLabs(page);
@@ -4650,7 +4686,7 @@ test('Plus extras: a free student sees the diagram, and Real 3D, the Museum quiz
   await ctx.close();
 });
 
-test('All 3D on Free: the cells, the body, the solar system and the globe open twice a week each, then say how to get Plus', async (b) => {
+test.slow('All 3D on Free: the cells, the body, the solar system and the globe open twice a week each, then say how to get Plus', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', plan: null } });
   const plusSays = async (what) => {
     await page.waitForSelector('.plus-sheet', { timeout: 8000 });
@@ -4761,7 +4797,7 @@ test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the e
   }
 });
 
-test('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
+test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
     const u = body.messages.filter((m) => m.role === 'user').map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
@@ -4905,7 +4941,7 @@ test('iPhone: the Solar System has no Teach me, Ask Cassie or Quiz me, Back alwa
   await ctx.close();
 });
 
-test('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom the whole page), in the chat, Labs, every lab, the tutor and the 3D explorer', async (b) => {
+test.slow('iPhone: every box you type in is at least 16px (smaller makes iPhones zoom the whole page), in the chat, Labs, every lab, the tutor and the 3D explorer', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', scale: 1, state: { groqKey: 'gsk_test' } }); /* (1x pixels: font sizes don't change with them, and 3D at 3x is slow here) */
   expect(await page.evaluate(() => innerWidth) === 390, '390px wide');
   const small = new Set();
@@ -5399,7 +5435,7 @@ test('Labs 3D: the atom’s particle tray stays still when the view turns, and z
   await ctx.close();
 });
 
-test('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket, look up Japan and a place; pour, drag particles and disks', async (b) => {
+test.slow('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D rocket, look up Japan and a place; pour, drag particles and disks', async (b) => {
   const { ctx, page, errors } = await open(b, { scale: 1, server: false, state: { groqKey: 'gsk_test' }, device: process.env.DEVICE || 'Pixel 7' });
   const shot = (n) => process.env.SHOTS && page.screenshot({ path: process.env.SHOTS + '/' + n + '.png' });
   // space: the planets, then the Local Group (the real maps and stars arrive, and every shader compiles)
@@ -5966,7 +6002,7 @@ test('highlight text in an answer → Explain; switched off, highlighting is jus
   await ctx.close();
 });
 
-test('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of icons or the full sidebar on a computer, the menu on a phone), Search, the highlight switch, and Ideas to get started points there', async (b) => {
+test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail of icons or the full sidebar on a computer, the menu on a phone), Search, the highlight switch, and Ideas to get started points there', async (b) => {
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
   // ---- a computer ----
@@ -6627,7 +6663,7 @@ test('first run on a phone: with the keyboard open, the first-run screen still c
   await ctx.close();
 });
 
-test('first run screens: every word at AA in light and dark, every control answers a tap, and nothing spills sideways, at 390x844, 768x1024 and 1280x800', async (b) => {
+test.slow('first run screens: every word at AA in light and dark, every control answers a tap, and nothing spills sideways, at 390x844, 768x1024 and 1280x800', async (b) => {
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const STEPS = [['intro', { step: 'intro' }, '.fr-intro'], ['sign in', { step: 'auth' }, '.auth-page'], ...[0, 1, 2, 3].map((k) => [`question ${k + 1}`, { step: 'ob', at: k, answers: { name: 'Hazel', gender: 'female', grade: 'Grade 10', age: '15', help: ['exams'], voice: 'woman' } }, '.fr-ob'])];
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['768x1024', 'iPad Mini', { width: 768, height: 1024 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -6655,7 +6691,7 @@ test('first run screens: every word at AA in light and dark, every control answe
   }
 });
 
-test('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is picked, and Home’s boxes each open their feature (390x844, 1280x800)', async (b) => {
+test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage is picked, and Home’s boxes each open their feature (390x844, 1280x800)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const tok = (page) => page.evaluate(() => { const st = getComputedStyle(document.documentElement); return Object.fromEntries(['--bg', '--surface', '--text', '--primary', '--on-primary'].map((k) => [k, st.getPropertyValue(k).trim().toLowerCase()])); });
   // a new student, a boy and a girl, and someone from before the change (accent ''): Monochrome
@@ -6949,7 +6985,7 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     await ctx.close();
   }
 });
-test('Home, You, Settings and Plans: the new and the returning home, every setting under its old key, search, drill-in pages with Back, and plans with no payment; contrast and taps at 390x844 and 1280x800', async (b) => {
+test.slow('Home, You, Settings and Plans: the new and the returning home, every setting under its old key, search, drill-in pages with Back, and plans with no payment; contrast and taps at 390x844 and 1280x800', async (b) => {
   const { contrastIssues, tapResponseIssues } = require('./ui-checks.cjs');
   const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -7213,7 +7249,7 @@ const TAP_SCREENS = [
   }, { server: true }],
   ['Talk with Cassie', async (page) => { await studioOn(page); await page.evaluate(() => openVoice('chat')); await page.waitForSelector('.vc:not([hidden])', { timeout: 8000 }); await page.waitForFunction(() => voiceChat && voiceChat.phase !== 'speaking', null, { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(800); }],
 ];
-test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
+test.slow('every screen at 390x844, 360x740 and 1280x800: every button can be tapped (44px, on screen, not under the tab bar, not cut off)', async (b) => {
   const { tapTargetIssues } = require('./ui-checks.cjs');
   const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
   const bad = [];
@@ -7256,7 +7292,7 @@ test('every screen at 390x844, 360x740 and 1280x800: every button can be tapped 
 // Every control on every screen and in every lab, tapped for real on a phone (390x844, a finger) and a
 // computer (1280x800, a mouse): the tap reaches it and something visibly responds within 100 ms.
 const RESPONSE_SIZES = [['phone 390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['computer 1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]];
-test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), every lab with TAP_SWEEP=all: a tap reaches it and something visibly responds within 100 ms, with no freeze, no double click and no drag that taps', async (b) => {
+test.slow('every control on every screen at 390x844 (touch) and 1280x800 (mouse), every lab with TAP_SWEEP=all: a tap reaches it and something visibly responds within 100 ms, with no freeze, no double click and no drag that taps', async (b) => {
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const only = process.env.TAP_ONLY ? new RegExp(process.env.TAP_ONLY, 'i') : null;
   const bad = [];
@@ -7339,7 +7375,7 @@ test('every control on every screen at 390x844 (touch) and 1280x800 (mouse), eve
 
 // A real phone: in the Solar System, after Teach me (or any top-bar button) nothing could be tapped, not
 // even Back. The 3D space labs now have no Teach me, Ask Cassie or Quiz me, as before Teach me existed.
-test('3D space labs: no Teach me, Ask Cassie or Quiz me; every control takes taps and Back goes to the shelf (390x844, 360x740, 1280x800)', async (b) => {
+test.slow('3D space labs: no Teach me, Ask Cassie or Quiz me; every control takes taps and Back goes to the shelf (390x844, 360x740, 1280x800)', async (b) => {
   const { tapResponseIssues } = require('./ui-checks.cjs');
   const bad = [];
   for (const [size, device, viewport, touch] of [['390x844', 'iPhone 13', { width: 390, height: 844 }, true], ['360x740', 'Pixel 7', { width: 360, height: 740 }, true], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, false]]) {
@@ -8052,20 +8088,35 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
     return browser;
   };
   const only = process.argv[2];
-  let failed = 0;
+  // SUITE=fast (before every deploy): every test but the slowest; ALSO="a|b" adds slow ones by name
+  // (the ones for what just changed). The full suite (no SUITE) runs every test: nightly, in CI.
+  const fast = process.env.SUITE === 'fast', also = process.env.ALSO ? process.env.ALSO.split('|') : [];
+  // the test browser itself giving out (this machine has no graphics chip and little memory) isn't the
+  // app's fault: that test runs once more in a new browser, and fails only if it gives out again
+  const browserGaveOut = (e) => /Target page, context or browser has been closed|browser has disconnected|Browser closed|Target crashed|Page crashed/i.test(String(e && e.message || e));
+  let failed = 0, skipped = 0;
   for (const t of tests) {
     if (only && !t.name.includes(only)) continue;
-    const browser = await launch();
+    if (fast && t.slow && !only && !also.some((a) => t.name.includes(a))) { skipped++; continue; }
     const t0 = Date.now(); // (TIMES=1 prints how long each test takes)
-    try {
-      cspViolations.length = 0;
-      await t.fn(browser);
-      if (cspViolations.length) throw new Error('blocked by the security policy: ' + [...new Set(cspViolations)].join(' | '));
-      console.log('PASS', t.name + (process.env.TIMES ? ` [${Math.round((Date.now() - t0) / 1000)}s]` : ''));
+    for (let attempt = 1; ; attempt++) {
+      const browser = await launch();
+      try {
+        cspViolations.length = 0;
+        await t.fn(browser);
+        if (cspViolations.length) throw new Error('blocked by the security policy: ' + [...new Set(cspViolations)].join(' | '));
+        console.log('PASS', t.name + (attempt > 1 ? ' (after the test browser gave out once)' : '') + (process.env.TIMES ? ` [${Math.round((Date.now() - t0) / 1000)}s]` : ''));
+        break;
+      }
+      catch (e) {
+        if (attempt === 1 && browserGaveOut(e)) { console.log('RETRY', t.name, '(the test browser gave out; once more in a new one)'); continue; }
+        failed += 1; console.log('FAIL', t.name, '\n     ', (process.env.VERBOSE && e && e.stack ? e.stack : (e && e.message || e)).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n'));
+        break;
+      }
+      finally { await browser.close().catch(() => {}); }
     }
-    catch (e) { failed += 1; console.log('FAIL', t.name, '\n     ', (process.env.VERBOSE && e && e.stack ? e.stack : (e && e.message || e)).toString().split('\n').slice(0, process.env.VERBOSE ? 30 : 1).join('\n')); }
-    finally { await browser.close().catch(() => {}); }
   }
+  if (skipped) console.log(`\n(the fast suite: ${skipped} slow tests skipped; the full suite runs them)`);
   await server.close(); app.close();
   console.log(failed ? `\n${failed} failed` : '\nAll passed');
   process.exit(failed ? 1 : 0);
