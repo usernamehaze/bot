@@ -31,8 +31,6 @@ const ASSETS = [
   'cite.js',
   'voice.js',
   'manifest.json',
-  'patterns/student.svg',
-  'patterns/pro.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
 ];
