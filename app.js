@@ -2126,7 +2126,7 @@ async function shareWeek(w) {
     x.font = '500 40px system-ui, sans-serif'; x.fillText(avg != null ? `${label}, ${avg}% right` : label, 300, y - 28);
     x.fillStyle = '#55555c'; x.font = '400 32px system-ui, sans-serif'; x.fillText(`last week ${w.last[k]}`, 300, y + 18);
   });
-  x.fillStyle = '#141416'; x.font = '600 34px system-ui, sans-serif'; x.fillText('askcassie.pages.dev', 80, 1270);
+  x.fillStyle = '#141416'; x.font = '600 34px system-ui, sans-serif'; x.fillText('askcassie.study', 80, 1270);
   const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
   if (!blob) return;
   const file = new File([blob], 'my-week-with-cassie.png', { type: 'image/png' });

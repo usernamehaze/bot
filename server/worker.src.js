@@ -52,7 +52,7 @@
  *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
- *                    (default: askcassie.pages.dev, usernamehaze.github.io, localhost)
+ *                    (default: askcassie.study, askcassie.pages.dev, usernamehaze.github.io, localhost)
  * Days are counted in Philippine time (UTC+8).
  */
 
@@ -71,7 +71,7 @@ function studentWords(messages) {
 // counted with nothing else: no words, no id
 const countCare = (env, ctx) => ctx.waitUntil(countChat(env, dayOf(Date.now()), 'care').catch(() => {}));
 
-const DEFAULT_ORIGINS = ['https://askcassie.pages.dev', 'https://usernamehaze.github.io', 'http://localhost'];
+const DEFAULT_ORIGINS = ['https://askcassie.study', 'https://www.askcassie.study', 'https://askcassie.pages.dev', 'https://usernamehaze.github.io', 'http://localhost'];
 const EVENTS = new Set(['open', 'feature', 'signup']);
 
 const SCHEMA = [
@@ -584,7 +584,7 @@ async function ask(request, env, ctx) {
   if (care) { countCare(env, ctx); return out(Care.reply(care.lang)); }
   const used = await countUse(env.DB, 'a:' + ip, today);
   const limit = +env.ASK_LIMIT || 40;
-  if (used > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.pages.dev`, 429);
+  if (used > limit) return out(`That's today's ${limit} quick answers from this network. Open Cassie for more: askcassie.study`, 429);
   const messages = [{ role: 'system', content: ASK_SYSTEM }, { role: 'user', content: text }];
   let reply = null, src = 'shortcut';
   if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }, 'haiku'); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
@@ -602,7 +602,7 @@ async function ask(request, env, ctx) {
   if (flagged) { countCare(env, ctx); return out(Care.reply(Care.langOf(text), flagged.aiWords)); }
   if (!reply) { ctx.waitUntil(logProblem(env, 'iPhone Shortcut', 'no AI answered')); return out('Cassie is very busy right now. Try again in a minute.', 503); }
   ctx.waitUntil(countChat(env, today, src));
-  return out(`${plainText(reply)}\n\nCassie · askcassie.pages.dev`);
+  return out(`${plainText(reply)}\n\nCassie · askcassie.study`);
 }
 
 async function chat(request, env, ctx) {

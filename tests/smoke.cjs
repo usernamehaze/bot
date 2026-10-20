@@ -358,11 +358,31 @@ const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
 // Google sends the student back only to addresses listed under "Authorized redirect URIs" for the
 // OAuth client in Google Cloud Console, exactly. These are the ones registered there (server/README.md):
 // change the app's return address and this list (and the console) together.
-const GOOGLE_REDIRECT_URIS = ['https://askcassie.pages.dev/app.html', 'https://usernamehaze.github.io/bot/app.html'];
+const GOOGLE_REDIRECT_URIS = ['https://askcassie.study/app.html', 'https://askcassie.pages.dev/app.html', 'https://usernamehaze.github.io/bot/app.html'];
+test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites, the extension opens it and talks to it, and what Cassie shares names it', async () => {
+  const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href)).default;
+  for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', true], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
+    const r = await w.fetch(new Request('https://cassie.failanzahazel.workers.dev/chat', { method: 'OPTIONS', headers: { origin: o } }), {}, { waitUntil() {} });
+    expect((r.headers.get('access-control-allow-origin') === o) === ok, `the server ${ok ? 'lets' : 'doesn’t let'} ${o} use it: ` + r.headers.get('access-control-allow-origin'));
+  }
+  const man = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(man.homepage_url === 'https://askcassie.study/', 'the extension’s home page: ' + man.homepage_url);
+  const bridge = man.content_scripts.find((c) => c.js.includes('bridge.js'));
+  for (const m of ['https://askcassie.study/*', 'https://www.askcassie.study/*', 'https://askcassie.pages.dev/*']) expect(bridge.matches.includes(m), 'the extension talks to Cassie on ' + m + ': ' + bridge.matches);
+  const bg = fs.readFileSync(path.join(ROOT, 'extension/background.js'), 'utf8');
+  expect(/CASSIE_APP_URL = 'https:\/\/askcassie\.study\/app\.html'/.test(bg) && /'https:\/\/askcassie\.study\/extension-version\.json'/.test(bg), 'the extension opens askcassie.study and checks it for updates');
+  const pop = fs.readFileSync(path.join(ROOT, 'extension/popup.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'extension/popup.html'), 'utf8');
+  expect(!/askcassie\.pages\.dev/.test(pop), 'the extension’s download link is on askcassie.study');
+  for (const f of ['app.js', 'bot.html', 'server/worker.src.js']) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/DEFAULT_ORIGINS = \[[^\]]*\]/, '').replace(/\(default: [^)]*\)/g, '');
+    expect(!/askcassie\.pages\.dev/.test(src), f + ' names askcassie.study, not askcassie.pages.dev');
+  }
+});
+
 test('sign in with Google: the return address sent to Google is one registered in Google Cloud, on every site Cassie runs on', async (b) => {
   await serverMode({ noGoogle: false, noApple: false });
   // each site, served from this folder at its real address (Cloudflare Pages serves the app at /app)
-  const SITES = [['Cloudflare Pages', 'https://askcassie.pages.dev', '', '/app'], ['GitHub Pages', 'https://usernamehaze.github.io', '/bot', '/bot/app.html']];
+  const SITES = [['askcassie.study', 'https://askcassie.study', '', '/app'], ['Cloudflare Pages', 'https://askcassie.pages.dev', '', '/app'], ['GitHub Pages', 'https://usernamehaze.github.io', '/bot', '/bot/app.html']];
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' };
   for (const [name, origin, base, start] of SITES) {
     const { ctx, page, errors } = await open(b, { state: null, setup: async (c) => {
@@ -823,7 +843,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
     'schemas.openxmlformats.org': 'names inside Word and PowerPoint files', 'www.w3.org': 'SVG and XML names',
-    'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
+    'askcassie.study': 'Cassie’s own site', 'www.askcassie.study': 'Cassie’s own site', 'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
     'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
     'commons.wikimedia.org': 'a link the student taps (where a museum picture comes from; the pictures are kept in the app)',
     'epa.culturalcenter.gov.ph': 'a museum picture’s credit link', '21am.culturalcenter.gov.ph': 'a museum picture’s credit link', 'salcedoauctions.com': 'a museum picture’s credit link', 'www.artandmarket.net': 'a museum picture’s credit link',

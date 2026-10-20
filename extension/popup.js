@@ -6,7 +6,7 @@ try { document.getElementById('version').textContent = 'Cassie extension v' + ch
 try {
   chrome.runtime.sendMessage({ type: 'CASSIE_UPDATE_CHECK' }).then((r) => {
     if (!r?.newer) return;
-    document.getElementById('update-get').href = 'https://askcassie.pages.dev/cassie-extension.zip?v=' + r.latest;
+    document.getElementById('update-get').href = 'https://askcassie.study/cassie-extension.zip?v=' + r.latest;
     document.getElementById('update-note').hidden = false;
   }, () => {});
 } catch (e) { /* ignore */ }
