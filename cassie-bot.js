@@ -391,6 +391,7 @@
       setAccent(hex) { if (/^#[0-9a-f]{3,8}$/i.test(hex || '')) { accent = hex; paintAccent(); shown.fx = ''; stale = true; setFx(st.effect || ''); if (deep) deep.changed(); } },
       get accent() { return accent; },
       pause(on = true) { paused = !!on; if (deep) deep.pause(paused); },
+      render() { frame(clock()); }, // draw her now
       poke() { const back = stateName === 'poke' ? 'idle' : stateName; api.setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => api.setState(back), 950); },
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
       destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); if (deep) deep.destroy(); },
