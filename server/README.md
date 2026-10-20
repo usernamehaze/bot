@@ -195,7 +195,9 @@ Optional variables (type **Text**):
 - `ELEVENLABS_VOICE_WOMAN` / `ELEVENLABS_VOICE_MAN`: voice IDs from your ElevenLabs
   voice library (defaults: Sarah and George).
 - `ELEVENLABS_MODEL`: default `eleven_flash_v2_5` (fast, and about half the credits of
-  the top model).
+  the top model). For ElevenLabs' newest, most natural voices use `eleven_v4_turbo` (made for
+  talking back and forth) or `eleven_v4` (the most expressive, a little slower). They cost
+  more credits a character than Flash. With v4, the man's voice leaves out "style" (v4 has none).
 
 **Cost:** ElevenLabs charges by the character. The same words (a flashcard, a quiz
 question) are remembered for 30 days, so they're only paid for once. Check current plans
