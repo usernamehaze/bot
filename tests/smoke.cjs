@@ -7219,7 +7219,9 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
       for (const scheme of ['light', 'dark']) {
         await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350);
         if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/appearance-${size}-${pick.replace('#', '') || 'cassie'}-${scheme}.png` });
-        const got = await colours();
+        // (until the colours stop changing: a busy machine can still be fading a button to the new scheme)
+        let got = await colours();
+        for (let k = 0; k < 12; k++) { await page.waitForTimeout(150); const again = await colours(); if (JSON.stringify(again) === JSON.stringify(got)) break; got = again; }
         for (const [k, v] of Object.entries(got)) {
           if (!v) { expect(k === 'open tab' && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; }
           const bg = hex(v.bg), fg = hex(v.fg);
