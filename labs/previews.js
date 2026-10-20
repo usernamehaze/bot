@@ -285,7 +285,6 @@ const mixCtx = document.createElement('canvas').getContext('2d');
 function mixA(col, a) { mixCtx.fillStyle = '#000'; mixCtx.fillStyle = col; const v = mixCtx.fillStyle; if (v[0] === '#') { const n = parseInt(v.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; } return v.replace(/rgba?\(([^)]+)\)/, (m, inner) => `rgba(${inner.split(',').slice(0, 3).join(',')},${a})`); }
 
 export const PREVIEW_IDS = Object.keys(P);
-export const hasPreview = (id) => !!P[id];
 
 // the 3D scenes (Plus and Pro), loaded once, only when asked for
 let P3 = null, p3 = null;

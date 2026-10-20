@@ -289,15 +289,6 @@ function applyReading() {
   appEl.setAttribute('data-easyread', state.easyRead ? 'on' : 'off');
 }
 
-// Favorite-colour theming: when the user picks a colour, it becomes --accent
-// and every accent-aware element (buttons, highlights, the board) adopts it.
-// Empty = Cassie's own colours (the default). Readable text colour is auto-picked.
-function accentInk(hex) {
-  const c = String(hex).replace('#', '');
-  if (c.length !== 6) return '#ffffff';
-  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#111111' : '#ffffff';
-}
 // Cassie's colours follow the profile: blush leads for a girl (and when it isn't said), sage
 // leads for a boy (style.css: html[data-pal="sage"]). A colour picked in Appearance wins over both.
 function palette() { return state.profile && state.profile.gender === 'male' ? 'sage' : 'blush'; }

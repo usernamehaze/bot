@@ -41,9 +41,15 @@ function setup() {
     if (i) shape.lineTo(X(ax), Y(ay)); else shape.moveTo(X(ax), Y(ay));
     shape.quadraticCurveTo(X(x), Y(y), X(bx), Y(by));
   });
-  const body = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: true, bevelThickness: 0.28, bevelSize: 0.14, bevelSegments: 14, curveSegments: 20 });
-  body.translate(0, 0, -0.03);
-  body.computeVertexNormals();
+  // (built in one of the quiet steps below: a deep round bevel is tens of milliseconds of work, and the
+  // first Cassie often comes into view right after a tap, a jump down the page; her parts use this one)
+  const body = new THREE.BufferGeometry();
+  const buildBody = () => {
+    const g = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: true, bevelThickness: 0.28, bevelSize: 0.14, bevelSegments: 14, curveSegments: 20 });
+    g.translate(0, 0, -0.03);
+    g.computeVertexNormals();
+    body.copy(g); g.dispose();
+  };
   const FRONT = 0.03 + 0.28; // her front face (z)
   // one kind of material for every part (one shader to build, so she's ready fast): a soft plastic
   // sheen, every part carrying a picture (plain parts a white one)
@@ -62,6 +68,7 @@ function setup() {
     scene.remove(m);
   };
   const steps = [
+    buildBody,
     () => {
       renderer = R.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' }); // (each picture is copied out in the same moment it's drawn)
       renderer.setPixelRatio(1);

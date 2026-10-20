@@ -298,7 +298,20 @@ function readout() {
   const r = { all: tw.all.slice(), gl, work, t0: tw.t0, change: tw.change, paint: tw.paint, what: tw.what, clicks: tw.clicks, longs: tw.longs.filter(([s, d]) => tw.t0 && s >= tw.t0 - 5 && s < tw.t0 + 1000 && d > 100).map(([, d]) => Math.round(d)) }; tw.armed = null; return r;
 }
 
-// o: { reopen: async () => page (the screen opened fresh), touch: bool, cdp: for touch drags, skip: RegExp of names not to tap }
+// a screen opened afresh, finished loading: no long work for 400 ms (at most 4 s). Its own first frames
+// are the page loading, not a tap being answered: on this machine (no graphics chip) a moving 3D
+// background's first frames are copied back by hand, a 140 ms freeze no phone or computer has.
+function settled() {
+  return new Promise((done) => {
+    let last = performance.now();
+    try { new PerformanceObserver((l) => l.getEntries().forEach((e) => { last = Math.max(last, e.startTime + e.duration); })).observe({ type: 'longtask', buffered: true }); } catch (e) { /* no long task timing */ }
+    const t0 = performance.now();
+    const check = () => (document.readyState === 'complete' && performance.now() - last > 400) || performance.now() - t0 > 4000 ? done() : setTimeout(check, 50);
+    check();
+  });
+}
+// o: { reopen: async () => page (the screen opened fresh), touch: bool, cdp: for touch drags, skip: RegExp of names not to tap,
+//      settle: wait for a reopened screen to finish loading before the next tap (a page with heavy first frames) }
 async function tapResponseIssues(page, o) {
   const out = [];
   // a file picker, a download or a new tab opening is the tap answering too (they are not in the page)
@@ -328,7 +341,7 @@ async function tapResponseIssues(page, o) {
     if (o.skip && o.skip.test(c.name)) continue;
     // a sheet or card the tap opened usually closes with Escape: much quicker than opening the screen again
     if (dirty && !page.isClosed()) { try { await page.keyboard.press('Escape'); await page.waitForTimeout(250); if ((await sig(page)) === base) dirty = false; } catch (e) { /* open it again */ } }
-    if (dirty) { const was = page; page = await o.reopen(); if (page !== was) watch(page); await page.evaluate(installTapWatch); await learnSteady(page, steadyKeys); base = await sig(page); dirty = false; }
+    if (dirty) { const was = page; page = await o.reopen(); if (page !== was) watch(page); if (o.settle) await page.evaluate(settled); await page.evaluate(installTapWatch); await learnSteady(page, steadyKeys); base = await sig(page); dirty = false; }
     let a;
     try { a = await page.evaluate(aim, c.key); } catch (e) { dirty = true; continue; }
     if (!a || a.behind) continue; // (gone: this screen has changed by itself; or under a sheet)
