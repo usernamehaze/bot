@@ -46,4 +46,3 @@ removed in the code cleanup; they're still in the git history if ever needed
   the 3D solar system. `node promo/hero/devices.cjs` (site served at :4650) takes them again, then
   `python3 promo/hero/devices.py` turns them into `landing/hero/lx-*.webp`. If the Labs shelf changes,
   check where the Human body and Solar system cards are (story.js taps them at y 395 and 568).
-  `hero/capture.cjs` takes the older chat, Space and Body screens.

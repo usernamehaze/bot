@@ -163,7 +163,7 @@ renderHistory();
 /* ---------- side panel ---------- */
 document.getElementById('open-panel')?.addEventListener('click', () => {
   chrome.windows.getCurrent((w) => {
-    try { chrome.sidePanel.open({ windowId: w.id }).then(() => window.close(), () => {}); } catch (e) { /* older Chrome */ }
+    chrome.sidePanel.open({ windowId: w.id }).then(() => window.close(), () => {});
   });
 });
 

@@ -51,9 +51,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first for our own files: always fetch the latest when online (so
-// code updates land immediately), falling back to cache only when offline.
-// Cross-origin requests (e.g. the Gemini API) are left untouched.
 // Android "Share → Cassie" (manifest share_target): keep what was shared, then open the app.
 // The app picks it up from this cache and asks "What should I do with this?".
 self.addEventListener('fetch', (event) => {
@@ -75,6 +72,9 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
+// Network-first for our own files: always fetch the latest when online (so
+// code updates land immediately), falling back to cache only when offline.
+// Cross-origin requests (e.g. the Gemini API) are left untouched.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
