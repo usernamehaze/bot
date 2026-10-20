@@ -2323,7 +2323,14 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
   const file = await dl;
   expect(file.suggestedFilename() === 'my-week-with-cassie.png', 'the week as a picture: ' + file.suggestedFilename());
   // (the moving background takes 0.7 s to fade to the new colors: on a busy machine 0.8 s caught it halfway, too light behind dark mode's grey words)
-  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1600); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#chat-log .hub-week, #chat-log .hub-exam'); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | ')); }
+  // (each card in the middle of the screen: one scrolled up under the see-through top bar is half covered, not unreadable)
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1600);
+    for (const sel of ['#chat-log .hub-week', '#chat-log .hub-exam']) {
+      await page.evaluate((s) => document.querySelector(s).scrollIntoView({ block: 'center', behavior: 'instant' }), sel); await page.waitForTimeout(200);
+      const { bad } = await require('./ui-checks.cjs').contrastIssues(page, sel); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | '));
+    }
+  }
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the three sizes: nothing spills off the screen, every control on it is 44px
