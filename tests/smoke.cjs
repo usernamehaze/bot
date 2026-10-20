@@ -359,6 +359,16 @@ const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
 // OAuth client in Google Cloud Console, exactly. These are the ones registered there (server/README.md):
 // change the app's return address and this list (and the console) together.
 const GOOGLE_REDIRECT_URIS = ['https://askcassie.study/app.html', 'https://askcassie.pages.dev/app.html', 'https://usernamehaze.github.io/bot/app.html'];
+test('leftover code stays out: styles for the old phone Home and the old landing sections, and two functions nothing called, aren’t back', async () => {
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8'), landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const gone = (src, names) => names.filter((n) => new RegExp('\\.' + n + '(?![\\w-])').test(src));
+  const back = gone(css, ['home-head', 'home-hi', 'home-round', 'home-avatar', 'home-tiles', 'home-today', 'today-card', 'home-sec', 'home-link', 'recent', 'recent-go', 'home-ask', 'tile', 'chat-empty', 'home-bar', 'hub-head', 'hub-bot-s', 'hub-sub']);
+  expect(!back.length, 'style.css has styles nothing uses again: ' + back.join(', '));
+  const back2 = gone(landing, ['steps', 'step', 'bento', 'span2', 'span3', 'span4', 'span6']).concat(/\.tile\.(v|dark)\b/.test(landing) ? ['tile.v / tile.dark'] : []);
+  expect(!back2.length, 'index.html has styles for sections it no longer has: ' + back2.join(', '));
+  expect(!/function accentInk\b/.test(fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8')) && !/hasPreview/.test(fs.readFileSync(path.join(ROOT, 'labs/previews.js'), 'utf8')), 'accentInk and hasPreview are gone (nothing called them)');
+});
+
 test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites, the extension opens it and talks to it, and what Cassie shares names it', async () => {
   const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href)).default;
   for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', true], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
@@ -1603,7 +1613,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   const { tapResponseIssues } = require('./ui-checks.cjs');
   ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
   const reopen = async () => { await page.goto(APP.replace('app.html', 'index.html')); return page; };
-  const issues = await tapResponseIssues(page, { reopen, touch: false, scope: '.nav' });
+  const issues = await tapResponseIssues(page, { reopen, touch: false, scope: '.nav', settle: true });
   expect(!issues.length, 'the header’s controls answer a tap: ' + JSON.stringify(issues).slice(0, 600));
   await ctx.close();
   // a touch screen wide enough for it: 44px tall; a phone: no extension button
@@ -6521,6 +6531,9 @@ test('3D Cassie: every state and every accessory draws a different 3D picture wi
   const worst = Math.max(t.setup, t.step, t.slowest);
   expect(worst < 300, `her first frame never holds the page up 300ms or more (setup ${Math.round(t.setup)}, steps ${t.steps}, slowest frame ${Math.round(t.slowest)})`);
   expect(t.long < 300, `no long freeze while she starts (longest task ${Math.round(t.long)}ms)`);
+  // (the part that runs the moment she comes into view, often right after a tap that jumps down the page:
+  // her body's rounded 3D shape took about 57 ms there, now it's built in one of the quiet steps)
+  expect(t.setup < 30, `what runs as she comes into view stays small: ${Math.round(t.setup)} ms (her 3D body is built in a quiet step)`);
   if (process.env.TIMES) console.log('    3D Cassie start: ' + JSON.stringify(t));
   // every state and every accessory: the same API as the flat Cassie, and a different picture each time
   // (she's held still, so only the state or the accessory changes the picture)
