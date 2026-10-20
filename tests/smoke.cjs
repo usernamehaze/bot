@@ -716,6 +716,9 @@ test('support.html: the help page the stores link to loads with no errors, every
   const mail = (h) => (h.match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [])[0];
   const privacyMail = mail(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
   expect(privacyMail && (await page.locator(`a[href="mailto:${privacyMail}"]`).count()) === 1, `the contact email is privacy.html's (${privacyMail})`);
+  // (Cassie's own address, the same on every page that gives one)
+  const termsMail = mail(fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
+  expect(privacyMail === 'askcassie.study@gmail.com' && termsMail === privacyMail, `privacy.html and terms.html give Cassie's own email: ${privacyMail}, ${termsMail}`);
   expect(/Report a problem or suggest something/.test(text) && /Report a problem or suggest something/.test(fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8')), 'it names the app’s own Report a problem button');
   // every link on the page (on this site) answers
   const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => h.startsWith(location.origin)));
