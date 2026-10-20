@@ -56,15 +56,16 @@ window.CASSIE_LITE = state.lite === 'on' || ((state.lite || 'auto') === 'auto' &
 document.documentElement.classList.toggle('lite', window.CASSIE_LITE);
 
 
-// Migrate old single-key state (apiKey was the Gemini key) to the new fields.
-if (state.apiKey && !state.geminiKey) { state.geminiKey = state.apiKey; }
+// Migrate old single-key state (apiKey was the Gemini key) to the new fields, then drop it
+// (it's a key: a backup file must never carry it)
+if ('apiKey' in state) { if (state.apiKey && !state.geminiKey) state.geminiKey = state.apiKey; delete state.apiKey; save(); }
 if (state.groqKey === undefined) state.groqKey = '';
 if (!state.groqModel) state.groqModel = 'openai/gpt-oss-120b';
 
 function save() {
   const { messages, ...rest } = state; // `messages` is a runtime alias to the current chat
   try { localStorage.setItem(STORE_KEY, JSON.stringify(rest)); } catch (e) { /* quota */ }
-  if (typeof syncAccount === 'function') syncAccount();
+  syncAccount();
   sideListSoon();
 }
 
@@ -314,7 +315,7 @@ function applyAccent() {
     const set = { '--primary': pick, '--primary-dark': mixHex(pick, '#000000', 0.18), '--on-primary': ink, '--primary-ink': words, '--accent': pick, '--accent-ink': ink, '--lab-accent': pick, '--lab-on-accent': ink };
     Object.entries(set).forEach(([k, v]) => root.style.setProperty(k, v));
   }
-  if (typeof updateBackdrop === 'function') updateBackdrop();
+  updateBackdrop();
 }
 // (light and dark mode differ in the shade that reads as words)
 if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyAccent());
@@ -427,20 +428,13 @@ const mascotBubble = document.getElementById('mascot-bubble');
 let mascotHappyTimer = null;
 let mascotBubbleTimer = null;
 
-// The mascot's moods → Cursor Cassie's states
-const EMOTE_TO_3D = {
-  'emote-happy': 'encouraging', 'emote-love': 'encouraging', 'emote-star': 'celebratory',
-  'emote-surprised': 'curious', 'emote-wink': 'neutral', 'emote-sleepy': 'neutral',
-  'emote-focused': 'thinking', 'emote-cool': 'neutral', 'emote-sad': 'neutral', 'emote-dizzy': 'curious',
-};
 function set3D(name) {
   if (name === 'walk') return; // walking over to an answer keeps her mood (e.g. proud)
-  if (typeof bot2d !== 'undefined' && bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
+  if (bot2d) { clearTimeout(bot2dTimer); bot2d.setState(LOOK_3D_TO_2D[name] || 'idle'); }
 }
 /* ---------- Cursor Cassie (cassie-bot.js): the 2D mascot ----------
-   Cassie's only look.
-   She mirrors the 3D Cassie's moods and adds her own: reading, searching,
-   highlighting, drawing, busy (hourglass), oops (⊘). */
+   Cassie's only look. Her moods (set3D takes the older mood names), plus her own: reading,
+   searching, highlighting, drawing, busy (hourglass), oops (⊘). */
 let bot2d = null, bot2dTimer = null;
 const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
@@ -483,8 +477,7 @@ function botMood(name, ms) {
 })();
 /* ---------- Cassie Island: the top-bar pill that shows what she's doing ----------
    While she works, a dark pill drops from the top bar with a tiny Cursor Cassie
-   and a status line ("Reading pages 3–8…"), says "Done", then tucks itself away.
-   It works with the 3D Cassie and with Cursor Cassie. */
+   and a status line ("Reading pages 3–8…"), says "Done", then tucks itself away. */
 const islandEl = document.getElementById('island');
 let islandBot = null, islandTimer = null, islandBusy = false, islandErrUntil = 0;
 const ISLAND_SAY = { thinking: 'Thinking…', reading: 'Reading your file…', searching: 'Searching…', drawing: 'Drawing…', busy: 'Lots of students: hang on…', highlighting: 'Looking at your highlight…', upload: 'Got your file!', done: 'Done', oops: 'That didn’t work' };
@@ -805,7 +798,7 @@ let taskOutfit = null; // 'graduate' while a Research / Web answer is up; the ne
 function dressCassie() {
   const base = state.audience === 'pro' ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
-  if (typeof bot2d !== 'undefined' && bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
+  if (bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
 }
 
 // Student / Professional switch
@@ -813,7 +806,6 @@ const audSwitch = document.getElementById('aud-switch');
 function renderAudience() {
   if (!audSwitch) return;
   const pro = state.audience === 'pro';
-  document.documentElement.dataset.aud = pro ? 'pro' : 'student'; // student or office doodles behind the chat
   audSwitch.classList.toggle('pro', pro);
   audSwitch.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.aud === (pro ? 'pro' : 'student'))));
 }
@@ -829,7 +821,7 @@ if (audSwitch) {
     dressCassie();
     set3D('happy');
     setTimeout(() => set3D('neutral'), 1600);
-    try { if (typeof mascotSay === 'function') mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode: let’s learn!', 2600); } catch (err) { /* ignore */ }
+    try { mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode: let’s learn!', 2600); } catch (err) { /* ignore */ }
   });
   renderAudience();
 }
@@ -873,8 +865,7 @@ function mascotEmote(name, hold) {
   if (!mascot || mascotDragging || mascotAsleep || mascot.classList.contains('thinking')) return;
   clearEmote();
   mascot.classList.add(name);
-  set3D(EMOTE_TO_3D[name] || 'neutral');
-  if (bot2d && EMOTE_TO_2D[name]) bot2d.setState(EMOTE_TO_2D[name]);
+  if (bot2d) { clearTimeout(bot2dTimer); bot2d.setState(EMOTE_TO_2D[name] || 'idle'); }
   clearTimeout(mascotEmoteClearTimer);
   const dur = hold || (name === 'emote-love' ? 2200 : 1600);
   mascotEmoteClearTimer = setTimeout(clearEmote, dur);
@@ -1045,7 +1036,7 @@ function mascotReact(kind, hold) {
 function mascotOnSend(text) {
   // sending is activity; she'll show 'thinking' while the answer is generated
   // (setCursorMode) and 'celebrate' once it arrives (mascotCelebrate).
-  if (typeof resetIdle === 'function') resetIdle();
+  resetIdle();
   if (mascotAsleep) wakeMascot();
 }
 
@@ -1376,7 +1367,7 @@ function detourToElement(el, { click = false, resumeAfter = 800 } = {}) {
 /* ---------- chat rendering ---------- */
 function scrollToBottom() {
   chatLog.scrollTop = chatLog.scrollHeight;
-  if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
+  requestAnimationFrame(keepMascotClear);
 }
 // Offline: a calm note at the top that says what still works (it goes away when the internet is back)
 const offlineNote = document.getElementById('offline-note');
@@ -1762,7 +1753,7 @@ function setSideOpen(open, keep = true) {
   if (keep) { try { localStorage.setItem(SIDE_KEY, open ? 'open' : 'rail'); } catch (e) { /* no storage: this visit only */ } }
   hideSideTip();
   if (open) renderChatList();
-  setTimeout(() => { if (typeof keepMascotClear === 'function') keepMascotClear(); }, 300);
+  setTimeout(() => { keepMascotClear(); }, 300);
 }
 let sideOpenSaved = false;
 try { sideOpenSaved = localStorage.getItem(SIDE_KEY) === 'open'; } catch (e) { /* ignore */ }
@@ -2431,7 +2422,7 @@ function renderHome() {
   }
   wrap.appendChild(intro);
   chatLog.appendChild(wrap);
-  if (typeof keepMascotClear === 'function') requestAnimationFrame(keepMascotClear);
+  requestAnimationFrame(keepMascotClear);
 }
 
 function renderHistory() {
@@ -2662,7 +2653,7 @@ async function groqChat(messages, { model, maxTokens = 2048, onWait, lean = fals
     if (modelRetired(res.status, detail)) {
       const next = await nextGroqModel(tried);
       if (!next) return viaServerInstead(retiredError());
-      if (model === state.groqModel) { state.groqModel = next; save(); if (typeof updateModelPill === 'function') updateModelPill(); }
+      if (model === state.groqModel) { state.groqModel = next; save(); updateModelPill(); }
       model = next;
       continue;
     }
@@ -2704,7 +2695,7 @@ function friendlyError(msg) { const e = new Error(msg); e.friendly = true; retur
 /* Cassie's own server (server/worker.js): the same chat call, but with the owner's
    key, a fair daily allowance per person, and Workers AI as a backup brain. */
 // signed in → the server knows the student's plan (Plus and Pro belong to an account)
-const chatHeaders = () => { const t = typeof authToken === 'function' ? authToken() : ''; return { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }; };
+const chatHeaders = () => { const t = authToken(); return { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }; };
 async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q } = {}) {
   let waits = 0;
   while (true) {
@@ -3669,7 +3660,7 @@ function exportBackup() {
   try { const m = localStorage.getItem(MEM_KEY); if (m) backup.memory = JSON.parse(m); } catch (e) { /* ignore */ }
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) { const s = JSON.parse(raw); delete s.groqKey; delete s.geminiKey; backup.state = s; }
+    if (raw) { const s = JSON.parse(raw); delete s.groqKey; delete s.geminiKey; delete s.apiKey; backup.state = s; }
   } catch (e) { /* ignore */ }
   const stamp = new Date().toISOString().slice(0, 10);
   downloadBlob(`cassie-backup-${stamp}.json`, new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
@@ -3972,7 +3963,7 @@ function reviewMistakes(all = false) {
   track('feature', 'review');
   quizMode = true; quizStarted();
   if (quizBtn) quizBtn.classList.add('active');
-  if (typeof setQuizLabel === 'function') setQuizLabel('Stop quiz');
+  setQuizLabel('Stop quiz');
   dressCassie();
   const qs = list.map((m, k) => `${k + 1}. ${m.q}${m.a ? ` (correct answer: ${m.a})` : ''}`).join('\n');
   handleSend(`Let's review the quiz questions I got wrong before. Ask them one at a time (you may reword them slightly), wait for my answer, then grade it:\n${qs}`);
@@ -4722,7 +4713,7 @@ function importExtensionHistory(items) {
   }
   state.extSeen = [...seen].slice(-600);
   save();
-  if (typeof renderChatList === 'function') renderChatList();
+  renderChatList();
   if (touchedCurrent) renderHistory();
   islandShow('done', fresh.length === 1 ? '1 answer from Chrome added' : `${fresh.length} answers from Chrome added`, 3200);
   return fresh.length;
@@ -4860,7 +4851,7 @@ async function startRoom(code, title) {
   const me = installId();
   const R = { code, title, since: 0, queue: [], timer: 0, stopped: false, fails: 0, members: [] };
   roomLive = R;
-  R.stop = () => { R.stopped = true; clearTimeout(R.timer); if (roomLive === R) roomLive = null; };
+  R.stop = () => { R.stopped = true; clearTimeout(R.timer); document.removeEventListener('visibilitychange', R.wake); if (roomLive === R) roomLive = null; };
   const link = `${location.origin}${location.pathname}?room=${code}`;
   await window.CassieSketch.open({
     title: `${title} · ${code}`,
@@ -4923,7 +4914,15 @@ async function startRoom(code, title) {
     finally { btn.disabled = false; btn.textContent = was; }
   }
   banner('Connecting…');
+  // one check at a time; and back to the tab: check now (a hidden tab only checks every 15 s)
   async function tick() {
+    if (R.stopped || R.busy) return;
+    R.busy = true;
+    try { await poll(); } finally { R.busy = false; }
+  }
+  R.wake = () => { if (!document.hidden) tick(); };
+  document.addEventListener('visibilitychange', R.wake);
+  async function poll() {
     if (R.stopped) return;
     clearTimeout(R.timer);
     try {
@@ -4951,7 +4950,8 @@ async function startRoom(code, title) {
       const names = JSON.stringify(d.members || []);
       if (names !== JSON.stringify(R.members) || R.fails) { R.members = d.members || []; R.fails = 0; if (study) study.members(R.members); banner(); }
       // quicker while people are moving pointers, so cursors and lasers feel live
-      R.timer = setTimeout(tick, d.more || R.queue.length ? 50 : document.hidden ? 4000 : Date.now() - (R.active || 0) < 4000 ? 450 : 1000);
+      // (a hidden tab: every 15 s, which still keeps you in the room: the server drops you after 25 s unseen)
+      R.timer = setTimeout(tick, d.more || R.queue.length ? 50 : document.hidden ? 15000 : Date.now() - (R.active || 0) < 4000 ? 450 : 1000);
     } catch (e) {
       if (e.gone) { banner('This room has ended. Save your board with the picture button.'); R.stop(); return; }
       R.fails++;
@@ -5389,7 +5389,7 @@ if (talkBtn) {
     if (counselorMode) {
       quizMode = false;
       if (quizBtn) quizBtn.classList.remove('active');
-      if (typeof setQuizLabel === 'function') setQuizLabel('Quiz me');
+      setQuizLabel('Quiz me');
       if (!state.messages.length) chatLog.innerHTML = '';
       renderMessage('assistant', "Okay: real talk mode. No lessons, no fluff. What's going on? I'm listening.");
       try { set3D('encouraging'); } catch (e) { /* ignore */ }
@@ -5715,7 +5715,7 @@ function startReview(topic) {
   if (!topic) return;
   quizMode = true;
   if (quizBtn) quizBtn.classList.add('active');
-  if (typeof setQuizLabel === 'function') setQuizLabel('Stop quiz');
+  setQuizLabel('Stop quiz');
   handleSend(`Quiz me on ${topic}. Ask one question at a time and wait for my answer.`);
 }
 if (window.CassieMemory) window.CassieMemory.onReview = startReview;
@@ -5809,8 +5809,8 @@ if (memoryPanel) {
   }
   function switchMode(next) { mode = next; remaining = total(); render(); }
   function nudge(msg, pose) {
-    try { if (typeof set3D === 'function') set3D(pose); } catch (e) { /* */ }
-    try { if (typeof mascotSay === 'function') mascotSay(msg, 5200); } catch (e) { /* */ }
+    try { set3D(pose); } catch (e) { /* */ }
+    try { mascotSay(msg, 5200); } catch (e) { /* */ }
   }
   function start() {
     if (running) return;
@@ -5830,7 +5830,7 @@ if (memoryPanel) {
     clearInterval(tick); running = false;
     if (mode === 'focus') {
       cycles += 1;
-      try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(times.focus); if (typeof updateMemoryDot === 'function') updateMemoryDot(); } } catch (e) { /* */ }
+      try { if (window.CassieMemory) { window.CassieMemory.addFocusMinutes(times.focus); updateMemoryDot(); } } catch (e) { /* */ }
       progressAdd({ focus: times.focus }); // (the weekly card)
       const long = cycles % 4 === 0;
       switchMode(long ? 'long' : 'break');
@@ -6774,7 +6774,6 @@ document.addEventListener('mousedown', (e) => {
   if (!highlightPopover.contains(e.target)) hideHighlightPopover();
 });
 document.addEventListener('keydown', (e) => {
-  // (Escape used to close the old "Ask Cassie" chip; it's gone)
   if (e.key === 'Escape' && !highlightPopover.hidden) dismissHighlightPopover();
 });
 
@@ -6961,7 +6960,7 @@ function saveProfile({ name, age, grade, gender }, first, prev = {}) {
   state.analytics = { usage: an0.usage !== false && age >= 13, topics: an0.topics !== false && age >= 18 };
   save();
   try { if (window.CassieMemory && name) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
-  if (typeof renderAudience === 'function') renderAudience();
+  renderAudience();
   applyAccent();
   dressCassie();
   if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
@@ -7026,9 +7025,7 @@ function frMascot3d(host) {
   host.dataset.mascot = want3d ? 'waiting' : '2d';
   if (!want3d) return;
   const noThreeD = () => { host.dataset.mascot = '2d'; if (flat) flat.reveal(true); };
-  const load = fr3dLoad();
-  if (!load) { noThreeD(); return; }
-  load.then((m) => {
+  fr3dLoad().then((m) => {
     if (!host.isConnected) return;
     if (!m || !m.webglOK()) { noThreeD(); return; }
     let canvas = null;
@@ -7163,7 +7160,7 @@ function frFinish(a) {
   save();
   frSave(null);
   frClose();
-  if (typeof syncAccount === 'function') syncAccount(true);
+  syncAccount(true);
   offerTour();
 }
 // right after the first run (signed in or as a guest): a quick tour?, asked once, ever
@@ -7657,7 +7654,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
 });
 
 function renderProfileSummary() {
-  { const card = document.querySelector('#settings-panel .settings-card'); if (card && card.dataset.page === 'profile' && typeof fillYou === 'function') setTimeout(fillYou, 0); }
+  { const card = document.querySelector('#settings-panel .settings-card'); if (card && card.dataset.page === 'profile') setTimeout(fillYou, 0); }
   const el = document.getElementById('profile-summary'); const p = state.profile;
   if (el) el.textContent = p ? [p.name, p.role === 'pro' ? (p.field || 'Working') : p.grade, p.age ? `age ${p.age}` : '', { female: 'Female', male: 'Male' }[p.gender] || ''].filter(Boolean).join(' · ') : 'No profile yet.';
   const u = document.getElementById('share-usage-toggle'), t = document.getElementById('share-topics-toggle'), row = document.getElementById('share-topics-row');
@@ -7902,6 +7899,7 @@ window.addEventListener('pageshow', (e) => {
 });
 // signed in: fetch the latest profile from the account (another device may have changed it)
 if (accountsOn() && authToken()) {
+  planAsked = Date.now(); // (this asks for the plan too: refreshPlan needn't ask again for a minute)
   authCall('/auth/me', null, 'GET').then((r) => { if (r.account) { state.account = accountOf(r.account); if (r.plan) { state.plan = r.plan; save(); } if (r.account.data) applyAccountData(r.account.data); else syncAccount(true); renderProfileSummary(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }

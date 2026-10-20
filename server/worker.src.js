@@ -462,18 +462,20 @@ async function askClaude(env, cleaned, family = 'opus') {
 /* ------------------------------------------------------------------ plans
    Free, Plus or Pro. A plan belongs to an account (sign in to subscribe), so it follows the
    student to every device. The owner can give one with /admin/plan; payments will write here too. */
+// (one read on every signed-in question: the session and its plan, not the whole account)
 async function planOf(request, env) {
-  if (!(request.headers.get('authorization') || '').trim()) return { plan: 'free' };
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!/^[\w-]{20,100}$/.test(token)) return { plan: 'free' };
   try {
-    const acc = await accountFromRequest(request, env);
-    if (!acc) return { plan: 'free' };
-    return { ...(await accountPlan(env, acc.id)), account: acc.id };
+    const row = await env.DB.prepare('SELECT s.account, s.created, p.plan, p.until FROM sessions s JOIN accounts a ON a.id = s.account LEFT JOIN plans p ON p.account = s.account AND p.until > ? WHERE s.token = ?')
+      .bind(Date.now(), await sha256(token)).first();
+    if (!row || Date.now() - row.created > SESSION_DAYS * 864e5) return { plan: 'free' };
+    return { ...paidPlan(row), account: row.account };
   } catch (e) { return { plan: 'free' }; }
 }
-async function accountPlan(env, id) {
-  const row = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(id, Date.now()).first();
-  return row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until } : { plan: 'free', until: 0 };
-}
+const paidPlan = (row) => (row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until } : { plan: 'free', until: 0 });
+const planQuery = (env, id) => env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(id, Date.now());
+async function accountPlan(env, id) { return paidPlan(await planQuery(env, id).first()); }
 // what each plan gets a day: questions the student sees, every request (a ceiling against abuse),
 // and Claude answers (family, then a second family once the first runs out)
 function limitsFor(env, plan) {
@@ -831,7 +833,8 @@ async function image(request, env, ctx) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
   const perDay = +env.IMAGE_LIMIT || 20;
   const bump = (k) => countUseQuery(env.DB, k, today);
-  const [u, i] = await env.DB.batch([bump(uid === 'anon' ? 'img:an:' + ip : 'img:u:' + uid), bump('img:i:' + ip)]);
+  const mine = uid === 'anon' ? 'img:an:' + ip : 'img:u:' + uid; // (counted per network without an id)
+  const [u, i] = await env.DB.batch([bump(mine), bump('img:i:' + ip)]);
   if ((u.results?.[0]?.n || 0) > perDay || (i.results?.[0]?.n || 0) > perDay * 25) {
     return chatError(`You've made today's ${perDay} pictures. More tomorrow, or add a free Gemini key in Settings for your own picture allowance.`, 429, h);
   }
@@ -842,7 +845,7 @@ async function image(request, env, ctx) {
     ctx.waitUntil(countChat(env, today, 'image'));
     return json({ image: b64, mimeType: 'image/jpeg' }, 200, h);
   } catch (e) {
-    ctx.waitUntil(uncountUses(env.DB, ['img:u:' + uid, 'img:i:' + ip]));
+    ctx.waitUntil(uncountUses(env.DB, [mine, 'img:i:' + ip])); // (given back to the one it was counted to)
     return chatError('Couldn’t make that picture right now. Try again in a minute, or describe it more simply.', 503, h);
   }
 }
@@ -966,22 +969,34 @@ async function room(request, env, url) {
   const db = env.DB, now = Date.now();
   const okUid = (u) => /^[\w-]{8,64}$/.test(u);
   const okCode = (c) => /^[A-Z0-9]{6}$/.test(c);
-  const live = async (code) => db.prepare('SELECT code, title, created FROM rooms WHERE code = ? AND created > ?').bind(code, now - ROOM_HOURS * 3600e3).first();
-  const members = async (code) => (await db.prepare('SELECT uid, name FROM room_members WHERE code = ? AND seen > ? ORDER BY name').bind(code, now - 25000).all()).results || [];
+  const liveQuery = (code) => db.prepare('SELECT code, title, created FROM rooms WHERE code = ? AND created > ?').bind(code, now - ROOM_HOURS * 3600e3);
+  const membersQuery = (code) => db.prepare('SELECT uid, name FROM room_members WHERE code = ? AND seen > ? ORDER BY name').bind(code, now - 25000);
+  const live = async (code) => liveQuery(code).first();
+  const members = async (code) => (await membersQuery(code).all()).results || [];
 
   if (request.method === 'GET' && url.pathname === '/room/poll') {
     const code = clean(url.searchParams.get('code'), 6).toUpperCase(), uid = clean(url.searchParams.get('uid'), 64);
     const since = Math.max(0, parseInt(url.searchParams.get('since'), 10) || 0);
     if (!okCode(code) || !okUid(uid)) return json({ error: 'bad request' }, 400, h);
-    if (!(await live(code))) return json({ error: 'That room has ended, so it can’t be joined. Rooms last one day. Ask for a new code.', code: 'room_gone', gone: true }, 404, h);
-    // "I'm still here" at most every 10 s (a write only when it's due)
-    await db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000).run();
     // the pointer: where you are and what you're doing (a cursor, a laser trail), replaced each time
-    const p = url.searchParams.get('p');
-    if (p && p.length <= 4000 && (await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) { try { if (typeof JSON.parse(p) !== 'object') throw 0; await db.prepare('INSERT INTO room_here (code, uid, ts, p) VALUES (?, ?, ?, ?) ON CONFLICT(code, uid) DO UPDATE SET ts = excluded.ts, p = excluded.p').bind(code, uid, now, p).run(); } catch (e) { /* not a pointer */ } }
-    const rows = (await db.prepare('SELECT id, uid, ts, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since).all()).results || [];
-    const here = (await db.prepare('SELECT uid, ts, p FROM room_here WHERE code = ? AND uid != ? AND ts > ?').bind(code, uid, now - 6000).all()).results || [];
-    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, ts: r.ts, op: JSON.parse(r.op) })), members: await members(code), here: here.map((r) => ({ uid: r.uid, ts: r.ts, p: JSON.parse(r.p) })), more: rows.length === 400, now }, 200, h);
+    let p = url.searchParams.get('p');
+    try { if (!p || p.length > 4000 || typeof JSON.parse(p) !== 'object') p = null; } catch (e) { p = null; }
+    // everything in one trip to the database (a room polls about once a second per person)
+    const [room, , , ops, here, people] = await db.batch([
+      liveQuery(code),
+      // "I'm still here" at most every 10 s (a write only when it's due)
+      db.prepare('UPDATE room_members SET seen = ? WHERE code = ? AND uid = ? AND seen < ?').bind(now, code, uid, now - 10000),
+      // (only a member's pointer is kept)
+      p ? db.prepare('INSERT INTO room_here (code, uid, ts, p) SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM room_members WHERE code = ? AND uid = ?) ON CONFLICT(code, uid) DO UPDATE SET ts = excluded.ts, p = excluded.p').bind(code, uid, now, p, code, uid)
+        : db.prepare('SELECT 1'),
+      db.prepare('SELECT id, uid, ts, op FROM room_ops WHERE code = ? AND id > ? ORDER BY id LIMIT 400').bind(code, since),
+      db.prepare('SELECT uid, ts, p FROM room_here WHERE code = ? AND uid != ? AND ts > ?').bind(code, uid, now - 6000),
+      membersQuery(code),
+    ]);
+    // (a room that has ended: what was written above is about a room nobody can open, and the tidy-up removes it)
+    if (!(room.results || []).length) return json({ error: 'That room has ended, so it can’t be joined. Rooms last one day. Ask for a new code.', code: 'room_gone', gone: true }, 404, h);
+    const rows = ops.results || [];
+    return json({ ops: rows.map((r) => ({ id: r.id, uid: r.uid, ts: r.ts, op: JSON.parse(r.op) })), members: people.results || [], here: (here.results || []).map((r) => ({ uid: r.uid, ts: r.ts, p: JSON.parse(r.p) })), more: rows.length === 400, now }, 200, h);
   }
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   const text = await request.text();
@@ -991,14 +1006,8 @@ async function room(request, env, url) {
   if (!okUid(uid)) return json({ error: 'bad request' }, 400, h);
 
   if (url.pathname === '/room/create') {
-    // tidy up: rooms older than a day go, with their drawings
+    // (rooms older than a day, and their drawings, go in tidy(): every 10 minutes and each night)
     const old = now - ROOM_HOURS * 3600e3;
-    await db.batch([
-      db.prepare('DELETE FROM room_ops WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
-      db.prepare('DELETE FROM room_members WHERE code IN (SELECT code FROM rooms WHERE created < ?)').bind(old),
-      db.prepare('DELETE FROM room_here WHERE ts < ?').bind(old),
-      db.prepare('DELETE FROM rooms WHERE created < ?').bind(old),
-    ]);
     const mine = await db.prepare('SELECT COUNT(*) AS n FROM rooms WHERE owner = ? AND created > ?').bind(uid, old).first();
     if (mine && mine.n >= 10) return json({ error: 'You’ve made 10 rooms today, which is the most for one day. Use one of those, or make a new one tomorrow.', code: 'room_limit' }, 429, h);
     let code = '';
@@ -1027,8 +1036,9 @@ async function room(request, env, url) {
   if (url.pathname === '/room/ops') {
     const ops = Array.isArray(b.ops) ? b.ops.slice(0, 40) : [];
     if (!ops.length) return json({ ok: true }, 200, h);
-    if (!(await db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid).first())) return json({ error: 'You aren’t in this room yet, so you can’t draw here. Join with the room code first.', code: 'room_join_first' }, 403, h);
-    const count = await db.prepare('SELECT COUNT(*) AS n FROM room_ops WHERE code = ?').bind(code).first();
+    const [inRoom, counted] = await db.batch([db.prepare('SELECT 1 FROM room_members WHERE code = ? AND uid = ?').bind(code, uid), db.prepare('SELECT COUNT(*) AS n FROM room_ops WHERE code = ?').bind(code)]);
+    if (!(inRoom.results || []).length) return json({ error: 'You aren’t in this room yet, so you can’t draw here. Join with the room code first.', code: 'room_join_first' }, 403, h);
+    const count = (counted.results || [])[0];
     if (count && count.n + ops.length > ROOM_OPS_MAX) return json({ error: 'This board is full, so nothing more fits. Save it, then start a new room.', code: 'room_full_board', full: true }, 409, h);
     const rows = [];
     for (const op of ops) {
@@ -1070,8 +1080,7 @@ async function scores(request, env, url) {
     if (value < PUZZLES[game] || value > 86400 * 1000) return json({ error: 'That result doesn’t look right.' }, 422, h);
     await db.prepare('INSERT OR IGNORE INTO scores (day, game, uid, name, value, shown, ts) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(b.day, game, uid, name, value, clean(b.shown, 40), now).run();
-    // old days go after two weeks
-    await db.prepare('DELETE FROM scores WHERE day < ?').bind(puzzleDay(now - 14 * 86400e3)).run();
+    // (old days go after two weeks, in tidy())
     me = uid; day = b.day;
   } else if (!(request.method === 'GET' && url.pathname === '/scores/today')) return new Response('not found', { status: 404, headers: h });
   if (!/^\d{4}-\d\d-\d\d$/.test(day)) return json({ error: 'bad day' }, 400, h);
@@ -1092,11 +1101,12 @@ async function scores(request, env, url) {
     }
     return [...players.values()].sort((a, b) => b.total - a.total || b.played - a.played);
   };
-  const rows = (await db.prepare('SELECT game, uid, name, value, shown FROM scores WHERE day = ? ORDER BY game, value, ts LIMIT 20000').bind(day).all()).results || [];
-  const board = tally(rows);
-  const at = board.findIndex((p) => p.uid === me);
+  // the week's results in one read, newest day first (so a limit would leave out the oldest day, never today);
+  // today's board is the day's part of it
   const weekFrom = puzzleDay(Date.parse(day + 'T12:00:00Z') - 6 * 86400e3);
-  const weekRows = (await db.prepare('SELECT day, game, uid, name, value FROM scores WHERE day >= ? AND day <= ? ORDER BY day, game, value, ts LIMIT 50000').bind(weekFrom, day).all()).results || [];
+  const weekRows = (await db.prepare('SELECT day, game, uid, name, value, shown FROM scores WHERE day >= ? AND day <= ? ORDER BY day DESC, game, value, ts LIMIT 50000').bind(weekFrom, day).all()).results || [];
+  const board = tally(weekRows.filter((r) => r.day === day));
+  const at = board.findIndex((p) => p.uid === me);
   const week = tally(weekRows);
   const wAt = week.findIndex((p) => p.uid === me);
   // the top 50, plus your own row if you're further down
@@ -1128,30 +1138,33 @@ function sameText(a, b) { // compare without leaking timing
   return d === 0;
 }
 // an account as the app sees it, with the ways it can sign in
-async function providersOf(env, id) {
-  const r = await env.DB.prepare('SELECT provider FROM identities WHERE account = ?').bind(id).all();
-  return ((r && r.results) || []).map((x) => x.provider).sort();
-}
-async function publicAccount(env, a) {
-  const providers = await providersOf(env, a.id);
+const providersQuery = (env, id) => env.DB.prepare('SELECT provider FROM identities WHERE account = ?').bind(id);
+const providerList = (r) => ((r && r.results) || []).map((x) => x.provider).sort();
+async function providersOf(env, id) { return providerList(await providersQuery(env, id).all()); }
+async function publicAccount(env, a, providers) {
+  if (!providers) providers = await providersOf(env, a.id);
   return { email: a.email || '', name: a.name || '', password: !!a.pass, providers, google: providers.includes('google'), apple: providers.includes('apple'), data: a.data ? JSON.parse(a.data) : null };
 }
 const freePlan = { plan: 'free', until: 0 };
 async function signedInReply(env, acc, isNew) {
-  return { token: await newSession(env, acc.id), account: await publicAccount(env, acc), isNew, plan: await accountPlan(env, acc.id).catch(() => freePlan) };
+  // the new session, the ways to sign in and the plan: one trip to the database
+  const token = randomToken(), now = Date.now();
+  const [, ways, plan] = await env.DB.batch([sessionInsert(env, await sha256(token), acc.id, now), providersQuery(env, acc.id), planQuery(env, acc.id)]);
+  return { token, account: await publicAccount(env, acc, providerList(ways)), isNew, plan: paidPlan((plan.results || [])[0]) };
 }
 
+const sessionInsert = (env, hash, accountId, now) => env.DB.prepare('INSERT INTO sessions (token, account, created, seen) VALUES (?, ?, ?, ?)').bind(hash, accountId, now, now);
 async function newSession(env, accountId) {
   const token = randomToken();
-  const now = Date.now();
-  await env.DB.prepare('INSERT INTO sessions (token, account, created, seen) VALUES (?, ?, ?, ?)').bind(await sha256(token), accountId, now, now).run();
+  await sessionInsert(env, await sha256(token), accountId, Date.now()).run();
   return token;
 }
-async function accountFromRequest(request, env) {
+// full: the whole account (its saved data, up to 250 KB); otherwise only who it is
+async function accountFromRequest(request, env, full = false) {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!/^[\w-]{20,100}$/.test(token)) return null;
   const hash = await sha256(token);
-  const row = await env.DB.prepare('SELECT a.*, s.created AS s_created FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.token = ?').bind(hash).first();
+  const row = await env.DB.prepare(`SELECT ${full ? 'a.*' : 'a.id, a.name'}, s.created AS s_created FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.token = ?`).bind(hash).first();
   if (!row || Date.now() - row.s_created > SESSION_DAYS * 864e5) return null;
   return { ...row, sessionHash: hash };
 }
@@ -1340,13 +1353,11 @@ async function auth(request, env, path) {
     return ok(await signedInReply(env, acc, !acc.data));
   }
 
-  const acc = await accountFromRequest(request, env);
+  const acc = await accountFromRequest(request, env, path === '/auth/me'); // (only /auth/me sends the saved data back)
   if (!acc) return fail('You’ve been signed out, so Cassie can’t save to your account. Sign in again to carry on.', 401, 'signed_out');
   if (path === '/auth/me') {
-    await env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash).run();
-    let plan = { plan: 'free', until: 0 };
-    try { plan = await accountPlan(env, acc.id); } catch (e) { /* free */ }
-    return ok({ account: await publicAccount(env, acc), plan });
+    const [, ways, plan] = await env.DB.batch([env.DB.prepare('UPDATE sessions SET seen = ? WHERE token = ?').bind(Date.now(), acc.sessionHash), providersQuery(env, acc.id), planQuery(env, acc.id)]);
+    return ok({ account: await publicAccount(env, acc, providerList(ways)), plan: paidPlan((plan.results || [])[0]) });
   }
   if (path === '/auth/save') {
     const data = body.data && typeof body.data === 'object' ? JSON.stringify(body.data) : null;

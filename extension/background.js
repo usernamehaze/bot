@@ -594,12 +594,16 @@ async function visionViaGemini(key, { image, images, prompt, system, maxTokens }
 
 // Groq pictures: try every vision-capable model this key can see until one works.
 let _visionModelOK = null;
+let _groqIds = null; // the models this key can see, asked once every 10 minutes (not on every picture)
 async function groqVisionCandidates(groqKey) {
   let ids = [];
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${groqKey}` } });
-    if (res.ok) ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id);
-  } catch (e) { /* offline — handled by caller */ }
+  if (_groqIds && _groqIds.key === groqKey && Date.now() - _groqIds.at < 10 * 60e3) ids = _groqIds.ids;
+  else {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${groqKey}` } });
+      if (res.ok) { ids = ((await res.json()).data || []).filter((m) => m.active !== false).map((m) => m.id); _groqIds = { key: groqKey, at: Date.now(), ids }; }
+    } catch (e) { /* offline — handled by caller */ }
+  }
   const score = (id) => (/llama-4-scout/i.test(id) ? 0 : /llama-4-maverick/i.test(id) ? 1 : /vision|llava|pixtral|(^|[-/])vl([-/]|$)|multimodal/i.test(id) ? 2 : 9);
   const list = ids.filter((id) => !/whisper|tts|guard|playai|orpheus|embed/i.test(id) && score(id) < 9).sort((a, b) => score(a) - score(b));
   if (_visionModelOK && list.includes(_visionModelOK)) list.splice(list.indexOf(_visionModelOK), 1), list.unshift(_visionModelOK);
@@ -905,7 +909,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // ---- the Cassie side panel (works beside ANY tab, including Chrome's PDF viewer) ----
-try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }); } catch (e) { /* older Chrome */ }
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {}); // (the manifest needs Chrome 116+, which has the side panel)
 
 // What file is this tab showing? (PDF / Google Doc / Google Slides / photo)
 async function tabFile(tab) {

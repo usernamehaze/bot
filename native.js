@@ -77,14 +77,6 @@
   new MutationObserver(later).observe(document.body, { attributes: true, attributeFilter: ['hidden'], subtree: true });
 
   /* ---------- Home ---------- */
-  const ago = (t) => {
-    const s = (Date.now() - (t || 0)) / 1000;
-    if (s < 60) return 'just now';
-    if (s < 3600) return Math.round(s / 60) + ' min ago';
-    if (s < 86400) return Math.round(s / 3600) + ' h ago';
-    const d = Math.round(s / 86400);
-    return d === 1 ? 'yesterday' : d < 7 ? d + ' days ago' : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  };
   function fill() { renderHub($('#home-hub')); } // (the hub: app.js)
   window.CassieNative = { go };
 

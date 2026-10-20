@@ -367,6 +367,157 @@ test('leftover code stays out: styles for the old phone Home and the old landing
   const back2 = gone(landing, ['steps', 'step', 'bento', 'span2', 'span3', 'span4', 'span6']).concat(/\.tile\.(v|dark)\b/.test(landing) ? ['tile.v / tile.dark'] : []);
   expect(!back2.length, 'index.html has styles for sections it no longer has: ' + back2.join(', '));
   expect(!/function accentInk\b/.test(fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8')) && !/hasPreview/.test(fs.readFileSync(path.join(ROOT, 'labs/previews.js'), 'utf8')), 'accentInk and hasPreview are gone (nothing called them)');
+  // the second sweep: a helper nothing calls, a mood map whose answer was always replaced, a style no page uses,
+  // an attribute nothing reads, checks that can't fail, an option nobody passes, and a promo tool whose pictures nothing uses
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const app = read('app.js');
+  expect(!/const ago = /.test(read('native.js')), 'native.js: ago() is gone');
+  expect(!/EMOTE_TO_3D/.test(app) && !/dataset\.aud = /.test(app), 'app.js: EMOTE_TO_3D and the doodle hook are gone');
+  const always = app.match(/typeof (syncAccount|updateBackdrop|mascotSay|resetIdle|keepMascotClear|updateModelPill|authToken|setQuizLabel|renderChatList|set3D|updateMemoryDot|renderAudience|fillYou) === 'function'|typeof bot2d !== 'undefined'/g);
+  expect(!always, 'app.js: no checks for functions that always exist: ' + always);
+  expect(!/\.refer\b/.test(landing), 'index.html: the .refer style is gone');
+  expect(!/opts\.clock|CASSIE_FLAT/.test(read('cassie-bot.js')), 'cassie-bot.js: the unused clock option is gone');
+  expect(!/older Chrome/.test(read('extension/background.js') + read('extension/popup.js')), 'the extension needs Chrome 116+: no guards for older ones');
+  expect(!fs.existsSync(path.join(ROOT, 'promo/hero/capture.cjs')) && !/capture\.cjs/.test(read('promo/README.md')), 'promo/hero/capture.cjs is gone');
+  // (a plugin switched on for every Claude session in this project, from someone else's GitHub: not without asking)
+  expect(!fs.existsSync(path.join(ROOT, '.claude/settings.json')) || !/enabledPlugins/.test(read('.claude/settings.json')), 'no third-party plugin is switched on for the project');
+});
+
+// The real server (server/worker.js) on a real SQLite database (Node's own, standing in for Cloudflare D1):
+// every query it sends must be valid, and study rooms, scores and accounts must work end to end.
+function fakeD1() {
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(':memory:'), plain = (r) => (r ? { ...r } : null);
+  const reads = (sql) => /^\s*(SELECT|WITH)\b/i.test(sql) || /\bRETURNING\b/i.test(sql);
+  const exec = (sql, args) => { const p = db.prepare(sql); if (reads(sql)) return { results: p.all(...args).map(plain), success: true }; const r = p.run(...args); return { results: [], success: true, meta: { changes: Number(r.changes) } }; };
+  const stmt = (sql, args = []) => ({ sql, args, bind: (...a) => stmt(sql, a),
+    first: async (col) => { D.trips++; const r = plain(db.prepare(sql).get(...args)); return r && col ? r[col] : r; },
+    all: async () => (D.trips++, exec(sql, args)), run: async () => (D.trips++, exec(sql, args)) });
+  const D = { db, trips: 0, prepare(sql) { return stmt(sql); },
+    async batch(list) { D.trips++; db.exec('BEGIN'); try { const out = list.map((s) => exec(s.sql, s.args)); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } } };
+  return D;
+}
+async function realServer(env = {}) {
+  process.removeAllListeners('warning'); // (node:sqlite says it's experimental)
+  const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href + '?fresh=' + Math.random())).default;
+  const DB = fakeD1();
+  const call = async (method, p, body, headers = {}) => {
+    const pending = [];
+    const res = await w.fetch(new Request('https://cassie.failanzahazel.workers.dev' + p, { method, headers: { origin: 'https://askcassie.study', 'cf-connecting-ip': '203.0.113.7', ...(body ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined }), { DB, ...env }, { waitUntil: (x) => pending.push(x) });
+    await Promise.all(pending);
+    const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
+    return { status: res.status, json, text };
+  };
+  return { call, DB };
+}
+test('the real server on a real database: study rooms (make, join, draw, see each other), the puzzle score board and accounts (sign up, save, plan, sign out) all work, and a paid plan is read from the session', async () => {
+  const { call, DB } = await realServer({ DAILY_LIMIT: '0', PLUS_DAILY_LIMIT: '0' });
+  const A = 'aaaaaaaa-1', B = 'bbbbbbbb-2', C = 'cccccccc-3';
+  // a study room
+  const made = await call('POST', '/room/create', { uid: A, name: 'Ana', title: 'Bio' });
+  expect(made.status === 200 && /^[A-Z0-9]{6}$/.test(made.json.code), 'a room is made: ' + made.text);
+  const code = made.json.code;
+  const joined = await call('POST', '/room/join', { uid: B, name: 'Ben', code });
+  expect(joined.status === 200 && joined.json.members.map((m) => m.uid).sort().join() === [A, B].join(), 'Ben joins and sees both: ' + joined.text);
+  const drew = await call('POST', '/room/ops', { uid: A, code, ops: [{ t: 'add', id: 's1', pts: [[0, 0], [10, 10]] }] });
+  expect(drew.status === 200 && drew.json.n === 1, 'Ana draws a line: ' + drew.text);
+  const stranger = await call('POST', '/room/ops', { uid: C, code, ops: [{ t: 'add', id: 's2' }] });
+  expect(stranger.status === 403, 'someone not in the room can’t draw: ' + stranger.status);
+  const benPoll = await call('GET', `/room/poll?code=${code}&uid=${B}&since=0&p=${encodeURIComponent(JSON.stringify({ x: 5, y: 6 }))}`);
+  expect(benPoll.status === 200 && benPoll.json.ops.length === 1 && benPoll.json.ops[0].op.id === 's1' && benPoll.json.members.length === 2, 'Ben gets Ana’s line: ' + benPoll.text);
+  await call('GET', `/room/poll?code=${code}&uid=${C}&since=0&p=${encodeURIComponent(JSON.stringify({ x: 9, y: 9 }))}`);
+  const t0 = DB.trips, anaPoll = await call('GET', `/room/poll?code=${code}&uid=${A}&since=1`);
+  expect(DB.trips - t0 === 1, 'a poll (sent about once a second by everyone in a room) is one trip to the database: ' + (DB.trips - t0));
+  expect(anaPoll.status === 200 && anaPoll.json.ops.length === 0 && anaPoll.json.here.length === 1 && anaPoll.json.here[0].uid === B && anaPoll.json.here[0].p.x === 5, 'Ana sees Ben’s pointer, and only a member’s: ' + anaPoll.text);
+  const gone = await call('GET', `/room/poll?code=ZZZZZZ&uid=${A}&since=0`);
+  expect(gone.status === 404 && gone.json.gone, 'a room that doesn’t exist says so: ' + gone.text);
+  // the puzzle score board
+  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  for (const [uid, name, value, shown] of [[A, 'Ana', 100, '1:40'], [B, 'Ben', 90, '1:30']]) {
+    const r = await call('POST', '/scores/submit', { uid, name, game: 'sudoku', value, shown, day });
+    expect(r.status === 200, 'a score is saved: ' + r.text);
+  }
+  const t1 = DB.trips, board = await call('GET', `/scores/today?uid=${A}`);
+  expect(DB.trips - t1 === 1, 'the score board is one read: ' + (DB.trips - t1));
+  expect(board.status === 200 && board.json.top[0].name === 'Ben' && board.json.me.rank === 2 && board.json.me.games.sudoku.shown === '1:40' && board.json.week.table.length === 2 && board.json.week.table[1].me, 'today’s board and the week: ' + board.text);
+  // an account
+  const up = await call('POST', '/auth/signup', { email: 'mika@example.com', password: 'longenough1', age: 16, name: 'Mika' });
+  expect(up.status === 200 && up.json.token && up.json.account.email === 'mika@example.com' && up.json.plan.plan === 'free', 'sign up: ' + up.text);
+  const auth = { authorization: 'Bearer ' + up.json.token };
+  const saved = await call('POST', '/auth/save', { data: { profile: { name: 'Mika R' }, cards: [1, 2] } }, auth);
+  expect(saved.status === 200 && saved.json.saved, 'save: ' + saved.text);
+  const me = await call('GET', '/auth/me', null, auth);
+  expect(me.status === 200 && me.json.account.name === 'Mika R' && me.json.account.data.cards.length === 2 && me.json.account.password === true && me.json.plan.plan === 'free', 'me: ' + me.text);
+  // a paid plan: read from the session (the chat limit says "fair-use", not "free questions")
+  const ask = (headers) => call('POST', '/chat', { messages: [{ role: 'user', content: 'hi' }], uid: A, q: 1 }, headers);
+  expect(/free questions/.test((await ask({})).text), 'no sign-in: the free allowance');
+  const id = DB.db.prepare('SELECT id FROM accounts WHERE email = ?').get('mika@example.com').id;
+  DB.db.prepare('INSERT INTO plans (account, plan, until) VALUES (?, ?, ?)').run(id, 'plus', Date.now() + 864e5);
+  const t2 = DB.trips;
+  expect(/fair-use/.test((await ask(auth)).text), 'signed in with Plus: the paid allowance');
+  expect(DB.trips - t2 <= 3, 'a signed-in question: its plan in one read (then the allowance): ' + (DB.trips - t2));
+  const me1 = await call('GET', '/auth/me', null, auth);
+  const t3 = DB.trips, me2 = await call('GET', '/auth/me', null, auth);
+  expect(me2.json.plan.plan === 'plus' && me1.json.plan.plan === 'plus', 'me shows the plan: ' + me2.text);
+  expect(DB.trips - t3 === 2, '/auth/me: the account, then one batch: ' + (DB.trips - t3));
+  const out = await call('POST', '/auth/logout', {}, auth);
+  expect(out.status === 200 && (await call('GET', '/auth/me', null, auth)).status === 401, 'signed out: the session is gone');
+});
+
+test('the real server: a picture that fails gives the use back to whoever it was counted to (with no id it is counted per network)', async () => {
+  const { call, DB } = await realServer({ AI: { run: async () => { throw new Error('busy'); } } });
+  const used = (k) => (DB.db.prepare('SELECT n FROM quota WHERE k = ?').get(k) || { n: 0 }).n;
+  for (const [uid, key] of [[undefined, 'img:an:203.0.113.7'], ['aaaaaaaa-1', 'img:u:aaaaaaaa-1']]) {
+    const r = await call('POST', '/image', { prompt: 'a cat', ...(uid ? { uid } : {}) });
+    expect(r.status === 503, 'the picture failed: ' + r.status);
+    expect(used(key) === 0 && used('img:i:203.0.113.7') === 0, `${key} was given back: ${used(key)}`);
+  }
+});
+
+test('signed in: the account is asked for once at start-up, and opening Labs right after doesn’t ask again', async (b) => {
+  let asked = 0;
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, setup: async (c) => {
+    await c.addInitScript(() => { try { localStorage.setItem('cassie.auth', 'tok_' + 'x'.repeat(30)); } catch (e) { /* */ } });
+    await c.route(/\/auth\/me/, (r) => { asked++; r.fulfill({ json: { account: { email: 'mika@example.com', name: 'Mika', providers: [], data: null }, plan: { plan: 'free', until: 0 } } }); });
+    await c.route(/\/auth\/save/, (r) => r.fulfill({ json: { saved: true } })); // (it then saves this device's profile to the account)
+  } });
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => openLabs());
+  await page.waitForTimeout(1500);
+  expect(asked === 1 && (await page.evaluate(() => authToken())), 'the account was asked for ' + asked + ' times (still signed in)');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('the extension asks Groq for its model list once per key (not on every picture)', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ctx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) { for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof groqVisionCandidates === 'function').catch(() => false)) { sw = w; break; } if (!sw) await new Promise((r) => setTimeout(r, 250)); }
+    expect(sw, 'the extension started');
+    const r = await sw.evaluate(async () => {
+      let calls = 0; const real = self.fetch;
+      self.fetch = async (u, o) => { if (/\/models$/.test(String(u))) { calls++; return new Response(JSON.stringify({ data: [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'openai/gpt-oss-120b' }] }), { status: 200 }); } return real(u, o); };
+      try { const a = await groqVisionCandidates('key-one'), b = await groqVisionCandidates('key-one'); await groqVisionCandidates('key-two'); return { calls, a, b }; } finally { self.fetch = real; }
+    });
+    expect(r.calls === 2 && r.a.join() === 'meta-llama/llama-4-scout-17b-16e-instruct' && r.b.join() === r.a.join(), 'one models request per key: ' + JSON.stringify(r));
+  } finally { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what’s stored, and never reaches a backup file', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: { apiKey: 'AIzaOLDKEY1234567890' } });
+  const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
+  expect(st.geminiKey === 'AIzaOLDKEY1234567890' && !('apiKey' in st), 'moved and dropped: ' + JSON.stringify({ gemini: st.geminiKey, apiKey: st.apiKey }));
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => exportBackup())]);
+  const text = fs.readFileSync(await dl.path(), 'utf8');
+  expect(!/AIzaOLDKEY/.test(text), 'the backup file has no key in it');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites, the extension opens it and talks to it, and what Cassie shares names it', async () => {
@@ -1751,9 +1902,10 @@ test('Student / Professional switch is top right and switches the audience; no d
   const sw = await page.locator('.topbar-actions #aud-switch').boundingBox();
   const brand = await page.locator('.topbar .brand').boundingBox();
   expect(sw && sw.x > brand.x + brand.width && sw.y < 80, 'switch is not in the top right: ' + JSON.stringify(sw));
-  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'student', 'not student by default');
+  const pressed = () => page.evaluate(() => document.querySelector('#aud-switch [aria-pressed="true"]')?.dataset.aud);
+  expect(await pressed() === 'student', 'not student by default');
   await page.click('#aud-switch [data-aud=pro]');
-  expect(await page.evaluate(() => document.documentElement.dataset.aud) === 'pro', 'the switch did not change to Professional');
+  expect(await pressed() === 'pro' && (await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).audience)) === 'pro', 'the switch did not change to Professional');
   expect(await page.locator('#aud-bg, .pat').count() === 0, 'the doodle wallpaper is gone (Apple: branding defers to content)');
   expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
   await ctx.close();
@@ -1944,6 +2096,14 @@ test('study room: two students draw on the same board, live (code, link, undo on
     await draw(B.page, 0.5, 0.6);
     await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 2, null, { timeout: 8000 });
     if (process.env.SHOTS) await A.page.screenshot({ path: process.env.SHOTS + '/study-room.png' });
+    // a hidden tab checks the room every 15 s (not every 4), and checks at once when it's back
+    const polls = []; B.page.on('request', (r) => { if (/\/room\/poll/.test(r.url())) polls.push(Date.now()); });
+    const hide = (h) => B.page.evaluate((h) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h }); document.dispatchEvent(new Event('visibilitychange')); }, h);
+    await hide(true); await B.page.waitForTimeout(1500); polls.length = 0;
+    await B.page.waitForTimeout(5000);
+    expect(polls.length === 0, 'a hidden tab didn’t check the room for 5 s: ' + polls.length);
+    await hide(false); await B.page.waitForTimeout(600);
+    expect(polls.length >= 1, 'back to the tab: it checks at once');
     // Ben's undo takes away only Ben's stroke, for everyone
     await B.page.click('[data-act="undo"]');
     await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 8000 });

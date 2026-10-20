@@ -220,10 +220,9 @@
     let accent = opts.accent || '#d8343c';
     let stateName = '', st = STATES.idle, stateAt = 0, accessory = null;
     let lookX = 0, lookY = 0, wantX = 0, wantY = 0, pointerLook = null;
-    // opts.clock (ms) drives her from outside — e.g. a video rendered frame by frame; call api.render()
     // opts.win: the window she lives in (the pop-out Cassie window keeps animating while the main tab is hidden)
     const W = opts.win || window;
-    const clock = typeof opts.clock === 'function' ? opts.clock : () => W.performance.now();
+    const clock = () => W.performance.now();
     let blinkUntil = 0, nextBlink = clock() + 2200, glanceUntil = 0, glance = [0, 0];
     let raf = 0, last = 0, t0 = clock(), alive = true, paused = false, pokeTimer = 0;
     const pose = { bob: 0, sx: 1, sy: 1, rot: 0, dx: 0, tail: 0, ex: 0, ey: 0, blink: 1, t: 0, ts: 0 };
@@ -292,9 +291,9 @@
 
     function frame(now) {
       if (!alive) return;
-      if (opts.clock) now = clock(); else raf = W.requestAnimationFrame(frame);
-      if (!opts.clock && (paused || W.document.hidden || now - last < 32)) return; // ~30 fps is plenty, and nothing while hidden or paused
-      const still = !opts.clock && (reduced() || !!window.CASSIE_LITE);
+      raf = W.requestAnimationFrame(frame);
+      if (paused || W.document.hidden || now - last < 32) return; // ~30 fps is plenty, and nothing while hidden or paused
+      const still = reduced() || !!window.CASSIE_LITE;
       if (still && !stale) return;
       stale = false;
       last = now;
@@ -392,7 +391,6 @@
       setAccent(hex) { if (/^#[0-9a-f]{3,8}$/i.test(hex || '')) { accent = hex; paintAccent(); shown.fx = ''; stale = true; setFx(st.effect || ''); if (deep) deep.changed(); } },
       get accent() { return accent; },
       pause(on = true) { paused = !!on; if (deep) deep.pause(paused); },
-      render() { frame(clock()); }, // with opts.clock: draw her at that moment
       poke() { const back = stateName === 'poke' ? 'idle' : stateName; api.setState('poke'); clearTimeout(pokeTimer); pokeTimer = setTimeout(() => api.setState(back), 950); },
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
       destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); if (deep) deep.destroy(); },
@@ -411,10 +409,10 @@
     // The 3D Cassie (cassie-bot3d.js): the same Cassie in 3D, every state and accessory, drawn by one
     // renderer for the whole page. Which one she is gets decided before anything is painted, so she
     // never changes from one to the other: the flat one is for Reduce Motion, Lite mode, no WebGL, a
-    // device where 3D failed before, the pop-out window and frame-by-frame video. While the 3D one gets
+    // device where 3D failed before and the pop-out window. While the 3D one gets
     // ready her place stays empty; if it fails, the flat one shows there instead (and is remembered).
     // opts.flat: a stand-in kept unseen for another 3D Cassie (Get started: opts.waitFor3d, then reveal()).
-    const will3d = !opts.clock && (!opts.win || opts.win === window) && !opts.flat && !reduced() && !window.CASSIE_LITE && !window.CASSIE_FLAT && !!window.WebGLRenderingContext && !failed3d();
+    const will3d = (!opts.win || opts.win === window) && !opts.flat && !reduced() && !window.CASSIE_LITE && !!window.WebGLRenderingContext && !failed3d();
     if (will3d || (opts.flat && opts.waitFor3d)) { flatShown = false; svg.style.visibility = 'hidden'; }
     if (will3d) {
       // (only once she's on screen: a hidden Cassie never loads the 3D one)
