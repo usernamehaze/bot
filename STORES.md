@@ -51,6 +51,7 @@ few days.
    - **Category:** Education.
    - **Screenshots:** at least one at 1280×800 (`cassie-screenshot-1280x800.png`).
    - **Icon:** `extension/icons/icon-128.png`.
+   - **Support URL:** `https://askcassie.study/support.html`
 4. **Privacy tab**
    - **Single purpose:** "Explains, answers, or summarizes text and screenshots
      the user chooses, for studying."

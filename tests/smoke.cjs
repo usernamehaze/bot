@@ -705,6 +705,31 @@ test('uploads are used to answer, then dropped: a file’s words, name and bytes
   await ctx.close();
 });
 
+test('support.html: the help page the stores link to loads with no errors, every link on it works, it gives the same contact as privacy.html, reads well on a phone and in dark mode, and the landing footer links to it', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const ctx = await b.newContext({ viewport: { width: 375, height: 740 }, serviceWorkers: 'block' });
+  const page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  const res = await page.goto(`http://localhost:${APP_PORT}/support.html`);
+  expect(res.ok(), 'support.html is on the site: ' + res.status());
+  const text = await page.evaluate(() => document.body.innerText);
+  expect(!/[\u2013\u2014]/.test(text), 'no long dashes on the page');
+  const mail = (h) => (h.match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [])[0];
+  const privacyMail = mail(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').split('<h2>Contact</h2>')[1] || '');
+  expect(privacyMail && (await page.locator(`a[href="mailto:${privacyMail}"]`).count()) === 1, `the contact email is privacy.html's (${privacyMail})`);
+  expect(/Report a problem or suggest something/.test(text) && /Report a problem or suggest something/.test(fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8')), 'it names the app’s own Report a problem button');
+  // every link on the page (on this site) answers
+  const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => h.startsWith(location.origin)));
+  // (the extension zip is made when the site is built, like the landing page's own download link)
+  for (const l of links) { if (/cassie-extension\.zip$/.test(l)) { expect(fs.existsSync(path.join(ROOT, '_site/cassie-extension.zip')), 'the built site has the extension download'); continue; } const r = await page.request.get(l); expect(r.ok(), 'a link on the help page is broken: ' + l + ' ' + r.status()); }
+  expect(links.length >= 4, 'it links home, privacy, terms and the extension download: ' + links.length);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on a phone');
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await contrastIssues(page, 'body'); expect(!bad.length, `readable in ${scheme} mode: ` + bad.join(' | ')); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await page.goto(`http://localhost:${APP_PORT}/index.html`);
+  expect(await page.locator('footer a[href="support.html"]').count() === 1, 'the landing page footer links to Help');
+  await ctx.close();
+});
+
 test('terms.html promises an easy cancel and a reminder before every renewal, and the subscriptions plan matches it (no payment code yet)', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
