@@ -1646,7 +1646,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
     expect(await p.locator('#update-note').isVisible(), 'a newer version on the site: the popup says so');
     const note = await p.locator('#update-note').innerText();
     expect(/A new version of Cassie is ready\. Download it, then press Reload on Cassie in chrome:\/\/extensions\./.test(note) && !/[—–]/.test(note), 'the note: ' + note);
-    expect(/^https:\/\/askcassie\.pages\.dev\/cassie-extension\.zip/.test(await p.locator('#update-get').getAttribute('href')), 'Download goes to the zip on the site');
+    expect(/^https:\/\/askcassie\.study\/cassie-extension\.zip/.test(await p.locator('#update-get').getAttribute('href')), 'Download goes to the zip on the site');
     expect((await p.locator('#update-get').boundingBox()).height >= 44, 'Download is 44px tall');
     let asked = await sw.evaluate(() => self.__asked);
     expect(asked.length === 1 && /\/extension-version\.json$/.test(asked[0].u) && !asked[0].body && asked[0].credentials === 'omit', 'one request for the file, nothing sent: ' + JSON.stringify(asked));
