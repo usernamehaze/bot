@@ -2292,7 +2292,8 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
   await page.click('#chat-log .wk-share');
   const file = await dl;
   expect(file.suggestedFilename() === 'my-week-with-cassie.png', 'the week as a picture: ' + file.suggestedFilename());
-  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#chat-log .hub-week, #chat-log .hub-exam'); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | ')); }
+  // (the moving background takes 0.7 s to fade to the new colors: on a busy machine 0.8 s caught it halfway, too light behind dark mode's grey words)
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1600); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#chat-log .hub-week, #chat-log .hub-exam'); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | ')); }
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the three sizes: nothing spills off the screen, every control on it is 44px
