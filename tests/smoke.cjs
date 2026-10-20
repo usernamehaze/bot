@@ -7399,6 +7399,9 @@ test('Cassie’s colours: Blush & Sage, picked in Appearance (sage leads for a b
         expect(hex(user) === primary, `${size} ${gender} ${scheme}: your bubble is the main colour: ${user}`);
         if (size === '390x844') { await page.evaluate(() => openSidebar()); await page.waitForTimeout(400); } else { await page.evaluate(() => setSideOpen(true)); await page.waitForTimeout(400); }
         if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/colours-${size}-${gender}-${scheme}.png` });
+        // (until the words' colours stop changing: a busy machine can still be fading them to the new scheme)
+        const inks = () => page.evaluate(() => [...document.querySelectorAll('body, button, .bubble, .chip, .tab')].slice(0, 80).map((e) => getComputedStyle(e).color + getComputedStyle(e).backgroundColor).join('|'));
+        for (let k = 0, was = await inks(); k < 12; k++) { await page.waitForTimeout(150); const now = await inks(); if (now === was) break; was = now; }
         const { checked, bad } = await contrastIssues(page);
         expect(checked >= 10, `${size} ${gender} ${scheme}: words measured: ${checked}`);
         expect(!bad.length, `${size} ${gender} ${scheme}: under AA: ` + bad.join(' | '));
