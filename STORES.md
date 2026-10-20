@@ -2,16 +2,16 @@
 
 There are four parts. Each one can be done on its own.
 
-1. [Keep askcassie.pages.dev up to date](#1-keep-askcassiepagesdev-up-to-date) (do this first, about 2 minutes)
+1. [Keep askcassie.study up to date](#1-keep-askcassiestudy-up-to-date) (do this first, about 2 minutes)
 2. [Chrome Web Store](#2-chrome-web-store-the-extension), so people install the extension in one click
 3. [Google Play Store](#3-google-play-store-android), for Android phones
 4. [Apple App Store](#4-apple-app-store-iphone), for iPhones
 
 ---
 
-## 1. Keep askcassie.pages.dev up to date
+## 1. Keep askcassie.study up to date
 
-askcassie.pages.dev is connected to GitHub, so Cloudflare rebuilds it after
+askcassie.study (the Cloudflare Pages project askcassie, also at askcassie.pages.dev) is connected to GitHub, so Cloudflare rebuilds it after
 every change. It needs two build settings, so that it publishes only the
 website and leaves out the big promo videos (Cloudflare refuses any file over
 25 MB):
@@ -65,7 +65,7 @@ few days.
    - **Remote code:** No.
    - **Data use:** tick "Website content". Confirm the data isn't sold, isn't
      used for unrelated purposes, and isn't used for credit decisions.
-   - **Privacy policy URL:** `https://askcassie.pages.dev/privacy.html`
+   - **Privacy policy URL:** `https://askcassie.study/privacy.html`
 5. Click **Submit for review**. Cassie can read every site, so Google may take
    a little longer to review it. That's normal.
 
@@ -86,7 +86,7 @@ to the website reach the Play Store app automatically.
 **Cost:** a one-time **US $25** Google Play developer account.
 
 1. **Package it**
-   - Go to **pwabuilder.com**, enter `https://askcassie.pages.dev/start.html`,
+   - Go to **pwabuilder.com**, enter `https://askcassie.study/start.html`,
      and click **Start**. Cassie already has the icons, screenshots and offline
      support that it checks for.
    - Click **Package for stores** → **Android** → **Generate**.
@@ -110,7 +110,7 @@ to the website reach the Play Store app automatically.
      usage counts, doesn't sell data, and lets users delete data by clearing it.
    - **Target audience:** if you include **under 13**, Google's stricter
      *Families* rules apply. Choosing **13+** is simpler for a first release.
-   - Privacy policy: `https://askcassie.pages.dev/privacy.html`
+   - Privacy policy: `https://askcassie.study/privacy.html`
 6. Send it for review. A first review can take a few days to a week.
 
 ---
@@ -127,7 +127,7 @@ This is harder and costs more:
   mode, voice, board and file reading help, but it isn't guaranteed.
 
 **Until then, iPhone users can install Cassie for free.** Open
-askcassie.pages.dev in **Safari** → **Share** → **Add to Home Screen**. It
+askcassie.study in **Safari** → **Share** → **Add to Home Screen**. It
 opens full screen with its own icon, like an app.
 
 **When you're ready:**

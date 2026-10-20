@@ -814,7 +814,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ---- "Make a reviewer" on a PDF / Google Doc / Slides tab: hand the whole file
 // to the Cassie web app, which reads it (pictures included) and writes the reviewer.
-const CASSIE_APP_URL = 'https://askcassie.pages.dev/app.html';
+const CASSIE_APP_URL = 'https://askcassie.study/app.html';
 
 // A newer extension on the website? Ask for one small file, at most once a day, and only tell the
 // popup (it shows a note with a Download button). Nothing updates by itself and nothing is sent.
@@ -833,7 +833,7 @@ async function checkForUpdate() {
   let latest = cassieUpdate?.latest || '';
   if (!cassieUpdate || !(Date.now() - cassieUpdate.checkedAt < CASSIE_UPDATE_DAY)) {
     try {
-      const url = self.CASSIE_UPDATE_URL || 'https://askcassie.pages.dev/extension-version.json';
+      const url = self.CASSIE_UPDATE_URL || 'https://askcassie.study/extension-version.json';
       const r = await fetch(url, { cache: 'no-store', credentials: 'omit' });
       const v = r.ok ? String((await r.json()).version || '') : '';
       if (/^\d+(\.\d+)*$/.test(v)) latest = v;

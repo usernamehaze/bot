@@ -82,7 +82,7 @@ desktops/laptops with Google Drive (or a USB stick). Do this once per computer.
   so don't delete or move it after loading. If you move it, re-run steps 6–8.
 - **Desktop only.** This works on Chrome/Edge/Brave (and some Android
   browsers). It does **not** work on iPhone/iPad — on a phone, just open the
-  web app at askcassie.pages.dev instead (no install needed).
+  web app at askcassie.study instead (no install needed).
 - **Updating.** If a newer version comes out, replace the folder's files with
   the new ones, then click the **↻ reload** icon on the extension's card at
   `chrome://extensions`.

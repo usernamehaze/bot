@@ -6,7 +6,7 @@ on the landing page; `landing/tour-poster.jpg` is its poster.
 
 Story: 2 A.M. hook → *Meet Cassie* → highlight a word and she explains it → slides in, reviewer out →
 talk with her → Labs → 3D space → the human body in 3D → rocket → World atlas → daily puzzles →
-Free · Private · Yours → try it free at askcassie.pages.dev.
+Free · Private · Yours → try it free at askcassie.study.
 
 Every filmed scene is the real thing, not a mock-up: the landing page's own demos and the real app
 (`app.html?lab=…`), driven by a script with a visible cursor. Playwright's fake clock moves time 1/30 s

@@ -9,7 +9,7 @@
     hook: '<div class="big a" data-t="0.25">47 slides.</div><div class="big a" data-t="1.3">1 exam.</div><div class="big a" data-t="2.25">2<span class="colon">:</span>00 AM.</div><div class="bot a" data-t="3.0" data-bot="sleeping" style="right:110px;bottom:70px;width:200px;height:200px"></div>',
     meet: '<div class="bot a" data-t="0.05" data-bot="greeting" data-pop></div><h1 class="a" data-t="0.35">Meet <span class="s">Cassie.</span></h1><p class="a" data-t="1.25">The study buddy that shows you how.</p>',
     private: '<div class="row"><div class="big a" data-t="0.2">Free.</div><div class="big a" data-t="0.75">Private.</div><div class="big a s" data-t="1.3">Yours.</div></div><p class="a" data-t="1.8">' + lock + 'Your notes stay on your device.</p>',
-    cta: '<div class="bot a" data-t="0.05" data-bot="proud" data-pop></div><div><h1 class="a" data-t="0.3">Whatever you’re studying,</h1><h1 class="a s" data-t="1.0">Cassie explains it.</h1><div class="pill a" data-t="3.2">Try it free <span>askcassie.pages.dev</span></div><small class="a" data-t="3.8">Phone · Web · Chrome</small></div>',
+    cta: '<div class="bot a" data-t="0.05" data-bot="proud" data-pop></div><div><h1 class="a" data-t="0.3">Whatever you’re studying,</h1><h1 class="a s" data-t="1.0">Cassie explains it.</h1><div class="pill a" data-t="3.2">Try it free <span>askcassie.study</span></div><small class="a" data-t="3.8">Phone · Web · Chrome</small></div>',
   }[k];
   document.body.appendChild(card);
   const bots = [...card.querySelectorAll('[data-bot]')].map((el) => window.CassieBot.create(el, { state: el.dataset.bot, glow: true }));

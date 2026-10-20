@@ -74,14 +74,15 @@ To add **Continue with Google**:
    app name `Cassie` and your email, and save.
 3. **APIs & Services** → **Credentials** → **Create credentials** → **OAuth
    client ID** → **Web application**.
-   - Under **Authorized JavaScript origins**, add `https://askcassie.pages.dev`
-     and `https://usernamehaze.github.io`.
+   - Under **Authorized JavaScript origins**, add `https://askcassie.study`,
+     `https://askcassie.pages.dev` and `https://usernamehaze.github.io`.
    - Under **Authorized redirect URIs**, add exactly (Cassie sends the student to Google
      and Google sends them back here; without these Google shows
      "Error 400: redirect_uri_mismatch"):
+     - `https://askcassie.study/app.html`
      - `https://askcassie.pages.dev/app.html`
      - `https://usernamehaze.github.io/bot/app.html`
-     Google allows no wildcards, so sign-in with Google works on these two sites only, not on
+     Google allows no wildcards, so sign-in with Google works on these sites only, not on
      Cloudflare's preview addresses (`*.askcassie.pages.dev`). The smoke test
      "the return address sent to Google…" keeps this list and the app in step.
    - Click **Create**, then copy the **Client ID**. It ends in
@@ -98,7 +99,7 @@ To add **Sign in with Apple** (the button stays hidden until this is set):
 2. Make a **Services ID** (for example `dev.askcassie.signin`), turn on
    **Sign in with Apple**, click **Configure**, pick that App ID as the
    **Primary App ID**, and add:
-   - **Domains and Subdomains**: `cassie.failanzahazel.workers.dev` and `askcassie.pages.dev`
+   - **Domains and Subdomains**: `cassie.failanzahazel.workers.dev`, `askcassie.study` and `askcassie.pages.dev`
    - **Return URLs**: `https://cassie.failanzahazel.workers.dev/auth/apple/callback`
 3. In this Worker → **Settings** → **Variables and Secrets** → add a **Text**
    variable named `APPLE_SERVICES_ID` with that Services ID. No key file is needed.
@@ -240,6 +241,6 @@ change that with a `ASK_LIMIT` variable. They show on the dashboard as
 Edit `worker.src.js` or `dashboard.html`, run `python3 build.py` in this folder,
 then paste the new `worker.js` into Cloudflare again. Your data is kept.
 
-Only Cassie's own sites can use the server: askcassie.pages.dev,
-usernamehaze.github.io and localhost. If you host Cassie somewhere else, add a
+Only Cassie's own sites can use the server: askcassie.study (and www),
+askcassie.pages.dev, usernamehaze.github.io and localhost. If you host Cassie somewhere else, add a
 variable `ALLOWED_ORIGINS` listing your sites, separated by commas.
