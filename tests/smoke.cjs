@@ -464,6 +464,23 @@ test('the real server on a real database: study rooms (make, join, draw, see eac
   expect(out.status === 200 && (await call('GET', '/auth/me', null, auth)).status === 401, 'signed out: the session is gone');
 });
 
+test('the real server: the studio voice uses the model set in ELEVENLABS_MODEL, and with Eleven v4 sends only the settings v4 takes (no "style")', async () => {
+  const sent = [], realFetch = globalThis.fetch, hadCaches = 'caches' in globalThis;
+  globalThis.caches = { default: { match: async () => null, put: async () => {} } }; // (Cloudflare's edge cache, empty)
+  globalThis.fetch = async (u, o) => { if (/elevenlabs\.io/.test(String(u))) { sent.push({ url: String(u), body: JSON.parse(o.body) }); return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'audio/mpeg' } }); } return realFetch(u, o); };
+  try {
+    for (const [model, voice, style] of [[undefined, 'man', true], ['eleven_v4_turbo', 'man', false], ['eleven_v4', 'woman', false]]) {
+      const { call } = await realServer({ ELEVENLABS_API_KEY: 'test-key', ...(model ? { ELEVENLABS_MODEL: model } : {}) });
+      sent.length = 0;
+      const r = await call('POST', '/speak', { text: 'Hello from Cassie ' + model, voice, uid: 'aaaaaaaa-1' });
+      const b = sent[0] && sent[0].body;
+      expect(r.status === 200 && b, `${model || 'the default'}: Cassie speaks: ` + r.status + ' ' + r.text.slice(0, 120));
+      expect(b.model_id === (model || 'eleven_flash_v2_5'), 'the model sent: ' + b.model_id);
+      expect(('style' in b.voice_settings) === style, `${model || 'flash'} ${voice}: style ${style ? 'sent' : 'left out'}: ` + JSON.stringify(b.voice_settings));
+    }
+  } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
+});
+
 test('the real server: a picture that fails gives the use back to whoever it was counted to (with no id it is counted per network)', async () => {
   const { call, DB } = await realServer({ AI: { run: async () => { throw new Error('busy'); } } });
   const used = (k) => (DB.db.prepare('SELECT n FROM quota WHERE k = ?').get(k) || { n: 0 }).n;

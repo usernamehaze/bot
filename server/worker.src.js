@@ -932,7 +932,8 @@ async function speak(request, env, ctx) {
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively
-  const settings = b.voice === 'man' ? { stability: 0.72, similarity_boost: 0.8, style: 0.05 } : { stability: 0.5, similarity_boost: 0.75 };
+  // (Eleven v4 takes only stability and similarity: no style)
+  const settings = b.voice === 'man' ? { stability: 0.72, similarity_boost: 0.8, ...(/^eleven_v4/.test(model) ? {} : { style: 0.05 }) } : { stability: 0.5, similarity_boost: 0.75 };
   const say = (v) => fetch(`${ELEVEN}/${v}?output_format=mp3_44100_64`, {
     method: 'POST', headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
     body: JSON.stringify({ text, model_id: model, voice_settings: settings }), signal: AbortSignal.timeout(20000),
