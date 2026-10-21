@@ -2010,17 +2010,22 @@ test('daily limit shows a friendly message with Try again', async (b) => {
   await ctx.close();
 });
 
-test('Student / Professional switch is top right and switches the audience; no doodle wallpaper behind the chat', async (b) => {
-  const { ctx, page } = await open(b);
-  const sw = await page.locator('.topbar-actions #aud-switch').boundingBox();
-  const brand = await page.locator('.topbar .brand').boundingBox();
-  expect(sw && sw.x > brand.x + brand.width && sw.y < 80, 'switch is not in the top right: ' + JSON.stringify(sw));
-  const pressed = () => page.evaluate(() => document.querySelector('#aud-switch [aria-pressed="true"]')?.dataset.aud);
-  expect(await pressed() === 'student', 'not student by default');
-  await page.click('#aud-switch [data-aud=pro]');
-  expect(await pressed() === 'pro' && (await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).audience)) === 'pro', 'the switch did not change to Professional');
-  expect(await page.locator('#aud-bg, .pat').count() === 0, 'the doodle wallpaper is gone (Apple: branding defers to content)');
-  expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
+test('no Student / Professional switch at the top (phone and computer); a switch flipped to Professional before is undone, and only a Working professional profile gets the work-style answers; no doodle wallpaper behind the chat', async (b) => {
+  for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, groqCalls } = await open(b, { device, viewport, server: false, state: { groqKey: 'gsk_test', audience: 'pro', profile: { name: 'Mika', role: 'student', grade: 'Grade 10', age: 16, at: 1 } }, fakeGroq: () => ({ text: 'Hi!' }) });
+    expect(await page.locator('#aud-switch, [data-aud], .aud-switch').count() === 0, `${viewport.width}: the switch is gone`);
+    expect(await page.evaluate(() => state.audience) === 'student', `${viewport.width}: the old Professional choice is undone`);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/topbar-${viewport.width}.png`, clip: { x: 0, y: 0, width: viewport.width, height: 90 } });
+    await ask(page, 'hello');
+    expect(!/working professional/.test(groqCalls.at(-1).messages[0].content), `${viewport.width}: a student gets study answers`);
+    expect(await page.locator('#aud-bg, .pat').count() === 0, 'the doodle wallpaper is gone (Apple: branding defers to content)');
+    expect(await page.locator('.rate-row, .beta-tag').count() === 0, 'thumbs or Beta still showing');
+    await ctx.close();
+  }
+  // a Working professional profile still gets the colleague style
+  const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test', profile: { name: 'Ana', role: 'pro', grade: '', age: 30, at: 1 } }, fakeGroq: () => ({ text: 'Hi!' }) });
+  await ask(page, 'hello');
+  expect(/working professional/.test(groqCalls.at(-1).messages[0].content) && await page.evaluate(() => state.audience) === 'pro', 'Working professional: the work-style answers');
   await ctx.close();
 });
 

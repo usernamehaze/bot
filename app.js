@@ -18,7 +18,7 @@ function loadState() {
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
     accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
-    audience: 'student',    // student | pro — the Student / Professional switch
+    audience: 'student',    // student | pro (from the profile: Working professional is pro)
     messages: [], // { role: 'user' | 'assistant', content: '...' }
   };
 }
@@ -194,8 +194,9 @@ const ABILITIES_INSTRUCTION = `What this app can do with your answers:
 - Pictures: the app has a real picture maker. If the student asks you to draw, generate, create or show an image, picture, photo, illustration or drawing of something (not a math graph), do NOT draw it with text or ASCII art and don't describe what you would draw, reply with exactly one line: [[IMAGE: a short, vivid description of the picture]] and nothing else. Never say you can't make images.
 - If they ask for a reviewer without naming a topic, make it about what you've been discussing. Only ask which topic when there is nothing to go on.`;
 
-// The Student / Professional switch: for working professionals Cassie is a sharp,
-// practical colleague rather than a tutor.
+// Working professionals (their profile says so) get a sharp, practical colleague rather than a tutor.
+// (There was a Student / Professional switch; now only the profile decides, so a flipped switch is undone.)
+const workMode = () => !!(state.profile && state.profile.role === 'pro');
 const PRO_INSTRUCTION = `The user is a working professional, not a student. Act as a sharp, practical colleague: lead with the answer, keep it concise, and make it workplace-ready, emails, reports, proposals, slide outlines, meeting notes, data and spreadsheet help, analysis with clear recommendations. Use a professional, friendly tone. Skip school-style framing (no grade levels, no "let's learn") unless they ask to learn something.`;
 
 let quizMode = false; // set by the "Quiz me" button; runs a multi-turn practice quiz
@@ -244,7 +245,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
     sp += `\n\nWhen you cite sources or format references, use ${state.citationStyle} style.`;
   }
   if (state.profile) sp += `\n\n${profileLine(state.profile)}`;
-  if (state.audience === 'pro') sp += `\n\n${PRO_INSTRUCTION}`;
+  if (workMode()) sp += `\n\n${PRO_INSTRUCTION}`;
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
@@ -793,39 +794,17 @@ if (isleMain) islandEl.after(isleMain.el);
 })();
 
 // Cassie dresses for the job:
-//   Student (default) → her classic fluffy felt · Professional → the suit & beret
+//   Student (default) → her classic fluffy felt · a working professional → the suit & beret
 //   Research / Web → cap & gown · Quiz me → thick glasses · Talk → the felt heart
 let taskOutfit = null; // 'graduate' while a Research / Web answer is up; the next plain message clears it
 function dressCassie() {
-  const base = state.audience === 'pro' ? 'professor' : 'classic';
+  const base = workMode() ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
   if (bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
 }
 
-// Student / Professional switch
-const audSwitch = document.getElementById('aud-switch');
-function renderAudience() {
-  if (!audSwitch) return;
-  const pro = state.audience === 'pro';
-  audSwitch.classList.toggle('pro', pro);
-  audSwitch.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.aud === (pro ? 'pro' : 'student'))));
-}
-if (audSwitch) {
-  audSwitch.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-aud]');
-    if (!b || b.dataset.aud === (state.audience || 'student')) return;
-    state.audience = b.dataset.aud;
-    save();
-    track('feature', 'mode:' + state.audience);
-    renderAudience();
-    taskOutfit = null;
-    dressCassie();
-    set3D('happy');
-    setTimeout(() => set3D('neutral'), 1600);
-    try { mascotSay(state.audience === 'pro' ? 'Suit on. Let’s get to work.' : 'Study mode: let’s learn!', 2600); } catch (err) { /* ignore */ }
-  });
-  renderAudience();
-}
+function syncAudience() { state.audience = workMode() ? 'pro' : 'student'; } // (the old switch's choice, undone)
+syncAudience();
 
 function setCursorMode(mode) {
   cursorState = mode;
@@ -7014,7 +6993,7 @@ function saveProfile({ name, age, grade, gender }, first, prev = {}) {
   state.analytics = { usage: an0.usage !== false && age >= 13, topics: an0.topics !== false && age >= 18 };
   save();
   try { if (window.CassieMemory && name) window.CassieMemory.setProfile('name', name); } catch (e2) { /* ignore */ }
-  renderAudience();
+  syncAudience();
   applyAccent();
   dressCassie();
   if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
@@ -7362,7 +7341,7 @@ function applyAccountData(d) {
   }
   lastSynced = JSON.stringify(accountData());
   save();
-  try { renderAudience(); applyAccent(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
+  try { syncAudience(); applyAccent(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
   if (!state.messages.length) renderHistory();
 }
 function signedIn(token, account, plan) {

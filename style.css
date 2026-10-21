@@ -1123,29 +1123,9 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 
-/* Student / Professional switch */
-.aud-switch {
-  position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid var(--border);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); flex-shrink: 0;
-}
-.aud-switch::before {
-  content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px;
-  background: var(--primary); transition: transform .28s cubic-bezier(.3,.8,.3,1);
-}
-.aud-switch.pro::before { transform: translateX(100%); }
-.aud-switch button {
-  position: relative; z-index: 1; border: 0; background: none; cursor: pointer; padding: 6px 12px; border-radius: 999px;
-  font: 600 .8rem/1 inherit; font-family: inherit; color: var(--muted); transition: color .2s;
-}
-.aud-switch button[aria-pressed="true"] { color: var(--on-primary); }
-.topbar-actions .aud-switch { margin-right: 6px; }
-.aud-short { display: none; }
 @media (max-width: 520px) {
-  .aud-full { display: none; } .aud-short { display: inline; }
-  .topbar { grid-template-columns: auto 1fr auto; column-gap: 6px; } /* room for the switch: Cassie sits by the menu */
+  .topbar { grid-template-columns: auto 1fr auto; column-gap: 6px; } /* Cassie sits by the menu */
   .topbar .brand { justify-self: start; }
-  .topbar-actions .aud-switch button { padding: 6px 10px; }
 }
 /* the 3D Cassie walks for real, so the flat waddle isn't needed */
 .quick-actions .chip.active { background: var(--primary); color: var(--on-primary); }
@@ -1587,8 +1567,6 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
   .topbar-actions { gap: 0; }
   .topbar-actions .icon-btn { width: 34px; height: 34px; padding: 0; }
   .topbar-actions .icon-btn svg { width: 20px; height: 20px; }
-  .topbar-actions .aud-switch { margin-right: 2px; }
-  .topbar-actions .aud-switch button { padding: 6px 8px; }
 }
 @media (max-width: 380px) { .topbar .brand > span { display: none; } } /* the Cassie dot stays */
 /* Explore 3D — the human body */
@@ -1998,8 +1976,8 @@ html.lite {
   .followups { gap: var(--sp-2); }
   .fu-chip { min-height: 36px; }
   .settings-card .btn, .settings-actions .btn { min-height: var(--tap); }
-  .chip, .fu-chip, .aud-switch button, .auth-switch button, .auth-legal a, .key-link, .bubble-tools button.suggest { position: relative; }
-  .chip::after, .fu-chip::after, .aud-switch button::after, .auth-switch button::after, .auth-legal a::after, .key-link::after, .bubble-tools button.suggest::after {
+  .chip, .fu-chip, .auth-switch button, .auth-legal a, .key-link, .bubble-tools button.suggest { position: relative; }
+  .chip::after, .fu-chip::after, .auth-switch button::after, .auth-legal a::after, .key-link::after, .bubble-tools button.suggest::after {
     content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--tap)); height: max(100%, var(--tap)); transform: translate(-50%, -50%);
   }
   .key-link { display: inline-block; }
