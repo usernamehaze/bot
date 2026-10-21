@@ -1229,6 +1229,46 @@ test('a new chat on a computer: no big Cassie over the title (the floating one s
   await ctx.close();
 });
 
+test('computers: whatever you open last is in front: from Settings, Memory, Labs, Games, Board, Flashcards, Home and Calendar each show on top and Settings closes; Settings opened over Memory is on top', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: deskSeed().state });
+  await page.evaluate(() => deskGo('home'));
+  await page.waitForSelector('#chat-log .desk-home');
+  // what is on top in the middle of where each one shows
+  const front = (sel) => page.evaluate((s) => { const el = document.querySelector(s); if (!el || !el.getClientRects().length) return 'not shown'; const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 200), hit = document.elementFromPoint(x, y); return hit && (el === hit || el.contains(hit)) ? 'front' : 'behind ' + (hit ? (hit.id || hit.className || hit.tagName) : 'nothing'); }, sel);
+  const openSettingsNow = async () => { await page.click('#side-general #settings-btn'); await page.waitForSelector('#settings-panel:not([hidden])'); };
+  const CASES = [
+    ['Memory', '#side-general #memory-btn', '#memory-panel'],
+    ['Labs', '#side-apps #labs-btn', '.labs:not([hidden])'],
+    ['Games', '#side-apps #games-btn', '.labs:not([hidden])'],
+    ['Board', '#side-apps #board-btn', '.csk-panel'],
+    ['Flashcards', '#side-tools .side-tool[data-tip="Flashcards"]', '.fc:not([hidden])'],
+    ['Home', '#side-nav [data-page="home"]', '#chat-log .desk-home'],
+    ['Calendar', '#side-nav [data-page="calendar"]', '#chat-log .desk-cal'],
+  ];
+  for (const [name, btn, shows] of CASES) {
+    await openSettingsNow();
+    if (name === 'Flashcards') await page.evaluate(() => setToolsOpen(true));
+    await page.click(btn);
+    await page.waitForSelector(shows, { timeout: 8000 });
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => document.getElementById('settings-panel').hidden), `${name}: Settings closed`);
+    const f = await front(shows);
+    expect(f === 'front', `${name} is in front after Settings: ` + f);
+    if (process.env.SHOTS && name === 'Memory') { for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(700); await page.screenshot({ path: `${process.env.SHOTS}/memory-over-settings-${scheme}.png` }); } await page.emulateMedia({ colorScheme: 'light' }); }
+    // close what opened, the way a student would
+    await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+    await page.evaluate(() => { document.querySelectorAll('.labs:not([hidden]) .labs-x, .fc:not([hidden]) .fc-x').forEach((x) => x.click()); if (window.CassieSketch && window.CassieSketch.isOpen()) window.CassieSketch.close(); closeMemory(); });
+    await page.waitForTimeout(250);
+  }
+  // the other way round: Memory, then Settings on top of it
+  await page.click('#side-general #memory-btn');
+  await page.waitForSelector('#memory-panel:not([hidden])');
+  await openSettingsNow();
+  expect(await page.evaluate(() => document.getElementById('memory-panel').hidden) && await front('#settings-panel .settings-card') === 'front', 'Settings opened over Memory is in front');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));

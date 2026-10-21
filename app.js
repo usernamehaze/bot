@@ -1692,6 +1692,7 @@ const sideHl = document.getElementById('side-hl-toggle');
 const toolBtns = [];
 function runTool(ex) {
   hideSideTip();
+  deskCloseOthers(/flashcards/i.test(ex.label) ? 'cards' : /labs/i.test(ex.label) ? 'labs' : '');
   if (!sideWide.matches) closeSidebar();
   if (ex.run) { ex.run(); return; }
   if (ex.send) handleSend(ex.text);
@@ -2192,7 +2193,7 @@ function showTopResults() {
   topQ.setAttribute('aria-expanded', String(!topResults.hidden));
   if (topHits.length) topQ.setAttribute('aria-activedescendant', 'top-r0'); else topQ.removeAttribute('aria-activedescendant');
 }
-function pickTop(i) { const h = topHits[i]; topQ.value = ''; showTopResults(); topQ.blur(); if (h) h.go(); }
+function pickTop(i) { const h = topHits[i]; topQ.value = ''; showTopResults(); topQ.blur(); if (h) { deskCloseOthers({ Settings: 'settings', Memory: 'memory', Labs: 'labs', Games: 'labs', Board: 'board', Flashcards: 'cards' }[h.t] || ''); h.go(); } }
 topQ.addEventListener('input', showTopResults);
 topQ.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -2390,6 +2391,7 @@ function deskCalendar() {
   return el;
 }
 function deskGo(page) {
+  deskCloseOthers();
   if (state.messages.length) createNewChat();
   setDeskPage(page);
   renderHistory();
@@ -5229,6 +5231,7 @@ function attachDataUrl(dataUrl, prompt) {
 
 function openSketch(opts = {}) {
   if (!window.CassieSketch) return;
+  deskCloseOthers('board');
   window.CassieSketch.open({
     title: opts.title || 'Your board',
     dark: opts.dark != null ? opts.dark : prefersDark(),
@@ -5769,6 +5772,7 @@ async function openExplore(cell, ret) {
 const labsBtn = document.getElementById('labs-btn');
 let labsMod = null;
 async function openLabs(lab, more = {}) {
+  deskCloseOthers('labs');
   track('feature', 'labs');
   refreshPlan();
   try {
@@ -5880,7 +5884,18 @@ if (talkBtn) {
 }
 
 /* ---------- settings ---------- */
+// computers: whatever you open last is in front, so what was open before it closes first (each with its own close)
+function deskCloseOthers(keep = '') {
+  if (!sideWide.matches) return;
+  if (keep !== 'settings' && !settingsPanel.hidden) closeSettings();
+  const mem = document.getElementById('memory-panel');
+  if (keep !== 'memory' && mem && !mem.hidden) closeMemory();
+  if (keep !== 'labs' && document.documentElement.classList.contains('labs-open')) { const x = document.querySelector('.labs .labs-x'); if (x) x.click(); }
+  if (keep !== 'cards' && document.documentElement.classList.contains('fc-open') && window.CassieCards) window.CassieCards.close();
+  if (keep !== 'board' && window.CassieSketch && window.CassieSketch.isOpen && window.CassieSketch.isOpen()) window.CassieSketch.close();
+}
 function openSettings(page = 'all') {
+  deskCloseOthers('settings');
   if (settingsPanel.hidden) setTrail = [];
   groqKeyInput.value = state.groqKey;
   groqModelSelect.value = state.groqModel;
@@ -6193,6 +6208,7 @@ function renderMemory() {
 
 function openMemory() {
   if (!memoryPanel) return;
+  deskCloseOthers('memory');
   renderMemory();
   memoryPanel.hidden = false;
 }
