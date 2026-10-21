@@ -2846,3 +2846,12 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   #chat-log > .home.home-desk > .desk { width: 100%; }
   body.desk-on #mascot { display: none; } /* (the dashboard pages are full of cards: she waits in the chats, where she has room) */
 }
+/* ---------- computers: scrollbars in Cassie's colours (the picked colour, softened toward the page; phones keep their own) ---------- */
+@media (min-width: 761px) {
+  :root { --scroll-thumb: color-mix(in srgb, var(--primary) 55%, var(--surface)); --scroll-thumb-hover: color-mix(in srgb, var(--primary) 80%, var(--surface)); }
+  * { scrollbar-color: var(--scroll-thumb) transparent; scrollbar-width: thin; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); background-clip: padding-box; }
+}

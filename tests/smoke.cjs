@@ -1269,6 +1269,35 @@ test('computers: whatever you open last is in front: from Settings, Memory, Labs
   await ctx.close();
 });
 
+test('computers: scrollbars in Cassie’s colours (the chat, the sidebar, Settings), following the picked colour in light and dark; phones keep their own', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: deskSeed().state });
+  await page.evaluate(() => deskGo('home'));
+  await page.waitForSelector('#chat-log .desk-home');
+  // the colour each scrollbar should be: the picked colour, softened toward the page (worked out by the browser)
+  const read = () => page.evaluate(() => {
+    const probe = document.createElement('i'); probe.style.color = 'color-mix(in srgb, var(--primary) 55%, var(--surface))'; document.body.appendChild(probe);
+    const want = getComputedStyle(probe).color; probe.remove();
+    const of = (el) => (getComputedStyle(el).scrollbarColor || '').split(/ (?=rgba?\(|color\()/)[0];
+    return { want, chat: of(document.getElementById('chat-log')), side: of(document.getElementById('sidebar')), card: of(document.querySelector('#settings-panel .settings-card')) };
+  });
+  const seen = [];
+  for (const [pick, scheme] of [['cassie', 'light'], ['#1d4ed8', 'light'], ['#1d4ed8', 'dark']]) {
+    await page.evaluate((c) => setAccent(c), pick); await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400);
+    const S = await read();
+    expect(S.chat === S.want && S.side === S.want && S.card === S.want, `${pick} ${scheme}: every scrollbar is the picked colour: ` + JSON.stringify(S));
+    seen.push(S.want);
+  }
+  expect(new Set(seen).size === 3, 'it changes with the colour and the theme: ' + JSON.stringify(seen));
+  if (process.env.SHOTS) { await page.evaluate(() => setAccent('cassie')); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(700); await page.screenshot({ path: `${process.env.SHOTS}/scrollbar-${scheme}.png` }); } }
+  await page.evaluate(() => setAccent('cassie'));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // a phone: the system's own
+  const ph = await open(b, { device: 'iPhone 13', server: false });
+  expect(await ph.page.evaluate(() => getComputedStyle(document.getElementById('chat-log')).scrollbarColor === 'auto'), 'a phone keeps its own scrollbars');
+  await ph.ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));
