@@ -889,6 +889,24 @@ const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
 const ELEVEN_VOICES = { woman: 'cgSgspJ2msm6clMCkdW9', man: 'iP95p4xoKVk53GoZ742B', manSpare: 'JBFqnCBsd6RMkjVDRZzb' };
 // What's left of the studio voice, read without counting a use: the app decides at the start of a
 // lesson, a Listen or a voice chat whether Bella can say all of it. Only numbers and a date go back.
+/* What the ElevenLabs account itself has left (its credits) and the day they come back: asked at most every
+   10 minutes per server copy, and set to none at once when ElevenLabs says the credits are gone. Cassie's
+   own counts (SPEAK_MONTHLY_CHARS) can't see credits used elsewhere (the ElevenLabs website, another app,
+   a plan change), so without this she kept asking a voice with nothing left. A key that can't read its
+   subscription leaves only Cassie's own counts. */
+let elevenCredits = null;
+async function elevenLeft(env) {
+  if (elevenCredits && Date.now() - elevenCredits.at < 10 * 60e3) return elevenCredits;
+  try {
+    const r = await fetch('https://api.elevenlabs.io/v1/user/subscription', { headers: { 'xi-api-key': env.ELEVENLABS_API_KEY }, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!Number.isFinite(+d.character_limit) || !Number.isFinite(+d.character_count)) return null;
+    const reset = +d.next_character_count_reset_unix;
+    elevenCredits = { at: Date.now(), left: Math.max(0, +d.character_limit - +d.character_count), back: reset > 0 ? dayOf(reset * 1000) : '' };
+    return elevenCredits;
+  } catch (e) { return null; }
+}
 async function speakLeft(env, uidRaw) {
   if (!env.ELEVENLABS_API_KEY) return { on: false, left: 0 };
   const monthMax = +env.SPEAK_MONTHLY_CHARS || 9500, dayMax = +env.SPEAK_DAILY_CHARS || 3000;
@@ -904,7 +922,10 @@ async function speakLeft(env, uidRaw) {
   const [y, m] = month.split('-').map(Number);
   const nextMonth = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
   const tomorrow = dayOf(now + 864e5);
-  return { on: true, left: Math.min(monthLeft, dayLeft), back: monthLeft <= dayLeft ? nextMonth : tomorrow };
+  const mine = { on: true, left: Math.min(monthLeft, dayLeft), back: monthLeft <= dayLeft ? nextMonth : tomorrow };
+  // the account's own credits, when they're the smaller (back: the day ElevenLabs renews them)
+  const credits = await elevenLeft(env);
+  return credits && credits.left < mine.left ? { on: true, left: credits.left, back: credits.back || nextMonth } : mine; // (a key that can't say when: the 1st)
 }
 async function speak(request, env, ctx) {
   const h = allowedOrigin(request, env);
@@ -925,6 +946,7 @@ async function speak(request, env, ctx) {
   const hit = await cache.match(key);
   if (hit) return audio(hit.body, { 'x-speak': 'cache' });
   const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
+  if (elevenCredits && elevenCredits.left < text.length && Date.now() - elevenCredits.at < 10 * 60e3) return chatError('Cassie’s studio voice is resting until its credits come back.', 429, h, { 'x-speak': 'month' });
   if (env.DB) {
     await ensureSchema(env.DB);
     const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
@@ -945,6 +967,12 @@ async function speak(request, env, ctx) {
   } catch (e) { ctx.waitUntil(logProblem(env, 'voice: elevenlabs', reasonOf(0, e && e.message || e)).catch(() => {})); return chatError('The studio voice didn’t answer.', 502, h); }
   if (!r.ok) {
     let m = ''; try { m = JSON.stringify(await r.json()).slice(0, 300); } catch (e) { /* not JSON */ }
+    // the account's credits are gone: resting until they come back (said once, not asked again and again)
+    if (/quota_exceeded|credits remaining/i.test(m)) {
+      if (!elevenCredits || elevenCredits.left > 0) ctx.waitUntil(logProblem(env, 'voice: elevenlabs', 'out of credits').catch(() => {}));
+      elevenCredits = { at: Date.now(), left: 0, back: (elevenCredits && elevenCredits.back) || '' };
+      return chatError('Cassie’s studio voice is resting until its credits come back.', 429, h, { 'x-speak': 'month' });
+    }
     ctx.waitUntil(logProblem(env, 'voice: elevenlabs', reasonOf(r.status, m)).catch(() => {}));
     return chatError('The studio voice didn’t work just now.', 502, h, { 'x-speak': 'error' });
   }
