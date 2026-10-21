@@ -1065,7 +1065,8 @@ const autoCode = (t) => (/^[a-z][a-z0-9_]{0,39}$/.test(String(t || '')) ? String
 const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
 // Sarah, and Daniel for the man's voice: calm, precise, British — an "AI butler" feel (ElevenLabs' own voices;
 // George is the spare if Daniel ever isn't there)
-const ELEVEN_VOICES = { woman: 'EXAVITQu4vr4xnSDxMaL', man: 'onwK4e9ZLuTAKqWW03F9', manSpare: 'JBFqnCBsd6RMkjVDRZzb' };
+// ElevenLabs' standard voices (every account has them): Jessica (bright, warm) and Chris (down-to-earth); George if Chris is missing
+const ELEVEN_VOICES = { woman: 'cgSgspJ2msm6clMCkdW9', man: 'iP95p4xoKVk53GoZ742B', manSpare: 'JBFqnCBsd6RMkjVDRZzb' };
 // What's left of the studio voice, read without counting a use: the app decides at the start of a
 // lesson, a Listen or a voice chat whether Bella can say all of it. Only numbers and a date go back.
 async function speakLeft(env, uidRaw) {
