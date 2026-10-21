@@ -483,6 +483,37 @@ test('the real server: the studio voice uses the model set in ELEVENLABS_MODEL, 
   } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
 });
 
+test('the real server: the studio voice counts the ElevenLabs account’s own credits, and when they run out it rests until they’re back instead of asking again and again', async () => {
+  const realFetch = globalThis.fetch, hadCaches = 'caches' in globalThis;
+  globalThis.caches = { default: { match: async () => null, put: async () => {} } };
+  let eleven = { sub: null, tts: 0 };
+  globalThis.fetch = async (u, o) => {
+    const url = String(u);
+    if (/elevenlabs\.io\/v1\/user\/subscription/.test(url)) return eleven.sub ? new Response(JSON.stringify(eleven.sub), { status: 200 }) : new Response('{"detail":{"status":"missing_permissions"}}', { status: 401 });
+    if (/elevenlabs\.io/.test(url)) { eleven.tts++; return eleven.out ? new Response(JSON.stringify({ detail: { code: 'quota_exceeded', message: 'This request exceeds your quota of 10000. You have 0 credits remaining.' } }), { status: 401 }) : new Response(new Uint8Array([1, 2]), { status: 200 }); }
+    return realFetch(u, o);
+  };
+  try {
+    // the account has 40 credits left, renewed on a known day: that's what Cassie says is left
+    let s1 = await realServer({ ELEVENLABS_API_KEY: 'k', SPEAK_MONTHLY_CHARS: '125000' });
+    const reset = Date.UTC(2026, 10, 3, 4) / 1000;
+    eleven.sub = { character_limit: 100000, character_count: 99960, next_character_count_reset_unix: reset };
+    const left = await s1.call('GET', '/speak?uid=aaaaaaaa-1');
+    expect(left.json.on && left.json.left === 40 && left.json.back === '2026-11-03', 'the account’s own credits and renewal day: ' + left.text);
+    // a key that can't read its account, and the credits run out: one try, then resting (no more calls)
+    const s2 = await realServer({ ELEVENLABS_API_KEY: 'k' });
+    eleven = { sub: null, tts: 0, out: true };
+    const a = await s2.call('POST', '/speak', { text: 'Hello there.', uid: 'aaaaaaaa-1' });
+    const b2 = await s2.call('POST', '/speak', { text: 'And again.', uid: 'aaaaaaaa-1' });
+    expect(a.status === 429 && b2.status === 429 && eleven.tts === 1, 'out of credits: resting (429), and ElevenLabs asked once: ' + JSON.stringify([a.status, b2.status, eleven.tts]));
+    const after = await s2.call('GET', '/speak?uid=aaaaaaaa-1');
+    const d = new Date(Date.now() + 8 * 3600e3), first = `${d.getUTCMonth() === 11 ? d.getUTCFullYear() + 1 : d.getUTCFullYear()}-${String(d.getUTCMonth() === 11 ? 1 : d.getUTCMonth() + 2).padStart(2, '0')}-01`;
+    expect(after.json.on && after.json.left === 0 && after.json.back === first, 'the app is told it’s resting (until the 1st when the key can’t say): ' + after.text);
+    const probs = s2.DB.db.prepare("SELECT text FROM feedback WHERE feature = 'voice: elevenlabs'").all().map((r) => r.text);
+    expect(probs.length === 1 && probs[0] === 'out of credits', 'the dashboard gets one plain line, not one per try: ' + JSON.stringify(probs));
+  } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
+});
+
 test('the real server: a picture that fails gives the use back to whoever it was counted to (with no id it is counted per network)', async () => {
   const { call, DB } = await realServer({ AI: { run: async () => { throw new Error('busy'); } } });
   const used = (k) => (DB.db.prepare('SELECT n FROM quota WHERE k = ?').get(k) || { n: 0 }).n;
@@ -2369,6 +2400,34 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await page.waitForFunction((n) => window.CassieSketch.session().strokeCount() === n, before, { timeout: 5000 });
   expect((await page.evaluate(() => window.CassieSketch.session().objects())).filter((o) => o.tool === 'note').length === 3, 'notes are back');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('exam readiness: practice quiz answers on a plan’s topics show how ready you are (a topic not yet practised counts as 0), from an exam task’s quiz and from Quiz me with a topic typed', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null, chats: [{ id: 'h1', title: 'Moles', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A count.' }], updatedAt: Date.now() }] } });
+  const hub = '#home .hub';
+  await page.waitForSelector(`${hub} .ex-new`, { timeout: 10000 });
+  const card = async () => { await page.evaluate(() => refreshHub()); return page.locator(`${hub} .ex-plan`).first(); };
+  await page.evaluate(() => {
+    const today = phDay();
+    state.exams = [{ id: 'exA', name: 'Gen Chem finals', date: dayAdd(today, 5), topics: 'Stoichiometry, gas laws', from: today, at: Date.now(), stats: {},
+      days: [{ date: today, tasks: [{ kind: 'learn', topic: 'Stoichiometry' }, { kind: 'quiz', topic: 'Stoichiometry' }] }, { date: dayAdd(today, 1), tasks: [{ kind: 'quiz', topic: 'Gas laws' }, { kind: 'mistakes', topic: '' }] }] }];
+    save();
+  });
+  expect(await (await card()).locator('.ex-ready').count() === 0, 'nothing practised yet: no readiness line');
+  // the exam task's quiz: 3 right of 4 on Stoichiometry, Gas laws not yet practised
+  await page.evaluate(() => { quizStarted('Stoichiometry'); captureQuizMarks('[[GOT: q1 || a]] [[GOT: q2 || a]] [[MISSED: q3 || a]] [[GOT: q4 || a]]'); });
+  let c = await card();
+  expect(/^38% ready/.test(await c.locator('.ex-ready-row').innerText()) && /1 of 2 topics practised/.test(await c.locator('.ex-ready').innerText()), '75% on one topic of two: 38% ready: ' + await c.locator('.ex-ready').innerText());
+  expect(await c.locator('.ex-bar').getAttribute('aria-valuenow') === '38', 'the bar says 38');
+  // Quiz me with "gas laws" typed: it counts for the plan's Gas laws
+  await page.evaluate(() => { quizStarted('gas laws'); captureQuizMarks('[[GOT: g1 || a]] [[GOT: g2 || a]]'); });
+  c = await card();
+  expect(/^88% ready/.test(await c.locator('.ex-ready-row').innerText()) && /2 of 2 topics practised/.test(await c.locator('.ex-ready').innerText()) && /not a promise about the grade/.test(await c.locator('.ex-ready').innerText()), '(75 + 100) / 2: ' + await c.locator('.ex-ready').innerText());
+  // a quiz on something else doesn't count
+  await page.evaluate(() => { quizStarted('Photosynthesis'); captureQuizMarks('[[MISSED: p1 || a]]'); });
+  expect(/^88% ready/.test(await (await card()).locator('.ex-ready-row').innerText()), 'another subject’s quiz leaves it as it was');
+  expect(!/[\u2013\u2014]/.test(await page.locator(hub).innerText()) && !errors.length, 'no dashes, no page errors: ' + errors.join('; '));
   await ctx.close();
 });
 

@@ -2044,12 +2044,39 @@ function progressAdd(add) {
 }
 // a quiz: the marks after a quiz starts (or after a 30 minute gap) are one quiz
 let quizFresh = false, lastMarkAt = 0;
-const quizStarted = () => { quizFresh = true; };
+// quizTopic: what this quiz is on, when it's known (an exam plan's quiz, or Quiz me with a topic typed)
+let quizTopic = '';
+const quizStarted = (topic = '') => { quizFresh = true; quizTopic = String(topic || '').trim(); };
 function progressMark(right, fixed) {
   const add = { answered: 1, right: right ? 1 : 0, fixed: fixed ? 1 : 0 };
   if (quizFresh || Date.now() - lastMarkAt > 30 * 6e4) add.quizzes = 1;
   quizFresh = false; lastMarkAt = Date.now();
   progressAdd(add);
+  if (quizTopic) examMark(quizTopic, right);
+}
+/* How ready you are for an exam: from your practice quizzes on its topics (the topics in its plan). Each
+   topic counts its last 10 answers; a topic you haven't practised counts as 0, so the number only grows
+   by practising every topic. It's practice, not a promise about the grade, and the card says so. */
+const topicKey = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const examTopics = (e) => [...new Set((e.days || []).flatMap((d) => d.tasks).filter((t) => t.topic && t.kind !== 'mistakes').map((t) => topicKey(t.topic)).filter(Boolean))];
+function examMark(topic, right) {
+  const k = topicKey(topic);
+  if (!k) return;
+  const day = phDay();
+  (state.exams || []).forEach((e) => {
+    if (e.closed || day > e.date) return;
+    const hit = examTopics(e).find((t) => t === k || (k.length > 3 && t.includes(k)) || (t.length > 3 && k.includes(t)));
+    if (!hit) return;
+    e.marks = e.marks || {};
+    e.marks[hit] = ((e.marks[hit] || '') + (right ? 'r' : 'w')).slice(-10);
+  });
+}
+function examReadiness(e) {
+  const topics = examTopics(e);
+  if (!topics.length) return null;
+  let sum = 0, tried = 0;
+  topics.forEach((t) => { const h = (e.marks || {})[t] || ''; if (h) { tried++; sum += (h.match(/r/g) || []).length / h.length; } });
+  return { pct: Math.round((sum / topics.length) * 100), tried, total: topics.length };
 }
 function weekSums(from, to) {
   const out = { fixed: 0, cardsUp: 0, quizzes: 0, answered: 0, right: 0, focus: 0, tasks: 0, days: 0 };
@@ -2243,7 +2270,8 @@ function examSection() {
       card.innerHTML = '<div class="ex-head"><b></b><small></small></div><p class="ex-sum"></p><div class="ex-actions"><button type="button" class="ex-close">Close</button></div>';
       card.querySelector('b').textContent = `${e.name}: your plan is done`;
       card.querySelector('small').textContent = `Exam day was ${dayName(e.date)}`;
-      card.querySelector('.ex-sum').textContent = `Tasks done: ${done} of ${all.length + (e.dropped || 0)}. Quizzes taken: ${s.quizzes || 0}. Mistakes fixed: ${s.fixed || 0}.`;
+      const ready = examReadiness(e);
+      card.querySelector('.ex-sum').textContent = `Tasks done: ${done} of ${all.length + (e.dropped || 0)}. Quizzes taken: ${s.quizzes || 0}. Mistakes fixed: ${s.fixed || 0}.${ready && ready.tried ? ` Ready on exam day: ${ready.pct}%.` : ''}`;
       card.querySelector('.ex-close').addEventListener('click', () => { state.exams = examsNow().filter((x) => x.id !== e.id); save(); refreshHub(); });
       wrap.appendChild(card);
       return;
@@ -2253,6 +2281,20 @@ function examSection() {
       <div class="ex-actions"><button type="button" class="ex-all" aria-expanded="false">See the whole plan</button><button type="button" class="ex-del">Delete</button></div><ol class="ex-days" hidden></ol>`;
     card.querySelector('.ex-head b').textContent = e.name;
     card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${done} of ${all.length} tasks done`;
+    // how ready: from your practice quizzes on the plan's topics (shown once you've practised one)
+    const ready = examReadiness(e);
+    if (ready && ready.tried) {
+      const r = document.createElement('div');
+      r.className = 'ex-ready';
+      r.innerHTML = '<div class="ex-ready-row"><b></b><span></span></div><div class="ex-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div><small></small>';
+      r.querySelector('b').textContent = `${ready.pct}% ready`;
+      r.querySelector('span').textContent = `${ready.tried} of ${ready.total} topics practised`;
+      const bar = r.querySelector('.ex-bar');
+      bar.setAttribute('aria-valuenow', String(ready.pct)); bar.setAttribute('aria-label', `${ready.pct}% ready for ${e.name}`);
+      r.querySelector('i').style.width = ready.pct + '%';
+      r.querySelector('small').textContent = ready.tried < ready.total ? 'From your practice quizzes. Quiz every topic to raise it.' : 'From your practice quizzes. It’s practice, not a promise about the grade.';
+      card.querySelector('.ex-head').after(r);
+    }
     const ul = card.querySelector('.ex-tasks');
     if (!todays.length) ul.innerHTML = `<li class="ex-rest">${left === 0 ? 'Exam day. You’ve got this.' : 'Nothing planned today. Rest, or review anything you like.'}</li>`;
     todays.forEach((t) => {
@@ -5170,7 +5212,7 @@ function lessonVoice() {
 const IN_LAB = {
   converse: (msgs) => (canChat() ? askCassie(msgs, null, { tutor: true }) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   format: (node, text) => renderFormatted(node, text),
-  makeQuiz: (topic) => (canChat() ? (quizStarted(), quizQuestions(topic, 5)) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
+  makeQuiz: (topic) => (canChat() ? (quizStarted(topic), quizQuestions(topic, 5)) : Promise.reject(friendlyError(CassieErrors.say('not_set_up')))),
   onMark: (q, a, right) => { captureQuizMarks(`[[${right ? 'GOT' : 'MISSED'}: ${q} || ${a}]]`); },
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
@@ -5191,7 +5233,7 @@ async function help3dFor(view) {
 function dropHelp3d() { if (help3d) { help3d.h.destroy(); help3d = null; } }
 function startQuizOn(topic) {
   if (!canChat()) { openSettings(); return; }
-  quizMode = true; quizStarted();
+  quizMode = true; quizStarted(topic);
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   dressCassie();
@@ -5352,7 +5394,7 @@ if (quizBtn) {
       return;
     }
     quizMode = !quizMode;
-    if (quizMode) quizStarted();
+    if (quizMode) quizStarted(promptInput.value);
     quizBtn.classList.toggle('active', quizMode);
     dressCassie();
     setQuizLabel(quizMode ? 'Stop quiz' : 'Quiz me');
