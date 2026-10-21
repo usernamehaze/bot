@@ -2828,7 +2828,6 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 /* a new chat on a computer: a hello and ideas above the ask box */
 .desk-chat { display: flex; justify-content: center; padding-top: 6vh; }
 .dk-chat-hi { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; max-width: 640px; }
-.dk-chat-bot { width: 96px; height: 96px; }
 .dk-ideas-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
 .desk .dk-idea { display: inline-flex; align-items: center; gap: 8px; }
 .dk-idea svg { width: 16px; height: 16px; fill: currentColor; }
