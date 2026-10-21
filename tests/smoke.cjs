@@ -174,7 +174,7 @@ async function onboard(page, { name, gender, grade, age, help = [], exam, voice 
   await next(1, name && (async () => { await page.fill('.fr-ob input[name=name]', name); if (gender) await page.click(`.fr-ob [data-gender=${gender}]`); }));
   await next(2, grade && (async () => { await page.selectOption('.fr-ob select[name=grade]', grade); if (age != null) await page.fill('.fr-ob input[name=age]', String(age)); }));
   await next(3, help.length && (async () => { for (const h of help) await page.click(`.fr-ob [data-help=${h}]`); }));
-  await next(4, exam && (async () => { await page.fill('.fr-ob input[name=exam]', exam.name); await page.fill('.fr-ob input[name=examDate]', exam.date); await page.fill('.fr-ob input[name=examTopics]', exam.topics); }));
+  await next(4, exam && (async () => { await page.fill('.fr-ob input[name=exam]', exam.name); await page.fill('.fr-ob input[name=examDate]', exam.date); if (exam.topics) await page.fill('.fr-ob input[name=examTopics]', exam.topics); if (exam.file) { await page.setInputFiles('.fr-notes input', exam.file); await page.waitForSelector('.fr-file-name >> text=Added:', { timeout: 8000 }); } if (exam.shots) await page.screenshot({ path: exam.shots }); }));
   await next(5, voice && (async () => { await page.click(`.fr-ob [data-voice=${voice}]`); }));
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
 }
@@ -2498,6 +2498,56 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
+});
+
+test('first run: the exam step shows no example subject (just Put your exam or subject), and Free can add notes or slides once: the plan is made from the notes with no topics typed; after that, notes in the first questions are Plus', async (b) => {
+  const fakeGroq = (body) => {
+    const t = JSON.stringify(body);
+    if (!/day by day study plan/.test(t)) return { text: 'Hi!' };
+    const [, from] = t.match(/Plan these days: (\d{4}-\d{2}-\d{2}) to/);
+    return { text: JSON.stringify({ days: [{ date: from, tasks: [{ kind: 'learn', topic: 'Photosynthesis' }, { kind: 'quiz', topic: 'Cell respiration' }] }] }) };
+  };
+  const notes = path.join(require('os').tmpdir(), 'bio-notes.txt');
+  fs.writeFileSync(notes, 'Biology finals reviewer\nLesson 1: Photosynthesis. Light reactions in the thylakoid make ATP and NADPH.\nLesson 2: Cell respiration. Glycolysis, the Krebs cycle and the electron transport chain.');
+  const { ctx, page, errors, groqCalls } = await open(b, { device: 'iPhone 13', scale: 1, server: false, lite: 'off', state: { profile: null, groqKey: 'gsk_test', tab: 'home', plan: null }, fakeGroq });
+  const date = await page.evaluate(() => dayAdd(phDay(), 5));
+  await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
+  if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
+  // the exam step, before anything is typed: no subject that looks filled in
+  const peek = async () => {
+    await page.waitForSelector('.fr-count >> text=4 of 5', { timeout: 8000 });
+    return page.evaluate(() => ({ exam: document.querySelector('.fr-ob input[name=exam]').placeholder, topics: document.querySelector('.fr-ob input[name=examTopics]').placeholder, file: document.querySelector('.fr-file').textContent, note: document.querySelector('.fr-file-name').textContent }));
+  };
+  for (let i = 0; i < 3; i++) await page.click('.fr-skip');
+  const P = await peek();
+  if (process.env.SHOTS) { await page.waitForTimeout(700); await page.screenshot({ path: process.env.SHOTS + '/onboard-exam-empty.png' }); }
+  expect(P.exam === 'Put your exam or subject' && P.topics === 'Put your topics' && !/Gen Chem|Stoichiometry/i.test(P.exam + P.topics), 'no example subject or topics in the boxes: ' + JSON.stringify(P));
+  expect(/notes or slides/.test(P.file) && /Free once/.test(P.note), 'notes or slides, free once: ' + JSON.stringify(P));
+  // notes and no topics: the plan comes from the notes
+  await page.fill('.fr-ob input[name=exam]', 'Bio finals'); await page.fill('.fr-ob input[name=examDate]', date);
+  await page.setInputFiles('.fr-notes input', notes);
+  await page.waitForSelector('.fr-file-name >> text=Added: bio-notes.txt', { timeout: 8000 });
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/onboard-exam-notes.png' });
+  await page.click('.fr-go');
+  await page.click('.fr-skip'); // (the voice)
+  await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
+  const asked = JSON.stringify(groqCalls.filter((c) => /day by day study plan/.test(JSON.stringify(c))));
+  expect(/Bio finals/.test(asked) && /the topics in the notes below/.test(asked) && /Krebs cycle/.test(asked), 'Cassie planned from the notes');
+  expect(await page.evaluate(() => state.freeNotesPlan === true), 'Free’s one plan from notes is used');
+  await page.waitForSelector('.tour-offer', { timeout: 5000 }); await page.click('.tour-offer [data-t="later"]');
+  await page.waitForSelector('.ex-ready-sheet', { timeout: 6000 });
+  expect(!(await page.locator('.tour-offer').count()), 'the tour note is gone before the plan window opens');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/onboard-notes-ready.png' });
+  expect(/Topics:\s*Photosynthesis, Cell respiration/.test(await page.locator('.ex-ready-sheet').innerText()), 'the topics come from the plan');
+  await page.click('.ex-ready-sheet .plus-ok');
+  // the first questions again (a new start): notes are Plus now
+  await page.evaluate(() => { frOnboard(3); });
+  const Q = await peek();
+  expect(/come with Plus/.test(Q.note), 'after the free one, notes say Plus: ' + JSON.stringify(Q));
+  await page.click('.fr-file');
+  await page.waitForSelector('.plus-sheet:not(.ex-ready-sheet)', { timeout: 3000 });
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('Taglish and named exams: a question in Taglish is sent with the rule to answer in Taglish (chat and files), and the pricing names real exams and says you can ask in Taglish', async (b) => {

@@ -61,7 +61,7 @@
       offerBox.innerHTML = '<p>Okay! You can take the tour any time: open Settings, then Help, then Take the tour.</p>';
       offerBox.setAttribute('role', 'status');
       setTimeout(closeOffer, 6000);
-      thenAfter();
+      if (after) setTimeout(() => { closeOffer(); thenAfter(); }, 2500); // (a moment to read it, then what comes next)
     });
     try { offerBox.querySelector('.tour-main').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
   }
