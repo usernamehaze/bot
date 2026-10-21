@@ -2857,3 +2857,21 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 }
 /* the camera button is for phones (a computer attaches photos with the clip) */
 @media (min-width: 761px) { .phone-only { display: none !important; } }
+/* ---------- Podcast: the cost first, then the transcript and the player ---------- */
+.pod-card { max-width: 560px; }
+.pod-facts { margin: 4px 0 8px; padding: 0 0 0 18px; display: grid; gap: 4px; color: var(--text); font-size: .9rem; line-height: 1.4; }
+.pod-status { min-height: 1.2em; margin: 0 0 8px; color: var(--muted); font-size: .88rem; }
+.pod-player { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 12px; }
+.pod-lines { list-style: none; margin: 0; padding: 4px; max-height: min(46vh, 380px); overflow-y: auto; display: flex; flex-direction: column; gap: 6px; border-radius: 14px; background: var(--surface-2); }
+.pod-line { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 12px; color: var(--text); cursor: pointer; border-left: 3px solid transparent; }
+.pod-line b { font-size: .78rem; color: var(--muted); }
+.pod-line span { font-size: .92rem; line-height: 1.4; }
+.pod-line.on { background: var(--surface); border-left-color: var(--primary); box-shadow: var(--lg-edge); }
+.pod-line:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pod-ctrl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pod-ctrl button { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .95rem; font-weight: 650; cursor: pointer; }
+.pod-ctrl .pod-play { min-width: 56px; background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.pod-ctrl .pod-dl { margin-left: auto; }
+.pod-ctrl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pod-ctrl button:disabled { opacity: .6; cursor: default; }
+.pod-note { margin: 0; min-height: 1em; color: var(--text); font-size: .86rem; }
