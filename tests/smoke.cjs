@@ -1298,6 +1298,34 @@ test('computers: scrollbars in Cassie’s colours (the chat, the sidebar, Settin
   await ph.ctx.close();
 });
 
+test('snap a problem: a camera button in the ask box on phones opens the back camera (accept image, capture environment); one snap is sent at once with a step by step ask, the photo goes to Cassie and she answers; typed words go with it; computers keep the clip only', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', state: { groqKey: '' } }); // (no key: Cassie's server reads the photo)
+  await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+  const sent = []; page.on('request', (rq) => { const d = rq.postData() || ''; if (/image_url|inlineData|"image"/.test(d)) sent.push(d); });
+  const cam = await page.evaluate(() => { const i = document.getElementById('camera-input'), bt = document.getElementById('camera-btn'), r = bt.getBoundingClientRect(); return { accept: i.accept, capture: i.getAttribute('capture'), shown: r.width >= 40 && r.height >= 40, label: bt.getAttribute('aria-label') }; });
+  expect(cam.accept === 'image/*' && cam.capture === 'environment' && cam.shown && /camera/i.test(cam.label), 'a camera button that opens the back camera: ' + JSON.stringify(cam));
+  const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 80; c.height = 40; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 80, 40); g.fillStyle = '#000'; g.font = '20px sans-serif'; g.fillText('2x=8', 8, 28); return c.toDataURL('image/png').split(',')[1]; });
+  // the camera's button opens the picker the phone shows as its camera
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#camera-btn')]);
+  expect(!chooser.isMultiple(), 'one photo at a time');
+  await chooser.setFiles({ name: 'snap.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.waitForFunction(() => { const a = [...document.querySelectorAll('#chat-log .bubble-assistant')].pop(); return a && !a.querySelector('.typing-dots') && a.innerText.trim().length > 3; }, null, { timeout: 30000 });
+  const user = await page.locator('#chat-log .bubble-user').last().innerText();
+  expect(/Solve this step by step/.test(user), 'sent at once with a step by step ask: ' + user);
+  expect(sent.length >= 1 && sent.some((d) => /data:image\/(png|jpeg|webp)/.test(d) && /Solve this step by step/.test(d)), 'the photo and the ask went to Cassie together: ' + sent.length);
+  // typed words go with the snap instead
+  await page.fill('#prompt-input', 'Only check my answer: x = 4');
+  await page.setInputFiles('#camera-input', { name: 'snap2.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.waitForFunction(() => /Only check my answer/.test([...document.querySelectorAll('#chat-log .bubble-user')].pop().innerText), null, { timeout: 30000 });
+  if (process.env.SHOTS) { await page.waitForTimeout(800); await page.screenshot({ path: process.env.SHOTS + '/camera-phone.png' }); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // a computer: the clip only
+  const d = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  expect(await d.page.evaluate(() => !document.getElementById('camera-btn').getClientRects().length && !!document.getElementById('attach-btn').getClientRects().length), 'a computer has the clip, no camera button');
+  await d.ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));

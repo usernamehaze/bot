@@ -5534,6 +5534,18 @@ if (boardBtn) boardBtn.addEventListener('click', () => { track('feature', 'board
 
 /* ---------- attach / generate wiring ---------- */
 attachBtn.addEventListener('click', () => fileInput.click());
+// the camera (phones): one snap, and Cassie works through it at once (what you typed goes with it)
+const SNAP_ASK = 'Solve this step by step and explain each step. If it is a page of notes or a textbook page, explain it simply and point out what matters most.';
+const cameraInput = document.getElementById('camera-input');
+document.getElementById('camera-btn').addEventListener('click', () => { track('feature', 'camera'); cameraInput.click(); });
+cameraInput.addEventListener('change', async () => {
+  const f = cameraInput.files && cameraInput.files[0];
+  cameraInput.value = '';
+  if (!f) return;
+  if (!(await attachFile(f))) return; // (it couldn't be read: the chip says why)
+  if (!promptInput.value.trim()) promptInput.value = SNAP_ASK;
+  document.getElementById('composer').requestSubmit();
+});
 fileInput.addEventListener('change', async () => {
   const files = [...(fileInput.files || [])];
   fileInput.value = '';
