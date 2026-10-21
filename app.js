@@ -1778,6 +1778,7 @@ function applySideSearch() {
   // (typing opens a folded list for a moment; clearing the box folds it again)
   if (q && !toolsOpen) { setToolsOpen(true, false); searchOpened = true; } else if (!q && searchOpened) { searchOpened = false; setToolsOpen(false, false); }
   toolBtns.forEach(([b, ex]) => { b.hidden = !!q && !ex.label.toLowerCase().includes(q); });
+  document.querySelectorAll('.side-nav .side-tool').forEach((b) => b.classList.toggle('search-out', !!q && !b.textContent.toLowerCase().includes(q))); // (the pages too)
   document.querySelectorAll('#chat-list .chat-item').forEach((it) => { it.hidden = !!q && !it.querySelector('.ci-title').textContent.toLowerCase().includes(q); });
 }
 sideSearch.addEventListener('input', applySideSearch);
@@ -1992,6 +1993,358 @@ function buildHub({ ideas = false, phone = false } = {}) {
   return el;
 }
 function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ phone: true })); } // (the phone's Home tab)
+
+/* ---------- Home on a computer: a study dashboard ----------
+   A greeting with Ask Cassie and Add my notes, four numbers (questions this week, cards learned, the streak,
+   exam readiness), the study chart for this week, the next thing to do, the exam plans, recent chats, the
+   readiness gauge and the focus timer. Only what's saved: an empty card says what will show up there. */
+const DESK_ICON = {
+  up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16L16 8M9 8h7v7"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></svg>',
+  book: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19M9 7h6"/></svg>',
+};
+// questions asked in chats touched in the last 7 days (the same number You shows)
+function questionsThisWeek() {
+  const week = Date.now() - 7 * 864e5;
+  return state.chats.reduce((n, c) => n + (c.messages || []).filter((m) => m.role === 'user' && (m.at || c.updatedAt || 0) >= week).length, 0);
+}
+// what was studied each day this week (quiz answers, cards moved up, mistakes fixed, plan tasks done)
+function studyDays() {
+  const today = phDay(), from = weekStart(today);
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = dayAdd(from, i), d = (state.progress || {})[day] || {};
+    return { day, n: (+d.answered || 0) + (+d.cardsUp || 0) + (+d.fixed || 0) + (+d.tasks || 0), today: day === today, later: day > today };
+  });
+}
+// the next exam task not done yet (today's first), and its plan
+function nextExamTask() {
+  const today = phDay();
+  for (const e of activeExams().slice().sort((a, b) => (a.date < b.date ? -1 : 1))) {
+    for (const d of e.days || []) {
+      if (d.date < today) continue;
+      const t = d.tasks.find((x) => !x.done);
+      if (t) return { e, t, day: d.date };
+    }
+  }
+  return null;
+}
+const nearestExam = () => activeExams().filter((e) => e.date >= phDay()).sort((a, b) => (a.date < b.date ? -1 : 1))[0] || null;
+function deskGauge(pct) {
+  // a half circle: the track, then the part done (pathLength 100, so the dash is the percent)
+  return `<svg class="dk-gauge-svg" viewBox="0 0 200 110" aria-hidden="true"><path class="dk-gauge-track" d="M20 100a80 80 0 0 1 160 0" pathLength="100"/><path class="dk-gauge-fill" d="M20 100a80 80 0 0 1 160 0" pathLength="100" stroke-dasharray="${pct} 100"/></svg>`;
+}
+function deskHome() {
+  const p = state.profile || {}, name = (p.name || '').trim().split(/\s+/)[0];
+  const chats = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const cardsLearned = (state.cards || []).filter((c) => (c.box || 0) >= 4).length;
+  const due = window.CassieCards ? window.CassieCards.dueCount() : 0;
+  const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  const asked = questionsThisWeek(), ex = nearestExam(), ready = ex ? examReadiness(ex) : null;
+  const w = weekData();
+  const el = document.createElement('div');
+  el.className = 'desk desk-home';
+  el.innerHTML = `
+    <header class="dk-head">
+      <div class="dk-hello"><div><h1 class="dk-title"></h1><p class="dk-sub">Everything you’re studying, in one calm place. <button type="button" class="home-ideas dk-ideas">Ideas to get started</button></p></div></div>
+      <div class="dk-acts"><button type="button" class="dk-btn dk-solid" data-dk="ask">${DESK_ICON.plus}Ask Cassie</button><button type="button" class="dk-btn dk-line" data-dk="notes">${DESK_ICON.file}Add my notes</button></div>
+    </header>
+    <section class="dk-stats" aria-label="This week in numbers">
+      <article class="dk-stat dk-stat-main"><h2>Questions this week</h2><b>${asked}</b><small>${asked ? 'Asked in your chats' : 'Ask Cassie anything to start'}</small><button type="button" class="dk-up" data-dk="chats" aria-label="Open your chats">${DESK_ICON.up}</button></article>
+      <article class="dk-stat"><h2>Cards learned</h2><b>${cardsLearned}</b><small>${due ? `${due} ${due === 1 ? 'card' : 'cards'} to review today` : (state.cards || []).length ? 'Nothing to review today' : 'Make flashcards from any answer'}</small><button type="button" class="dk-up" data-dk="cards" aria-label="Open flashcards">${DESK_ICON.up}</button></article>
+      <article class="dk-stat"><h2>Day streak</h2><b>${streak}</b><small>${w.now.days ? `${w.now.days} ${w.now.days === 1 ? 'day' : 'days'} studied this week, last week ${w.last.days}` : 'Study today to start one'}</small><button type="button" class="dk-up" data-dk="progress" aria-label="See your progress">${DESK_ICON.up}</button></article>
+      <article class="dk-stat"><h2>Exam readiness</h2><b>${ready && ready.tried ? ready.pct + '%' : ex ? '0%' : 'None'}</b><small class="dk-ready-note"></small><button type="button" class="dk-up" data-dk="plan" aria-label="See your study plan">${DESK_ICON.up}</button></article>
+    </section>
+    <div class="dk-grid">
+      <section class="dk-card dk-chart" aria-labelledby="dk-chart-h"><h2 id="dk-chart-h">Study this week</h2><p class="dk-note">Quiz answers, cards moved up, mistakes fixed and plan tasks done, each day.</p><div class="dk-bars" role="list"></div></section>
+      <section class="dk-card dk-next" aria-labelledby="dk-next-h"><h2 id="dk-next-h">Next up</h2></section>
+      <section class="dk-card dk-plans" aria-labelledby="dk-plans-h"><div class="dk-card-head"><h2 id="dk-plans-h">My exam plans</h2><button type="button" class="dk-pill" data-dk="newplan">${DESK_ICON.plus}New plan</button></div><ul class="dk-list"></ul></section>
+      <section class="dk-card dk-chats" aria-labelledby="dk-chats-h"><div class="dk-card-head"><h2 id="dk-chats-h">Recent chats</h2>${chats.length ? '<button type="button" class="dk-pill" data-dk="chats">See all</button>' : ''}</div><ul class="dk-list"></ul></section>
+      <section class="dk-card dk-ready" aria-labelledby="dk-ready-h"><h2 id="dk-ready-h">Exam readiness</h2></section>
+      <section class="dk-card dk-timer" aria-labelledby="dk-timer-h"><h2 id="dk-timer-h">Focus timer</h2><b class="dk-time" aria-live="off">25:00</b><small class="dk-mode">Focus</small><div class="dk-tbtns"><button type="button" class="dk-tgo" data-dk="tgo" aria-label="Start the focus timer">${DESK_ICON.play}</button><button type="button" class="dk-tstop" data-dk="tstop" aria-label="Stop and reset the timer">${DESK_ICON.stop}</button></div></section>
+    </div>`;
+  el.querySelector('.dk-title').textContent = name ? `Hi, ${name}` : 'Hi there';
+  el.querySelector('.dk-ready-note').textContent = ex ? `${ex.name}, ${dayGap(phDay(), ex.date) === 0 ? 'today' : `in ${dayGap(phDay(), ex.date)} ${dayGap(phDay(), ex.date) === 1 ? 'day' : 'days'}`}` : 'Plan an exam to see it';
+  // the chart: a rounded bar a day, today marked, days with nothing striped
+  const days = studyDays(), top = Math.max(1, ...days.map((d) => d.n));
+  el.querySelector('.dk-bars').innerHTML = days.map((d) => {
+    const h = d.n ? Math.max(18, Math.round((d.n / top) * 100)) : 100;
+    const label = `${dayName(d.day, { weekday: 'long' })}: ${d.n} ${d.n === 1 ? 'thing' : 'things'} studied`;
+    return `<div class="dk-bar${d.n ? '' : ' dk-bar-none'}${d.today ? ' dk-bar-today' : ''}" role="listitem" aria-label="${label}">${d.today && d.n ? `<span class="dk-bubble">${d.n}</span>` : ''}<i style="height:${h}%"></i><small>${dayName(d.day, { weekday: 'narrow' })}</small></div>`;
+  }).join('');
+  // next up: the next task of the nearest plan
+  const nx = nextExamTask(), next = el.querySelector('.dk-next');
+  if (nx) {
+    const left = dayGap(phDay(), nx.day);
+    next.insertAdjacentHTML('beforeend', `<p class="dk-next-what"></p><p class="dk-note dk-next-when"></p><button type="button" class="dk-btn dk-solid dk-wide" data-dk="nexttask">${DESK_ICON.play}Start studying</button>`);
+    next.querySelector('.dk-next-what').textContent = taskLabel(nx.t);
+    next.querySelector('.dk-next-when').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : dayName(nx.day)} · ${nx.e.name}`;
+  } else next.append(CassieErrors.empty({ title: activeExams().length ? 'All caught up' : 'No plan yet', text: activeExams().length ? 'Every task so far is done. Nice work.' : 'Tell Cassie your exam and she plans it day by day.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }));
+  // the exam plans
+  const plans = el.querySelector('.dk-plans .dk-list');
+  activeExams().forEach((e, i) => {
+    const li = document.createElement('li'), r = examReadiness(e);
+    li.innerHTML = `<button type="button" class="dk-row" data-dk="plan" data-id="${e.id}"><i class="dk-dot dk-c${i % 4}" aria-hidden="true">${DESK_ICON.book}</i><span><b></b><small></small></span></button>`;
+    li.querySelector('b').textContent = e.name;
+    li.querySelector('small').textContent = `Exam day: ${dayName(e.date)}${r && r.tried ? ` · ${r.pct}% ready` : ''}`;
+    plans.appendChild(li);
+  });
+  if (!activeExams().length) plans.replaceWith(CassieErrors.empty({ title: 'No exam plans', text: 'Your exam plans show up here.' }));
+  // recent chats
+  const list = el.querySelector('.dk-chats .dk-list');
+  chats.slice(0, 4).forEach((c) => {
+    const li = document.createElement('li'), n = c.messages.length;
+    li.innerHTML = `<button type="button" class="dk-row" data-dk="chat:${c.id}"><i class="dk-dot" aria-hidden="true">${HUB_ICON.chat}</i><span><b></b><small></small></span></button>`;
+    li.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
+    li.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${hubAgo(c.updatedAt)}`;
+    list.appendChild(li);
+  });
+  if (!chats.length) list.replaceWith(CassieErrors.empty({ title: 'No chats yet', text: 'Your chats with Cassie show up here.' }));
+  // readiness: the nearest exam, as a half circle
+  const rd = el.querySelector('.dk-ready');
+  if (ex) {
+    const pct = ready && ready.tried ? ready.pct : 0;
+    rd.insertAdjacentHTML('beforeend', `<div class="dk-gauge" role="img">${deskGauge(pct)}<b>${pct}%</b></div><p class="dk-note dk-center"></p>`);
+    rd.querySelector('.dk-gauge').setAttribute('aria-label', `${pct}% ready for ${ex.name}`);
+    rd.querySelector('.dk-center').textContent = ready && ready.tried ? `${ex.name}: ${ready.tried} of ${ready.total} topics practised` : `${ex.name}: take a quiz on a topic to start`;
+  } else rd.append(CassieErrors.empty({ title: 'Nothing to measure yet', text: 'Plan an exam, then practise its topics. Cassie shows how ready you are here.' }));
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk]'); if (b) deskAct(b.dataset.dk); });
+  el.querySelector('.dk-ideas').addEventListener('click', () => showTools()); // (where every study tool lives: the sidebar)
+  setTimeout(renderDeskTimer, 0);
+  return el;
+}
+function deskAct(act) {
+  if (act === 'ask') { promptInput.focus(); return; }
+  if (act === 'notes') { document.getElementById('file-input').click(); return; }
+  if (act === 'chats') { const c = state.chats.filter((x) => x.messages && x.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]; if (c) selectChat(c.id); else promptInput.focus(); return; }
+  if (act.startsWith('chat:')) { selectChat(act.slice(5)); return; }
+  if (act === 'cards') { if (window.CassieCards) window.CassieCards.open(); return; }
+  if (act === 'newplan') { openExamSheet(); return; }
+  if (act === 'nexttask') { const nx = nextExamTask(); if (nx) openExamTask(nx.t, nx.e); return; }
+  if (act === 'plan' || act === 'progress') { deskGo(act); return; }
+  if (act === 'tgo') { document.getElementById('pomo-toggle').click(); renderDeskTimer(); return; }
+  if (act === 'tstop') { document.getElementById('pomo-reset').click(); renderDeskTimer(); }
+}
+// the dashboard's timer card and the top bar's pill follow the focus timer
+function renderDeskTimer() {
+  const time = (document.getElementById('pomo-time') || {}).textContent || '25:00', mode = (document.getElementById('pomo-mode') || {}).textContent || 'Focus';
+  const on = /pause/i.test((document.getElementById('pomo-toggle') || {}).textContent || '');
+  const put = (el, t) => { if (el && el.textContent !== t) el.textContent = t; }; // (only real changes: no needless redraws)
+  document.querySelectorAll('.dk-timer').forEach((c) => {
+    put(c.querySelector('.dk-time'), time);
+    put(c.querySelector('.dk-mode'), mode);
+    const go = c.querySelector('.dk-tgo'), label = on ? 'Pause the focus timer' : 'Start the focus timer';
+    if (go.getAttribute('aria-label') !== label) { go.innerHTML = on ? DESK_ICON.pause : DESK_ICON.play; go.setAttribute('aria-label', label); }
+  });
+  const pill = document.getElementById('top-timer');
+  if (pill) { if (pill.hidden === on) pill.hidden = !on; put(pill.querySelector('b'), time); put(pill.querySelector('span'), mode); }
+}
+setInterval(renderDeskTimer, 1000);
+// the computer's sidebar pages and top bar (phones never show them)
+function goHome() { deskGo('home'); }
+function deskChrome() {
+  const empty = !state.messages.length;
+  document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const on = (b.dataset.page === deskPage && empty) || (b.dataset.page === 'chats' && !empty); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  const so = document.querySelector('.side-nav [data-page="signout"]'); if (so) so.hidden = !(accountsOn() && authToken());
+  const badge = document.querySelector('#side-nav [data-page="plan"] .side-badge'), n = dueToday();
+  if (badge) { const t = n ? String(n) : ''; if (badge.textContent !== t) badge.textContent = t; badge.hidden = !n; document.querySelector('#side-nav [data-page="plan"]').setAttribute('aria-label', n ? `Study plan: ${n} ${n === 1 ? 'task' : 'tasks'} today` : 'Study plan'); }
+  const p = state.profile || {}, name = (p.name || '').trim(), email = (state.account && state.account.email) || '';
+  const me = document.getElementById('top-me');
+  if (me) {
+    me.querySelector('.top-av').textContent = (name || 'C')[0].toUpperCase();
+    me.querySelector('b').textContent = name || 'You';
+    me.querySelector('small').textContent = email || (accountsOn() ? 'Sign in' : 'Your settings');
+    me.setAttribute('aria-label', `${name || 'You'}: ${email ? 'your account' : 'open your settings'}`);
+  }
+  const due = window.CassieCards ? window.CassieCards.dueCount() : 0, dot = document.querySelector('#top-bell .top-dot');
+  if (dot) { dot.hidden = !due; document.getElementById('top-bell').setAttribute('aria-label', `Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}`); }
+}
+setInterval(deskChrome, 2000);
+document.querySelectorAll('.side-nav [data-page]').forEach((b) => b.addEventListener('click', () => {
+  const pg = b.dataset.page;
+  if (pg === 'home') goHome();
+  else if (pg === 'chats') deskAct('chats');
+  else if (pg === 'settings') openSettings('all');
+  else if (pg === 'signout') signOutNow().then(deskChrome);
+  else deskGo(pg);
+  setTimeout(deskChrome, 0);
+}));
+const topSearch = () => { setSideOpen(true); sideSearch.focus(); };
+document.getElementById('top-search').addEventListener('click', topSearch);
+document.addEventListener('keydown', (e) => { if (sideWide.matches && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); topSearch(); } });
+document.getElementById('top-timer').addEventListener('click', goHome);
+document.getElementById('top-me').addEventListener('click', () => openSettings('all'));
+// the bell: today's reminders (the same list the phone's Home has)
+const topBell = document.getElementById('top-bell'), topRemind = document.getElementById('top-remind');
+function closeTopRemind() { topRemind.hidden = true; topBell.setAttribute('aria-expanded', 'false'); }
+topBell.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!topRemind.hidden) { closeTopRemind(); return; }
+  const due = window.CassieCards ? window.CassieCards.dueCount() : 0, streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  const box = hubReminders(due, streak); box.classList.add('open');
+  topRemind.replaceChildren(box); topRemind.hidden = false; topBell.setAttribute('aria-expanded', 'true');
+  const first = topRemind.querySelector('button'); if (first) first.focus({ preventScroll: true });
+});
+topRemind.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) { closeTopRemind(); hubAct(b.dataset.hub); } });
+document.addEventListener('click', (e) => { if (!topRemind.hidden && !topRemind.contains(e.target)) closeTopRemind(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !topRemind.hidden) { closeTopRemind(); topBell.focus(); } });
+/* The computer's pages (Study plan, Calendar, Progress) open where Home does, in an empty chat, so the
+   Ask Cassie box stays under every page; the first question turns it back into a chat. */
+var deskPage = 'home';
+const DESK_PAGES = { home: () => deskHome(), plan: () => deskPlan(), calendar: () => deskCalendar(), progress: () => deskProgress() };
+const KIND_NAME = { learn: 'Learn', quiz: 'Quiz', cards: 'Flashcards', mistakes: 'Mistakes', focus: 'Focus' };
+// every exam task with its plan and day (newest plans included, closed ones left out)
+function allExamTasks() {
+  return activeExams().flatMap((e) => (e.days || []).flatMap((d) => d.tasks.map((t) => ({ t, e, day: d.date }))));
+}
+const dueToday = () => allExamTasks().filter((x) => x.day === phDay() && !x.t.done).length;
+/* Study plan: every task from the exam plans as a board (Today, Coming up, Done), then the plans themselves */
+let deskPlanFilter = 'all';
+function deskPlan() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-plan';
+  const today = phDay(), weekEnd = dayAdd(weekStart(today), 6);
+  const FILTERS = [['all', 'All'], ['today', 'Today'], ['quiz', 'Quizzes'], ['week', 'This week']];
+  el.innerHTML = deskHeader('Study plan', 'Every task from your exam plans. Tap one to start it, or tick it when it’s done.', `<button type="button" class="dk-btn dk-solid" data-dk="newplan">${DESK_ICON.plus}New plan</button>`)
+    + `<div class="dk-filters"><div class="dk-chips" role="group" aria-label="Show">${FILTERS.map(([k, l]) => `<button type="button" class="dk-chip" data-f="${k}" aria-pressed="${k === deskPlanFilter}">${l}</button>`).join('')}</div><small class="dk-count" aria-live="polite"></small></div>
+    <div class="dk-board">${[['now', 'Today'], ['next', 'Coming up'], ['done', 'Done']].map(([k, l]) => `<section class="dk-col" data-col="${k}" aria-label="${l}"><h2>${l} <span class="dk-n"></span></h2><ul class="dk-col-list"></ul></section>`).join('')}</div>`;
+  const keep = (x) => deskPlanFilter === 'all' || (deskPlanFilter === 'today' && x.day === today) || (deskPlanFilter === 'quiz' && x.t.kind === 'quiz') || (deskPlanFilter === 'week' && x.day <= weekEnd);
+  const tasks = allExamTasks().filter(keep);
+  const col = (x) => (x.t.done ? 'done' : x.day <= today ? 'now' : 'next');
+  tasks.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)).forEach((x) => {
+    const li = document.createElement('li'), left = dayGap(today, x.day);
+    li.className = 'dk-task' + (x.t.done ? ' done' : '');
+    li.innerHTML = `<div class="dk-tags"><span class="dk-tag dk-k-${x.t.kind}"></span>${x.t.moved ? '<span class="dk-tag dk-moved">Moved</span>' : ''}</div><button type="button" class="dk-task-go"></button>
+      <div class="dk-task-foot"><small></small><label class="ex-check"><input type="checkbox"><span class="ex-tick" aria-hidden="true"></span></label></div>`;
+    li.querySelector('.dk-tag').textContent = KIND_NAME[x.t.kind] || 'Task';
+    li.querySelector('.dk-task-go').textContent = taskLabel(x.t);
+    li.querySelector('small').textContent = `${x.e.name} · ${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : dayName(x.day)}`;
+    const box = li.querySelector('input');
+    box.checked = !!x.t.done; box.setAttribute('aria-label', `Done: ${taskLabel(x.t)}`);
+    box.addEventListener('change', () => { x.t.done = box.checked; progressAdd({ tasks: x.t.done ? 1 : -1 }); renderHistory(); });
+    li.querySelector('.dk-task-go').addEventListener('click', () => openExamTask(x.t, x.e));
+    el.querySelector(`[data-col="${col(x)}"] .dk-col-list`).appendChild(li);
+  });
+  el.querySelectorAll('.dk-col').forEach((c) => {
+    const n = c.querySelectorAll('.dk-task').length;
+    c.querySelector('.dk-n').textContent = n;
+    if (!n) c.querySelector('.dk-col-list').replaceWith(CassieErrors.empty({ title: c.dataset.col === 'done' ? 'Nothing done yet' : 'Nothing here', text: c.dataset.col === 'done' ? 'Tick a task when it’s done and it moves here.' : activeExams().length ? 'No tasks for this filter.' : 'Make an exam plan and its tasks show up here.' }));
+  });
+  el.querySelector('.dk-count').textContent = `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} shown`;
+  el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskPlanFilter = b.dataset.f; renderHistory(); } });
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk="newplan"]'); if (b) openExamSheet(); });
+  const plans = examSection(); // the plans in full: Your Exam Plan, its subject and topics, the whole plan, Delete
+  plans.querySelectorAll('.hub-h').forEach((h) => { h.textContent = 'Your exam plans'; });
+  el.appendChild(plans);
+  return el;
+}
+/* Calendar: the month with exam days and tasks; Today and Coming up beside it */
+let deskMonth = '';
+function deskCalendar() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-cal';
+  const today = phDay(), month = deskMonth || today.slice(0, 7), [y, m] = month.split('-').map(Number);
+  const first = `${month}-01`, startDow = new Date(first + 'T00:00:00Z').getUTCDay(), daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const items = {};
+  const put = (day, it) => { (items[day] = items[day] || []).push(it); };
+  activeExams().forEach((e) => put(e.date, { kind: 'exam', label: `${e.name} exam`, e }));
+  allExamTasks().forEach((x) => put(x.day, { kind: x.t.kind, label: taskLabel(x.t), x }));
+  const monthName = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push('<div class="dk-day dk-day-out" aria-hidden="true"></div>');
+  for (let d = 1; d <= daysIn; d++) {
+    const day = `${month}-${String(d).padStart(2, '0')}`, list = items[day] || [];
+    const chips = list.slice(0, 2).map((it) => `<span class="dk-ev dk-k-${it.kind}${it.x && it.x.t.done ? ' done' : ''}">${escapeHtml(it.kind === 'exam' ? it.label : KIND_NAME[it.kind] + (it.x.t.topic ? ': ' + it.x.t.topic : ''))}</span>`).join('') + (list.length > 2 ? `<span class="dk-more">+${list.length - 2} more</span>` : '');
+    const label = `${dayName(day, { weekday: 'long', day: 'numeric', month: 'long' })}${list.length ? ': ' + list.map((it) => it.label).join(', ') : ''}`;
+    cells.push(`<div class="dk-day${day === today ? ' dk-today' : ''}${list.some((it) => it.kind === 'exam') ? ' dk-examday' : ''}" role="gridcell" aria-label="${escapeHtml(label)}"><b>${d}</b>${chips}</div>`);
+  }
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  el.innerHTML = deskHeader('Calendar', 'Your exam days and study tasks, day by day.', '<button type="button" class="dk-btn dk-line" data-dk="today">Today</button>')
+    + `<div class="dk-cal-wrap"><section class="dk-card dk-month" aria-label="${escapeHtml(monthName)}"><div class="dk-card-head"><h2>${escapeHtml(monthName)}</h2><div class="dk-arrows"><button type="button" class="dk-arrow" data-dk="prev" aria-label="Last month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" class="dk-arrow" data-dk="next" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div></div>
+      <div class="dk-week-h" aria-hidden="true">${WEEKDAYS.map((w) => `<span>${w}</span>`).join('')}</div><div class="dk-days" role="grid">${cells.join('')}</div>
+      <p class="dk-legend dk-cal-legend">${[['exam', 'Exam day'], ...Object.entries(KIND_NAME)].map(([k, l]) => `<span class="dk-lg dk-k-${k}">${l}</span>`).join('')}</p></section>
+      <aside class="dk-side"><section class="dk-card dk-today-card" aria-labelledby="dk-today-h"><small class="dk-kicker">Today · ${escapeHtml(dayName(today, { weekday: 'long' }))}</small><h2 id="dk-today-h">${escapeHtml(dayName(today, { month: 'long', day: 'numeric' }))}</h2><ul class="dk-list dk-today-list"></ul></section>
+      <section class="dk-card" aria-labelledby="dk-soon-h"><h2 id="dk-soon-h">Coming up</h2><ul class="dk-list dk-soon"></ul></section></aside></div>`;
+  // today: the day's tasks (and an exam, if it's today)
+  const tl = el.querySelector('.dk-today-list');
+  (items[today] || []).forEach((it) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button type="button" class="dk-row dk-ev-row dk-k-${it.kind}"><span><b></b><small></small></span></button>`;
+    li.querySelector('b').textContent = it.label;
+    li.querySelector('small').textContent = it.kind === 'exam' ? 'Exam day. You’ve got this.' : `${it.x.e.name}${it.x.t.done ? ' · done' : ''}`;
+    li.querySelector('button').addEventListener('click', () => { if (it.x) openExamTask(it.x.t, it.x.e); });
+    tl.appendChild(li);
+  });
+  if (!tl.children.length) tl.replaceWith(CassieErrors.empty({ title: 'Nothing planned today', text: 'Rest, or review anything you like.' }));
+  // coming up: the next tasks and exams after today
+  const soon = el.querySelector('.dk-soon');
+  Object.keys(items).filter((d) => d > today).sort().flatMap((d) => items[d].filter((it) => !(it.x && it.x.t.done)).map((it) => ({ d, it }))).slice(0, 6).forEach(({ d, it }) => {
+    const li = document.createElement('li'), left = dayGap(today, d);
+    li.innerHTML = `<div class="dk-soon-row"><span class="dk-date" aria-hidden="true"><small></small><b></b></span><span><b class="dk-soon-what"></b><small class="dk-soon-when"></small></span></div>`;
+    li.querySelector('.dk-date small').textContent = dayName(d, { month: 'short' });
+    li.querySelector('.dk-date b').textContent = String(+d.slice(8));
+    li.querySelector('.dk-soon-what').textContent = it.label;
+    li.querySelector('.dk-soon-when').textContent = `${left === 1 ? 'Tomorrow' : dayName(d, { weekday: 'long' })}${it.x ? ' · ' + it.x.e.name : ''}`;
+    soon.appendChild(li);
+  });
+  if (!soon.children.length) soon.replaceWith(CassieErrors.empty({ title: 'Nothing coming up', text: activeExams().length ? 'Every planned task is done.' : 'Plan an exam and its days show up here.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }));
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dk]'); if (!b) return;
+    const shift = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); deskMonth = d.toISOString().slice(0, 7); renderHistory(); };
+    if (b.dataset.dk === 'prev') shift(-1); else if (b.dataset.dk === 'next') shift(1); else if (b.dataset.dk === 'today') { deskMonth = ''; renderHistory(); }
+  });
+  return el;
+}
+function deskGo(page) {
+  if (state.messages.length) createNewChat();
+  deskPage = DESK_PAGES[page] ? page : 'home';
+  renderHistory();
+  promptInput.blur();
+}
+// a page's header: the title, one grey line, and its main buttons
+function deskHeader(title, sub, buttons = '') {
+  return `<header class="dk-head"><div><h1 class="dk-title">${escapeHtml(title)}</h1><p class="dk-sub">${escapeHtml(sub)}</p></div><div class="dk-acts">${buttons}</div></header>`;
+}
+/* Progress: this week against last week, a day at a time (the same counts as Home's chart), then the week's numbers */
+function deskProgress() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-progress';
+  const today = phDay(), from = weekStart(today);
+  const count = (day) => { const d = (state.progress || {})[day] || {}; return (+d.answered || 0) + (+d.cardsUp || 0) + (+d.fixed || 0) + (+d.tasks || 0); };
+  const pts = Array.from({ length: 7 }, (_, i) => { const day = dayAdd(from, i); return { day, now: day > today ? null : count(day), last: count(dayAdd(day, -7)) }; });
+  const top = Math.max(4, ...pts.map((p) => Math.max(p.now || 0, p.last)));
+  const W = 700, H = 240, L = 36, R = 16, T = 16, B = 30, x = (i) => L + (i * (W - L - R)) / 6, y = (n) => T + (H - T - B) * (1 - n / top);
+  const line = (k) => pts.filter((p) => p[k] != null).map((p, i) => `${i ? 'L' : 'M'}${x(pts.indexOf(p)).toFixed(1)} ${y(p[k]).toFixed(1)}`).join(' ');
+  const nowPts = pts.filter((p) => p.now != null), area = nowPts.length > 1 ? `${line('now')} L${x(nowPts.length - 1).toFixed(1)} ${y(0)} L${x(0)} ${y(0)} Z` : '';
+  const grid = [0, 0.5, 1].map((f) => Math.round(top * f)).map((n) => `<line class="dk-gridline" x1="${L}" x2="${W - R}" y1="${y(n)}" y2="${y(n)}"/><text class="dk-axis" x="${L - 8}" y="${y(n) + 4}" text-anchor="end">${n}</text>`).join('');
+  const days = pts.map((p, i) => `<text class="dk-axis" x="${x(i)}" y="${H - 8}" text-anchor="middle">${dayName(p.day, { weekday: 'short' })}</text>`).join('');
+  const dots = pts.map((p, i) => {
+    const label = `${dayName(p.day, { weekday: 'long', day: 'numeric', month: 'short' })}: ${p.now == null ? 'still to come' : `${p.now} studied`}, last week ${p.last}`;
+    return `<g class="dk-pt" tabindex="0" role="img" aria-label="${label}" data-i="${i}"><rect x="${x(i) - 30}" y="${T}" width="60" height="${H - T - B}" fill="transparent"/>${p.now != null ? `<circle cx="${x(i)}" cy="${y(p.now)}" r="5"/>` : ''}</g>`;
+  }).join('');
+  el.innerHTML = deskHeader('Progress', 'How your studying is going, this week against last week.', '<button type="button" class="dk-btn dk-solid" data-dk="share">Share my week</button>')
+    + `<section class="dk-card dk-line-card" aria-labelledby="dk-line-h"><div class="dk-card-head"><div><h2 id="dk-line-h">Study each day</h2><p class="dk-note">Quiz answers, cards moved up, mistakes fixed and plan tasks done.</p></div>
+      <p class="dk-legend"><span class="dk-key dk-key-now">This week</span><span class="dk-key dk-key-last">Last week</span></p></div>
+      <div class="dk-line-wrap"><svg class="dk-line-svg" viewBox="0 0 ${W} ${H}" aria-label="Study each day, this week against last week">${grid}${days}
+      ${area ? `<path class="dk-area" d="${area}"/>` : ''}<path class="dk-last" d="${line('last')}"/><path class="dk-now" d="${line('now')}"/>${dots}</svg><div class="dk-tip" hidden></div></div></section>`;
+  el.appendChild(weekCard()); // the week's numbers against last week, with Share my week
+  const tip = el.querySelector('.dk-tip'), wrap = el.querySelector('.dk-line-wrap');
+  const show = (g) => {
+    const p = pts[+g.dataset.i], r = g.querySelector('rect').getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    tip.innerHTML = `<small></small><b></b><span></span>`;
+    tip.querySelector('small').textContent = dayName(p.day, { weekday: 'short', day: 'numeric', month: 'short' });
+    tip.querySelector('b').textContent = p.now == null ? 'Still to come' : `${p.now} studied`;
+    tip.querySelector('span').textContent = `Last week: ${p.last}`;
+    tip.hidden = false;
+    tip.style.left = `${Math.min(w.width - 150, Math.max(0, r.left - w.left + r.width / 2 - 70))}px`;
+  };
+  el.querySelectorAll('.dk-pt').forEach((g) => { g.addEventListener('pointerenter', () => show(g)); g.addEventListener('focus', () => show(g)); g.addEventListener('pointerleave', () => { tip.hidden = true; }); g.addEventListener('blur', () => { tip.hidden = true; }); });
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk]'); if (b && b.dataset.dk === 'share') shareWeek(weekData()); });
+  return el;
+}
 
 /* ---------- Exam plans and the weekly progress card (Home) ----------
    An exam plan: the student names an exam, its day and its topics; Cassie writes a day by day plan
@@ -2219,7 +2572,7 @@ async function makeExamPlan(form) {
 function refreshHub() {
   const h = document.getElementById('home-hub');
   if (h && h.querySelector('.hub')) renderHub(h);
-  if (!state.messages.length && chatLog.querySelector('.hub')) renderHistory();
+  if (!state.messages.length && chatLog.querySelector('.hub, .home-desk')) renderHistory();
 }
 // what a task opens: the thing Cassie already does
 function openExamTask(t, e) {
@@ -2410,11 +2763,12 @@ function openExamSheet(pre = null) {
 }
 
 function renderHome() {
-  if (sideWide.matches) { // computers: the hub, centred (phones: Home is its own tab)
-    const w = document.createElement('div'); w.className = 'home home-hub';
-    w.appendChild(buildHub({ ideas: true }));
+  if (sideWide.matches) { // computers: the study dashboard, or the page picked in the sidebar (phones: Home is its own tab)
+    const w = document.createElement('div'); w.className = 'home home-desk';
+    w.appendChild((DESK_PAGES[deskPage] || DESK_PAGES.home)());
     chatLog.appendChild(w);
-    requestAnimationFrame(() => { chatLog.scrollTop = 0; }); // (the hub reads from the top)
+    chatPinned = false; // (Home reads from the top: its timer ticking never pulls it down)
+    requestAnimationFrame(() => { chatLog.scrollTop = 0; chatPinned = false; });
     return;
   }
   const wrap = document.createElement('div');
@@ -2458,6 +2812,7 @@ function renderHome() {
 }
 
 function renderHistory() {
+  setTimeout(deskChrome, 0);
   chatLog.innerHTML = '';
   clearFollowups();
   if (state.messages.length === 0) {
@@ -4051,8 +4406,8 @@ async function handleSend(text, opts = {}) {
   if (!sendText && many) sendText = docs.length ? 'Please read all of these carefully and make me one complete reviewer of everything in them.' : 'Please read all of these photos carefully. If they have questions, answer every one; if they are notes or a lesson, make me a complete reviewer of everything in them.';
 
   clearFollowups();
-  // if the home screen is showing, clear it before the first message
-  if (!state.messages.length) chatLog.innerHTML = '';
+  // if the home screen is showing, clear it before the first message (a computer's next empty chat is Home again)
+  if (!state.messages.length) { chatLog.innerHTML = ''; deskPage = 'home'; }
   // A document is read separately; history only keeps a short note + excerpt,
   // so later questions don't blow past the free per-minute limits.
   let modelContent = sendText;
@@ -6004,6 +6359,7 @@ function selectChat(id) {
   closeSidebar();
 }
 function createNewChat() {
+  deskPage = 'home';
   const cur = curChat();
   if (cur && cur.messages.length === 0) {
     state.messages = cur.messages; // reuse the current blank chat instead of stacking empties
@@ -7257,6 +7613,7 @@ function examReadySheet(e) {
 // the plan lives on Home: the Home tab on a phone, an empty new chat on a computer
 function showExamPlan(id) {
   if (onPhoneHome()) window.CassieNative.go('home');
+  else if (sideWide.matches) deskGo('plan');
   else if (state.messages.length) createNewChat();
   refreshHub();
   requestAnimationFrame(() => {
@@ -7355,6 +7712,7 @@ function accountOf(a) {
   const providers = Array.isArray(a.providers) ? a.providers.filter((p) => p === 'google' || p === 'apple') : a.google ? ['google'] : [];
   return { email: a.email || '', name: a.name || '', providers, google: providers.includes('google') };
 }
+async function signOutNow() { try { await authCall('/auth/logout', {}); } catch (e2) { /* signed out anyway */ } signedOutLocally(); mascotSay('Signed out. Your stuff is still here on this device.', 3000); }
 function signedOutLocally() {
   try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
   state.account = null; state.plan = null; save(); renderProfileSummary();
@@ -7755,7 +8113,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (!act) return;
   if (act === 'signin') { settingsPanel.hidden = true; openAuth({ mode: 'signin' }); return; }
-  if (act === 'signout') { try { await authCall('/auth/logout', {}); } catch (e2) { /* signed out anyway */ } signedOutLocally(); mascotSay('Signed out. Your stuff is still here on this device.', 3000); return; }
+  if (act === 'signout') { await signOutNow(); return; }
   if (act === 'delete') {
     if (!confirm('Delete your Cassie account? Your profile and saved mistakes are removed from the server. What’s on this device stays.')) return;
     try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(CassieErrors.explain(e2)); }
