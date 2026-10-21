@@ -45,7 +45,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== 'cassie-remind').map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -122,4 +122,32 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => caches.match(event.request).then((c) => c || caches.match(event.request, { ignoreSearch: true })))
   );
+});
+
+// Study reminders: the server only sends an empty nudge at the time you picked.
+// The words come from this device (what is due and your streak), so they never leave it.
+async function remindText(now = Date.now()) {
+  let snap = null;
+  try { const r = await (await caches.open('cassie-remind')).match('/__remind'); if (r) snap = await r.json(); } catch (e) { /* nothing kept */ }
+  if (!snap) return 'A short review today keeps what you learned.';
+  const end = new Date(now); end.setHours(23, 59, 59, 999);
+  const due = (snap.due || []).filter((d) => d <= end.getTime()).length;
+  const first = (snap.soon || []).find((c) => c.due <= end.getTime());
+  if (due) return `${due} card${due === 1 ? ' is' : 's are'} due today${first && first.f ? `, like ${first.f}` : ''}. A 5 minute review keeps them.`;
+  const y = new Date(now); y.setDate(y.getDate() - 1);
+  const yday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+  if (snap.streak > 0 && snap.streakDay === yday) return `Your ${snap.streak} day streak ends tonight. One question keeps it going.`;
+  return 'A short review today keeps what you learned.';
+}
+self.addEventListener('push', (event) => {
+  event.waitUntil(remindText().then((body) => self.registration.showNotification('Cassie', { body, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: 'cassie-remind' })));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = all.find((c) => /app(\.html)?/.test(new URL(c.url).pathname));
+    if (open) return open.focus();
+    return self.clients.openWindow(new URL('app.html', self.registration.scope).href);
+  })());
 });

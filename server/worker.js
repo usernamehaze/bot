@@ -248,6 +248,77 @@ function studentWords(messages) {
   const t = typeof last.content === 'string' ? last.content : last.content.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
   return t.replace(/^\[I attached[^\]]*\]\s*/, '').split(/\n\n\(Excerpt from|\n\[Picture from/)[0];
 }
+/* ------------------------------------------------------------------ reminders (web push)
+   A student turns reminders on in Settings. The browser gives a push address, and Cassie keeps it with the hour
+   they picked, their time zone, their quiet hours, and two facts the app sends: when their next flashcard is due,
+   and their streak (its length and last day). No names and no card words. Once an hour the Cron Trigger sends an
+   EMPTY push to anyone whose hour it is: at most once a day, never in quiet hours, and only when a card is due
+   today or the streak ends tonight. The phone writes the words itself from what's saved on it.
+   Keys (Worker → Settings → Variables and Secrets): VAPID_PUBLIC_KEY (Text) and VAPID_PRIVATE_KEY (Secret);
+   scripts/make-vapid-keys.mjs makes a pair. VAPID_SUBJECT (Text, optional): a mailto: for the push services. */
+const b64uDec = (s) => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (String(s).length % 4)) % 4)), (c) => c.charCodeAt(0)); // (b64u, below, writes it)
+// only the browsers' own push services (never any other address)
+const PUSH_HOSTS = /(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
+const pushOn = (env) => !!(env.DB && env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
+let vapidKey = null;
+async function vapidAuth(env, endpoint) {
+  if (!vapidKey || vapidKey.pub !== env.VAPID_PUBLIC_KEY) {
+    const pub = b64uDec(env.VAPID_PUBLIC_KEY); // (65 bytes: 4, then x and y)
+    const jwk = { kty: 'EC', crv: 'P-256', d: env.VAPID_PRIVATE_KEY, x: b64u(pub.slice(1, 33)), y: b64u(pub.slice(33, 65)), ext: true };
+    vapidKey = { pub: env.VAPID_PUBLIC_KEY, key: await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']) };
+  }
+  const enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));
+  const head = enc({ typ: 'JWT', alg: 'ES256' });
+  const claims = enc({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: env.VAPID_SUBJECT || 'mailto:askcassie.study@gmail.com' });
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, vapidKey.key, new TextEncoder().encode(`${head}.${claims}`));
+  return `vapid t=${head}.${claims}.${b64u(sig)}, k=${env.VAPID_PUBLIC_KEY}`;
+}
+const hourIn = (v, d) => (Number.isInteger(+v) && +v >= 0 && +v <= 23 ? +v : d);
+const inQuiet = (h, from, to) => (from === to ? false : from < to ? h >= from && h < to : h >= from || h < to);
+async function push(request, env, url) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  if (request.method === 'GET' && url.pathname === '/push/key') return json(pushOn(env) ? { on: true, key: env.VAPID_PUBLIC_KEY } : { on: false }, 200, h);
+  if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
+  if (!pushOn(env)) return json({ error: 'Reminders aren’t switched on yet.' }, 503, h);
+  let b; try { b = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, h); }
+  const id = /^[\w-]{8,64}$/.test(String(b.id || '')) ? String(b.id) : '';
+  if (!id) return json({ error: 'bad id' }, 400, h);
+  await ensureSchema(env.DB);
+  const facts = [Math.max(0, Math.floor(+b.nextDue || 0)), Math.max(0, Math.min(10000, Math.floor(+b.streak || 0))), /^\d{4}-\d{2}-\d{2}$/.test(String(b.streakDay || '')) ? String(b.streakDay) : ''];
+  if (url.pathname === '/push/subscribe') {
+    let ep; try { ep = new URL(String(b.endpoint || '')); } catch (e) { return json({ error: 'bad endpoint' }, 400, h); }
+    if (ep.protocol !== 'https:' || !PUSH_HOSTS.test(ep.hostname) || ep.href.length > 1000) return json({ error: 'bad endpoint' }, 400, h);
+    const tz = Math.max(-840, Math.min(840, Math.round(+b.tz || 0)));
+    await env.DB.prepare('INSERT OR REPLACE INTO push_subs (id, endpoint, hour, tz, qfrom, qto, next_due, streak, streak_day, last_sent, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ep.href, hourIn(b.hour, 19), tz, hourIn(b.quietFrom, 22), hourIn(b.quietTo, 7), ...facts, '', Date.now()).run();
+    return json({ on: true }, 200, h);
+  }
+  if (url.pathname === '/push/state') { await env.DB.prepare('UPDATE push_subs SET next_due = ?, streak = ?, streak_day = ? WHERE id = ?').bind(...facts, id).run(); return json({ ok: true }, 200, h); }
+  if (url.pathname === '/push/unsubscribe') { await env.DB.prepare('DELETE FROM push_subs WHERE id = ?').bind(id).run(); return json({ on: false }, 200, h); }
+  return new Response('not found', { status: 404, headers: h });
+}
+// once an hour (the Cron Trigger): the reminders whose hour it is
+async function sendReminders(env, now = Date.now()) {
+  if (!pushOn(env)) return 0;
+  await ensureSchema(env.DB);
+  const { results } = await env.DB.prepare('SELECT id, endpoint, hour, tz, qfrom, qto, next_due, streak, streak_day, last_sent FROM push_subs LIMIT 5000').all();
+  let sent = 0;
+  for (const s of results || []) {
+    const local = new Date(now + s.tz * 60e3), hour = local.getUTCHours(), day = local.toISOString().slice(0, 10);
+    if (hour !== s.hour || s.last_sent === day || inQuiet(hour, s.qfrom, s.qto)) continue;
+    const yesterday = new Date(now + s.tz * 60e3 - 864e5).toISOString().slice(0, 10);
+    const dueToday = s.next_due > 0 && s.next_due <= now + (24 - hour) * 3600e3; // (due before the day ends)
+    const streakEnds = s.streak > 0 && s.streak_day === yesterday; // (studied yesterday, not yet today)
+    if (!dueToday && !streakEnds) continue;
+    let r = null;
+    try { r = await fetch(s.endpoint, { method: 'POST', headers: { authorization: await vapidAuth(env, s.endpoint), ttl: '14400', urgency: 'normal', 'content-length': '0' } }); } catch (e) { /* tried again next hour */ }
+    if (r && (r.status === 404 || r.status === 410)) await env.DB.prepare('DELETE FROM push_subs WHERE id = ?').bind(s.id).run(); // (turned off in the browser)
+    else if (r && r.ok) { await env.DB.prepare('UPDATE push_subs SET last_sent = ? WHERE id = ?').bind(day, s.id).run(); sent++; }
+  }
+  return sent;
+}
+
 // counted with nothing else: no words, no id
 const countCare = (env, ctx) => ctx.waitUntil(countChat(env, dayOf(Date.now()), 'care').catch(() => {}));
 
@@ -280,6 +351,8 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS room_ops_code ON room_ops(code, id)`,
   // sign-in with Google or Apple: which provider and its id for the person (nothing else is kept)
   `CREATE TABLE IF NOT EXISTS identities (provider TEXT, sub TEXT, account TEXT, PRIMARY KEY (provider, sub))`,
+  // reminders: a push address and when to use it (no names, no card words)
+  `CREATE TABLE IF NOT EXISTS push_subs (id TEXT PRIMARY KEY, endpoint TEXT, hour INTEGER, tz INTEGER, qfrom INTEGER, qto INTEGER, next_due INTEGER, streak INTEGER, streak_day TEXT, last_sent TEXT, at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS identities_account ON identities(account)`,
   `INSERT OR IGNORE INTO identities (provider, sub, account) SELECT 'google', google, id FROM accounts WHERE google IS NOT NULL`,
 ];
@@ -363,7 +436,7 @@ const BACKUP_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'; // Workers AI
 const minuteHits = new Map(); // per-person counts for the current minute (per Worker instance)
 // A per-network speed limit for everything that writes to the database, so nobody can flood it.
 // (Counted per Worker instance, so it's a guard rail, not an exact number.)
-const SPEED = { '/e': 400, '/f': 100, '/scores/': 200, '/room/create': 30, '/room': 3000, '/auth/': 200, '/transcribe': 300, '/image': 100, '/speak': 240 };
+const SPEED = { '/push/': 60, '/e': 400, '/f': 100, '/scores/': 200, '/room/create': 30, '/room': 3000, '/auth/': 200, '/transcribe': 300, '/image': 100, '/speak': 240 };
 function tooFast(request, path) {
   const rule = Object.keys(SPEED).find((p) => (p.endsWith('/') ? path.startsWith(p) : path === p || path.startsWith(p + '/')));
   if (!rule) return false;
@@ -1706,8 +1779,14 @@ async function stats(request, env) {
 }
 
 export default {
-  // Cron Trigger (Worker → Settings → Triggers): the daily brain check, and the tidy-up
-  async scheduled(event, env, ctx) { ctx.waitUntil(runHealth(env)); ctx.waitUntil(tidy(env).catch(() => {})); },
+  // Cron Trigger (Worker → Settings → Triggers), every hour (0 * * * *): reminders whose hour it is, the tidy-up,
+  // and at 22:00 UTC (6 a.m. in the Philippines) the daily brain check (a daily-only trigger still works: it runs then)
+  async scheduled(event, env, ctx) {
+    const at = (event && event.scheduledTime) || Date.now();
+    if (new Date(at).getUTCHours() === 22) ctx.waitUntil(runHealth(env));
+    ctx.waitUntil(tidy(env).catch(() => {}));
+    ctx.waitUntil(sendReminders(env, at).catch((e) => logProblem(env, 'reminders', String(e && e.message || e).slice(0, 200)).catch(() => {})));
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (env.DB && Date.now() - tidiedAt > 10 * 60e3) { tidiedAt = Date.now(); ctx.waitUntil(tidy(env).catch(() => {})); }
@@ -1727,6 +1806,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);
+      if (url.pathname.startsWith('/push/')) return await push(request, env, url);
       if (url.pathname.startsWith('/scores/')) return await scores(request, env, url);
       if (request.method === 'GET' && url.pathname === '/stats') return await stats(request, env);
       if (request.method === 'GET' && url.pathname === '/health') return await health(request, env);

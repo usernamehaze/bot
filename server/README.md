@@ -133,8 +133,27 @@ which Gemini models your key can use, and if no Groq model name looks like a
 picture reader, it shows each one a tiny picture to find the one that can read.
 
 To run it by itself every day: Worker → **Settings** → **Triggers** → **Cron
-Triggers** → **Add** → `0 22 * * *` (6 a.m. in the Philippines) → **Add**. The
-dashboard then always shows this morning's result.
+Triggers** → **Add** → `0 * * * *` (every hour) → **Add**. The check runs once a
+day, at 22:00 UTC (6 a.m. in the Philippines), and the dashboard then always shows
+this morning's result. Every hour the same trigger sends study reminders (below).
+If you already have `0 22 * * *`, change it to `0 * * * *`.
+
+## Study reminders (push notifications)
+
+Students turn them on in Settings → Study. At most one a day, at the hour they
+picked, never in their quiet hours, and only when a flashcard is due that day or
+their streak ends tonight. Cassie's server keeps only the push address, the hour,
+the time zone and two facts (when the next card is due, the streak); the phone
+writes the words itself.
+
+1. On your computer, in the bot folder: `node scripts/make-vapid-keys.mjs`. It
+   prints two keys and saves nothing.
+2. Worker → **Settings** → **Variables and Secrets** → **Add**:
+   `VAPID_PUBLIC_KEY` as **Text**, `VAPID_PRIVATE_KEY` as **Secret**.
+3. The Cron Trigger must be `0 * * * *` (above).
+
+On iPhone, reminders work only after Cassie is added to the Home Screen (iOS 16.4
+or later); Settings says so.
 
 The same card lists **Problems Cassie hit**: every time the server couldn't
 answer, and errors the app ran into (only the error message, never what the

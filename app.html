@@ -363,6 +363,18 @@
             </select>
           </label>
           </div>
+          <!-- reminders: one a day at most, when cards are due or the streak ends tonight -->
+          <div class="set-row remind-row" data-k="reminders notifications push streak flashcards due">
+          <label class="field row">
+            <span>Reminders: one a day at most, when flashcards are due or your streak ends tonight</span>
+            <input type="checkbox" id="remind-toggle" role="switch">
+          </label>
+          <div class="remind-times" id="remind-times" hidden>
+            <label class="field"><span>Remind me at</span><select id="remind-hour"></select></label>
+            <div class="remind-quiet"><label class="field"><span>Quiet from</span><select id="quiet-from"></select></label><label class="field"><span>to</span><select id="quiet-to"></select></label></div>
+          </div>
+          <p class="field-hint" id="remind-note" aria-live="polite"></p>
+          </div>
           <div class="set-row" data-k="highlight help popup copy">
           <label class="field row">
             <span>Highlight help: Cassie pops up when I highlight words (off: highlight and copy like normal)</span>
