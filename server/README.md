@@ -188,8 +188,8 @@ The app notices the next time it opens. Never put the key in the app or send it 
 
 Optional variables (type **Text**):
 
-- `SPEAK_DAILY_CHARS`: characters each student can hear per day (default 3000, about
-  3 minutes of reading). After that, Bella reads.
+- `SPEAK_DAILY_CHARS`: characters each student can hear per day (default 12000, about
+  15 minutes of talk). After that, Cassie types her answers until tomorrow, and says so.
 - `SPEAK_MONTHLY_CHARS`: characters for the whole app per month (default 9500, just under
   ElevenLabs' free plan). Raise it to match your plan (for example 28000 on Starter).
 - `ELEVENLABS_VOICE_WOMAN` / `ELEVENLABS_VOICE_MAN`: voice IDs from your ElevenLabs

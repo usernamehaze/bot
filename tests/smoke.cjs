@@ -415,7 +415,7 @@ async function realServer(env = {}) {
     const res = await w.fetch(new Request('https://cassie.failanzahazel.workers.dev' + p, { method, headers: { origin: 'https://askcassie.study', 'cf-connecting-ip': '203.0.113.7', ...(body ? { 'content-type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined }), { DB, ...env }, { waitUntil: (x) => pending.push(x) });
     await Promise.all(pending);
     const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
-    return { status: res.status, json, text };
+    return { status: res.status, json, text, headers: res.headers };
   };
   return { call, DB };
 }
@@ -521,6 +521,36 @@ test('the real server: the studio voice counts the ElevenLabs account’s own cr
     const probs = s2.DB.db.prepare("SELECT text FROM feedback WHERE feature = 'voice: elevenlabs'").all().map((r) => r.text);
     expect(probs.length === 1 && probs[0] === 'out of credits', 'the dashboard gets one plain line, not one per try: ' + JSON.stringify(probs));
   } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
+});
+
+test('voice for 5 minutes straight: the real server lets one student hear about 15 minutes a day (it stopped at 3,000 characters, about 5 minutes), says why when it stops (x-speak, readable by the app), and the app says she’s back tomorrow instead of “not available”', async (b) => {
+  const realFetch = globalThis.fetch, hadCaches = 'caches' in globalThis;
+  globalThis.caches = { default: { match: async () => null, put: async () => {} } };
+  globalThis.fetch = async (u, o) => (/elevenlabs\.io\/v1\/user\/subscription/.test(String(u)) ? new Response('{}', { status: 401 }) : /elevenlabs\.io/.test(String(u)) ? new Response(new Uint8Array([1, 2]), { status: 200 }) : realFetch(u, o));
+  try {
+    const { call } = await realServer({ ELEVENLABS_API_KEY: 'k', SPEAK_MONTHLY_CHARS: '125000' });
+    // about 5 minutes of a voice chat: 10 spoken answers of 600 characters
+    const said = [];
+    for (let i = 0; i < 10; i++) said.push((await call('POST', '/speak', { text: `Answer ${i} ` + 'x'.repeat(590), uid: 'aaaaaaaa-5' })).status);
+    expect(said.every((st) => st === 200), '5 minutes of talk all spoken: ' + said.join(','));
+    // far past 15 minutes: she rests for the day, and says that's why
+    let last;
+    for (let i = 0; i < 12; i++) last = await call('POST', '/speak', { text: `More ${i} ` + 'y'.repeat(690), uid: 'aaaaaaaa-5' });
+    const hd = (k) => (last.headers && last.headers.get ? last.headers.get(k) : (last.headers || {})[k]) || '';
+    expect(last.status === 429 && hd('x-speak') === 'day' && /x-speak/.test(hd('access-control-expose-headers')), 'past the day: 429, x-speak day, and the app may read it: ' + last.status + ' ' + JSON.stringify([hd('x-speak'), hd('access-control-expose-headers')]));
+  } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
+  // the app: the voice runs out partway through a Listen, and the line says why and when
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: Array.from({ length: 8 }, (_, i) => `Sentence ${i + 1} says cells need energy.`).join(' ') }) });
+  await ctx.addInitScript(FAKE_VOICE, { studio: { failFrom: 1, failStatus: 429, failHeaders: { 'x-speak': 'day' } } });
+  await page.reload();
+  await page.waitForFunction(() => window.CassieVoice.studio.known() && window.CassieVoice.studio.on(), null, { timeout: 5000 });
+  await ask(page, 'What do cells need?');
+  await page.click('.bubble-assistant .listen-btn');
+  await page.waitForFunction(() => window.__notes.length > 0, null, { timeout: 15000 });
+  const note = (await page.evaluate(() => window.__notes))[0];
+  expect(/listened to Cassie a lot today/.test(note) && /back tomorrow/.test(note) && !/isn’t available/.test(note), 'the line says why and when: ' + note);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('the real server: a picture that fails gives the use back to whoever it was counted to (with no id it is counted per network)', async () => {
@@ -3305,7 +3335,7 @@ const FAKE_VOICE = (opts) => {
       if (!init.method || init.method === 'GET') return new Response(JSON.stringify(c.on ? { on: true, left: c.left, back: c.back } : { on: false, left: 0 }), { headers: { 'content-type': 'application/json' } });
       const body = JSON.parse(init.body), ok = c.on && !(c.failFrom != null && window.__studio.length >= c.failFrom);
       window.__studio.push({ text: body.text, voice: body.voice, ok });
-      if (!ok) return new Response('{"error":{"message":"the studio voice failed"}}', { status: c.failStatus || 502 });
+      if (!ok) { if (c.failHeaders) c.left = 0; return new Response('{"error":{"message":"the studio voice failed"}}', { status: c.failStatus || 502, headers: c.failHeaders || {} }); } // (failHeaders: used up, so nothing is left)
       c.left = Math.max(0, c.left - body.text.length);
       return new Response(wav(), { headers: { 'content-type': 'audio/mpeg', 'x-speak': 'new' } });
     };
@@ -3383,7 +3413,9 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   await page.click('.bubble-assistant .listen-btn').catch(() => {}); // (tapped twice: still one line)
   await page.waitForTimeout(600);
   expect((await studio()).length === n0, 'nothing went to the studio voice');
-  expect(JSON.stringify(await notes()) === JSON.stringify([LINE]), 'the line showed once: ' + JSON.stringify(await notes()));
+  // (too little left, with a known day: the line says when she's back, not just "not available")
+  const RESTING = 'Cassie’s voice is resting until 1 November. Until then she types her answers.';
+  expect(JSON.stringify(await notes()) === JSON.stringify([RESTING]), 'the line showed once, with when she’s back: ' + JSON.stringify(await notes()));
   expect(/Sentence 12 says/.test(await page.locator('.bubble-assistant').last().innerText()), 'the answer is on the screen');
   // Settings says when she is back
   const resting = await settingsLine();
@@ -3394,7 +3426,7 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   await page.click('#voice-btn');
   await page.waitForTimeout(800);
   expect(await page.evaluate(() => !document.querySelector('.vc') || document.querySelector('.vc').hidden), 'the voice screen did not open');
-  expect((await notes()).length === 2 && (await notes())[1] === LINE, 'voice chat said the same line');
+  expect((await notes()).length === 2 && (await notes())[1] === RESTING, 'voice chat said the same line');
   expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'prompt-input'), 'the typed chat is ready to type in');
   expect((await studio()).length === n0, 'still nothing spoken');
 

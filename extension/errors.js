@@ -101,6 +101,7 @@
     voice_unsupported: 'This browser can’t play Cassie’s voice, so she types her answers instead. Try Chrome, Edge or Safari.',
     voice_typing: 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.',
     voice_resting: 'Cassie’s voice is resting until {date}. Until then she types her answers.',
+    voice_today: 'You’ve listened to Cassie a lot today, so she’ll type her answers for now. Her voice is back tomorrow.',
     voice_not_set_up: 'Cassie’s voice isn’t switched on yet, so she types her answers.',
     mic_blocked: 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.',
     not_heard: 'Cassie couldn’t hear that clearly. Try again, or type it.',
