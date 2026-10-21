@@ -1032,6 +1032,139 @@ test('the pricing page and the app’s Plans say exactly what the server allows:
   expect(row('Questions a day') === `${lim.free.q} ${lim.plus.q} ${lim.pro.q}` && row('Smarter answers a day') === `${lim.free.smart} ${lim.plus.smart} ${lim.pro.smartest} smartest, then ${lim.pro.smart}`, 'the table matches the server: ' + JSON.stringify([row('Questions a day'), row('Smarter answers a day')]));
 });
 
+// a student a few days in: two exam plans, a week of study, chats and flashcards (for the computer's pages)
+function deskSeed() {
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const add = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const progress = { [today]: { answered: 6, right: 5, quizzes: 1, cardsUp: 3, tasks: 1, focus: 25 }, [add(today, -1)]: { answered: 10, right: 7, quizzes: 2, fixed: 2, focus: 50 }, [add(today, -8)]: { answered: 4, right: 2, quizzes: 1, focus: 25 } };
+  const exams = [
+    { id: 'ex1', name: 'Gen Chem finals', date: add(today, 5), topics: 'Stoichiometry, gas laws', from: today, at: 1, stats: {}, marks: { stoichiometry: 'rrwr' }, days: [{ date: today, tasks: [{ kind: 'learn', topic: 'Stoichiometry', done: true }, { kind: 'quiz', topic: 'Gas laws' }] }, { date: add(today, 1), tasks: [{ kind: 'cards', topic: 'Gas laws' }, { kind: 'mistakes' }] }] },
+    { id: 'ex2', name: 'Bio 1 midterm', date: add(today, 12), topics: 'Cells', from: today, at: 2, stats: {}, days: [{ date: add(today, 2), tasks: [{ kind: 'learn', topic: 'Cells' }, { kind: 'quiz', topic: 'Cells' }] }] },
+  ];
+  const now = Date.now();
+  const chats = [
+    { id: 'c1', title: 'Moles and molar mass', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A mole is a count.' }], updatedAt: now - 3600e3 },
+    { id: 'c2', title: 'Photosynthesis steps', messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }, { role: 'user', content: 'c' }, { role: 'assistant', content: 'd' }], updatedAt: now - 86400e3 },
+    { id: 'c3', title: '', messages: [], updatedAt: now },
+  ];
+  const cards = Array.from({ length: 8 }, (_, i) => ({ id: 'k' + i, f: 'Q' + i, b: 'A' + i, deck: 'Chem', box: i < 5 ? 4 : 1, due: 0, at: 0 }));
+  return { today, add, state: { progress, exams, chats, currentId: 'c3', cards, tour: 'done', extVideoSeen: true, groqKey: 'gsk_test' } };
+}
+
+test('computer Home is a study dashboard: Hi and the two main buttons, four real numbers, the week’s chart, Next up, exam plans, recent chats, the readiness gauge and the focus timer (also in the top bar while it runs); the sidebar has Menu and General and the Chrome card; the top bar has search (Ctrl K), the bell and you; phones never see any of it', async (b) => {
+  const seed = deskSeed();
+  for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: seed.state });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
+    const H = await page.evaluate(() => {
+      const d = document.querySelector('.desk-home'), t = (s) => (d.querySelector(s) || {}).textContent || '';
+      return { title: t('.dk-title'), acts: [...d.querySelectorAll('.dk-acts .dk-btn')].map((x) => x.textContent.trim()), stats: [...d.querySelectorAll('.dk-stat')].map((x) => x.querySelector('h2').textContent + '=' + x.querySelector('b').textContent),
+        bars: [...d.querySelectorAll('.dk-bar')].map((x) => x.getAttribute('aria-label')), next: t('.dk-next-what') + ' | ' + t('.dk-next-when'), plans: [...d.querySelectorAll('.dk-plans .dk-row b')].map((x) => x.textContent), chats: [...d.querySelectorAll('.dk-chats .dk-row b')].map((x) => x.textContent),
+        gauge: (d.querySelector('.dk-gauge') || { getAttribute: () => '' }).getAttribute('aria-label'), timer: t('.dk-time') };
+    });
+    expect(H.title === 'Hi, Test' && H.acts.join() === 'Ask Cassie,Add my notes', `${viewport.width}: the greeting and buttons: ` + JSON.stringify(H));
+    expect(H.stats.join('|') === 'Questions this week=3|Cards learned=5|Day streak=0|Exam readiness=38%', `${viewport.width}: the four numbers come from what's saved: ` + H.stats.join('|'));
+    expect(H.bars.length === 7 && H.bars.some((l) => /: 10 things studied/.test(l) || /: 13 things studied/.test(l)), `${viewport.width}: a bar a day from the saved counts: ` + H.bars.join(' / '));
+    expect(H.next === 'Quiz me on Gas laws | Today · Gen Chem finals', 'Next up is the next task not done: ' + H.next);
+    expect(H.plans.join() === 'Gen Chem finals,Bio 1 midterm' && H.chats.join() === 'Moles and molar mass,Photosynthesis steps', 'plans and chats: ' + JSON.stringify([H.plans, H.chats]));
+    expect(/38% ready for Gen Chem finals/.test(H.gauge), 'the gauge: ' + H.gauge);
+    if (process.env.SHOTS) { await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/desk-home-${viewport.width}-${scheme}.png` }); }
+    if (scheme === 'light') {
+      // the sidebar and the top bar
+      const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Settings,Help' && side.badge === '1' && side.ext === 'cassie-extension.zip' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
+      await page.keyboard.press('Control+k');
+      expect(await page.evaluate(() => document.activeElement.id === 'side-search' && document.body.classList.contains('side-open')), 'Ctrl K opens search');
+      await page.keyboard.press('Escape');
+      await page.click('#top-bell');
+      expect(await page.locator('#top-remind .hub-chat').count() === 4, 'the bell shows the reminders');
+      await page.keyboard.press('Escape');
+      expect(await page.locator('#top-me b').innerText() === 'Test', 'you, in the top bar');
+      // the timer: from the card, and in the top bar while it runs
+      await page.click('.dk-tgo');
+      await page.waitForFunction(() => !document.getElementById('top-timer').hidden && /Pause/.test(document.querySelector('.dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
+      await page.click('.dk-tstop');
+      await page.waitForFunction(() => document.getElementById('top-timer').hidden, null, { timeout: 4000 });
+      // each button does its job: Ask Cassie, the ↗ on cards and the streak, Start studying
+      await page.click('.dk-acts [data-dk="ask"]');
+      expect(await page.evaluate(() => document.activeElement.id === 'prompt-input'), 'Ask Cassie: the ask box');
+      await page.click('.dk-stat [data-dk="cards"]');
+      await page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }); await page.click('.fc-x'); await page.waitForSelector('.fc', { state: 'hidden' });
+      await page.click('.dk-stat [data-dk="progress"]');
+      await page.waitForSelector('#chat-log .desk-progress', { timeout: 4000 });
+      await page.click('#side-nav [data-page="home"]'); await page.waitForSelector('#chat-log .desk-home');
+      // a chat, then Home again from the sidebar
+      await page.click('.dk-chats .dk-row');
+      await page.waitForFunction(() => !document.querySelector('.desk-home') && document.querySelector('#side-nav [data-page="chats"]').getAttribute('aria-current') === 'page', null, { timeout: 4000 });
+      await page.click('#side-nav [data-page="home"]');
+      await page.waitForSelector('#chat-log .desk-home', { timeout: 4000 });
+    }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a phone: none of it
+  const { ctx, page } = await open(b, { device: 'iPhone 13', server: false, state: { ...seed.state, tab: 'home' } });
+  await page.waitForSelector('#home .hub', { timeout: 8000 });
+  expect(await page.evaluate(() => !document.querySelector('.desk-home') && [...document.querySelectorAll('.desk-only')].every((x) => !x.getBoundingClientRect().width)), 'phones never see the dashboard or the computer parts');
+  await ctx.close();
+});
+
+test('computer pages: Study plan is a board (Today, Coming up, Done) with filters and ticks, then the full exam plans; Calendar shows the month with exam days and tasks, Today and Coming up; Progress draws this week against last week with tooltips and the week’s numbers; each opens from the sidebar and a question turns it back into a chat', async (b) => {
+  const seed = deskSeed();
+  for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
+    const { ctx, page, errors, groqCalls } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: seed.state, fakeGroq: () => ({ text: 'Sure!' }) });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
+    const shot = async (n) => { if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/desk-${n}-${viewport.width}-${scheme}.png` }); } };
+    // Study plan
+    await page.click('#side-nav [data-page="plan"]');
+    await page.waitForSelector('#chat-log .desk-plan', { timeout: 4000 });
+    const cols = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.dk-col')].map((c) => [c.dataset.col, [...c.querySelectorAll('.dk-task-go')].map((x) => x.textContent)])));
+    let C = await cols();
+    expect(C.now.join() === 'Quiz me on Gas laws' && C.next.join() === '10 flashcards on Gas laws,Review my mistakes,Learn Cells with Cassie,Quiz me on Cells' && C.done.join() === 'Learn Stoichiometry with Cassie', 'the board: ' + JSON.stringify(C));
+    expect(await page.locator('#side-nav [data-page="plan"]').getAttribute('aria-current') === 'page' && await page.locator('#chat-log .desk-plan .ex-plan').count() === 2, 'Study plan is the page; the plans in full under the board');
+    await shot('plan');
+    await page.click('.dk-chip[data-f="quiz"]');
+    C = await cols();
+    expect(C.now.join() === 'Quiz me on Gas laws' && C.next.join() === 'Quiz me on Cells' && !C.done.length, 'Quizzes only: ' + JSON.stringify(C));
+    await page.click('.dk-chip[data-f="all"]');
+    await page.click('[data-col="now"] .ex-check');
+    await page.waitForFunction(() => document.querySelectorAll('[data-col="done"] .dk-task').length === 2 && document.querySelector('#side-nav [data-page="plan"] .side-badge').hidden, null, { timeout: 4000 });
+    expect(await page.evaluate(() => state.exams[0].days[0].tasks[1].done === true), 'the tick is saved on the task');
+    // Calendar
+    await page.click('#side-nav [data-page="calendar"]');
+    await page.waitForSelector('#chat-log .desk-cal', { timeout: 4000 });
+    const K = await page.evaluate(() => ({ exam: [...document.querySelectorAll('.dk-examday')].map((d) => d.getAttribute('aria-label')), today: [...document.querySelectorAll('.dk-today-list b')].map((x) => x.textContent), soon: [...document.querySelectorAll('.dk-soon .dk-soon-what')].map((x) => x.textContent), legend: [...document.querySelectorAll('.dk-cal-legend .dk-lg')].map((x) => x.textContent) }));
+    expect(K.today.join() === 'Learn Stoichiometry with Cassie,Quiz me on Gas laws' && K.soon[0] === '10 flashcards on Gas laws' && K.soon.includes('Gen Chem finals exam') && K.legend.join() === 'Exam day,Learn,Quiz,Flashcards,Mistakes,Focus', 'Today, Coming up and the legend: ' + JSON.stringify(K));
+    const examInMonth = seed.add(seed.today, 5).slice(0, 7) === seed.today.slice(0, 7);
+    if (examInMonth) expect(K.exam.some((l) => /Gen Chem finals exam/.test(l)), 'the exam day is marked: ' + JSON.stringify(K.exam));
+    await shot('calendar');
+    const m0 = await page.locator('.dk-month h2').innerText();
+    await page.click('[data-dk="next"]');
+    expect(await page.locator('.dk-month h2').innerText() !== m0, 'next month');
+    await page.click('[data-dk="today"]');
+    expect(await page.locator('.dk-month h2').innerText() === m0, 'Today comes back');
+    // Progress
+    await page.click('#side-nav [data-page="progress"]');
+    await page.waitForSelector('#chat-log .desk-progress .hub-week', { timeout: 4000 });
+    const P = await page.evaluate(() => ({ pts: [...document.querySelectorAll('.dk-pt')].map((g) => g.getAttribute('aria-label')), now: !!document.querySelector('.dk-now').getAttribute('d'), last: !!document.querySelector('.dk-last').getAttribute('d') }));
+    expect(P.pts.length === 7 && P.now && P.last && P.pts.some((l) => /last week 4$/.test(l)), 'the chart: ' + JSON.stringify(P));
+    await page.locator('.dk-pt').first().focus();
+    expect(await page.locator('.dk-tip').isVisible() && /Last week/.test(await page.locator('.dk-tip').innerText()), 'a tooltip on focus');
+    await shot('progress');
+    // a question turns the page back into a chat, and the next empty chat is Home
+    await page.fill('#prompt-input', 'What is a mole?'); await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('#chat-log .bubble-assistant', { timeout: 8000 });
+    expect(!(await page.locator('#chat-log .home-desk').count()) && groqCalls.length >= 1, 'the page became a chat');
+    await page.click('#new-chat-btn');
+    await page.waitForSelector('#chat-log .desk-home', { timeout: 4000 });
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));
@@ -2531,11 +2664,13 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
     await onboard(page, { name: 'Mika', grade: 'Grade 10', exam: { name: 'Gen Chem finals', date, topics: 'Stoichiometry, gas laws' } });
     await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
-    // the card: Your Exam Plan, then what subject and what topics
+    // the card: Your Exam Plan, then what subject and what topics (a computer: Home lists the plan, Study plan has the card)
+    if (!phone) { await page.waitForSelector('#chat-log .dk-plans .dk-row', { timeout: 10000 }); expect(await page.locator('#chat-log .dk-plans .dk-row b').first().innerText() === 'Gen Chem finals', 'Home lists the new plan'); await page.evaluate(() => deskGo('plan')); }
     const card = page.locator(where).first();
     await card.waitFor({ timeout: 10000 });
     const head = await card.locator('.ex-head').innerText();
-    expect(/^Your Exam Plan\b/.test(head) && /Subject:\s*Gen Chem finals/.test(head) && /Topics:\s*Stoichiometry, gas laws/.test(head), `${viewport.width}: the card says Your Exam Plan, the subject and the topics: ` + head + ' | ' + await card.locator('.ex-head').evaluate((e) => e.outerHTML));
+    if (!phone) await page.evaluate(() => deskGo('home'));
+    expect(/^Your Exam Plan\b/.test(head) && /Subject:\s*Gen Chem finals/.test(head) && /Topics:\s*Stoichiometry, gas laws/.test(head), `${viewport.width}: the card says Your Exam Plan, the subject and the topics: ` + head);
     // the tour is next, and no plan prompt yet
     await page.waitForSelector('.tour-offer', { timeout: 5000 });
     expect(!(await page.locator('.ex-ready-sheet').count()), `${viewport.width}: no plan prompt before the tour`);
@@ -2557,14 +2692,14 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     await page.waitForFunction((s) => { const e = [...document.querySelectorAll(s)].find((x) => x.offsetParent); const r = e && e.getBoundingClientRect(); return !!r && r.top < innerHeight && r.bottom > 0; }, where, { timeout: 5000 });
     expect(!(await page.locator('.ex-ready-sheet').count()), `${viewport.width}: the prompt closed`);
     if (process.env.SHOTS) { await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/exam-card-${viewport.width}.png` }); }
-    // the sidebar Menu: a pill (round ends, a visible edge) with an arrow, and it opens the tools
+    // the sidebar Menu: a pill (round ends, a visible edge) with an arrow, and it opens the tools (a computer: Menu is the pages above it, so the pill says Study tools)
     if (phone) { await page.evaluate(() => window.CassieNative.go('chat')); await page.tap('#menu-btn'); await page.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 2000 }); await page.waitForTimeout(300); }
     else if (!(await page.evaluate(() => document.body.classList.contains('side-open')))) { await page.click('#side-toggle'); await page.waitForTimeout(350); }
     const pill = await page.evaluate(() => {
       const m = document.getElementById('side-menu-toggle'), cs = getComputedStyle(m), r = m.getBoundingClientRect(), svg = m.querySelector('svg');
       return { h: r.height, w: r.width, side: document.getElementById('sidebar').getBoundingClientRect().width, radius: parseFloat(cs.borderTopLeftRadius), border: parseFloat(cs.borderTopWidth), bg: cs.backgroundColor, arrow: !!svg && getComputedStyle(svg).display !== 'none' && svg.getBoundingClientRect().width > 0, text: m.innerText.trim() };
     });
-    expect(pill.radius >= pill.h / 2 - 1 && pill.border >= 1 && pill.bg !== 'rgba(0, 0, 0, 0)' && pill.arrow && pill.w < pill.side / 2 && /menu/i.test(pill.text), `${viewport.width}: Menu is an oval pill with an arrow: ` + JSON.stringify(pill));
+    expect(pill.radius >= pill.h / 2 - 1 && pill.border >= 1 && pill.bg !== 'rgba(0, 0, 0, 0)' && pill.arrow && pill.w < pill.side * 0.6 && (phone ? /^menu$/i : /^study tools$/i).test(pill.text), `${viewport.width}: Menu is an oval pill with an arrow: ` + JSON.stringify(pill));
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/menu-pill-${viewport.width}.png` });
     await page.click('#side-menu-toggle');
     expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'true' && await page.locator('#side-tools .side-tool').first().isVisible(), `${viewport.width}: the pill opens the tools`);
@@ -2793,7 +2928,7 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
     mistakes: [{ q: 'What is the powerhouse of the cell?', a: 'mitochondria', at: 1, due: 1, misses: 1 }],
     cards: [{ id: 'c1', f: 'What is a cell?', b: 'The unit of life.', deck: 'Bio', box: 0, due: 0, at: 0 }] };
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: seed, fakeGroq });
-  const home = async () => { await page.evaluate(() => createNewChat()); await page.waitForSelector('#chat-log .hub .hub-week', { timeout: 10000 }); };
+  const home = async () => { await page.evaluate(() => deskGo('progress')); await page.waitForSelector('#chat-log .desk-progress .hub-week', { timeout: 10000 }).catch(async (e) => { throw new Error(e.message + ' | ' + errors.join('; ') + ' | ' + await page.evaluate(() => document.getElementById('chat-log').innerHTML.slice(0, 300))); }); }; // (a computer: the Progress page)
   // nothing this week yet: what to do, not zeros
   await home();
   expect(await page.locator('#chat-log .hub-week .empty-state').count() === 1 && /Take a quick quiz/.test(await page.locator('#chat-log .hub-week').innerText()), 'an empty week says what to do');
@@ -2829,7 +2964,8 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
   // (each card in the middle of the screen: one scrolled up under the see-through top bar is half covered, not unreadable)
   for (const scheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1600);
-    for (const sel of ['#chat-log .hub-week', '#chat-log .hub-exam']) {
+    for (const [pg, sel] of [['progress', '#chat-log .hub-week'], ['plan', '#chat-log .hub-exam']]) {
+      await page.evaluate((x) => deskGo(x), pg); await page.waitForSelector(sel, { timeout: 4000 }); await page.waitForTimeout(300);
       await page.evaluate((s) => document.querySelector(s).scrollIntoView({ block: 'center', behavior: 'instant' }), sel); await page.waitForTimeout(200);
       const { bad } = await require('./ui-checks.cjs').contrastIssues(page, sel); expect(!bad.length, `the week card (${scheme}): ` + bad.join(' | '));
     }
@@ -2841,11 +2977,13 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
     const st = { ...seed, tab: 'home', progress: { [lastMon]: { quizzes: 1 } }, exams: [{ id: 'e1', name: 'Physics long test', date: '2099-01-01', from: '2000-01-01', days: [{ date: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), tasks: [{ id: 't1', kind: 'quiz', topic: 'Vectors', done: false }, { id: 't2', kind: 'mistakes', topic: '', done: false }] }], stats: {} }] };
     st.progress[new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10)] = { quizzes: 1, answered: 2, right: 1 };
     const r = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: st });
-    const hub = viewport.width < 761 ? '#home .hub' : '#chat-log .hub';
-    if (viewport.width >= 761) await r.page.evaluate(() => createNewChat()); // (a computer: Home is a new, empty chat)
-    await r.page.waitForSelector(`${hub} .wk-card`, { timeout: 10000 });
-    const g = await r.page.evaluate((h) => { const els = [...document.querySelectorAll(`${h} .hub-exam button, ${h} .hub-exam label.ex-check, ${h} .hub-week button`)].filter((e) => e.offsetParent); return { small: els.filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).map((e) => e.className + ' ' + Math.round(e.getBoundingClientRect().height)), wide: document.documentElement.scrollWidth > innerWidth + 1 }; }, hub);
-    expect(!g.small.length && !g.wide, `${viewport.width}x${viewport.height}: ` + JSON.stringify(g));
+    // (a computer: the week is on Progress and the plans on Study plan)
+    for (const [hub, pg] of viewport.width < 761 ? [['#home .hub', '']] : [['#chat-log .desk-progress', 'progress'], ['#chat-log .desk-plan', 'plan']]) {
+    if (pg) await r.page.evaluate((x) => deskGo(x), pg);
+    await r.page.waitForSelector(`${hub} ${pg === 'plan' ? '.ex-plan' : '.wk-card'}`, { timeout: 10000 });
+      const g = await r.page.evaluate((h) => { const els = [...document.querySelectorAll(`${h} .hub-exam button, ${h} .hub-exam label.ex-check, ${h} .hub-week button`)].filter((e) => e.offsetParent); return { small: els.filter((e) => { const r = e.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).map((e) => e.className + ' ' + Math.round(e.getBoundingClientRect().height)), wide: document.documentElement.scrollWidth > innerWidth + 1 }; }, hub);
+      expect(!g.small.length && !g.wide, `${viewport.width}x${viewport.height}: ` + JSON.stringify(g));
+    }
     expect(!r.errors.length, 'page errors: ' + r.errors.join('; '));
     await r.ctx.close();
   }
@@ -4122,11 +4260,11 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   // 3. the app: glass only on the floating controls (tab bar, top bar, sidebar, the ask box); Home's cards are solid
   for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true, tab: 'home' } }); // (Lite mode turns all glass solid)
-    await page.waitForSelector('.hub-box', { timeout: 10000 });
+    await page.waitForSelector('.hub-box, .dk-card', { timeout: 10000 }); // (a computer: the study dashboard)
     const A = await page.evaluate(() => {
       const blur = (el) => /blur/.test(getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter || '');
       const shown = (el) => el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none';
-      const content = [...document.querySelectorAll('.hub-box, .hub-card, .hub-hero:not(.hub-hero-phone)')].filter(shown);
+      const content = [...document.querySelectorAll('.hub-box, .hub-card, .hub-hero:not(.hub-hero-phone), .dk-card, .dk-stat')].filter(shown);
       const controls = [...document.querySelectorAll('#tabbar, .composer, .topbar')].filter(shown);
       const menu = document.querySelector('.side-menu-label');
       return { glassyContent: content.filter(blur).map((e) => e.className), content: content.length, glassControls: controls.filter(blur).length, controls: controls.length, menu: menu && shown(menu) ? parseFloat(getComputedStyle(menu).fontSize) : null };
@@ -6550,6 +6688,7 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   const reply = () => ({ text: 'Osmosis is water moving across a membrane.' });
   // ---- a computer ----
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: reply });
+  ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); }); // (Help opens in a new tab: closed at once, so this page stays in front and keeps drawing)
   expect(await page.locator('.ideas-panel, .ideas-shade').count() === 0, 'the old Ideas panel is gone');
   expect(await page.locator('.home-ideas').isVisible(), 'Ideas to get started is still on the home screen');
   await ask(page, 'What is osmosis?');
@@ -6575,7 +6714,8 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   await page.waitForTimeout(400);
   const inView = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return 'missing'; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? 'ok' : JSON.stringify(r); }, sel);
   expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'the tool list starts folded');
-  expect(await inView('#pomo-toggle') === 'ok' && await inView('#chat-list .chat-item') === 'ok', 'folded: the timer’s Start and the first chat are in view: ' + await inView('#pomo-toggle') + ' ' + await inView('#chat-list .chat-item'));
+  // (a computer: the focus timer lives on Home now, so New chat and the first chat are what must be in view)
+  expect(await inView('#new-chat-btn') === 'ok' && await inView('#chat-list .chat-item') === 'ok', 'folded: New chat and the first chat are in view: ' + await inView('#new-chat-btn') + ' ' + await inView('#chat-list .chat-item'));
   // typing in Search opens it for a moment; clearing folds it again
   await page.fill('#side-search', 'flash');
   expect(await page.locator('.side-tool[data-tip="Flashcards"] span').isVisible(), 'flash finds Flashcards while folded');
@@ -6591,7 +6731,7 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   expect((await geo()).open, 'still the full sidebar after a reload');
   // Search: the tools and the chats that match
   await page.fill('#side-search', 'flash');
-  const shownTools = await page.evaluate(() => [...document.querySelectorAll('.side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip));
+  const shownTools = await page.evaluate(() => [...document.querySelectorAll('.side-tool')].filter((x) => x.getClientRects().length).map((x) => x.dataset.tip)); // (what shows: the pages are searched too)
   expect(shownTools.join() === 'Flashcards', 'flash leaves only Flashcards: ' + shownTools);
   expect(await page.locator('#chat-list .chat-item:visible').count() === 0, 'and the chat about osmosis is hidden');
   await page.fill('#side-search', 'osmo');
@@ -7309,7 +7449,7 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
   }
 });
 
-test('phone Home: a peek inside the labs slides past the hello, a live Today’s Lab card, then Today, Continue, the boxes and Quick actions; still with Reduce Motion or Lite mode; a computer’s Home is unchanged', async (b) => {
+test('phone Home: a peek inside the labs slides past the hello, a live Today’s Lab card, then Today, Continue, the boxes and Quick actions; still with Reduce Motion or Lite mode; a computer’s Home is the study dashboard', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'Q', b: 'A', deck: 'Bio', box: 0, due: 0, at: 0 }] };
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed });
@@ -7353,12 +7493,12 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     expect(st.still && st.anim === 'none' && f1 - f0 <= 2, `${why}: still previews (one frame each, not ~30 a second): ` + JSON.stringify({ ...st, f0, f1 }));
     await ctx.close();
   }
-  // a computer: the same Home as before (no strip, no Today’s Lab card; the hello bar, then the boxes)
+  // a computer: the study dashboard instead (no strip, no Today’s Lab card)
   {
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
-    await page.waitForSelector('#chat-log .hub .hub-boxes');
-    const d = await page.evaluate(() => { const hub = document.querySelector('#chat-log .hub'); return { kids: [...hub.children].slice(0, 3).map((k) => k.className), strip: !!hub.querySelector('.hub-strip, .hub-tlab, canvas[data-pv]'), hello: hub.querySelector('.hub-hero').innerText, boxes: hub.querySelectorAll('.hub-box').length }; });
-    expect(!d.strip && /Hi, welcome/.test(d.hello) && d.kids[0] === 'hub-hero' && d.kids[1].startsWith('hub-remind') && d.kids[2] === 'hub-boxes' && d.boxes === 10, 'a computer’s Home is unchanged: ' + JSON.stringify(d));
+    await page.waitForSelector('#chat-log .desk-home');
+    const d = await page.evaluate(() => ({ strip: !!document.querySelector('#chat-log .hub-strip, #chat-log .hub-tlab, #chat-log canvas[data-pv]'), hello: document.querySelector('.dk-title').textContent }));
+    expect(!d.strip && d.hello === 'Hi, Test', 'a computer’s Home is the dashboard: ' + JSON.stringify(d));
     await ctx.close();
   }
 });
@@ -7482,9 +7622,9 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   }
 });
 
-test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844, 1280x800)', async (b) => {
+test('Home header: a glass bar with the hello and a bell; every Home button still does its job; Today as a row of chips; no 3D room (390x844; a computer’s Home is the dashboard, tested on its own)', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] };
-  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
     const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
     const loaded = [];
@@ -7540,27 +7680,35 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); });
     const toHome = async () => { if (phone) { await page.evaluate(() => CassieNative.go('home')); } else { await page.evaluate(() => { createNewChat(); }); } await page.waitForTimeout(500); };
     const hub = phone ? '#home .hub' : '#chat-log .hub';
-    // a new student: Cassie, a hello with the name, two cards and Start studying
-    await toHome();
-    await page.waitForSelector(hub + '.hub-empty');
-    const t = await page.locator(hub).innerText();
-    expect(/Hello, Test!/.test(t) && /What are we studying today\?/.test(t) && /Ask a question/.test(t) && /Make flashcards/.test(t) && /Start studying/.test(t), `${size}: the new home: ` + t);
-    expect(await page.locator(hub + ' .hub-bot .cassie-bot').count() === 1, `${size}: Cassie is on the new home`);
-    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} new home (${scheme}): ` + bad.join(' | ')); }
-    await page.emulateMedia({ colorScheme: 'light' });
-    // one chat and one due card later: Today, Continue and Quick actions
-    await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
-    await ask(page, 'What is osmosis?');
-    await page.evaluate(() => { state.cards = [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }]; save(); });
-    await toHome();
-    await page.waitForSelector(hub + ':not(.hub-empty) .hub-today');
-    const r = await page.locator(hub).innerText();
-    expect(await page.locator(hub + ' .hub-w').count() === 3 && /card due/.test(r) && /Today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today chips (and Today’s lab in the boxes): ` + r);
-    expect(/Continue/.test(r) && await page.locator(hub + ' .hub-chat', { hasText: 'What is osmosis?' }).count() === 1, `${size}: the chat under Continue`);
-    expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 4, `${size}: Quick actions`);
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
-    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
-    await page.emulateMedia({ colorScheme: 'light' });
+    if (phone) { // (a computer's Home is the study dashboard: checked below and in its own test)
+      // a new student: Cassie, a hello with the name, two cards and Start studying
+      await toHome();
+      await page.waitForSelector(hub + '.hub-empty');
+      const t = await page.locator(hub).innerText();
+      expect(/Hello, Test!/.test(t) && /What are we studying today\?/.test(t) && /Ask a question/.test(t) && /Make flashcards/.test(t) && /Start studying/.test(t), `${size}: the new home: ` + t);
+      expect(await page.locator(hub + ' .hub-bot .cassie-bot').count() === 1, `${size}: Cassie is on the new home`);
+      for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} new home (${scheme}): ` + bad.join(' | ')); }
+      await page.emulateMedia({ colorScheme: 'light' });
+      // one chat and one due card later: Today, Continue and Quick actions
+      await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+      await ask(page, 'What is osmosis?');
+      await page.evaluate(() => { state.cards = [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }]; save(); });
+      await toHome();
+      await page.waitForSelector(hub + ':not(.hub-empty) .hub-today');
+      const r = await page.locator(hub).innerText();
+      expect(await page.locator(hub + ' .hub-w').count() === 3 && /card due/.test(r) && /Today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today chips (and Today’s lab in the boxes): ` + r);
+      expect(/Continue/.test(r) && await page.locator(hub + ' .hub-chat', { hasText: 'What is osmosis?' }).count() === 1, `${size}: the chat under Continue`);
+      expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 4, `${size}: Quick actions`);
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
+      for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
+      await page.emulateMedia({ colorScheme: 'light' });
+    } else {
+      await toHome();
+      await page.waitForSelector('#chat-log .desk-home');
+      expect(/Hi, Test/.test(await page.locator('#chat-log .desk-home').innerText()), `${size}: the dashboard`);
+      for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); const { bad } = await contrastIssues(page, '#chat-log .desk-home'); expect(!bad.length, `${size} dashboard (${scheme}): ` + bad.join(' | ')); }
+      await page.emulateMedia({ colorScheme: 'light' });
+    }
     // You: who you are, three numbers, and rows that open their own screen
     await page.goto(APP); await page.waitForTimeout(600);
     await page.evaluate(() => openSettings('profile'));
@@ -7739,7 +7887,7 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
         let got = await colours();
         for (let k = 0; k < 12; k++) { await page.waitForTimeout(150); const again = await colours(); if (JSON.stringify(again) === JSON.stringify(got)) break; got = again; }
         for (const [k, v] of Object.entries(got)) {
-          if (!v) { expect(k === 'open tab' && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; }
+          if (!v) { expect((k === 'open tab' || k === 'timer Start') && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; } // (a computer: no tabs, and the timer is Home's dark card)
           const bg = hex(v.bg), fg = hex(v.fg);
           if (pick === 'mono') {
             const [r, g, bl] = rgb(v.bg);
