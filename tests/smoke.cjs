@@ -2555,7 +2555,7 @@ test('study room: two students draw on the same board, live (code, link, undo on
   } finally { await A.ctx.close(); await B.ctx.close(); }
 });
 
-test('study room: studying together — chat, Cassie for everyone, shared flashcards, a group quiz, notes, a timer', async (b) => {
+test('study room: studying together — chat, Cassie for everyone, shared flashcards (kept in your own after), a group quiz, notes (kept as a chat after), a timer', async (b) => {
   const QUIZ = JSON.stringify([{ q: 'What makes ATP?', o: ['Mitochondria', 'Ribosome', 'Nucleus', 'Golgi'], a: 0, why: 'Mitochondria release energy as ATP.' }, { q: 'Where is DNA kept?', o: ['Vacuole', 'Nucleus', 'Wall', 'Membrane'], a: 1, why: 'The nucleus holds the DNA.' }]);
   const fake = (body) => ({ text: /multiple-choice quiz/.test(JSON.stringify(body.messages)) ? QUIZ : 'Plants make glucose from light, water and carbon dioxide.' });
   const cards = [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }, { id: 'c2', f: 'Where is DNA?', b: 'Nucleus', deck: 'Biology', box: 0, due: 0, at: 0 }];
@@ -2597,6 +2597,10 @@ test('study room: studying together — chat, Cassie for everyone, shared flashc
     await A.page.waitForFunction(() => /Ana ✓/.test(document.querySelector('.sr-body').textContent) && /Ben ✗/.test(document.querySelector('.sr-body').textContent), null, { timeout: 8000 });
     await B.page.click('[data-act="next"]');
     await A.page.waitForSelector('.sr-card >> text=Where is DNA?', { timeout: 8000 });
+    // Ben keeps the deck: the room ends after a day, the cards stay in his own flashcards
+    await B.page.click('[data-act="keepdeck"]');
+    await B.page.waitForSelector('[data-act="keepdeck"] >> text=Saved 2 cards to “Biology”', { timeout: 4000 });
+    expect(await B.page.evaluate(() => (state.cards || []).filter((c) => c.deck === 'Biology').map((c) => c.f).sort().join('|')) === 'Powerhouse of the cell?|Where is DNA?', 'the deck is in Ben’s flashcards');
     // a group quiz with a score board
     await B.page.click('.sr-tabs [data-tab="quiz"]');
     await B.page.fill('.sr-foot .sr-in', 'cells');
@@ -2615,7 +2619,13 @@ test('study room: studying together — chat, Cassie for everyone, shared flashc
     await A.page.click('.sr-foot [data-act="note"]');
     await B.page.click('.sr-tabs [data-tab="notes"]');
     await B.page.waitForSelector('.sr-note >> text=OpenStax', { timeout: 8000 });
-    expect(await B.page.locator('.sr-note button').count() === 0, 'Ben can’t remove Ana’s note');
+    expect(await B.page.locator('.sr-note button:not(.sr-btn)').count() === 0, 'Ben can’t remove Ana’s note');
+    // Ben keeps the notes too: a chat of his own
+    await B.page.click('[data-act="keepnotes"]');
+    await B.page.waitForSelector('[data-act="keepnotes"] >> text=Saved to your chats', { timeout: 4000 });
+    const kept = await B.page.evaluate((c) => { const ch = state.chats.find((x) => x.title === 'Study room notes · ' + c); return ch && ch.messages[0].content; }, code);
+    expect(kept && /OpenStax Biology ch\. 7/.test(kept) && /Ana/.test(kept), 'the notes are in Ben’s chats: ' + kept);
+    if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/study-keep-notes.png' });
     // a focus timer for everyone
     await A.page.click('.sr-head [data-act="timer"]');
     await B.page.waitForFunction(() => /⏱ (25|24):/.test(document.querySelector('.sr-tm').textContent), null, { timeout: 8000 });
