@@ -1670,6 +1670,7 @@ const HOME_EXAMPLES = [
   { label: 'Labs: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
   { label: 'Study together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
+  { label: 'Podcast my notes', icon: 'M12 3a7 7 0 0 0-7 7v5.5A2.5 2.5 0 0 0 7.5 18H9v-6H7v-2a5 5 0 0 1 10 0v2h-2v6h1.5a2.5 2.5 0 0 0 2.5-2.5V10a7 7 0 0 0-7-7zm-1 16h2v2h-2z', run: () => podcastFromFile() },
   { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
 ];
 
@@ -1994,6 +1995,146 @@ function buildHub({ ideas = false, phone = false } = {}) {
   return el;
 }
 function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ phone: true })); } // (the phone's Home tab)
+
+/* ---------- Podcast mode: Jessica and Chris talk through your notes (about 3 minutes) ----------
+   Cassie writes a short two person script from the notes only, then it plays line by line in the
+   studio voices (/speak, with its daily and monthly limits), with the transcript, Back, Pause, Skip,
+   speed and a download. Free: one a week; Plus and Pro: one a day. Shown before: what it costs. */
+const POD_CHARS = 2700; // (about 3 minutes of talk)
+function podAllowance() {
+  const today = phDay(), wk = weekStart(today), p = state.podcasts || {};
+  if (isSubscriber()) return { ok: p.day !== today, per: 'one a day', next: 'tomorrow' };
+  return { ok: p.week !== wk, per: 'one a week', next: dayName(dayAdd(wk, 7), { weekday: 'long', day: 'numeric', month: 'long' }) };
+}
+function podPrompt(text) {
+  return 'Write a short podcast script, about 3 minutes (380 to 420 words), where two study friends, Jessica and Chris, talk through these notes for a student reviewing for an exam.\n'
+    + 'Use ONLY what is in the notes. If something is not in them, do not say it, and never invent numbers, names or dates.\n'
+    + 'Plain everyday words and short turns of 1 to 3 sentences. Jessica explains; Chris asks what a student would ask and adds a memory trick when it fits.\n'
+    + 'Start with a one line welcome that names the topic, and end with a recap of the 3 most important points. No dashes.\n'
+    + 'Reply with ONLY JSON, no other text: {"lines":[{"who":"Jessica","say":"..."},{"who":"Chris","say":"..."}]}\n\n'
+    + 'Notes:\n"""\n' + String(text).slice(0, 8000) + '\n"""';
+}
+// the reply → lines (JSON, or "Jessica: ..." lines as a fallback), each short enough for one voice clip
+function parsePodcast(reply) {
+  const s = String(reply || '').replace(/```(?:json)?/gi, '');
+  let lines = [];
+  try { const j = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1)); lines = (j.lines || []).map((l) => ({ who: /chris/i.test(l.who) ? 'Chris' : 'Jessica', say: String(l.say || '') })); }
+  catch (e) { lines = s.split('\n').map((l) => /^\s*\**(Jessica|Chris)\**\s*:\s*(.+)/i.exec(l)).filter(Boolean).map((m) => ({ who: /chris/i.test(m[1]) ? 'Chris' : 'Jessica', say: m[2] })); }
+  return lines.map((l) => ({ who: l.who, say: noDashes(l.say.replace(/\s+/g, ' ').trim()).slice(0, 650) })).filter((l) => l.say).slice(0, 40);
+}
+function podcastFromFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.pdf,.docx,.pptx,.txt,.md,application/pdf';
+  inp.addEventListener('change', async () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    try { const doc = await readDocument(f); if (!doc.text) throw new Error('empty'); openPodcast(doc.text, f.name.replace(/\.[a-z0-9]+$/i, '')); }
+    catch (e) { mascotSay(CassieErrors.say('exam_file_failed'), 5000); }
+  });
+  inp.click();
+}
+function openPodcast(text, title) {
+  document.querySelector('.pod-sheet')?.remove();
+  const CV = window.CassieVoice, left = CV && CV.studio.known() ? CV.studio.left() : null;
+  const voiceOk = !!(SERVER && CV && CV.studio.on() && (left == null || left >= POD_CHARS));
+  const allow = podAllowance();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet pod-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-h');
+  w.innerHTML = `<div class="plus-card pod-card">
+    <span class="plus-kicker">Podcast</span>
+    <h3 id="pod-h"></h3>
+    <p class="plus-why">Jessica and Chris talk it through in about 3 minutes, using only what’s in it. Listen on the way to school, or while doing chores.</p>
+    <ul class="pod-facts"><li class="pod-cost"></li><li class="pod-allow"></li></ul>
+    <p class="pod-status" aria-live="polite"></p>
+    <div class="plus-actions"><button type="button" class="plus-go pod-go">Make my podcast</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
+  w.querySelector('#pod-h').textContent = title;
+  w.querySelector('.pod-cost').textContent = voiceOk
+    ? `It uses about ${POD_CHARS.toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left` : ''}.`
+    : 'Cassie’s voice is resting right now, so you get the script to read. It still counts as your podcast.';
+  w.querySelector('.pod-allow').textContent = `${isSubscriber() ? 'Your plan' : 'Free'} makes ${allow.per}.${allow.ok ? '' : ` Your next one is ${allow.next === 'tomorrow' ? 'tomorrow' : 'on ' + allow.next}.`}`;
+  const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
+  if (!allow.ok) { go.textContent = isSubscriber() ? 'Back tomorrow' : 'Get one every day with Plus'; if (isSubscriber()) go.disabled = true; }
+  let player = null;
+  const close = () => { if (player) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.querySelector('.pod-x').addEventListener('click', close);
+  w.addEventListener('click', (e) => { if (e.target === w) close(); });
+  go.addEventListener('click', async () => {
+    if (!podAllowance().ok) { if (!isSubscriber()) plusSheet('A podcast every day', 'Free makes one podcast a week. Plus makes one every day.'); return; }
+    if (!canChat()) { close(); openSettings(); return; }
+    go.disabled = true; status.textContent = 'Cassie is writing the script…';
+    try {
+      const lines = parsePodcast(await askCassie([{ role: 'user', content: podPrompt(text) }]));
+      if (lines.length < 2) throw new Error('no script');
+      const today = phDay(); state.podcasts = { day: today, week: weekStart(today) }; save();
+      track('feature', 'podcast');
+      w.querySelector('.pod-facts').remove(); go.remove(); w.querySelector('.plus-why').remove(); status.textContent = '';
+      w.querySelector('.pod-x').textContent = 'Close';
+      player = podPlayer(w.querySelector('.pod-card'), lines, title, voiceOk);
+    } catch (e) { go.disabled = false; status.textContent = 'Cassie couldn’t write the podcast just now. Check your connection, then try again.'; }
+  });
+  document.body.appendChild(w);
+  go.focus({ preventScroll: true });
+}
+// the player: the transcript (tap a line to play from it), Back, Play or Pause, Skip, speed, Download
+function podPlayer(card, lines, title, voiceOk) {
+  const box = document.createElement('div');
+  box.className = 'pod-player';
+  box.innerHTML = `<ol class="pod-lines"></ol>
+    <div class="pod-ctrl" role="group" aria-label="Podcast controls"><button type="button" data-p="back" aria-label="Back one line">⏮</button><button type="button" class="pod-play" data-p="play" aria-label="Play">▶</button><button type="button" data-p="skip" aria-label="Skip to the next line">⏭</button><button type="button" class="pod-speed" data-p="speed" aria-label="Speed 1x">1x</button><button type="button" class="pod-dl" data-p="dl">Download</button></div>
+    <p class="pod-note" role="status"></p>`;
+  const ol = box.querySelector('.pod-lines'), note = box.querySelector('.pod-note'), playBtn = box.querySelector('.pod-play');
+  lines.forEach((l, i) => { const li = document.createElement('li'); li.dataset.i = i; li.className = 'pod-line pod-' + l.who.toLowerCase(); li.innerHTML = '<b></b><span></span>'; li.querySelector('b').textContent = l.who; li.querySelector('span').textContent = l.say; li.tabIndex = 0; ol.appendChild(li); });
+  card.insertBefore(box, card.querySelector('.plus-actions'));
+  const audio = new Audio(), clips = new Map(), urls = [];
+  let at = 0, playing = false, rate = 1, stopped = false;
+  const clip = (i) => {
+    if (!clips.has(i)) clips.set(i, fetch(SERVER + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: lines[i].say, voice: lines[i].who === 'Chris' ? 'man' : 'woman', uid: installId() }) })
+      .then((r) => { if (!r.ok) throw Object.assign(new Error('voice ' + r.status), { why: r.headers.get('x-speak') || '' }); return r.blob(); }));
+    const p = clips.get(i); p.catch(() => {}); return p;
+  };
+  const mark = () => ol.querySelectorAll('.pod-line').forEach((li) => { const on = +li.dataset.i === at; li.classList.toggle('on', on); if (on) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current'); });
+  const setPlay = (on) => { playing = on; playBtn.textContent = on ? '⏸' : '▶'; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); };
+  const rest = (e) => { setPlay(false); note.textContent = e && e.why === 'day' ? CassieErrors.say('voice_today') : e && e.why === 'month' ? CassieErrors.say('voice_resting', { date: 'next month' }) : CassieErrors.say('voice_typing'); };
+  function play(i) {
+    if (stopped || i < 0) return;
+    if (i >= lines.length) { setPlay(false); return; }
+    at = i; mark();
+    const li = ol.querySelector(`[data-i="${i}"]`); if (li) li.scrollIntoView({ block: 'nearest' });
+    if (!voiceOk) { rest(null); return; }
+    setPlay(true);
+    clip(i).then((blob) => {
+      if (stopped || at !== i) return;
+      const u = URL.createObjectURL(blob); urls.push(u);
+      audio.src = u; audio.playbackRate = rate;
+      audio.play().catch(() => setPlay(false));
+      if (i + 1 < lines.length) clip(i + 1); // (the next one downloads while this one plays)
+    }, rest);
+  }
+  audio.addEventListener('ended', () => { if (playing) play(at + 1); });
+  box.addEventListener('click', (e) => {
+    const li = e.target.closest('.pod-line'); if (li) { play(+li.dataset.i); return; }
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    const k = b.dataset.p;
+    if (k === 'play') { if (playing) { audio.pause(); setPlay(false); } else if (audio.src && !audio.ended && audio.currentTime > 0) { audio.play(); setPlay(true); } else play(at); }
+    else if (k === 'back') play(Math.max(0, at - 1));
+    else if (k === 'skip') play(Math.min(lines.length - 1, at + 1));
+    else if (k === 'speed') { rate = rate === 1 ? 1.25 : rate === 1.25 ? 1.5 : 1; audio.playbackRate = rate; b.textContent = rate + 'x'; b.setAttribute('aria-label', `Speed ${rate}x`); }
+    else if (k === 'dl') {
+      const script = () => downloadBlob(`${title} podcast.txt`, new Blob([lines.map((l) => `${l.who}: ${l.say}`).join('\n\n')], { type: 'text/plain' }));
+      if (!voiceOk) { script(); return; }
+      b.disabled = true; b.textContent = 'Getting it ready…';
+      Promise.all(lines.map((_, i) => clip(i)))
+        .then((blobs) => { downloadBlob(`${title} podcast.mp3`, new Blob(blobs, { type: 'audio/mpeg' })); b.textContent = 'Download'; }, (e2) => { rest(e2); voiceOk = false; b.textContent = 'Download the script'; })
+        .finally(() => { b.disabled = false; });
+    }
+  });
+  ol.addEventListener('keydown', (e) => { const li = e.target.closest('.pod-line'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); play(+li.dataset.i); } });
+  mark();
+  if (!voiceOk) rest(null);
+  return { stop() { stopped = true; audio.pause(); urls.forEach((u) => URL.revokeObjectURL(u)); } };
+}
 
 /* ---------- Home on a computer: a study dashboard ----------
    A greeting with Ask Cassie and Add my notes, four numbers (questions this week, cards learned, the streak,
@@ -4218,6 +4359,14 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
       } finally { fcBtn.disabled = false; }
     });
     tools.appendChild(fcBtn);
+  }
+  // Podcast: Jessica and Chris talk it through (a reviewer or notes long enough to talk about)
+  if (text.length > 600) {
+    const pod = document.createElement('button');
+    pod.type = 'button'; pod.className = 'pod-make'; pod.textContent = 'Podcast';
+    pod.setAttribute('aria-label', 'Make a podcast of this: two voices talk it through');
+    pod.addEventListener('click', () => openPodcast(text, title || (curChat() && curChat().title) || 'Your notes'));
+    tools.appendChild(pod);
   }
   if (!window.CassieExport) {
     const btn = document.createElement('button');

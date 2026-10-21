@@ -1326,6 +1326,71 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   await d.ctx.close();
 });
 
+test('podcast mode: under a long answer (and from a file in Study tools), the cost and the allowance first, then Jessica and Chris talk it through: a transcript, Back, Play, Skip, speed and an MP3 download; Free makes one a week, Plus and Pro one a day; a resting voice says so and keeps the script', async (b) => {
+  const LINES = [['Jessica', 'Welcome! Today we talk about photosynthesis.'], ['Chris', 'So how do plants make food?'], ['Jessica', 'They use light, water and carbon dioxide to make glucose.'], ['Chris', 'Recap: light, water, carbon dioxide make glucose and oxygen.']];
+  const LONG = 'Photosynthesis is how plants make food. ' + 'Plants use light, water and carbon dioxide to make glucose and oxygen in their leaves. '.repeat(10);
+  const fakeGroq = (body) => ({ text: /podcast script/.test(JSON.stringify(body.messages)) ? JSON.stringify({ lines: LINES.map(([who, say]) => ({ who, say })) }) : LONG });
+  const wavB64 = () => { const n = 400, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40); return buf; };
+  const voice = (said, mode) => async (c) => c.route(/\/speak(\?|$)/, (route) => {
+    const rq = route.request();
+    if (rq.method() !== 'POST') return route.fulfill({ json: { on: true, left: 9000, back: '2026-11-01' } });
+    said.push(JSON.parse(rq.postData()));
+    if (mode === 'day') return route.fulfill({ status: 429, headers: { 'x-speak': 'day', 'access-control-expose-headers': 'x-speak' }, json: { error: { message: 'That’s a lot of listening today.' } } });
+    return route.fulfill({ status: 200, headers: { 'content-type': 'audio/wav', 'x-speak': 'new' }, body: wavB64() });
+  });
+  for (const [label, device, viewport, plan] of [['phone Free', 'iPhone 13', { width: 390, height: 844 }, null], ['computer Plus', 'Desktop Chrome', { width: 1280, height: 800 }, { plan: 'plus', until: 0 }]]) {
+    const said = [];
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, state: { groqKey: 'gsk_test', plan }, fakeGroq, setup: voice(said) });
+    await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+    expect(await page.evaluate(() => HOME_EXAMPLES.some((x) => x.label === 'Podcast my notes')), 'Podcast my notes is in Study tools');
+    await page.waitForFunction(() => window.CassieVoice.studio.known(), null, { timeout: 5000 });
+    await ask(page, 'Explain photosynthesis for my review');
+    await page.click('#chat-log .bubble-assistant .pod-make');
+    await page.waitForSelector('.pod-sheet');
+    const first = (await page.locator('.pod-sheet').innerText()).replace(/\s+/g, ' ');
+    expect(/2,700 characters of Cassie’s voice, and you have 9,000 left/.test(first) && (plan ? /makes one a day/ : /Free makes one a week/).test(first), `${label}: the cost and the allowance first: ` + first);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/podcast-cost-${viewport.width}.png` });
+    await page.click('.pod-go');
+    await page.waitForSelector('.pod-line', { timeout: 10000 });
+    const T = await page.evaluate(() => [...document.querySelectorAll('.pod-line')].map((l) => l.querySelector('b').textContent + ': ' + l.querySelector('span').textContent));
+    expect(T.length === 4 && T[0].startsWith('Jessica: Welcome') && T[1].startsWith('Chris:'), `${label}: the transcript, two voices: ` + JSON.stringify(T));
+    // play: line by line, Jessica in the woman's voice, Chris in the man's, the transcript follows
+    await page.click('.pod-play');
+    await page.waitForFunction(() => +((document.querySelector('.pod-line.on') || {}).dataset || {}).i >= 2, null, { timeout: 10000 });
+    expect(said.length >= 3 && said[0].voice === 'woman' && said[1].voice === 'man' && said[0].text.startsWith('Welcome'), `${label}: each line in its own voice: ` + JSON.stringify(said.map((x) => x.voice)));
+    await page.click('[data-p="speed"]');
+    expect(await page.locator('[data-p="speed"]').innerText() === '1.25x', 'speed');
+    await page.click('.pod-line[data-i="0"]');
+    await page.waitForFunction(() => document.querySelector('.pod-line.on').dataset.i === '0' || document.querySelector('.pod-line.on').dataset.i === '1', null, { timeout: 4000 });
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(500); if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/podcast-${viewport.width}-${scheme}.png` }); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.pod-sheet'); expect(!bad.length, `${label} ${scheme}: readable: ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('[data-p="dl"]')]);
+    expect(/podcast\.mp3$/.test(dl.suggestedFilename()), 'one MP3 to keep: ' + dl.suggestedFilename());
+    await page.click('.pod-x');
+    // the allowance: used for this week (Free) or today (Plus)
+    await page.click('#chat-log .bubble-assistant .pod-make');
+    const again = (await page.locator('.pod-sheet').innerText()).replace(/\s+/g, ' ');
+    expect((plan ? /Your next one is tomorrow/ : /Your next one is on/).test(again), `${label}: one ${plan ? 'a day' : 'a week'}: ` + again);
+    if (!plan) { await page.click('.pod-go'); await page.waitForSelector('.plus-sheet:not(.pod-sheet)', { timeout: 3000 }); }
+    else expect(await page.locator('.pod-go').isDisabled(), 'Plus: back tomorrow');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a resting voice: it says why, and the script stays to read (and to download)
+  const said = [];
+  const { ctx, page } = await open(b, { device: 'iPhone 13', state: { groqKey: 'gsk_test' }, fakeGroq, setup: voice(said, 'day') });
+  await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
+  await page.waitForFunction(() => window.CassieVoice.studio.known(), null, { timeout: 5000 });
+  await ask(page, 'Explain photosynthesis');
+  await page.click('#chat-log .bubble-assistant .pod-make');
+  await page.click('.pod-go');
+  await page.waitForSelector('.pod-line');
+  await page.click('.pod-play');
+  await page.waitForFunction(() => /listened to Cassie a lot today/.test(document.querySelector('.pod-note').textContent), null, { timeout: 6000 });
+  expect(await page.locator('.pod-line').count() === 4, 'the script stays');
+  await ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));
