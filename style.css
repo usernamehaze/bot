@@ -2215,6 +2215,9 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .set-row .field { margin-bottom: 0; }
 .set-row .field-hint { margin: 8px 0 0; }
 .set-row .field-hint:empty { display: none; }
+.remind-times { display: grid; gap: 8px; margin-top: 10px; }
+.remind-times[hidden] { display: none; }
+.remind-quiet { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .set-group > details.settings-group { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; margin: 0; background: transparent; }
 .set-group > details.settings-group:last-child { border-bottom: 0; }
 .set-group > details.settings-group > summary { padding: 14px 0; }

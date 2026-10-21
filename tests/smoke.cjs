@@ -418,7 +418,7 @@ async function realServer(env = {}) {
     const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
     return { status: res.status, json, text, headers: res.headers };
   };
-  return { call, DB };
+  return { call, DB, w };
 }
 test('the real server on a real database: study rooms (make, join, draw, see each other), the puzzle score board and accounts (sign up, save, plan, sign out) all work, and a paid plan is read from the session', async () => {
   const { call, DB } = await realServer({ DAILY_LIMIT: '0', PLUS_DAILY_LIMIT: '0' });
@@ -1391,6 +1391,139 @@ test('podcast mode: under a long answer (and from a file in Study tools), the co
   await ctx.close();
 });
 
+// a VAPID key pair made here for the test only (never kept)
+async function testVapid() {
+  const { subtle } = require('crypto').webcrypto;
+  const kp = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const raw = Buffer.from(await subtle.exportKey('raw', kp.publicKey)).toString('base64url');
+  return { pub: raw, priv: (await subtle.exportKey('jwk', kp.privateKey)).d };
+}
+test('reminders on the server: only a browser’s push service is kept; once an hour Cassie sends an empty push to whoever picked this hour, at most once a day, never in quiet hours, only when a card is due today or the streak ends tonight; signed with the Cassie key; a push address the browser dropped is forgotten', async () => {
+  const keys = await testVapid();
+  const off = await realServer({});
+  expect((await off.call('GET', '/push/key')).json.on === false, 'no keys: reminders are off');
+  expect((await off.call('POST', '/push/subscribe', { id: 'abcdefgh-1', endpoint: 'https://fcm.googleapis.com/fcm/send/x' })).status === 503, 'no keys: nothing is kept');
+  const { call, DB, w } = await realServer({ VAPID_PUBLIC_KEY: keys.pub, VAPID_PRIVATE_KEY: keys.priv });
+  const key = await call('GET', '/push/key');
+  expect(key.json.on && key.json.key === keys.pub, 'the public key for the browser: ' + key.text);
+  for (const ep of ['https://evil.example.com/push', 'http://fcm.googleapis.com/fcm/send/x', 'https://fcm.googleapis.com.evil.com/x', 'not a url']) expect((await call('POST', '/push/subscribe', { id: 'abcdefgh-9', endpoint: ep })).status === 400, 'only a browser’s push service: ' + ep);
+  const T = Date.UTC(2026, 9, 21, 19, 5); // 7:05 PM (UTC, and tz 0)
+  const yday = '2026-10-20', base = { hour: 19, quietFrom: 22, quietTo: 7, tz: 0 };
+  const subs = {
+    due: { ...base, endpoint: 'https://fcm.googleapis.com/fcm/send/due', nextDue: T + 3600e3 }, // a card due later today
+    nothing: { ...base, endpoint: 'https://fcm.googleapis.com/fcm/send/nothing', nextDue: T + 3 * 864e5 },
+    streak: { ...base, endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/streak', streak: 4, streakDay: yday },
+    done: { ...base, endpoint: 'https://web.push.apple.com/done', streak: 4, streakDay: '2026-10-21', nextDue: 0 }, // (studied today)
+    gone: { ...base, endpoint: 'https://fcm.googleapis.com/fcm/send/gone', nextDue: T - 1000 },
+    quiet: { ...base, hour: 23, endpoint: 'https://fcm.googleapis.com/fcm/send/quiet', nextDue: T - 1000 },
+    later: { ...base, hour: 20, endpoint: 'https://fcm.googleapis.com/fcm/send/later', nextDue: T - 1000 },
+    manila: { ...base, hour: 3, tz: 480, endpoint: 'https://fcm.googleapis.com/fcm/send/manila', nextDue: T + 3600e3 }, // 3:05 AM in Manila, quiet
+  };
+  for (const [name, s] of Object.entries(subs)) { const r = await call('POST', '/push/subscribe', { id: 'id-' + name + '-0000', ...s }); expect(r.status === 200, 'kept: ' + name + ' ' + r.text); }
+  const rows = await DB.prepare('SELECT * FROM push_subs').all();
+  expect(rows.results.length === 8 && rows.results.every((r) => Object.keys(r).sort().join() === 'at,endpoint,hour,id,last_sent,next_due,qfrom,qto,streak,streak_day,tz'), 'only times and counts are kept: ' + JSON.stringify(rows.results[0]));
+  const realFetch = globalThis.fetch, sent = [];
+  globalThis.fetch = async (u, o = {}) => { sent.push({ u: String(u), o }); return new Response('', { status: /gone/.test(u) ? 410 : 201 }); };
+  const cron = async (at) => { sent.length = 0; const pending = []; await w.scheduled({ scheduledTime: at }, { DB, VAPID_PUBLIC_KEY: keys.pub, VAPID_PRIVATE_KEY: keys.priv }, { waitUntil: (x) => pending.push(x) }); await Promise.all(pending); return sent.map((s) => s.u.split('/').pop()).sort(); };
+  try {
+    let got = await cron(T);
+    expect(got.join() === 'due,gone,streak', 'at 7 PM: a card due today, a streak ending tonight (and the dropped one is tried), nothing else: ' + got.join());
+    const one = sent.find((s) => /due$/.test(s.u));
+    expect(one.o.method === 'POST' && !one.o.body && one.o.headers.ttl && one.o.headers['content-length'] === '0', 'an empty push (the words are written on the phone): ' + JSON.stringify(one.o.headers));
+    const m = one.o.headers.authorization.match(/^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/);
+    expect(m && m[4] === keys.pub, 'signed, with the Cassie key: ' + one.o.headers.authorization.slice(0, 40));
+    const claims = JSON.parse(Buffer.from(m[2], 'base64url').toString());
+    expect(claims.aud === 'https://fcm.googleapis.com' && claims.exp > T / 1000 - 1e9 && /^mailto:/.test(claims.sub), 'for that push service: ' + JSON.stringify(claims));
+    const { subtle } = require('crypto').webcrypto;
+    const pk = await subtle.importKey('raw', Buffer.from(keys.pub, 'base64url'), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    expect(await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pk, Buffer.from(m[3], 'base64url'), Buffer.from(m[1] + '.' + m[2])), 'the signature checks out with the public key');
+    const left = (await DB.prepare('SELECT id FROM push_subs').all()).results.map((r) => r.id);
+    expect(!left.includes('id-gone-0000') && left.length === 7, 'a push address the browser dropped (410) is forgotten: ' + left.join());
+    expect((await cron(T + 20 * 60e3)).length === 0, 'once a day: not again in the same hour');
+    got = await cron(T + 3600e3);
+    expect(got.join() === 'later', 'at 8 PM: the one who picked 8 PM: ' + got.join());
+    // the app says what changed: nothing due now
+    await call('POST', '/push/state', { id: 'id-due-0000', nextDue: T + 5 * 864e5, streak: 0, streakDay: '' });
+    got = await cron(T + 864e5);
+    expect(!got.includes('due') && !got.includes('streak'), 'the next day: nothing due and no streak ending, so no reminder: ' + got.join());
+    await call('POST', '/push/unsubscribe', { id: 'id-later-0000' });
+    expect(!(await DB.prepare('SELECT id FROM push_subs').all()).results.some((r) => r.id === 'id-later-0000'), 'turning reminders off forgets the push address');
+  } finally { globalThis.fetch = realFetch; }
+});
+test('reminders in Settings: on with a tap (asks to allow notifications), a time to remind and quiet hours (a time in the quiet hours is refused), only times and counts go to Cassie, the phone writes the words itself (how many cards are due and one of them, or the streak); off forgets it; an iPhone is told to add Cassie to the Home Screen first', async (b) => {
+  const keys = await testVapid();
+  const posts = [];
+  const setup = async (c) => {
+    await c.grantPermissions(['notifications'], { origin: 'http://localhost:' + APP_PORT });
+    await c.addInitScript(() => { // (no real push service in a test: the browser's own subscribe, faked)
+      let sub = null;
+      if (window.PushManager) {
+        PushManager.prototype.getSubscription = async () => sub;
+        PushManager.prototype.subscribe = async (o) => { window.__pushOpts = o; sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/test-device', unsubscribe: async () => { sub = null; return true; } }; return sub; };
+      }
+    });
+    await c.route(/\/push\//, (route) => { const rq = route.request(); if (rq.method() === 'GET') return route.fulfill({ json: { on: true, key: keys.pub } }); posts.push({ path: new URL(rq.url()).pathname, body: JSON.parse(rq.postData() || '{}') }); return route.fulfill({ json: { ok: true } }); });
+  };
+  const now = Date.now();
+  const cards = [{ id: 'c1', f: 'Mitochondria', b: 'The powerhouse of the cell', deck: 'Bio', box: 1, due: now - 60e3, at: now }, { id: 'c2', f: 'Ribosome', b: 'Makes proteins', deck: 'Bio', box: 1, due: now - 30e3, at: now }];
+  for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    posts.length = 0;
+    const { ctx, page, errors } = await open(b, { device, viewport, state: { cards }, setup });
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await tapSettings(page);
+    await page.evaluate(() => setPage('study'));
+    await page.locator('#remind-toggle').check();
+    await page.waitForFunction(() => state.remind && state.remind.on, null, { timeout: 8000 });
+    const sub = posts.find((p) => p.path === '/push/subscribe');
+    expect(sub && sub.body.endpoint === 'https://fcm.googleapis.com/fcm/send/test-device' && sub.body.hour === 19 && sub.body.quietFrom === 22 && sub.body.quietTo === 7 && typeof sub.body.tz === 'number' && sub.body.nextDue === cards[0].due, 'on: the push address, the hour, quiet hours, time zone and when the next card is due: ' + JSON.stringify(sub && sub.body));
+    expect(!JSON.stringify(posts).includes('Mitochondria'), 'no card words go to Cassie');
+    expect(await page.evaluate(() => new Uint8Array(window.__pushOpts.applicationServerKey).length === 65 && window.__pushOpts.userVisibleOnly), 'subscribed with Cassie’s public key, notifications shown');
+    expect(/reminds you at 7:00 PM, never between 10:00 PM and 7:00 AM/.test(await page.locator('#remind-note').innerText()), 'it says when: ' + await page.locator('#remind-note').innerText());
+    // the phone writes the words: what's due and one of the cards
+    let sw = null;
+    for (let i = 0; i < 40 && !sw; i++) { sw = ctx.serviceWorkers().find((w) => /\/sw\.js$/.test(w.url())); if (!sw) await page.waitForTimeout(250); }
+    expect(sw, 'the service worker is there');
+    let text = await sw.evaluate(() => remindText());
+    expect(text === '2 cards are due today, like Mitochondria. A 5 minute review keeps them.', 'the reminder, written on the phone: ' + text);
+    await page.evaluate(() => { const y = new Date(Date.now() - 864e5); const d = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`; return caches.open('cassie-remind').then((c) => c.put('/__remind', new Response(JSON.stringify({ due: [], soon: [], streak: 6, streakDay: d })))); });
+    text = await sw.evaluate(() => remindText());
+    expect(text === 'Your 6 day streak ends tonight. One question keeps it going.', 'or the streak: ' + text);
+    // a time in the quiet hours is refused
+    await page.selectOption('#remind-hour', '23');
+    await page.waitForFunction(() => /quiet hours/.test(document.getElementById('remind-note').textContent));
+    expect(await page.evaluate(() => state.remind.hour === 19 && document.getElementById('remind-hour').value === '19'), 'stays at 7 PM');
+    await page.selectOption('#remind-hour', '20');
+    await page.waitForFunction(() => state.remind.hour === 20);
+    expect(posts.filter((p) => p.path === '/push/subscribe').pop().body.hour === 20, 'a new time is sent');
+    // a new card: only the new "next due" goes, once
+    const n0 = posts.length;
+    await page.evaluate(() => { state.cards.push({ id: 'c3', f: 'Golgi', b: 'Packages', deck: 'Bio', box: 0, due: Date.now() - 120e3, at: Date.now() }); save(); });
+    await page.waitForTimeout(2200);
+    const st = posts.slice(n0).filter((p) => p.path === '/push/state');
+    expect(st.length === 1 && st[0].body.nextDue < cards[0].due && !('cards' in st[0].body), 'the next due time is updated: ' + JSON.stringify(st));
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300);
+      await page.locator('.remind-row').scrollIntoViewIfNeeded();
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/remind-${viewport ? viewport.width : 'phone'}-${scheme}.png` });
+      const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.remind-row');
+      expect(!bad.length, scheme + ': readable: ' + bad.join(' | '));
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.locator('#remind-toggle').uncheck();
+    await page.waitForFunction(() => !state.remind.on);
+    await page.waitForTimeout(300);
+    expect(posts.some((p) => p.path === '/push/unsubscribe') && await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.pushManager.getSubscription()).then((s) => s === null)), 'off: forgotten here and on Cassie');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // an iPhone in Safari (not from the Home Screen) has no push
+  const { ctx, page } = await open(b, { device: 'iPhone 13', setup: async (c) => c.addInitScript(() => { delete window.PushManager; }) });
+  await tapSettings(page);
+  await page.evaluate(() => setPage('study'));
+  expect(await page.locator('#remind-toggle').isDisabled() && /add Cassie to your Home Screen first/.test(await page.locator('#remind-note').innerText()), 'iPhone: add Cassie to the Home Screen first: ' + await page.locator('#remind-note').innerText());
+  if (process.env.SHOTS) { await page.locator('.remind-row').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/remind-iphone.png` }); }
+  await ctx.close();
+});
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));

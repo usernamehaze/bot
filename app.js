@@ -67,6 +67,7 @@ function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(rest)); } catch (e) { /* quota */ }
   syncAccount();
   sideListSoon();
+  remindSoon(); // (reminders on: the facts the server needs, when they change)
 }
 
 if (!GROQ_MODELS.includes(state.groqModel)) {
@@ -6055,6 +6056,83 @@ if (talkBtn) {
 }
 
 /* ---------- settings ---------- */
+/* ---------- Reminders (web push): one a day at most, when cards are due or the streak ends tonight ----------
+   Off until the student turns them on. Cassie's server keeps the push address with the hour, the time zone,
+   the quiet hours and two facts (when the next card is due, the streak); the words of the reminder are written
+   on this device (sw.js reads the snapshot below), so no card words leave it. */
+const REMIND_CACHE = 'cassie-remind';
+const remindOk = () => !!(SERVER && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+const remindPrefs = () => ({ on: false, hour: 19, quietFrom: 22, quietTo: 7, ...(state.remind || {}) });
+const hourName = (h) => `${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`;
+function remindFacts() {
+  const cards = (state.cards || []).filter((c) => c.due).sort((a, b) => a.due - b.due);
+  const st = (window.CassieMemory && window.CassieMemory.data && window.CassieMemory.data.streak) || { count: 0, lastDay: '' };
+  return { cards, nextDue: cards.length ? cards[0].due : 0, streak: st.count || 0, streakDay: st.lastDay || '' };
+}
+// what the service worker needs to write the reminder (this device only)
+async function remindSnapshot() {
+  const f = remindFacts();
+  const snap = { due: f.cards.slice(0, 300).map((c) => c.due), soon: f.cards.slice(0, 5).map((c) => ({ due: c.due, f: String(c.f).replace(/\s+/g, ' ').slice(0, 60) })), streak: f.streak, streakDay: f.streakDay };
+  try { const c = await caches.open(REMIND_CACHE); await c.put('/__remind', new Response(JSON.stringify(snap), { headers: { 'content-type': 'application/json' } })); } catch (e) { /* no cache here */ }
+  return f;
+}
+let remindTimer = 0, remindSent = '';
+function remindSoon() {
+  if (!remindPrefs().on) return;
+  clearTimeout(remindTimer);
+  remindTimer = setTimeout(async () => {
+    const f = await remindSnapshot(), facts = JSON.stringify([f.nextDue, f.streak, f.streakDay]);
+    if (facts === remindSent) return; // (only when something changed)
+    remindSent = facts;
+    fetch(SERVER + '/push/state', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: installId(), nextDue: f.nextDue, streak: f.streak, streakDay: f.streakDay }) }).catch(() => {});
+  }, 1500);
+}
+const b64uBytes = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
+async function remindSubscribe(p) {
+  const key = await fetch(SERVER + '/push/key').then((r) => r.json());
+  if (!key.on) throw Object.assign(new Error('off'), { why: 'server' });
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw Object.assign(new Error('blocked'), { why: 'blocked' });
+  const reg = await navigator.serviceWorker.ready;
+  const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(key.key) });
+  const f = await remindSnapshot();
+  remindSent = JSON.stringify([f.nextDue, f.streak, f.streakDay]);
+  const r = await fetch(SERVER + '/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: installId(), endpoint: sub.endpoint, hour: p.hour, quietFrom: p.quietFrom, quietTo: p.quietTo, tz: -new Date().getTimezoneOffset(), nextDue: f.nextDue, streak: f.streak, streakDay: f.streakDay }) });
+  if (!r.ok) throw new Error('subscribe ' + r.status);
+}
+async function remindOff() {
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (e) { /* already off */ }
+  fetch(SERVER + '/push/unsubscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: installId() }) }).catch(() => {});
+}
+function renderRemind() {
+  const t = document.getElementById('remind-toggle'); if (!t) return;
+  const p = remindPrefs(), note = document.getElementById('remind-note'), times = document.getElementById('remind-times');
+  const ios = /iPhone|iPad/.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  t.checked = !!p.on; times.hidden = !p.on;
+  t.disabled = !remindOk();
+  if (!remindOk()) note.textContent = ios && !standalone ? 'On iPhone, add Cassie to your Home Screen first (Share, then Add to Home Screen), then turn reminders on there.' : 'This browser can’t show reminders.';
+  else note.textContent = p.on ? `Cassie reminds you at ${hourName(p.hour)}, never between ${hourName(p.quietFrom)} and ${hourName(p.quietTo)}.` : '';
+  const fill = (id, v) => { const s = document.getElementById(id); if (!s.options.length) s.innerHTML = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${hourName(h)}</option>`).join(''); s.value = String(v); };
+  fill('remind-hour', p.hour); fill('quiet-from', p.quietFrom); fill('quiet-to', p.quietTo);
+}
+async function setRemind(change) {
+  const p = { ...remindPrefs(), ...change }, note = document.getElementById('remind-note');
+  const quiet = (h) => (p.quietFrom === p.quietTo ? false : p.quietFrom < p.quietTo ? h >= p.quietFrom && h < p.quietTo : h >= p.quietFrom || h < p.quietTo);
+  if (p.on && quiet(p.hour)) { note.textContent = `${hourName(p.hour)} is in your quiet hours. Pick another time, or change the quiet hours.`; renderRemindKeep(); return; }
+  try {
+    if (p.on) { note.textContent = 'Turning reminders on…'; await remindSubscribe(p); }
+    else if (remindPrefs().on) await remindOff();
+    state.remind = p; save(); track('feature', p.on ? 'remind-on' : 'remind-off');
+    renderRemind();
+  } catch (e) {
+    state.remind = { ...p, on: false }; save(); renderRemind();
+    note.textContent = e.why === 'blocked' ? 'Notifications are blocked for Cassie. Allow them in your browser’s site settings, then try again.' : e.why === 'server' ? 'Reminders aren’t switched on yet. Please try again later.' : 'Cassie couldn’t turn reminders on just now. Check your connection, then try again.';
+  }
+}
+function renderRemindKeep() { const s = (id, v) => { document.getElementById(id).value = String(v); }; const p = remindPrefs(); s('remind-hour', p.hour); s('quiet-from', p.quietFrom); s('quiet-to', p.quietTo); }
+document.getElementById('remind-toggle')?.addEventListener('change', (e) => setRemind({ on: e.target.checked }));
+['remind-hour', 'quiet-from', 'quiet-to'].forEach((id) => document.getElementById(id)?.addEventListener('change', (e) => setRemind({ [{ 'remind-hour': 'hour', 'quiet-from': 'quietFrom', 'quiet-to': 'quietTo' }[id]]: +e.target.value })));
+renderRemind();
 // computers: whatever you open last is in front, so what was open before it closes first (each with its own close)
 function deskCloseOthers(keep = '') {
   if (!sideWide.matches) return;
@@ -6234,6 +6312,7 @@ function setPage(page, { back = false } = {}) {
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
   if (page === 'profile') fillYou();
+  if (page === 'study' || page === 'all') renderRemind();
   settingsPanel.querySelectorAll('.set-nav [data-go]').forEach((b) => { if (b.dataset.go === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   setCard.scrollTop = 0;
 }
