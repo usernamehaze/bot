@@ -49,6 +49,7 @@ export async function startFakeServer(port = 4630) {
     // fake Google and Apple public keys: ID tokens are made by POST /__idtoken with the test keys below
     if (u === 'https://www.googleapis.com/oauth2/v3/certs') return Response.json({ keys: [idp.google.pub] });
     if (u === 'https://appleid.apple.com/auth/keys') return Response.json({ keys: [idp.apple.pub] });
+    if (u.startsWith('https://api.elevenlabs.io/v1/user/subscription')) return new Response('{"detail":{"status":"missing_permissions"}}', { status: 401 }); // (a key that may only make speech: Cassie's own counts apply)
     if (u.startsWith('https://api.elevenlabs.io/')) { mode.elevenCalls = (mode.elevenCalls || 0) + 1; return new Response(new Uint8Array([73, 68, 51, 4, 0, 0]), { headers: { 'content-type': 'audio/mpeg' } }); } // fake ElevenLabs: a few bytes of "MP3"
     if (u.startsWith('https://api.anthropic.com/')) { // fake Claude: mode.claude 'ok' | 'down' | 'refuse'
       if (u.includes('/v1/models')) return Response.json({ data: [{ id: 'test-haiku' }, { id: 'test-sonnet' }, { id: 'test-opus-newest' }, { id: 'test-opus-older' }] });
