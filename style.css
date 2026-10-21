@@ -2178,6 +2178,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-q2 { display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: .9rem; font-weight: 650; color: var(--muted); margin-top: 6px; }
 .fr-age { width: 140px; min-height: 48px; text-align: center; font: inherit; font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
 .fr-age:focus { outline: none; border-color: var(--primary); }
+.fr-age.fr-wide { width: min(320px, 100%); }
 .fr-seg, .fr-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .fr-seg button, .fr-pick { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
 .fr-pick { min-height: 52px; padding: 0 20px; font-size: 1.02rem; }
@@ -2353,6 +2354,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .ex-actions button, .wk-share, .ex-chip, .ex-file-btn, .ex-again { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--lg-line); background: var(--lg-fill); color: var(--text); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .ex-days { margin: 10px 0 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 6px; font-size: .86rem; }
 .ex-days b { margin-right: 6px; }
+.ex-days[hidden] { display: none; } /* (the whole plan opens with its button) */
 .ex-sum { margin: 8px 0 0; font-size: .92rem; line-height: 1.45; }
 .ex-ready { margin: 10px 0 2px; }
 .ex-ready-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }

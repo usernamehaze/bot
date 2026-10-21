@@ -2338,7 +2338,8 @@ function examSection() {
   return wrap;
 }
 // the form: name, day, topics (or tap ones you've been studying), and on Plus, your notes
-function openExamSheet() {
+// pre: { name, date, topics } to fill in; auto: make the plan at once (from the first-run questions); then: after it closes
+function openExamSheet(pre = null) {
   if (activeExams().length >= examLimit()) {
     if (!isSubscriber()) plusSheet('More exam plans', 'Free keeps one exam plan at a time. Plus can plan up to 5 exams at once, and build a plan from your notes.');
     return;
@@ -2389,7 +2390,7 @@ function openExamSheet() {
     date: (v) => (!v ? 'exam_date_needed' : v < today ? 'exam_date_past' : v > dayAdd(today, 365) ? 'exam_date_far' : ''),
     topics: (v) => (v.trim() || notes ? '' : 'exam_topics_needed'),
   });
-  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); if (pre && pre.then) { const t = pre.then; pre.then = null; t(); } };
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.plus-sheet')) { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   w.querySelector('.ex-cancel').addEventListener('click', close);
@@ -2416,7 +2417,8 @@ function openExamSheet() {
   };
   f.addEventListener('submit', (e) => { e.preventDefault(); make(); });
   document.body.appendChild(w);
-  f.name.focus();
+  if (pre) { f.name.value = pre.name || ''; f.date.value = pre.date || ''; f.topics.value = pre.topics || ''; }
+  if (pre && pre.auto) make(); else f.name.focus();
 }
 
 function renderHome() {
@@ -7130,19 +7132,23 @@ function frSignIn() {
 // 4. The questions, one a screen: name, studying, help with, voice
 function frOnboard(at = 0) {
   const prev = frLoad() || {};
-  const a = { name: '', gender: '', grade: '', age: '', help: [], voice: state.voiceGender === 'man' ? 'man' : 'woman', ...(prev.answers || {}) };
+  const a = { name: '', gender: '', grade: '', age: '', help: [], exam: { name: '', date: '', topics: '' }, voice: state.voiceGender === 'man' ? 'man' : 'woman', ...(prev.answers || {}) };
   if (!a.name && state.account && state.account.name) a.name = state.account.name;
   const keep = () => frSave({ step: 'ob', at, answers: a });
   keep();
   const el = frShell();
   el.dataset.step = 'ob' + (at + 1);
-  const TOTAL = 4;
+  const TOTAL = 5, EXAM = 3, today = phDay();
   const Q = [
     { h: 'What’s your name?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
         <div class="fr-q2"><span id="fr-g">You are</span><div class="fr-seg" role="radiogroup" aria-labelledby="fr-g">${[['female', 'Female'], ['male', 'Male'], ['none', 'Prefer not to say']].map(([v, l]) => `<button type="button" role="radio" data-gender="${v}">${l}</button>`).join('')}</div></div>` },
     { h: 'What are you studying?', body: `<select class="fr-big fr-select" name="grade" aria-label="What you are studying"><option value="">Choose your level</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select>
         <label class="fr-q2"><span>Your age</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
     { h: 'What do you want help with?', sub: 'Pick any.', body: `<div class="fr-picks">${HELP_WITH.map(([v, l]) => `<button type="button" class="fr-pick" data-help="${v}" aria-pressed="false">${l}</button>`).join('')}</div>` },
+    // an exam coming up: Cassie plans for it the moment the questions are done (empty: no plan)
+    { h: 'Got an exam coming up?', sub: 'Cassie makes you a day by day plan to it. Leave this empty if not.', body: `<input class="fr-big" name="exam" maxlength="60" autocomplete="off" placeholder="Gen Chem finals" aria-label="Your exam">
+        <label class="fr-q2"><span>Exam day</span><input class="fr-age fr-wide" name="examDate" type="date" min="${today}" max="${dayAdd(today, 365)}"></label>
+        <label class="fr-q2"><span>Topics</span><input class="fr-age fr-wide" name="examTopics" maxlength="600" autocomplete="off" placeholder="Stoichiometry, gas laws"></label>` },
     { h: 'How should Cassie sound?', sub: 'Tap one to hear her.', body: `<div class="fr-voices" role="radiogroup" aria-label="Cassie’s voice">${[['woman', 'Woman'], ['man', 'Man']].map(([v, l]) => `<button type="button" role="radio" class="fr-voice" data-voice="${v}"><span class="fr-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>${l}</button>`).join('')}</div>` },
   ][at];
   el.innerHTML = `<form class="fr-ob" novalidate>
@@ -7164,14 +7170,16 @@ function frOnboard(at = 0) {
   // fill in what's known, and keep each answer as it changes
   if (f.name) f.name.value = a.name;
   if (f.grade) { f.grade.value = a.grade; f.age.value = a.age; }
+  if (f.exam) { f.exam.value = a.exam.name; f.examDate.value = a.exam.date; f.examTopics.value = a.exam.topics; }
   const mark = () => {
     f.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === a.gender)));
     f.querySelectorAll('[data-help]').forEach((b) => b.setAttribute('aria-pressed', String(a.help.includes(b.dataset.help))));
     f.querySelectorAll('[data-voice]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.voice === a.voice)));
   };
   mark();
-  f.addEventListener('input', () => { if (f.name) a.name = f.name.value.trim(); if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } say(''); keep(); });
-  f.addEventListener('change', () => { if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } keep(); });
+  const examIn = () => { if (f.exam) a.exam = { name: noDashes(f.exam.value.trim()).slice(0, 60), date: f.examDate.value, topics: noDashes(f.examTopics.value.trim()).slice(0, 600) }; };
+  f.addEventListener('input', () => { if (f.name) a.name = f.name.value.trim(); if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } examIn(); say(''); keep(); });
+  f.addEventListener('change', () => { if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } examIn(); keep(); });
   f.addEventListener('click', (e) => {
     const g = e.target.closest('[data-gender]'), h = e.target.closest('[data-help]'), v = e.target.closest('[data-voice]');
     if (g) a.gender = g.dataset.gender;
@@ -7190,6 +7198,10 @@ function frOnboard(at = 0) {
     if (at === 0 && !a.name) { say('Type your name, or tap Skip.'); f.name.focus(); return; }
     if (at === 1 && !a.grade) { say('Choose your level, or tap Skip.'); f.grade.focus(); return; }
     if (at === 1 && a.age && !(Math.round(+a.age) >= 2 && Math.round(+a.age) <= 100)) { say('Type an age from 2 to 100, or leave it empty.'); f.age.focus(); return; }
+    if (at === EXAM && (a.exam.name || a.exam.date || a.exam.topics)) { // (all empty: no exam, on we go)
+      const d = a.exam.date, why = !a.exam.name ? ['exam_name_needed', f.exam] : !d ? ['exam_date_needed', f.examDate] : d < today ? ['exam_date_past', f.examDate] : d > dayAdd(today, 365) ? ['exam_date_far', f.examDate] : !a.exam.topics ? ['exam_topics_needed', f.examTopics] : null;
+      if (why) { say(CassieErrors.say(why[0])); why[1].focus(); return; }
+    }
     go(at + 1);
   });
   setTimeout(() => { const first = f.querySelector('.fr-big, .fr-pick, .fr-voice'); if (first && !f.contains(document.activeElement)) first.focus({ preventScroll: true }); }, 60);
@@ -7203,7 +7215,10 @@ function frFinish(a) {
   frSave(null);
   frClose();
   syncAccount(true);
-  offerTour();
+  // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour
+  const ex = a.exam || {};
+  if (ex.name && ex.date && ex.topics) setTimeout(() => openExamSheet({ ...ex, auto: true, then: offerTour }), 300);
+  else offerTour();
 }
 // right after the first run (signed in or as a guest): a quick tour?, asked once, ever
 function offerTour() { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(); }, 700); }
