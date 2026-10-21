@@ -2248,11 +2248,10 @@ function deskChatStart() {
   const el = document.createElement('div');
   el.className = 'desk desk-chat';
   const p = state.profile || {}, name = (p.name || '').trim().split(/\s+/)[0];
-  el.innerHTML = `<div class="dk-chat-hi"><div class="dk-chat-bot" aria-hidden="true"></div><h1 class="dk-title"></h1><p class="dk-sub">Ask anything you’re studying. Cassie explains it step by step.</p>
+  el.innerHTML = `<div class="dk-chat-hi"><h1 class="dk-title"></h1><p class="dk-sub">Ask anything you’re studying. Cassie explains it step by step.</p>
     <div class="dk-ideas-row">${HOME_EXAMPLES.slice(0, 6).map((ex, i) => `<button type="button" class="dk-chip dk-idea" data-i="${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div></div>`;
   el.querySelector('.dk-title').textContent = name ? `What are we studying, ${name}?` : 'What are we studying today?';
   el.querySelectorAll('.dk-idea').forEach((b) => { b.querySelector('span').textContent = HOME_EXAMPLES[+b.dataset.i].label; b.addEventListener('click', () => runTool(HOME_EXAMPLES[+b.dataset.i])); });
-  try { window.CassieBot.create(el.querySelector('.dk-chat-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
   return el;
 }
 /* Chats: every conversation as a card, newest first (like Fernly's Team page) */

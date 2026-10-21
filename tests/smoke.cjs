@@ -1217,6 +1217,18 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
   await ctx.close();
 });
 
+test('a new chat on a computer: no big Cassie over the title (the floating one stays), and the title shows in full', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: deskSeed().state });
+  await page.evaluate(() => deskGo('chat'));
+  await page.waitForSelector('#chat-log .desk-chat .dk-title');
+  await page.waitForTimeout(600);
+  const T = await page.evaluate(() => { const t = document.querySelector('.desk-chat .dk-title'), r = t.getBoundingClientRect(); const pts = [[0.1, 0.5], [0.5, 0.5], [0.9, 0.5]].map(([x, y]) => { const e = document.elementFromPoint(r.left + r.width * x, r.top + r.height * y); return !!e && (e === t || t.contains(e)); }); return { bot: !!document.querySelector('.dk-chat-bot'), clear: pts.every(Boolean), mascot: !!document.getElementById('mascot') }; });
+  expect(!T.bot && T.clear && T.mascot, 'no big Cassie, nothing over the title, the floating one is still there: ' + JSON.stringify(T));
+  if (process.env.SHOTS) for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); await page.screenshot({ path: `${process.env.SHOTS}/new-chat-${scheme}.png` }); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));
