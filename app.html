@@ -44,6 +44,7 @@
     <button type="button" class="side-tool" data-page="progress" data-tip="Progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 15l4-4 3 3 5-6"/></svg><span>Progress</span></button>
   </nav>
   <button type="button" id="side-menu-toggle" class="sidebar-section side-menu-label" aria-expanded="false" aria-controls="side-tools"><span class="ml-phone">Menu</span><span class="ml-desk">Study tools</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+  <nav id="side-apps" class="side-nav desk-only" aria-label="Labs, games and the board"></nav>
   <nav id="side-tools" class="side-tools" aria-label="Study tools"></nav>
   <button id="new-chat-btn" class="new-chat-btn" data-tip="New chat">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
@@ -88,8 +89,7 @@
   <label class="side-hl rail-hide"><span><b>Highlight help</b><small>On: Cassie pops up when you highlight words. Off: highlight and copy like normal.</small></span><input type="checkbox" id="side-hl-toggle" role="switch"></label>
   <!-- computers: Settings, Help, Sign out, and the Chrome extension -->
   <div class="side-group desk-only rail-hide" id="side-general-h">General</div>
-  <nav class="side-nav desk-only" aria-labelledby="side-general-h">
-    <button type="button" class="side-tool" data-page="settings" data-tip="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1"/></svg><span>Settings</span></button>
+  <nav id="side-general" class="side-nav desk-only" aria-labelledby="side-general-h">
     <a class="side-tool" href="support.html" target="_blank" rel="noopener" data-tip="Help"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 16.8h.01"/></svg><span>Help</span></a>
     <button type="button" class="side-tool" data-page="signout" data-tip="Sign out" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14M10 8l-4 4 4 4M6 12h9"/></svg><span>Sign out</span></button>
   </nav>
@@ -115,26 +115,26 @@
       <span class="island-in"><span class="island-bot" aria-hidden="true"></span><span class="island-text"></span></span>
     </div>
     <!-- computers: search (the sidebar's), the focus timer while it runs, reminders and you -->
-    <button type="button" id="top-search" class="top-search desk-only" aria-label="Search tools and chats"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Search tools and chats</span><kbd aria-hidden="true">Ctrl K</kbd></button>
+    <div class="top-search desk-only" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="top-q" type="search" placeholder="Search pages, tools and chats" aria-label="Search pages, tools and chats" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="top-results" aria-autocomplete="list"><kbd aria-hidden="true">Ctrl K</kbd><ul id="top-results" class="top-results" role="listbox" aria-label="Results" hidden></ul></div>
     <div class="topbar-actions">
     <button type="button" id="top-timer" class="top-timer desk-only" hidden aria-label="Focus timer: open Home"><i aria-hidden="true"></i><span>Focus</span><b>25:00</b></button>
     <button id="labs-btn" class="icon-btn" title="Labs: simulations to play with: pendulums, pH, fractions, Punnett squares…" aria-label="Labs">
       <svg viewBox="0 0 24 24"><path d="M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z"/></svg>
-    </button>
+    <span class="app-label">Labs</span></button>
     <button id="games-btn" class="icon-btn" title="Games: logic circuits, formula cracker, pinning blitz, daily puzzles…" aria-label="Games">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14 14.5h-4l-.7 1.1A3.5 3.5 0 0 1 3 13.5V12a4 4 0 0 1 4-4zM8 10.5v3M6.5 12h3M15.5 11.5h.01M17.5 13.5h.01"/></svg>
-    </button>
+    <span class="app-label">Games</span></button>
     <button id="board-btn" class="icon-btn" title="Board: draw, sketch, or work on a graph" aria-label="Open the drawing board">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4"/><path d="M7 13l3-3 2 2 4-4"/></svg>
-    </button>
+    <span class="app-label">Board</span></button>
     <button id="memory-btn" class="icon-btn" title="What Cassie remembers about you" aria-label="Memory">
       <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-4.9 4A4 4 0 0 0 4 9.8a4 4 0 0 0 1.4 6.4A3.5 3.5 0 0 0 9 21a3 3 0 0 0 3-3V4a2 2 0 0 0-2-2h2zm4.9 4A5 5 0 0 0 12 2a2 2 0 0 1 2 2v14a3 3 0 0 0 3 3 3.5 3.5 0 0 0 3.6-4.8A4 4 0 0 0 20 9.8 4 4 0 0 0 16.9 6z"/></svg>
       <span id="memory-dot" class="memory-dot" hidden></span>
-    </button>
+    <span class="app-label">Memory</span></button>
     <button type="button" id="top-bell" class="icon-btn desk-only" aria-label="Reminders" aria-expanded="false" aria-controls="top-remind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg><i class="top-dot" hidden></i></button>
     <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.6 7.6 0 0 0-1.7-1L14.4 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5L9 5.1a7.6 7.6 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.8 1.7 1l.4 2.6c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
-    </button>
+    <span class="app-label">Settings</span></button>
     <button type="button" id="top-me" class="top-me desk-only"><span class="top-av" aria-hidden="true">C</span><span class="top-who"><b>You</b><small>Sign in</small></span></button>
     </div>
     <div id="top-remind" class="top-remind desk-only" hidden></div>

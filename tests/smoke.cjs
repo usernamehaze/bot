@@ -78,7 +78,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
-    if (seedJson && !sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
+    if (seedJson && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('cassie.deskPage', 'chat'); /* (a computer starts on Home, with no ask box: the tests start in a new chat, and the dashboard tests open Home) */ localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
   await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
@@ -137,6 +137,7 @@ async function open3d(page, id) {
 // software barely gets to draw a frame, and the usual frame-by-frame check then times out)
 const seen = (page, sel, text = '', timeout = 30000) => page.waitForFunction(([s, t]) => [...document.querySelectorAll(s)].some((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden' && e.textContent.includes(t)), [sel, text], { timeout, polling: 250 });
 async function ask(page, text) {
+  await page.evaluate(() => { if (document.body.classList.contains('desk-on')) deskGo('chat'); }); // (a computer's dashboard pages have no ask box)
   const before = await page.locator('#chat-log .bubble-assistant').count();
   await page.fill('#prompt-input', text);
   await page.press('#prompt-input', 'Enter');
@@ -1056,6 +1057,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
   for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
     const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: seed.state });
     await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
     const H = await page.evaluate(() => {
       const d = document.querySelector('.desk-home'), t = (s) => (d.querySelector(s) || {}).textContent || '';
@@ -1072,11 +1074,16 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (process.env.SHOTS) { await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/desk-home-${viewport.width}-${scheme}.png` }); }
     if (scheme === 'light') {
       // the sidebar and the top bar
-      const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Settings,Help' && side.badge === '1' && side.ext === 'cassie-extension.zip' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'cassie-extension.zip' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
+      expect(side.topIcons === 'top-bell,top-me' && side.ask === 'none', 'like the reference: only the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
+      // search: Ctrl K, then pages, tools and chats as you type
       await page.keyboard.press('Control+k');
-      expect(await page.evaluate(() => document.activeElement.id === 'side-search' && document.body.classList.contains('side-open')), 'Ctrl K opens search');
+      expect(await page.evaluate(() => document.activeElement.id === 'top-q'), 'Ctrl K opens search');
+      await page.keyboard.type('mol');
+      await page.waitForSelector('#top-results:not([hidden]) [role="option"]');
+      expect((await page.locator('#top-results [role="option"]').allInnerTexts()).some((t) => /Moles and molar mass/.test(t)), 'a chat is found');
       await page.keyboard.press('Escape');
       await page.click('#top-bell');
       expect(await page.locator('#top-remind .hub-chat').count() === 4, 'the bell shows the reminders');
@@ -1090,6 +1097,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
       // each button does its job: Ask Cassie, the ↗ on cards and the streak, Start studying
       await page.click('.dk-acts [data-dk="ask"]');
       expect(await page.evaluate(() => document.activeElement.id === 'prompt-input'), 'Ask Cassie: the ask box');
+      await page.click('#side-nav [data-page="home"]'); await page.waitForSelector('#chat-log .desk-home');
       await page.click('.dk-stat [data-dk="cards"]');
       await page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }); await page.click('.fc-x'); await page.waitForSelector('.fc', { state: 'hidden' });
       await page.click('.dk-stat [data-dk="progress"]');
@@ -1116,6 +1124,7 @@ test('computer pages: Study plan is a board (Today, Coming up, Done) with filter
   for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
     const { ctx, page, errors, groqCalls } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: seed.state, fakeGroq: () => ({ text: 'Sure!' }) });
     await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
     const shot = async (n) => { if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/desk-${n}-${viewport.width}-${scheme}.png` }); } };
     // Study plan
@@ -1154,11 +1163,18 @@ test('computer pages: Study plan is a board (Today, Coming up, Done) with filter
     await page.locator('.dk-pt').first().focus();
     expect(await page.locator('.dk-tip').isVisible() && /Last week/.test(await page.locator('.dk-tip').innerText()), 'a tooltip on focus');
     await shot('progress');
-    // a question turns the page back into a chat, and the next empty chat is Home
+    // no ask box on the pages (like the reference): Chats, New chat, then a question
+    expect(await page.evaluate(() => getComputedStyle(document.getElementById('composer')).display === 'none'), 'no ask box on Progress');
+    await page.click('#side-nav [data-page="chats"]');
+    await page.waitForSelector('#chat-log .desk-chats .dk-chat-card', { timeout: 4000 });
+    expect((await page.locator('.dk-chat-card b').allInnerTexts()).join() === 'Moles and molar mass,Photosynthesis steps', 'Chats lists every chat');
+    await shot('chats');
+    await page.click('.desk-chats [data-dk="ask"]');
+    expect(await page.evaluate(() => document.activeElement.id === 'prompt-input'), 'New chat: the ask box, ready');
     await page.fill('#prompt-input', 'What is a mole?'); await page.press('#prompt-input', 'Enter');
     await page.waitForSelector('#chat-log .bubble-assistant', { timeout: 8000 });
     expect(!(await page.locator('#chat-log .home-desk').count()) && groqCalls.length >= 1, 'the page became a chat');
-    await page.click('#new-chat-btn');
+    await page.click('#side-nav [data-page="home"]');
     await page.waitForSelector('#chat-log .desk-home', { timeout: 4000 });
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -1169,8 +1185,9 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
   for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
     const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: { ...deskSeed().state } });
     await page.emulateMedia({ colorScheme: scheme });
+    await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
-    await page.click('.side-nav [data-page="settings"]');
+    await page.click('#side-general #settings-btn');
     await page.waitForSelector('#settings-panel:not([hidden]) .set-nav', { timeout: 4000 });
     const nav = await page.evaluate(() => [...document.querySelectorAll('.set-nav [data-go]')].map((x) => x.textContent));
     expect(nav.join() === 'You,Account,Study,Appearance,Voice and sound,Privacy and data,Plans,Help,All settings', 'the list: ' + nav.join());
@@ -2700,7 +2717,7 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     await onboard(page, { name: 'Mika', grade: 'Grade 10', exam: { name: 'Gen Chem finals', date, topics: 'Stoichiometry, gas laws' } });
     await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
     // the card: Your Exam Plan, then what subject and what topics (a computer: Home lists the plan, Study plan has the card)
-    if (!phone) { await page.waitForSelector('#chat-log .dk-plans .dk-row', { timeout: 10000 }); expect(await page.locator('#chat-log .dk-plans .dk-row b').first().innerText() === 'Gen Chem finals', 'Home lists the new plan'); await page.evaluate(() => deskGo('plan')); }
+    if (!phone) { await page.evaluate(() => deskGo('home')); await page.waitForSelector('#chat-log .dk-plans .dk-row', { timeout: 10000 }); expect(await page.locator('#chat-log .dk-plans .dk-row b').first().innerText() === 'Gen Chem finals', 'Home lists the new plan'); await page.evaluate(() => deskGo('plan')); }
     const card = page.locator(where).first();
     await card.waitFor({ timeout: 10000 });
     const head = await card.locator('.ex-head').innerText();
@@ -2968,6 +2985,7 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
   await home();
   expect(await page.locator('#chat-log .hub-week .empty-state').count() === 1 && /Take a quick quiz/.test(await page.locator('#chat-log .hub-week').innerText()), 'an empty week says what to do');
   // a quiz (one right, one missed), a mistake review (the saved one, right) and a flashcard session (Good)
+  await page.evaluate(() => deskGo('chat')); // (a computer: Progress has no ask box; a new chat does)
   await page.fill('#prompt-input', 'maths');
   await page.click('#quiz-btn');
   await page.waitForSelector('text=Question 1');
@@ -4295,7 +4313,8 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   // 3. the app: glass only on the floating controls (tab bar, top bar, sidebar, the ask box); Home's cards are solid
   for (const [device, viewport] of [['iPhone 13', { width: 390, height: 844 }], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { groqKey: 'gsk_test', tour: 'done', extVideoSeen: true, tab: 'home' } }); // (Lite mode turns all glass solid)
-    await page.waitForSelector('.hub-box, .dk-card', { timeout: 10000 }); // (a computer: the study dashboard)
+    await page.evaluate(() => { if (sideWide.matches) deskGo('home'); }); // (a computer: the study dashboard)
+    await page.waitForSelector('.hub-box, .dk-card', { timeout: 10000 });
     const A = await page.evaluate(() => {
       const blur = (el) => /blur/.test(getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter || '');
       const shown = (el) => el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none';
@@ -6725,17 +6744,24 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: reply });
   ctx.on('page', (p) => { if (p !== page) p.close().catch(() => {}); }); // (Help opens in a new tab: closed at once, so this page stays in front and keeps drawing)
   expect(await page.locator('.ideas-panel, .ideas-shade').count() === 0, 'the old Ideas panel is gone');
-  expect(await page.locator('.home-ideas').isVisible(), 'Ideas to get started is still on the home screen');
+  await page.evaluate(() => deskGo('home'));
+  expect(await page.locator('.home-ideas').isVisible(), 'Ideas to get started is on Home');
   await ask(page, 'What is osmosis?');
-  const geo = () => page.evaluate(() => { const s = document.getElementById('sidebar').getBoundingClientRect(), a = document.getElementById('app').getBoundingClientRect(), c = document.getElementById('chat-log').getBoundingClientRect(); return { side: Math.round(s.right), app: Math.round(a.left), chat: Math.round(c.left), wide: document.documentElement.scrollWidth > innerWidth, open: document.body.classList.contains('side-open') }; });
+  const geo = () => page.evaluate(() => { const s = document.getElementById('sidebar').getBoundingClientRect(), a = document.getElementById('app').getBoundingClientRect(), c = document.getElementById('chat-log').getBoundingClientRect(); return { open: document.body.classList.contains('side-open'), side: Math.round(s.width), app: Math.round(a.left), chat: Math.round(c.left), wide: document.documentElement.scrollWidth > innerWidth + 1 }; });
   let g = await geo();
+  expect(g.open && g.side >= 260 && g.app >= g.side && !g.wide, 'the full sidebar at first (like the reference), the chat beside it: ' + JSON.stringify(g));
+  const inView = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return 'missing'; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? 'ok' : JSON.stringify(r); }, sel);
+  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'the tool list starts folded');
+  for (const sel of ['#side-nav [data-page="home"]', '#side-nav [data-page="chats"]', '#side-apps #labs-btn', '#side-general #settings-btn']) expect(await inView(sel) === 'ok', 'in view without scrolling: ' + sel + ' ' + await inView(sel));
+  // the chevron: a slim rail of icons
+  await page.click('#side-toggle'); await page.waitForTimeout(400);
+  g = await geo();
   expect(!g.open && g.side >= 60 && g.side <= 90 && g.app >= g.side && g.chat >= g.side && !g.wide, 'a slim rail beside the chat, nothing covered: ' + JSON.stringify(g));
   const fc = page.locator('.side-tool[data-tip="Flashcards"]');
   const fb = await fc.boundingBox();
-  expect(await fc.isVisible() && fb && fb.y + fb.height <= 800 && fb.x + fb.width <= g.side, 'the rail shows Flashcards, no scrolling: ' + JSON.stringify(fb));
+  expect(await fc.isVisible() && fb && fb.x + fb.width <= g.side, 'the rail shows Flashcards: ' + JSON.stringify(fb));
   expect(!(await fc.locator('span').isVisible()), 'the rail is icons only');
-  // its name shows beside it on hover
-  await fc.hover();
+  await fc.scrollIntoViewIfNeeded(); await fc.hover();
   await page.waitForSelector('#side-tip:not([hidden])', { timeout: 2000 });
   expect((await page.locator('#side-tip').innerText()) === 'Flashcards', 'the tooltip names it');
   await fc.click();
@@ -6744,38 +6770,22 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/side-rail-cards.png' });
   await page.click('.fc-x');
   await page.waitForFunction(() => !document.querySelector('.side-tool[data-tip="Flashcards"]').classList.contains('on'), null, { timeout: 2000 });
-  // the chevron: the full sidebar, the tool list folded at first so the timer and Recents are near the top
-  await page.click('#side-toggle');
-  await page.waitForTimeout(400);
-  const inView = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return 'missing'; const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight ? 'ok' : JSON.stringify(r); }, sel);
-  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'the tool list starts folded');
-  // (a computer: the focus timer lives on Home now, so New chat and the first chat are what must be in view)
-  expect(await inView('#new-chat-btn') === 'ok' && await inView('#chat-list .chat-item') === 'ok', 'folded: New chat and the first chat are in view: ' + await inView('#new-chat-btn') + ' ' + await inView('#chat-list .chat-item'));
-  // typing in Search opens it for a moment; clearing folds it again
-  await page.fill('#side-search', 'flash');
-  expect(await page.locator('.side-tool[data-tip="Flashcards"] span').isVisible(), 'flash finds Flashcards while folded');
-  await page.fill('#side-search', '');
-  expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'false', 'clearing Search folds it again');
+  await page.click('#side-toggle'); await page.waitForTimeout(400);
   await page.click('#side-menu-toggle');
   const labels = await page.evaluate(() => HOME_EXAMPLES.map((x) => x.label));
   for (const l of labels) expect(await page.locator('.side-tool', { hasText: l }).locator('span').isVisible(), 'the full sidebar shows ' + l);
-  g = await geo();
-  expect(g.open && g.side >= 260 && g.app >= g.side && !g.wide, 'the full sidebar, the chat moved over: ' + JSON.stringify(g));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/side-open.png' });
   await page.reload(); await page.waitForTimeout(800);
   expect((await geo()).open, 'still the full sidebar after a reload');
-  // Search: the tools and the chats that match
-  await page.fill('#side-search', 'flash');
-  const shownTools = await page.evaluate(() => [...document.querySelectorAll('.side-tool')].filter((x) => x.getClientRects().length).map((x) => x.dataset.tip)); // (what shows: the pages are searched too)
-  expect(shownTools.join() === 'Flashcards', 'flash leaves only Flashcards: ' + shownTools);
-  expect(await page.locator('#chat-list .chat-item:visible').count() === 0, 'and the chat about osmosis is hidden');
-  await page.fill('#side-search', 'osmo');
-  expect(await page.locator('#chat-list .chat-item:visible').count() === 1 && await page.locator('.side-tool:visible').count() === 0, 'osmo finds the chat');
-  await page.fill('#side-search', '');
-  // the highlight switch is the same setting as the one in Settings
-  await page.click('.side-hl');
-  expect(await page.evaluate(() => state.highlightHelp === false && document.getElementById('highlight-help-toggle').checked === false), 'the sidebar switch turns highlight help off, Settings agrees');
-  await page.click('.side-hl');
+  // Search (the top bar): pages, tools and chats that match
+  await page.fill('#top-q', 'flash');
+  let hits = await page.locator('#top-results [role="option"]').allInnerTexts();
+  expect(hits.length === 1 && /Flashcards/.test(hits[0]) && /Tool/.test(hits[0]), 'flash finds Flashcards: ' + JSON.stringify(hits));
+  await page.fill('#top-q', 'osmo');
+  hits = await page.locator('#top-results [role="option"]').allInnerTexts();
+  expect(hits.length === 1 && /osmosis/i.test(hits[0]) && /Chat/.test(hits[0]), 'osmo finds the chat: ' + JSON.stringify(hits));
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => /osmosis/i.test(document.getElementById('chat-log').innerText), null, { timeout: 3000 });
   // nothing covered or scrolling sideways, either way, at three widths
   for (const open of [true, false]) {
     await page.evaluate((o) => setSideOpen(o), open);
@@ -6795,7 +6805,7 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
   }
   // Ideas to get started: the home screen of a new chat shows where the tools are
   await page.goto(APP); await page.waitForTimeout(600);
-  await page.evaluate(() => { setSideOpen(false); createNewChat(); });
+  await page.evaluate(() => { setSideOpen(false); deskGo('home'); });
   await page.click('.home-ideas');
   await page.waitForFunction(() => document.body.classList.contains('side-open') && document.querySelector('.side-tools.flash'), null, { timeout: 2000 });
   // folded or not is kept too
@@ -7531,6 +7541,7 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
   // a computer: the study dashboard instead (no strip, no Today’s Lab card)
   {
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
+    await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home');
     const d = await page.evaluate(() => ({ strip: !!document.querySelector('#chat-log .hub-strip, #chat-log .hub-tlab, #chat-log canvas[data-pv]'), hello: document.querySelector('.dk-title').textContent }));
     expect(!d.strip && d.hello === 'Hi, Test', 'a computer’s Home is the dashboard: ' + JSON.stringify(d));
@@ -7738,7 +7749,7 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
       for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page); expect(!bad.length, `${size} returning home (${scheme}): ` + bad.join(' | ')); }
       await page.emulateMedia({ colorScheme: 'light' });
     } else {
-      await toHome();
+      await page.evaluate(() => deskGo('home'));
       await page.waitForSelector('#chat-log .desk-home');
       expect(/Hi, Test/.test(await page.locator('#chat-log .desk-home').innerText()), `${size}: the dashboard`);
       for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); const { bad } = await contrastIssues(page, '#chat-log .desk-home'); expect(!bad.length, `${size} dashboard (${scheme}): ` + bad.join(' | ')); }
@@ -7922,7 +7933,7 @@ test('Appearance: Monochrome is black and white, a picked colour reaches New cha
         let got = await colours();
         for (let k = 0; k < 12; k++) { await page.waitForTimeout(150); const again = await colours(); if (JSON.stringify(again) === JSON.stringify(got)) break; got = again; }
         for (const [k, v] of Object.entries(got)) {
-          if (!v) { expect((k === 'open tab' || k === 'timer Start') && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; } // (a computer: no tabs, and the timer is Home's dark card)
+          if (!v) { expect((k === 'open tab' || k === 'timer Start' || k === 'New chat') && size === '1280x800', `${size} ${pick || 'Cassie'} ${scheme}: ${k} is missing`); continue; } // (a computer: no tabs, and the timer is Home's dark card)
           const bg = hex(v.bg), fg = hex(v.fg);
           if (pick === 'mono') {
             const [r, g, bl] = rgb(v.bg);

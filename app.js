@@ -1736,7 +1736,7 @@ function setSideOpen(open, keep = true) {
   setTimeout(() => { keepMascotClear(); }, 300);
 }
 let sideOpenSaved = false;
-try { sideOpenSaved = localStorage.getItem(SIDE_KEY) === 'open'; } catch (e) { /* ignore */ }
+try { sideOpenSaved = localStorage.getItem(SIDE_KEY) !== 'rail'; } catch (e) { sideOpenSaved = true; } // (the full sidebar, unless made small)
 // "Menu" folds the tool list away (folded at first, so New chat, the timer and Recents are near the
 // top); the choice is kept. The rail on a computer always shows every tool.
 const TOOLS_KEY = 'cassie.toolsOpen';
@@ -2117,9 +2117,9 @@ function deskHome() {
   return el;
 }
 function deskAct(act) {
-  if (act === 'ask') { promptInput.focus(); return; }
+  if (act === 'ask') { deskGo('chat'); return; }
   if (act === 'notes') { document.getElementById('file-input').click(); return; }
-  if (act === 'chats') { const c = state.chats.filter((x) => x.messages && x.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]; if (c) selectChat(c.id); else promptInput.focus(); return; }
+  if (act === 'chats') { deskGo('chats'); return; }
   if (act.startsWith('chat:')) { selectChat(act.slice(5)); return; }
   if (act === 'cards') { if (window.CassieCards) window.CassieCards.open(); return; }
   if (act === 'newplan') { openExamSheet(); return; }
@@ -2147,7 +2147,9 @@ setInterval(renderDeskTimer, 1000);
 function goHome() { deskGo('home'); }
 function deskChrome() {
   const empty = !state.messages.length;
-  document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const on = (b.dataset.page === deskPage && empty) || (b.dataset.page === 'chats' && !empty); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  // (the dashboard pages have no ask box; a chat, new or not, does)
+  document.body.classList.toggle('desk-on', sideWide.matches && empty && deskPage !== 'chat');
+  document.querySelectorAll('#side-nav [data-page]').forEach((b) => { const on = (b.dataset.page === deskPage && empty) || (b.dataset.page === 'chats' && (!empty || deskPage === 'chat')); b.classList.toggle('on', on); if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   const so = document.querySelector('.side-nav [data-page="signout"]'); if (so) so.hidden = !(accountsOn() && authToken());
   const badge = document.querySelector('#side-nav [data-page="plan"] .side-badge'), n = dueToday();
   if (badge) { const t = n ? String(n) : ''; if (badge.textContent !== t) badge.textContent = t; badge.hidden = !n; document.querySelector('#side-nav [data-page="plan"]').setAttribute('aria-label', n ? `Study plan: ${n} ${n === 1 ? 'task' : 'tasks'} today` : 'Study plan'); }
@@ -2166,15 +2168,57 @@ setInterval(deskChrome, 2000);
 document.querySelectorAll('.side-nav [data-page]').forEach((b) => b.addEventListener('click', () => {
   const pg = b.dataset.page;
   if (pg === 'home') goHome();
-  else if (pg === 'chats') deskAct('chats');
-  else if (pg === 'settings') openSettings('all');
   else if (pg === 'signout') signOutNow().then(deskChrome);
   else deskGo(pg);
   setTimeout(deskChrome, 0);
 }));
-const topSearch = () => { setSideOpen(true); sideSearch.focus(); };
-document.getElementById('top-search').addEventListener('click', topSearch);
-document.addEventListener('keydown', (e) => { if (sideWide.matches && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); topSearch(); } });
+/* The top bar's search: pages, tools and chats as you type; arrows and Enter, or a click */
+const topQ = document.getElementById('top-q'), topResults = document.getElementById('top-results');
+let topHits = [], topAt = 0;
+function topSearchHits(q) {
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Labs', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
+    .map(([t, go]) => ({ t, kind: 'Page', go }));
+  const tools = HOME_EXAMPLES.map((ex) => ({ t: ex.label, kind: 'Tool', go: () => { if (state.messages.length || deskPage !== 'chat') deskGo('chat'); runTool(ex); } }));
+  const chats = state.chats.filter((c) => c.messages && c.messages.length).map((c) => ({ t: c.title || deriveTitle(c.messages) || 'Chat', kind: 'Chat', go: () => selectChat(c.id) }));
+  return [...pages, ...tools, ...chats].filter((h) => h.t.toLowerCase().includes(q)).slice(0, 8);
+}
+function showTopResults() {
+  topHits = topSearchHits(topQ.value); topAt = 0;
+  topResults.innerHTML = topHits.length ? topHits.map((h, i) => `<li role="option" id="top-r${i}" aria-selected="${i === 0}"><span></span><small>${h.kind}</small></li>`).join('') : (topQ.value.trim() ? '<li class="top-none" role="presentation">Nothing matches. Ask Cassie instead?</li>' : '');
+  topResults.querySelectorAll('[role="option"] span').forEach((sp, i) => { sp.textContent = topHits[i].t; });
+  topResults.hidden = !topQ.value.trim();
+  topQ.setAttribute('aria-expanded', String(!topResults.hidden));
+  if (topHits.length) topQ.setAttribute('aria-activedescendant', 'top-r0'); else topQ.removeAttribute('aria-activedescendant');
+}
+function pickTop(i) { const h = topHits[i]; topQ.value = ''; showTopResults(); topQ.blur(); if (h) h.go(); }
+topQ.addEventListener('input', showTopResults);
+topQ.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!topHits.length) return; e.preventDefault();
+    topAt = (topAt + (e.key === 'ArrowDown' ? 1 : topHits.length - 1)) % topHits.length;
+    topResults.querySelectorAll('[role="option"]').forEach((li, i) => li.setAttribute('aria-selected', String(i === topAt)));
+    topQ.setAttribute('aria-activedescendant', 'top-r' + topAt);
+  } else if (e.key === 'Enter') { e.preventDefault(); if (topHits.length) pickTop(topAt); }
+  else if (e.key === 'Escape') { topQ.value = ''; showTopResults(); topQ.blur(); }
+});
+topResults.addEventListener('mousedown', (e) => { const li = e.target.closest('[role="option"]'); if (li) { e.preventDefault(); pickTop(+li.id.slice(5)); } });
+topQ.addEventListener('blur', () => setTimeout(() => { topResults.hidden = true; topQ.setAttribute('aria-expanded', 'false'); }, 150));
+document.addEventListener('keydown', (e) => { if (sideWide.matches && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); topQ.focus(); topQ.select(); } });
+/* Computers: Labs, Games and the Board sit under Study tools, Settings and Memory under General (phones: the top bar) */
+const APP_BTNS = ['labs-btn', 'games-btn', 'board-btn', 'memory-btn', 'settings-btn'].map((id) => { const b = document.getElementById(id); return { b, home: b.parentElement, next: b.nextElementSibling }; });
+function placeApps() {
+  const wide = sideWide.matches, apps = document.getElementById('side-apps'), general = document.getElementById('side-general');
+  (wide ? APP_BTNS : [...APP_BTNS].reverse()).forEach(({ b, home, next }) => { // (back in reverse, so each one's neighbour is already home)
+    if (wide) { (b.id === 'memory-btn' || b.id === 'settings-btn' ? general : apps)[b.id === 'settings-btn' ? 'prepend' : 'append'](b); b.classList.add('side-tool'); b.dataset.tip = b.querySelector('.app-label').textContent; }
+    else { home.insertBefore(b, next && next.parentElement === home ? next : null); b.classList.remove('side-tool'); }
+  });
+  const mem = document.getElementById('memory-btn'), set = document.getElementById('settings-btn');
+  if (wide && mem.previousElementSibling !== set) set.after(mem);
+}
+placeApps();
+sideWide.addEventListener('change', () => { placeApps(); deskChrome(); });
 document.getElementById('top-timer').addEventListener('click', goHome);
 document.getElementById('top-me').addEventListener('click', () => openSettings('all'));
 // the bell: today's reminders (the same list the phone's Home has)
@@ -2193,8 +2237,56 @@ document.addEventListener('click', (e) => { if (!topRemind.hidden && !topRemind.
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !topRemind.hidden) { closeTopRemind(); topBell.focus(); } });
 /* The computer's pages (Study plan, Calendar, Progress) open where Home does, in an empty chat, so the
    Ask Cassie box stays under every page; the first question turns it back into a chat. */
+// (the page is kept for this tab, so a reload stays where you were)
+const DESK_KEY = 'cassie.deskPage';
 var deskPage = 'home';
-const DESK_PAGES = { home: () => deskHome(), plan: () => deskPlan(), calendar: () => deskCalendar(), progress: () => deskProgress() };
+try { deskPage = sessionStorage.getItem(DESK_KEY) || 'home'; } catch (e) { /* this visit only */ }
+const DESK_PAGES = { home: () => deskHome(), chat: () => deskChatStart(), chats: () => deskChats(), plan: () => deskPlan(), calendar: () => deskCalendar(), progress: () => deskProgress() };
+function setDeskPage(page) { deskPage = DESK_PAGES[page] ? page : 'home'; try { sessionStorage.setItem(DESK_KEY, deskPage); } catch (e) { /* ignore */ } }
+// a new chat on a computer: a hello, a few ideas, and the ask box under it
+function deskChatStart() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-chat';
+  const p = state.profile || {}, name = (p.name || '').trim().split(/\s+/)[0];
+  el.innerHTML = `<div class="dk-chat-hi"><div class="dk-chat-bot" aria-hidden="true"></div><h1 class="dk-title"></h1><p class="dk-sub">Ask anything you’re studying. Cassie explains it step by step.</p>
+    <div class="dk-ideas-row">${HOME_EXAMPLES.slice(0, 6).map((ex, i) => `<button type="button" class="dk-chip dk-idea" data-i="${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div></div>`;
+  el.querySelector('.dk-title').textContent = name ? `What are we studying, ${name}?` : 'What are we studying today?';
+  el.querySelectorAll('.dk-idea').forEach((b) => { b.querySelector('span').textContent = HOME_EXAMPLES[+b.dataset.i].label; b.addEventListener('click', () => runTool(HOME_EXAMPLES[+b.dataset.i])); });
+  try { window.CassieBot.create(el.querySelector('.dk-chat-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
+  return el;
+}
+/* Chats: every conversation as a card, newest first (like Fernly's Team page) */
+let deskChatsFilter = 'all';
+function deskChats() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-chats';
+  const all = state.chats.filter((c) => c.messages && c.messages.length).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const week = Date.now() - 7 * 864e5;
+  const FILTERS = [['all', 'All'], ['week', 'This week'], ['files', 'With files'], ['older', 'Older']];
+  const keep = (c) => deskChatsFilter === 'all' || (deskChatsFilter === 'week' && (c.updatedAt || 0) >= week) || (deskChatsFilter === 'older' && (c.updatedAt || 0) < week) || (deskChatsFilter === 'files' && c.messages.some((m) => m.display && /\(attached:/.test(m.display)));
+  const list = all.filter(keep);
+  el.innerHTML = deskHeader('Chats', 'Every conversation with Cassie, newest first.', `<button type="button" class="dk-btn dk-solid" data-dk="ask">${DESK_ICON.plus}New chat</button>`)
+    + `<div class="dk-filters"><div class="dk-chips" role="group" aria-label="Show">${FILTERS.map(([k, l]) => `<button type="button" class="dk-chip" data-f="${k}" aria-pressed="${k === deskChatsFilter}">${l}</button>`).join('')}</div><small class="dk-count"></small></div><div class="dk-chat-grid"></div>`;
+  const grid = el.querySelector('.dk-chat-grid');
+  list.forEach((c) => {
+    const n = c.messages.length, first = (c.messages.find((m) => m.role === 'user') || {});
+    const card = document.createElement('article');
+    card.className = 'dk-card dk-chat-card';
+    card.innerHTML = `<div class="dk-chat-top"><i class="dk-dot" aria-hidden="true">${HUB_ICON.chat}</i><span><b></b><small></small></span></div><p class="dk-note dk-chat-q"></p><div class="dk-chat-acts"><button type="button" class="dk-btn dk-solid dk-open">Open</button><button type="button" class="dk-btn dk-line dk-del">Delete</button></div>`;
+    card.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
+    card.querySelector('small').textContent = `${n} message${n === 1 ? '' : 's'} · ${hubAgo(c.updatedAt)}`;
+    card.querySelector('.dk-chat-q').textContent = String(first.display || first.content || '').replace(/\s+/g, ' ').slice(0, 140);
+    card.querySelector('.dk-open').setAttribute('aria-label', `Open ${card.querySelector('b').textContent}`);
+    card.querySelector('.dk-open').addEventListener('click', () => selectChat(c.id));
+    card.querySelector('.dk-del').addEventListener('click', () => { if (!confirm('Delete this chat?')) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
+    grid.appendChild(card);
+  });
+  if (!list.length) grid.replaceWith(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Try another filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? '' : 'Ask Cassie', onAction: () => deskAct('ask') }));
+  el.querySelector('.dk-count').textContent = `${list.length} ${list.length === 1 ? 'chat' : 'chats'}`;
+  el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskChatsFilter = b.dataset.f; renderHistory(); } });
+  el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk="ask"]'); if (b) deskAct('ask'); });
+  return el;
+}
 const KIND_NAME = { learn: 'Learn', quiz: 'Quiz', cards: 'Flashcards', mistakes: 'Mistakes', focus: 'Focus' };
 // every exam task with its plan and day (newest plans included, closed ones left out)
 function allExamTasks() {
@@ -2300,9 +2392,10 @@ function deskCalendar() {
 }
 function deskGo(page) {
   if (state.messages.length) createNewChat();
-  deskPage = DESK_PAGES[page] ? page : 'home';
+  setDeskPage(page);
   renderHistory();
-  promptInput.blur();
+  deskChrome(); // (now, so the ask box is back before it's focused)
+  if (deskPage === 'chat') promptInput.focus(); else promptInput.blur();
 }
 // a page's header: the title, one grey line, and its main buttons
 function deskHeader(title, sub, buttons = '') {
@@ -4407,7 +4500,7 @@ async function handleSend(text, opts = {}) {
 
   clearFollowups();
   // if the home screen is showing, clear it before the first message (a computer's next empty chat is Home again)
-  if (!state.messages.length) { chatLog.innerHTML = ''; deskPage = 'home'; }
+  if (!state.messages.length) { chatLog.innerHTML = ''; setDeskPage('chat'); }
   // A document is read separately; history only keeps a short note + excerpt,
   // so later questions don't blow past the free per-minute limits.
   let modelContent = sendText;
@@ -6367,7 +6460,7 @@ function selectChat(id) {
   closeSidebar();
 }
 function createNewChat() {
-  deskPage = 'home';
+  setDeskPage('chat'); // (a computer: a new chat is a blank chat with the ask box; Home is in the sidebar)
   const cur = curChat();
   if (cur && cur.messages.length === 0) {
     state.messages = cur.messages; // reuse the current blank chat instead of stacking empties
