@@ -2780,3 +2780,21 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 .desk .dk-ideas { display: inline; min-height: 0; margin: 0 0 0 4px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .side-nav .side-tool.search-out { display: none; }
 .dk-head .dk-sub { color: var(--text); } /* (on the moving background, not a card: the full text colour reads in both themes) */
+/* ---------- Settings on a computer: a page with its parts listed on the left ---------- */
+@media (min-width: 761px) {
+  #settings-panel { align-items: stretch; padding: 16px clamp(16px, 3vw, 32px); background: color-mix(in srgb, var(--bg) 92%, transparent); }
+  #settings-panel > .settings-card { display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 28px; align-content: start; max-width: 1080px; max-height: none; height: 100%; padding: 12px 24px 24px; }
+  #settings-panel > .settings-card > * { grid-column: 2; min-width: 0; }
+  #settings-panel > .settings-card > .set-head { grid-column: 1 / -1; }
+  #settings-panel > .settings-card > .set-nav { grid-column: 1; grid-row: 2 / span 30; align-self: start; position: sticky; top: 64px; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 18px; background: var(--surface-2); }
+  .set-nav button { display: flex; align-items: center; min-height: 42px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--text); font: inherit; font-size: .92rem; font-weight: 600; text-align: left; cursor: pointer; }
+  .set-nav button:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+  .set-nav button[aria-current="page"] { background: var(--surface); box-shadow: var(--lg-edge); color: var(--text); font-weight: 700; }
+  .set-nav button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* Appearance: colours by name, then the whole palette */
+  .accent-named { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .accent-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px 0 8px; border-radius: 14px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+  .accent-chip i { width: 26px; height: 26px; border-radius: 8px; background: var(--sw); }
+  .accent-chip[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+  .accent-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+}

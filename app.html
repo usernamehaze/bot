@@ -232,6 +232,18 @@
         <h2 id="set-title">Settings</h2>
         <button type="button" class="set-x" id="settings-x" aria-label="Close">×</button>
       </div>
+      <!-- computers: every part of Settings in a list on the left -->
+      <nav class="set-nav desk-only" aria-label="Settings pages">
+        <button type="button" data-go="profile">You</button>
+        <button type="button" data-go="account">Account</button>
+        <button type="button" data-go="study">Study</button>
+        <button type="button" data-go="appearance">Appearance</button>
+        <button type="button" data-go="voice">Voice and sound</button>
+        <button type="button" data-go="privacy">Privacy and data</button>
+        <button type="button" data-go="plans">Plans</button>
+        <button type="button" data-go="help">Help</button>
+        <button type="button" data-go="all">All settings</button>
+      </nav>
 
       <!-- You: who you are, a few numbers, and the parts of Settings that are about you -->
       <section class="set-profile" data-page-only="profile" aria-label="Your profile">
@@ -360,6 +372,7 @@
           <div class="set-row" data-k="colour color theme monochrome lite mode data">
           <label class="field">
             <span>Favorite colour</span>
+            <div class="accent-named desk-only" id="accent-named" role="group" aria-label="Colours by name"></div>
             <div class="accent-swatches" id="accent-swatches"></div>
           </label>
           <p class="field-hint">Colours every button, the send button, the timer and the board. <strong>Cassie</strong> is her own blush and sage; <strong>Monochrome</strong> is black and white. The loading screen and Cassie herself keep their own colours.</p>

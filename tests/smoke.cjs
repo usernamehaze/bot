@@ -1165,6 +1165,41 @@ test('computer pages: Study plan is a board (Today, Coming up, Done) with filter
   }
 });
 
+test('computer Settings is a page: its parts listed on the left (You, Account, Study, Appearance, Voice and sound, Privacy and data, Plans, Help, All settings), each opening on the right; Appearance has colours by name (Cassie, Monochrome, Forest, Ocean, Plum, Ember) that pick the colour; a phone’s Settings is unchanged', async (b) => {
+  for (const [scheme, viewport] of [['light', { width: 1280, height: 800 }], ['dark', { width: 1440, height: 900 }]]) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport, server: false, state: { ...deskSeed().state } });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForSelector('#chat-log .desk-home', { timeout: 8000 });
+    await page.click('.side-nav [data-page="settings"]');
+    await page.waitForSelector('#settings-panel:not([hidden]) .set-nav', { timeout: 4000 });
+    const nav = await page.evaluate(() => [...document.querySelectorAll('.set-nav [data-go]')].map((x) => x.textContent));
+    expect(nav.join() === 'You,Account,Study,Appearance,Voice and sound,Privacy and data,Plans,Help,All settings', 'the list: ' + nav.join());
+    const geo = await page.evaluate(() => { const n = document.querySelector('.set-nav').getBoundingClientRect(), c = document.querySelector('.settings-card').getBoundingClientRect(); return { navLeft: n.left - c.left, navW: n.width, cardW: c.width }; });
+    expect(geo.navLeft < 40 && geo.navW >= 200 && geo.cardW > 900, 'the list on the left of a wide page: ' + JSON.stringify(geo));
+    for (const [go, title, inside] of [['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['plans', 'Plans', '.plan-compare'], ['appearance', 'Appearance', '#accent-swatches']]) {
+      await page.click(`.set-nav [data-go="${go}"]`);
+      expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator(`.set-nav [data-go="${go}"]`).getAttribute('aria-current') === 'page', `${go} opens on the right`);
+    }
+    const names = await page.evaluate(() => [...document.querySelectorAll('.accent-chip')].map((x) => x.textContent));
+    expect(names.join() === 'Cassie,Monochrome,Forest,Ocean,Plum,Ember', 'colours by name: ' + names.join());
+    await page.click('.accent-chip[data-accent="#1d4ed8"]');
+    expect(await page.evaluate(() => accentChoice()) === '#1d4ed8' && await page.locator('.accent-chip[data-accent="#1d4ed8"]').getAttribute('aria-pressed') === 'true', 'Ocean picks blue');
+    if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/desk-settings-${viewport.width}-${scheme}.png` }); }
+    const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#settings-panel');
+    expect(!bad.length, `${scheme}: every word readable: ` + bad.join(' | '));
+    await page.click('.accent-chip[data-accent="cassie"]');
+    await page.click('#settings-x');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a phone: no list on the left, no colours by name
+  const { ctx, page } = await open(b, { device: 'iPhone 13', server: false });
+  await page.evaluate(() => openSettings('appearance'));
+  await page.waitForSelector('#settings-panel:not([hidden])');
+  expect(await page.evaluate(() => !document.querySelector('.set-nav').getBoundingClientRect().width && !document.querySelector('.accent-named').getBoundingClientRect().width), 'a phone’s Settings is unchanged');
+  await ctx.close();
+});
+
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
   await page.evaluate(() => openSettings('plans'));

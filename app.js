@@ -5832,10 +5832,14 @@ const ACCENT_COLORS = [
   '#f9a8d4', '#f472b6', '#ec4899', '#be185d', // pink
   '#d6d3ce', '#a8a29e', '#78716c', '#44403c', // warm neutral (marble)
 ];
+const ACCENT_NAMED = [['Cassie', 'cassie'], ['Monochrome', 'mono'], ['Forest', '#15803d'], ['Ocean', '#1d4ed8'], ['Plum', '#7e22ce'], ['Ember', '#c2410c']];
 function buildAccentSwatches() {
   const wrap = document.getElementById('accent-swatches');
   if (!wrap) return;
   wrap.innerHTML = '';
+  // (computers: a few colours by name first, then the whole palette)
+  const named = document.getElementById('accent-named');
+  if (named) named.innerHTML = ACCENT_NAMED.map(([n, c]) => `<button type="button" class="accent-chip" data-accent="${c}" aria-pressed="false"><i style="--sw:${c === 'cassie' ? 'var(--sw-blush)' : c === 'mono' ? 'var(--sw-ink)' : c}" aria-hidden="true"></i>${n}</button>`).join('');
   const none = document.createElement('button');
   none.type = 'button'; none.className = 'accent-sw accent-none';
   none.dataset.accent = 'cassie'; none.title = 'Cassie: blush and sage';
@@ -5860,9 +5864,12 @@ function buildAccentSwatches() {
   lab.appendChild(inp); wrap.appendChild(lab);
 }
 
+// computers: the list on the left of Settings opens each part
+settingsPanel.querySelector('.set-nav').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (!b) return; setTrail = []; setPage(b.dataset.go); settingsPanel.querySelector('.settings-card').scrollTop = 0; });
 // Mark the swatch matching the saved colour (or "None") as active.
 function syncAccentSwatches() {
   const pick = accentChoice(), cur = pick === 'mono' ? 'mono' : pick || 'cassie';
+  settingsPanel.querySelectorAll('.accent-chip[data-accent]').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.accent.toLowerCase() === cur)));
   const sws = settingsPanel.querySelectorAll('.accent-sw[data-accent]');
   let matched = false;
   sws.forEach((sw) => {
@@ -5949,6 +5956,7 @@ function setPage(page, { back = false } = {}) {
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
   if (page === 'profile') fillYou();
+  settingsPanel.querySelectorAll('.set-nav [data-go]').forEach((b) => { if (b.dataset.go === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   setCard.scrollTop = 0;
 }
 function setBack() { const prev = setTrail.pop(); if (prev) setPage(prev, { back: true }); }
@@ -5988,7 +5996,7 @@ function fillYou() {
 }
 // Favorite-colour swatches: preset click, "None", or a custom colour.
 settingsPanel.addEventListener('click', (e) => {
-  const sw = e.target.closest('.accent-sw[data-accent]');
+  const sw = e.target.closest('.accent-sw[data-accent], .accent-chip[data-accent]');
   if (sw) setAccent(sw.dataset.accent);
 });
 settingsPanel.addEventListener('input', (e) => {
