@@ -5359,6 +5359,16 @@ async function startRoom(code, title) {
     makeQuiz: roomQuiz,
     decks: boardDecks().decks,
     speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
+    // what the room shared, kept after it ends: a deck into your flashcards, the pinned notes as a chat
+    keepDeck: (title, cards) => (window.CassieCards ? window.CassieCards.add(cards.map((c) => ({ f: c.f, b: c.b })), title, 'room') : 0),
+    keepNotes: (notes) => {
+      const c = makeChat();
+      c.title = `Study room notes · ${code}`;
+      c.messages.push({ role: 'assistant', content: `**Notes from study room ${code}**\n\n` + notes.map((n) => `- ${n.text} *(${n.by})*`).join('\n') });
+      c.updatedAt = Date.now();
+      state.chats.push(c); save(); renderChatList();
+      return true;
+    },
     onUnread: (n) => { const b = document.querySelector('[data-room-act="study"]'); if (b) b.textContent = n ? `📚 Study together (${n})` : '📚 Study together'; },
   }) : null;
   const stopRoom = R.stop;

@@ -4,7 +4,7 @@
    a live score board; pinned notes; and a focus timer that runs for everyone at once.
    Everything travels as steps in the room (like the drawing), so someone who joins late sees
    what happened, and nothing is kept after the room ends (a day).
-     window.CassieStudy.attach({ panel, me, name, send, ask, makeQuiz, decks, speak }) → { receive, members, toggle, destroy } */
+     window.CassieStudy.attach({ panel, me, name, send, ask, makeQuiz, decks, speak, keepDeck(title, cards) → how many new, keepNotes([{ text, by }]) → saved }) → { receive, members, toggle, destroy } */
 (function () {
   'use strict';
   const KINDS = new Set(['msg', 'share', 'deck', 'card', 'grade', 'quiz', 'ans', 'note', 'unnote', 'timer']);
@@ -161,6 +161,8 @@
           <div class="sr-row"><button type="button" class="sr-btn soft" data-act="prev" ${S.card.i ? '' : 'disabled'}>‹ Back</button><button type="button" class="sr-btn soft" data-act="say">🔊 Listen</button><button type="button" class="sr-btn" data-act="next" ${S.card.i < d.cards.length - 1 ? '' : 'disabled'}>Next ›</button></div>
           ${S.card.flip ? `<div class="sr-row" style="margin-top:8px"><button type="button" class="sr-btn soft" data-act="got" ${myGrade && myGrade.ok ? 'disabled' : ''}>✓ Got it</button><button type="button" class="sr-btn soft" data-act="miss" ${myGrade && !myGrade.ok ? 'disabled' : ''}>✗ Not yet</button></div>` : ''}
           ${g.size ? `<p class="sr-tally">${[...g.values()].map((x) => `${esc(x.name)} ${x.ok ? '✓' : '✗'}`).join(' · ')}</p>` : ''}`;
+        // keep it: the room ends after a day, the cards stay in your own flashcards
+        if (o.keepDeck) html += `<div class="sr-row" style="margin-top:8px"><button type="button" class="sr-btn soft" data-act="keepdeck">Save this deck to my flashcards</button></div>`;
         if (shared.length > 1) html += `<p class="sr-tally">Other decks: ${shared.filter((x) => x.id !== d.id).map((x) => `<button type="button" class="sr-mini" data-deck="${esc(x.id)}">${esc(x.title)}</button>`).join(' ')}</p>`;
       } else html += '<p class="sr-empty">Share one of your flashcard decks and the whole room studies it together: everyone sees the same card, flips it at the same time, and marks if they got it.</p>';
       html += mine.length ? `<h4 style="margin:18px 0 4px">Share a deck</h4>${mine.map((m, i) => `<div class="sr-deck"><span>${esc(m.name)} <small>${m.cards.length} cards</small></span><button type="button" class="sr-mini" data-share-deck="${i}">Share</button></div>`).join('')}`
@@ -190,6 +192,8 @@
       const list = [...S.notes.entries()];
       body.innerHTML = list.length ? list.map(([id, n]) => `<div class="sr-note">${esc(n.text)}<small>${esc(nameOf(n.uid, n.name))}</small>${n.uid === o.me ? `<button type="button" data-unnote="${esc(id)}" aria-label="Remove this note">×</button>` : ''}</div>`).join('')
         : '<p class="sr-empty">Pin what the group finds while researching, a definition, a source, a formula, who does which part.</p>';
+      // keep them: the room ends after a day, the notes stay in a chat of your own
+      if (list.length && o.keepNotes) body.insertAdjacentHTML('beforeend', '<div class="sr-row" style="margin-top:10px"><button type="button" class="sr-btn soft" data-act="keepnotes">Save the notes to my chats</button></div>');
       foot.hidden = false;
       if (foot.dataset.view !== 'notes') { foot.dataset.view = 'notes'; foot.innerHTML = '<textarea class="sr-in" rows="2" maxlength="600" placeholder="A note for everyone…"></textarea><button type="button" class="sr-btn" data-act="note">Pin</button>'; if (window.CassieMic) window.CassieMic.attach(foot.querySelector('.sr-in')); }
     }
@@ -232,6 +236,16 @@
         try { const qs = await o.makeQuiz(topic); if (qs && qs.length) { input.value = ''; send({ t: 'quiz', topic, qs }); } else el.textContent = 'Try another topic'; }
         catch (e) { el.textContent = 'Couldn’t make it. Try again'; }
         finally { setTimeout(() => { el.disabled = false; el.textContent = 'Make a group quiz'; }, 1200); }
+        return;
+      }
+      if (a === 'keepdeck' && S.card) {
+        const d = S.decks.get(S.card.deck), n = d ? o.keepDeck(d.title, d.cards) : 0;
+        el.disabled = true; el.textContent = n ? `Saved ${n} ${n === 1 ? 'card' : 'cards'} to “${d.title}”` : 'Already in your flashcards';
+        return;
+      }
+      if (a === 'keepnotes') {
+        const list = [...S.notes.values()];
+        if (list.length && o.keepNotes(list.map((n) => ({ text: n.text, by: nameOf(n.uid, n.name) })))) { el.disabled = true; el.textContent = 'Saved to your chats'; }
         return;
       }
       if (a === 'note') { const t = cut(input.value, 600); if (!t) { input.focus(); return; } input.value = ''; send({ t: 'note', text: t }); }
