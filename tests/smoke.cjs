@@ -2500,6 +2500,23 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
   }
 });
 
+test('Taglish and named exams: a question in Taglish is sent with the rule to answer in Taglish (chat and files), and the pricing names real exams and says you can ask in Taglish', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Ang **mole** ay 6.02 × 10^23 particles.' }) });
+  await ask(page, 'Ano ba yung mole sa chem? Di ko gets yung concept');
+  const sys = groqCalls.at(-1).messages[0].content;
+  expect(/Taglish \(English and Filipino mixed\) gets natural Taglish/.test(sys) && /technical terms in English/.test(sys), 'the chat prompt says to answer in Taglish when asked in Taglish');
+  const doc = await page.evaluate(() => leanDocSystem());
+  expect(/Taglish/.test(doc), 'the file prompt says it too');
+  await page.goto(APP.replace('app.html', 'index.html'));
+  const pricing = await page.locator('#pricing').innerText();
+  expect(/Name your exam, like Gen Chem finals, Pre-Calc, the NLE or the LET/.test(pricing), 'the pricing names real exams: ' + pricing.slice(0, 300));
+  expect(/Pasado Pass for Gen Chem, Pre-Calc, the NLE, the LET or any exam you name/.test(pricing), 'Plus names them too');
+  expect(/Ask in Taglish, Filipino or English/.test(pricing), 'Free says you can ask in Taglish');
+  expect(!/[–—]/.test(pricing), 'no long dashes');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('exam readiness: practice quiz answers on a plan’s topics show how ready you are (a topic not yet practised counts as 0), from an exam task’s quiz and from Quiz me with a topic typed', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null, chats: [{ id: 'h1', title: 'Moles', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A count.' }], updatedAt: Date.now() }] } });
   const hub = '#home .hub';
