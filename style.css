@@ -1511,9 +1511,11 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .side-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; outline: none; }
 .side-search:focus-within { border-color: var(--text); }
 .side-search-btn { display: none; }
-/* "Menu" folds the tool list away, so New chat, the timer and Recents sit near the top */
-.side-menu-label { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 32px; margin: 0 0 4px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
-.side-menu-label:hover { color: var(--text); }
+/* "Menu" folds the tool list away, so New chat, the timer and Recents sit near the top.
+   It's a pill with an arrow, so it reads as a button with more inside */
+.side-menu-label { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-height: 32px; margin: 0 0 6px; padding: 0 12px 0 14px; border: 1.5px solid color-mix(in srgb, var(--primary) 55%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.side-menu-label:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); border-color: var(--primary); }
+.side-menu-label:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .side-menu-label svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
 .side-menu-label[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .sidebar.tools-folded .side-tools { display: none; }
@@ -1568,7 +1570,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
   body:not(.side-open) .sidebar-head { justify-content: center; padding: 0; }
   body:not(.side-open) .side-search-btn { display: grid; place-items: center; width: 100%; height: 40px; margin: 0 0 12px; border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); cursor: pointer; }
   body:not(.side-open) .side-search-btn:hover { color: var(--text); }
-  body:not(.side-open) .side-menu-label { justify-content: center; padding: 0 0 6px; font-size: 11px; letter-spacing: .02em; pointer-events: none; } /* (Apple's smallest on a computer: 10pt) */
+  body:not(.side-open) .side-menu-label { display: flex; justify-content: center; width: 100%; min-height: 24px; padding: 0 0 6px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; letter-spacing: .02em; pointer-events: none; } /* (Apple's smallest on a computer: 10pt) */
   body:not(.side-open) .side-menu-label svg { display: none; }
   body:not(.side-open) .sidebar.tools-folded .side-tools { display: flex; } /* (the rail always shows every tool) */
   body:not(.side-open) .side-tool { justify-content: center; padding: 8px 0; }
@@ -2340,6 +2342,12 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .ex-plan, .wk-card { padding: 14px; border-radius: 22px; background: var(--surface); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge); color: var(--text); }
 .ex-head b { display: block; font-size: 1.05rem; line-height: 1.25; }
 .ex-head small, .wk-dates { display: block; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
+.ex-what { margin: 6px 0 0; font-size: .9rem; line-height: 1.4; }
+.ex-what span { display: block; overflow-wrap: anywhere; }
+.ex-what em { font-style: normal; font-weight: 650; }
+.ex-plan { transition: box-shadow .4s ease; }
+.ex-plan.ex-flash { box-shadow: 0 0 0 3px var(--focus); }
+@media (prefers-reduced-motion: reduce) { .ex-plan { transition: none; } }
 .ex-tasks { list-style: none; margin: 10px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ex-tasks li { display: flex; align-items: center; gap: 4px; min-height: 44px; }
 .ex-tasks li.ex-rest { color: var(--text); font-size: .9rem; }

@@ -2442,6 +2442,64 @@ test('first run: an exam given in the questions becomes a plan as soon as they�
   await ctx.close();
 });
 
+test('first run with an exam: the card says Your Exam Plan with the subject and topics, the tour comes next, then See my exam plan goes to the plan (phone: from the Chat tab after the tour; computer: from a chat, after Not now); the sidebar Menu is a pill with an arrow that opens the tools', async (b) => {
+  const fakeGroq = (body) => {
+    const t = JSON.stringify(body);
+    if (!/day by day study plan/.test(t)) return { text: 'Hi!' };
+    const [, from] = t.match(/Plan these days: (\d{4}-\d{2}-\d{2}) to/);
+    return { text: JSON.stringify({ days: [{ date: from, tasks: [{ kind: 'learn', topic: 'Stoichiometry' }, { kind: 'quiz', topic: 'Gas laws' }] }] }) };
+  };
+  const inView = (page, sel) => page.evaluate((s) => { const e = [...document.querySelectorAll(s)].find((x) => x.offsetParent); const r = e && e.getBoundingClientRect(); return !!r && r.height > 0 && r.top < innerHeight && r.bottom > 0; }, sel);
+  for (const [device, viewport, where] of [['iPhone 13', { width: 390, height: 844 }, '#home .hub .ex-plan'], ['Desktop Chrome', { width: 1280, height: 800 }, '#chat-log .ex-plan']]) {
+    const phone = viewport.width < 700;
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, server: false, lite: 'off', state: { profile: null, groqKey: 'gsk_test', tab: 'home', plan: null }, fakeGroq });
+    const date = await page.evaluate(() => dayAdd(phDay(), 6));
+    await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
+    if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
+    await onboard(page, { name: 'Mika', grade: 'Grade 10', exam: { name: 'Gen Chem finals', date, topics: 'Stoichiometry, gas laws' } });
+    await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
+    // the card: Your Exam Plan, then what subject and what topics
+    const card = page.locator(where).first();
+    await card.waitFor({ timeout: 10000 });
+    const head = await card.locator('.ex-head').innerText();
+    expect(/^Your Exam Plan\b/.test(head) && /Subject:\s*Gen Chem finals/.test(head) && /Topics:\s*Stoichiometry, gas laws/.test(head), `${viewport.width}: the card says Your Exam Plan, the subject and the topics: ` + head + ' | ' + await card.locator('.ex-head').evaluate((e) => e.outerHTML));
+    // the tour is next, and no plan prompt yet
+    await page.waitForSelector('.tour-offer', { timeout: 5000 });
+    expect(!(await page.locator('.ex-ready-sheet').count()), `${viewport.width}: no plan prompt before the tour`);
+    if (phone) { // the tour, then leave it on the Chat tab
+      await page.click('.tour-offer [data-t="go"]');
+      await page.waitForFunction(() => window.CassieTour.active, null, { timeout: 5000 });
+      expect(!(await page.locator('.ex-ready-sheet').count()), 'no plan prompt during the tour');
+      await page.evaluate(() => window.CassieTour.stop());
+    } else await page.click('.tour-offer [data-t="later"]');
+    await page.waitForSelector('.ex-ready-sheet', { timeout: 5000 });
+    const sheet = await page.locator('.ex-ready-sheet').innerText();
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/exam-ready-${viewport.width}.png` });
+    expect(/Your Exam Plan is ready/.test(sheet) && /Subject:\s*Gen Chem finals/.test(sheet) && /Topics:\s*Stoichiometry, gas laws/.test(sheet) && /Exam day:/.test(sheet), `${viewport.width}: after the tour, the plan with its subject, day and topics: ` + sheet);
+    // somewhere else, then See my exam plan brings the plan back into view
+    if (phone) await page.evaluate(() => window.CassieNative.go('chat'));
+    else await page.evaluate(() => { state.messages.push({ role: 'user', content: 'hi' }, { role: 'assistant', content: 'Hello!' }); save(); renderHistory(); });
+    expect(!(await inView(page, where)), `${viewport.width}: the plan is out of sight first`);
+    await page.click('.ex-ready-sheet .exr-see');
+    await page.waitForFunction((s) => { const e = [...document.querySelectorAll(s)].find((x) => x.offsetParent); const r = e && e.getBoundingClientRect(); return !!r && r.top < innerHeight && r.bottom > 0; }, where, { timeout: 5000 });
+    expect(!(await page.locator('.ex-ready-sheet').count()), `${viewport.width}: the prompt closed`);
+    if (process.env.SHOTS) { await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/exam-card-${viewport.width}.png` }); }
+    // the sidebar Menu: a pill (round ends, a visible edge) with an arrow, and it opens the tools
+    if (phone) { await page.evaluate(() => window.CassieNative.go('chat')); await page.tap('#menu-btn'); await page.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 2000 }); await page.waitForTimeout(300); }
+    else if (!(await page.evaluate(() => document.body.classList.contains('side-open')))) { await page.click('#side-toggle'); await page.waitForTimeout(350); }
+    const pill = await page.evaluate(() => {
+      const m = document.getElementById('side-menu-toggle'), cs = getComputedStyle(m), r = m.getBoundingClientRect(), svg = m.querySelector('svg');
+      return { h: r.height, w: r.width, side: document.getElementById('sidebar').getBoundingClientRect().width, radius: parseFloat(cs.borderTopLeftRadius), border: parseFloat(cs.borderTopWidth), bg: cs.backgroundColor, arrow: !!svg && getComputedStyle(svg).display !== 'none' && svg.getBoundingClientRect().width > 0, text: m.innerText.trim() };
+    });
+    expect(pill.radius >= pill.h / 2 - 1 && pill.border >= 1 && pill.bg !== 'rgba(0, 0, 0, 0)' && pill.arrow && pill.w < pill.side / 2 && /menu/i.test(pill.text), `${viewport.width}: Menu is an oval pill with an arrow: ` + JSON.stringify(pill));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/menu-pill-${viewport.width}.png` });
+    await page.click('#side-menu-toggle');
+    expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'true' && await page.locator('#side-tools .side-tool').first().isVisible(), `${viewport.width}: the pill opens the tools`);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('exam readiness: practice quiz answers on a plan’s topics show how ready you are (a topic not yet practised counts as 0), from an exam task’s quiz and from Quiz me with a topic typed', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null, chats: [{ id: 'h1', title: 'Moles', messages: [{ role: 'user', content: 'What is a mole?' }, { role: 'assistant', content: 'A count.' }], updatedAt: Date.now() }] } });
   const hub = '#home .hub';

@@ -2277,9 +2277,11 @@ function examSection() {
       return;
     }
     const left = dayGap(today, e.date), todays = (e.days.find((d) => d.date === today) || { tasks: [] }).tasks;
-    card.innerHTML = `<div class="ex-head"><b></b><small></small></div><ul class="ex-tasks"></ul>
+    card.innerHTML = `<div class="ex-head"><b>Your Exam Plan</b><p class="ex-what"><span class="ex-subj"><em>Subject:</em> </span><span class="ex-tops"><em>Topics:</em> </span></p><small></small></div><ul class="ex-tasks"></ul>
       <div class="ex-actions"><button type="button" class="ex-all" aria-expanded="false">See the whole plan</button><button type="button" class="ex-del">Delete</button></div><ol class="ex-days" hidden></ol>`;
-    card.querySelector('.ex-head b').textContent = e.name;
+    card.querySelector('.ex-subj').append(e.name);
+    const tops = (e.topics || '').trim() || examTopics(e).join(', ');
+    if (tops) card.querySelector('.ex-tops').append(tops); else card.querySelector('.ex-tops').remove();
     card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${done} of ${all.length} tasks done`;
     // how ready: from your practice quizzes on the plan's topics (shown once you've practised one)
     const ready = examReadiness(e);
@@ -2390,7 +2392,8 @@ function openExamSheet(pre = null) {
     date: (v) => (!v ? 'exam_date_needed' : v < today ? 'exam_date_past' : v > dayAdd(today, 365) ? 'exam_date_far' : ''),
     topics: (v) => (v.trim() || notes ? '' : 'exam_topics_needed'),
   });
-  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); if (pre && pre.then) { const t = pre.then; pre.then = null; t(); } };
+  let made = null;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); if (pre && pre.then) { const t = pre.then; pre.then = null; t(made); } };
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.plus-sheet')) { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   w.querySelector('.ex-cancel').addEventListener('click', close);
@@ -2402,6 +2405,7 @@ function openExamSheet(pre = null) {
     btn.disabled = true; status.textContent = 'Cassie is making your plan…';
     try {
       const e = await makeExamPlan({ name: noDashes(f.name.value.trim()).slice(0, 60), date: f.date.value, topics: noDashes(f.topics.value.trim()).slice(0, 600), notes });
+      made = e;
       close();
       if (onPhoneHome()) window.CassieNative.go('home');
       refreshHub();
@@ -7215,13 +7219,47 @@ function frFinish(a) {
   frSave(null);
   frClose();
   syncAccount(true);
-  // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour
+  // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour, then the plan
   const ex = a.exam || {};
-  if (ex.name && ex.date && ex.topics) setTimeout(() => openExamSheet({ ...ex, auto: true, then: offerTour }), 300);
+  if (ex.name && ex.date && ex.topics) setTimeout(() => openExamSheet({ ...ex, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
   else offerTour();
 }
-// right after the first run (signed in or as a guest): a quick tour?, asked once, ever
-function offerTour() { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(); }, 700); }
+// right after the first run (signed in or as a guest): a quick tour?, asked once, ever; after: once it's over
+function offerTour(after = null) { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(after); else if (after) after(); }, 700); }
+// after the tour: your new exam plan, one tap away
+function examReadySheet(e) {
+  if (!examsNow().some((x) => x.id === e.id)) return;
+  document.querySelector('.ex-ready-sheet')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet ex-ready-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'ex-ready-h');
+  w.innerHTML = `<div class="plus-card">
+    <h3 id="ex-ready-h">Your Exam Plan is ready</h3>
+    <p class="plus-why"><b>Subject:</b> <span class="exr-subj"></span><br><b>Exam day:</b> <span class="exr-day"></span><br><b>Topics:</b> <span class="exr-tops"></span></p>
+    <div class="plus-actions"><button type="button" class="plus-go exr-see">See my exam plan</button><button type="button" class="plus-ok">Not now</button></div></div>`;
+  w.querySelector('.exr-subj').textContent = e.name;
+  w.querySelector('.exr-day').textContent = dayName(e.date);
+  w.querySelector('.exr-tops').textContent = (e.topics || '').trim() || examTopics(e).join(', ');
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (k) => { if (k.key === 'Escape') { k.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.querySelector('.plus-ok').addEventListener('click', close);
+  w.addEventListener('click', (k) => { if (k.target === w) close(); });
+  w.querySelector('.exr-see').addEventListener('click', () => { close(); showExamPlan(e.id); });
+  document.body.appendChild(w);
+  w.querySelector('.exr-see').focus({ preventScroll: true });
+}
+// the plan lives on Home: the Home tab on a phone, an empty new chat on a computer
+function showExamPlan(id) {
+  if (onPhoneHome()) window.CassieNative.go('home');
+  else if (state.messages.length) createNewChat();
+  refreshHub();
+  requestAnimationFrame(() => {
+    const card = [...document.querySelectorAll('.ex-plan')].find((c) => c.dataset.id === id && c.offsetParent);
+    if (!card) return;
+    card.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    card.classList.add('ex-flash'); setTimeout(() => card.classList.remove('ex-flash'), 1600);
+  });
+}
 // where the first run starts: a returning student never sees it; a reload carries on
 function firstRun() {
   const saved = frLoad();

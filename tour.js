@@ -8,7 +8,7 @@
    detourToElement, resumeFollowing, openSettings, closeSettings, voiceGender and cleanForSpeech.
    After the tour, on a computer, a short video shows how the Chrome extension works (once; again from
    Settings, then Help).
-   window.CassieTour = { offer(), start(), stop(), video(), get active } */
+   window.CassieTour = { offer(after), start(), stop(), video(), get active } */
 (function () {
   'use strict';
   const phone = () => document.documentElement.classList.contains('native');
@@ -42,9 +42,12 @@
   ];
 
   /* ---------- the offer: once, right after the first run ---------- */
-  let offerBox = null;
-  function offer() {
-    if (state.tour || run || offerBox) return; // (asked once, ever: this device or the account)
+  let offerBox = null, after = null;
+  // after: runs once the offer is answered and the tour (and its video) is over
+  const thenAfter = () => { const f = after; after = null; if (f) setTimeout(f, 300); };
+  function offer(then) {
+    if (then) after = then;
+    if (state.tour || run || offerBox) { if (!run && !offerBox) thenAfter(); return; } // (asked once, ever: this device or the account)
     state.tour = 'offered'; save(); if (typeof syncAccount === 'function') syncAccount();
     offerBox = document.createElement('div');
     offerBox.className = 'tour-offer'; offerBox.setAttribute('role', 'dialog'); offerBox.setAttribute('aria-label', 'A quick tour');
@@ -58,6 +61,7 @@
       offerBox.innerHTML = '<p>Okay! You can take the tour any time: open Settings, then Help, then Take the tour.</p>';
       offerBox.setAttribute('role', 'status');
       setTimeout(closeOffer, 6000);
+      thenAfter();
     });
     try { offerBox.querySelector('.tour-main').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
   }
@@ -198,6 +202,7 @@
     if (b.settings) { openSettings('all'); if (b.settings !== 'all' && typeof setPage === 'function') setPage(b.settings); }
     try { if (b.focus && b.focus.isConnected) b.focus.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
     if (how === 'done' && !b.phone && !phone() && !state.extVideoSeen) setTimeout(video, 400);
+    else thenAfter();
   }
 
   /* ---------- the Chrome extension, in a 38 second video (computers only: it needs Chrome or Edge) ---------- */
@@ -222,6 +227,7 @@
       videoBox.remove(); videoBox = null;
       document.removeEventListener('keydown', key, true);
       try { if (back && back.isConnected) back.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+      thenAfter();
     };
     const key = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
