@@ -1038,14 +1038,27 @@ test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance tab
   await page.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
   const names = await page.locator('.set-plans .plan h3').allInnerTexts();
   expect(names.join() === 'Free,Plus,Pro', 'three plans: ' + names.join());
-  const pro = (await page.locator('.set-plans .plan-pro').innerText()).replace(/\s+/g, ' ');
-  expect(/₱1,999 a semester, about ₱13 a day/.test(pro) && /Or ₱499 a month/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Coming soon/.test(pro), 'Pro: ' + pro);
+  // prices a month first (smaller numbers), with no Pasado Pass yet
+  const text = async (sel) => (await page.locator(sel).innerText()).replace(/\s+/g, ' ');
+  expect(await page.locator('.set-plans [data-bill="m"]').getAttribute('aria-pressed') === 'true', 'Monthly is picked at first');
+  let plus = await text('.set-plans .plan-plus'), pro = await text('.set-plans .plan-pro');
+  expect(/₱149 a month/.test(plus) && !/₱599 a semester/.test(plus) && !/Pasado Pass/.test(plus) && /Renews each month until you cancel in Settings\. 7 days to change your mind\. Or ₱599 once for the whole semester\./.test(plus), 'Plus, a month: ' + plus);
+  expect(/₱499 a month/.test(pro) && !/₱1,999 a semester/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Coming soon/.test(pro), 'Pro, a month: ' + pro);
+  const priceRow = () => page.evaluate(() => [...document.querySelectorAll('.set-plans .plan-compare tbody tr:first-child td')].map((x) => x.innerText.trim()).join('|'));
+  expect(await priceRow() === '₱0|₱149 a month|₱499 a month', 'the table, a month: ' + await priceRow());
+  if (process.env.SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly.png' }); await page.locator('.set-plans .plan-plus').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly-plus.png' }); await page.locator('.set-plans .bill-seg').scrollIntoViewIfNeeded(); }
+  // Semester: the one-payment prices and the Pasado Pass
+  await page.click('.set-plans [data-bill="s"]');
+  plus = await text('.set-plans .plan-plus'); pro = await text('.set-plans .plan-pro');
+  expect(/₱599 a semester, about ₱4 a day/.test(plus) && /Pasado Pass/.test(plus) && !/₱149 a month Renews/.test(plus), 'Plus, a semester: ' + plus);
+  expect(/₱1,999 a semester, about ₱13 a day/.test(pro) && /Or ₱499 a month/.test(pro), 'Pro, a semester: ' + pro);
+  expect(await page.locator('.set-plans [data-bill="s"]').getAttribute('aria-pressed') === 'true', 'Semester is shown as picked');
   expect(/Best for school/.test(await page.locator('.set-plans .plan-plus').innerText()) && !(await page.locator('.set-plans .plan-pro .plan-badge').count()), 'only Plus is Best for school');
   const T = await page.evaluate(() => {
     const t = document.querySelector('.set-plans .plan-compare'), box = document.querySelector('.set-plans');
     return t && { cols: [...t.querySelectorAll('thead th')].map((x) => x.textContent.trim()), w: t.getBoundingClientRect().width, right: t.getBoundingClientRect().right, inner: innerWidth, scroll: box.scrollWidth - box.clientWidth, price: [...t.querySelectorAll('tbody tr:first-child td')].map((x) => x.textContent) };
   });
-  expect(T && T.cols.slice(1).join() === 'Free,Plus,Pro' && T.price.join('|') === '₱0|₱599 a semester|₱1,999 a semester', 'the table compares all three: ' + JSON.stringify(T));
+  expect(T && T.cols.slice(1).join() === 'Free,Plus,Pro' && T.price.join('|').replace(/₱149 a month|₱499 a month/g, '') === '₱0|₱599 a semester|₱1,999 a semester', 'the table compares all three: ' + JSON.stringify(T));
   expect(T.right <= T.inner && T.scroll <= 1, 'it fits a phone, no sideways scrolling: ' + JSON.stringify(T));
   if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: process.env.SHOTS + '/plans-phone.png' }); await page.locator('.set-plans .plan-pro').scrollIntoViewIfNeeded(); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-phone-pro.png' }); }
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -1104,6 +1117,7 @@ test('the Pasado Pass: the pricing page opens on Semester with the pass, its pri
   const { ctx: actx, page: app, errors } = await open(b, { server: false, state: { plan: null } });
   await app.evaluate(() => openSettings('plans'));
   await app.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
+  await app.click('.set-plans [data-bill="s"]'); // (a month shows first; the pass is under Semester)
   const plans = (await app.locator('.set-plans').innerText()).replace(/\s+/g, ' ');
   expect(/Best for school/.test(plans) && /Pasado Pass/.test(plans) && /₱599 a semester, about ₱4 a day/.test(plans) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(plans) && !/Most popular/.test(plans), 'the app’s Plans: ' + plans);
   await app.evaluate(() => { closeSettings(); plusSheet('The 3D human body'); });
