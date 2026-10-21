@@ -2276,7 +2276,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .set-link:hover .set-chev { stroke: var(--text); }
 /* Plans */
 .set-plans-sub { margin: 0 2px 14px; color: var(--muted); }
-.plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; }
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 0 0 14px; }
 @media (max-width: 480px) { .plan-grid { grid-template-columns: 1fr; } }
 .plan { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 18px 16px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--lg-edge); }
 .plan-plus { border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
@@ -2291,6 +2291,15 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .plan-go { background: var(--primary); color: var(--on-primary); }
 .plan-go:active { background: var(--primary-dark); }
 .plan-now { border: 1px solid var(--border); color: var(--muted); }
+.plan-go-line { background: transparent; color: var(--text); border: 1.5px solid var(--text); }
+.plan-go-line:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* the three at a glance (a phone fits all three columns) */
+.plan-compare { width: 100%; margin: 0 0 16px; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--surface); font-size: .84rem; line-height: 1.3; table-layout: fixed; }
+.plan-compare caption { caption-side: top; text-align: left; padding: 0 2px 8px; font-weight: 750; color: var(--text); }
+.plan-compare th, .plan-compare td { padding: 9px 6px; text-align: center; vertical-align: middle; border-top: 1px solid var(--border); color: var(--text); overflow-wrap: anywhere; }
+.plan-compare thead th { border-top: 0; font-weight: 750; }
+.plan-compare tbody th { text-align: left; padding-left: 12px; font-weight: 600; color: var(--muted); width: 30%; }
+.plan-compare .pc-plus { background: color-mix(in srgb, var(--primary) 8%, transparent); font-weight: 650; }
 @media (prefers-reduced-motion: reduce) { .set-link, .set-edit { transition: none; } }
 
 /* ---------- Home: the hub ----------

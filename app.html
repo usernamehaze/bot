@@ -478,9 +478,20 @@
       </section>
       </div>
 
-      <!-- Plans: Free and Plus (paid plans are coming: nothing here takes a payment) -->
+      <!-- Plans: Free, Plus and Pro (paid plans are coming: nothing here takes a payment) -->
       <section class="set-plans" data-page-only="plans" aria-label="Plans">
-        <p class="set-plans-sub">Free forever, no card needed. When you want more, one payment covers your whole semester. Plus is coming soon.</p>
+        <p class="set-plans-sub">Free forever, no card needed. When you want more, one payment covers your whole semester. Plus and Pro are coming soon.</p>
+        <!-- the three side by side first, so it's quick to compare on a phone -->
+        <table class="plan-compare">
+          <caption>At a glance</caption>
+          <thead><tr><th scope="col"><span class="sr-only">What you get</span></th><th scope="col">Free</th><th scope="col" class="pc-plus">Plus</th><th scope="col">Pro</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Price</th><td>₱0</td><td class="pc-plus">₱599 a semester</td><td>₱1,999 a semester</td></tr>
+            <tr><th scope="row">Questions a day</th><td>20</td><td class="pc-plus">100</td><td>150</td></tr>
+            <tr><th scope="row">Smarter answers a day</th><td>10</td><td class="pc-plus">100</td><td>15 smartest, then 100</td></tr>
+            <tr><th scope="row">Gemini pictures</th><td>3 a week</td><td class="pc-plus">5 a day</td><td>20 a day</td></tr>
+          </tbody>
+        </table>
         <div class="plan-grid">
           <article class="plan">
             <h3>Free</h3>
@@ -509,6 +520,18 @@
               <li>Up to 5 exam plans, and plans from your notes</li>
             </ul>
             <a class="plan-go" href="index.html#pricing" target="_blank" rel="noopener">Coming soon</a>
+          </article>
+          <article class="plan plan-pro">
+            <h3>Pro</h3>
+            <p class="plan-price"><b>₱1,999</b> a semester, about ₱13 a day</p>
+            <p class="plan-under">One payment for 5 months. Never renews. 7 days to change your mind. Or ₱499 a month.</p>
+            <ul>
+              <li>Everything in Plus</li>
+              <li>150 questions a day</li>
+              <li>15 answers a day from Cassie’s smartest model, then 100 from the smarter one</li>
+              <li>20 Gemini pictures a day</li>
+            </ul>
+            <a class="plan-go plan-go-line" href="index.html#pricing" target="_blank" rel="noopener">Coming soon</a>
           </article>
         </div>
         <p class="field-hint">Daily limits start again at midnight, Philippine time. Paid plans are launching soon; everything on Free works today.</p>

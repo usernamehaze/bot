@@ -1026,6 +1026,30 @@ test('the pricing page and the app’s Plans say exactly what the server allows:
   const plans = app.slice(app.indexOf('class="set-plans"'), app.indexOf('</section>', app.indexOf('class="set-plans"'))).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   expect(plans.includes(`${lim.free.q} questions a day`) && plans.includes(`${lim.plus.q} questions a day`) && plans.includes(`${lim.plus.gpic} Gemini pictures a day`) && plans.includes(`${quick} quick pictures a day, plus ${lim.free.gpic} Gemini pictures a week`), 'the app’s Plans match the server: ' + plans);
   expect(!/research runs|file reviewers|Unlimited (questions|voice)|Unlimited means/i.test(plans), 'the app’s Plans promise nothing the code doesn’t do: ' + plans);
+  // Pro too, and the at-a-glance table, with the server's own numbers
+  expect(plans.includes(`${lim.pro.q} questions a day`) && plans.includes(`${lim.pro.smartest} answers a day from Cassie’s smartest model, then ${lim.pro.smart} from the smarter one`) && plans.includes(`${lim.pro.gpic} Gemini pictures a day`), 'the app’s Pro matches the server: ' + plans);
+  const row = (name) => (plans.match(new RegExp(name + ' (.+?) (?=Questions a day|Smarter answers a day|Gemini pictures|Free Plus)')) || [])[1] || '';
+  expect(row('Questions a day') === `${lim.free.q} ${lim.plus.q} ${lim.pro.q}` && row('Smarter answers a day') === `${lim.free.smart} ${lim.plus.smart} ${lim.pro.smartest} smartest, then ${lim.pro.smart}`, 'the table matches the server: ' + JSON.stringify([row('Questions a day'), row('Smarter answers a day')]));
+});
+
+test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, server: false, state: { plan: null, groqKey: 'gsk_test' } });
+  await page.evaluate(() => openSettings('plans'));
+  await page.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
+  const names = await page.locator('.set-plans .plan h3').allInnerTexts();
+  expect(names.join() === 'Free,Plus,Pro', 'three plans: ' + names.join());
+  const pro = (await page.locator('.set-plans .plan-pro').innerText()).replace(/\s+/g, ' ');
+  expect(/₱1,999 a semester, about ₱13 a day/.test(pro) && /Or ₱499 a month/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Coming soon/.test(pro), 'Pro: ' + pro);
+  expect(/Best for school/.test(await page.locator('.set-plans .plan-plus').innerText()) && !(await page.locator('.set-plans .plan-pro .plan-badge').count()), 'only Plus is Best for school');
+  const T = await page.evaluate(() => {
+    const t = document.querySelector('.set-plans .plan-compare'), box = document.querySelector('.set-plans');
+    return t && { cols: [...t.querySelectorAll('thead th')].map((x) => x.textContent.trim()), w: t.getBoundingClientRect().width, right: t.getBoundingClientRect().right, inner: innerWidth, scroll: box.scrollWidth - box.clientWidth, price: [...t.querySelectorAll('tbody tr:first-child td')].map((x) => x.textContent) };
+  });
+  expect(T && T.cols.slice(1).join() === 'Free,Plus,Pro' && T.price.join('|') === '₱0|₱599 a semester|₱1,999 a semester', 'the table compares all three: ' + JSON.stringify(T));
+  expect(T.right <= T.inner && T.scroll <= 1, 'it fits a phone, no sideways scrolling: ' + JSON.stringify(T));
+  if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: process.env.SHOTS + '/plans-phone.png' }); await page.locator('.set-plans .plan-pro').scrollIntoViewIfNeeded(); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-phone-pro.png' }); }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('the Pasado Pass: the pricing page opens on Semester with the pass, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
@@ -7535,8 +7559,9 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     // Plans: Free and Plus side by side, Plus best for school, Coming soon, and nothing that takes a payment
     await page.click('.set-link[data-open="plans"]');
     const plans = await page.locator('.set-plans').innerText();
-    expect(/Free/.test(plans) && /Plus/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free and Plus: ` + plans);
-    expect(await page.locator('.set-plans .plan-go').innerText() === 'Coming soon' && await page.locator('.set-plans .plan-go').getAttribute('href') === 'index.html#pricing', `${size}: Coming soon goes to the plans page`);
+    expect(/Free/.test(plans) && /Plus/.test(plans) && /Pro/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free, Plus and Pro: ` + plans);
+    const gos = await page.locator('.set-plans .plan-go').evaluateAll((a) => a.map((x) => [x.textContent.trim(), x.getAttribute('href')]));
+    expect(gos.length === 2 && gos.every(([t, h]) => t === 'Coming soon' && h === 'index.html#pricing'), `${size}: Coming soon goes to the plans page: ` + JSON.stringify(gos));
     expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
