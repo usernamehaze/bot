@@ -2059,6 +2059,8 @@ function progressMark(right, fixed) {
    topic counts its last 10 answers; a topic you haven't practised counts as 0, so the number only grows
    by practising every topic. It's practice, not a promise about the grade, and the card says so. */
 const topicKey = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// the plan's topics as Cassie wrote them (for showing; examTopics is for matching)
+const planTopics = (e) => { const seen = new Set(); return (e.days || []).flatMap((d) => d.tasks).filter((t) => t.topic && t.kind !== 'mistakes').map((t) => t.topic.trim()).filter((t) => { const k = topicKey(t); if (!k || seen.has(k)) return false; seen.add(k); return true; }); };
 const examTopics = (e) => [...new Set((e.days || []).flatMap((d) => d.tasks).filter((t) => t.topic && t.kind !== 'mistakes').map((t) => topicKey(t.topic)).filter(Boolean))];
 function examMark(topic, right) {
   const k = topicKey(topic);
@@ -2281,7 +2283,7 @@ function examSection() {
     card.innerHTML = `<div class="ex-head"><b>Your Exam Plan</b><p class="ex-what"><span class="ex-subj"><em>Subject:</em> </span><span class="ex-tops"><em>Topics:</em> </span></p><small></small></div><ul class="ex-tasks"></ul>
       <div class="ex-actions"><button type="button" class="ex-all" aria-expanded="false">See the whole plan</button><button type="button" class="ex-del">Delete</button></div><ol class="ex-days" hidden></ol>`;
     card.querySelector('.ex-subj').append(e.name);
-    const tops = (e.topics || '').trim() || examTopics(e).join(', ');
+    const tops = (e.topics || '').trim() || planTopics(e).join(', ');
     if (tops) card.querySelector('.ex-tops').append(tops); else card.querySelector('.ex-tops').remove();
     card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${done} of ${all.length} tasks done`;
     // how ready: from your practice quizzes on the plan's topics (shown once you've practised one)
@@ -2375,7 +2377,8 @@ function openExamSheet(pre = null) {
     });
     chips.appendChild(c);
   });
-  let notes = null;
+  let notes = (pre && pre.notes && pre.notes.text) || null;
+  const fromStart = !!notes; // (Free's one plan from notes, from the first questions)
   const fileIn = w.querySelector('input[type=file]');
   w.querySelector('.ex-file-btn').addEventListener('click', () => {
     if (!isSubscriber()) { plusSheet('Plans from your notes', 'Plus builds your exam plan from your notes, slides or reviewer.'); return; }
@@ -2407,6 +2410,7 @@ function openExamSheet(pre = null) {
     try {
       const e = await makeExamPlan({ name: noDashes(f.name.value.trim()).slice(0, 60), date: f.date.value, topics: noDashes(f.topics.value.trim()).slice(0, 600), notes });
       made = e;
+      if (fromStart && !isSubscriber()) { state.freeNotesPlan = true; save(); }
       close();
       if (onPhoneHome()) window.CassieNative.go('home');
       refreshHub();
@@ -2422,7 +2426,7 @@ function openExamSheet(pre = null) {
   };
   f.addEventListener('submit', (e) => { e.preventDefault(); make(); });
   document.body.appendChild(w);
-  if (pre) { f.name.value = pre.name || ''; f.date.value = pre.date || ''; f.topics.value = pre.topics || ''; }
+  if (pre) { f.name.value = pre.name || ''; f.date.value = pre.date || ''; f.topics.value = pre.topics || ''; if (fromStart) w.querySelector('.ex-file-name').textContent = pre.notes.name; }
   if (pre && pre.auto) make(); else f.name.focus();
 }
 
@@ -7152,9 +7156,10 @@ function frOnboard(at = 0) {
         <label class="fr-q2"><span>Your age</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
     { h: 'What do you want help with?', sub: 'Pick any.', body: `<div class="fr-picks">${HELP_WITH.map(([v, l]) => `<button type="button" class="fr-pick" data-help="${v}" aria-pressed="false">${l}</button>`).join('')}</div>` },
     // an exam coming up: Cassie plans for it the moment the questions are done (empty: no plan)
-    { h: 'Got an exam coming up?', sub: 'Cassie makes you a day by day plan to it. Leave this empty if not.', body: `<input class="fr-big" name="exam" maxlength="60" autocomplete="off" placeholder="Gen Chem finals" aria-label="Your exam">
+    { h: 'Got an exam coming up?', sub: 'Cassie makes you a day by day plan to it. Leave this empty if not.', body: `<input class="fr-big" name="exam" maxlength="60" autocomplete="off" placeholder="Put your exam or subject" aria-label="Your exam or subject">
         <label class="fr-q2"><span>Exam day</span><input class="fr-age fr-wide" name="examDate" type="date" min="${today}" max="${dayAdd(today, 365)}"></label>
-        <label class="fr-q2"><span>Topics</span><input class="fr-age fr-wide" name="examTopics" maxlength="600" autocomplete="off" placeholder="Stoichiometry, gas laws"></label>` },
+        <label class="fr-q2"><span>Topics</span><input class="fr-age fr-wide" name="examTopics" maxlength="600" autocomplete="off" placeholder="Put your topics"></label>
+        <div class="fr-q2 fr-notes"><button type="button" class="fr-file">Or add your notes or slides</button><input type="file" accept=".pdf,.docx,.pptx,.txt" hidden><small class="fr-file-name">${frNotes ? '' : notesFree() ? 'PDF, PowerPoint or Word. Free once, right now.' : 'PDF, PowerPoint or Word. Plans from notes come with Plus.'}</small></div>` },
     { h: 'How should Cassie sound?', sub: 'Tap one to hear her.', body: `<div class="fr-voices" role="radiogroup" aria-label="Cassie’s voice">${[['woman', 'Woman'], ['man', 'Man']].map(([v, l]) => `<button type="button" role="radio" class="fr-voice" data-voice="${v}"><span class="fr-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>${l}</button>`).join('')}</div>` },
   ][at];
   el.innerHTML = `<form class="fr-ob" novalidate>
@@ -7176,7 +7181,23 @@ function frOnboard(at = 0) {
   // fill in what's known, and keep each answer as it changes
   if (f.name) f.name.value = a.name;
   if (f.grade) { f.grade.value = a.grade; f.age.value = a.age; }
-  if (f.exam) { f.exam.value = a.exam.name; f.examDate.value = a.exam.date; f.examTopics.value = a.exam.topics; }
+  if (f.exam) {
+    f.exam.value = a.exam.name; f.examDate.value = a.exam.date; f.examTopics.value = a.exam.topics;
+    // notes or slides: read here, in the browser; Cassie plans from them (Free: once, in these questions)
+    const pick = f.querySelector('.fr-notes input'), shown = f.querySelector('.fr-file-name');
+    if (frNotes) shown.textContent = `Added: ${frNotes.name}`;
+    f.querySelector('.fr-file').addEventListener('click', () => {
+      if (!notesFree() && !isSubscriber()) { plusSheet('Plans from your notes', 'Free gets one plan from notes in the first questions. Plus builds every exam plan from your notes, slides or reviewer.'); return; }
+      pick.click();
+    });
+    pick.addEventListener('change', async () => {
+      const file = pick.files && pick.files[0];
+      if (!file) return;
+      shown.textContent = 'Reading your notes…'; say('');
+      try { const doc = await readDocument(file); if (!doc.text) throw new Error('empty'); frNotes = { name: file.name, text: doc.text }; shown.textContent = `Added: ${file.name}`; }
+      catch (e2) { frNotes = null; shown.textContent = ''; say(CassieErrors.say('exam_file_failed')); }
+    });
+  }
   const mark = () => {
     f.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === a.gender)));
     f.querySelectorAll('[data-help]').forEach((b) => b.setAttribute('aria-pressed', String(a.help.includes(b.dataset.help))));
@@ -7205,7 +7226,7 @@ function frOnboard(at = 0) {
     if (at === 1 && !a.grade) { say('Choose your level, or tap Skip.'); f.grade.focus(); return; }
     if (at === 1 && a.age && !(Math.round(+a.age) >= 2 && Math.round(+a.age) <= 100)) { say('Type an age from 2 to 100, or leave it empty.'); f.age.focus(); return; }
     if (at === EXAM && (a.exam.name || a.exam.date || a.exam.topics)) { // (all empty: no exam, on we go)
-      const d = a.exam.date, why = !a.exam.name ? ['exam_name_needed', f.exam] : !d ? ['exam_date_needed', f.examDate] : d < today ? ['exam_date_past', f.examDate] : d > dayAdd(today, 365) ? ['exam_date_far', f.examDate] : !a.exam.topics ? ['exam_topics_needed', f.examTopics] : null;
+      const d = a.exam.date, why = !a.exam.name ? ['exam_name_needed', f.exam] : !d ? ['exam_date_needed', f.examDate] : d < today ? ['exam_date_past', f.examDate] : d > dayAdd(today, 365) ? ['exam_date_far', f.examDate] : !a.exam.topics && !frNotes ? ['exam_topics_needed', f.examTopics] : null;
       if (why) { say(CassieErrors.say(why[0])); why[1].focus(); return; }
     }
     go(at + 1);
@@ -7222,10 +7243,14 @@ function frFinish(a) {
   frClose();
   syncAccount(true);
   // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour, then the plan
-  const ex = a.exam || {};
-  if (ex.name && ex.date && ex.topics) setTimeout(() => openExamSheet({ ...ex, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
+  const ex = a.exam || {}, notes = frNotes;
+  frNotes = null;
+  if (ex.name && ex.date && (ex.topics || notes)) setTimeout(() => openExamSheet({ ...ex, notes, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
   else offerTour();
 }
+// notes or slides added in the first questions (kept in memory only: a reload asks again)
+var frNotes = null; // (var: the first questions can open before this line runs)
+function notesFree() { return !state.freeNotesPlan; }
 // right after the first run (signed in or as a guest): a quick tour?, asked once, ever; after: once it's over
 function offerTour(after = null) { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(after); else if (after) after(); }, 700); }
 // after the tour: your new exam plan, one tap away
@@ -7240,7 +7265,7 @@ function examReadySheet(e) {
     <div class="plus-actions"><button type="button" class="plus-go exr-see">See my exam plan</button><button type="button" class="plus-ok">Not now</button></div></div>`;
   w.querySelector('.exr-subj').textContent = e.name;
   w.querySelector('.exr-day').textContent = dayName(e.date);
-  w.querySelector('.exr-tops').textContent = (e.topics || '').trim() || examTopics(e).join(', ');
+  w.querySelector('.exr-tops').textContent = (e.topics || '').trim() || planTopics(e).join(', ');
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (k) => { if (k.key === 'Escape') { k.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);

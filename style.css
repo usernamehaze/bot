@@ -2181,6 +2181,9 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-age { width: 140px; min-height: 48px; text-align: center; font: inherit; font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
 .fr-age:focus { outline: none; border-color: var(--primary); }
 .fr-age.fr-wide { width: min(320px, 100%); }
+.fr-file { min-height: 44px; padding: 0 18px; border: 1.5px dashed var(--border); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: .95rem; font-weight: 650; cursor: pointer; }
+.fr-file:hover, .fr-file:focus-visible { border-color: var(--primary); outline: none; }
+.fr-file-name { color: var(--muted); font-size: .82rem; font-weight: 500; text-align: center; overflow-wrap: anywhere; }
 .fr-seg, .fr-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .fr-seg button, .fr-pick { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
 .fr-pick { min-height: 52px; padding: 0 20px; font-size: 1.02rem; }
