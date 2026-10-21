@@ -1,6 +1,6 @@
 # Cassie's voice: setup and costs
 
-Cassie speaks only in Bella's studio voice (ElevenLabs, voice `EXAVITQu4vr4xnSDxMaL`, model `eleven_flash_v2_5`). Her server sends the words to ElevenLabs and plays back the sound. When a lesson, a Listen or a voice chat starts, the app asks the server how many characters are left this month. Bella speaks only if that covers the whole session. Otherwise Cassie types her answers and shows one line: "Cassie’s voice isn’t available right now, so she’ll type her answers instead." There is no other voice.
+Cassie speaks only in her studio voice (ElevenLabs: Jessica, voice `cgSgspJ2msm6clMCkdW9`, or Chris for a man's voice, `iP95p4xoKVk53GoZ742B`; model `eleven_flash_v2_5` unless `ELEVENLABS_MODEL` says otherwise). Her server sends the words to ElevenLabs and plays back the sound. When a lesson, a Listen or a voice chat starts, the app asks the server how many characters are left this month. Bella speaks only if that covers the whole session. Otherwise Cassie types her answers and shows one line: "Cassie’s voice isn’t available right now, so she’ll type her answers instead." There is no other voice.
 
 ## What uses up characters (measured from the code)
 

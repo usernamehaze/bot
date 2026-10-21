@@ -476,6 +476,8 @@ test('the real server: the studio voice uses the model set in ELEVENLABS_MODEL, 
       const b = sent[0] && sent[0].body;
       expect(r.status === 200 && b, `${model || 'the default'}: Cassie speaks: ` + r.status + ' ' + r.text.slice(0, 120));
       expect(b.model_id === (model || 'eleven_flash_v2_5'), 'the model sent: ' + b.model_id);
+      // Jessica for a woman's voice, Chris for a man's (ElevenLabs' standard voices)
+      expect(sent[0].url.includes(voice === 'man' ? '/iP95p4xoKVk53GoZ742B?' : '/cgSgspJ2msm6clMCkdW9?'), `${voice}: ${voice === 'man' ? 'Chris' : 'Jessica'}: ` + sent[0].url);
       expect(('style' in b.voice_settings) === style, `${model || 'flash'} ${voice}: style ${style ? 'sent' : 'left out'}: ` + JSON.stringify(b.voice_settings));
     }
   } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
@@ -3137,7 +3139,7 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   const settingsLine = async () => { await page.evaluate(() => openSettings()); const t = await page.locator('#hv-state').innerText(); await page.evaluate(() => closeSettings && closeSettings()).catch(() => {}); return t; };
 
   // Settings, Voice: Bella is ready
-  expect(/^Bella’s voice is ready\./.test(await settingsLine()), 'Settings says Bella is ready: ' + await page.locator('#hv-state').innerText());
+  expect(/^Jessica’s voice is ready\./.test(await settingsLine()), 'Settings says Jessica is ready: ' + await page.locator('#hv-state').innerText());
   await page.keyboard.press('Escape');
 
   // 1. a long Listen with enough left: every sentence in Bella's voice, no line

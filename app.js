@@ -6100,7 +6100,7 @@ function cleanForSpeech(t) {
     .replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*#+\s*/gm, '').replace(/[*_#>|]+/g, ' ')
     .replace(/\s+/g, ' ').trim();
 }
-// Cassie's voice can be a woman's (Bella) or a man's (Edward, a calm British voice): Settings, or the switch on the voice screen.
+// Cassie's voice can be a woman's (Jessica) or a man's (Chris): Settings, or the switch on the voice screen.
 const voiceGender = () => (state.voiceGender === 'man' ? 'man' : 'woman');
 function buildVoiceUI() {
   const el = document.createElement('div');
@@ -6173,7 +6173,7 @@ function voiceLine() {
   if (!CV.studio.known()) return SERVER ? 'Checking Cassie’s voice…' : CassieErrors.say('voice_not_set_up');
   if (!CV.studio.on()) return CassieErrors.say('voice_not_set_up');
   if (CV.studio.left() < VOICE_ENOUGH) return CassieErrors.say('voice_resting', { date: voiceBackDate(CV.studio.back()) });
-  return `${voiceGender() === 'man' ? 'Cassie’s' : 'Bella’s'} voice is ready. Cassie reads her answers aloud in it.`;
+  return `${voiceGender() === 'man' ? 'Chris’s' : 'Jessica’s'} voice is ready. Cassie reads her answers aloud in it.`;
 }
 function showHumanVoiceSetting() {
   const box = document.getElementById('hv-state');
