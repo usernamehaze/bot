@@ -47,7 +47,7 @@
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
  *   TRANSCRIBE_DAILY_LIMIT  voice recordings written down per network per day (default 3000)
  *   ELEVENLABS_API_KEY  (secret) Cassie's studio voice: reads answers, quizzes and flashcards aloud
- *   SPEAK_DAILY_CHARS   characters of studio voice per student per day (default 3000)
+ *   SPEAK_DAILY_CHARS   characters of studio voice per student per day (default 12000, about 15 minutes)
  *   SPEAK_MONTHLY_CHARS characters of studio voice for the whole app per month (default 9500)
  *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
@@ -127,7 +127,7 @@ function cors(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : DEFAULT_ORIGINS);
   const ok = allowed.some((a) => origin === a || (a === 'http://localhost' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)))
     || (env.ALLOW_EXTENSION !== 'off' && /^chrome-extension:\/\/[a-p]{32}$/.test(origin)); // the Cassie extension (Chrome and Edge)
-  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left, x-cassie-plan', vary: 'origin' } : {};
+  return ok ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-expose-headers': 'retry-after, x-cassie-source, x-cassie-left, x-cassie-plan, x-speak', vary: 'origin' } : {};
 }
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra } });
 // The dashboard page: only its own script may run (a fresh one-time code each visit), it can't be
@@ -878,7 +878,7 @@ const autoCode = (t) => (/^[a-z][a-z0-9_]{0,39}$/.test(String(t || '')) ? String
 // worker → Settings → Variables and Secrets; never in the app). GET /speak?uid=… says whether it's
 // on, how many studio characters are left (this month's, or this student's today if that is less),
 // and the day the allowance comes back; POST /speak { text, voice: 'woman' | 'man', uid } answers with an MP3.
-// Credits cost money, so: each student gets SPEAK_DAILY_CHARS a day (default 3000), the whole app
+// Credits cost money, so: each student gets SPEAK_DAILY_CHARS a day (default 12000, about 15 minutes of talk), the whole app
 // SPEAK_MONTHLY_CHARS a month (default 9500, under ElevenLabs' free 10,000), and the same words
 // (a flashcard, a quiz question) are kept in Cloudflare's cache for 30 days, so they're paid for
 // once. When it's off or used up, the app types instead: Cassie never speaks in another voice.
@@ -895,6 +895,7 @@ const ELEVEN_VOICES = { woman: 'cgSgspJ2msm6clMCkdW9', man: 'iP95p4xoKVk53GoZ742
    a plan change), so without this she kept asking a voice with nothing left. A key that can't read its
    subscription leaves only Cassie's own counts. */
 let elevenCredits = null;
+const SPEAK_DAY = 12000; // (3000 ran out after about 5 minutes of voice chat)
 async function elevenLeft(env) {
   if (elevenCredits && Date.now() - elevenCredits.at < 10 * 60e3) return elevenCredits;
   try {
@@ -909,7 +910,7 @@ async function elevenLeft(env) {
 }
 async function speakLeft(env, uidRaw) {
   if (!env.ELEVENLABS_API_KEY) return { on: false, left: 0 };
-  const monthMax = +env.SPEAK_MONTHLY_CHARS || 9500, dayMax = +env.SPEAK_DAILY_CHARS || 3000;
+  const monthMax = +env.SPEAK_MONTHLY_CHARS || 9500, dayMax = +env.SPEAK_DAILY_CHARS || SPEAK_DAY;
   const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
   const uid = /^[\w-]{8,64}$/.test(String(uidRaw || '')) ? String(uidRaw) : 'anon';
   let usedMonth = 0, usedDay = 0;
@@ -951,7 +952,7 @@ async function speak(request, env, ctx) {
     await ensureSchema(env.DB);
     const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
     if (all > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
-    if (mine > (+env.SPEAK_DAILY_CHARS || 3000)) return chatError('That’s a lot of listening today. Cassie types her answers until tomorrow.', 429, h, { 'x-speak': 'day' });
+    if (mine > (+env.SPEAK_DAILY_CHARS || SPEAK_DAY)) return chatError('That’s a lot of listening today. Cassie types her answers until tomorrow.', 429, h, { 'x-speak': 'day' });
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively

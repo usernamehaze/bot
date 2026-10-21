@@ -44,7 +44,7 @@
     return fetch(studio.server + '/speak?uid=' + encodeURIComponent(studio.uid || ''))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d) studio = { ...studio, on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '', known: true, off: false };
+        if (d) studio = { ...studio, on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '', known: true, off: false, why: +d.left > 0 ? '' : studio.why };
         emit();
         return studio;
       })
@@ -57,7 +57,8 @@
   async function studioClip(text, gender) {
     const r = await fetch(studio.server + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: gender === 'man' ? 'man' : 'woman', uid: studio.uid }) });
     if (!r.ok) {
-      if (r.status === 429 || r.status === 503) { studio.off = true; studio.left = 0; emit(); refresh(); } // used up or off: she types until it's back
+      // used up or off: she types until it's back (why: 'day' = this student's day, 'month' = the app's credits)
+      if (r.status === 429 || r.status === 503) { studio.off = true; studio.left = 0; studio.why = r.headers.get('x-speak') || ''; if (studio.why === 'day') studio.back = dayFrom(1); emit(); refresh().then(() => { studio.off = true; studio.left = 0; }); }
       throw Object.assign(new Error('studio ' + r.status), { usedUp: r.status === 429 || r.status === 503 });
     }
     if (r.headers.get('x-speak') !== 'cache') { studio.left = Math.max(0, studio.left - text.length); emit(); } // (said before: free)
@@ -65,8 +66,21 @@
     return await new Promise((res, rej) => audioCtx().decodeAudioData(buf, res, rej));
   }
 
-  /* ---------- the one line: Cassie types instead, said once ---------- */
-  const line = () => (window.CassieErrors ? window.CassieErrors.say('voice_typing') : 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.');
+  /* ---------- the one line: Cassie types instead, said once (with why, and when she's back) ---------- */
+  // a day in the Philippines ('YYYY-MM-DD'), n days from today
+  function dayFrom(n) { return new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10); }
+  function backWhen(back) {
+    if (!back || back === dayFrom(1)) return 'tomorrow';
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(back) ? new Date(back + 'T12:00:00') : null;
+    return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : 'tomorrow';
+  }
+  const line = () => {
+    const E = window.CassieErrors;
+    if (!E) return 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.';
+    if (studio.why === 'day' || (studio.known && studio.on && studio.left < 400 && studio.back === dayFrom(1))) return E.say('voice_today');
+    if (studio.why === 'month' || (studio.known && studio.on && studio.left < 400)) return E.say('voice_resting', { date: backWhen(studio.back) });
+    return E.say('voice_typing');
+  };
   let noteBox = null, noteTimer = 0;
   function notice(where) {
     if (typeof where === 'function') { where(line()); return; }

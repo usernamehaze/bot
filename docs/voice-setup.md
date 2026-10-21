@@ -16,7 +16,7 @@ One character is one letter, space or punctuation mark that Bella reads. A sente
 | A flashcard Listen session | `cards.js` reads up to 60 cards per deck | 10 cards: about 2,000. 60 cards: about 12,000 |
 | A 7-step Teach me lesson (Labs, 3D, extension) | `labs/tutor.js` and `extension/teach.js`: each step is "one or two short, natural spoken sentences" | about 60 to 160 a step, so 420 to 1,120. Typical: about 700 |
 
-Each student can also use at most `SPEAK_DAILY_CHARS` a day (default 3,000).
+Each student can also use at most `SPEAK_DAILY_CHARS` a day (default 12,000, about 15 minutes of talk).
 
 With today's default of 9,500 characters a month for the whole app, that is roughly 13 seven-step lessons, or 8 voice chats, or 4 ten-card flashcard sessions. That is for everyone together, not for each student.
 
@@ -47,7 +47,7 @@ Sources:
 
 1. Cloudflare dashboard, then Workers & Pages, then the Cassie worker, then Settings, then Variables and Secrets.
 2. Add or edit the plain variable `SPEAK_MONTHLY_CHARS` (a variable, not a secret). Set it to the number in the table for your plan.
-3. Optional: `SPEAK_DAILY_CHARS` is the most one student can use in a day (default 3,000). Raise it if one student's lesson or deck gets cut short.
+3. Optional: `SPEAK_DAILY_CHARS` is the most one student can use in a day (default 12,000, about 15 minutes of talk). Raise it if one student's lesson or deck gets cut short.
 4. Deploy. The app reads the new number the next time it asks the server (each page load, and each time a voice session starts).
 
 The key stays where it is: `ELEVENLABS_API_KEY` is a Secret in the same place. Never put it in the code, the app or a chat.
