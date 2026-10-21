@@ -2269,6 +2269,16 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .plan-go { background: var(--primary); color: var(--on-primary); }
 .plan-go:active { background: var(--primary-dark); }
 .plan-now { border: 1px solid var(--border); color: var(--muted); }
+/* Monthly or Semester: a month first; .bill-sem on the section shows the semester prices */
+.set-plans .bill-s, .set-plans.bill-sem .bill-m { display: none; }
+.set-plans.bill-sem .bill-s { display: inline; }
+.set-plans.bill-sem .plan-pass.bill-s { display: inline-block; }
+.bill-seg { display: inline-flex; gap: 2px; margin: 0 0 14px; padding: 3px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.bill-seg button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.bill-seg button small { font-size: .74rem; font-weight: 650; color: var(--muted); }
+.bill-seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.bill-seg button[aria-pressed="true"] small { color: inherit; }
+@media (pointer: coarse) { .bill-seg button { min-height: 44px; } }
 .plan-go-line { background: transparent; color: var(--text); border: 1.5px solid var(--text); }
 .plan-go-line:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
 /* the three at a glance (a phone fits all three columns) */

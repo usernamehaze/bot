@@ -7378,6 +7378,14 @@ function refreshPlan(force) {
   return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
+// Plans: prices a month first; Semester shows the one-payment prices
+document.querySelector('.set-plans .bill-seg')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-bill]');
+  if (!b) return;
+  const sem = b.dataset.bill === 's';
+  document.querySelector('.set-plans').classList.toggle('bill-sem', sem);
+  b.parentElement.querySelectorAll('[data-bill]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+});
 function plusSheet(what, why) {
   track('feature', 'plus-ask');
   document.querySelector('.plus-sheet')?.remove();
