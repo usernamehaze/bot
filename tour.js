@@ -25,13 +25,13 @@
       say: () => 'Quiz me makes a practice quiz on any topic you name. Questions you miss are saved, and come back later in Review my mistakes.' },
     { id: 'talk', tab: 'chat', at: ['#voice-btn', '[data-hub="talk"]'],
       say: () => 'Talk with Cassie is a real voice chat. Chat with her, teach her a topic, or let her quiz you out loud.' },
-    { id: 'home', tab: 'home', phoneAt: ['#tabbar [data-tab="home"]'], at: ['#chat-log .hub-hero', '#chat-log .hub-boxes', '#new-chat-btn'],
+    { id: 'home', tab: 'home', phoneAt: ['#tabbar [data-tab="home"]'], at: ['#chat-log .hub-hero', '#chat-log .hub-boxes', '#side-nav [data-page="home"]', '#new-chat-btn'],
       say: () => `Home keeps all your tools in one place${phone() ? '' : ', in every new chat'}. Once you start studying, it also shows today’s tasks, your exam plans and your week.` },
     { id: 'labs', tab: 'labs', phoneAt: ['#tabbar [data-tab="labs"]'], at: ['#labs-btn'],
       say: () => 'Labs has simulations you can play with, like pendulums and pH. Explore 3D is there too, for the human body, cells and space.' },
     { id: 'games', tab: 'games', phoneAt: ['#tabbar [data-tab="games"]'], at: ['#games-btn'],
       say: () => 'Games has quick learning games and a new puzzle every day. They are a fun way to practise what you learn.' },
-    { id: 'cards', tab: 'cards', phoneAt: ['#tabbar [data-tab="cards"]'], at: ['#side-tools .side-tool[data-tip="Flashcards"]', '[data-hub="cards"]'],
+    { id: 'cards', tab: 'cards', phoneAt: ['#tabbar [data-tab="cards"]'], at: ['#side-tools .side-tool[data-tip="Flashcards"]', '[data-hub="cards"]', '#side-menu-toggle'],
       say: () => 'Flashcards bring each card back right before you would forget it. Make them from any answer, or write your own.' },
     { id: 'board', tab: 'home', phoneAt: ['#home [data-hub="board"]'], at: ['#board-btn'],
       say: () => 'The board is for drawing, sketching and graphs. Cassie can draw on it too, when a picture explains it better.' },
@@ -77,6 +77,8 @@
     const setCard = document.querySelector('#settings-panel .settings-card');
     const before = { phone: phone(), tab: state.tab, settings: !settingsPanel.hidden ? (setCard && setCard.dataset.page) || 'all' : null, homeTop: (document.getElementById('home') || {}).scrollTop || 0, focus: document.activeElement };
     if (before.settings) closeSettings();
+    // a computer's dashboard pages have no ask box: the tour shows a new chat, where every stop is
+    if (!before.phone && document.body.classList.contains('desk-on') && typeof deskGo === 'function') { before.desk = deskPage; deskGo('chat'); }
     const root = document.documentElement;
     root.classList.add('touring');
     const veil = document.createElement('div'); veil.className = 'tour-veil'; // (taps on the app wait until the tour ends)
@@ -195,6 +197,7 @@
     save(); if (typeof syncAccount === 'function') syncAccount();
     // the app, exactly where it was
     const b = r.before;
+    if (b.desk && !state.messages.length && typeof deskGo === 'function') deskGo(b.desk); // (back to the page you were on)
     if (b.phone && window.CassieNative) {
       window.CassieNative.go(b.tab === 'home' ? 'home' : 'chat');
       const home = document.getElementById('home'); if (home) requestAnimationFrame(() => { home.scrollTop = b.homeTop; });

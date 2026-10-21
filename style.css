@@ -2798,3 +2798,52 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   .accent-chip[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
   .accent-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 }
+/* ---------- computers: the layout of the reference (a labelled sidebar in groups, a slim top bar, no ask box on the dashboard pages) ---------- */
+.topbar .app-label { display: none; }
+@media (min-width: 761px) {
+  /* the sidebar: Menu, Study tools, General and the Chrome card (chats live on the Chats page) */
+  .sidebar .side-search, #side-search-btn, #new-chat-btn, .sidebar .sidebar-section.rail-hide, #chat-list, .side-hl, .sidebar-foot { display: none !important; }
+  #side-apps .side-tool, #side-general .side-tool { width: 100%; height: auto; min-height: 40px; justify-content: flex-start; border-radius: 10px; }
+  #side-apps .side-tool svg, #side-general .side-tool svg { width: 18px; height: 18px; }
+  #side-apps #labs-btn svg, #side-general #memory-btn svg, #side-general #settings-btn svg { fill: currentColor; stroke: none; }
+  #side-apps #board-btn svg, #side-apps #games-btn svg { fill: none; stroke: currentColor; }
+  .side-tool .app-label { overflow: hidden; text-overflow: ellipsis; }
+  #side-general .memory-dot { position: static; margin-left: auto; }
+  body:not(.side-open) #side-apps .side-tool, body:not(.side-open) #side-general .side-tool { justify-content: center; padding: 8px 0; }
+  .sidebar { background: var(--surface); }
+  /* the dashboard pages have no ask box: Ask Cassie opens a chat */
+  body.desk-on #composer, body.desk-on #quick-actions, body.desk-on #attach-preview { display: none !important; }
+  /* the top bar's search: a real box, and its results under it */
+  .top-search { position: relative; cursor: text; }
+  .top-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: .92rem; outline: none; }
+  .top-search input::placeholder { color: var(--muted); }
+  .top-search:focus-within { border-color: var(--text); }
+  .top-results { position: absolute; z-index: 70; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; list-style: none; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px rgba(var(--shade-rgb), .18); }
+  .top-results[hidden] { display: none; }
+  .top-results li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; color: var(--text); cursor: pointer; }
+  .top-results li[aria-selected="true"], .top-results li:hover { background: var(--surface-2); }
+  .top-results li small { color: var(--muted); font-size: .76rem; }
+  .top-results .top-none { color: var(--muted); cursor: default; }
+}
+/* a new chat on a computer: a hello and ideas above the ask box */
+.desk-chat { display: flex; justify-content: center; padding-top: 6vh; }
+.dk-chat-hi { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; max-width: 640px; }
+.dk-chat-bot { width: 96px; height: 96px; }
+.dk-ideas-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+.desk .dk-idea { display: inline-flex; align-items: center; gap: 8px; }
+.dk-idea svg { width: 16px; height: 16px; fill: currentColor; }
+/* Chats: a card for each */
+.desk-chats .dk-head { margin-bottom: 14px; }
+.dk-chat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.dk-chat-card { gap: 10px; }
+.dk-chat-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dk-chat-top span { display: flex; flex-direction: column; min-width: 0; }
+.dk-chat-top b { font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-chat-top small { color: var(--muted); font-size: .78rem; }
+.dk-chat-q { flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dk-chat-acts { display: flex; gap: 8px; }
+.dk-chat-acts .dk-btn { flex: 1; min-height: 40px; padding: 0 12px; font-size: .88rem; }
+@media (min-width: 761px) {
+  #chat-log > .home.home-desk > .desk { width: 100%; }
+  body.desk-on #mascot { display: none; } /* (the dashboard pages are full of cards: she waits in the chats, where she has room) */
+}
