@@ -131,7 +131,7 @@ You are especially strong at:
 - History, science, math, literature, languages, essay and email writing, exam prep, general knowledge, and professional tasks (summaries, reports, explanations).
 - Research and thesis writing: you are a genius academic mentor. You help with every part of a research paper or thesis, the title, abstract, introduction, Review of Related Literature (RRL), theoretical/conceptual framework, statement of the problem, hypotheses, methodology (research design, respondents, sampling, instruments, data analysis), results, discussion, conclusion, and recommendations. You know citation styles (APA, MLA, IEEE, Chicago) and can format references and in-text citations correctly. When the user provides real sources, synthesize them by theme rather than summarizing one by one.
 - English literature and close reading: you are an insightful literature teacher. Analyze novels, short stories, plays, and poems, long or short, in depth: theme(s), plot and structure, characterization, setting, point of view, tone and mood, conflict, symbolism, motifs, imagery, irony, and figurative language (metaphor, simile, personification, hyperbole, etc.). For poetry, also cover form and type, meter/rhythm, rhyme scheme, sound devices (alliteration, assonance, onomatopoeia), enjambment, and stanza structure, and give a stanza-by-stanza or line-by-line reading when it helps. Always ground an interpretation in the text, quote short lines as evidence, and bring in relevant historical, cultural, or biographical context. You can also compare works, trace a theme across a text, and explain literary movements and terms.
-- Reviewers, study guides, and summaries: when the user gives you material, pasted text or an attached document/PDF, and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a clear, well-organized study reviewer: bold section labels, tight bullet points, key terms with short definitions, and a few practice questions with answers at the end when useful. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word. Just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
+- Reviewers, study guides, and summaries: when the user gives you material, pasted text or an attached document/PDF, and asks for a "reviewer", study guide, summary, outline, notes, flashcards, or key points, turn it into a reviewer that teaches, not a list of facts: **The big picture** first (what it is about and why it matters), then each topic under a bold heading named after it, explained in plain words, with key terms in bold, a worked example (code exactly in code blocks with what it prints; math solved step by step), and a **Watch out:** line for common mistakes; a table when things are compared; a **Quick review** table of key terms; then practice questions that make them use the idea (not trivia), with answers that say why. Shape it for the subject: only history-type material gets people and a timeline, and never write a label with "None" under it. Cover the whole document faithfully; don't invent facts that aren't in it. Every answer you give has Save-as Word / PDF / Image / Text buttons beneath it, so you CAN give the user a file: never say you can't make files and never tell them to copy-paste into Word. Just write the complete content and mention they can tap Save as. Never ask them to paste text from a file they already attached.
 
 How you work:
 - Do exactly what you're asked. Read the request carefully and follow every part of it: the task, the format, the length, the language and any limits ("only the answer", "in 3 bullets", "in Filipino", "graph it", "make it shorter"). Never swap their request for a different one, never skip a part, and never refuse something you can do. If they ask you to do something with a picture or a snip (graph it, solve it, explain it, check it), do that exact thing with what's in the picture. Ask a question back only when the request truly can't be done without the answer; otherwise make a sensible assumption, say it in one short line, and do it.
@@ -3642,22 +3642,35 @@ async function askCassie(msgs, image, opts = {}) {
 
 /* ---------- reading whole files: reviewers, summaries, answers ---------- */
 // What "take note of everything" means — used for every file, photo and page.
-const NOTES_GUIDE = `Take note of EVERYTHING a student could be asked about. One fact per bullet, under these labels when they apply (skip a label with nothing under it):
-**People**, full name, who they are / what they did
-**Key terms**, **term**, what it means
-**Dates & times**, exact date, year or time, what happened (keep every single one)
-**Places, groups & things**, countries, cities, organisations, laws, treaties, books, inventions, species, objects, why each matters
-**Events & history**: in the order they happened, with causes and effects
-**Numbers & formulas**: statistics, amounts, measurements, equations (with units)
+const NOTES_GUIDE = `Take note of EVERYTHING a student could be asked about. One fact per bullet, under the labels below that fit THIS file (a programming module has no people or dates; a history reading does). Never write a label with nothing under it, and never write "None".
+**Key terms**: **term**, what it means
+**Ideas & explanations**: what each idea is, why it works, what it is for
+**Code & examples**: copy every code example exactly inside \`\`\` code blocks, with what it prints or does; worked examples with every step
+**Rules, syntax & formulas**: in \`backticks\`, with what each part means (never use * for times outside code)
 **Processes**: numbered steps
 **Lists, types & comparisons**
+**Common mistakes & errors**: what goes wrong, and why
+**People**: real people only (full name, who they are), never names used in examples or exercises
+**Dates & events**: exact date or year, what happened, causes and effects
+**Places, groups & things**: why each matters
 **Pictures, tables & charts**: what each shows, every label and value you can read
 **Questions in the file**: exercises or questions it asks
-Put the page or slide after a fact when you know it, like (p. 12). Copy names, dates and numbers exactly. Never invent anything.`;
-const REVIEWER_TAIL = 'After the sections, add **People to remember** (name, who), **Timeline** (every date and time in order, what happened), and **Key terms** (term, meaning), then 10 practice questions and an **Answers** list.';
+Put the page or slide after a fact when you know it, like (p. 12). Copy names, dates, numbers and code exactly. Never invent anything.`;
+// How Cassie writes a reviewer: a study guide that teaches, shaped for the subject (not a list of facts in boxes)
+const REVIEWER_GUIDE = `How to write a reviewer, study guide or notes (like the best student in class would):
+1. Start with **The big picture**: 2 to 4 sentences on what the file is about and why it matters.
+2. If the file lists objectives or outcomes, add **What you should be able to do** as a short list.
+3. Then go topic by topic, in the file's order. Give each topic a **bold heading** named after the topic itself (never "Pages 1-22" or "Section 2"). Under it: explain the idea in plain words first, then the details; put each key term in **bold** with its meaning where it first appears; add a worked example from the file; and when students often get it wrong, a **Watch out:** line.
+4. Shape it for the subject. Programming: the syntax, the code examples copied exactly in \`\`\` code blocks, and what each one prints. Math and physics: each formula, then a problem solved step by step. Science: processes as numbered steps, and what each diagram shows. History, literature and social studies: **People to remember** (real people only) and a **Timeline** in order. Never write a label with nothing under it, and never write "None".
+5. Use a small table when something is compared (like a function and a method).
+6. End with **Quick review**: a table of every key term and its one line meaning.
+7. Then **Practice questions**: 10 of them, mixed: multiple choice, identification, and at least 4 that make the student use the idea (what does this code print, find the bug, solve this problem, explain why). Never ask about names used in examples, page numbers or trivia. Then **Answers**, each with one short line on why.
+Put code, commands and formulas in \`backticks\` and never use * for times outside code. Put the page or slide in brackets after a fact when you know it, like (p. 12). Stick to the file: don't invent facts that aren't in it.`;
+const REVIEWER_TAIL = 'End with **Quick review** (a table of every key term and its meaning), then **Practice questions** (10, mixed, with at least 4 that make the student use the idea) and **Answers** with one line on why each is right.';
 const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables, or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
 Do exactly what they ask with it, a reviewer, study guide, summary, outline, notes, flashcards, practice quiz, or answers to questions in it.
-For a reviewer, notes, summary or study guide: follow the file's order and cover EVERY page, section, slide or topic, don't stop early or skip the middle. Use bold section labels on their own line and tight bullets. Keep every person (full name and who they are), key term (in bold, with its meaning), date and time (with what happened), place, event, number, formula and process (as numbered steps), and say what each diagram, chart, table or picture shows and why it matters. Put the page or slide in brackets after a fact when you know it, like (p. 12). ${REVIEWER_TAIL} Stick to the file: don't invent facts that aren't in it.
+For a reviewer, notes, summary or study guide: follow the file's order and cover EVERY page, section, slide or topic, don't stop early or skip the middle. Keep every key term, number, formula, code example, process, and (when the file has them) every person, date, place and event, and say what each diagram, chart, table or picture shows and why it matters.
+${REVIEWER_GUIDE}
 The app puts Save-as Word / PDF / Image / Text buttons under every answer, so if they want a file, just write the complete content, don't tell them to copy it anywhere.`;
 
 function leanDocSystem() {
@@ -3863,7 +3876,8 @@ async function pictureNotes(doc, onStatus, waitNote) {
 
 // Pull "@@PERSON: …", "@@DATE: …", "@@TERM: …" lines out of a section into the master lists.
 function takeMasterLines(md, lists) {
-  return md.replace(/^\s*[-*•]?\s*@@\s*(PERSON|DATE|TERM)\s*:\s*(.+)$/gim, (_, kind, body) => {
+  return md.replace(/^\s*[-*•]?\s*@@\s*(PERSON|DATE|TERM)\s*:[ \t]*(.*)$/gim, (_, kind, body) => {
+    if (!body.trim() || /^(none|n\/a|-)\b/i.test(body.trim())) return '';
     const [head, ...rest] = body.split(/\s+[—–|-]\s+/);
     const item = { head: (head || '').replace(/\*\*/g, '').trim(), tail: rest.join(', ').trim() };
     if (!item.head) return '';
@@ -3871,7 +3885,8 @@ function takeMasterLines(md, lists) {
     const k = (item.head + (key === 'DATE' ? item.tail : '')).toLowerCase();
     if (!lists[key].some((x) => x.k === k)) lists[key].push({ ...item, k });
     return '';
-  }).replace(/\n{3,}/g, '\n\n').trim();
+  }).split('\n').filter((l) => !/@@/.test(l)).join('\n') // (and nothing about the markers ever reaches the student)
+    .replace(/\n{3,}/g, '\n\n').trim();
 }
 function masterListsMd(lists) {
   const yearOf = (t) => { const m = t.match(/\b(\d{3,4})\b/); return m ? +m[1] : Infinity; };
@@ -3879,7 +3894,8 @@ function masterListsMd(lists) {
   let md = '';
   if (lists.PERSON.length) md += `**People to remember**\n${bullets(lists.PERSON)}\n\n`;
   if (lists.DATE.length) md += `**Timeline: every date and time**\n${bullets([...lists.DATE].sort((a, b) => yearOf(a.head) - yearOf(b.head)))}\n\n`;
-  if (lists.TERM.length) md += `**Key terms**\n${bullets(lists.TERM)}\n\n`;
+  const cell = (t) => String(t).replace(/\|/g, '/').trim();
+  if (lists.TERM.length) md += `**Key terms: quick review**\n\n| Term | What it means |\n| --- | --- |\n${lists.TERM.map((x) => `| **${cell(x.head)}** | ${cell(x.tail)} |`).join('\n')}\n\n`;
   return md.trim();
 }
 
@@ -3985,7 +4001,7 @@ async function groqDocument(doc, request, history, onStatus) {
     onStatus(`Writing it up: ${where} (section ${i + 1} of ${n})…`);
     try {
       return await groqChat([{ role: 'system', content: sys },
-        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this section of the answer. Cover every note above, in order. Keep every name, date, time, place, number and term. No intro, no conclusion, no practice questions (those come at the end).\nThen, after the section, add one line for every person, date/time and key term in these notes, exactly like this:\n@@PERSON: full name - who they are / what they did\n@@DATE: date or time - what happened\n@@TERM: term - what it means` }],
+        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this part of the reviewer, following steps 3 to 5 of the guide: a bold heading for each topic, named after the topic; explain it, then the details; key terms in bold; the examples (code exactly, in code blocks, with what it prints); **Watch out:** lines. Cover every note above, in order, and keep every name, date, number, formula and code example. No big picture, no quick review and no practice questions (those come at the end).\nThen, after it, add one line for every key term, and for every real person and every date in these notes (none for names used in examples), exactly like this:\n@@TERM: term - what it means\n@@PERSON: full name - who they are / what they did\n@@DATE: date or time - what happened\nWrite no other line with @@ in it, and none for a kind this part doesn't have.` }],
         { maxTokens: 3200, lean: true, rotate: true, onWait: waitNote(`Writing ${where}…`) });
     } catch (e) {
       if (!e.tooLarge || depth >= 1 || group.length < 2) throw e;
@@ -3994,21 +4010,22 @@ async function groqDocument(doc, request, history, onStatus) {
     }
   };
   for (let i = 0; i < groups.length; i++) {
-    const where = groupSpan(groups[i]) || `Section ${i + 1}`;
-    const body = takeMasterLines(await writeSection(groups[i], i, groups.length), lists);
-    sections.push(`**${where.replace(/^\w/, (c) => c.toUpperCase())}**\n\n${body}`);
+    sections.push(takeMasterLines(await writeSection(groups[i], i, groups.length), lists)); // (its topics are its headings)
   }
   const master = masterListsMd(lists);
-  let questions = '';
+  let questions = '', big = '';
   try {
     onStatus('Writing practice questions…');
-    const facts = (master || sections.join('\n\n')).slice(0, 9000);
-    questions = await groqChat([{ role: 'system', content: sys },
-      { role: 'user', content: `Key facts from all of "${doc.name}":\n"""\n${facts}\n"""\n\nWrite 10 practice questions that cover the whole file (mix multiple choice, identification and short answer), then an **Answers** list.` }],
-      { maxTokens: 1600, lean: true, rotate: true, onWait: waitNote('Writing practice questions…') });
+    const whole = sections.join('\n\n').slice(0, 12000);
+    const out = await groqChat([{ role: 'system', content: sys },
+      { role: 'user', content: `The reviewer of all of "${doc.name}":\n"""\n${whole}\n"""\n\nWrite two things. First **The big picture**: 2 to 4 sentences on what this file is about and why it matters. Then **Practice questions** that cover the whole file, following step 7 of the guide: 10 questions, mixed, with at least 4 that make the student use the ideas (what does this code print, find the bug, solve this problem, explain why), never about names used in examples or page numbers; then **Answers**, each with one short line on why.` }],
+      { maxTokens: 2000, lean: true, rotate: true, onWait: waitNote('Writing practice questions…') });
+    const at = out.search(/\*\*Practice questions\*\*/i);
+    if (at > 0) { big = out.slice(0, at).trim(); questions = out.slice(at).trim(); } else questions = `**Practice questions**\n\n${out.trim()}`;
+    if (big && !/big picture/i.test(big)) big = `**The big picture**\n${big}`;
   } catch (e) { /* the reviewer is still complete without them */ }
   const pagesNote = doc.pages ? `: all ${doc.pages} pages` : '';
-  return [`**${doc.name}${pagesNote}**`, ...sections, master, questions ? `**Practice questions**\n\n${questions}` : ''].filter(Boolean).join('\n\n') + tail;
+  return [`**${doc.name}${pagesNote}**`, big, ...sections, master, questions].filter(Boolean).join('\n\n') + tail;
 }
 
 /* Several photos and files at once. Each photo is read on its own — every word copied out

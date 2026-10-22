@@ -3570,7 +3570,7 @@ test('a 49-page file becomes a complete reviewer with people, timeline and terms
     const all = JSON.stringify(body.messages);
     if (/image_url/.test(all)) { seen.pictures++; return { text: '- **Pictures, tables & charts** — a map of Luzon (p. 2)' }; }
     if (/study notes from one part/.test(all)) { seen.notes++; return { text: ('- **People** — José Rizal — national hero (p. 3)\n- **Dates & times** — 30 December 1896 — Rizal is executed\n').repeat(30) }; }
-    if (/Write ONLY this section/.test(all)) { seen.sections++; return { text: `**Rizal's life**\n- Born in Calamba\n@@PERSON: José Rizal — national hero\n@@DATE: 30 December 1896 — Rizal is executed in Bagumbayan\n@@DATE: 1861 — Rizal is born\n@@TERM: Propaganda Movement — campaign for reforms` }; }
+    if (/Write ONLY this part/.test(all)) { seen.sections++; return { text: `**Rizal's life**\n- Born in Calamba\n@@PERSON: José Rizal — national hero\n@@DATE: 30 December 1896 — Rizal is executed in Bagumbayan\n@@DATE: 1861 — Rizal is born\n@@TERM: Propaganda Movement — campaign for reforms` }; }
     if (/practice questions/.test(all)) { seen.questions++; return { text: '1. Who wrote Noli Me Tangere?\n\n**Answers**\n1. José Rizal' }; }
     return { text: 'ok' };
   } });
@@ -3589,6 +3589,41 @@ test('a 49-page file becomes a complete reviewer with people, timeline and terms
   if (process.env.SHOT) await a.screenshot({ path: process.env.SHOT }); // to look at the result
   const tl = t.slice(t.indexOf('Timeline'));
   expect(tl.indexOf('1861') < tl.indexOf('1896'), 'timeline not in order');
+  await ctx.close();
+});
+
+test('a reviewer teaches, shaped for the subject: a programming module gets the big picture, topics as headings with their code, a quick review table and questions that make you use it; never "None", never history boxes, never Cassie’s own @@ markers or "Pages 1-22" headings', async (b) => {
+  const seen = { notes: [], sections: [], end: [], systems: [] };
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages);
+    seen.systems.push((body.messages[0] || {}).content || '');
+    if (/study notes from one part/.test(all)) { seen.notes.push(body.messages[0].content); return { text: ('- **Key terms**: **class**, a blueprint for objects (p. 8)\n- **Code & examples**: `class SampleClass: x = 30` prints 30 (p. 9)\n').repeat(30) }; }
+    if (/Write ONLY this part/.test(all)) { seen.sections.push(body.messages[body.messages.length - 1].content); return { text: '**Classes and objects**\nA **class** is a blueprint; an **instance** is an object made from it.\n```python\nclass SampleClass:\n    x = 30\nobject1 = SampleClass()\nprint(object1.x)  # 30\n```\n**Watch out:** after `del object1`, using it raises a `NameError`.\n@@TERM: class - a blueprint for creating objects\n@@TERM: instance - an object made from a class\n@@PERSON: None\n@@DATE:\n(Note: the notes have no people or dates, so no @@PERSON or @@DATE lines.)' }; }
+    if (/The big picture/.test(all) && /Practice questions/.test(all)) { seen.end.push(all); return { text: '**The big picture**\nObject oriented programming bundles data and behaviour into objects.\n\n**Practice questions**\n1. What does this code print? `print(SampleClass().x)`\n\n**Answers**\n1. 30, because x is a class attribute.' }; }
+    return { text: 'ok' };
+  } });
+  const pdf = await page.evaluate(async () => {
+    const para = 'A class is a blueprint for creating objects. class SampleClass: x = 30. object1 = SampleClass(). print(object1.x) prints 30. ';
+    const md = Array.from({ length: 40 }, (_, i) => `## Module 7 page ${i + 1}\n\n${para.repeat(22)}`).join('\n\n');
+    const blob = await window.CassieExport.toPdf(md, 'Module 7');
+    const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (const x of buf) s += String.fromCharCode(x); return btoa(s);
+  });
+  await page.setInputFiles('#file-input', { name: 'Module 7 Introduction to OOP.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf, 'base64') });
+  const a = await ask(page, 'Make me a reviewer of this');
+  const t = await a.innerText();
+  expect(seen.sections.length >= 2 && seen.end.length === 1, 'read in parts, then the big picture and questions: ' + JSON.stringify({ s: seen.sections.length, e: seen.end.length }));
+  // what the student sees
+  expect(!/@@/.test(t) && !/\bNone\b/.test(t) && !/no people or dates/i.test(t), 'none of Cassie’s markers or empty labels: ' + t.slice(0, 400));
+  expect(!/^\s*Pages? \d/m.test(t) && !/People to remember|Timeline/.test(t), 'no "Pages 1-22" headings and no history boxes for a programming file');
+  expect(t.indexOf('The big picture') > -1 && t.indexOf('The big picture') < t.indexOf('Classes and objects'), 'the big picture comes first');
+  expect(await a.locator('pre code, pre').filter({ hasText: 'class SampleClass' }).count() > 0, 'the code example stays code');
+  expect(await a.locator('table').filter({ hasText: 'blueprint' }).count() === 1 && /quick review/i.test(t), 'a quick review table of the key terms');
+  expect(/What does this code print/.test(t) && /because/.test(t), 'practice that uses the idea, answers that say why');
+  // what Cassie is told
+  const sys = seen.systems.find((x) => /reviewer/.test(x)) || '';
+  expect(/The big picture/.test(sys) && /Watch out/.test(sys) && /what does this code print/i.test(sys) && /never write "None"/i.test(sys) && /names used in examples/.test(sys), 'the reviewer guide: big picture, topics taught, watch out lines, questions that use the idea, no "None", no trivia');
+  expect(/named after the topic/.test(seen.sections[0]) && /none for names used in examples/.test(seen.sections[0]), 'each part: topics as headings, markers only for real people and dates');
+  expect(/never write "None"/i.test(seen.notes[0]) && /Code & examples/.test(seen.notes[0]) && /real people only/.test(seen.notes[0]), 'the notes fit the subject (code kept, real people only)');
   await ctx.close();
 });
 
