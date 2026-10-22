@@ -40,7 +40,7 @@
   /* ---------- reveal on scroll ---------- */
   if ('IntersectionObserver' in window && !reduce) {
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
-    $$('.rv').forEach((el, i) => { const row = el.closest('.grid6, .plans, .pair'); el.style.transitionDelay = (el.closest('.hero') ? i * 0.08 : row ? [...row.children].indexOf(el) * 0.08 : 0) + 's'; io.observe(el); }); // (cards in a row arrive one after another)
+    $$('.rv').forEach((el, i) => { const row = el.closest('.grid6, .plans, .pair, .figs'); el.style.transitionDelay = (el.closest('.hero') ? i * 0.08 : row ? [...row.children].indexOf(el) * 0.08 : 0) + 's'; io.observe(el); }); // (cards in a row arrive one after another)
     // fail-safe: after a jump (a nav link, a fast fling) show everything at or above the screen
     let settle = 0;
     const catchUp = () => { clearTimeout(settle); settle = setTimeout(() => $$('.rv:not(.in)').forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) { el.classList.add('in'); io.unobserve(el); } }), 180); };
@@ -78,6 +78,14 @@
   };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }, { passive: true });
   addEventListener('resize', frame); frame();
+
+  /* ---------- the subjects strip: a button stops it (and starts it again) ---------- */
+  const strip = $('.strip'), pause = $('.strip-pause');
+  if (strip && pause) pause.addEventListener('click', () => {
+    const on = strip.classList.toggle('paused');
+    pause.setAttribute('aria-pressed', String(on));
+    pause.setAttribute('aria-label', on ? 'Play the moving subjects' : 'Pause the moving subjects');
+  });
 
   /* ---------- the loops (the button's light, the subjects strip) rest while off screen ---------- */
   if ('IntersectionObserver' in window) {
