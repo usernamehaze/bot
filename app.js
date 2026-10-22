@@ -2805,6 +2805,32 @@ async function makeExamPlan(form) {
   save();
   return e;
 }
+// the Exam Rescue Plan (rescue.html, made in the browser) hands its plan over: it becomes an exam plan here
+var RESCUE_KEY = 'cassie.rescue';
+function takeRescue() {
+  let r = null;
+  try { r = JSON.parse(localStorage.getItem(RESCUE_KEY) || 'null'); } catch (e) { r = null; }
+  if (!r) return null;
+  const today = phDay(), drop = () => { try { localStorage.removeItem(RESCUE_KEY); } catch (e) { /* storage off */ } };
+  if (typeof r.name !== 'string' || !r.name.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') || r.date < today || !Array.isArray(r.days)) { drop(); return null; }
+  if (activeExams().some((x) => x.name === r.name.trim() && x.date === r.date)) { drop(); return null; } // (already kept)
+  if (activeExams().length >= examLimit()) return { full: true };
+  const e = { id: 'ex' + Date.now().toString(36), name: noDashes(r.name.trim()).slice(0, 60), date: r.date, topics: noDashes(String(r.topics || '')).slice(0, 600), from: today, at: Date.now(), days: [], stats: {}, rescue: true };
+  const last = examLast(e);
+  r.days.forEach((d) => {
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.date) || d.date > last) return;
+    const tasks = (Array.isArray(d.tasks) ? d.tasks : []).filter((t) => t && EXAM_KINDS.includes(t.kind)).slice(0, 3)
+      .map((t, k) => ({ id: `${d.date}-${k}-${Math.random().toString(36).slice(2, 6)}`, kind: t.kind, topic: noDashes(String(t.topic || '')).replace(/\s+/g, ' ').trim().slice(0, 60), done: false }));
+    if (tasks.length) e.days.push({ date: d.date, tasks });
+  });
+  if (!e.days.length) { drop(); return null; }
+  reflowExam(e, today); // (a plan made days ago: what's past moves on)
+  examsNow().push(e);
+  drop();
+  track('feature', 'rescue-plan');
+  save();
+  return e;
+}
 function refreshHub() {
   const h = document.getElementById('home-hub');
   if (h && h.querySelector('.hub')) renderHub(h);
@@ -7844,6 +7870,8 @@ function frSignIn() {
 function frOnboard(at = 0) {
   const prev = frLoad() || {};
   const a = { name: '', gender: '', grade: '', age: '', help: [], exam: { name: '', date: '', topics: '' }, voice: state.voiceGender === 'man' ? 'man' : 'woman', ...(prev.answers || {}) };
+  const kept = activeExams()[0]; // (a plan already here, like one from the Exam Rescue Plan page: its exam is filled in)
+  if (kept && !a.exam.name) a.exam = { name: kept.name, date: kept.date, topics: kept.topics || '' };
   if (!a.name && state.account && state.account.name) a.name = state.account.name;
   const keep = () => frSave({ step: 'ob', at, answers: a });
   keep();
@@ -7946,7 +7974,9 @@ function frFinish(a) {
   // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour, then the plan
   const ex = a.exam || {}, notes = frNotes;
   frNotes = null;
-  if (ex.name && ex.date && (ex.topics || notes)) setTimeout(() => openExamSheet({ ...ex, notes, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
+  const same = activeExams().find((x) => x.name === ex.name && x.date === ex.date);
+  if (same && !notes) offerTour(() => examReadySheet(same)); // (that plan is already made)
+  else if (ex.name && ex.date && (ex.topics || notes)) setTimeout(() => openExamSheet({ ...ex, notes, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
   else offerTour();
 }
 // notes or slides added in the first questions (kept in memory only: a reload asks again)
@@ -8714,6 +8744,10 @@ renderHistory();
 updateModelPill();
 updateMemoryDot();
 renderProfileSummary();
+const rescued = takeRescue(); // a plan from the Exam Rescue Plan page (a new student keeps it through the first run)
+const fromRescue = /[?&]from=rescue/.test(location.search);
+if (fromRescue) history.replaceState(null, '', location.pathname + location.hash);
+if (rescued && state.profile && (!rescued.full || fromRescue)) setTimeout(() => (rescued.full ? (!isSubscriber() && plusSheet('More exam plans', 'Free keeps one exam plan at a time. Delete the plan on Home to add your Exam Rescue Plan, or get Plus for up to 5 at once.')) : examReadySheet(rescued)), 600);
 const signinBack = accountsOn() ? signinReturned() : null; // back from Google or Apple
 if (signinBack) openAuth({ first: !state.profile, mode: 'signin', returned: signinBack }); // at once: "Signing you in…", never a bare page
 else if (!state.profile) {
