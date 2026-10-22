@@ -10,7 +10,7 @@
 #                            Google sign-in).
 #   X-Frame-Options / frame-ancestors   no other site can put Cassie inside a frame (clickjacking).
 #   X-Content-Type-Options   the browser never guesses a file's type (an upload can't turn into a script).
-#   Referrer-Policy          other sites see only "askcassie.pages.dev", never the full page address.
+#   Referrer-Policy          other sites see only "askcassie.study", never the full page address.
 #   Permissions-Policy       only the microphone (voice chat) may be asked for; no camera, location, etc.
 #   Strict-Transport-Security   always HTTPS.
 # If Cassie starts using a new service, add its address to connect-src below.

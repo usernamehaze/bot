@@ -52,7 +52,7 @@
  *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
- *                    (default: askcassie.study, askcassie.pages.dev, usernamehaze.github.io, localhost)
+ *                    (default: askcassie.study, www.askcassie.study, localhost)
  * Days are counted in Philippine time (UTC+8).
  */
 
@@ -142,7 +142,7 @@ async function sendReminders(env, now = Date.now()) {
 // counted with nothing else: no words, no id
 const countCare = (env, ctx) => ctx.waitUntil(countChat(env, dayOf(Date.now()), 'care').catch(() => {}));
 
-const DEFAULT_ORIGINS = ['https://askcassie.study', 'https://www.askcassie.study', 'https://askcassie.pages.dev', 'https://usernamehaze.github.io', 'http://localhost'];
+const DEFAULT_ORIGINS = ['https://askcassie.study', 'https://www.askcassie.study', 'http://localhost'];
 const EVENTS = new Set(['open', 'feature', 'signup']);
 
 const SCHEMA = [
