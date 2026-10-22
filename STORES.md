@@ -46,8 +46,20 @@ few days.
    zip, `manifest.json` is at the top level, which the store requires. The zip
    for installing by hand has a folder inside, so don't upload that one.
 3. **Store listing**
-   - **Description:** what Cassie does. Highlight → Explain / Answer / Code /
-     Summarize, Snip, Ask about this page, and the board with graphs.
+   - **Short description** (115 characters, the store allows 132):
+     Highlight any page, PDF or photo and Cassie explains it step by step. Then turn it into reviewers and quizzes. Free.
+   - **Description** (the same pitch as the landing page):
+
+     > Stuck on a reading? Highlight it. Cassie explains it step by step, right where you are, in English, Filipino or Taglish.
+     >
+     > • Explain anything on a page, PDF or photo
+     > • Turn your notes into reviewers, flashcards and practice quizzes
+     > • Snip any part of the screen and ask about it
+     > • Teach me: Cassie walks you through a page one step at a time
+     >
+     > Your notes are yours. Your chats and settings stay on your device. Files, photos and voice are used only to answer you, then let go. No ads, no trackers, and we never sell your data.
+     >
+     > Made independently in the Philippines, for every student: grade school, high school, college and board exams. The basics are free.
    - **Category:** Education.
    - **Screenshots:** at least one at 1280×800 (`cassie-screenshot-1280x800.png`).
    - **Icon:** `extension/icons/icon-128.png`.
