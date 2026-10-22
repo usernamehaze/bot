@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Free Exam Rescue Plan · Cassie</title>
+<meta name="description" content="Exam coming up? Type the subject, the day and the topics, and get a free day by day study plan in 30 seconds: what to study each day, how to study it, and an exam day checklist.">
+<meta property="og:title" content="Free Exam Rescue Plan · Cassie">
+<meta property="og:description" content="Exam coming up? Get a free day by day study plan in 30 seconds.">
+<meta name="theme-color" content="#f5f5f7">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="rescue.css?v=169">
+</head>
+<body>
+<header class="rs-top">
+  <a class="rs-brand" href="index.html"><img src="icons/icon-192.png" alt="" width="28" height="28">Cassie</a>
+  <a class="rs-open" href="start.html">Open Cassie</a>
+</header>
+<main>
+  <section class="rs-hero">
+    <p class="rs-kicker">Free · No sign up · 30 seconds</p>
+    <h1>Exam coming up? Get your rescue plan.</h1>
+    <p class="rs-lead">Tell Cassie the subject, the day and the topics. You get a day by day plan: what to study each day, how to study it so it sticks, and what to do the night before.</p>
+  </section>
+  <form id="rs-form" class="rs-card" novalidate>
+    <label class="rs-field"><span>What is the exam?</span><input name="subject" type="text" maxlength="60" placeholder="Biology midterm" autocomplete="off" required></label>
+    <label class="rs-field"><span>When is it?</span><input name="date" type="date" required></label>
+    <label class="rs-field"><span>Topics, one per line</span><textarea name="topics" rows="5" placeholder="Cells&#10;Photosynthesis&#10;Respiration" required></textarea></label>
+    <label class="rs-field"><span>Time a day</span><select name="minutes"><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option></select></label>
+    <p id="rs-err" class="rs-err" role="alert" hidden></p>
+    <button type="submit" class="rs-go">Make my plan</button>
+    <p class="rs-small">Made on your device. Nothing you type is sent anywhere.</p>
+  </form>
+  <article id="rs-plan" class="rs-card rs-plan" aria-live="polite" hidden></article>
+  <section id="rs-after" class="rs-card rs-after" hidden>
+    <h2>Want Cassie to do it with you?</h2>
+    <p>Save the plan in Cassie, free. Each day she explains the topic, quizzes you, makes the flashcards, keeps your mistakes for review and can remind you to study.</p>
+    <div class="rs-actions">
+      <button type="button" id="rs-save" class="rs-go">Save it in Cassie, free</button>
+      <button type="button" id="rs-print" class="rs-line">Print or save as PDF</button>
+    </div>
+  </section>
+</main>
+<footer class="rs-foot"><a href="index.html">Cassie</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html">Help</a></footer>
+<script src="rescue.js?v=169"></script>
+</body>
+</html>

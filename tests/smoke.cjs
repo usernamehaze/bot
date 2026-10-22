@@ -1391,6 +1391,91 @@ test('podcast mode: under a long answer (and from a file in Study tools), the co
   await ctx.close();
 });
 
+test('the Exam Rescue Plan (free, from the landing page): subject, day and topics make a day by day plan at once, made on the device (nothing sent anywhere): each topic learned, then flashcards, then a quiz on a later day, at most 3 a day, a light last day, how to study each task and an exam day checklist; too few days says what gets only a quick look; Save it in Cassie keeps it as an exam plan (a new student keeps it through sign up; Free with a plan already is told); readable in light and dark', async (b) => {
+  const RESCUE = APP.replace('app.html', 'rescue.html');
+  const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  expect((land.match(/href="rescue\.html"/g) || []).length >= 2, 'the landing page links to it (the hero and the footer)');
+  expect(/rescue\.html rescue\.css rescue\.js/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
+  const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+  for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, state: { exams: [] } });
+    const away = [];
+    page.on('request', (r) => { const u = new URL(r.url()); if (/rescue\.html/.test(r.frame().url()) && u.origin !== new URL(APP).origin) away.push(u.href); }); // (the rescue page's own requests)
+    await page.goto(RESCUE);
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, 'body'); expect(!bad.length, 'the form, ' + scheme + ': readable: ' + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.click('.rs-go');
+    expect(/What is the exam/.test(await page.locator('#rs-err').innerText()), 'nothing typed: it says what to fill in');
+    await page.fill('[name=subject]', 'Biology midterm');
+    await page.fill('[name=date]', day(-1));
+    await page.fill('[name=topics]', 'Cells');
+    await page.click('#rs-form .rs-go');
+    expect(/has passed/.test(await page.locator('#rs-err').innerText()), 'a day that has passed is refused');
+    await page.fill('[name=date]', day(7));
+    await page.fill('[name=topics]', 'Cells\nPhotosynthesis\nRespiration\nGenetics');
+    await page.click('#rs-form .rs-go');
+    await page.waitForSelector('#rs-plan:not([hidden]) .rs-day');
+    await page.waitForTimeout(1200); // (it scrolls to the plan)
+    const plan = await page.evaluate((d) => CassieRescue.makePlan({ name: 'Biology midterm', date: d, topics: 'Cells\nPhotosynthesis\nRespiration\nGenetics' }), day(7));
+    expect(plan.days.length === 7 && plan.days.every((x) => x.tasks.length >= 1 && x.tasks.length <= 3) && plan.days[6].date === day(6) && !plan.dropped.length, 'a week: every day until the day before, 1 to 3 tasks a day: ' + JSON.stringify(plan.days.map((x) => x.tasks.length)));
+    for (const t of ['Cells', 'Photosynthesis', 'Respiration', 'Genetics']) {
+      const when = (k) => plan.days.findIndex((x) => x.tasks.some((y) => y.kind === k && y.topic === t));
+      expect(when('learn') >= 0 && when('cards') > when('learn') && when('quiz') > when('cards'), `${t}: learned, then flashcards, then a quiz on later days: ` + [when('learn'), when('cards'), when('quiz')]);
+    }
+    expect(plan.days[6].tasks.every((x) => x.kind === 'mistakes' || x.kind === 'focus'), 'the last day is light: mistakes and a last look');
+    expect(plan.days.every((x) => new Set(x.tasks.map((t) => t.kind + t.topic)).size === x.tasks.length), 'never the same task twice in a day: ' + JSON.stringify(plan.days.map((x) => x.tasks.map((t) => t.kind))));
+    const shown = await page.locator('#rs-plan').innerText();
+    expect(/Biology midterm/.test(shown) && /Learn Cells/.test(shown) && /explain it out loud/.test(shown) && /about \d+ min/.test(shown) && /Sleep at least 7 hours/.test(shown), 'the plan says what, how and for how long, and the exam day checklist');
+    expect(!/[–—]/.test(await page.locator('body').innerText()), 'no dashes');
+    expect(!away.length, 'made on the device: nothing sent anywhere: ' + away.join(', '));
+    // two days with five topics: says what gets only a quick look
+    const tight = await page.evaluate((d) => CassieRescue.makePlan({ name: 'Chem', date: d, topics: 'A,B,C,D,E,F,G' }), day(1));
+    expect(tight.days.length === 1 && tight.days[0].tasks.length === 3 && tight.dropped.length >= 4, 'exam tomorrow: today only, the rest named: ' + JSON.stringify(tight));
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(200);
+      if (process.env.SHOTS) { await page.screenshot({ path: `${process.env.SHOTS}/rescue-${viewport ? viewport.width : 'phone'}-${scheme}.png`, fullPage: false }); await page.locator('#rs-plan').screenshot({ path: `${process.env.SHOTS}/rescue-plan-${viewport ? viewport.width : 'phone'}-${scheme}.png` }); }
+      const { bad } = await require('./ui-checks.cjs').contrastIssues(page, 'main');
+      expect(!bad.length, scheme + ': readable: ' + bad.join(' | '));
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(over <= 0, 'nothing off the side: ' + over);
+    // Save it in Cassie: an exam plan in the app, ready
+    await Promise.all([page.waitForURL(/app\.html/), page.click('#rs-save')]);
+    await page.waitForSelector('.ex-ready-sheet', { timeout: 8000 });
+    const kept = await page.evaluate(() => ({ exams: state.exams, left: localStorage.getItem('cassie.rescue'), url: location.search }));
+    const ex = kept.exams[0];
+    expect(kept.exams.length === 1 && ex.name === 'Biology midterm' && ex.date === day(7) && ex.days.length === 7 && ex.days.every((x) => x.tasks.every((t) => t.id && t.done === false)), 'kept as an exam plan: ' + JSON.stringify(ex && ex.days.length));
+    expect(kept.left === null && kept.url === '', 'handed over once (and the address is tidy)');
+    expect(/Biology midterm/.test(await page.locator('.ex-ready-sheet').innerText()), 'Your Exam Plan is ready');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a new student: the plan is kept, and the first questions have the exam filled in (not made twice)
+  {
+    const { ctx, page } = await open(b, { state: null });
+    await page.goto(RESCUE);
+    await page.fill('[name=subject]', 'History quiz'); await page.fill('[name=date]', day(4)); await page.fill('[name=topics]', 'Rizal\nRevolution');
+    await page.click('#rs-form .rs-go');
+    await Promise.all([page.waitForURL(/app\.html/), page.click('#rs-save')]);
+    await page.waitForFunction(() => Array.isArray(state.exams) && state.exams.length === 1);
+    expect(await page.evaluate(() => state.exams[0].name === 'History quiz' && !state.profile), 'kept for a new student (who then signs up as always)');
+    await ctx.close();
+  }
+  // Free with a plan already: told, and the rescue plan waits
+  {
+    const old = { id: 'exold', name: 'Math', date: day(10), topics: 'Algebra', from: day(0), at: Date.now(), days: [{ date: day(0), tasks: [{ id: 'a', kind: 'learn', topic: 'Algebra', done: false }] }], stats: {} };
+    const { ctx, page } = await open(b, { state: { plan: null, exams: [old] } });
+    await page.goto(RESCUE);
+    await page.fill('[name=subject]', 'Physics'); await page.fill('[name=date]', day(3)); await page.fill('[name=topics]', 'Forces');
+    await page.click('#rs-form .rs-go');
+    await Promise.all([page.waitForURL(/app\.html/), page.click('#rs-save')]);
+    await page.waitForSelector('.plus-sheet', { timeout: 8000 });
+    const s = await page.evaluate(() => ({ n: state.exams.length, text: document.querySelector('.plus-sheet').innerText, left: !!localStorage.getItem('cassie.rescue') }));
+    expect(s.n === 1 && /Exam Rescue Plan/.test(s.text) && s.left, 'Free keeps one plan: it says so, and the new one waits: ' + JSON.stringify(s));
+    await ctx.close();
+  }
+});
 // a VAPID key pair made here for the test only (never kept)
 async function testVapid() {
   const { subtle } = require('crypto').webcrypto;

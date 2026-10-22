@@ -1,0 +1,61 @@
+/* The Exam Rescue Plan page: Cassie's black and white, like the landing page. Every colour is a token. */
+:root {
+  color-scheme: light dark;
+  --page: #f5f5f7; --card: #ffffff; --ink: #1d1d1f; --mute: #5f5f66; --line: #d9d9de; --field: #f2f2f5;
+  --go: #1d1d1f; --go-ink: #ffffff; --warn-bg: #fff4d6; --warn-ink: #5c4300; --err: #b3261e;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --page: #0f0f12; --card: #1b1b20; --ink: #f2f2f5; --mute: #a9a9b2; --line: #34343c; --field: #24242b; --go: #f2f2f5; --go-ink: #111114; --warn-bg: #3a2f10; --warn-ink: #ffe3a3; --err: #ff8a80; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+main { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 40px; }
+.rs-top { width: min(720px, calc(100% - 32px)); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
+.rs-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 19px; text-decoration: none; }
+.rs-brand img { border-radius: 8px; }
+.rs-open { font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; }
+.rs-hero { padding: 28px 0 8px; }
+.rs-kicker { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
+h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -.02em; }
+.rs-lead { margin: 0; color: var(--mute); font-size: 18px; }
+.rs-card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin-top: 20px; }
+.rs-field { display: grid; gap: 6px; margin-bottom: 16px; font-weight: 600; font-size: 15px; }
+.rs-field input, .rs-field textarea, .rs-field select { font: 400 17px/1.4 var(--sans); color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; min-height: 48px; width: 100%; }
+.rs-field textarea { resize: vertical; }
+.rs-field ::placeholder { color: var(--mute); opacity: 1; }
+.rs-field :focus-visible, .rs-go:focus-visible, .rs-line:focus-visible, .rs-open:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.rs-go, .rs-line { font: 600 17px/1 var(--sans); border-radius: 999px; padding: 14px 22px; min-height: 52px; cursor: pointer; }
+.rs-go { background: var(--go); color: var(--go-ink); border: 0; width: 100%; }
+.rs-line { background: transparent; color: var(--ink); border: 1px solid var(--line); width: 100%; }
+.rs-err { color: var(--err); font-weight: 600; margin: 0 0 12px; }
+.rs-small { margin: 12px 0 0; font-size: 14px; color: var(--mute); text-align: center; }
+.rs-plan-head h2 { margin: 0 0 4px; font-size: 26px; line-height: 1.2; }
+.rs-meta { margin: 0; color: var(--mute); }
+.rs-warn { background: var(--warn-bg); color: var(--warn-ink); border-radius: 14px; padding: 12px 14px; margin: 16px 0 0; }
+.rs-days { list-style: none; margin: 18px 0 0; padding: 0; }
+.rs-day { border-top: 1px solid var(--line); padding: 16px 0 6px; }
+.rs-day h3 { margin: 0 0 8px; font-size: 17px; }
+.rs-tasks { list-style: none; margin: 0; padding: 0; }
+.rs-task { display: flex; gap: 12px; padding: 8px 0; }
+.rs-task b { font-size: 16px; }
+.rs-task p { margin: 4px 0 0; color: var(--mute); font-size: 15px; }
+.rs-min { color: var(--mute); font-size: 14px; }
+.rs-box { flex: none; width: 20px; height: 20px; border: 2px solid var(--ink); border-radius: 6px; margin-top: 3px; }
+.rs-check { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 16px; }
+.rs-check h3 { margin: 0 0 6px; font-size: 17px; }
+.rs-check ul { margin: 0; padding-left: 20px; }
+.rs-check li { margin: 6px 0; }
+.rs-after h2 { margin: 0 0 6px; font-size: 22px; }
+.rs-after p { margin: 0 0 16px; color: var(--mute); }
+.rs-actions { display: grid; gap: 10px; }
+@media (min-width: 560px) { .rs-actions { grid-template-columns: 1fr 1fr; } }
+.rs-foot { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 max(28px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; color: var(--mute); }
+/* printing: only the plan, black on white, one day never split across pages */
+@media print {
+  :root { --page: #fff; --card: #fff; --ink: #000; --mute: #333; --line: #bbb; }
+  .rs-top, .rs-hero, #rs-form, .rs-after, .rs-foot { display: none !important; }
+  .rs-card { border: 0; padding: 0; margin: 0; }
+  .rs-day { break-inside: avoid; }
+}
