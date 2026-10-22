@@ -6076,9 +6076,9 @@ async function remindSnapshot() {
   try { const c = await caches.open(REMIND_CACHE); await c.put('/__remind', new Response(JSON.stringify(snap), { headers: { 'content-type': 'application/json' } })); } catch (e) { /* no cache here */ }
   return f;
 }
-let remindTimer = 0, remindSent = '';
+var remindTimer = 0, remindSent = ''; // (var: save() can run before this line, while the app starts)
 function remindSoon() {
-  if (!remindPrefs().on) return;
+  if (!(state.remind && state.remind.on)) return;
   clearTimeout(remindTimer);
   remindTimer = setTimeout(async () => {
     const f = await remindSnapshot(), facts = JSON.stringify([f.nextDue, f.streak, f.streakDay]);
