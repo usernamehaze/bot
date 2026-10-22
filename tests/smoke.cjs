@@ -6725,25 +6725,6 @@ test.slow('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D r
   await ctx.close();
 });
 
-test('landing: Meet Cassie mood buttons change her mood', async (b) => {
-  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(APP.replace('app.html', 'index.html'));
-  await page.locator('#meet').scrollIntoViewIfNeeded();
-  await page.waitForSelector('#play-stage .cassie-bot', { state: 'attached' });
-  await page.waitForSelector('#meet .play.in'); await page.waitForTimeout(900); // let it finish sliding in
-  expect(await page.locator('#moods button').count() >= 12, 'mood buttons missing');
-  await page.click('#moods button[data-m="dance"]');
-  expect(await page.locator('#moods button.on').getAttribute('data-m') === 'dance', 'Dance should be selected');
-  expect(/Study break/.test(await page.locator('#play-say').innerText()), 'caption should change');
-  await page.click('#moods button[data-m="oops"]');
-  expect(await page.locator('#moods button.on').getAttribute('data-m') === 'oops', 'Oops should be selected');
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
-});
-
 test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, You)', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { tab: 'home', groqKey: 'gsk_test' } });
   await page.goto(APP);
@@ -6769,43 +6750,90 @@ test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, 
   await ctx.close();
 });
 
-test('landing: highlight a word on the page and Cassie explains it, quizzes you, makes a card', async (b) => {
+test('the landing page is calm, like linear.app: one message and one button in the hero (no "AI" in it), 5 or fewer things in the menu, 7 or fewer sections, every link people need, one live demo and one moving background, a sentence that lights up as you read, for every student, a true privacy line; readable in light and dark at 390 and 1280; no dashes', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  expect(/'landing\/home\.css'/.test(sw) && /'landing\/try\.js'/.test(sw) && !/landing\/(story|desk|play)\./.test(sw), 'the offline copy has the new page’s files, not the old ones');
+  for (const [w, h, maxH] of [[390, 844, 14000], [1280, 800, 10000]]) {
+    for (const scheme of ['light', 'dark']) {
+      const ctx = watchCsp(await b.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, serviceWorkers: 'block', ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) }));
+      const page = await ctx.newPage();
+      const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(APP.replace('app.html', 'index.html'));
+      const L = await page.evaluate(() => {
+        const vis = (e) => !!e.offsetParent || getComputedStyle(e).position === 'fixed';
+        const hero = document.querySelector('.hero'), tryBox = document.querySelector('#try');
+        const heroControls = [...hero.querySelectorAll('a, button')].filter((e) => !tryBox.contains(e) && vis(e));
+        return {
+          primary: heroControls.filter((e) => e.classList.contains('btn')).map((e) => [e.textContent.trim(), e.getAttribute('href')]),
+          textLinks: heroControls.filter((e) => !e.classList.contains('btn')).length,
+          heroWords: hero.querySelector('h1').textContent + ' ' + hero.querySelector('.lead').textContent,
+          menu: [...document.querySelectorAll('.nav a, .nav button')].filter((e) => !e.classList.contains('brand') && e.offsetParent).map((e) => e.textContent.trim()),
+          sections: document.querySelectorAll('main > section').length,
+          hrefs: [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')),
+          height: document.documentElement.scrollHeight,
+          canvases: document.querySelectorAll('canvas').length,
+          loops: document.getAnimations().filter((a) => a.effect && a.effect.getComputedTiming().iterations === Infinity).map((a) => a.effect.target.className || a.effect.target.parentElement.className),
+          cards: document.querySelectorAll('.how-card').length,
+          sticky: getComputedStyle(document.querySelector('.how-card')).position,
+          who: [...document.querySelectorAll('.who h3')].map((e) => e.textContent),
+          trust: document.querySelector('#trust').textContent.replace(/\s+/g, ' '),
+          sideways: document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+      const tag = `${w} ${scheme}`;
+      expect(L.primary.length === 1 && L.primary[0][0] === 'Start free' && L.primary[0][1] === 'start.html' && L.textLinks <= 1, `${tag}: one button in the hero (and one text link): ` + JSON.stringify(L.primary));
+      expect(!/\bAI\b|algorithm|machine learning|automation/i.test(L.heroWords), `${tag}: the hero says what Cassie does for you, not the technology: ` + L.heroWords);
+      expect(L.menu.length <= 5 && (w > 760 || L.menu.join() === 'Open Cassie'), `${tag}: 5 or fewer things in the menu (just Open Cassie on a phone): ` + L.menu.join(', '));
+      expect(L.sections <= 7, `${tag}: 7 or fewer sections: ` + L.sections);
+      for (const need of ['start.html', 'rescue.html', 'let.html', 'privacy.html', 'terms.html', 'support.html', 'bot.html', '#pricing', '#faq']) expect(L.hrefs.includes(need), `${tag}: a link to ${need}`);
+      expect(L.hrefs.some((x) => /^cassie-extension\.zip\?v=/.test(x)), `${tag}: the extension download`);
+      expect(L.height <= maxH, `${tag}: a short page (was 26,600px on a computer and 33,900px on a phone): ${L.height}px`);
+      expect(L.canvases <= 1 && L.loops.every((c) => /beam|subjects/.test(c)), `${tag}: one moving background, and only the button's light and the subjects strip loop: ` + JSON.stringify([L.canvases, L.loops]));
+      expect(await page.evaluate(() => document.querySelector('.subjects').classList.contains('off') && getComputedStyle(document.querySelector('.subjects ul')).animationPlayState === 'paused'), `${tag}: the strip rests while off screen`);
+      expect(L.cards === 3 && (w > 760 ? L.sticky === 'sticky' : true), `${tag}: Highlight, Understand, Remember (stacking as you scroll on a computer)`);
+      expect(L.who.length === 6 && /Nursery/.test(L.who[0]) && L.who.some((x) => /High school/.test(x)) && L.who.some((x) => /College/.test(x)) && L.who.some((x) => /Board/.test(x)), `${tag}: for every student: ` + L.who.join(' | '));
+      expect(/Files, photos and voice are used only to answer you/.test(L.trust) && !/offline|never leaves|I built/i.test(L.trust), `${tag}: the privacy line says only what privacy.html says, and Cassie’s makers stay unnamed`);
+      expect(!L.sideways, `${tag}: nothing off the side`);
+      // the sentence is held on screen and comes into focus word by word as you scroll
+      const at = async (q) => { await page.evaluate((q) => { const e = document.querySelector('#why'); scrollTo({ top: e.offsetTop + (e.offsetHeight - innerHeight) * q, behavior: 'instant' }); }, q); await page.waitForTimeout(300); return page.evaluate(() => { const say = document.querySelector('[data-say]'), r = say.getBoundingClientRect(); return { lit: say.querySelectorAll('span.lit').length, n: say.querySelectorAll('span').length, onScreen: r.top >= 0 && r.bottom <= innerHeight }; }); };
+      const [early, mid, done] = [await at(0.05), await at(0.45), await at(1)];
+      expect(mid.lit > early.lit && mid.lit < mid.n && done.lit === done.n && mid.onScreen && done.onScreen, `${tag}: the sentence stays on screen and comes into focus as you scroll: ` + JSON.stringify([early, mid, done]));
+      // the hero's lesson page leans back at the top and lies flat once scrolled
+      await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await page.waitForTimeout(200);
+      const lean = await page.evaluate(() => getComputedStyle(document.querySelector('.hero-try .try-win')).transform);
+      await page.evaluate(() => scrollTo({ top: innerHeight, behavior: 'instant' })); await page.waitForTimeout(200);
+      const flat = await page.evaluate(() => getComputedStyle(document.querySelector('.hero-try .try-win')).transform);
+      expect(lean !== flat && /matrix3d/.test(lean) && (flat === 'none' || /^matrix\(1, 0, 0, 1/.test(flat) || /matrix3d\(1, 0, 0, 0, 0, 1, 0/.test(flat)), `${tag}: the lesson page leans back, then lies flat: ` + [lean, flat].join(' / '));
+      // readable everywhere, once each part has arrived
+      await page.evaluate(() => document.querySelectorAll('.rv').forEach((e) => e.classList.add('in')));
+      const bad = [];
+      for (let y = 0; y < L.height; y += h * 0.9) {
+        await page.evaluate((y) => scrollTo({ top: y, behavior: 'instant' }), y); await page.waitForTimeout(250);
+        bad.push(...(await contrastIssues(page, 'body')).bad);
+      }
+      expect(!bad.length, `${tag}: words under AA: ` + [...new Set(bad)].slice(0, 6).join(' | '));
+      expect(!/[–—]/.test(await page.locator('body').innerText()), `${tag}: no dashes`);
+      if (process.env.SHOTS) { await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(400); await page.screenshot({ path: `${process.env.SHOTS}/landing-${w}-${scheme}.png` }); }
+      expect(!errors.length, `${tag}: page errors: ` + errors.join('; '));
+      await ctx.close();
+    }
+  }
+  // Reduce Motion: everything is there at once, the sentence fully lit
+  const rm = await b.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
+  const p2 = await rm.newPage(); await p2.goto(APP.replace('app.html', 'index.html'));
+  const R = await p2.evaluate(() => ({ hidden: [...document.querySelectorAll('.rv')].filter((e) => getComputedStyle(e).opacity !== '1').length, dim: [...document.querySelectorAll('[data-say] span')].filter((e) => !e.classList.contains('lit')).length, loops: document.getAnimations().filter((a) => a.effect && a.effect.getComputedTiming().iterations === Infinity).length, lean: getComputedStyle(document.querySelector('.hero-try .try-win')).transform }));
+  expect(!R.hidden && !R.dim && !R.loops && R.lean === 'none', 'Reduce Motion: nothing waits to fade in or light up, nothing loops or leans: ' + JSON.stringify(R));
+  await rm.close();
+});
+
+test('landing: the hero’s lesson page: highlight a word and Cassie explains it, quizzes you, makes a card', async (b) => {
   const ctx = watchCsp(await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
-  // under the hero: a 3D laptop and phone showing Labs (the Google Docs strip is gone)
-  expect(await page.locator('.strip, .marquee').count() === 0, 'the scrolling strip is gone');
-  expect(await page.locator('.lx-lid .lx-scr img').count() === 6 && await page.locator('.lx-phone img').count() === 3, 'the laptop and phone show Labs, the body and the planets');
-  expect(await page.locator('.lx-notch').count() === 1 && await page.locator('.lx-keys text').count() > 60 && await page.locator('.lx-island').count() === 1, 'a real-looking laptop (notch, labelled keys) and phone (dynamic island)');
-  expect(await page.evaluate(async () => { const all = [...document.querySelectorAll('.lx-show img')]; await Promise.all(all.map((i) => { i.loading = 'eager'; return i.decode().catch(() => null); })); return all.every((i) => i.naturalWidth > 0); }), 'every device screen image loads');
-  expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the new logo: Cursor Cassie with her two eyes');
-  // the scroll story: scrolling through a scene moves what's inside it
-  const scrollTo = async (sel, p) => {
-    await page.evaluate(([s, q]) => { const el = document.querySelector(s); const top = el.getBoundingClientRect().top + scrollY; scrollTo({ top: top + (el.offsetHeight - innerHeight) * q, behavior: 'instant' }); }, [sel, p]);
-    await page.waitForTimeout(150);
-  };
-  await scrollTo('.lx-show', 0.32);
-  expect(await page.evaluate(() => { const r = document.querySelector('.lx-scr').getBoundingClientRect(); return r.width > innerWidth * 0.85; }), 'scrolled in, the laptop screen fills the window');
-  // Cassie taps "Human body 3D" and the body pulls apart, frame by frame
-  await scrollTo('.lx-show', 0.385);
-  expect(await page.evaluate(() => +getComputedStyle(document.querySelector('.lx-cursor')).opacity > 0.5), 'Cassie’s cursor goes to the card');
-  await scrollTo('.lx-show', 0.5);
-  await page.waitForFunction(() => +getComputedStyle(document.querySelector('.lx-body')).opacity === 1 && document.querySelector('.lx-show')._lx.drawn > 0, null, { timeout: 8000 }).catch(() => {});
-  expect(await page.evaluate(() => document.querySelector('.lx-show')._lx.drawn > 0) && /^Human body/.test(await page.locator('.lx-type span').innerText()), 'then the body is pulled apart on the screen');
-  // then the planets
-  await scrollTo('.lx-show', 0.72);
-  expect(await page.evaluate(() => +getComputedStyle(document.querySelector('.lx-planets')).opacity === 1 && [...document.querySelectorAll('.lx-planets img')].some((i) => +getComputedStyle(i).opacity === 1)) && /^The planets/.test(await page.locator('.lx-type span').innerText()), 'then the planets');
-  await scrollTo('.st-steps', 0.7);
-  expect(await page.locator('.ss-list li.on').innerText() === 'Quiz', 'two-thirds through the steps, Quiz is the step on: ' + await page.locator('.ss-list li.on').innerText());
-  expect(await page.locator('.ss-card.on').count() === 1, 'one step card shows at a time');
-  await scrollTo('.st-path', 0.1);
-  const early = await page.locator('.sp-node.on').count();
-  await scrollTo('.st-path', 1);
-  expect(early >= 1 && await page.locator('.sp-node.on').count() === 6 && /Remembered/.test(await page.locator('.sp-status').innerText()), 'the dot travels the path to Remembered');
-  await scrollTo('.st-brain', 1);
-  expect(await page.locator('.sb-steps').innerText() === 'Solved', 'the ring fills and the answer comes out');
+  expect(await page.locator('.nav .brand svg rect[rx="11"]').count() === 2, 'the logo: Cursor Cassie with her two eyes');
   await page.locator('#try').scrollIntoViewIfNeeded();
   await page.click('#try-page b[data-term]:text-is("mitochondria")');
   await page.waitForSelector('#try-pop:not([hidden])');
@@ -6824,40 +6852,6 @@ test('landing: highlight a word on the page and Cassie explains it, quizzes you,
   await page.waitForSelector('#try-pop:not([hidden])');
   await page.click('#try-pop [data-act="explain"]');
   await page.waitForFunction(() => /only know the words in bold|power stations|smallest living unit/.test(document.querySelector('#try-pop .tp-out').textContent), null, { timeout: 8000 });
-  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
-  await ctx.close();
-});
-
-test('landing: the desk runs the demos and the real labs; the little toys work', async (b) => {
-  const ctx = watchCsp(await b.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' }));
-  await ctx.route(/wikipedia\.org|worldbank\.org/, (r) => r.abort());
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(APP.replace('app.html', 'index.html'));
-  await page.locator('#desk').scrollIntoViewIfNeeded();
-  await page.waitForSelector('#desk-stage .sn-cv');
-  await page.click('.sn-auto');
-  await page.waitForFunction(() => document.querySelectorAll('.sn-steps li').length >= 4, null, { timeout: 15000 });
-  await page.click('.sn-board .dk-btn');
-  await page.waitForSelector('#desk-stage .sn-board[hidden]', { state: 'attached' });
-  await page.click('#desk [data-demo="files"]');
-  await page.click('.fl-file[data-f="pdf"]');
-  await page.waitForFunction(() => /Reviewer ready/.test(document.querySelector('.fl-pill').textContent), null, { timeout: 10000 });
-  expect(/Decomposer/.test(await page.locator('.fl-rev').innerText()), 'a reviewer is written');
-  await page.click('#desk [data-demo="labs"]');
-  await page.waitForSelector("#desk-stage .labs-embed .lab-panel input[type=range]", { state: "attached" });
-  await page.click('.lp-chips [data-i="1"]');
-  await page.waitForSelector('#desk-stage .labs-embed .lab-stage canvas');
-  await page.click('#desk [data-demo="puzzles"]');
-  await page.waitForSelector('#desk-stage .labs-embed .puz-head');
-  // toys
-  await page.click('#toy-quiz [data-a="1"]');
-  expect(/Right!/.test(await page.locator('#toy-quiz .qz-fb').innerText()), 'quiz answers');
-  await page.click('#toy-cite [data-c="MLA"]');
-  expect(/vol\. 44/.test(await page.locator('#toy-cite .ct-ref').innerText()), 'MLA citation shown');
-  await page.click('#toy-memory [data-forget] >> nth=0');
-  await page.waitForFunction(() => document.querySelectorAll('#toy-memory li').length === 3);
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });

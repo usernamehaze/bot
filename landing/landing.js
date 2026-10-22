@@ -1,8 +1,9 @@
-/* Cassie landing page — small, dependency-free behaviour.
- * - starts the living marble (gradient.js) after first paint where
- *   WebGL works; a CSS marble shows otherwise. Cassie herself is Cursor Cassie (play.js).
- * - pricing: ₱ / $ and monthly / yearly
- * - reveal-on-scroll, feature videos that play only while visible, the tour video
+/* Cassie landing page: small, dependency-free behaviour.
+ * - starts the slow marble behind the hero (gradient.js) after first paint where WebGL works
+ * - reveal-on-scroll, and the sentence that lights up word by word as you read it
+ * - pricing: ₱ / $ and monthly / semester / yearly
+ * - the tour video
+ * (the demo to highlight is landing/try.js)
  */
 (function () {
   'use strict';
@@ -39,25 +40,50 @@
   /* ---------- reveal on scroll ---------- */
   if ('IntersectionObserver' in window && !reduce) {
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
-    $$('.rv').forEach((el, i) => { el.style.transitionDelay = (el.closest('.hero') ? i * 0.08 : 0) + 's'; io.observe(el); });
+    $$('.rv').forEach((el, i) => { const row = el.closest('.grid6, .plans, .pair'); el.style.transitionDelay = (el.closest('.hero') ? i * 0.08 : row ? [...row.children].indexOf(el) * 0.08 : 0) + 's'; io.observe(el); }); // (cards in a row arrive one after another)
     // fail-safe: after a jump (a nav link, a fast fling) show everything at or above the screen
     let settle = 0;
     const catchUp = () => { clearTimeout(settle); settle = setTimeout(() => $$('.rv:not(.in)').forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) { el.classList.add('in'); io.unobserve(el); } }), 180); };
     addEventListener('scroll', catchUp, { passive: true }); addEventListener('hashchange', catchUp); catchUp();
   } else $$('.rv').forEach((el) => el.classList.add('in'));
 
-  /* ---------- feature videos: load + play only while on screen ---------- */
-  const vids = $$('video[data-src]');
+  /* ---------- motion that follows the scroll (after animos.app) ----------
+     - the lesson page in the hero leans back, and lies flat as you scroll down to it
+     - the sentence is held on screen while it comes into focus, word by word
+     - each How it works card shrinks a little as the next one slides over it
+     All of it is worked out once a frame, only while you scroll; with Reduce Motion nothing moves. */
+  const say = $('[data-say]'), why = $('#why'), tryWin = $('.hero-try'), cards = $$('.how-card');
+  const spans = [];
+  if (say) {
+    say.innerHTML = say.textContent.trim().split(/\s+/).map((w) => `<span>${w.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))} </span>`).join('');
+    spans.push(...$$('span', say));
+  }
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  let lit = -1, ticking = false;
+  const frame = () => {
+    ticking = false;
+    const vh = innerHeight;
+    if (tryWin) tryWin.style.setProperty('--flat', reduce ? 1 : clamp(scrollY / (vh * 0.55)).toFixed(3));
+    if (why && spans.length) {
+      const r = why.getBoundingClientRect();
+      const p = reduce ? 1 : clamp((-r.top + vh * 0.15) / Math.max(1, r.height - vh * 1.1));
+      const n = Math.round(p * spans.length);
+      if (n !== lit) { lit = n; spans.forEach((sp, k) => sp.classList.toggle('lit', k < n)); }
+    }
+    cards.forEach((c, k) => {
+      const next = cards[k + 1];
+      const sink = !next || reduce ? 0 : clamp((c.getBoundingClientRect().bottom - next.getBoundingClientRect().top) / c.offsetHeight);
+      c.style.setProperty('--sink', sink.toFixed(3));
+    });
+  };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(frame); } }, { passive: true });
+  addEventListener('resize', frame); frame();
+
+  /* ---------- the loops (the button's light, the subjects strip) rest while off screen ---------- */
   if ('IntersectionObserver' in window) {
-    const vio = new IntersectionObserver((es) => es.forEach((e) => {
-      const v = e.target;
-      if (e.isIntersecting) {
-        if (!v.src) v.src = v.dataset.src;
-        if (!reduce) v.play().catch(() => {});
-      } else v.pause();
-    }), { threshold: 0.35 });
-    vids.forEach((v) => vio.observe(v));
-  } else vids.forEach((v) => { v.src = v.dataset.src; });
+    const lio = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
+    $$('.btn.beam, .subjects').forEach((el) => lio.observe(el));
+  }
 
   /* ---------- pricing ---------- */
   const PRICES = {
