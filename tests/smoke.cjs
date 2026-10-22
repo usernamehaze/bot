@@ -4741,9 +4741,9 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   // 2. the landing page: one typeface (the system's), Apple's greys, nothing under 11px that a person reads
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   // the deleted web fonts and doodle wallpaper: nothing still asks for them
-  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/story.css', 'landing/desk.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+  const shipped = ['index.html', 'app.html', 'bot.html', 'start.html', 'style.css', 'sw.js', 'scripts/build-site.sh', 'landing/home.css'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
   expect(!/landing\/fonts|patterns\/|"Inter|'Inter|Instrument Serif/.test(shipped), 'no page or build step refers to the deleted fonts or wallpaper');
-  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/story.css'), 'utf8') + fs.readFileSync(path.join(ROOT, 'landing/desk.css'), 'utf8')), 'the landing page loads no web fonts');
+  expect(!/landing\/fonts\.css|Instrument Serif|Inter Tight/.test(html + fs.readFileSync(path.join(ROOT, 'landing/home.css'), 'utf8')), 'the landing page loads no web fonts');
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const ctx = await b.newContext({ viewport });
     await ctx.route(/workers\.dev|groq|fonts\.g/, (r) => r.abort());

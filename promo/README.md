@@ -25,6 +25,9 @@ node promo/ad3/frames.cjs OUT          # the caption frames + window mask
 python3 promo/ad3/build.py OUT         # cross-fades, voice-over + music → promo/cassie-ad-60s.mp4
 ```
 
+Some scenes (`snip`, `talk`) filmed the landing page's old desk demos, which the October 2026 redesign removed;
+re-filming those scenes needs them pointed at the app instead. The finished video is unaffected.
+
 The voice-over (`ad3/vo/*.wav`) was made with Kokoro (voice `af_bella`) from the lines in
 `script.json`; re-make a line the same way if you change its text. Title cards are
 `ad3/titles.html`; the frame around each scene is `ad3/frame.html`.
@@ -36,13 +39,8 @@ The earlier ads and reels (`source/`, `reel/`, `explainer/`, `explainer-vo/` and
 removed in the code cleanup; they're still in the git history if ever needed
 (`git checkout d3ec810 -- promo/reel`, for example).
 
-## The logo and the landing page's device screens
+## The logo
 
 - **Logo (`brand/mark.cjs`):** Cursor Cassie herself — the pointer with her two caret eyes — in
   black and white. `node promo/brand/mark.cjs` redraws every app and extension icon
   (`icons/`, `extension/icons/`) and `icons/logo.svg` from that one shape.
-- **Laptop & phone screens (`hero/devices.cjs`):** the laptop and phone under the landing page's
-  hero show Cassie's Labs, the human body pulling apart (18 frames of the "Pull it apart" slider) and
-  the 3D solar system. `node promo/hero/devices.cjs` (site served at :4650) takes them again, then
-  `python3 promo/hero/devices.py` turns them into `landing/hero/lx-*.webp`. If the Labs shelf changes,
-  check where the Human body and Solar system cards are (story.js taps them at y 395 and 568).
