@@ -6789,7 +6789,7 @@ test('the landing page is calm, like linear.app: one message and one button in t
   const { contrastIssues } = require('./ui-checks.cjs');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   expect(/'landing\/home\.css'/.test(sw) && /'landing\/try\.js'/.test(sw) && !/landing\/(story|desk|play)\./.test(sw), 'the offline copy has the new page’s files, not the old ones');
-  for (const [w, h, maxH] of [[390, 844, 14000], [1280, 800, 10000]]) {
+  for (const [w, h, maxH] of [[390, 844, 16500], [1280, 800, 11000]]) {
     for (const scheme of ['light', 'dark']) {
       const ctx = watchCsp(await b.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, serviceWorkers: 'block', ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) }));
       const page = await ctx.newPage();
@@ -6824,8 +6824,24 @@ test('the landing page is calm, like linear.app: one message and one button in t
       for (const need of ['start.html', 'rescue.html', 'let.html', 'privacy.html', 'terms.html', 'support.html', 'bot.html', '#pricing', '#faq']) expect(L.hrefs.includes(need), `${tag}: a link to ${need}`);
       expect(L.hrefs.some((x) => /^cassie-extension\.zip\?v=/.test(x)), `${tag}: the extension download`);
       expect(L.height <= maxH, `${tag}: a short page (was 26,600px on a computer and 33,900px on a phone): ${L.height}px`);
-      expect(L.canvases <= 1 && L.loops.every((c) => /beam|subjects/.test(c)), `${tag}: one moving background, and only the button's light and the subjects strip loop: ` + JSON.stringify([L.canvases, L.loops]));
+      expect(L.canvases <= 1 && L.loops.every((c) => /subjects/.test(c)), `${tag}: one moving background, and only the subjects strip loops (the button's light turns 3 times, then rests): ` + JSON.stringify([L.canvases, L.loops]));
       expect(await page.evaluate(() => document.querySelector('.subjects').classList.contains('off') && getComputedStyle(document.querySelector('.subjects ul')).animationPlayState === 'paused'), `${tag}: the strip rests while off screen`);
+      // the study tools: three figures that draw themselves in, one after another
+      const F = await page.evaluate(async () => {
+        const figs = [...document.querySelectorAll('.figs .fig')];
+        const before = figs.map((f) => getComputedStyle(f.querySelector('.ln')).strokeDashoffset);
+        for (const f of figs) { f.scrollIntoView({ behavior: 'instant', block: 'center' }); await new Promise((r) => setTimeout(r, 350)); } // (stacked on a phone: each one as you reach it)
+        await new Promise((r) => setTimeout(r, 2600));
+        return { n: figs.length, labels: figs.map((f) => f.querySelector('.fig-n').textContent), titles: figs.map((f) => f.querySelector('h3').textContent), before, after: figs.map((f) => getComputedStyle(f.querySelector('.ln')).strokeDashoffset), delays: figs.map((f) => getComputedStyle(f.querySelector('.ln')).transitionDelay) };
+      });
+      expect(F.n === 3 && F.labels.join() === 'FIG 0.1,FIG 0.2,FIG 0.3' && /Labs/.test(F.titles[0]) && /Flashcards/.test(F.titles[1]) && /board/i.test(F.titles[2]), `${tag}: the study tools, like Linear's figures: ` + JSON.stringify(F.titles));
+      expect(F.before.every((x) => parseFloat(x) > 0) && F.after.every((x) => parseFloat(x) === 0) && new Set(F.delays).size === 3, `${tag}: each drawing draws itself in, one after another: ` + JSON.stringify(F));
+      // the strip can be stopped (motion people can stop), and keyboard focus shows on every background
+      await page.locator('.strip-pause').scrollIntoViewIfNeeded(); await page.click('.strip-pause');
+      expect(await page.evaluate(() => getComputedStyle(document.querySelector('.subjects ul')).animationPlayState === 'paused' && document.querySelector('.strip-pause').getAttribute('aria-pressed') === 'true'), `${tag}: Pause stops the subjects strip`);
+      const ring = await page.evaluate(() => { const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; }; const cr = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+        const out = []; for (const sel of ['.who .go', '.foot a', '.hero .text-link']) { const e = document.querySelector(sel); e.focus(); let bg = 'rgba(0, 0, 0, 0)', p = e; while (p && /rgba\(0, 0, 0, 0\)|transparent/.test(bg)) { bg = getComputedStyle(p).backgroundColor; p = p.parentElement; } out.push([sel, cr(getComputedStyle(e).outlineColor, bg)]); } return out; });
+      expect(ring.every(([, r]) => r >= 3), `${tag}: the focus ring stands out (3:1 or more) wherever it is: ` + JSON.stringify(ring));
       expect(L.cards === 3 && (w > 760 ? L.sticky === 'sticky' : true), `${tag}: Highlight, Understand, Remember (stacking as you scroll on a computer)`);
       expect(L.who.length === 6 && /Nursery/.test(L.who[0]) && L.who.some((x) => /High school/.test(x)) && L.who.some((x) => /College/.test(x)) && L.who.some((x) => /Board/.test(x)), `${tag}: for every student: ` + L.who.join(' | '));
       expect(/Files, photos and voice are used only to answer you/.test(L.trust) && !/offline|never leaves|I built/i.test(L.trust), `${tag}: the privacy line says only what privacy.html says, and Cassie’s makers stay unnamed`);
