@@ -11,7 +11,7 @@ There are four parts. Each one can be done on its own.
 
 ## 1. Keep askcassie.study up to date
 
-askcassie.study (the Cloudflare Pages project askcassie, also at askcassie.pages.dev) is connected to GitHub, so Cloudflare rebuilds it after
+askcassie.study (the Cloudflare Pages project askcassie; askcassie.pages.dev sends people to askcassie.study with a Bulk Redirect: Cloudflare → Bulk Redirects, source `askcassie.pages.dev`, target `https://askcassie.study`, 301, keep the path and query) is connected to GitHub, so Cloudflare rebuilds it after
 every change. It needs two build settings, so that it publishes only the
 website and leaves out the big promo videos (Cloudflare refuses any file over
 25 MB):

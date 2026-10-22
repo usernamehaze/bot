@@ -368,7 +368,7 @@ const authErr = (page) => page.locator('.auth-err:not([hidden])').textContent();
 // Google sends the student back only to addresses listed under "Authorized redirect URIs" for the
 // OAuth client in Google Cloud Console, exactly. These are the ones registered there (server/README.md):
 // change the app's return address and this list (and the console) together.
-const GOOGLE_REDIRECT_URIS = ['https://askcassie.study/app.html', 'https://askcassie.pages.dev/app.html', 'https://usernamehaze.github.io/bot/app.html'];
+const GOOGLE_REDIRECT_URIS = ['https://askcassie.study/app.html'];
 test('leftover code stays out: styles for the old phone Home and the old landing sections, and two functions nothing called, aren’t back', async () => {
   const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8'), landing = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const gone = (src, names) => names.filter((n) => new RegExp('\\.' + n + '(?![\\w-])').test(src));
@@ -610,9 +610,9 @@ test('an old saved Gemini key (apiKey) moves to geminiKey, is removed from what�
   await ctx.close();
 });
 
-test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites, the extension opens it and talks to it, and what Cassie shares names it', async () => {
+test('askcassie.study is Cassie’s main address: the server lets it (and www) use Cassie but not other sites (askcassie.pages.dev and the old GitHub Pages copy neither), the extension opens it and talks to it, and what Cassie shares names it', async () => {
   const w = (await import(require('url').pathToFileURL(path.join(ROOT, 'server/worker.js')).href)).default;
-  for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', true], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
+  for (const [o, ok] of [['https://askcassie.study', true], ['https://www.askcassie.study', true], ['https://askcassie.pages.dev', false], ['https://usernamehaze.github.io', false], ['https://askcassie.study.evil.example', false], ['https://evil.example', false]]) {
     const r = await w.fetch(new Request('https://cassie.failanzahazel.workers.dev/chat', { method: 'OPTIONS', headers: { origin: o } }), {}, { waitUntil() {} });
     expect((r.headers.get('access-control-allow-origin') === o) === ok, `the server ${ok ? 'lets' : 'doesn’t let'} ${o} use it: ` + r.headers.get('access-control-allow-origin'));
   }
@@ -633,7 +633,7 @@ test('askcassie.study is Cassie’s main address: the server lets it (and www) u
 test('sign in with Google: the return address sent to Google is one registered in Google Cloud, on every site Cassie runs on', async (b) => {
   await serverMode({ noGoogle: false, noApple: false });
   // each site, served from this folder at its real address (Cloudflare Pages serves the app at /app)
-  const SITES = [['askcassie.study', 'https://askcassie.study', '', '/app'], ['Cloudflare Pages', 'https://askcassie.pages.dev', '', '/app'], ['GitHub Pages', 'https://usernamehaze.github.io', '/bot', '/bot/app.html']];
+  const SITES = [['askcassie.study', 'https://askcassie.study', '', '/app']];
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' };
   for (const [name, origin, base, start] of SITES) {
     const { ctx, page, errors } = await open(b, { state: null, setup: async (c) => {

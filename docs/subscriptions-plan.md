@@ -107,7 +107,7 @@ You set these in the Lemon Squeezy dashboard. Secrets go into Cloudflare as **Se
 |---|---|
 | Store | Test mode on until everything passes end to end. Support and reply email: **askcassie.study@gmail.com**. Check whether one store can show both ₱ and $ prices, or which currency it charges in. |
 | Products | **Cassie Plus** and **Cassie Pro**. Each has 3 variants: **Monthly** (subscription, every 1 month), **Yearly** (subscription, every 12 months) and **Semester** (single payment). That makes 6 variants. |
-| Checkout | The redirect after payment goes to `https://askcassie.pages.dev/app.html#plan=thanks`. Allow buying only 1 of each. Pass the account with custom data (`checkout[custom][account]`), so the webhook knows whose plan it is. |
+| Checkout | The redirect after payment goes to `https://askcassie.study/app.html#plan=thanks`. Allow buying only 1 of each. Pass the account with custom data (`checkout[custom][account]`), so the webhook knows whose plan it is. |
 | Settings → Recovery | Renewal reminder email **off**, because Cassie sends her own (decision 3). Failed payment emails **on**. |
 | Customer portal | On. Lets the customer cancel, resume and update the payment method (second way to cancel). |
 | Pausing | Off. There are fewer states to explain, and cancelling covers it. |
