@@ -1,7 +1,8 @@
 /* The Exam Rescue Plan (rescue.html): a student types the subject, the exam day and the topics, and gets a day by
    day plan at once, with how to study each day and an exam day checklist. It is made here, in the browser (no AI,
    nothing sent anywhere), so it costs nothing however many students use it. "Save it in Cassie" hands the plan to
-   the app (the same exam plan the app makes: learn, quiz, flashcards, mistakes and focus tasks, at most 3 a day). */
+   the app (the same exam plan the app makes: learn, quiz, flashcards, mistakes and focus tasks, at most 3 a day).
+   let.html is the same plan for the LET (the board exam for teachers): the topics come filled in for the level. */
 (function () {
   'use strict';
   const PH_MS = 8 * 3600e3; // (days are Philippine days, like the app's exam plans)
@@ -14,7 +15,7 @@
 
   function topicsOf(text) {
     const seen = new Set();
-    return String(text || '').split(/[\n,;]+/).map((t) => clean(t, 40)).filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase())).slice(0, 12);
+    return String(text || '').split(/[\n,;]+/).map((t) => clean(t, 40)).filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase())).slice(0, 20);
   }
 
   // the plan: learn each topic, flashcards on it the next day, a quiz on it the day after (spaced, so it sticks),
@@ -37,6 +38,9 @@
         put(Math.min(d + 1, lastStudy), { kind: 'cards', topic });
         put(Math.min(d + 2, lastStudy), { kind: 'quiz', topic });
       });
+      // a long review (weeks or months): every topic is quizzed again later, so it isn't forgotten by exam day
+      const again = learnSpan + 3, room = lastStudy - again + 1;
+      if (list.length && room >= Math.ceil(list.length / 2)) list.forEach((topic, i) => put(again + Math.floor((i * room) / list.length), { kind: 'quiz', topic }));
       slots.forEach((s, i) => { if (i > 0 && i <= lastStudy && slots[i - 1].some((t) => t.kind === 'quiz') && !s.some((t) => t.kind === 'mistakes')) s.push({ kind: 'mistakes', topic: '' }); });
       put(n - 1, { kind: 'mistakes', topic: '' });
       put(n - 1, { kind: 'focus', topic: list.length ? 'a last look at every topic' : '' });
@@ -72,14 +76,25 @@
     focus: '25 minutes, phone in another room, one thing only. Then a 5 minute break.',
   };
 
+  // the LET's areas (the PRC's table of specifications): General Education and Professional Education for every
+  // examinee, and the major for Secondary. Short names (no commas: a comma splits topics), each one session's topic.
+  const LET_GENED = ['English and Purposive Communication', 'Filipino', 'Mathematics', 'Science and Technology in Society', 'Philippine History and Rizal', 'Ethics and Understanding the Self'];
+  const LET_PROFED = ['Child and Adolescent Development', 'Principles and Strategies of Teaching', 'Assessment of Learning', 'Curriculum Development', 'Technology for Teaching and Learning', 'The Teaching Profession and Ethics', 'Social Dimensions of Education', 'Special and Inclusive Education'];
+  function letTopics(level, major) {
+    const m = clean(major, 30);
+    const majors = level === 'secondary' ? (m ? [`${m}: the content`, `${m}: teaching it`, `${m}: practice questions`] : []) : [];
+    return [...majors, ...LET_PROFED, ...LET_GENED];
+  }
+  const letName = (level, major) => (level === 'secondary' ? `LET Secondary${clean(major, 30) ? `: ${clean(major, 30)}` : ''}` : 'LET Elementary');
+
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-  function render(plan) {
+  function render(plan, isLet = false) {
     const out = $('#rs-plan');
     out.innerHTML = '';
     const head = el('div', 'rs-plan-head');
-    head.append(el('p', 'rs-kicker', 'Your Exam Rescue Plan'), el('h2', null, plan.name));
+    head.append(el('p', 'rs-kicker', isLet ? 'Your LET Rescue Plan' : 'Your Exam Rescue Plan'), el('h2', null, plan.name));
     const left = dayGap(plan.from, plan.date);
     const count = plan.days.reduce((a, d) => a + d.tasks.length, 0);
     head.append(el('p', 'rs-meta', `Exam on ${dayName(plan.date)} · ${left === 0 ? 'today' : left === 1 ? 'tomorrow' : `${left} days to go`} · ${count} study sessions`));
@@ -104,7 +119,9 @@
     const check = el('section', 'rs-check');
     check.append(el('h3', null, 'The night before and exam day'));
     const cl = el('ul');
-    ['Stop studying new things the night before. Only your flashcards and your mistakes.', 'Sleep at least 7 hours. A tired brain forgets what it knows.', 'Pack the night before: ID, pens, calculator, water.', 'Eat breakfast, and get there 15 minutes early.', 'In the exam, answer the easy questions first, then come back to the hard ones.']
+    (isLet
+      ? ['Stop studying new things the night before. Only your flashcards and your mistakes.', 'Sleep at least 7 hours. A tired brain forgets what it knows.', 'Pack the night before: your Notice of Admission, a valid ID, and everything PRC lists on it.', 'Find your room assignment and testing center, and know how to get there.', 'Eat breakfast, and get there early.', 'In each test, answer the easy items first, then come back to the hard ones. Leave no item blank.']
+      : ['Stop studying new things the night before. Only your flashcards and your mistakes.', 'Sleep at least 7 hours. A tired brain forgets what it knows.', 'Pack the night before: ID, pens, calculator, water.', 'Eat breakfast, and get there 15 minutes early.', 'In the exam, answer the easy questions first, then come back to the hard ones.'])
       .forEach((t) => cl.append(el('li', null, t)));
     check.append(cl);
     out.append(check);
@@ -121,17 +138,31 @@
     f.date.max = dayAdd(today, 365);
     let plan = null;
     const say = (m, field) => { const e = $('#rs-err'); e.textContent = m; e.hidden = !m; if (field) field.focus(); };
+    const isLet = !!f.level;
+    if (isLet) { // (the LET page: the topics follow the level and the major, until the student edits them)
+      let edited = false;
+      const fill = () => {
+        const sec = f.level.value === 'secondary';
+        $('#rs-major').hidden = !sec;
+        if (!edited) f.topics.value = letTopics(f.level.value, f.major.value).join('\n');
+      };
+      f.topics.addEventListener('input', () => { edited = true; });
+      f.level.addEventListener('change', fill);
+      f.major.addEventListener('input', fill);
+      fill();
+    }
     f.addEventListener('submit', (e) => {
       e.preventDefault();
-      const name = clean(f.subject.value, 60), date = f.date.value, topics = topicsOf(f.topics.value);
+      const name = isLet ? letName(f.level.value, f.major.value) : clean(f.subject.value, 60), date = f.date.value, topics = topicsOf(f.topics.value);
       if (!name) return say('What is the exam? For example: Biology midterm.', f.subject);
+      if (isLet && f.level.value === 'secondary' && !clean(f.major.value, 30)) return say('What is your major? For example: English.', f.major);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return say('When is the exam? Pick the day.', f.date);
       if (date < today) return say('That day has passed. Pick the day of your next exam.', f.date);
       if (date > dayAdd(today, 365)) return say('Pick a day within the next year.', f.date);
       if (!topics.length) return say('Add at least one topic, one per line. For example: Cells.', f.topics);
       say('');
       plan = makePlan({ name, date, topics: topics.join('\n'), minutes: +f.minutes.value || 60 }, today);
-      render(plan);
+      render(plan, isLet);
     });
     $('#rs-print').addEventListener('click', () => window.print());
     $('#rs-save').addEventListener('click', () => {
@@ -141,6 +172,6 @@
     });
   }
 
-  window.CassieRescue = { makePlan, topicsOf };
+  window.CassieRescue = { makePlan, topicsOf, letTopics, letName };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

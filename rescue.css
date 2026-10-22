@@ -23,6 +23,8 @@ h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; lett
 .rs-card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin-top: 20px; }
 .rs-field { display: grid; gap: 6px; margin-bottom: 16px; font-weight: 600; font-size: 15px; }
 .rs-field input, .rs-field textarea, .rs-field select { font: 400 17px/1.4 var(--sans); color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; min-height: 48px; width: 100%; }
+.rs-field[hidden] { display: none; }
+.rs-hint { font-weight: 400; font-size: 14px; color: var(--mute); }
 .rs-field textarea { resize: vertical; }
 .rs-field ::placeholder { color: var(--mute); opacity: 1; }
 .rs-field :focus-visible, .rs-go:focus-visible, .rs-line:focus-visible, .rs-open:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
@@ -51,11 +53,12 @@ h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; lett
 .rs-after p { margin: 0 0 16px; color: var(--mute); }
 .rs-actions { display: grid; gap: 10px; }
 @media (min-width: 560px) { .rs-actions { grid-template-columns: 1fr 1fr; } }
+.rs-other { margin: 20px 0 0; text-align: center; color: var(--mute); font-size: 15px; }
 .rs-foot { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 max(28px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; color: var(--mute); }
 /* printing: only the plan, black on white, one day never split across pages */
 @media print {
   :root { --page: #fff; --card: #fff; --ink: #000; --mute: #333; --line: #bbb; }
-  .rs-top, .rs-hero, #rs-form, .rs-after, .rs-foot { display: none !important; }
+  .rs-top, .rs-hero, #rs-form, .rs-after, .rs-other, .rs-foot { display: none !important; }
   .rs-card { border: 0; padding: 0; margin: 0; }
   .rs-day { break-inside: avoid; }
 }

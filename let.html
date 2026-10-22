@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Free LET Rescue Plan · Cassie</title>
+<meta name="description" content="Taking the LET? Get a free day by day review plan in 30 seconds: General Education, Professional Education and your major, how to study each one, and what to do the night before.">
+<meta property="og:title" content="Free LET Rescue Plan · Cassie">
+<meta property="og:description" content="Taking the LET? Get a free day by day review plan in 30 seconds.">
+<meta name="theme-color" content="#f5f5f7">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="rescue.css?v=169">
+</head>
+<body>
+<header class="rs-top">
+  <a class="rs-brand" href="index.html"><img src="icons/icon-192.png" alt="" width="28" height="28">Cassie</a>
+  <a class="rs-open" href="start.html">Open Cassie</a>
+</header>
+<main>
+  <section class="rs-hero">
+    <p class="rs-kicker">For LET takers · Free · 30 seconds</p>
+    <h1>Pass the LET with a plan, not panic.</h1>
+    <p class="rs-lead">Pick your level and your exam day. Cassie lays out your review day by day: Professional Education, General Education and your major, how to study each one so it sticks, and what to do the night before.</p>
+  </section>
+  <form id="rs-form" class="rs-card" novalidate>
+    <label class="rs-field"><span>Your level</span><select name="level"><option value="elementary">Elementary</option><option value="secondary">Secondary</option></select></label>
+    <label class="rs-field" id="rs-major" hidden><span>Your major</span><input name="major" type="text" maxlength="30" placeholder="English" autocomplete="off"></label>
+    <label class="rs-field"><span>Your exam day</span><input name="date" type="date" required><small class="rs-hint">The LET is usually in March and September. Check your date at prc.gov.ph.</small></label>
+    <label class="rs-field"><span>Topics, one per line (change them if you like)</span><textarea name="topics" rows="8" required></textarea></label>
+    <label class="rs-field"><span>Time a day</span><select name="minutes"><option value="30">30 minutes</option><option value="60">1 hour</option><option value="120" selected>2 hours</option></select></label>
+    <p id="rs-err" class="rs-err" role="alert" hidden></p>
+    <button type="submit" class="rs-go">Make my LET plan</button>
+    <p class="rs-small">Made on your device. Nothing you type is sent anywhere.</p>
+  </form>
+  <article id="rs-plan" class="rs-card rs-plan" aria-live="polite" hidden></article>
+  <section id="rs-after" class="rs-card rs-after" hidden>
+    <h2>Review with Cassie every day</h2>
+    <p>Save the plan in Cassie, free. Each day she explains the topic, gives you board-style practice questions, makes the flashcards, keeps your mistakes for review and can remind you to study.</p>
+    <div class="rs-actions">
+      <button type="button" id="rs-save" class="rs-go">Save it in Cassie, free</button>
+      <button type="button" id="rs-print" class="rs-line">Print or save as PDF</button>
+    </div>
+  </section>
+  <p class="rs-other">Not the LET? <a href="rescue.html">Make a plan for any exam</a>.</p>
+</main>
+<footer class="rs-foot"><a href="index.html">Cassie</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html">Help</a></footer>
+<script src="rescue.js?v=169"></script>
+</body>
+</html>
