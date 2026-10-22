@@ -1395,7 +1395,7 @@ test('the Exam Rescue Plan (free, from the landing page): subject, day and topic
   const RESCUE = APP.replace('app.html', 'rescue.html');
   const land = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   expect((land.match(/href="rescue\.html"/g) || []).length >= 2, 'the landing page links to it (the hero and the footer)');
-  expect(/rescue\.html rescue\.css rescue\.js/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
+  expect(/rescue\.html let\.html rescue\.css rescue\.js/.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
   const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
   for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, state: { exams: [] } });
@@ -1473,6 +1473,62 @@ test('the Exam Rescue Plan (free, from the landing page): subject, day and topic
     await page.waitForSelector('.plus-sheet', { timeout: 8000 });
     const s = await page.evaluate(() => ({ n: state.exams.length, text: document.querySelector('.plus-sheet').innerText, left: !!localStorage.getItem('cassie.rescue') }));
     expect(s.n === 1 && /Exam Rescue Plan/.test(s.text) && s.left, 'Free keeps one plan: it says so, and the new one waits: ' + JSON.stringify(s));
+    await ctx.close();
+  }
+});
+test('the LET Rescue Plan (let.html, linked from the Rescue Plan and the landing page): the level fills in the LET topics (Professional Education, General Education, and the major for Secondary, which is asked for); a review of months quizzes every topic twice; the plan is called by the level and major, with the LET exam day list; the student can change the topics; made on the device; Save it in Cassie keeps it as an exam plan; readable in light and dark', async (b) => {
+  const LET = APP.replace('app.html', 'let.html');
+  expect(/href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'rescue.html'), 'utf8')) && /href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')), 'linked from the Rescue Plan and the landing page');
+  expect(/ let\.html /.test(fs.readFileSync(path.join(ROOT, 'scripts/build-site.sh'), 'utf8')), 'the site build publishes it');
+  const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+  for (const [device, viewport] of [['Pixel 7', null], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, state: { exams: [] } });
+    const away = [];
+    page.on('request', (r) => { const u = new URL(r.url()); if (/let\.html/.test(r.frame().url()) && u.origin !== new URL(APP).origin) away.push(u.href); });
+    await page.goto(LET);
+    const elem = (await page.inputValue('[name=topics]')).split('\n');
+    expect(elem.length === 14 && elem.includes('Assessment of Learning') && elem.includes('Filipino') && await page.locator('[name=major]').isHidden(), 'Elementary: Professional and General Education filled in, no major: ' + elem.length);
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, 'body'); expect(!bad.length, 'the form, ' + scheme + ': readable: ' + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.selectOption('[name=level]', 'secondary');
+    expect(await page.locator('[name=major]').isVisible(), 'Secondary asks for the major');
+    await page.fill('[name=date]', day(120));
+    await page.click('#rs-form .rs-go');
+    expect(/major/.test(await page.locator('#rs-err').innerText()), 'no major: it asks');
+    await page.fill('[name=major]', 'English');
+    const sec = (await page.inputValue('[name=topics]')).split('\n');
+    expect(sec.length === 17 && sec[0] === 'English: the content' && sec.includes('English: teaching it'), 'Secondary: the major first, then the rest: ' + sec.slice(0, 3));
+    await page.click('#rs-form .rs-go');
+    await page.waitForSelector('#rs-plan:not([hidden]) .rs-day');
+    await page.waitForTimeout(1200);
+    const shown = await page.locator('#rs-plan').innerText();
+    expect(/Your LET Rescue Plan/i.test(shown) && /LET Secondary: English/.test(shown) && /Notice of Admission/.test(shown) && /Learn English: the content/.test(shown), 'called by the level and major, with the LET exam day list');
+    const plan = await page.evaluate((d) => CassieRescue.makePlan({ name: 'LET Secondary: English', date: d, topics: CassieRescue.letTopics('secondary', 'English').join('\n') }), day(120));
+    const n = (k, t) => plan.days.reduce((a, x) => a + x.tasks.filter((y) => y.kind === k && y.topic === t).length, 0);
+    expect(!plan.dropped.length && sec.every((t) => n('learn', t) === 1 && n('quiz', t) === 2), 'months of review: every topic learned once and quizzed twice: ' + JSON.stringify(sec.map((t) => n('quiz', t))));
+    expect(plan.days.every((x) => x.tasks.length <= 3 && x.date < day(120)) && plan.days[plan.days.length - 1].tasks.every((x) => x.kind === 'mistakes' || x.kind === 'focus'), 'at most 3 a day, a light last day');
+    expect(!/[–—]/.test(await page.locator('body').innerText()), 'no dashes');
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(200);
+      if (process.env.SHOTS) await page.locator('#rs-plan').screenshot({ path: `${process.env.SHOTS}/let-plan-${viewport ? viewport.width : 'phone'}-${scheme}.png` });
+      const { bad } = await require('./ui-checks.cjs').contrastIssues(page, 'main');
+      expect(!bad.length, scheme + ': readable: ' + bad.join(' | '));
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 0, 'nothing off the side');
+    // the student's own topics stay when the major changes
+    await page.fill('[name=topics]', 'Grammar\nLiterature');
+    await page.fill('[name=major]', 'Filipino');
+    expect(await page.inputValue('[name=topics]') === 'Grammar\nLiterature', 'edited topics are kept');
+    await page.fill('[name=major]', 'English');
+    await page.click('#rs-form .rs-go');
+    await page.waitForTimeout(400);
+    await Promise.all([page.waitForURL(/app\.html/), page.click('#rs-save')]);
+    await page.waitForSelector('.ex-ready-sheet', { timeout: 8000 });
+    const ex = await page.evaluate(() => state.exams[0]);
+    expect(ex && ex.name === 'LET Secondary: English' && ex.date === day(120) && /Grammar/.test(ex.topics), 'kept in Cassie as an exam plan: ' + JSON.stringify(ex && { name: ex.name, topics: ex.topics }));
+    expect(!away.length, 'made on the device: ' + away.join(', '));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
 });
