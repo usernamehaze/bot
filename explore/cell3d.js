@@ -438,6 +438,10 @@ function createView() {
   const topBar = $('.x3d-top');
   const markTop = () => { if (!root.hidden) root.style.setProperty('--x3d-top', Math.round(topBar.getBoundingClientRect().height) + 'px'); };
   if (window.ResizeObserver) new ResizeObserver(markTop).observe(topBar);
+  // and what sits above the bottom row (a part's card, Look around, the letters) goes where that row really starts:
+  // on a computer the system chips wrap to a second row
+  const markBar = () => { if (!root.hidden) root.style.setProperty('--x3d-bar', Math.round($('.x3d-parts').getBoundingClientRect().height) + 'px'); };
+  if (window.ResizeObserver) new ResizeObserver(markBar).observe($('.x3d-parts'));
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -990,7 +994,7 @@ function createView() {
     $('[data-tool="teach"]').hidden = !opts.onTeach; $('[data-tool="ask"]').hidden = !opts.onAskHere;
     root.hidden = false;
     document.documentElement.classList.add('x3d-open');
-    resize(); markTop();
+    resize(); markTop(); markBar();
     if (!raf) frame();
     const want = o.cell || (inBody || !current ? 'body' : kind);
     if ((!current && !inBody) || want !== kind) showCell(want);
