@@ -277,6 +277,17 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   await ctx.close();
 });
 
+test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
+  const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
+  const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
+  const pages = ['app.html', 'start.html', 'index.html', 'bot.html', 'rescue.html', 'let.html'].map((f) => [f, [...read(f).matchAll(/\.(?:js|css)\?v=(\d+)/g)].map((m) => m[1])]);
+  const off = pages.filter(([, vs]) => vs.some((x) => x !== v)).map(([f]) => f);
+  expect(v && !off.length, 'pages on another version than the service worker (cassie-v' + v + '): ' + off.join());
+  const app = read('app.js'), labs = read('labs/labs.js');
+  expect(app.includes("import('./labs/labs.js?v=" + v + "')"), 'the app loads Labs with the current version');
+  expect(labs.includes("from './museum.js?v=" + v + "'"), 'Labs loads the Museum with the current version');
+});
+
 test('every age is welcome: nursery to work, with an account too', async (b) => {
   const { ctx, page } = await open(b, { state: null });
   await toSignIn(page);
