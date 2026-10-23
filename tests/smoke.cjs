@@ -6836,6 +6836,18 @@ test('the landing page is calm, like linear.app: one message and one button in t
       });
       expect(F.n === 3 && F.labels.join() === 'FIG 0.1,FIG 0.2,FIG 0.3' && /Labs/.test(F.titles[0]) && /Flashcards/.test(F.titles[1]) && /board/i.test(F.titles[2]), `${tag}: the study tools, like Linear's figures: ` + JSON.stringify(F.titles));
       expect(F.before.every((x) => parseFloat(x) > 0) && F.after.every((x) => parseFloat(x) === 0) && new Set(F.delays).size === 3, `${tag}: each drawing draws itself in, one after another: ` + JSON.stringify(F));
+      const moves = await page.evaluate(async () => {
+        const out = [];
+        for (const f of document.querySelectorAll('.fig')) { // (each one while it is on screen: off screen they rest)
+          f.scrollIntoView({ behavior: 'instant', block: 'center' }); await new Promise((r) => setTimeout(r, 200));
+          const mover = f.querySelector('.dot') || f.querySelector('g'), box = f.querySelector('svg').getBoundingClientRect();
+          const at = () => { const r = mover.getBoundingClientRect(); return [Math.round(r.left - box.left), Math.round(r.top - box.top)].join(','); };
+          const a = at(); await new Promise((r) => setTimeout(r, 1100));
+          out.push({ a, b: at(), paused: f.querySelector('svg').animationsPaused() });
+        }
+        return out;
+      });
+      expect(moves.every((m) => m.a !== m.b && !m.paused), `${tag}: each drawing moves while on screen (planets orbit, the top card lifts, a point rides the curve): ` + JSON.stringify(moves));
       // the strip can be stopped (motion people can stop), and keyboard focus shows on every background
       await page.locator('.strip-pause').scrollIntoViewIfNeeded(); await page.click('.strip-pause');
       expect(await page.evaluate(() => getComputedStyle(document.querySelector('.subjects ul')).animationPlayState === 'paused' && document.querySelector('.strip-pause').getAttribute('aria-pressed') === 'true'), `${tag}: Pause stops the subjects strip`);
@@ -6875,7 +6887,37 @@ test('the landing page is calm, like linear.app: one message and one button in t
   const p2 = await rm.newPage(); await p2.goto(APP.replace('app.html', 'index.html'));
   const R = await p2.evaluate(() => ({ hidden: [...document.querySelectorAll('.rv')].filter((e) => getComputedStyle(e).opacity !== '1').length, dim: [...document.querySelectorAll('[data-say] span')].filter((e) => !e.classList.contains('lit')).length, loops: document.getAnimations().filter((a) => a.effect && a.effect.getComputedTiming().iterations === Infinity).length, lean: getComputedStyle(document.querySelector('.hero-try .try-win')).transform }));
   expect(!R.hidden && !R.dim && !R.loops && R.lean === 'none', 'Reduce Motion: nothing waits to fade in or light up, nothing loops or leans: ' + JSON.stringify(R));
+  expect(await p2.evaluate(() => [...document.querySelectorAll('.fig svg')].every((s) => s.animationsPaused())), 'Reduce Motion: the drawings stay still');
   await rm.close();
+});
+
+test('landing: Cassie’s popup on the hero’s lesson page is never cut off: in a short window, opened near the bottom, its quiz shows whole (above the word when there is no room below, and on screen as it grows)', async (b) => {
+  for (const scheme of ['dark', 'light']) {
+    const ctx = await b.newContext({ viewport: { width: 1176, height: 519 }, colorScheme: scheme, serviceWorkers: 'block' });
+    const page = await ctx.newPage();
+    const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(APP.replace('app.html', 'index.html'));
+    await page.waitForTimeout(600);
+    // like the screenshot: the lesson page high on the screen, the word in its first lines
+    await page.evaluate(() => { const e = document.querySelector('#try-page'); scrollTo({ top: e.getBoundingClientRect().top + scrollY - 40, behavior: 'instant' }); });
+    await page.waitForTimeout(400);
+    await page.click('#try-page b[data-term]:text-is("cellular respiration")');
+    await page.waitForSelector('#try-pop:not([hidden])');
+    await page.click('#try-pop [data-act="quiz"]');
+    await page.waitForSelector('#try-pop [data-o="2"]', { timeout: 8000 });
+    await page.waitForTimeout(1200);
+    const g = await page.evaluate(() => {
+      const pop = document.querySelector('#try-pop'), r = pop.getBoundingClientRect(), nav = document.querySelector('.nav').getBoundingClientRect();
+      const seen = (x, y) => { const h = document.elementFromPoint(x, y); return !!h && pop.contains(h); };
+      const last = pop.querySelector('[data-o="2"]').getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, navBottom: nav.bottom, h: innerHeight, lastSeen: seen(last.left + last.width / 2, last.top + last.height / 2), topSeen: seen(r.left + r.width / 2, r.top + 20) };
+    });
+    expect(g.top >= g.navBottom - 1 && g.bottom <= g.h + 1 && g.lastSeen && g.topSeen, `${scheme}: the whole popup shows, down to its last answer: ` + JSON.stringify(g));
+    await page.click('#try-pop [data-o="2"]');
+    expect(await page.locator('#try-pop .tp-fb').isVisible(), `${scheme}: the answer can be picked`);
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
 });
 
 test('landing: the hero’s lesson page: highlight a word and Cassie explains it, quizzes you, makes a card', async (b) => {

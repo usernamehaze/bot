@@ -75,8 +75,8 @@ footer .brand { color: var(--ink); }
 .text-link:hover { color: var(--night-ink); }
 
 /* ---------- 1. hero: a headline, one button, and Cassie to try ---------- */
-.hero { position: relative; isolation: isolate; background: var(--night); color: var(--night-ink); padding: 152px 0 96px; overflow: hidden; }
-.hero-bg { position: absolute; inset: 0; z-index: -2; opacity: .22; }
+.hero { position: relative; z-index: 2; isolation: isolate; background: var(--night); color: var(--night-ink); padding: 152px 0 96px; overflow-x: clip; overflow-y: visible; } /* (clipped only at the sides: Cassie's popup can open past the hero's bottom edge) */
+.hero-bg { position: absolute; inset: 0; z-index: -2; opacity: .22; overflow: hidden; }
 .hero-bg canvas { opacity: 0; transition: opacity 1.4s ease; }
 .hero-bg.live canvas { opacity: 1; }
 .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 40%, var(--night) 96%); pointer-events: none; }

@@ -87,6 +87,15 @@
     pause.setAttribute('aria-label', on ? 'Play the moving subjects' : 'Pause the moving subjects');
   });
 
+  /* ---------- the study tools' drawings move (planets orbit, a card lifts, a point rides the curve):
+     only while on screen, and never with Reduce Motion ---------- */
+  const figSvgs = $$('.fig svg');
+  figSvgs.forEach((sv) => { if (reduce && sv.pauseAnimations) { sv.pauseAnimations(); sv.setCurrentTime(0); } });
+  if (!reduce && 'IntersectionObserver' in window) {
+    const fio = new IntersectionObserver((es) => es.forEach((e) => { if (e.target.pauseAnimations) e.target[e.isIntersecting ? 'unpauseAnimations' : 'pauseAnimations'](); }));
+    figSvgs.forEach((sv) => fio.observe(sv));
+  }
+
   /* ---------- the loops (the button's light, the subjects strip) rest while off screen ---------- */
   if ('IntersectionObserver' in window) {
     const lio = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle('off', !e.isIntersecting)));
