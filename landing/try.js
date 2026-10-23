@@ -78,10 +78,20 @@ function tryIt() {
   function place(rect) {
     const box = page.getBoundingClientRect(), w = Math.min(340, box.width - 20);
     pop.style.width = w + 'px';
-    let x = rect.left - box.left + rect.width / 2 - w / 2, y = rect.bottom - box.top + 12;
+    let x = rect.left - box.left + rect.width / 2 - w / 2;
     x = Math.max(10, Math.min(box.width - w - 10, x));
-    pop.style.left = x + 'px'; pop.style.top = y + 'px';
+    pop.style.left = x + 'px';
+    // below the word, or above it when there's no room below on the screen (it grows as it answers)
+    const ROOM = 360;
+    if (innerHeight - rect.bottom < ROOM && rect.top > ROOM) { pop.style.top = 'auto'; pop.style.bottom = (box.bottom - rect.top + 12) + 'px'; }
+    else { pop.style.bottom = 'auto'; pop.style.top = (rect.bottom - box.top + 12) + 'px'; }
   }
+  // as the popup grows (an answer, a quiz), keep all of it on the screen
+  if ('ResizeObserver' in window) new ResizeObserver(() => {
+    if (pop.hidden) return;
+    const r = pop.getBoundingClientRect();
+    if (r.bottom > innerHeight - 8 || r.top < 80) pop.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  }).observe(pop);
   function open(text, rect) {
     chosen = text.trim().replace(/\s+/g, ' ').slice(0, 80);
     if (!chosen) return;
