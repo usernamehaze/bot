@@ -1398,11 +1398,13 @@ html.x3d-open, html.x3d-open body { overflow: hidden; }
   padding: 10px 16px calc(12px + var(--safe-bottom, 0px)); background: linear-gradient(to top, rgba(var(--dark-rgb), .85), transparent);
 }
 .x3d-parts::-webkit-scrollbar { display: none; }
+/* a mouse can't swipe a row sideways: on a computer or a tablet every system chip shows, on a second row if they need it */
+@media (min-width: 700px) { .x3d-parts { flex-wrap: wrap; justify-content: center; overflow: visible; } }
 .x3d-chip { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; font-size: .84rem; font-weight: 600; white-space: nowrap; }
 .x3d-chip.on { background: var(--on-dark); color: var(--dark-1); border-color: var(--on-dark); }
 .x3d-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(var(--hi-rgb), .18); }
 .x3d-sheet {
-  position: absolute; left: 50%; bottom: calc(64px + var(--safe-bottom, 0px)); transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: calc(var(--x3d-bar, calc(58px + var(--safe-bottom, 0px))) + 6px); transform: translateX(-50%);
   width: min(440px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; padding: 16px 16px 14px; border-radius: 20px;
   background: rgba(var(--dark-rgb), .9); border: 1px solid rgba(var(--hi-rgb), .14); box-shadow: 0 18px 50px rgba(var(--shade-rgb), .45);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: x3dUp .28s ease-out;
@@ -1604,7 +1606,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
 .x3d-count b { color: var(--on-dark); font-weight: 600; font-variant-numeric: tabular-nums; }
 .x3d-count-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--on-dark); box-shadow: 0 0 0 3px rgba(var(--hi-rgb), .12); }
 .x3d-view {
-  position: absolute; left: 50%; bottom: calc(64px + var(--safe-bottom, 0px)); transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: calc(var(--x3d-bar, calc(58px + var(--safe-bottom, 0px))) + 6px); transform: translateX(-50%);
   width: min(460px, calc(100vw - 32px)); padding: 12px 16px 12px; border-radius: 20px;
   background: rgba(var(--dark-rgb), .9); border: 1px solid rgba(var(--hi-rgb), .14); box-shadow: 0 18px 50px rgba(var(--shade-rgb), .45);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: x3dUp .28s ease-out;
@@ -1612,7 +1614,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
 .x3d-view[hidden] { display: none; }
 /* a computer: the view controls sit at the side, so the pulled-apart pieces get the whole middle; a tablet: a wider panel */
 @media (min-width: 1100px) {
-  .x3d-view { left: 16px; transform: none; bottom: calc(70px + var(--safe-bottom, 0px)); width: 380px; animation-name: x3dUpL; }
+  .x3d-view { left: 16px; transform: none; bottom: calc(var(--x3d-bar, calc(58px + var(--safe-bottom, 0px))) + 12px); width: 380px; animation-name: x3dUpL; }
   .x3d-spread-head label, .x3d-reassemble { white-space: nowrap; }
   .x3d-view .x3d-seg button { font-size: .76rem; }
 }
@@ -1637,7 +1639,7 @@ html.native .sidebar { padding-bottom: calc(84px + var(--safe-bottom)); }
 .x3d-spread::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--dark-1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='100 80 305 350'%3E%3Cpath d='M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z' fill='white' stroke='%230b0a0f' stroke-width='22' stroke-linejoin='round' paint-order='stroke'/%3E%3C/svg%3E") 58% 55%/12px 14px no-repeat; border: 2px solid var(--on-dark); }
 .x3d-spread:focus-visible { outline: 2px solid var(--white); outline-offset: 4px; border-radius: 99px; }
 .x3d-spread-ends { display: flex; justify-content: space-between; font-size: .72rem; color: rgba(var(--hi-rgb), .55); }
-.x3d-gizmo { position: absolute; right: 22px; bottom: calc(96px + var(--safe-bottom, 0px)); width: 76px; height: 76px; border-radius: 50%; background: rgba(var(--hi-rgb), .04); border: 1px solid rgba(var(--hi-rgb), .08); }
+.x3d-gizmo { position: absolute; right: 22px; bottom: calc(var(--x3d-bar, calc(58px + var(--safe-bottom, 0px))) + 38px); width: 76px; height: 76px; border-radius: 50%; background: rgba(var(--hi-rgb), .04); border: 1px solid rgba(var(--hi-rgb), .08); }
 .x3d-gizmo[hidden] { display: none; }
 .x3d-gizmo button { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; border-radius: 50%; border: 1px solid rgba(var(--hi-rgb), .22); background: rgba(var(--dark-rgb), .85); color: var(--on-dark); font: inherit; font-size: .64rem; font-weight: 700; cursor: pointer; }
 .x3d-gizmo button[data-face="A"], .x3d-gizmo button[data-face="S"] { background: var(--on-dark); color: var(--dark-1); }

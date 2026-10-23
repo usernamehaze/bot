@@ -286,6 +286,7 @@ test('an update reaches every device: the pages, the service worker cache and th
   const app = read('app.js'), labs = read('labs/labs.js');
   expect(app.includes("import('./labs/labs.js?v=" + v + "')"), 'the app loads Labs with the current version');
   expect(labs.includes("from './museum.js?v=" + v + "'"), 'Labs loads the Museum with the current version');
+  expect(app.includes("import('./explore/cell3d.js?v=" + v + "')"), 'the app loads the 3D views (the human body) with the current version');
 });
 
 test('every age is welcome: nursery to work, with an account too', async (b) => {
@@ -5185,6 +5186,30 @@ test.slow('Explore cells are their own view: own card on the Labs shelf and in 3
   const body = await page.evaluate(() => window.__body);
   expect(!body.length && !bodyFiles.length, 'the body never showed or loaded on the way to the cells: ' + JSON.stringify({ body, bodyFiles: bodyFiles.slice(0, 3) }));
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Explore 3D body on a laptop (1366 wide, a mouse): every body system chip shows and turns on and off with a click, and Look around and the letters sit above the chips', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, viewport: { width: 1366, height: 657 }, state: { groqKey: 'gsk_test' } });
+  await open3d(page, 'body3d');
+  await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
+  const chips = () => page.$$eval('.x3d-sys', (cs) => cs.map((c) => { const r = c.getBoundingClientRect(); const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { name: c.textContent.trim(), in: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, hit: !!t && (t === c || c.contains(t)) }; }));
+  const bad = (await chips()).filter((c) => !c.in || !c.hit).map((c) => c.name);
+  expect(!bad.length, 'chips off screen or covered on a laptop (a mouse cannot swipe the row): ' + bad.join());
+  for (const sys of ['lymphatic', 'reproductive', 'circulatory']) {
+    const was = await page.getAttribute(`.x3d-sys[data-sys="${sys}"]`, 'aria-pressed');
+    await page.click(`.x3d-sys[data-sys="${sys}"]`);
+    await page.waitForFunction(([s, w]) => document.querySelector(`.x3d-sys[data-sys="${s}"]`).getAttribute('aria-pressed') !== w, [sys, was], { timeout: 5000 });
+  }
+  if (await page.locator('.x3d-view').isHidden()) await page.click('[data-tool="view"]').catch(() => {});
+  const gap = await page.evaluate(() => {
+    const bar = document.querySelector('.x3d-parts').getBoundingClientRect().top;
+    return ['.x3d-view', '.x3d-gizmo'].map((q) => { const e = document.querySelector(q); return e && !e.hidden ? [q, Math.round(bar - e.getBoundingClientRect().bottom)] : [q, 'hidden']; });
+  });
+  expect(gap.every(([, g]) => g === 'hidden' || g >= 0), 'Look around and the letters sit above the chips: ' + JSON.stringify(gap));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/body-chips-1366.png' });
   await ctx.close();
 });
 
