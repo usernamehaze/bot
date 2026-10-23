@@ -112,7 +112,7 @@ const credit = (a) => (COMMONS[a.id] ? `Picture: public domain, from <a href="${
 const wikiLink = (a) => `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wiki.replace(/ /g, '_'))}`;
 
 const museumLab = {
-  id: 'museum', name: 'Museum of Famous Arts', subject: 'tools', wide: true,
+  id: 'museum', name: 'Museum of Famous Arts', subject: 'history', wide: true,
   blurb: 'Walk through masterpieces by Filipino artists, Luna, Hidalgo, Amorsolo, Botong, BenCab, and the world’s most famous paintings: who made them, when, and the story behind each.',
   words: 'art museum painting artist filipino juan luna spoliarium amorsolo national artist mona lisa starry night van gogh gallery history arts',
   topic: 'famous paintings and artists, Filipino and world',
@@ -120,22 +120,26 @@ const museumLab = {
   about: 'Thirty-five famous works, from Damián Domingo’s 1820s watercolours to BenCab’s Sabel, and from Botticelli to Frida Kahlo. Every card says who made it, when, what it is made of, and where it is now. Every picture is kept in the app so it always loads: public domain works from Wikimedia Commons, and works still under copyright as a credited copy, shown for study. “Who painted it?” is a quick game with the same works.',
   mount({ stage, panel, api }) {
     let wing = 'all', open = null, game = null, seen = new Set();
+    // the gallery is a ring of framed paintings on a damask wall, turning one at a time (after animos.app);
+    // "Show all as a grid" lays every work out at once
+    let at = 0, asGrid = false, timer = 0, hovering = false, focused = false, onScreen = true, swipe = null;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const page = el('div', 'tl-sheet tl-museum'); stage.appendChild(page);
-    seg(group(panel, 'Gallery'), { options: [['all', 'All'], ['ph', 'Filipino artists'], ['world', 'Around the world']], value: wing, onChange: (v) => { wing = v; game = null; open = null; draw(); } });
+    seg(group(panel, 'Gallery'), { options: [['all', 'All'], ['ph', 'Filipino artists'], ['world', 'Around the world']], value: wing, onChange: (v) => { wing = v; game = null; open = null; at = 0; draw(); } });
     const search = el('input', 'tl-input'); search.placeholder = 'Find a work or an artist…'; search.setAttribute('aria-label', 'Find a work or an artist');
     group(panel, 'Search').appendChild(search);
-    search.addEventListener('input', () => { open = null; game = null; draw(); });
+    search.addEventListener('input', () => { open = null; game = null; at = 0; draw(); });
     const r = row(panel);
     button(r, 'Play “Who painted it?”', plusOnly('The “Who painted it?” quiz', () => startGame()), 'main');
-    button(r, 'Surprise me', () => { const list = shown(); show(list[Math.floor(Math.random() * list.length)].id); });
+    button(r, 'Surprise me', () => { const list = shown(), pick = list[Math.floor(Math.random() * list.length)]; if (!pick) return; if (!asGrid && !open && !game) turnTo(pick.id); else show(pick.id); });
     const st = stats(panel);
     const shown = () => { const q = search.value.trim().toLowerCase(); return ALL.filter((a) => (wing === 'all' || a.from === wing) && (!q || (a.title + ' ' + a.artist + ' ' + a.year).toLowerCase().includes(q))); };
     function frame(a, big = false) {
       return `<div class="tl-frame${big ? ' tl-big' : ''}" data-pic="${a.id}"><div class="tl-canvas tl-ph-${a.from}"><span>${esc(a.title)}</span><small>${esc(a.artist)}</small></div></div>`;
     }
     // fill in pictures as they arrive
-    function hydrate() {
-      page.querySelectorAll('[data-pic]').forEach((f) => {
+    function hydrate(only) {
+      (only || [...page.querySelectorAll('[data-pic]')]).forEach((f) => {
         const a = ALL.find((x) => x.id === f.dataset.pic);
         if (f.querySelector('img') || !hasPic(a)) return;
         const img = new Image(); img.alt = `${a.title} by ${a.artist}`; img.loading = 'lazy'; img.decoding = 'async';
@@ -147,10 +151,66 @@ const museumLab = {
       if (game) { drawGame(); return; }
       if (open) { drawOne(); return; }
       const list = shown();
-      page.innerHTML = `<p class="tl-hint">${list.length} works · tap one to read its story</p><div class="tl-gallery">${list.map((a) => `<button type="button" class="tl-work" data-open="${a.id}">${frame(a)}<b>${esc(a.title)}</b><span>${esc(a.artist)} · ${esc(a.year)}</span></button>`).join('')}</div>`;
+      if (!asGrid && list.length) { drawRing(list); return; }
+      stopTurning();
+      page.innerHTML = `<p class="tl-hint">${list.length} works · tap one to read its story ${list.length ? '<button type="button" class="tl-view" data-view="ring">Show as a gallery wall</button>' : ''}</p><div class="tl-gallery">${list.map((a) => `<button type="button" class="tl-work" data-open="${a.id}">${frame(a)}<b>${esc(a.title)}</b><span>${esc(a.artist)} · ${esc(a.year)}</span></button>`).join('')}</div>`;
       hydrate();
       st.set([['Works', String(list.length)], ['Viewed', `${seen.size}/${ALL.length}`]]);
     }
+    function drawRing(list) {
+      at = Math.min(at, list.length - 1);
+      page.innerHTML = `<div class="tl-hall${reduce ? ' tl-still' : ''}">
+          <div class="tl-ring" tabindex="0" role="region" aria-roledescription="carousel" aria-label="The gallery: use the arrow keys to turn it">${list.map((a, k) => `<button type="button" class="tl-work tl-card3d" data-open="${a.id}" data-k="${k}" aria-label="${esc(a.title)}, ${esc(a.artist)}, ${esc(a.year)}">${frame(a)}</button>`).join('')}</div>
+          <button type="button" class="tl-turn tl-prev" data-turn="-1" aria-label="The painting before">‹</button><button type="button" class="tl-turn tl-next" data-turn="1" aria-label="The next painting">›</button>
+        </div>
+        <p class="tl-now" aria-live="polite"></p>
+        <p class="tl-hint tl-ringhint">${list.length} works · tap the one in front to read its story <button type="button" class="tl-view" data-view="grid">Show all as a grid</button></p>`;
+      const hall = page.querySelector('.tl-hall'), ring = page.querySelector('.tl-ring');
+      hall.addEventListener('pointerenter', () => { hovering = true; }); hall.addEventListener('pointerleave', () => { hovering = false; });
+      hall.addEventListener('focusin', () => { focused = true; }); hall.addEventListener('focusout', () => { focused = false; });
+      ring.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); turn(e.key === 'ArrowRight' ? 1 : -1); } });
+      // a swipe turns it (and isn't also a tap)
+      ring.addEventListener('pointerdown', (e) => { swipe = { x: e.clientX, y: e.clientY, moved: false }; });
+      ring.addEventListener('pointermove', (e) => { if (swipe && Math.abs(e.clientX - swipe.x) > 12 && Math.abs(e.clientX - swipe.x) > Math.abs(e.clientY - swipe.y)) swipe.moved = true; });
+      ring.addEventListener('pointerup', (e) => { if (swipe && swipe.moved && Math.abs(e.clientX - swipe.x) > 40) turn(e.clientX < swipe.x ? 1 : -1); });
+      ring.addEventListener('click', (e) => { if (swipe && swipe.moved) { e.stopPropagation(); e.preventDefault(); } swipe = null; }, true);
+      if ('ResizeObserver' in window) new ResizeObserver(() => place()).observe(ring);
+      ring.classList.add('tl-settle'); place(); // (they start in their places: no fly-in each time it opens)
+      requestAnimationFrame(() => requestAnimationFrame(() => ring.classList.remove('tl-settle')));
+      st.set([['Works', String(list.length)], ['Viewed', `${seen.size}/${ALL.length}`]]);
+      startTurning();
+    }
+    // each painting stands by how far it is from the front: turned away, further back and dimmer
+    function place() {
+      const ring = page.querySelector('.tl-ring'); if (!ring) return;
+      const cards = [...ring.querySelectorAll('.tl-card3d')], n = cards.length, w = cards[0] ? cards[0].offsetWidth : 200;
+      cards.forEach((c, k) => {
+        let d = k - at; if (d > n / 2) d -= n; if (d < -n / 2) d += n; // (the shortest way round the ring)
+        const a = Math.abs(d), s = Math.sign(d);
+        const x = a ? s * (w * 0.62 + (a - 1) * w * 0.4) : 0;
+        c.style.transform = reduce ? `translate(-50%, -50%) translateX(${s * a * (w + 24)}px)`
+          : `translate(-50%, -50%) translateX(${x}px) translateZ(${-a * 150}px) rotateY(${-s * Math.min(a, 1) * 50}deg)`;
+        c.style.zIndex = String(20 - a);
+        c.style.setProperty('--dim', String(Math.min(a * 0.22, 0.75)));
+        c.classList.toggle('tl-front', a === 0);
+        c.classList.toggle('tl-gone', a > 3);
+        c.tabIndex = a === 0 ? 0 : -1;
+        if (a === 0) c.setAttribute('aria-current', 'true'); else c.removeAttribute('aria-current');
+      });
+      hydrate(cards.filter((c, k) => { let d = Math.abs(k - at); d = Math.min(d, n - d); return d <= 2; }).map((c) => c.querySelector('[data-pic]')));
+      const a = shown()[at], now = page.querySelector('.tl-now');
+      if (a && now) now.innerHTML = `<b>${esc(a.title)}</b> · ${esc(a.artist)} · ${esc(a.year)}`;
+    }
+    function turn(by) { const n = shown().length; if (!n) return; at = (at + by + n) % n; place(); }
+    function turnTo(id) { const k = shown().findIndex((x) => x.id === id); if (k >= 0) { at = k; place(); } }
+    // it turns on its own every 2.8 s, but rests while you point at it, use it with the keyboard, or it's off screen
+    function startTurning() {
+      stopTurning();
+      if (reduce) return;
+      timer = setInterval(() => { if (!hovering && !focused && onScreen && !open && !game && !asGrid && !document.hidden && page.isConnected) turn(1); }, 2800);
+    }
+    function stopTurning() { clearInterval(timer); timer = 0; }
+    if ('IntersectionObserver' in window) new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; }).observe(page);
     function drawOne() {
       const a = ALL.find((x) => x.id === open);
       page.innerHTML = `<div class="tl-one"><button type="button" class="lab-btn" data-close>‹ Back to the gallery</button>
@@ -166,7 +226,7 @@ const museumLab = {
       if (seen.size >= 1) api.check(0);
       if (new Set([...seen].map((id) => ALL.find((x) => x.id === id).from)).size === 2) api.check(1);
     }
-    function show(id) { open = id; game = null; draw(); page.scrollTop = 0; }
+    function show(id) { open = id; game = null; stopTurning(); draw(); page.scrollTop = 0; }
     function startGame() {
       const pool = shuffle(shown().length >= 8 ? shown() : ALL, Math.random).slice(0, 8); // (always a round of 8: a gallery with fewer plays from every work)
       game = { pool, i: 0, score: 0, picked: null };
@@ -188,8 +248,12 @@ const museumLab = {
       hydrate();
     }
     page.addEventListener('click', async (e) => {
-      const o = e.target.closest('[data-open]'); if (o) { show(o.dataset.open); return; }
-      if (e.target.closest('[data-close]')) { open = null; game = null; draw(); return; }
+      const t = e.target.closest('[data-turn]'); if (t) { turn(+t.dataset.turn); return; }
+      const v = e.target.closest('[data-view]'); if (v) { asGrid = v.dataset.view === 'grid'; draw(); return; }
+      const o = e.target.closest('[data-open]');
+      if (o && o.classList.contains('tl-card3d') && !o.classList.contains('tl-front')) { at = +o.dataset.k; place(); return; }
+      if (o) { show(o.dataset.open); return; }
+      if (e.target.closest('[data-close]')) { open = null; game = null; draw(); startTurning(); return; }
       if (e.target.closest('[data-again]')) { startGame(); return; }
       const gu = e.target.closest('[data-guess]');
       if (gu && game && !game.picked) { game.picked = gu.dataset.guess; if (game.picked === game.pool[game.i].artist) game.score++; seen.add(game.pool[game.i].id); drawGame(); return; }
@@ -205,7 +269,7 @@ const museumLab = {
       }
     });
     draw();
-    return { state: () => (game ? `playing “Who painted it?”: ${game.score} right so far` : open ? `looking at ${ALL.find((x) => x.id === open).title} by ${ALL.find((x) => x.id === open).artist}` : `browsing the ${wing === 'ph' ? 'Filipino' : wing === 'world' ? 'world' : 'whole'} gallery`), destroy() {} };
+    return { destroy: () => stopTurning(), state: () => (game ? `playing “Who painted it?”: ${game.score} right so far` : open ? `looking at ${ALL.find((x) => x.id === open).title} by ${ALL.find((x) => x.id === open).artist}` : `browsing the ${wing === 'ph' ? 'Filipino' : wing === 'world' ? 'world' : 'whole'} gallery`), destroy() {} };
   },
   tries: ['Open a work and read its story', 'Visit both galleries: Filipino and world', 'Get 6 or more right in “Who painted it?”'],
   hints: ['Tap any work in the gallery.', 'Switch the Gallery to “Filipino artists”, then to “Around the world”.', 'Read a few stories first: the artists’ styles give them away.'],

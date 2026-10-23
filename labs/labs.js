@@ -30,10 +30,10 @@ import { MUSEUM } from './museum.js';
 import { GAMES } from './games.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
-export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography']];
+export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
 // labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone)
 const NO_HELPERS = new Set(['solar', 'space3d']);
-const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
+const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', history: 'History', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
   { id: 'body3d', name: 'Human body 3D', subject: 'biology', blurb: 'Turn, zoom and pull apart the real body, 10 systems, tap any part.', explore: 'body',
@@ -49,7 +49,7 @@ const is3d = (l) => !!(l.explore || l.three);
 
 // the phone's Labs tab: a sliding row of filters, Today's Lab, and For you (Learn, Study tools),
 // each with a live mini preview (previews.js). Computers keep the shelf above.
-const LP_CHIPS = [['all', 'All'], ['science', 'Science'], ['maths', 'Maths'], ['3d', '3D'], ['tools', 'Study tools'], ['games', 'Games']];
+const LP_CHIPS = [['all', 'All'], ['science', 'Science'], ['maths', 'Maths'], ['history', 'History'], ['3d', '3D'], ['tools', 'Study tools'], ['games', 'Games']];
 const SCIENCE = new Set(['biology', 'chemistry', 'physics', 'space', 'geography']);
 const phoneQ = matchMedia('(max-width: 760px)');
 let pvMod = null;
@@ -236,7 +236,7 @@ function createView() {
     const learn = [...EXPLORE, ...SIMS];
     const lists = { search: ['Search', found || []],
       learn: ['Learn', learn], tools: ['Study tools', LABS.filter((l) => shelfOf(l) === 'tools')], science: ['Science', learn.filter((l) => SCIENCE.has(l.subject))],
-      maths: ['Maths', learn.filter((l) => l.subject === 'math')], '3d': ['3D', learn.filter(is3d)], games: ['Games', LABS.filter((l) => shelfOf(l) === 'games')],
+      maths: ['Maths', learn.filter((l) => l.subject === 'math')], history: ['History', learn.filter((l) => l.subject === 'history')], '3d': ['3D', learn.filter(is3d)], games: ['Games', LABS.filter((l) => shelfOf(l) === 'games')],
     };
     const [title, list] = lists[kind] || lists.learn;
     lpList.querySelector('h3').textContent = title;

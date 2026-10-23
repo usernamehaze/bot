@@ -5734,7 +5734,7 @@ test('Study tools: vocabulary chain, timeline, essay structure, flashcards from 
   await page.evaluate(() => openLabs(undefined, { section: 'tools' }));
   await page.waitForSelector('.labs:not([hidden]) .labs-grid .labs-card[data-lab="vocab"]', { timeout: 15000 }); // (the shelf draws a moment later)
   const tools = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
-  expect(['vocab', 'timeline', 'essay', 'cardmatrix', 'cornell', 'thesis', 'museum'].every((t) => tools.includes(t)) && !tools.includes('pendulum') && !tools.includes('sudoku'), 'the Study tools shelf: ' + tools);
+  expect(['vocab', 'timeline', 'essay', 'cardmatrix', 'cornell', 'thesis'].every((t) => tools.includes(t)) && !tools.includes('museum') && !tools.includes('pendulum') && !tools.includes('sudoku'), 'the Study tools shelf (the Museum is in Learn > History now): ' + tools);
   await page.evaluate(() => openLabs(undefined, { section: 'games' }));
   const games = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
   expect(['circuit', 'cracker', 'blitz', 'diner', 'economy', 'sudoku'].every((t) => games.includes(t)), 'the Games shelf: ' + games);
@@ -7863,12 +7863,99 @@ test('3D Cassie in the app: she replaces the flat Cassie on Home and in chat (sa
   }
 });
 
-test('museum: every painting’s picture really loads (all 35, from the app, no outside host), and every frame is the carved antique gold one', async (b) => {
+test('museum: a gallery wall where the paintings stand in a ring that turns (after animos.app), each in an ornate gold frame on red damask; under Learn > History on a computer and a phone (not Study tools); arrows, keys, swipe and tap; it rests on hover, focus and Reduce Motion; readable; no dashes', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, server: false, state: { groqKey: 'gsk_test' } });
+    // where it lives: Learn, under History (and not in Study tools)
+    const where = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const lab = m.LABS.find((l) => l.id === 'museum'); return { subject: lab.subject }; });
+    expect(where.subject === 'history', `${size}: the Museum's subject is history: ` + JSON.stringify(where));
+    await page.evaluate(() => openLabs());
+    await page.waitForSelector('.labs:not([hidden])');
+    if (await page.locator('.lp:not([hidden])').count()) { // a phone: the History chip lists it; Study tools doesn't
+      await page.click('.lp-chips [data-lp="history"]');
+      expect(await page.locator('.lp-row[data-lab="museum"]').count() === 1, `${size}: History lists the Museum`);
+      await page.click('.lp-chips [data-lp="tools"]');
+      expect(await page.locator('.lp-row[data-lab="museum"]').count() === 0, `${size}: Study tools doesn't`);
+    } else {
+      await page.click('.labs-chips [data-subject="history"]');
+      expect(await page.locator('.labs-grid [data-lab="museum"]').count() === 1, `${size}: Learn > History shows the Museum`);
+    }
+    await page.evaluate(() => openLabs('museum'));
+    await page.waitForSelector('.tl-ring .tl-card3d.tl-front', { timeout: 15000 });
+    const R = await page.evaluate(() => {
+      const hall = document.querySelector('.tl-hall'), front = document.querySelector('.tl-front'), side = document.querySelector('.tl-card3d[data-k="1"]'), f = front.querySelector('.tl-frame');
+      return { n: document.querySelectorAll('.tl-card3d').length, wall: /data:image\/svg\+xml/.test(getComputedStyle(hall).backgroundImage), ornaments: (getComputedStyle(f, '::before').backgroundImage.match(/data:image\/svg\+xml/g) || []).length, gold: /gradient/.test(getComputedStyle(f).backgroundImage), front: getComputedStyle(front).transform, side: getComputedStyle(side).transform, now: document.querySelector('.tl-now').textContent };
+    });
+    expect(R.n === 35 && R.wall && R.ornaments === 8 && R.gold, `${size}: 35 paintings in ornate gold frames (8 carved ornaments each) on the damask wall: ` + JSON.stringify(R));
+    expect(/matrix3d/.test(R.side) && R.front !== R.side && /Spoliarium/.test(R.now), `${size}: the one in front faces you, the next is turned away in 3D, and its name shows below: ` + JSON.stringify([R.side.slice(0, 40), R.now]));
+    // it turns on its own
+    const front = () => page.evaluate(() => { const f = document.querySelector('.tl-front'); return f ? f.dataset.open : 'none in front'; });
+    const f0 = await front(); await page.mouse.move(2, 2); await page.waitForTimeout(3300);
+    expect(await front() !== f0, `${size}: it turns on its own`);
+    // Next, Previous, the arrow keys
+    let f1 = await front(); await page.click('.tl-next'); await page.waitForTimeout(150);
+    const f2 = await front(); expect(f2 !== f1, `${size}: Next turns it`);
+    await page.click('.tl-prev'); await page.waitForTimeout(150); expect(await front() === f1, `${size}: Previous turns it back`);
+    await page.focus('.tl-ring'); await page.keyboard.press('ArrowRight'); expect(await front() === f2, `${size}: the right arrow key turns it`);
+    // it rests while focused, and while the pointer is on it
+    const held = await front(); await page.waitForTimeout(3300); expect(await front() === held, `${size}: it rests while it has keyboard focus`);
+    await page.evaluate(() => document.activeElement.blur());
+    if (!/390/.test(size)) { await page.hover('.tl-hall'); const h = await front(); await page.waitForTimeout(3300); expect(await front() === h, `${size}: it rests while the pointer is on it`); await page.mouse.move(2, 2); }
+    // a swipe turns it
+    const s0 = await front();
+    await page.evaluate(() => { const r = document.querySelector('.tl-ring'), b = r.getBoundingClientRect(), y = b.top + b.height / 2, ev = (t, x) => r.dispatchEvent(new PointerEvent(t, { bubbles: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true })); ev('pointerdown', b.left + b.width * 0.7); ev('pointermove', b.left + b.width * 0.5); ev('pointermove', b.left + b.width * 0.3); ev('pointerup', b.left + b.width * 0.3); });
+    await page.waitForTimeout(150); expect(await front() !== s0, `${size}: a swipe turns it`);
+    // a painting at the side comes to the front; the one in front opens its story
+    await page.waitForTimeout(900);
+    const sideId = await page.evaluate(() => { const n = document.querySelectorAll('.tl-card3d').length, at = +document.querySelector('.tl-front').dataset.k; return document.querySelector(`.tl-card3d[data-k="${(at + 1) % n}"]`).dataset.open; });
+    const sb = await page.locator(`.tl-card3d[data-open="${sideId}"]`).boundingBox(); await page.mouse.click(sb.x + sb.width - 12, sb.y + sb.height / 2); // (the part of it that shows, beside the front one)
+    await page.waitForTimeout(900);
+    expect(await front() === sideId, `${size}: tapping a side painting turns it to the front`);
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900);
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/museum-ring-${size}-${scheme}.png` });
+      const { bad } = await contrastIssues(page, '.tl-museum');
+      expect(!bad.length, `${size} ${scheme}: readable: ` + bad.join(' | '));
+    }
+    expect(!/[–—]/.test(await page.locator('.tl-museum').innerText()), `${size}: no dashes`);
+    await page.click('.tl-front');
+    await page.waitForSelector('.tl-one .tl-big');
+    expect(await page.locator('.tl-one h3').innerText() !== '', `${size}: the one in front opens its story`);
+    const stay = await page.evaluate(() => document.querySelector('.tl-one h3').textContent); await page.waitForTimeout(3000);
+    expect(await page.evaluate(() => document.querySelector('.tl-one h3').textContent) === stay, `${size}: it stays still while a work is open`);
+    await page.click('[data-close]');
+    // all as a grid, then back
+    await page.click('[data-view="grid"]'); expect(await page.locator('.tl-gallery .tl-work').count() === 35, `${size}: Show all as a grid`);
+    await page.click('[data-view="ring"]'); expect(await page.locator('.tl-ring .tl-card3d').count() === 35, `${size}: back to the gallery wall`);
+    if (process.env.SHOTS && /1280/.test(size)) { await page.emulateMedia({ colorScheme: 'dark' }); for (let i = 0; i < 3; i++) { await page.locator('.tl-hall').screenshot({ path: `${process.env.SHOTS}/museum-turn-${i}.png` }); await page.click('.tl-next'); await page.waitForTimeout(950); } }
+    expect(!errors.length, `${size}: page errors: ` + errors.join('; '));
+    await ctx.close();
+  }
+  // Reduce Motion: no turning on its own and no 3D; Next still works
+  const rm = await b.newContext({ ...require('playwright').devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  await rm.close();
+  const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await page.evaluate(() => openLabs('museum'));
+  await page.waitForSelector('.tl-ring .tl-front', { timeout: 15000 });
+  const r0 = await page.evaluate(() => document.querySelector('.tl-front').dataset.open);
+  await page.mouse.move(2, 2); await page.waitForTimeout(3300);
+  const still = await page.evaluate(() => ({ front: document.querySelector('.tl-front').dataset.open, threeD: [...document.querySelectorAll('.tl-card3d')].some((c) => /matrix3d/.test(getComputedStyle(c).transform)) }));
+  expect(still.front === r0 && !still.threeD, 'Reduce Motion: it doesn’t turn on its own, and nothing is in 3D: ' + JSON.stringify(still));
+  await page.click('.tl-next'); expect(await page.evaluate(() => document.querySelector('.tl-front').dataset.open) !== r0, 'Reduce Motion: Next still works');
+  await ctx.close();
+});
+
+test('museum: every painting’s picture really loads (all 35, from the app, no outside host), and every frame is the ornate carved gold one', async (b) => {
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, scale: 1, server: false, state: { groqKey: 'gsk_test' } });
     const outside = [];
     page.on('request', (r) => { if (/wiki(pedia|media)\.org/.test(r.url())) outside.push(r.url()); });
     await page.evaluate(() => openLabs('museum'));
+    await page.waitForSelector('.tl-ring .tl-front', { timeout: 15000 });
+    await page.click('[data-view="grid"]'); // (all of them at once: the grid)
     await page.waitForSelector('.tl-gallery .tl-frame', { timeout: 15000 });
     // every work, in view one by one (the pictures load as they come into view)
     const n = await page.locator('.tl-work').count();
@@ -7881,10 +7968,10 @@ test('museum: every painting’s picture really loads (all 35, from the app, no 
     // the frame: carved gold moulding, a beaded band, corner ornaments (inline SVG) and a gilt lip round the picture
     const frames = await page.evaluate(() => [...document.querySelectorAll('.tl-frame')].map((f) => {
       const cs = getComputedStyle(f), before = getComputedStyle(f, '::before'), after = getComputedStyle(f, '::after'), lip = getComputedStyle(f.querySelector('.tl-canvas'));
-      return { id: f.dataset.pic, gold: /gradient/.test(cs.backgroundImage) && (cs.boxShadow.match(/inset/g) || []).length >= 5, corners: (before.backgroundImage.match(/data:image\/svg\+xml/g) || []).length === 4, beads: /radial-gradient/.test(after.backgroundImage), lip: (lip.boxShadow.match(/rgb/g) || []).length >= 3 };
+      return { id: f.dataset.pic, gold: /gradient/.test(cs.backgroundImage) && (cs.boxShadow.match(/inset/g) || []).length >= 5, corners: (before.backgroundImage.match(/data:image\/svg\+xml/g) || []).length === 8, beads: /radial-gradient/.test(after.backgroundImage), lip: (lip.boxShadow.match(/rgb/g) || []).length >= 3 };
     }));
     const plain = frames.filter((f) => !(f.gold && f.corners && f.beads && f.lip));
-    expect(frames.length === 35 && !plain.length, `${size}: every frame is the antique one: ` + JSON.stringify(plain.slice(0, 3)));
+    expect(frames.length === 35 && !plain.length, `${size}: every frame is the ornate one (carved corners and mid sides, beads, a gilt lip): ` + JSON.stringify(plain.slice(0, 3)));
     // a painting opened large: its big picture loads in the big frame
     await page.click('[data-open="monalisa"]');
     await page.waitForFunction(() => { const im = document.querySelector('.tl-big img'); return im && im.complete && im.naturalWidth > 0; }, null, { timeout: 15000 });
@@ -8143,7 +8230,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     pv: document.querySelector('.lp-big').dataset.preview, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, peek: !!document.querySelector('.lp-card .lp-peek'),
     forYou: [...document.querySelectorAll('.lp-for b')].map((x) => x.textContent), forPv: [...document.querySelectorAll('.lp-for canvas[data-preview]')].length }));
   expect(top.title === 'Labs' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
-  expect(top.chips.join() === 'All,Science,Maths,3D,Study tools,Games', 'the filter chips: ' + top.chips.join());
+  expect(top.chips.join() === 'All,Science,Maths,History,3D,Study tools,Games', 'the filter chips: ' + top.chips.join());
   expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
   expect(top.forYou.join() === 'Learn,Study tools' && top.forPv === 2, 'For you: Learn and Study tools, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
@@ -8208,7 +8295,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     await o.page.evaluate(() => openLabs());
     await o.page.waitForSelector('.labs:not([hidden]) .labs-grid .labs-card');
     const d = await o.page.evaluate(() => { const vis = (s) => { const e = document.querySelector(s); return !!e && !!e.getClientRects().length; }; return { lp: vis('.lp'), on: document.querySelector('.labs').classList.contains('lp-on'), head: vis('.labs-head'), tabs: [...document.querySelectorAll('.labs-tabs [data-section]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.section), search: vis('.labs-search'), chips: document.querySelectorAll('.labs-chips button').length, cards: document.querySelectorAll('.labs-grid .labs-card').length, feature: vis('.labs-feature'), bg: getComputedStyle(document.querySelector('.labs')).backgroundImage.slice(0, 15) }; });
-    expect(!d.lp && !d.on && d.head && d.tabs.join() === 'learn,tools' && d.search && d.chips === 8 && d.cards >= 25 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf: ' + JSON.stringify(d));
+    expect(!d.lp && !d.on && d.head && d.tabs.join() === 'learn,tools' && d.search && d.chips === 9 && d.cards >= 25 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf: ' + JSON.stringify(d));
     await o.ctx.close();
   }
 });
