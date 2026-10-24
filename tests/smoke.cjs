@@ -1710,6 +1710,48 @@ test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance tab
   await ctx.close();
 });
 
+test('the website’s Get the Pasado Pass early: an email field, a refused throwaway email says why, then “you’re on the early list”; the app’s Plans buttons open the same list', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  await serverMode({ groq: 'ok', ai: 'ok' });
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx.addInitScript((srv) => { window.CASSIE_SERVER = srv; }, SERVER);
+  const page = await ctx.newPage();
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  try {
+    await page.goto(`http://localhost:${APP_PORT}/index.html#pricing`);
+    const go = page.locator('#pricing [data-plan="plus"]');
+    expect(await go.innerText() === 'Get the Pasado Pass early', 'the button says what you get: ' + await go.innerText());
+    await go.click();
+    await page.waitForSelector('#pricing [data-early="plus"]:not([hidden]) input');
+    expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'early-plus'), 'the email field has focus');
+    await page.fill('#early-plus', 'x@yopmail.com');
+    await page.click('#pricing [data-early="plus"] button');
+    await page.waitForFunction(() => document.querySelector('[data-early="plus"] .early-msg').textContent.length > 0);
+    expect(/email/i.test(await page.locator('[data-early="plus"] .early-msg').innerText()), 'a throwaway email is refused, with why');
+    const mail = `site${Date.now()}@example.com`;
+    await page.fill('#early-plus', mail);
+    await page.press('#early-plus', 'Enter');
+    await page.waitForSelector('#pricing .early-done');
+    expect((await page.locator('#pricing .early-done').innerText()).includes(mail), 'it says who Cassie will email');
+    const { bad } = await contrastIssues(page, '#pricing .plan.feat');
+    expect(!bad.length, 'the early list reads clearly: ' + bad.join(' | '));
+    const g = await page.evaluate(() => ({ wide: document.documentElement.scrollWidth > innerWidth + 1, small: [...document.querySelectorAll('#pricing button, #pricing .btn, #pricing input')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() || e.id) }));
+    expect(!g.wide && !g.small.length, 'nothing spills sideways and every control is 44px: ' + JSON.stringify(g));
+    const list = await (await fetch(SERVER + '/admin/early', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
+    expect((list.list || []).some((r) => r.email === mail && r.src === 'site' && r.plan === 'plus'), 'the owner sees it, from the website');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+  // the app's Plans: both buttons open the early list
+  const { ctx: actx, page: app } = await open(b, { state: { plan: null } });
+  try {
+    await app.evaluate(() => openSettings('plans'));
+    await app.waitForSelector('.set-plans', { state: 'visible', timeout: 8000 });
+    await app.click('.set-plans [data-early="plus"]');
+    await app.waitForSelector('.plus-sheet .plus-join');
+    expect(/Get the Pasado Pass first/.test(await app.locator('.plus-sheet h3').innerText()), 'the Plans button opens the early list');
+  } finally { await fetch(`${SERVER}/__reset`); await actx.close(); }
+});
+
 test('the Pasado Pass: the pricing page opens on Semester with the pass, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
   const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
@@ -1720,9 +1762,10 @@ test('the Pasado Pass: the pricing page opens on Semester with the pass, its pri
   expect(await page.locator('#pricing [data-bill="sem"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Semester');
   let p = await plus();
   expect(/Pasado Pass/.test(p) && /₱599/.test(p) && /about ₱4 a day/.test(p) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(p), 'the Plus card is the Pasado Pass: ' + p);
-  expect(/Best for school/i.test(p) && /Everything in Free, including the Finals Reviewer Kit/.test(p) && /Up to 5 exam plans/.test(p), 'the bonus stack, with what Free has under Everything in Free: ' + p);
+  expect(/Best for school/i.test(p) && /Your exam, planned day by day/.test(p) && /up to 5 exam plans/i.test(p) && /Plus these bonuses/i.test(p) && /All the 3D, any time/.test(p), 'the result first, then the named bonuses: ' + p);
+  expect(/Everything in Free, including the Finals Reviewer Kit/.test(await page.locator('#pricing .plan.feat details.all').textContent()), 'what Free has too sits under See everything');
   expect(await page.locator('#pricing [data-anchor]').innerText() === '₱599 for the whole semester: about ₱4 a day, less than one hour with a tutor.', 'the comparison line: ' + await page.locator('#pricing [data-anchor]').innerText());
-  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub');
+  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /the Pasado Pass gets you ready/.test(await page.locator('#pricing .sub').innerText()) && /One payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub lead with the result');
   await page.click('#pricing [data-cur="usd"]');
   p = await plus();
   expect(/\$31\.99/.test(p) && /about \$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === '$31.99 for the whole semester: about $0.21 a day.', 'Worldwide: the $ price a day: ' + p);
@@ -1768,8 +1811,8 @@ test('the Pasado Pass: the pricing page opens on Semester with the pass, its pri
   await app.evaluate(() => { closeSettings(); plusSheet('The 3D human body'); });
   const foot = await app.locator('.plus-sheet .plus-foot').innerText();
   expect(/Pasado Pass, one payment of ₱599 for your whole semester\. It never renews, and you have 7 days to change your mind\./.test(foot), 'the Plus sheet: ' + foot);
-  expect(await app.locator('.plus-sheet .plus-go').getAttribute('href') === 'index.html#pricing', 'its link still goes to the plans');
-  const [go, ok] = [await app.locator('.plus-sheet .plus-go').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
+  expect(await app.locator('.plus-sheet .plus-see').getAttribute('href') === 'index.html#pricing', 'its link still goes to the plans');
+  const [go, ok] = [await app.locator('.plus-sheet .plus-see').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
   expect(ok.height >= 44 && Math.abs(ok.height - go.height) < 1, 'Not now is the same size: ' + JSON.stringify([go, ok]));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await actx.close();
@@ -2655,18 +2698,51 @@ test('free questions: only what the student asks counts (file sections and helpe
   } finally { await serverMode({ dailyAll: null, freeQuestions: null }); await fetch(`${SERVER}/__reset`); await ctx.close(); }
 });
 
-test('daily limit shows a friendly message with Try again', async (b) => {
+test('out of free questions: Cassie offers the Pasado Pass early list right there (signed out with an email, signed in in one tap), and the owner sees the list', async (b) => {
   await serverMode({ groq: 'ok', ai: 'ok' });
-  const { ctx, page } = await open(b);
-  await page.evaluate(async (srv) => {
-    for (let i = 0; i < 5; i++) await fetch(srv + '/chat', { method: 'POST', body: JSON.stringify({ uid: installId(), messages: [{ role: 'user', content: 'hi' }] }) });
-  }, SERVER);
-  const a = await ask(page, 'One more question');
-  const t = await a.textContent();
-  expect(/free questions/.test(t) && /own free Groq key/.test(t), 'no daily-limit message: ' + t);
-  expect(await a.locator('.retry-btn').count() === 1, 'no Try again button');
-  await fetch(`${SERVER}/__reset`);
-  await ctx.close();
+  const { ctx, page, errors } = await open(b);
+  try {
+    await page.evaluate(async (srv) => {
+      for (let i = 0; i < 5; i++) await fetch(srv + '/chat', { method: 'POST', body: JSON.stringify({ uid: installId(), messages: [{ role: 'user', content: 'hi' }] }) });
+    }, SERVER);
+    const a = await ask(page, 'One more question');
+    const t = await a.textContent();
+    expect(/free questions/.test(t) && /Pasado Pass/.test(t) && /own free Groq key/.test(t), 'the daily-limit message: ' + t);
+    expect(await a.locator('.early-chip').count() === 1 && await a.locator('.retry-btn').count() === 0, 'the way to keep going, and no Try again (it would only fail until midnight)');
+    await a.locator('.early-chip').click();
+    await page.waitForSelector('.plus-sheet .plus-join');
+    expect(/More questions today/.test(await page.locator('.plus-sheet h3').innerText()), 'the sheet says what it is for');
+    expect(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('plus-join')), 'the join button has focus');
+    await page.click('.plus-sheet .plus-join');
+    await page.waitForSelector('.plus-sheet .plus-early:not([hidden]) input');
+    await page.fill('.plus-sheet .plus-early input', 'juan@mailinator.com');
+    await page.click('.plus-sheet .plus-join');
+    await page.waitForSelector('.plus-sheet .plus-err:not([hidden])');
+    expect(/email/i.test(await page.locator('.plus-sheet .plus-err').innerText()), 'a throwaway email is refused, with why');
+    const mail = `early${Date.now()}@example.com`;
+    await page.fill('.plus-sheet .plus-early input', mail);
+    await page.press('.plus-sheet .plus-early input', 'Enter');
+    await page.waitForSelector('.plus-sheet .plus-done');
+    expect((await page.locator('.plus-sheet .plus-done').innerText()).includes(mail), 'it says who Cassie will email');
+    // next time the sheet remembers
+    await page.click('.plus-sheet .plus-ok');
+    await page.evaluate(() => plusSheet('The 3D human body'));
+    expect(await page.locator('.plus-sheet .plus-done').count() === 1 && await page.locator('.plus-sheet .plus-join').count() === 0, 'already on the list: no button again');
+    await page.click('.plus-sheet .plus-ok');
+    // signed in: the account's email, no typing
+    const acct = `earlyacct${Date.now()}@example.com`;
+    const joined = await page.evaluate(async ([srv, em]) => {
+      const su = await (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: em, password: 'secret-pass-1', age: 17 }) })).json();
+      const r = await fetch(srv + '/early', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + su.token }, body: JSON.stringify({ src: 'plus' }) });
+      return [r.status, await r.json()];
+    }, [SERVER, acct]);
+    expect(joined[0] === 200 && joined[1].email === acct, 'signed in joins in one tap: ' + JSON.stringify(joined));
+    const list = await (await fetch(SERVER + '/admin/early', { headers: { authorization: 'Bearer test-admin-token-0123456789' } })).json();
+    const mine = (list.list || []).filter((r) => r.email === mail || r.email === acct).map((r) => r.email + ':' + r.src).sort();
+    expect(mine.join() === [acct + ':plus', mail + ':limit'].sort().join(), 'the owner sees both, and where they joined: ' + JSON.stringify(mine));
+    expect((await fetch(SERVER + '/admin/early')).status === 401, 'the list needs the owner password');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await fetch(`${SERVER}/__reset`); await ctx.close(); }
 });
 
 test('no Student / Professional switch at the top (phone and computer); a switch flipped to Professional before is undone, and only a Working professional profile gets the work-style answers; no doodle wallpaper behind the chat', async (b) => {
@@ -3289,8 +3365,8 @@ test('Taglish and named exams: a question in Taglish is sent with the rule to an
   expect(/Taglish/.test(doc), 'the file prompt says it too');
   await page.goto(APP.replace('app.html', 'index.html'));
   const pricing = await page.locator('#pricing').innerText();
-  expect(/Name your exam, like Gen Chem finals, Pre-Calc, the NLE or the LET/.test(pricing), 'the pricing names real exams: ' + pricing.slice(0, 300));
-  expect(/Pasado Pass for Gen Chem, Pre-Calc, the NLE, the LET or any exam you name/.test(pricing), 'Plus names them too');
+  expect(/name your exam, like Gen Chem finals, Pre-Calc, the NLE or the LET/i.test(pricing), 'the pricing names real exams: ' + pricing.slice(0, 300));
+  expect(/Ready on exam day, for Gen Chem, Pre-Calc, the NLE, the LET or any exam you name/.test(pricing), 'Plus names them too');
   expect(/Ask in Taglish, Filipino or English/.test(pricing), 'Free says you can ask in Taglish');
   expect(!/[–—]/.test(pricing), 'no long dashes');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -8437,12 +8513,12 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     }
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} You (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
-    // Plans: Free and Plus side by side, Plus best for school, Coming soon, and nothing that takes a payment
+    // Plans: Free and Plus side by side, Plus best for school, the early list, and nothing that takes a payment
     await page.click('.set-link[data-open="plans"]');
     const plans = await page.locator('.set-plans').innerText();
     expect(/Free/.test(plans) && /Plus/.test(plans) && /Pro/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free, Plus and Pro: ` + plans);
-    const gos = await page.locator('.set-plans .plan-go').evaluateAll((a) => a.map((x) => [x.textContent.trim(), x.getAttribute('href')]));
-    expect(gos.length === 2 && gos.every(([t, h]) => t === 'Coming soon' && h === 'index.html#pricing'), `${size}: Coming soon goes to the plans page: ` + JSON.stringify(gos));
+    const gos = await page.locator('.set-plans .plan-go').evaluateAll((a) => a.map((x) => x.textContent.trim()));
+    expect(gos.join() === 'Get the Pasado Pass early,Get Pro early', `${size}: the plans offer the early list: ` + JSON.stringify(gos));
     expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });

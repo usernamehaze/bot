@@ -3362,11 +3362,12 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
       const data = await res.json();
       return (data.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
     }
-    let detail = '';
-    try { detail = (await res.json()).error?.message || ''; } catch (e) { /* ignore */ }
+    let detail = '', code = '';
+    try { const er = (await res.json()).error || {}; detail = er.message || ''; code = er.code || ''; } catch (e) { /* ignore */ }
     if (res.status === 413 || (res.status === 400 && isTooLarge(400, detail))) {
       const e = new Error('too large'); e.tooLarge = true; e.model = model; throw e;
     }
+    if (code === 'daily_free') { const e = friendlyError(detail); e.dailyFree = true; throw e; } // out of today's free questions: no waiting
     const secs = parseDuration(res.headers.get('retry-after'));
     if ((res.status === 429 || res.status === 503) && secs && secs <= 30 && waits < 2) {
       waits += 1;
@@ -4575,6 +4576,15 @@ function renderError(err, retry, prefix) {
   islandShow(busyErr ? 'busy' : 'oops', busyErr ? 'Very busy. Try again soon' : 'That didn’t work', 3000);
   const b = renderMessage('assistant', errorText(err, prefix));
   b.classList.add('error');
+  // out of today's free questions: the way to keep going, right here
+  if (err && err.dailyFree) {
+    const go = document.createElement('button');
+    go.type = 'button'; go.className = 'fu-chip early-chip';
+    go.textContent = 'Keep going with the Pasado Pass';
+    go.addEventListener('click', () => plusSheet('More questions today', 'You’ve used today’s free questions. The Pasado Pass gives you 100 a day until your exam.', 'limit'));
+    b.appendChild(go);
+    return b;
+  }
   if (retry) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -8149,6 +8159,10 @@ function refreshPlan(force) {
   return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
+// Plans: Get it early opens the early list
+document.querySelector('.set-plans')?.addEventListener('click', (e) => {
+  if (e.target.closest('[data-early]')) plusSheet('', '', 'plans', 'Get the Pasado Pass first');
+});
 // Plans: prices a month first; Semester shows the one-payment prices
 document.querySelector('.set-plans .bill-seg')?.addEventListener('click', (e) => {
   const b = e.target.closest('[data-bill]');
@@ -8157,7 +8171,20 @@ document.querySelector('.set-plans .bill-seg')?.addEventListener('click', (e) =>
   document.querySelector('.set-plans').classList.toggle('bill-sem', sem);
   b.parentElement.querySelectorAll('[data-bill]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
 });
-function plusSheet(what, why) {
+// the Pasado Pass early list: signed in, the account's email is used; otherwise the one typed
+const EARLY_KEY = 'cassie.early';
+const earlyJoined = () => { try { return JSON.parse(localStorage.getItem(EARLY_KEY) || 'null'); } catch (e) { return null; } };
+async function joinEarly(email, src) {
+  if (!SERVER) throw friendlyError('The early list needs Cassie’s server. Try again on askcassie.study.');
+  let res;
+  try { res = await fetch(SERVER + '/early', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ email: email || undefined, plan: 'plus', src }) }); } catch (e) { throw friendlyError(CassieErrors.say('network')); }
+  const r = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = friendlyError((r && r.error) || 'That didn’t work. Try again.'); e.status = res.status; throw e; }
+  try { localStorage.setItem(EARLY_KEY, JSON.stringify({ email: r.email, at: Date.now() })); } catch (e) { /* ignore */ }
+  track('feature', 'early-' + src);
+  return r.email;
+}
+function plusSheet(what, why, src = 'plus', title) {
   track('feature', 'plus-ask');
   document.querySelector('.plus-sheet')?.remove();
   const signedOut = accountsOn() && !authToken();
@@ -8165,16 +8192,22 @@ function plusSheet(what, why) {
   w.className = 'plus-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'plus-sheet-h');
   w.innerHTML = `<div class="plus-card">
     <span class="plus-kicker">Plus</span>
-    <h3 id="plus-sheet-h">${escapeHtml(what)} comes with Plus</h3>
+    <h3 id="plus-sheet-h">${escapeHtml(title || `${what} comes with Plus`)}</h3>
     ${why ? `<p class="plus-why">${escapeHtml(why)}</p>` : ''}
     <ul class="plus-list">
-      <li>All the 3D, any time: the body, the cells, the solar system and the globe</li>
-      <li>Real 3D in every lab, and the Museum quiz</li>
-      <li>Save or print your notes, maps and boards</li>
+      <li>100 questions a day until your exam</li>
+      <li>Your exams planned day by day, up to 5 at once, even from your notes</li>
+      <li>All the 3D any time, and save or print your notes and boards</li>
     </ul>
     <p class="plus-foot">Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.</p>
+    <form class="plus-early" novalidate hidden>
+      <label for="plus-early-mail">Your email, so Cassie can tell you the day it opens</label>
+      <input id="plus-early-mail" type="email" autocomplete="email" inputmode="email" placeholder="juan@gmail.com" required>
+      <p class="plus-err" role="alert" hidden></p>
+    </form>
     <div class="plus-actions">
-      <a class="plus-go" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
+      ${earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : '<button type="button" class="plus-go plus-join">Get the Pasado Pass early</button>'}
+      <a class="plus-see" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
       <button type="button" class="plus-ok">Not now</button>
     </div></div>`;
@@ -8182,13 +8215,41 @@ function plusSheet(what, why) {
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   // signed in: the plan may have just been given — check, and say so
-  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelector('.plus-go').remove(); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-see, .plus-done').forEach((x) => x.remove()); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  const form = w.querySelector('.plus-early'), mail = form.querySelector('input'), err = form.querySelector('.plus-err');
+  const join = async () => {
+    const btn = w.querySelector('.plus-join');
+    if (!btn) return;
+    const typed = !form.hidden;
+    if (typed && !mail.value.trim()) { err.textContent = 'Type your email first.'; err.hidden = false; mail.focus(); return; }
+    btn.disabled = true; err.hidden = true;
+    try {
+      const email = await joinEarly(typed ? mail.value.trim() : '', src);
+      form.remove();
+      const done = document.createElement('p'); done.className = 'plus-done'; done.setAttribute('role', 'status');
+      done.textContent = `You’re on the early list. Cassie will email ${email} the day it opens.`;
+      btn.replaceWith(done);
+      w.querySelector('.plus-ok').textContent = 'OK';
+      w.querySelector('.plus-ok').focus();
+    } catch (e2) {
+      btn.disabled = false;
+      // no account email to use: ask for one
+      if (!typed) { form.hidden = false; btn.textContent = 'Keep my spot'; mail.focus(); if (e2.status !== 400) { err.textContent = e2.message; err.hidden = false; } return; }
+      err.textContent = e2.message; err.hidden = false; mail.focus();
+    }
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); join(); });
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
     else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
+    else if (e.target.closest('.plus-join')) {
+      // signed in: one tap, with the account's email; otherwise the email field first
+      if (!authToken() && form.hidden) { form.hidden = false; e.target.closest('.plus-join').textContent = 'Keep my spot'; mail.focus(); return; }
+      join();
+    }
   });
   document.body.appendChild(w);
-  w.querySelector('.plus-ok').focus();
+  (w.querySelector('.plus-join') || w.querySelector('.plus-ok')).focus();
 }
 // free tries of an extra, a week (from Monday, Philippine time): Real 3D twice a week in each lab ("3d:atom")
 const FREE_TRIES = { '3d': 2 };

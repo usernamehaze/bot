@@ -1891,6 +1891,15 @@ html.lite {
 .plus-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .plus-actions > * { flex: 1 1 auto; min-height: 40px; padding: 8px 14px; border-radius: 99px; font: inherit; font-size: .88rem; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border, rgba(var(--shade-rgb), .15)); background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; }
 .plus-actions .plus-go { background: var(--text, var(--dark-2)); color: var(--surface, var(--white)); border-color: transparent; }
+.plus-actions .plus-join { flex-basis: 100%; min-height: 44px; }
+.plus-actions .plus-done { flex-basis: 100%; margin: 0; border: 0; padding: 0 0 4px; justify-content: flex-start; text-align: left; cursor: default; font-weight: 600; opacity: 1; }
+.plus-early { display: grid; gap: 6px; margin: 0 0 12px; }
+.plus-early[hidden] { display: none; }
+.plus-early label { font-size: .84rem; font-weight: 600; }
+.plus-early input { font: inherit; font-size: 1rem; min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border, rgba(var(--shade-rgb), .25)); background: var(--surface, var(--white)); color: inherit; }
+.plus-card .plus-err { margin: 0; color: var(--danger, #b3261e); font-weight: 600; opacity: 1; }
+.plus-card .plus-err[hidden] { display: none; }
+.bubble .early-chip { background: var(--text); color: var(--surface); border-color: var(--text); }
 .x3d-toast { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); z-index: 20; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 99px; background: rgba(var(--dark-rgb), .82); color: var(--white); font-size: .82rem; text-align: center; pointer-events: none; }
 .x3d-tools .x3d-btn { white-space: nowrap; }
 @media (max-width: 430px) { .x3d-tools { gap: 6px; } .x3d-tools .x3d-btn { padding-left: 11px; padding-right: 11px; font-size: .84rem; } }
@@ -2285,6 +2294,8 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .bill-seg button[aria-pressed="true"] small { color: inherit; }
 @media (pointer: coarse) { .bill-seg button { min-height: 44px; } }
 .plan-go-line { background: transparent; color: var(--text); border: 1.5px solid var(--text); }
+button.plan-go { width: 100%; font: inherit; font-weight: 750; cursor: pointer; }
+button.plan-go:not(.plan-go-line) { border: 0; }
 .plan-go-line:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
 /* the three at a glance (a phone fits all three columns) */
 .plan-compare { width: 100%; margin: 0 0 16px; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--surface); font-size: .84rem; line-height: 1.3; table-layout: fixed; }
