@@ -79,6 +79,8 @@ few days.
    - **Data use:** tick "Website content". Confirm the data isn't sold, isn't
      used for unrelated purposes, and isn't used for credit decisions.
    - **Privacy policy URL:** `https://askcassie.study/privacy.html`
+     (the privacy page, not support.html: Google rejected Cassie once, Purple
+     Nickel, because this field had the help page)
 5. Click **Submit for review**. Cassie can read every site, so Google may take
    a little longer to review it. That's normal.
 
