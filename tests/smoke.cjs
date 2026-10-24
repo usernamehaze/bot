@@ -5458,7 +5458,9 @@ test('Explore 3D body on a laptop (1366 wide, a mouse): every body system chip s
   await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
   const chips = () => page.$$eval('.x3d-sys', (cs) => cs.map((c) => { const r = c.getBoundingClientRect(); const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { name: c.textContent.trim(), in: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, hit: !!t && (t === c || c.contains(t)) }; }));
-  const bad = (await chips()).filter((c) => !c.in || !c.hit).map((c) => c.name);
+  // (the chip row eases in once the body has loaded: give it a moment to settle before checking)
+  let bad = [];
+  for (let i = 0; i < 10; i++) { bad = (await chips()).filter((c) => !c.in || !c.hit).map((c) => c.name); if (!bad.length) break; await page.waitForTimeout(200); }
   expect(!bad.length, 'chips off screen or covered on a laptop (a mouse cannot swipe the row): ' + bad.join());
   for (const sys of ['lymphatic', 'reproductive', 'circulatory']) {
     const was = await page.getAttribute(`.x3d-sys[data-sys="${sys}"]`, 'aria-pressed');
