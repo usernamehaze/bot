@@ -1952,6 +1952,28 @@ test('the Grand Slam offer doc has its 8 sections, names a file for what Cassie 
   expect(!/[—–]/.test(doc), 'no em or en dashes in the doc');
 });
 
+test('privacy.html explains every table Cassie’s server keeps (a new table fails until the page says what it holds), names the reminders, the early list and the plan, has a Chrome extension section with the Limited Use promise, and the store guide links the privacy page, not the help page', async () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server/worker.src.js'), 'utf8');
+  const tables = [...src.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);
+  const page = fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const SAID = { // [the table, what privacy.html must say about it]
+    users: /Anonymous usage counts/, events: /Anonymous usage counts/, words: /topic words/, feedback: /Problem reports/, quota: /Counts for fair limits/,
+    chats: /Counts for fair limits/, accounts: /Your account/, sessions: /your sign ins/, health: null /* (Cassie's own checks: no one's data) */,
+    rooms: /Study rooms/, room_members: /Study rooms/, room_ops: /Study rooms/, room_here: /where your pointer is/, plans: /your plan \(Free, Plus or Pro\) and when it ends/,
+    scores: /Daily puzzles/, identities: /Google or Apple, we keep which one/, push_subs: /Study reminders/, early: /The early list/,
+  };
+  const unknown = tables.filter((t) => !(t in SAID));
+  expect(!unknown.length, 'the server keeps a table privacy.html doesn’t explain: ' + unknown.join(', ') + '. Say on the page what it holds, then add it here.');
+  const missing = tables.filter((t) => SAID[t] && !SAID[t].test(page));
+  expect(!missing.length, 'privacy.html doesn’t say what these hold: ' + missing.join(', '));
+  expect(/Turning reminders off deletes it from our server/.test(page) && /notification service/.test(page), 'the reminders: what is kept, who delivers them, and how to delete');
+  expect(/The Chrome extension/.test(page) && /Limited Use/.test(page) && /does not read pages on its own/.test(page) && /Ask about this file/.test(page), 'the extension: what it reads, when, and the Limited Use promise');
+  expect(/Anthropic \(Claude\)\s*: writes Cassie’s smarter answers: a few a day on Free/.test(page.replace(/'/g, '’')), 'Claude answers on Free too (Free gets a few smarter answers a day)');
+  const stores = fs.readFileSync(path.join(ROOT, 'STORES.md'), 'utf8');
+  expect(/Privacy policy URL:\*\* `https:\/\/askcassie\.study\/privacy\.html`/.test(stores), 'the store guide says the privacy URL is privacy.html');
+  expect(!/[—–]/.test(page), 'no dashes');
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
