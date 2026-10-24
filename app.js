@@ -1926,7 +1926,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=173').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=174').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3654,18 +3654,19 @@ const NOTES_GUIDE = `Take note of EVERYTHING a student could be asked about. One
 **People**: real people only (full name, who they are), never names used in examples or exercises
 **Dates & events**: exact date or year, what happened, causes and effects
 **Places, groups & things**: why each matters
-**Pictures, tables & charts**: what each shows, every label and value you can read
+**Pictures, tables & charts**: only ones that teach something (a diagram, chart, map, table, or a photo of a person or place): what each shows, every label and value you can read. Skip decorations: backgrounds, borders, icons, logos, title and "Thank you" slides, class rules
 **Questions in the file**: exercises or questions it asks
 Put the page or slide after a fact when you know it, like (p. 12). Copy names, dates, numbers and code exactly. Never invent anything.`;
 // How Cassie writes a reviewer: a study guide that teaches, shaped for the subject (not a list of facts in boxes)
 const REVIEWER_GUIDE = `How to write a reviewer, study guide or notes (like the best student in class would):
-1. Start with **The big picture**: 2 to 4 sentences on what the file is about and why it matters.
+1. Start with a **bold title** that names the subject and its topics (never the file's name), then **The big picture**: 2 to 4 sentences on what the file is about and why it matters.
 2. If the file lists objectives or outcomes, add **What you should be able to do** as a short list.
 3. Then go topic by topic, in the file's order. Give each topic a **bold heading** named after the topic itself (never "Pages 1-22" or "Section 2"). Under it: explain the idea in plain words first, then the details; put each key term in **bold** with its meaning where it first appears; add a worked example from the file; and when students often get it wrong, a **Watch out:** line.
-4. Shape it for the subject. Programming: the syntax, the code examples copied exactly in \`\`\` code blocks, and what each one prints. Math and physics: each formula, then a problem solved step by step. Science: processes as numbered steps, and what each diagram shows. History, literature and social studies: **People to remember** (real people only) and a **Timeline** in order. Never write a label with nothing under it, and never write "None".
+4. Shape it for the subject. Programming: the syntax, the code examples copied exactly in \`\`\` code blocks, and what each one prints. Math and physics: each formula, then a problem solved step by step. Science: processes as numbered steps, and what each diagram shows. History, literature and social studies: **People to remember** (real people only) as a table (Person, Why they matter) and a **Timeline** in order as a table (Date, What happened). Never write a label with nothing under it, and never write "None".
 5. Use a small table when something is compared (like a function and a method).
 6. End with **Quick review**: a table of every key term and its one line meaning.
 7. Then **Practice questions**: 10 of them, mixed: multiple choice, identification, and at least 4 that make the student use the idea (what does this code print, find the bug, solve this problem, explain why). Never ask about names used in examples, page numbers or trivia. Then **Answers**, each with one short line on why.
+Write each fact once: never the same list or the same point twice. Skip decorations (backgrounds, borders, logos, title and "Thank you" slides, class rules) and never write a section about the file's pictures: say what a diagram shows inside its topic. If the file itself gets a name, date or fact wrong, keep what it teaches but list it under **Notes on your file** at the end (what it says, and what is correct).
 Put code, commands and formulas in \`backticks\` and never use * for times outside code. Put the page or slide in brackets after a fact when you know it, like (p. 12). Stick to the file: don't invent facts that aren't in it.`;
 const REVIEWER_TAIL = 'End with **Quick review** (a table of every key term and its meaning), then **Practice questions** (10, mixed, with at least 4 that make the student use the idea) and **Answers** with one line on why each is right.';
 const DOC_INSTRUCTION = `The user attached a file, and you are told what KIND it is (PDF, PowerPoint slides, Word document, text, or a photo). Refer to it correctly: say "slide 3" for a presentation, "page 3" for a PDF, "the document" for Word/text, "the photo" for a picture. Its full content is given to you (the text, and for PDFs and slides also the pictures, diagrams, charts, and tables, or notes describing them). You HAVE the whole file: never ask them to paste the text or upload it again, and never say you can't see images or can't make files.
@@ -3865,7 +3866,7 @@ async function pictureNotes(doc, onStatus, waitNote) {
     const labels = imgs.map((x) => x.label).join(', ');
     onStatus(`Looking at the pictures: ${labels} (${i + 1} of ${batches.length})…`);
     try {
-      const note = await askGroqVision([{ role: 'user', content: `These are ${labels} from "${doc.name}". For each one, take study notes. If it is mostly text, write out ALL of its important content. If it is a diagram, table, chart or picture, say what it shows and every label and value you can read.\n\n${NOTES_GUIDE}` }],
+      const note = await askGroqVision([{ role: 'user', content: `These are ${labels} from "${doc.name}". For each one, take study notes. If it is mostly text, write out ALL of its important content. If it is a diagram, table, chart or picture, say what it shows and every label and value you can read. Skip decorations (backgrounds, borders, logos, title and "Thank you" slides, class rules): write nothing about them.\n\n${NOTES_GUIDE}` }],
         imgs, { system: 'You turn pages and pictures from a student\'s file into accurate, complete study notes. Bullets only. Never invent anything you cannot read.', maxTokens: 1500, onWait: waitNote(`Looking at ${labels}…`) });
       if (note) out.push(`[${labels.replace(/^\w/, (c) => c.toUpperCase())}: pictures]\n${note}`);
     } catch (e) {
@@ -3876,34 +3877,197 @@ async function pictureNotes(doc, onStatus, waitNote) {
 }
 
 // Pull "@@PERSON: …", "@@DATE: …", "@@TERM: …" lines out of a section into the master lists.
+// The same person, date or term from two parts is kept once ("Gen. Emilio Aguinaldo" = "Emilio Aguinaldo",
+// "June 12 , 1898" = "June 12, 1898"), with the fuller of the two descriptions.
+const plainText = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const HONORIFICS = /^(?:(?:major|maj|lieutenant|lt|brigadier|general|gen|colonel|col|captain|capt|admiral|adm|dr|mrs|mr|ms|sir|president|pres|senator|sen|governor-general|gov-gen|governor|gov|saint|st|father|fr|rev)\.?\s+)+/;
+function personKey(name) {
+  const w = plainText(name).replace(/[^a-z\s.-]/g, ' ').replace(/\s+/g, ' ').trim().replace(HONORIFICS, '').replace(/\./g, ' ').split(/\s+/).filter(Boolean);
+  return w.length > 1 ? `${w[0]} ${w[w.length - 1]}` : w.join(' ');
+}
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function dateParts(t) {
+  const s = plainText(t), y = +((s.match(/\b(1\d{3}|20\d{2})\b/) || [])[1] || 0);
+  const m = MONTH_NAMES.findIndex((n) => new RegExp(`\\b${n.slice(0, 3).toLowerCase()}`).test(s));
+  const d = +((s.replace(/\b\d{3,4}\b/g, ' ').match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/) || [])[1] || 0);
+  return { y, m, d: d >= 1 && d <= 31 ? d : 0 };
+}
+// one way to write a date: "June 12, 1898" (a date it can't read stays as it was)
+function tidyDate(t) {
+  const { y, m, d } = dateParts(t);
+  if (y && m >= 0 && d && /^[\w\s,.]+$/.test(t)) return `${MONTH_NAMES[m]} ${d}, ${y}`;
+  if (y && m >= 0 && !d && /^[\w\s,.]+$/.test(t)) return `${MONTH_NAMES[m]} ${y}`;
+  return String(t).replace(/(\d)\s+,/g, '$1,').trim();
+}
+const factWords = (t) => new Set(plainText(t).match(/[a-z]{4,}/g) || []);
+const sameFact = (a, b) => { const x = factWords(a), y = factWords(b); if (!x.size || !y.size) return true; let n = 0; x.forEach((w) => { if (y.has(w)) n++; }); return n / Math.min(x.size, y.size) >= 0.5; };
 function takeMasterLines(md, lists) {
   return md.replace(/^\s*[-*•]?\s*@@\s*(PERSON|DATE|TERM)\s*:[ \t]*(.*)$/gim, (_, kind, body) => {
     if (!body.trim() || /^(none|n\/a|-)\b/i.test(body.trim())) return '';
     const [head, ...rest] = body.split(/\s+[—–|-]\s+/);
-    const item = { head: (head || '').replace(/\*\*/g, '').trim(), tail: rest.join(', ').trim() };
-    if (!item.head) return '';
     const key = kind.toUpperCase();
-    const k = (item.head + (key === 'DATE' ? item.tail : '')).toLowerCase();
-    if (!lists[key].some((x) => x.k === k)) lists[key].push({ ...item, k });
+    let h = (head || '').replace(/\*\*/g, '').trim();
+    const tail = rest.join(', ').trim();
+    if (!h) return '';
+    if (key === 'DATE') h = tidyDate(h);
+    const k = key === 'PERSON' ? personKey(h) : key === 'TERM' ? plainText(h).replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim() : h.toLowerCase();
+    const same = lists[key].find((x) => x.k === k && (key !== 'DATE' || sameFact(x.tail, tail)));
+    if (!same) lists[key].push({ head: h, tail, k });
+    else { // the same one again: keep the fuller name and description
+      if (key === 'PERSON' && h.replace(HONORIFICS, '').length > same.head.length) same.head = h;
+      if (tail.length > same.tail.length) same.tail = tail;
+    }
     return '';
   }).split('\n').filter((l) => !/@@/.test(l)).join('\n') // (and nothing about the markers ever reaches the student)
     .replace(/\n{3,}/g, '\n\n').trim();
 }
 function masterListsMd(lists) {
-  const yearOf = (t) => { const m = t.match(/\b(\d{3,4})\b/); return m ? +m[1] : Infinity; };
-  const bullets = (arr) => arr.map((x) => `- **${x.head}**${x.tail ? `: ${x.tail}` : ''}`).join('\n');
+  const order = (x) => { const { y, m, d } = dateParts(x.head); return (y || 9999) * 10000 + (m + 1) * 100 + d; };
+  const cell = (t) => String(t).replace(/\|/g, '/').replace(/\n/g, ' ').trim();
   let md = '';
-  if (lists.PERSON.length) md += `**People to remember**\n${bullets(lists.PERSON)}\n\n`;
-  if (lists.DATE.length) md += `**Timeline: every date and time**\n${bullets([...lists.DATE].sort((a, b) => yearOf(a.head) - yearOf(b.head)))}\n\n`;
-  const cell = (t) => String(t).replace(/\|/g, '/').trim();
+  if (lists.PERSON.length) md += `**People to remember**\n\n| Person | Why they matter |\n| --- | --- |\n${lists.PERSON.map((x) => `| **${cell(x.head)}** | ${cell(x.tail)} |`).join('\n')}\n\n`;
+  if (lists.DATE.length) md += `**Timeline**\n\n| Date | What happened |\n| --- | --- |\n${[...lists.DATE].sort((a, b) => order(a) - order(b)).map((x) => `| **${cell(x.head)}** | ${cell(x.tail)} |`).join('\n')}\n\n`;
   if (lists.TERM.length) md += `**Key terms: quick review**\n\n| Term | What it means |\n| --- | --- |\n${lists.TERM.map((x) => `| **${cell(x.head)}** | ${cell(x.tail)} |`).join('\n')}\n\n`;
   return md.trim();
 }
 
-async function groqDocument(doc, request, history, onStatus) {
+// A reviewer, tidied before the student sees it: no section about the file's decorations, each point
+// once, dates written one way, and no heading with nothing under it. With `lists` (the people, timeline
+// and key terms gathered from the whole file), the sections' own lists of those go: they'd say it twice.
+const NOTE_LISTS_RE = /^(?:key terms?(?: definitions)?|people|persons|people to remember|dates?(?: (?:&|and) (?:events|times))?|timeline(?::.*)?|every date)$/i;
+const PICTURES_RE = /^(?:pictures?,? tables? (?:&|and) charts?|pictures?|visuals?|images?)$/i;
+const DECOR_RE = /thank you for (?:listening|watching)|ink[- ]?splash|\bdecorative\b|background (?:graphics?|images?|texture|design)|textured (?:\w+ )?background|class rules|^\W*-\s*end\s*-\W*$/i;
+function cleanReviewer(md, { lists = null } = {}) {
+  const heading = (l) => { const m = l.match(/^\s*(?:#{1,4}\s+)?\*\*([^*]+?)\*\*:?\s*$/) || l.match(/^\s*#{1,4}\s+(.+?)\s*$/); return m ? m[1].replace(/:$/, '').trim() : null; };
+  const seen = new Set(), out = [];
+  let fence = false, skip = false;
+  for (const raw of String(md).split('\n')) {
+    if (/^\s*```/.test(raw)) { fence = !fence; if (!skip) out.push(raw); continue; }
+    if (fence) { if (!skip) out.push(raw); continue; }
+    const h = heading(raw);
+    if (h) {
+      skip = PICTURES_RE.test(h) || (!!lists && NOTE_LISTS_RE.test(h));
+      if (!skip) out.push(raw);
+      continue;
+    }
+    // a skipped section's own list goes; a sentence after it is the next point, so it stays
+    if (skip && (!raw.trim() || /^\s*(?:[-*•]|\d+[.)]|\|)\s?/.test(raw) || /^\s{2,}\S/.test(raw))) continue;
+    skip = false;
+    if (DECOR_RE.test(raw)) continue;
+    let line = raw.replace(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\s*,?\s+(\d{4})\b/g, (_, mo, d, y) => `${tidyDate(`${mo} ${d} ${y}`)}`);
+    // the same point twice (a bullet or a Watch out line): keep the first
+    if (/^\s*(?:[-*•]|\*\*Watch out)/.test(line)) {
+      const k = plainText(line).replace(/\((?:p|pp|page|slide|slides)\.?\s*[\d,\s-]+\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+      if (k.length > 12) { if (seen.has(k)) continue; seen.add(k); }
+    }
+    out.push(line);
+  }
+  // a heading with nothing under it (before the next heading, or at the end) goes
+  const kept = [];
+  for (let i = 0; i < out.length; i++) {
+    if (heading(out[i]) !== null) {
+      let j = i + 1;
+      while (j < out.length && !out[j].trim()) j++;
+      if (j >= out.length || heading(out[j]) !== null) continue;
+    }
+    kept.push(out[i]);
+  }
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// A part of a reviewer that ran out of room stops mid-sentence ("**Graph b"): ask once for the rest.
+function looksCut(md, maxTokens) {
+  const t = String(md).replace(/^\s*[-*•]?\s*@@.*$/gm, '').trimEnd();
+  if (!t) return false;
+  if ((t.match(/```/g) || []).length % 2) return true;
+  const last = t.split('\n').pop().trim();
+  if ((last.match(/\*\*/g) || []).length % 2) return true;
+  if (/^\|/.test(last) && !/\|$/.test(last)) return true;
+  if (/[,;(–—-]$/.test(last)) return true;
+  return estimateTokens(md) >= maxTokens * 0.85 && !/[.!?)\]"'”’`|*:]$/.test(last);
+}
+async function finishCut(md, sys, maxTokens, waitNote) {
+  if (!looksCut(md, maxTokens)) return md;
+  try {
+    const more = await groqChat([{ role: 'system', content: sys }, { role: 'user', content: `This part of a study guide stopped in the middle because it ran out of room:\n"""\n${String(md).slice(-2500)}\n"""\nWrite only what comes next: finish the sentence it stopped in, then the rest of that part. Don't repeat anything already written.` }],
+      { maxTokens: 1500, lean: true, rotate: true, onWait: waitNote('Finishing it…') });
+    if (!more || !more.trim()) return md;
+    return String(md).replace(/\s+$/, '') + (/^[\s.,;:!?)]/.test(more) ? '' : ' ') + more.trim();
+  } catch (e) { return md; } // (what's there is still worth having)
+}
+
+// The accuracy check: every Watch out line and every practice answer is checked against the file.
+// One the file doesn't support goes (an answer takes its question with it), and mistakes in the
+// file itself are listed under "Notes on your file" for the student to check with the teacher.
+async function checkReviewer(md, source, waitNote, onStatus) {
+  const lines = String(md).split('\n');
+  const isHead = (l) => /^\s*(?:#{1,4}\s+)?\*\*[^*]+\*\*:?\s*$/.test(l);
+  const headAt = (re) => lines.findIndex((l) => isHead(l) && re.test(l));
+  // numbered items of a section: [{ n, from, to }] (a question can run over several lines)
+  const items = (start) => {
+    const out = [];
+    if (start < 0) return out;
+    for (let i = start + 1; i < lines.length && !isHead(lines[i]); i++) {
+      const m = lines[i].match(/^\s*(\d+)[.)]\s+/);
+      if (m) out.push({ n: +m[1], from: i, to: i });
+      else if (out.length && lines[i].trim()) out[out.length - 1].to = i;
+    }
+    return out;
+  };
+  const qs = items(headAt(/practice questions|self-test/i)), as = items(headAt(/\*\*answers?\b/i));
+  const watch = lines.map((l, i) => ({ l, i })).filter((x) => /\*\*Watch out:?\*\*/i.test(x.l));
+  if (!watch.length && !as.length) return md;
+  const text = (x) => lines.slice(x.from, x.to + 1).join(' ').replace(/\s+/g, ' ').trim();
+  const list = [
+    ...watch.map((w, k) => `W${k + 1}: ${w.l.replace(/^\s*[-*•]\s*/, '').trim()}`),
+    ...as.map((a) => { const q = qs.find((x) => x.n === a.n); return `A${a.n}: ${q ? text(q) + ' ANSWER: ' : ''}${text(a)}`; }),
+  ];
+  onStatus('Checking it for mistakes…');
+  let out = '';
+  try {
+    out = await groqChat([{ role: 'system', content: 'You check study guides for mistakes against the source they were made from. You are careful and brief.' },
+      { role: 'user', content: `The source (a student's file, or notes taken from it):\n"""\n${String(source).slice(0, 12000)}\n"""\n\nThese lines are from a study guide made from it:\n${list.join('\n')}\n\nCheck each line against the source. For a line that is wrong, mixes things up, or says something the source does not support, write: DROP W2 (or DROP A5). Then, only if you are sure the source itself has a mistake (a misspelled name, a wrong date, a wrong fact), write: NOTE: what the file says, and what is correct. At most 5 notes. Write nothing else. If everything is right, write OK.` }],
+      { maxTokens: 700, lean: true, rotate: true, onWait: waitNote('Checking it for mistakes…') });
+  } catch (e) { return md; } // (no check is better than no reviewer)
+  const drops = new Set([...String(out).matchAll(/DROP\s+([WA])\s*(\d+)/gi)].map((m) => m[1].toUpperCase() + m[2]));
+  const notes = [...String(out).matchAll(/^\s*[-*•]?\s*NOTE:\s*(.{10,300})$/gim)].map((m) => m[1].trim()).slice(0, 5);
+  // a check that throws out most of the guide is the check going wrong, not the guide
+  if (drops.size > Math.max(2, (watch.length + as.length) * 0.6)) drops.clear();
+  const gone = new Set();
+  watch.forEach((w, k) => { if (drops.has(`W${k + 1}`)) gone.add(w.i); });
+  as.forEach((a) => {
+    if (!drops.has(`A${a.n}`)) return;
+    for (let i = a.from; i <= a.to; i++) gone.add(i);
+    const q = qs.find((x) => x.n === a.n);
+    if (q) for (let i = q.from; i <= q.to; i++) gone.add(i);
+  });
+  let kept = lines.filter((_, i) => !gone.has(i));
+  if (gone.size) { // number what's left 1, 2, 3… again (questions and answers alike)
+    let n = 0, inList = false;
+    kept = kept.map((l) => {
+      if (isHead(l)) { inList = /practice questions|self-test|\*\*answers?\b/i.test(l); n = 0; return l; }
+      return inList ? l.replace(/^(\s*)\d+([.)]\s+)/, (_, sp, p) => `${sp}${++n}${p}`) : l;
+    });
+  }
+  let result = kept.join('\n');
+  if (notes.length) {
+    const box = `**Notes on your file**\n${notes.map((x) => `- ${x}`).join('\n')}\n- If one of these comes up on a test, follow your teacher's version.`;
+    const at = result.search(/^\s*\*\*Practice questions\*\*/im);
+    result = at > -1 ? `${result.slice(0, at)}${box}\n\n${result.slice(at)}` : `${result}\n\n${box}`;
+  }
+  return result;
+}
+// a reviewer, finished: tidied, then checked against the file
+async function polishReviewer(md, source, waitNote, onStatus, lists) {
+  return checkReviewer(cleanReviewer(md, { lists }), source, waitNote, onStatus);
+}
+
+// notesOnly: notes of one file for a reviewer of several (never a reviewer of its own: that one is written once, from all of them)
+async function groqDocument(doc, request, history, onStatus, { notesOnly = false } = {}) {
   const sys = leanDocSystem();
   const waitNote = (label) => (secs) => onStatus(`${label} (free per-minute limit: continuing in ${secs}s)`);
   const whole = WHOLE_FILE_RE.test(request) || wantsStudyFile(request);
+  const reviewer = whole && !notesOnly;
   const text = pagesAskedFor(doc.text || '', request);
   const visualNotes = doc.hasVisuals ? await pictureNotes(doc, onStatus, waitNote) : [];
   if (!text && !visualNotes.length) {
@@ -3919,6 +4083,7 @@ async function groqDocument(doc, request, history, onStatus) {
       const reply = await groqChat([{ role: 'system', content: sys }, ...hist,
         { role: 'user', content: `File "${doc.name}": a ${KIND_WORD[doc.kind] || 'file'} (${doc.label}):\n"""\n${text}\n"""${visualAll ? `\n\nNotes on the pictures and pages in the file:\n${visualAll}` : ''}\n\n${request}` }],
         { maxTokens: 3500, lean: true, rotate: true, onWait: waitNote('Reading…') });
+      if (reply && reviewer) return polishReviewer(await finishCut(reply, sys, 3500, waitNote), `${text}\n\n${visualAll}`, waitNote, onStatus);
       if (reply) return reply;
     } catch (e) { if (!e.tooLarge) throw e; /* fall through to reading in parts */ }
   }
@@ -3941,7 +4106,8 @@ async function groqDocument(doc, request, history, onStatus) {
   };
   const notes = [];
   let span = 'the start';
-  for (let i = 0; i < parts.length; i++) {
+  if (doc.preNoted) notes.push(...parts); // (already notes, from each file: never notes of notes)
+  else for (let i = 0; i < parts.length; i++) {
     span = partSpan(parts[i], span);
     onStatus(`Reading ${span} of ${doc.name}: part ${i + 1} of ${parts.length}…`);
     notes.push(`[${span.replace(/^\w/, (c) => c.toUpperCase())}]\n${await noteFor(parts[i], span.replace(/^\w/, (c) => c.toUpperCase()))}`);
@@ -3951,6 +4117,7 @@ async function groqDocument(doc, request, history, onStatus) {
   const firstNum = (n) => { const m = n.match(/^\[(?:Pages?|Slides?) (\d+)/i); return m ? +m[1] : Infinity; };
   notes.sort((x, y) => firstNum(x) - firstNum(y));
   const tail = truncated ? `\n\n*This file is very long, so I read the first ${GROQ_DOC_MAX_PARTS} parts. Add your free Gemini key in Settings and I'll read the whole file, pictures included, in one go.*` : '';
+  if (notesOnly) return notes.join('\n\n') + tail;
 
   // One answer from the notes (shrinking them if the model says it's too long).
   const finalFrom = async (list, ask, maxTokens = 3000) => {
@@ -3993,7 +4160,8 @@ async function groqDocument(doc, request, history, onStatus) {
   }
   if (groups.length === 1) {
     onStatus('Putting it all together…');
-    return (await finalFrom(notes, `${request}\n\nCover every note above. ${REVIEWER_TAIL}`, 3500)) + tail;
+    const one = await finishCut(await finalFrom(notes, `${request}\n\nCover every note above. ${REVIEWER_TAIL}`, 3500), sys, 3500, waitNote);
+    return (await polishReviewer(one, notes.join('\n\n'), waitNote, onStatus)) + tail;
   }
   const lists = { PERSON: [], DATE: [], TERM: [] };
   const sections = [];
@@ -4002,8 +4170,8 @@ async function groqDocument(doc, request, history, onStatus) {
     onStatus(`Writing it up: ${where} (section ${i + 1} of ${n})…`);
     try {
       return await groqChat([{ role: 'system', content: sys },
-        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this part of the reviewer, following steps 3 to 5 of the guide: a bold heading for each topic, named after the topic; explain it, then the details; key terms in bold; the examples (code exactly, in code blocks, with what it prints); **Watch out:** lines. Cover every note above, in order, and keep every name, date, number, formula and code example. No big picture, no quick review and no practice questions (those come at the end).\nThen, after it, add one line for every key term, and for every real person and every date in these notes (none for names used in examples), exactly like this:\n@@TERM: term - what it means\n@@PERSON: full name - who they are / what they did\n@@DATE: date or time - what happened\nWrite no other line with @@ in it, and none for a kind this part doesn't have.` }],
-        { maxTokens: 3200, lean: true, rotate: true, onWait: waitNote(`Writing ${where}…`) });
+        { role: 'user', content: `Study notes from ${where} of "${doc.name}" (section ${i + 1} of ${n}):\n"""\n${group.join('\n\n')}\n"""\n\nThe student asked: ${request}\n\nWrite ONLY this part of the reviewer, following steps 3 to 5 of the guide: a bold heading for each topic, named after the topic; explain it, then the details; key terms in bold; the examples (code exactly, in code blocks, with what it prints); **Watch out:** lines. Cover every note above, in order, and keep every name, date, number, formula and code example. The notes are sorted under labels (Key terms, Ideas, People, Dates & events, Places, Pictures…): those labels are NOT headings, so organise by topic and write each fact once. Don't write lists of people, dates or key terms here (the @@ lines below collect them), and no section about the file's pictures: say what a diagram shows inside its topic. No big picture, no quick review and no practice questions (those come at the end).\nThen, after it, add one line for every key term, and for every real person and every date in these notes (none for names used in examples), exactly like this:\n@@TERM: term - what it means\n@@PERSON: full name - who they are / what they did\n@@DATE: date or time - what happened\nWrite no other line with @@ in it, and none for a kind this part doesn't have.` }],
+        { maxTokens: 3200, lean: true, rotate: true, onWait: waitNote(`Writing ${where}…`) }).then((md) => finishCut(md, sys, 3200, waitNote));
     } catch (e) {
       if (!e.tooLarge || depth >= 1 || group.length < 2) throw e;
       const half = Math.ceil(group.length / 2);
@@ -4014,19 +4182,23 @@ async function groqDocument(doc, request, history, onStatus) {
     sections.push(takeMasterLines(await writeSection(groups[i], i, groups.length), lists)); // (its topics are its headings)
   }
   const master = masterListsMd(lists);
-  let questions = '', big = '';
+  let questions = '', big = '', title = '';
   try {
     onStatus('Writing practice questions…');
     const whole = sections.join('\n\n').slice(0, 12000);
-    const out = await groqChat([{ role: 'system', content: sys },
-      { role: 'user', content: `The reviewer of all of "${doc.name}":\n"""\n${whole}\n"""\n\nWrite two things. First **The big picture**: 2 to 4 sentences on what this file is about and why it matters. Then **Practice questions** that cover the whole file, following step 7 of the guide: 10 questions, mixed, with at least 4 that make the student use the ideas (what does this code print, find the bug, solve this problem, explain why), never about names used in examples or page numbers; then **Answers**, each with one short line on why.` }],
+    let out = await groqChat([{ role: 'system', content: sys },
+      { role: 'user', content: `The reviewer of all of "${doc.name}":\n"""\n${whole}\n"""\n\nWrite three things. First one line: TITLE: the subject and its topics, like "Readings in Philippine History: The Birth of a Nation" (never the file's name). Then **The big picture**: 2 to 4 sentences on what this file is about and why it matters. Then **Practice questions** that cover the whole file, following step 7 of the guide: 10 questions, mixed, with at least 4 that make the student use the ideas (what does this code print, find the bug, solve this problem, explain why), never about names used in examples or page numbers; then **Answers**, each with one short line on why.` }],
       { maxTokens: 2000, lean: true, rotate: true, onWait: waitNote('Writing practice questions…') });
+    const named = out.match(/^\s*\**\s*TITLE\s*:?\**\s*:?\s*(.+)$/im);
+    if (named) { title = named[1].replace(/\*\*/g, '').replace(/^["“]|["”]$/g, '').trim(); out = out.replace(named[0], ''); }
     const at = out.search(/\*\*Practice questions\*\*/i);
     if (at > 0) { big = out.slice(0, at).trim(); questions = out.slice(at).trim(); } else questions = `**Practice questions**\n\n${out.trim()}`;
     if (big && !/big picture/i.test(big)) big = `**The big picture**\n${big}`;
   } catch (e) { /* the reviewer is still complete without them */ }
-  const pagesNote = doc.pages ? `: all ${doc.pages} pages` : '';
-  return [`**${doc.name}${pagesNote}**`, big, ...sections, master, questions].filter(Boolean).join('\n\n') + tail;
+  const pagesNote = doc.pages ? `, all ${doc.pages} pages` : '';
+  const head = `**${title || doc.title || doc.name.replace(/\.[a-z0-9]{2,5}$/i, '')}**\n\n*From ${doc.from || doc.name}${pagesNote}*`;
+  const body = cleanReviewer(sections.join('\n\n'), { lists }); // (the sections' own lists go: the master lists have them all, once)
+  return (await checkReviewer([head, big, body, master, questions].filter(Boolean).join('\n\n'), notes.join('\n\n'), waitNote, onStatus)) + tail;
 }
 
 /* Several photos and files at once. Each photo is read on its own — every word copied out
@@ -4064,11 +4236,12 @@ async function answerAboutMany(items, request, history, onStatus) {
     const d = files[i].doc, k = i + 1, head = `=== File ${k} of ${files.length}: ${d.name} (${d.label}) ===`;
     let body;
     if (d.text && d.text.length <= 14000 && !d.hasVisuals && !d.scanned) body = d.text;
-    else body = await readDocumentAnswer(d, `Take complete, accurate study notes of this WHOLE file, in its order. ${NOTES_GUIDE}`, [], (m) => onStatus(`File ${k} of ${files.length} (${d.name}): ${m}`));
+    else body = await readDocumentAnswer(d, `Take complete, accurate study notes of this WHOLE file, in its order. ${NOTES_GUIDE}`, [], (m) => onStatus(`File ${k} of ${files.length} (${d.name}): ${m}`), { notesOnly: true });
     parts[items.indexOf(files[i])] = `${head}\n${body}`;
   }
   const label = [photos.length ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : '', files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
-  const doc = { name: `your ${label}`, kind: 'txt', label, text: parts.filter(Boolean).join('\n\n'), hasVisuals: false, scanned: false, combined: true };
+  const from = [...files.map((f) => f.doc.name), photos.length ? `${photos.length} photo${photos.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+  const doc = { name: `your ${label}`, title: 'Reviewer', from, kind: 'txt', label, text: parts.filter(Boolean).join('\n\n'), hasVisuals: false, scanned: false, combined: true, preNoted: true };
   onStatus('Putting it all together…');
   const reply = await answerAboutDocument(doc, `${request}\n\n(This content comes from ${label}, each marked with === headers. Use all of them: don't skip any. When it helps, say where a fact is from, like "(photo 3)" or "(${files[0] ? files[0].doc.name : 'the file'}, p. 4)".)`, history, onStatus);
   return { reply, doc };
@@ -4081,16 +4254,19 @@ async function answerAboutDocument(doc, request, history, onStatus) {
     throw friendlyError(CassieErrors.say('file_too_big', { name: doc.name }));
   }
 }
-async function readDocumentAnswer(doc, request, history, onStatus) {
+async function readDocumentAnswer(doc, request, history, onStatus, opts = {}) {
   if (state.geminiKey) {
-    try { return await geminiDocument(doc, request, history, onStatus); }
+    try {
+      const out = await geminiDocument(doc, request, history, onStatus);
+      return !opts.notesOnly && (WHOLE_FILE_RE.test(request) || wantsStudyFile(request)) ? cleanReviewer(out) : out;
+    }
     catch (e) {
       if (!canChat() || geminiOnly()) throw e;
       onStatus('Gemini is busy, reading it another way…');
     }
   }
   if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
-  return groqDocument(doc, request, history, onStatus);
+  return groqDocument(doc, request, history, onStatus, opts);
 }
 
 /* ---------- upload / download / image + document helpers ---------- */
@@ -4790,7 +4966,9 @@ async function handleSend(text, opts = {}) {
     const bubble = renderMessage('assistant', reply);
     ensureGraph(bubble, sendText, reply);
     if (bubble.querySelector('.cassie-board')) track('feature', 'graph');
-    const base = doc ? doc.name.replace(/\.[^.]+$/, '') : '';
+    // a reviewer that starts with its own title ("Readings in Philippine History") is saved under it, not the file's name
+    const top = (reply.match(/^\s*\*\*([^*\n]{3,90})\*\*\s*\n/) || [])[1];
+    const base = doc ? (top && !/big picture/i.test(top) ? top.replace(/^reviewer:?\s*/i, '') : doc.name.replace(/\.[^.]+$/, '')) : '';
     const title = doc
       ? (/review/i.test(sendText) ? `Reviewer: ${base}` : `${base}: notes`)
       : '';
@@ -5954,7 +6132,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=173');
+      exploreMod = await import('./explore/cell3d.js?v=174');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6004,7 +6182,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=173');
+      labsMod = await import('./labs/labs.js?v=174');
       islandRest();
     }
     labsMod.open({
@@ -7819,10 +7997,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=173').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=174').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=173', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=174', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -3812,6 +3812,61 @@ test('a 49-page file becomes a complete reviewer with people, timeline and terms
   await ctx.close();
 });
 
+test('a reviewer of two files reads each file once and writes one reviewer: a real title, each person and date once (in tables), no section about the slides’ decorations or empty headings, a part cut off by the length limit is finished, and a check drops a wrong Watch out and a wrong answer and lists the file’s own mistakes', async (b) => {
+  const seen = { notes: [], sections: 0, ends: 0, more: 0, checks: 0 };
+  const S1 = '**The Birth of a Nation**\n- Independence was proclaimed in Kawit, Cavite.\n- Independence was proclaimed in Kawit, Cavite.\n**Watch out:** Don’t mix up the Mock Battle (1898) with the Battle of Manila (1899).\n**Watch out:** Felipe Calderón and Felipe Calderón y Roca are different people.\n**Persons**\n\n**Pictures, Tables & Charts**\n- Closing graphic: Thank you for listening! over a decorative ink-splash\n@@PERSON: Gen. Emilio Aguinaldo — led the revolution\n@@DATE: June 12 , 1898 — Independence proclaimed in Kawit\n@@TERM: Malolos Congress — the revolutionary legislature\nThe last example is **Graph';
+  const S2 = '**The American Rule**\n- Independence was proclaimed in Kawit, Cavite.\n- The Treaty of Paris was signed on Dec 10 1898.\n@@PERSON: Emilio Aguinaldo — first president of the Malolos Republic\n@@DATE: June 12, 1898 — Philippine independence proclaimed at Kawit, Cavite\n@@PERSON: Maj. Gen. Wesley Merritt — first American military governor';
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
+    const all = JSON.stringify(body.messages);
+    if (/check study guides/.test(all)) { seen.checks++; return { text: 'DROP W2\nDROP A2\nNOTE: The file spells it Delfina Hermosa de Natividad; the usual spelling is Herbosa.' }; }
+    if (/stopped in the middle/.test(all)) { seen.more++; return { text: 'b**, which has an Euler path.' }; }
+    if (/study notes from one part/.test(all)) { seen.notes.push(all); return { text: ('- **People**: Emilio Aguinaldo, led the revolution (p. 2)\n- **Dates & events**: June 12, 1898, independence proclaimed at Kawit (p. 3)\n').repeat(40) }; }
+    if (/Write ONLY this part/.test(all)) { seen.sections++; return { text: seen.sections === 1 ? S1 : S2 }; }
+    if (/Write three things/.test(all)) { seen.ends++; return { text: 'TITLE: Readings in Philippine History: The Birth of a Nation\n**The big picture**\nHow the Philippines became a nation, then a US colony.\n\n**Practice questions**\n1. Where was independence proclaimed?\n2. Who was the first military governor?\n   a) Merritt b) MacArthur\n3. When was the Treaty of Paris signed?\n\n**Answers**\n1. Kawit, Cavite.\n2. Douglas MacArthur.\n3. December 10, 1898.' }; }
+    return { text: 'ok' };
+  } });
+  try {
+    const long = (w) => `${w} `.repeat(4000);
+    await page.setInputFiles('#file-input', [{ name: 'a-history.txt', mimeType: 'text/plain', buffer: Buffer.from(long('Independence was proclaimed in Kawit on June 12, 1898.')) }, { name: 'b-history.txt', mimeType: 'text/plain', buffer: Buffer.from(long('The Treaty of Paris was signed on December 10, 1898.')) }]);
+    const a = await ask(page, 'Make me a reviewer of these');
+    const t = await a.innerText();
+    // each file read once, one reviewer from both
+    expect(seen.notes.length >= 2 && !seen.notes.some((n) => /=== File/.test(n)), 'each file’s parts are noted once, and the notes are never noted again: ' + seen.notes.length);
+    expect(seen.ends === 1 && seen.checks === 1, 'one ending and one check for the whole reviewer, not one per file: ' + JSON.stringify(seen));
+    // a real title, and where it is from
+    const first = t.trim().split('\n')[0];
+    expect(first === 'Readings in Philippine History: The Birth of a Nation' && /From a-history\.txt, b-history\.txt/.test(t), 'a title that names the subject, and the files it is from: ' + t.slice(0, 160));
+    // each person and each date once, in tables
+    const people = await a.locator('table').filter({ hasText: 'Why they matter' }).innerText();
+    expect((people.match(/Aguinaldo/g) || []).length === 1 && /Wesley Merritt/.test(people), '"Gen. Emilio Aguinaldo" and "Emilio Aguinaldo" are one person: ' + people);
+    const timeline = await a.locator('table').filter({ hasText: 'What happened' }).innerText();
+    expect((timeline.match(/June 12, 1898/g) || []).length === 1, '"June 12 , 1898" and "June 12, 1898" are one date: ' + timeline);
+    expect(/December 10, 1898/.test(t) && !/Dec 10 1898/.test(t), 'dates are written one way');
+    // nothing twice, no decorations, no empty heading
+    expect((t.match(/Independence was proclaimed in Kawit, Cavite/g) || []).length === 1, 'the same point once: ' + (t.match(/Independence was proclaimed in Kawit, Cavite/g) || []).length);
+    expect(!/Thank you for listening|ink-splash|Pictures, Tables/i.test(t) && !/^\s*Persons\s*$/m.test(t), 'no section about the slides’ decorations, no heading with nothing under it');
+    // the part cut off by the length limit is finished
+    expect(seen.more === 1 && /Graph b, which has an Euler path\./.test(t), 'the cut-off part is finished: ' + seen.more + ' ' + t.slice(Math.max(0, t.indexOf('Graph') - 80), t.indexOf('Graph') + 80));
+    // the check: the wrong Watch out and the wrong answer (with its question) go, the rest are numbered again
+    expect(/Mock Battle/.test(t) && !/different people/.test(t), 'the wrong Watch out goes, the right one stays');
+    const qa = await a.evaluate((el) => [...el.querySelectorAll('ol')].map((o) => [...o.children].map((li) => li.textContent.trim())));
+    expect(!/first military governor/.test(t) && !/Douglas MacArthur/.test(t) && qa.some((l) => l.join('|') === 'Where was independence proclaimed?|When was the Treaty of Paris signed?') && qa.some((l) => l.join('|') === 'Kawit, Cavite.|December 10, 1898.'), 'the wrong answer goes with its question, and the rest are numbered 1, 2: ' + JSON.stringify(qa));
+    expect(/Reviewer Readings in Philippine History/.test(t), 'the Word file is named after the reviewer’s title, not “your 2 files”');
+    expect(/Notes on your file[\s\S]*Herbosa[\s\S]*follow your teacher’s version|Notes on your file[\s\S]*Herbosa[\s\S]*follow your teacher's version/.test(t) && t.indexOf('Notes on your file') < t.indexOf('Practice questions'), 'the file’s own mistakes, before the practice questions');
+    expect(!/@@|TITLE:/.test(t), 'none of Cassie’s markers');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    // the merging on its own
+    const m = await page.evaluate(() => {
+      const lists = { PERSON: [], DATE: [], TERM: [] };
+      takeMasterLines('@@PERSON: General Elwell S. Otis - US commander\n@@PERSON: Gen. Elwell Stephen Otis - second military governor of the Philippines\n@@PERSON: Douglas MacArthur - WWII general\n@@PERSON: Arthur MacArthur - third military governor\n@@DATE: Jan 21, 1899 - Malolos Constitution promulgated\n@@DATE: January 23 1899 - Malolos Republic inaugurated\n@@DATE: 1898 - Treaty of Paris\n@@TERM: Battle of Manila (1899) - first battle of the war\n@@TERM: Battle of Manila - the first and largest battle of the Philippine-American War', lists);
+      return { people: lists.PERSON.map((x) => x.head), dates: lists.DATE.map((x) => x.head), terms: lists.TERM.length, md: masterListsMd(lists) };
+    });
+    expect(m.people.length === 3 && m.people.includes('Gen. Elwell Stephen Otis') && m.people.includes('Douglas MacArthur') && m.people.includes('Arthur MacArthur'), 'one Otis (the fuller name), two different MacArthurs: ' + m.people);
+    expect(m.dates.join() === 'January 21, 1899,January 23, 1899,1898' && m.terms === 1, 'two different days stay apart, written one way; the same term once: ' + m.dates + ' ' + m.terms);
+    expect(m.md.indexOf('1898') < m.md.indexOf('January 21, 1899'), 'the timeline is in order');
+  } finally { await ctx.close(); }
+});
+
 test('a reviewer teaches, shaped for the subject: a programming module gets the big picture, topics as headings with their code, a quick review table and questions that make you use it; never "None", never history boxes, never Cassie’s own @@ markers or "Pages 1-22" headings', async (b) => {
   const seen = { notes: [], sections: [], end: [], systems: [] };
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
