@@ -1897,7 +1897,7 @@ html.lite {
 .plus-early[hidden] { display: none; }
 .plus-early label { font-size: .84rem; font-weight: 600; }
 .plus-early input { font: inherit; font-size: 1rem; min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border, rgba(var(--shade-rgb), .25)); background: var(--surface, var(--white)); color: inherit; }
-.plus-card .plus-err { margin: 0; color: var(--danger, #b3261e); font-weight: 600; opacity: 1; }
+.plus-card .plus-err { margin: 0; color: var(--danger); font-weight: 600; opacity: 1; }
 .plus-card .plus-err[hidden] { display: none; }
 .bubble .early-chip { background: var(--text); color: var(--surface); border-color: var(--text); }
 .x3d-toast { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); z-index: 20; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 99px; background: rgba(var(--dark-rgb), .82); color: var(--white); font-size: .82rem; text-align: center; pointer-events: none; }
