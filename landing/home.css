@@ -271,7 +271,7 @@ h2 { font: 600 clamp(32px, 4.4vw, 52px)/1.08 var(--sans); letter-spacing: -.025e
 .plan ul.bonus { margin-top: 10px; padding-top: 0; border-top: 0; }
 /* the early list: an email, then "you're on the list" */
 .early { display: grid; gap: 8px; margin: 12px 0 0; }
-.early[hidden] { display: none; }
+.early[hidden], .plan .btn[hidden] { display: none; }
 .early label { font-size: 14px; font-weight: 600; }
 .early-row { display: flex; gap: 8px; }
 .early input { flex: 1; min-width: 0; min-height: 48px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 400 16px/1 var(--body); }

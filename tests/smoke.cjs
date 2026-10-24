@@ -1774,6 +1774,7 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
     await page.waitForSelector('#pricing [data-early="plus"]:not([hidden]) input');
     if (process.env.SHOTS) await page.locator('#pricing .plan.feat').screenshot({ path: process.env.SHOTS + '/pricing-pass.png' });
     expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'early-plus'), 'the email field has focus');
+    expect(!(await go.isVisible()), 'the button makes way for the email field (not both)');
     await page.fill('#early-plus', 'x@yopmail.com');
     await page.click('#pricing [data-early="plus"] button');
     await page.waitForFunction(() => document.querySelector('[data-early="plus"] .early-msg').textContent.length > 0);
