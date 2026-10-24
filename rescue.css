@@ -52,7 +52,8 @@ h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; lett
 .rs-after h2 { margin: 0 0 6px; font-size: 22px; }
 .rs-after p { margin: 0 0 16px; color: var(--mute); }
 .rs-actions { display: grid; gap: 10px; }
-@media (min-width: 560px) { .rs-actions { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 560px) { .rs-actions { grid-template-columns: 1fr 1fr; } .rs-actions .rs-go { grid-column: 1 / -1; } }
+#rs-share-msg:empty { display: none; }
 .rs-other { margin: 20px 0 0; text-align: center; color: var(--mute); font-size: 15px; }
 .rs-foot { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 20px 0 max(28px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; gap: 18px; font-size: 14px; color: var(--mute); }
 /* printing: only the plan, black on white, one day never split across pages */

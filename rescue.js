@@ -130,6 +130,115 @@
     out.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }
 
+  // Share my plan: a picture of the plan for a story or a group (1080 x 1350, the size feeds show whole), drawn
+  // here on the device. The exam, the days to go, the first days, a dot for every day, and where to get one.
+  const INK = { bg: '#111114', card: '#1d1d22', ink: '#f5f5f7', mute: '#a9a9b2', line: '#34343c', pop: '#ffd84d', popInk: '#111114' };
+  const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  const shortDay = (day) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-PH', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  function fit(ctx, text, max) { // one line, with … when it is too long
+    if (ctx.measureText(text).width <= max) return text;
+    let t = text;
+    while (t.length > 1 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
+    return t.trimEnd() + '…';
+  }
+  function wrap(ctx, text, max, lines) { // up to `lines` lines, the last one ending in … when it doesn't fit
+    const words = text.split(' '), out = [];
+    let line = '';
+    for (const w of words) {
+      const next = line ? line + ' ' + w : w;
+      if (ctx.measureText(next).width <= max || !line) line = next; else { out.push(line); line = w; }
+    }
+    if (line) out.push(line);
+    if (out.length > lines) { out.length = lines; out[lines - 1] = fit(ctx, out[lines - 1] + ' …', max); }
+    return out;
+  }
+  function planPicture(plan, isLet) {
+    const W = 1080, H = 1350, P = 84, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = INK.bg; g.fillRect(0, 0, W, H);
+    g.textBaseline = 'alphabetic';
+    // the kicker and the exam
+    g.fillStyle = INK.mute; g.font = `700 30px ${FONT}`;
+    g.fillText(isLet ? 'MY LET REVIEW PLAN' : 'MY EXAM PLAN', P, 140);
+    g.fillStyle = INK.ink; g.font = `800 76px ${FONT}`;
+    const title = wrap(g, plan.name, W - P * 2, 2);
+    title.forEach((t, i) => g.fillText(t, P, 236 + i * 86));
+    let y = 236 + (title.length - 1) * 86 + 70;
+    // the days to go, big
+    const left = dayGap(plan.from, plan.date);
+    const big = left === 0 ? 'Today' : left === 1 ? '1 day' : `${left} days`;
+    g.font = `800 150px ${FONT}`; g.fillStyle = INK.pop;
+    y += 130; g.fillText(big, P, y);
+    const bw = g.measureText(big).width;
+    g.font = `600 40px ${FONT}`; g.fillStyle = INK.ink;
+    if (left > 0) g.fillText('to go', P + bw + 24, y);
+    const sessions = plan.days.reduce((a, d) => a + d.tasks.length, 0);
+    g.font = `500 34px ${FONT}`; g.fillStyle = INK.mute;
+    y += 60; g.fillText(fit(g, `Exam on ${dayName(plan.date)} · ${sessions} study sessions`, W - P * 2), P, y);
+    // a dot for every day (up to 70), the first ones filled: the road to exam day
+    const total = Math.max(1, left), shown = Math.min(total, 70), per = 14, r = 13, gap = (W - P * 2 - r * 2) / (per - 1);
+    y += 60;
+    for (let i = 0; i < shown; i++) {
+      const cx = P + r + (i % per) * gap, cy = y + r + Math.floor(i / per) * 40;
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
+      if (i === shown - 1) { g.fillStyle = INK.pop; g.fill(); } else { g.strokeStyle = INK.line; g.lineWidth = 4; g.stroke(); }
+    }
+    y += Math.ceil(shown / per) * 40 + 30;
+    // the first days, one line each
+    const room = Math.max(1, Math.min(5, Math.floor((H - 250 - y) / 92)));
+    g.fillStyle = INK.card;
+    const boxH = room * 92 + 40;
+    g.beginPath(); g.roundRect(P - 24, y, W - (P - 24) * 2, boxH, 28); g.fill();
+    plan.days.slice(0, room).forEach((d, i) => {
+      const ly = y + 24 + i * 92;
+      g.font = `700 30px ${FONT}`; g.fillStyle = INK.mute;
+      g.fillText(i === 0 && d.date === plan.from ? 'Today' : shortDay(d.date), P, ly + 36);
+      g.font = `600 34px ${FONT}`; g.fillStyle = INK.ink;
+      // whole tasks only, then how many more (never half a task)
+      const names = d.tasks.map((t) => LABEL[t.kind](t.topic));
+      let line = names[0], k = 1;
+      for (; k < names.length; k++) {
+        const rest = names.length - k - 1, next = line + ' · ' + names[k] + (rest ? ` · +${rest} more` : '');
+        if (g.measureText(next).width > W - P * 2) break;
+        line += ' · ' + names[k];
+      }
+      if (k < names.length) line = fit(g, line, W - P * 2 - g.measureText(` · +${names.length - k} more`).width) + ` · +${names.length - k} more`;
+      g.fillText(fit(g, line, W - P * 2), P, ly + 78);
+    });
+    const more = plan.days.length - room;
+    // where to get one: Cassie's mark, her name and the page
+    const fy = H - 110;
+    if (more > 0) { g.font = `600 30px ${FONT}`; g.fillStyle = INK.mute; g.fillText(`+ ${more} more ${more === 1 ? 'day' : 'days'} planned`, P, Math.min(y + boxH + 52, fy - 70)); }
+    g.save(); g.translate(P, fy - 44); g.scale(56 / 420, 56 / 420); g.translate(-40, -40);
+    g.fillStyle = INK.ink; g.strokeStyle = INK.ink; g.lineWidth = 56; g.lineJoin = 'round';
+    const mark = new Path2D('M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z');
+    g.stroke(mark); g.fill(mark);
+    g.fillStyle = INK.bg; g.beginPath(); g.roundRect(168, 196, 22, 70, 11); g.roundRect(236, 214, 22, 70, 11); g.fill();
+    g.restore();
+    g.font = `800 38px ${FONT}`; g.fillStyle = INK.ink; g.fillText('Made free with Cassie', P + 80, fy - 4);
+    g.font = `600 30px ${FONT}`; g.fillStyle = INK.pop; g.fillText(isLet ? 'askcassie.study/let' : 'askcassie.study/rescue', P + 80, fy + 40);
+    return c;
+  }
+  async function sharePlan(plan, isLet, say) {
+    const c = planPicture(plan, isLet);
+    const blob = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+    if (!blob) { say('That picture could not be made here. Try Print or save as PDF instead.'); return; }
+    const file = new File([blob], (isLet ? 'my-let-plan' : 'my-exam-plan') + '.png', { type: 'image/png' });
+    const url = `https://askcassie.study/${isLet ? 'let' : 'rescue'}.html`;
+    const text = `${isLet ? 'My LET review plan' : 'My exam plan'}, made free with Cassie. Get yours: ${url}`;
+    // a phone: its own share sheet (Messenger, Facebook, Instagram…); a computer or a refusal: the picture is saved
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text }); say('Shared. Good luck, you’ve got this!'); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; } // (closed the share sheet: nothing to say)
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = file.name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    say('Saved to your downloads. Post it on your story or in your review group!');
+  }
+
   function init() {
     const f = $('#rs-form');
     if (!f) return;
@@ -165,6 +274,8 @@
       render(plan, isLet);
     });
     $('#rs-print').addEventListener('click', () => window.print());
+    const shareMsg = (m) => { const e = $('#rs-share-msg'); e.textContent = m; };
+    $('#rs-share').addEventListener('click', () => { if (!plan) return; shareMsg(''); sharePlan(plan, isLet, shareMsg).catch(() => shareMsg('That picture could not be made here. Try Print or save as PDF instead.')); });
     $('#rs-save').addEventListener('click', () => {
       if (!plan) return;
       try { localStorage.setItem('cassie.rescue', JSON.stringify({ ...plan, at: Date.now() })); } catch (e) { /* storage off: the app still opens */ }
@@ -172,6 +283,6 @@
     });
   }
 
-  window.CassieRescue = { makePlan, topicsOf, letTopics, letName };
+  window.CassieRescue = { makePlan, topicsOf, letTopics, letName, planPicture };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

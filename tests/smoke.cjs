@@ -1537,6 +1537,62 @@ test('the Exam Rescue Plan (free, from the landing page): subject, day and topic
     await ctx.close();
   }
 });
+test('Share my plan: the LET and Rescue plans become a 1080x1350 picture made on the device (the exam, the days to go, the first days, a dot a day, Made free with Cassie and the link); a phone opens its share sheet with the link, a computer saves it; long names stay inside', async (b) => {
+  const LET = APP.replace('app.html', 'let.html'), RESCUE = APP.replace('app.html', 'rescue.html');
+  const day = (n) => new Date(Date.now() + 8 * 3600e3 + n * 864e5).toISOString().slice(0, 10);
+  // a computer: the picture is saved
+  let { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: { exams: [] } });
+  try {
+    const away = [];
+    page.on('request', (r) => { const u = new URL(r.url()); if (u.origin !== new URL(APP).origin && !u.protocol.startsWith('blob')) away.push(u.href); });
+    await page.goto(LET);
+    await page.fill('[name=date]', day(45));
+    await page.click('#rs-form .rs-go');
+    await page.waitForSelector('#rs-plan:not([hidden]) .rs-day');
+    expect(await page.locator('#rs-share').innerText() === 'Share my plan', 'a Share my plan button under the plan');
+    away.length = 0;
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#rs-share')]);
+    expect(dl.suggestedFilename() === 'my-let-plan.png', 'saved as my-let-plan.png: ' + dl.suggestedFilename());
+    const file = await dl.path();
+    const png = fs.readFileSync(file);
+    expect(png.readUInt32BE(16) === 1080 && png.readUInt32BE(20) === 1350, 'a 1080 x 1350 picture: ' + png.readUInt32BE(16) + 'x' + png.readUInt32BE(20));
+    if (process.env.SHOTS) fs.copyFileSync(file, process.env.SHOTS + '/share-let.png');
+    await page.waitForFunction(() => /Saved to your downloads/.test(document.querySelector('#rs-share-msg').textContent));
+    expect(!away.length, 'nothing sent anywhere: ' + away.join(' '));
+    // what is drawn: words in the title, the big number, the days, the footer; nothing past the right margin
+    const drawn = await page.evaluate((d) => {
+      const plan = CassieRescue.makePlan({ name: 'LET Secondary: Technology and Livelihood Education with a very long major name that goes on', date: d, topics: CassieRescue.letTopics('secondary', 'Technology and Livelihood Education').join('\n') });
+      const c = CassieRescue.planPicture(plan, true), g = c.getContext('2d');
+      const lit = (x, y, w, h) => { const px = g.getImageData(x, y, w, h).data; let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] > 300) n++; return n; };
+      return { title: lit(84, 160, 900, 180), big: lit(84, 360, 600, 200), foot: lit(84, 1180, 700, 90), edge: lit(1040, 0, 40, 1350), days: plan.days.length };
+    }, day(45));
+    expect(drawn.title > 2000 && drawn.big > 2000 && drawn.foot > 1000, 'the title, the days to go and the footer are drawn: ' + JSON.stringify(drawn));
+    expect(drawn.edge === 0, 'nothing runs past the right edge, even a very long name: ' + JSON.stringify(drawn));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+  // a phone: its share sheet, with the picture and the link to get one
+  ({ ctx, page, errors } = await open(b, { device: 'Pixel 7', state: { exams: [] } }));
+  try {
+    await page.addInitScript(() => { window.__shared = null; navigator.canShare = (d) => !!(d && d.files); navigator.share = async (d) => { window.__shared = { files: d.files.map((f) => [f.name, f.type, f.size]), text: d.text }; }; });
+    await page.goto(RESCUE);
+    await page.fill('[name=subject]', 'Biology midterm');
+    await page.fill('[name=date]', day(6));
+    await page.fill('[name=topics]', 'Cells\nPhotosynthesis\nRespiration');
+    await page.click('#rs-form .rs-go');
+    await page.waitForSelector('#rs-plan:not([hidden]) .rs-day');
+    await page.click('#rs-share');
+    await page.waitForFunction(() => window.__shared);
+    const sh = await page.evaluate(() => window.__shared);
+    expect(sh.files.length === 1 && sh.files[0][0] === 'my-exam-plan.png' && sh.files[0][1] === 'image/png' && sh.files[0][2] > 10000, 'the picture goes to the share sheet: ' + JSON.stringify(sh.files));
+    expect(/made free with Cassie/.test(sh.text) && /https:\/\/askcassie\.study\/rescue\.html/.test(sh.text), 'with the link to get one: ' + sh.text);
+    expect(/Shared/.test(await page.locator('#rs-share-msg').innerText()), 'it says it was shared');
+    const tap = await page.locator('#rs-share').boundingBox();
+    expect(tap.height >= 44, 'the button is easy to tap: ' + tap.height);
+    if (process.env.SHOTS) { const png = await page.evaluate((d) => CassieRescue.planPicture(CassieRescue.makePlan({ name: 'Biology midterm', date: d, topics: 'Cells\nPhotosynthesis\nRespiration' }), false).toDataURL('image/png'), day(6)); fs.writeFileSync(process.env.SHOTS + '/share-rescue.png', Buffer.from(png.split(',')[1], 'base64')); }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+});
+
 test('the LET Rescue Plan (let.html, linked from the Rescue Plan and the landing page): the level fills in the LET topics (Professional Education, General Education, and the major for Secondary, which is asked for); a review of months quizzes every topic twice; the plan is called by the level and major, with the LET exam day list; the student can change the topics; made on the device; Save it in Cassie keeps it as an exam plan; readable in light and dark', async (b) => {
   const LET = APP.replace('app.html', 'let.html');
   expect(/href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'rescue.html'), 'utf8')) && /href="let\.html"/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')), 'linked from the Rescue Plan and the landing page');
