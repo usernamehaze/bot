@@ -289,6 +289,55 @@ test('an update reaches every device: the pages, the service worker cache and th
   expect(app.includes("import('./explore/cell3d.js?v=" + v + "')"), 'the app loads the 3D views (the human body) with the current version');
 });
 
+test('help first: Ask your first question goes straight to the chat (no sign in, no questions); after Cassie’s first good answer she offers once to save progress and fit her to you; Save my progress signs up then asks the questions; with no age, no usage counts', async (b) => {
+  await serverMode({ groq: 'ok', ai: 'ok' });
+  for (const [device, viewport] of [['Pixel 7', undefined], ['Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { state: null, device, viewport });
+    try {
+      await page.waitForSelector('.fr-intro .fr-ask', { timeout: 8000 });
+      expect(await page.locator('.fr-intro .fr-ask').innerText() === 'Ask your first question' && await page.locator('.fr-intro .fr-start').isVisible(), `${device}: the big button asks; setting up first is still there`);
+      expect(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('fr-ask')), `${device}: Ask has focus`);
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/help-first-intro-${viewport ? 'computer' : 'phone'}.png` });
+      await page.click('.fr-intro .fr-ask');
+      await page.waitForFunction(() => !document.querySelector('.fr-intro, .fr-ob, .auth-page') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 5000 });
+      const st = await page.evaluate(() => ({ p: !!state.profile, later: state.setupLater, usage: state.analytics && state.analytics.usage }));
+      expect(st.p && st.later === true && st.usage === false, `${device}: a blank profile, set up later, and no usage counts while the age is unknown: ` + JSON.stringify(st));
+      const a1 = await ask(page, 'What is photosynthesis?');
+      await page.waitForSelector('.save-offer', { timeout: 5000 });
+      const offer = await page.locator('.save-offer').innerText();
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/help-first-offer-${viewport ? 'computer' : 'phone'}.png` });
+      expect(/Keep this, and make Cassie fit you\?/.test(offer) && /Save my progress/.test(offer) && /Not now/.test(offer), `${device}: the offer after the first answer: ` + offer);
+      expect(await page.evaluate(() => { const o = document.querySelector('.save-offer'); return o.previousElementSibling && o.previousElementSibling.classList.contains('bubble-assistant'); }), `${device}: it sits right under the answer`);
+      if (device === 'Pixel 7') {
+        await page.click('.save-offer [data-so="no"]');
+        expect(await page.locator('.save-offer').count() === 0, 'Not now closes it');
+        await ask(page, 'And respiration?');
+        expect(await page.locator('.save-offer').count() === 0, 'asked once: not again after the next answer');
+        await page.reload();
+        await page.waitForSelector('#prompt-input');
+        expect(await page.locator('.fr-intro, .auth-page').count() === 0, 'a reload goes straight back in');
+      } else {
+        await page.click('.save-offer [data-so="save"]');
+        await page.waitForSelector('.auth-page', { timeout: 5000 });
+        const mail = `helpfirst${Date.now()}@example.com`;
+        await page.fill('.auth-form input[name=email]', mail);
+        await page.fill('.auth-form input[name=age]', '17');
+        await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+        await page.click('.auth-go');
+        await page.waitForSelector('.fr-ob', { timeout: 10000 });
+        expect(/What’s your name\?/.test(await page.locator('.fr-h').innerText()), 'after signing up, the questions (the profile was blank)');
+        await page.fill('.fr-ob input[name=name]', 'Ana');
+        for (let i = 0; i < 5; i++) { if (!(await page.locator('.fr-ob').count())) break; await page.click(i === 0 ? '.fr-go' : '.fr-skip'); await page.waitForTimeout(150); }
+        await page.waitForFunction(() => !document.querySelector('.fr-ob'), null, { timeout: 5000 });
+        const done = await page.evaluate(() => ({ name: state.profile.name, later: state.setupLater }));
+        expect(done.name === 'Ana' && done.later === false, 'the questions fill the profile in: ' + JSON.stringify(done));
+      }
+      expect(!errors.length, `${device}: page errors: ` + errors.join('; '));
+    } finally { await ctx.close(); }
+  }
+  await fetch(`${SERVER}/__reset`);
+});
+
 test('every age is welcome: nursery to work, with an account too', async (b) => {
   const { ctx, page } = await open(b, { state: null });
   await toSignIn(page);
@@ -1723,6 +1772,7 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
     expect(await go.innerText() === 'Get the Pasado Pass early', 'the button says what you get: ' + await go.innerText());
     await go.click();
     await page.waitForSelector('#pricing [data-early="plus"]:not([hidden]) input');
+    if (process.env.SHOTS) await page.locator('#pricing .plan.feat').screenshot({ path: process.env.SHOTS + '/pricing-pass.png' });
     expect(await page.evaluate(() => document.activeElement && document.activeElement.id === 'early-plus'), 'the email field has focus');
     await page.fill('#early-plus', 'x@yopmail.com');
     await page.click('#pricing [data-early="plus"] button');
@@ -1733,6 +1783,7 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
     await page.press('#early-plus', 'Enter');
     await page.waitForSelector('#pricing .early-done');
     expect((await page.locator('#pricing .early-done').innerText()).includes(mail), 'it says who Cassie will email');
+    if (process.env.SHOTS) await page.locator('#pricing .plan.feat').screenshot({ path: process.env.SHOTS + '/pricing-pass-done.png' });
     const { bad } = await contrastIssues(page, '#pricing .plan.feat');
     expect(!bad.length, 'the early list reads clearly: ' + bad.join(' | '));
     const g = await page.evaluate(() => ({ wide: document.documentElement.scrollWidth > innerWidth + 1, small: [...document.querySelectorAll('#pricing button, #pricing .btn, #pricing input')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() || e.id) }));
@@ -2712,6 +2763,7 @@ test('out of free questions: Cassie offers the Pasado Pass early list right ther
     await a.locator('.early-chip').click();
     await page.waitForSelector('.plus-sheet .plus-join');
     expect(/More questions today/.test(await page.locator('.plus-sheet h3').innerText()), 'the sheet says what it is for');
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/limit-offer.png' });
     expect(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('plus-join')), 'the join button has focus');
     await page.click('.plus-sheet .plus-join');
     await page.waitForSelector('.plus-sheet .plus-early:not([hidden]) input');

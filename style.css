@@ -2148,6 +2148,15 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 /* the one big button on every screen */
 .fr-go { width: 100%; min-height: 52px; border: 0; border-radius: 16px; background: var(--primary); color: var(--on-primary); font: inherit; font-size: 1.02rem; font-weight: 750; cursor: pointer; }
 .fr-go:active { background: var(--primary-dark); }
+.fr-later { width: 100%; min-height: 48px; margin-top: 8px; border: 0; background: none; color: var(--text); font: inherit; font-size: .95rem; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+/* help first: after the first good answer, keep it and fit Cassie to the student (once) */
+.save-offer { margin: 4px 0 12px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text); max-width: 560px; }
+.save-offer-h { margin: 0 0 4px; font-weight: 750; }
+.save-offer-p { margin: 0 0 12px; color: var(--muted); font-size: .92rem; line-height: 1.45; }
+.save-offer-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.save-offer-acts button { min-height: 44px; padding: 0 16px; border-radius: 99px; font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.save-offer-go { border: 0; background: var(--primary); color: var(--on-primary); }
+.save-offer-line { border: 1px solid var(--border); background: transparent; color: var(--text); }
 /* 4. The questions */
 .fr-ob { width: min(440px, 100%); min-height: min(640px, calc(var(--fr-h, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom))); display: flex; flex-direction: column; gap: 16px; animation: frIn .35s ease both; }
 .fr-top { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; gap: 8px; }
