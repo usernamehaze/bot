@@ -354,6 +354,8 @@ const SCHEMA = [
   // reminders: a push address and when to use it (no names, no card words)
   `CREATE TABLE IF NOT EXISTS push_subs (id TEXT PRIMARY KEY, endpoint TEXT, hour INTEGER, tz INTEGER, qfrom INTEGER, qto INTEGER, next_due INTEGER, streak INTEGER, streak_day TEXT, last_sent TEXT, at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS identities_account ON identities(account)`,
+  // the Pasado Pass early list: an email to tell when it opens, which plan, where they joined (nothing else)
+  `CREATE TABLE IF NOT EXISTS early (email TEXT PRIMARY KEY, plan TEXT, src TEXT, account TEXT, at INTEGER)`,
   `INSERT OR IGNORE INTO identities (provider, sub, account) SELECT 'google', google, id FROM accounts WHERE google IS NOT NULL`,
 ];
 let schemaReady = false;
@@ -458,8 +460,8 @@ function msUntilMidnightPH(now) {
   const ph = new Date(now + TZ_OFFSET_H * 3600e3);
   return 864e5 - ((ph.getUTCHours() * 3600 + ph.getUTCMinutes() * 60 + ph.getUTCSeconds()) * 1000);
 }
-function chatError(message, status, h, extra = {}) {
-  return json({ error: { message } }, status, { ...h, ...extra });
+function chatError(message, status, h, extra = {}, code) {
+  return json({ error: code ? { message, code } : { message } }, status, { ...h, ...extra });
 }
 // Groq's picture-reading models change over time — ask Groq which ones it has now, best first.
 async function visionModels(env, fresh = false) {
@@ -737,6 +739,31 @@ function limitsFor(env, plan) {
   if (plan === 'plus') return { questions: n(env.PLUS_DAILY_QUESTIONS, 100), all: n(env.PLUS_DAILY_LIMIT, 400), claude: [['haiku', n(env.PLUS_CLAUDE_LIMIT, 100)]] };
   return { questions: n(env.FREE_DAILY_QUESTIONS, 20), all: n(env.DAILY_LIMIT, 150), claude: [['haiku', n(env.FREE_CLAUDE_LIMIT, 10)]] };
 }
+// The Pasado Pass early list: POST /early {email, plan, src}. Signed in, the account's own email is used
+// (an email typed instead is fine too). Only the email, the plan, where they joined and when are kept.
+async function early(request, env) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  await ensureSchema(env.DB);
+  if (!(await authAllowed(request, env, 'early:' + (request.headers.get('cf-connecting-ip') || 'unknown'), 20))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
+  const b = await request.json().catch(() => ({}));
+  const { account } = await planOf(request, env);
+  let email = String(b.email || '').trim().toLowerCase().slice(0, 200);
+  if (!email && account) email = String(((await env.DB.prepare('SELECT email FROM accounts WHERE id = ?').bind(account).first()) || {}).email || '').toLowerCase();
+  if (!EMAIL_RE.test(email) || DISPOSABLE_RE.test(email)) return json({ error: 'Type the email you check, like juan@gmail.com.' }, 400, h);
+  const plan = ['plus', 'pro'].includes(b.plan) ? b.plan : 'plus';
+  const src = /^[a-z0-9-]{1,24}$/.test(String(b.src || '')) ? String(b.src) : 'site';
+  await env.DB.prepare('INSERT INTO early (email, plan, src, account, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET plan = excluded.plan, account = COALESCE(excluded.account, early.account)')
+    .bind(email, plan, src, account || null, Date.now()).run();
+  return json({ ok: true, email }, 200, h);
+}
+// the owner's early list (dashboard password): how many, from where, and the emails to write to when it opens
+async function adminEarly(request, env) {
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
+  const r = await env.DB.prepare('SELECT email, plan, src, at FROM early ORDER BY at DESC LIMIT 5000').all();
+  return json({ n: (r.results || []).length, list: r.results || [] });
+}
 // The owner gives (or ends) a plan: POST /admin/plan {"email": "...", "plan": "pro", "days": 30}
 // with the dashboard password; GET /admin/plan?email=... shows it.
 async function adminPlan(request, env, url) {
@@ -905,8 +932,8 @@ async function chat(request, env, ctx) {
     const secs = Math.ceil(msUntilMidnightPH(now) / 1000), shown = usedQ > L.questions ? L.questions : perDay;
     if (question && usedQ > L.questions) ctx.waitUntil(refund().catch(() => {})); // a refused question isn't counted
     return chatError(plan === 'free'
-      ? `You've used today's ${shown} free questions. They come back at midnight, or add your own free Groq key in Settings to carry on right now.`
-      : `You've reached today's fair-use limit (${shown}). It resets at midnight. Thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' });
+      ? `You've used today's ${shown} free questions. Want to keep going? The Pasado Pass gives you 100 a day until your exam, and the early list gets it first. Your free questions come back at midnight, or add your own free Groq key in Settings.`
+      : `You've reached today's fair-use limit (${shown}). It resets at midnight. Thanks for studying so hard!`, 429, h, { 'retry-after': String(secs), 'x-cassie-daily': '1' }, plan === 'free' ? 'daily_free' : 'daily');
   }
   const left = { 'x-cassie-left': String(Math.max(0, question ? L.questions - usedQ : perDay - usedU)), 'x-cassie-plan': plan };
 
@@ -1448,7 +1475,7 @@ async function accountFromRequest(request, env, full = false) {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!/^[\w-]{20,100}$/.test(token)) return null;
   const hash = await sha256(token);
-  const row = await env.DB.prepare(`SELECT ${full ? 'a.*' : 'a.id, a.name'}, s.created AS s_created FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.token = ?`).bind(hash).first();
+  const row = await env.DB.prepare(`SELECT ${full ? 'a.*' : 'a.id, a.name, a.email'}, s.created AS s_created FROM sessions s JOIN accounts a ON a.id = s.account WHERE s.token = ?`).bind(hash).first();
   if (!row || Date.now() - row.s_created > SESSION_DAYS * 864e5) return null;
   return { ...row, sessionHash: hash };
 }
@@ -1655,7 +1682,7 @@ async function auth(request, env, path) {
     return ok({ signedOut: true });
   }
   if (path === '/auth/delete') { // "Delete my account" — removes everything about it (its plan too)
-    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM plans WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM plans WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM early WHERE account = ? OR email = ?').bind(acc.id, acc.email || ''), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
     return ok({ deleted: true });
   }
   return fail('Cassie couldn’t find that. It may have been removed. Go back and try again.', 404, 'not_found');
@@ -1764,18 +1791,19 @@ async function stats(request, env) {
     all(`SELECT COALESCE(NULLIF(platform,''),'unknown') AS k, COUNT(*) AS n FROM users GROUP BY k ORDER BY n DESC`),
     all(`SELECT substr(uid,1,8) AS id, opens, uses, first_day, last_day, role, grade, age FROM users ORDER BY opens + uses DESC LIMIT 25`),
   ]);
-  const [ratings, reports, chats, accountsRow] = await Promise.all([
+  const [ratings, reports, chats, accountsRow, earlyRows] = await Promise.all([
     all(`SELECT COALESCE(NULLIF(feature,''),'chat') AS name, SUM(kind = 'up') AS up, SUM(kind = 'down') AS down FROM feedback WHERE day >= ? AND kind IN ('up','down') GROUP BY name ORDER BY up + down DESC LIMIT 20`, since),
     all(`SELECT ts, kind, feature, text, ctx FROM feedback WHERE day >= ? AND text != '' ORDER BY ts DESC LIMIT 60`, since),
     all(`SELECT src, SUM(n) AS n FROM chats WHERE day >= ? GROUP BY src ORDER BY n DESC`, since),
     one(`SELECT (SELECT COUNT(*) FROM accounts) AS n, (SELECT COUNT(DISTINCT account) FROM identities WHERE provider = 'google') AS google, (SELECT COUNT(DISTINCT account) FROM identities WHERE provider = 'apple') AS apple`),
+    all(`SELECT src, COUNT(*) AS n FROM early GROUP BY src ORDER BY n DESC`),
   ]);
   const [healthRow, problems] = await Promise.all([
     one(`SELECT data FROM health WHERE k = 'last'`),
     all(`SELECT feature AS k, COUNT(*) AS n, MAX(ts) AS last FROM feedback WHERE day >= ? AND kind = 'error' GROUP BY feature ORDER BY n DESC LIMIT 12`, since),
   ]);
   let healthData = null; try { healthData = healthRow ? JSON.parse(healthRow.data) : null; } catch (e) { healthData = null; }
-  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow, health: healthData, problems });
+  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow, early: earlyRows, health: healthData, problems });
 }
 
 export default {
@@ -1805,6 +1833,8 @@ export default {
       if (request.method === 'POST' && url.pathname === '/f') return await feedback(request, env);
       if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
+      if (request.method === 'POST' && url.pathname === '/early') return await early(request, env);
+      if (request.method === 'GET' && url.pathname === '/admin/early') return await adminEarly(request, env);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);
       if (url.pathname.startsWith('/push/')) return await push(request, env, url);
       if (url.pathname.startsWith('/scores/')) return await scores(request, env, url);
@@ -2070,6 +2100,7 @@ const DASHBOARD = `<!doctype html>
         </div>
       </div>
       <div class="grid two">
+        <div class="card"><h2>Pasado Pass early list</h2><p class="sub">People who asked to get the Pasado Pass first, by where they joined. The emails: GET /admin/early with this password.</p><p class="big">\${(d.early || []).reduce((t, r) => t + r.n, 0)}</p>\${bars(d.early || [], (r) => ({ site: 'The website', limit: 'Out of free questions', plus: 'A Plus feature', plans: 'Plans in Settings' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Care shown</h2><p class="sub">Times a student said they want to hurt or kill themselves and Cassie answered with care and the crisis lines, last \${d.days} days. Counted with nothing else: no words, no id.</p><p class="big">\${((d.chats || []).find((r) => r.src === 'care') || { n: 0 }).n}</p></div>
         <div class="card"><h2>Questions answered through your server</h2><p class="sub">People without their own key, last \${d.days} days</p>\${bars((d.chats || []).filter((r) => r.src !== 'care'), (r) => ({ claude: 'Claude', gemini: 'Gemini (your key)', 'shortcut-gemini': 'iPhone Shortcut (Gemini)', shortcut: 'iPhone Shortcut', 'shortcut-claude': 'iPhone Shortcut (Claude)', groq: 'Groq', backup: 'Workers AI (backup)', 'backup-picture': 'Pictures (Workers AI backup)', failed: 'Could not answer', voice: 'Voice chat: speech to text (Groq)', 'voice-backup': 'Voice chat: speech to text (Workers AI)', image: 'Pictures (Workers AI)', 'gemini-picture': 'Pictures (Gemini)', 'gemini-picture-photo': 'Answer pictures from a photo (Gemini)' }[r.src] || r.src), (r) => r.n)}</div>
         <div class="card"><h2>Problem reports</h2><p class="sub">What users wrote in “Report a problem”</p>

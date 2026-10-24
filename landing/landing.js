@@ -1,15 +1,15 @@
 /* Cassie landing page: small, dependency-free behaviour.
  * - starts the slow marble behind the hero (gradient.js) after first paint where WebGL works
  * - reveal-on-scroll, and the sentence that lights up word by word as you read it
- * - pricing: ₱ / $ and monthly / semester / yearly
+ * - pricing: ₱ / $ and monthly / semester / yearly, and the Pasado Pass early list
  * - the tour video
  * (the demo to highlight is landing/try.js)
  */
 (function () {
   'use strict';
 
-  // Paste a waitlist form link (Tally, Google Forms…) here when you have one.
-  const WAITLIST_URL = '';
+  // the early list goes to Cassie's server (config.js)
+  const SERVER = String(window.CASSIE_SERVER || '').trim().replace(/\/+$/, '');
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -146,10 +146,35 @@
   renderPrices();
 
   const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); };
+  // Get the Pasado Pass early: the button opens an email field; the server keeps the email, the plan and "site"
   $$('[data-plan]').forEach((a) => {
-    if (WAITLIST_URL) { a.href = WAITLIST_URL + (WAITLIST_URL.includes('?') ? '&' : '?') + 'plan=' + a.dataset.plan; a.target = '_blank'; a.rel = 'noopener'; return; }
-    a.textContent = 'Coming soon';
-    a.addEventListener('click', (e) => { e.preventDefault(); toast('Paid plans are almost here. Everything on Free works today.'); });
+    const plan = a.dataset.plan, form = $(`[data-early="${plan}"]`);
+    if (!form) return;
+    const input = $('input', form), msg = $('.early-msg', form), go = $('button', form);
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!SERVER) { toast('Paid plans are almost here. Everything on Free works today.'); return; }
+      a.hidden = true; form.hidden = false; input.focus();
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = input.value.trim();
+      if (!email) { msg.textContent = 'Type your email first.'; input.focus(); return; }
+      go.disabled = true; msg.textContent = '';
+      try {
+        const res = await fetch(SERVER + '/early', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, plan, src: 'site' }) });
+        const r = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(r.error || 'That didn’t work. Try again.');
+        const done = document.createElement('p');
+        done.className = 'early-done'; done.setAttribute('role', 'status');
+        done.textContent = `You’re on the early list. Cassie will email ${r.email} the day it opens.`;
+        form.replaceWith(done);
+      } catch (err) {
+        go.disabled = false;
+        msg.textContent = err && err.message && !/fetch/i.test(err.message) ? err.message : 'No connection. Check your internet, then try again.';
+        input.focus();
+      }
+    });
   });
 
   /* ---------- tour video ---------- */
