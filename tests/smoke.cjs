@@ -1737,7 +1737,7 @@ test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance tab
   expect(await page.locator('.set-plans [data-bill="m"]').getAttribute('aria-pressed') === 'true', 'Monthly is picked at first');
   let plus = await text('.set-plans .plan-plus'), pro = await text('.set-plans .plan-pro');
   expect(/₱149 a month/.test(plus) && !/₱599 a semester/.test(plus) && !/Pasado Pass/.test(plus) && /Renews each month until you cancel in Settings\. 7 days to change your mind\. Or ₱599 once for the whole semester\./.test(plus), 'Plus, a month: ' + plus);
-  expect(/₱499 a month/.test(pro) && !/₱1,999 a semester/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Coming soon/.test(pro), 'Pro, a month: ' + pro);
+  expect(/₱499 a month/.test(pro) && !/₱1,999 a semester/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Get Pro early/.test(pro), 'Pro, a month: ' + pro);
   const priceRow = () => page.evaluate(() => [...document.querySelectorAll('.set-plans .plan-compare tbody tr:first-child td')].map((x) => x.innerText.trim()).join('|'));
   expect(await priceRow() === '₱0|₱149 a month|₱499 a month', 'the table, a month: ' + await priceRow());
   if (process.env.SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly.png' }); await page.locator('.set-plans .plan-plus').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly-plus.png' }); await page.locator('.set-plans .bill-seg').scrollIntoViewIfNeeded(); }
@@ -1784,6 +1784,7 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
     await page.waitForSelector('#pricing .early-done');
     expect((await page.locator('#pricing .early-done').innerText()).includes(mail), 'it says who Cassie will email');
     if (process.env.SHOTS) await page.locator('#pricing .plan.feat').screenshot({ path: process.env.SHOTS + '/pricing-pass-done.png' });
+    await page.waitForTimeout(900); // (the cards ease in as they scroll into view)
     const { bad } = await contrastIssues(page, '#pricing .plan.feat');
     expect(!bad.length, 'the early list reads clearly: ' + bad.join(' | '));
     const g = await page.evaluate(() => ({ wide: document.documentElement.scrollWidth > innerWidth + 1, small: [...document.querySelectorAll('#pricing button, #pricing .btn, #pricing input')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim() || e.id) }));
@@ -8569,8 +8570,8 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     await page.click('.set-link[data-open="plans"]');
     const plans = await page.locator('.set-plans').innerText();
     expect(/Free/.test(plans) && /Plus/.test(plans) && /Pro/.test(plans) && /Best for school/.test(plans) && !/Most popular/.test(plans), `${size}: Free, Plus and Pro: ` + plans);
-    const gos = await page.locator('.set-plans .plan-go').evaluateAll((a) => a.map((x) => x.textContent.trim()));
-    expect(gos.join() === 'Get the Pasado Pass early,Get Pro early', `${size}: the plans offer the early list: ` + JSON.stringify(gos));
+    const gos = await page.locator('.set-plans .plan-go').evaluateAll((a) => a.map((x) => x.innerText.trim()));
+    expect(gos.join() === 'Get Plus early,Get Pro early', `${size}: the plans offer the early list: ` + JSON.stringify(gos));
     expect(await page.locator('.set-plans input, .set-plans select, .set-plans textarea, .set-plans form').count() === 0 && !/card number|cvv|expiry/i.test(plans), `${size}: nothing asks for card details`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the moving background eases into its dark colours) */ const { bad } = await contrastIssues(page, '#settings-panel'); expect(!bad.length, `${size} Plans (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
@@ -9141,7 +9142,7 @@ test('the other screens in Liquid Glass: Plus sheet, offline note, board, flashc
   await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views. They come back on Monday.'));
   const sheet = page.locator('.plus-sheet');
   expect(/Real 3D views comes with Plus/.test(await sheet.locator('h3').innerText()) && await sheet.locator('.plus-list li').count() === 3, 'the Plus sheet says what it is and what Plus adds');
-  expect(await sheet.locator('.plus-go').getAttribute('href') === 'index.html#pricing', 'See the plans goes to the plans (no payment here)');
+  expect(await sheet.locator('.plus-see').getAttribute('href') === 'index.html#pricing' && await sheet.locator('.plus-join').count() === 1, 'See the plans goes to the plans, and the early list is one tap (no payment here)');
   await sheet.locator('.plus-ok').click();
   expect(await page.locator('.plus-sheet').count() === 0, 'Not now closes it');
   // offline: a calm note says what still works, and goes away when the internet is back

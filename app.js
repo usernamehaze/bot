@@ -8274,8 +8274,8 @@ function plusSheet(what, why, src = 'plus', title) {
     } catch (e2) {
       btn.disabled = false;
       // no account email to use: ask for one
-      if (!typed) { form.hidden = false; btn.textContent = 'Keep my spot'; mail.focus(); if (e2.status !== 400) { err.textContent = e2.message; err.hidden = false; } return; }
-      err.textContent = e2.message; err.hidden = false; mail.focus();
+      if (!typed) { form.hidden = false; btn.textContent = 'Keep my spot'; mail.focus(); if (e2.status !== 400) { err.textContent = CassieErrors.explain(e2, 'unknown'); err.hidden = false; } return; }
+      err.textContent = CassieErrors.explain(e2, 'unknown'); err.hidden = false; mail.focus();
     }
   };
   form.addEventListener('submit', (e) => { e.preventDefault(); join(); });
