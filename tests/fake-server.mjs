@@ -93,6 +93,13 @@ export async function startFakeServer(port = 4630) {
       const asMsgs = [{ role: 'user', content: parts.map((p) => (p.inlineData ? { type: 'image_url' } : { type: 'text', text: p.text })) }];
       return Response.json({ candidates: [{ content: { parts: [{ text: smart(asMsgs) || mode.geminiReply || 'Gemini on the server read it.' }] } }] });
     }
+    if (u.startsWith('https://api.paymongo.com/')) { // fake PayMongo: a checkout session (mode.paymongo 'ok' | 'down')
+      const body = JSON.parse(init.body || '{}');
+      mode.paymongoCalls = [...(mode.paymongoCalls || []), { url: u, auth: (init.headers || {}).authorization, body }].slice(-10);
+      if (mode.paymongo === 'down') return Response.json({ errors: [{ code: 'resource_failed_state', detail: 'down' }] }, { status: 500 });
+      const id = `cs_test_${Date.now()}${mode.paymongoCalls.length}`;
+      return Response.json({ data: { id, type: 'checkout_session', attributes: { checkout_url: `https://checkout.paymongo.com/${id}`, reference_number: body.data.attributes.reference_number } } });
+    }
     if (!u.startsWith('https://api.groq.com/')) return realFetch(url, init);
     if (u.endsWith('/models')) { // mode.groqVision: 'ok' | 'second' (first picture model broken) | 'retired' (none left)
       const vision = mode.groqVision === 'retired' ? [] : mode.groqVision === 'renamed' ? [{ id: 'meta-llama/llama-guard-4-12b' }, { id: 'acme/new-eyes-9b' }] : [{ id: 'meta-llama/llama-4-scout-17b-16e-instruct' }, { id: 'qwen/qwen3-vl-32b' }];
@@ -126,6 +133,8 @@ export async function startFakeServer(port = 4630) {
     DB, ADMIN_TOKEN: 'test-admin-token-0123456789', GROQ_KEY: 'gsk_server_test', get DAILY_LIMIT() { return mode.dailyAll == null ? '5' : String(mode.dailyAll); }, get FREE_DAILY_QUESTIONS() { return mode.freeQuestions == null ? '20' : String(mode.freeQuestions); }, get GOOGLE_CLIENT_ID() { return mode.noGoogle ? undefined : 'test-client-id'; }, get APPLE_SERVICES_ID() { return mode.noApple ? undefined : 'test.apple.services'; },
     get FREE_CLAUDE_LIMIT() { return mode.freeClaude == null ? '3' : String(mode.freeClaude); }, // (real default: 10)
     get ANTHROPIC_KEY() { return mode.claude === 'off' ? undefined : 'sk-ant-test'; },
+    get PAYMONGO_SECRET_KEY() { return mode.payOn ? 'sk_test_fake_paymongo' : undefined; }, // (payments are off unless a test switches them on)
+    PAYMONGO_WEBHOOK_SECRET: 'whsk_test_fake_paymongo', VIEW_TOKEN: 'test-view-token-0123456789',
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
     get ELEVENLABS_API_KEY() { return mode.speakOn ? 'not-a-real-elevenlabs-key' : undefined; }, // (mode.speakOn: the studio voice is switched on)
     get SPEAK_MONTHLY_CHARS() { return mode.speakMonth == null ? undefined : String(mode.speakMonth); },

@@ -1892,6 +1892,7 @@ html.lite {
 .plus-actions > * { flex: 1 1 auto; min-height: 40px; padding: 8px 14px; border-radius: 99px; font: inherit; font-size: .88rem; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border, rgba(var(--shade-rgb), .15)); background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; }
 .plus-actions .plus-go { background: var(--text, var(--dark-2)); color: var(--surface, var(--white)); border-color: transparent; }
 .plus-actions .plus-join { flex-basis: 100%; min-height: 44px; }
+.plus-actions .plus-buy { flex-basis: 100%; min-height: 44px; }
 .plus-actions .plus-done { flex-basis: 100%; margin: 0; border: 0; padding: 0 0 4px; justify-content: flex-start; text-align: left; cursor: default; font-weight: 600; opacity: 1; }
 .plus-early { display: grid; gap: 6px; margin: 0 0 12px; }
 .plus-early[hidden] { display: none; }

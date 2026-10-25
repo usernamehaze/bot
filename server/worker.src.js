@@ -176,6 +176,9 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS identities_account ON identities(account)`,
   // the Pasado Pass early list: an email to tell when it opens, which plan, where they joined (nothing else)
   `CREATE TABLE IF NOT EXISTS early (email TEXT PRIMARY KEY, plan TEXT, src TEXT, account TEXT, at INTEGER)`,
+  // payments (PayMongo): who bought which pass, for how much, and PayMongo's payment number (never card details)
+  `CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, session TEXT, account TEXT, plan TEXT, bill TEXT, php INTEGER, shown TEXT, status TEXT, pay_ref TEXT, method TEXT, live INTEGER, created INTEGER, paid INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS payments_session ON payments(session)`,
   `INSERT OR IGNORE INTO identities (provider, sub, account) SELECT 'google', google, id FROM accounts WHERE google IS NOT NULL`,
 ];
 let schemaReady = false;
@@ -442,6 +445,7 @@ async function tidy(env) {
     // a day (2026-10-14) or an hour (2026-10-14T05) that is over; weeks (gpic:) and months (2026-10) stay
     env.DB.prepare("DELETE FROM quota WHERE day < ? AND length(day) IN (10, 13) AND k NOT LIKE 'gpic:%'").bind(today),
     env.DB.prepare('DELETE FROM scores WHERE day < ?').bind(dayOf(now - 14 * 86400e3)),
+    env.DB.prepare("DELETE FROM payments WHERE status = 'pending' AND created < ?").bind(now - 2 * 864e5), // (checkouts never paid)
   ]);
 }
 function cleanMessages(list) {
@@ -542,14 +546,14 @@ async function planOf(request, env) {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!/^[\w-]{20,100}$/.test(token)) return { plan: 'free' };
   try {
-    const row = await env.DB.prepare('SELECT s.account, s.created, p.plan, p.until FROM sessions s JOIN accounts a ON a.id = s.account LEFT JOIN plans p ON p.account = s.account AND p.until > ? WHERE s.token = ?')
+    const row = await env.DB.prepare('SELECT s.account, s.created, p.plan, p.until, p.note FROM sessions s JOIN accounts a ON a.id = s.account LEFT JOIN plans p ON p.account = s.account AND p.until > ? WHERE s.token = ?')
       .bind(Date.now(), await sha256(token)).first();
     if (!row || Date.now() - row.created > SESSION_DAYS * 864e5) return { plan: 'free' };
     return { ...paidPlan(row), account: row.account };
   } catch (e) { return { plan: 'free' }; }
 }
-const paidPlan = (row) => (row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until } : { plan: 'free', until: 0 });
-const planQuery = (env, id) => env.DB.prepare('SELECT plan, until FROM plans WHERE account = ? AND until > ?').bind(id, Date.now());
+const paidPlan = (row) => (row && ['plus', 'pro'].includes(row.plan) ? { plan: row.plan, until: row.until, bill: (/\bpaid (month|sem|year)\b/.exec(row.note || '') || [])[1] || '' } : { plan: 'free', until: 0 });
+const planQuery = (env, id) => env.DB.prepare('SELECT plan, until, note FROM plans WHERE account = ? AND until > ?').bind(id, Date.now());
 async function accountPlan(env, id) { return paidPlan(await planQuery(env, id).first()); }
 // what each plan gets a day: questions the student sees, every request (a ceiling against abuse),
 // and Claude answers (family, then a second family once the first runs out)
@@ -584,6 +588,113 @@ async function adminEarly(request, env) {
   const r = await env.DB.prepare('SELECT email, plan, src, at FROM early ORDER BY at DESC LIMIT 5000').all();
   return json({ n: (r.results || []).length, list: r.results || [] });
 }
+/* ------------------------------------------------------------------ payments (PayMongo)
+   Every plan is a pass: one payment for a set time, and it never renews (Monthly 30 days, Semester
+   152 days, Yearly 365). The prices live here only (a page never sends its own). PayMongo charges in
+   pesos, so a US$ plan is charged its fixed peso price (US$ × USD_PHP_RATE, rounded up to …9).
+   Cloudflare Secrets: PAYMONGO_SECRET_KEY, PAYMONGO_WEBHOOK_SECRET; optional PAYMONGO_METHODS. */
+const PAY_DAYS = { month: 30, sem: 152, year: 365 };
+const PAY_PHP = { plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } };
+const PAY_USD = { plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } };
+const PAY_LONG = { month: '30 days', sem: 'the semester (5 months)', year: '12 months' };
+const payOn = (env) => !!env.PAYMONGO_SECRET_KEY;
+function payPrice(env, plan, bill, cur) {
+  if (!PAY_PHP[plan] || !PAY_DAYS[bill]) return null;
+  if (cur === 'usd') {
+    const rate = +env.USD_PHP_RATE > 20 && +env.USD_PHP_RATE < 200 ? +env.USD_PHP_RATE : 61.5, usd = PAY_USD[plan][bill];
+    return { php: Math.ceil((usd * rate) / 10) * 10 - 1, shown: `US$${usd.toFixed(2)}` };
+  }
+  return { php: PAY_PHP[plan][bill], shown: `₱${PAY_PHP[plan][bill].toLocaleString('en-PH')}` };
+}
+const hmacHex = async (secret, text) => {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+async function pay(request, env, url, ctx) {
+  if (request.method === 'POST' && url.pathname === '/pay/webhook') return payWebhook(request, env, ctx);
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  await ensureSchema(env.DB);
+  if (!payOn(env)) return json({ error: 'Paid plans are almost here. Everything on Free works today.', code: 'pay_off' }, 503, h);
+  const acc = await accountFromRequest(request, env);
+  if (!acc) return json({ error: 'Sign in first, so the plan has an account to belong to.', code: 'signin' }, 401, h);
+  // the student's own payment, after PayMongo sends them back (the plan arrives with PayMongo's message)
+  if (request.method === 'GET' && url.pathname === '/pay/status') {
+    const row = await env.DB.prepare('SELECT status, plan, bill, php, shown FROM payments WHERE id = ? AND account = ?').bind(String(url.searchParams.get('id') || '').slice(0, 40), acc.id).first();
+    if (!row) return json({ error: 'No such payment.' }, 404, h);
+    return json({ ...row, ...(row.status === 'paid' ? { until: (await accountPlan(env, acc.id)).until } : {}) }, 200, h);
+  }
+  if (!(request.method === 'POST' && url.pathname === '/pay/checkout')) return new Response('not found', { status: 404, headers: h });
+  if (!(await authAllowed(request, env, 'pay:' + acc.id, 20))) return json({ error: 'Too many tries. Wait a while, then try again.' }, 429, h);
+  const b = await request.json().catch(() => ({}));
+  const plan = ['plus', 'pro'].includes(b.plan) ? b.plan : '', bill = PAY_DAYS[b.bill] ? b.bill : '', cur = b.cur === 'usd' ? 'usd' : 'php';
+  const price = payPrice(env, plan, bill, cur);
+  if (!price) return json({ error: 'Pick a plan first.' }, 400, h);
+  const id = 'cas_' + [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const back = (() => { try { return new URL(request.headers.get('origin')).origin; } catch (e) { return 'https://askcassie.study'; } })();
+  const name = `Cassie ${plan === 'pro' ? 'Pro' : 'Plus'}, ${PAY_LONG[bill]}`;
+  const note = cur === 'usd' ? `${price.shown}, charged as ₱${price.php.toLocaleString('en-PH')} (PHP). One payment, never renews.` : 'One payment. Never renews.';
+  const methods = cur === 'usd' ? ['card'] : String(env.PAYMONGO_METHODS || 'card,gcash,paymaya').split(',').map((x) => x.trim()).filter(Boolean);
+  let res, out;
+  try {
+    res = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json', authorization: 'Basic ' + btoa(String(env.PAYMONGO_SECRET_KEY) + ':') },
+      body: JSON.stringify({ data: { attributes: {
+        line_items: [{ currency: 'PHP', amount: price.php * 100, name, quantity: 1, description: note }],
+        payment_method_types: methods, description: `${name}. ${note}`, reference_number: id,
+        success_url: `${back}/app.html?paid=${id}`, cancel_url: `${back}/app.html?paid=cancel`,
+        send_email_receipt: true, show_description: true, show_line_items: true,
+        ...(acc.email ? { billing: { email: acc.email, name: acc.name || acc.email.split('@')[0] } } : {}),
+      } } }),
+    });
+    out = await res.json().catch(() => ({}));
+  } catch (e) { res = null; }
+  const session = out && out.data && out.data.id, checkoutUrl = out && out.data && out.data.attributes && out.data.attributes.checkout_url;
+  if (!res || !res.ok || !session || !checkoutUrl) {
+    // (only the status and PayMongo's error code: never the request, which names the student)
+    ctx.waitUntil(logProblem(env, 'pay: checkout', `PayMongo ${res ? res.status : 'unreachable'} ${((out && out.errors && out.errors[0]) || {}).code || ''}`).catch(() => {}));
+    return json({ error: 'Payments aren’t working right now. Try again in a few minutes.', code: 'pay_down' }, 502, h);
+  }
+  await env.DB.prepare('INSERT INTO payments (id, session, account, plan, bill, php, shown, status, live, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, session, acc.id, plan, bill, price.php, price.shown, 'pending', /^sk_live_/.test(String(env.PAYMONGO_SECRET_KEY)) ? 1 : 0, Date.now()).run();
+  return json({ url: checkoutUrl, id, php: price.php, shown: price.shown }, 200, h);
+}
+// PayMongo's message that a checkout was paid: checked with the webhook's secret (HMAC-SHA256 of
+// "timestamp.body", compared with te in test mode and li when live), then the plan is given once.
+async function payWebhook(request, env, ctx) {
+  if (!env.PAYMONGO_WEBHOOK_SECRET) return new Response('not set up', { status: 503 });
+  await ensureSchema(env.DB);
+  const raw = await request.text();
+  const sig = Object.fromEntries(String(request.headers.get('paymongo-signature') || '').split(',').map((x) => x.trim().split('=')).filter((x) => x.length === 2));
+  let evt; try { evt = JSON.parse(raw); } catch (e) { return new Response('bad', { status: 400 }); }
+  const a = (evt && evt.data && evt.data.attributes) || {};
+  const want = await hmacHex(String(env.PAYMONGO_WEBHOOK_SECRET), `${sig.t}.${raw}`);
+  if (!sig.t || !sameText(String((a.livemode ? sig.li : sig.te) || ''), want)) return new Response('bad signature', { status: 401 });
+  if (a.type !== 'checkout_session.payment.paid') return new Response(null, { status: 204 }); // (other events: nothing to do)
+  const cs = a.data || {}, ca = cs.attributes || {};
+  const row = await env.DB.prepare('SELECT * FROM payments WHERE session = ? OR id = ?').bind(String(cs.id || ''), String(ca.reference_number || '')).first();
+  if (!row) { ctx.waitUntil(logProblem(env, 'pay: webhook', 'a paid checkout Cassie has no record of').catch(() => {})); return new Response(null, { status: 204 }); }
+  if (row.status === 'paid') return new Response(null, { status: 204 }); // (PayMongo may send it twice: the plan is given once)
+  const p = (ca.payments || [])[0] || {}, pa = p.attributes || {};
+  const amount = pa.amount != null ? +pa.amount : (ca.line_items || []).reduce((t, x) => t + (+x.amount || 0) * (+x.quantity || 1), 0);
+  if (amount && amount !== row.php * 100) { // never a plan for a different amount than its price
+    await env.DB.prepare("UPDATE payments SET status = 'mismatch', paid = ? WHERE id = ?").bind(Date.now(), row.id).run();
+    ctx.waitUntil(logProblem(env, 'pay: webhook', `amount ${amount} for a ${row.php * 100} plan`).catch(() => {}));
+    return new Response(null, { status: 204 });
+  }
+  // the plan: the same plan still running gets the days added on; otherwise it starts now
+  const now = Date.now(), cur = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ?').bind(row.account).first();
+  const from = cur && cur.plan === row.plan && cur.until > now ? cur.until : now, until = from + PAY_DAYS[row.bill] * 864e5;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO plans (account, plan, until, note, updated) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account) DO UPDATE SET plan = excluded.plan, until = excluded.until, note = excluded.note, updated = excluded.updated')
+      .bind(row.account, row.plan, until, `paid ${row.bill} ${row.id}`, now),
+    env.DB.prepare("UPDATE payments SET status = 'paid', paid = ?, pay_ref = ?, method = ?, live = ? WHERE id = ?")
+      .bind(now, String(p.id || '').slice(0, 60), String((pa.source && pa.source.type) || ca.payment_method_used || '').slice(0, 20), a.livemode ? 1 : 0, row.id),
+  ]);
+  return new Response(null, { status: 204 });
+}
+
 // The owner gives (or ends) a plan: POST /admin/plan {"email": "...", "plan": "pro", "days": 30}
 // with the dashboard password; GET /admin/plan?email=... shows it.
 async function adminPlan(request, env, url) {
@@ -608,7 +719,9 @@ async function adminPlan(request, env, url) {
 async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env) }, 200, { ...h, 'cache-control': 'max-age=300' });
+  // with payments on: every pass's price, in pesos and in US$ (with the pesos it is charged as), from the server's own table
+  const prices = payOn(env) ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c)]))]))])) : null;
+  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), prices }, 200, { ...h, 'cache-control': 'max-age=300' });
 }
 
 /* ---------------------------------------------------------------- talking with Cassie
@@ -1502,7 +1615,7 @@ async function auth(request, env, path) {
     return ok({ signedOut: true });
   }
   if (path === '/auth/delete') { // "Delete my account" — removes everything about it (its plan too)
-    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM plans WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM early WHERE account = ? OR email = ?').bind(acc.id, acc.email || ''), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM identities WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM plans WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM early WHERE account = ? OR email = ?').bind(acc.id, acc.email || ''), env.DB.prepare('UPDATE payments SET account = NULL WHERE account = ?').bind(acc.id), env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(acc.id)]);
     return ok({ deleted: true });
   }
   return fail('Cassie couldn’t find that. It may have been removed. Go back and try again.', 404, 'not_found');
@@ -1569,9 +1682,11 @@ async function runHealth(env) {
 }
 // The dashboard's password (ADMIN_TOKEN). It must be at least 16 characters; wrong guesses are
 // limited to 10 an hour per network, so it can't be guessed by trying many.
-async function adminOk(request, env) {
+// view: the dashboard's numbers may also be read with VIEW_TOKEN (a second password that can't change anything)
+async function adminOk(request, env, { view = false } = {}) {
   const given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (!env.ADMIN_TOKEN || String(env.ADMIN_TOKEN).length < 16) return { error: 'Set an ADMIN_TOKEN of at least 16 characters in the Worker settings first.', status: 503 };
+  if (view && given && env.VIEW_TOKEN && String(env.VIEW_TOKEN).length >= 16 && sameText(given, String(env.VIEW_TOKEN))) { await ensureSchema(env.DB); return null; }
   await ensureSchema(env.DB);
   const ip = request.headers.get('cf-connecting-ip') || 'unknown', hour = new Date().toISOString().slice(0, 13);
   const tries = await env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind('adm:' + ip, hour).first();
@@ -1588,7 +1703,7 @@ async function health(request, env) {
 
 async function stats(request, env) {
   const url = new URL(request.url);
-  const no = await adminOk(request, env);
+  const no = await adminOk(request, env, { view: true }); // (the view-only password reads the numbers too)
   if (no) return json({ error: no.error }, no.status);
   const days = Math.min(365, Math.max(1, +url.searchParams.get('days') || 30));
   const db = env.DB;
@@ -1623,7 +1738,15 @@ async function stats(request, env) {
     all(`SELECT feature AS k, COUNT(*) AS n, MAX(ts) AS last FROM feedback WHERE day >= ? AND kind = 'error' GROUP BY feature ORDER BY n DESC LIMIT 12`, since),
   ]);
   let healthData = null; try { healthData = healthRow ? JSON.parse(healthRow.data) : null; } catch (e) { healthData = null; }
-  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow, early: earlyRows, health: healthData, problems });
+  // money: live payments only (test payments are counted apart), this month from the 1st, Philippine time
+  const monthStart = Date.parse(`${today.slice(0, 7)}-01T00:00:00+08:00`);
+  const [paySum, payList, active] = await Promise.all([
+    one(`SELECT COALESCE(SUM(CASE WHEN live = 1 THEN php END), 0) AS php, COALESCE(SUM(live = 1), 0) AS n, COUNT(DISTINCT CASE WHEN live = 1 THEN account END) AS people,
+      COALESCE(SUM(CASE WHEN live = 1 AND paid >= ? THEN php END), 0) AS month_php, COALESCE(SUM(live = 1 AND paid >= ?), 0) AS month_n, COALESCE(SUM(live = 0), 0) AS tests FROM payments WHERE status = 'paid'`, monthStart, monthStart),
+    all(`SELECT p.paid, p.plan, p.bill, p.php, p.shown, p.method, p.live, a.email FROM payments p LEFT JOIN accounts a ON a.id = p.account WHERE p.status = 'paid' ORDER BY p.paid DESC LIMIT 50`),
+    one(`SELECT COALESCE(SUM(plan = 'plus'), 0) AS plus, COALESCE(SUM(plan = 'pro'), 0) AS pro FROM plans WHERE until > ?`, now),
+  ]);
+  return json({ days, today, since, totals, today_: todayRow, week: weekRow, range: rangeRow, daily, newDaily, features, words, roles, grades, ages, platforms, top, ratings, reports, chats, accounts: accountsRow, early: earlyRows, health: healthData, problems, payments: { ...paySum, active, list: payList } });
 }
 
 export default {
@@ -1654,6 +1777,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'POST' && url.pathname === '/early') return await early(request, env);
+      if (url.pathname.startsWith('/pay/')) return await pay(request, env, url, ctx);
       if (request.method === 'GET' && url.pathname === '/admin/early') return await adminEarly(request, env);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);
       if (url.pathname.startsWith('/push/')) return await push(request, env, url);

@@ -1926,7 +1926,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=175').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=176').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3549,12 +3549,17 @@ async function askGroqVision(msgs, images, { system, maxTokens = 2048, onWait } 
 let serverClaude = false, serverPictures = false; // (serverPictures: Gemini pictures with the owner's key)
 let lastPhoto = null;
 try { serverClaude = sessionStorage.getItem('cassie.claude') === '1'; serverPictures = sessionStorage.getItem('cassie.pictures') === '1'; } catch (e) { /* storage blocked */ }
-if (SERVER) {
-  fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
+var serverPay = false, payPrices = null; // (var: buying can start before this part of the file has run)
+try { const pc = JSON.parse(sessionStorage.getItem('cassie.pay') || 'null'); if (pc) { serverPay = !!pc.on; payPrices = pc.prices || null; } } catch (e) { /* storage blocked */ }
+const configReady = !SERVER ? Promise.resolve() : (() => {
+  return fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
     serverClaude = !!(c && c.claude); serverPictures = !!(c && c.pictures);
+    serverPay = !!(c && c.pay); payPrices = (c && c.prices) || null;
+    try { sessionStorage.setItem('cassie.pay', JSON.stringify({ on: serverPay, prices: payPrices })); } catch (e) { /* storage blocked */ }
+    payLabels();
     try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); sessionStorage.setItem('cassie.pictures', serverPictures ? '1' : '0'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline: the usual brains answer */ });
-}
+})();
 async function askClaudeViaServer(msgs, images, opts = {}) {
   const hist = trimHistory(msgs, 12000).slice(-30).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }));
   const last = hist[hist.length - 1];
@@ -6132,7 +6137,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=175');
+      exploreMod = await import('./explore/cell3d.js?v=176');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6182,7 +6187,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=175');
+      labsMod = await import('./labs/labs.js?v=176');
       islandRest();
     }
     labsMod.open({
@@ -7997,10 +8002,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=175').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=176').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=175', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=176', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8379,7 +8384,10 @@ function refreshPlan(force) {
 }
 // Plans: Get it early opens the early list
 document.querySelector('.set-plans')?.addEventListener('click', (e) => {
-  if (e.target.closest('[data-early]')) plusSheet('', '', 'plans', 'Get the Pasado Pass first');
+  const g = e.target.closest('[data-early]');
+  if (!g) return;
+  if (serverPay) buyPlan(g.dataset.early === 'pro' ? 'pro' : 'plus', document.querySelector('.set-plans').classList.contains('bill-sem') ? 'sem' : 'month');
+  else plusSheet('', '', 'plans', 'Get the Pasado Pass first');
 });
 // Plans: prices a month first; Semester shows the one-payment prices
 document.querySelector('.set-plans .bill-seg')?.addEventListener('click', (e) => {
@@ -8389,6 +8397,99 @@ document.querySelector('.set-plans .bill-seg')?.addEventListener('click', (e) =>
   document.querySelector('.set-plans').classList.toggle('bill-sem', sem);
   b.parentElement.querySelectorAll('[data-bill]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
 });
+/* ---------- buying a pass (PayMongo) ----------
+   Every plan is a pass: one payment for 30 days, the semester or 12 months, and it never renews.
+   Buy: signed in first (the plan belongs to an account), then PayMongo's own checkout page (GCash,
+   Maya or card; a US$ price is charged its peso price there), then back here, where the plan shows. */
+var BUY_KEY = 'cassie.buy'; // (a purchase waiting for the student to sign in)
+const BILL_LONG = { month: '30 days', sem: 'the semester', year: '12 months' };
+function payCur() { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '', lang = (navigator.language || '').toLowerCase(); return tz === 'Asia/Manila' || /-ph$|^fil|^tl/.test(lang) ? 'php' : 'usd'; }
+const pesos = (n) => `₱${Number(n).toLocaleString('en-PH')}`;
+function priceLine(plan, bill, cur = payCur()) {
+  const p = payPrices && payPrices[cur] && payPrices[cur][plan] && payPrices[cur][plan][bill];
+  if (!p) return '';
+  return cur === 'usd' ? `${p.shown} for ${BILL_LONG[bill]} (charged as ${pesos(p.php)})` : `${p.shown} for ${BILL_LONG[bill]}`;
+}
+// the Plans page buttons say Get, once paying is on
+function payLabels() {
+  if (!serverPay) return;
+  document.querySelectorAll('.set-plans [data-early]').forEach((b) => {
+    const pro = b.dataset.early === 'pro';
+    b.innerHTML = pro ? 'Get Pro' : '<span class="bill-m">Get Plus</span><span class="bill-s">Get the Pasado Pass</span>';
+  });
+}
+async function buyPlan(plan = 'plus', bill = 'month', cur = payCur()) {
+  await configReady;
+  if (!SERVER || !serverPay) { plusSheet('', '', 'plans', 'Get the Pasado Pass first'); return; }
+  if (!authToken()) {
+    try { sessionStorage.setItem(BUY_KEY, JSON.stringify({ plan, bill, cur })); } catch (e) { /* storage blocked */ }
+    if (!state.profile) { frSave({ step: 'auth' }); frClose(); }
+    openAuth({ first: !state.profile, mode: 'signup' });
+    try { mascotSay('Sign in first, so your plan has an account to belong to.', 4000); } catch (e) { /* the little helper is a bonus */ }
+    return;
+  }
+  document.querySelector('.plus-sheet')?.remove();
+  const note = paySheet('Opening the secure checkout…', 'PayMongo’s page opens next. Pay with GCash, Maya or a card.');
+  let r = null, j = {};
+  try { r = await fetch(SERVER + '/pay/checkout', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ plan, bill, cur }) }); j = await r.json().catch(() => ({})); } catch (e) { r = null; }
+  if (r && r.ok && j.url) { location.href = j.url; return; }
+  if (r && r.status === 401) { note.close(); signedOutLocally(); buyPlan(plan, bill, cur); return; } // (signed out on the server: sign in again, then buy)
+  note.set('That didn’t work', CassieErrors.explain(r ? friendlyError(j.error || '') : new Error('network'), 'network'));
+}
+// a small sheet for buying news: set() changes it, close() takes it away
+function paySheet(title, text) {
+  document.querySelector('.pay-sheet')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet pay-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pay-sheet-h');
+  w.innerHTML = `<div class="plus-card"><h3 id="pay-sheet-h"></h3><p class="plus-why" role="status"></p><div class="plus-actions"></div></div>`;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('.plus-ok')) close(); });
+  const set = (t, x, actions = '<button type="button" class="plus-ok">OK</button>') => {
+    w.querySelector('h3').textContent = t; w.querySelector('.plus-why').textContent = x;
+    w.querySelector('.plus-actions').innerHTML = actions;
+    (w.querySelector('.plus-actions button') || w).focus?.();
+  };
+  set(title, text, '');
+  document.body.appendChild(w);
+  return { set, close, el: w };
+}
+const planDate = (ms) => new Date(ms).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+// back from PayMongo: the plan arrives with PayMongo's message, usually within seconds
+async function paidReturn(id) {
+  await configReady;
+  if (id === 'cancel') { paySheet('No payment was made', 'You can get Plus any time from Plans.').set('No payment was made', 'You can get Plus any time from Plans.'); return; }
+  const sh = paySheet('Checking your payment…', 'PayMongo is confirming it. This takes a few seconds.');
+  for (let i = 0; i < 12; i++) {
+    let st = null;
+    try { const r = await fetch(SERVER + '/pay/status?id=' + encodeURIComponent(id), { headers: chatHeaders() }); if (r.ok) st = await r.json(); } catch (e) { /* try again */ }
+    if (st && st.status === 'paid') {
+      await refreshPlan(true);
+      const name = st.plan === 'pro' ? 'Pro' : 'Plus', paid = /^US\$/.test(st.shown || '') ? `${pesos(st.php)} (${st.shown})` : pesos(st.php);
+      sh.set(`✅ You have Cassie ${name} until ${planDate(st.until || (state.plan && state.plan.until) || Date.now())}`, `Paid ${paid}. It never renews by itself: Cassie reminds you before it ends. Thank you!`);
+      renderAccountRow();
+      return;
+    }
+    await sleep(2500);
+  }
+  sh.set('Your payment is still being confirmed', 'If you paid, your plan shows up here within a few minutes, and PayMongo emails you a receipt. Nothing after an hour? Email askcassie.study@gmail.com with your receipt.');
+}
+// a few days before a pass ends (a week for the semester, a month for a year): once a day, in the app
+function planReminder() {
+  const p = state.plan;
+  if (!p || planName() === 'free' || !p.until) return;
+  const left = p.until - Date.now(), days = Math.ceil(left / 864e5), warn = { month: 3, sem: 7, year: 30 }[p.bill] || 3;
+  const today = phDay();
+  if (left <= 0 || days > warn || state.planRemindedDay === today) return;
+  state.planRemindedDay = today; save();
+  const name = p.plan === 'pro' ? 'Pro' : 'Plus', bill = p.bill || 'month';
+  const sh = paySheet(`Your Cassie ${name} ends ${days <= 1 ? 'tomorrow' : `in ${days} days`}`, '');
+  const more = serverPay && priceLine(p.plan, bill) ? `<button type="button" class="plus-go pay-again">Get ${BILL_LONG[bill]} more: ${escapeHtml(priceLine(p.plan, bill))}</button>` : '';
+  sh.set(sh.el.querySelector('h3').textContent, `It ends on ${planDate(p.until)}. It never renews by itself, so nothing is charged.${more ? ' Want more time?' : ''}`, `${more}<button type="button" class="plus-ok">Not now</button>`);
+  sh.el.querySelector('.pay-again')?.addEventListener('click', () => { sh.close(); buyPlan(p.plan, bill); });
+}
+
 // the Pasado Pass early list: signed in, the account's email is used; otherwise the one typed
 const EARLY_KEY = 'cassie.early';
 const earlyJoined = () => { try { return JSON.parse(localStorage.getItem(EARLY_KEY) || 'null'); } catch (e) { return null; } };
@@ -8417,14 +8518,15 @@ function plusSheet(what, why, src = 'plus', title) {
       <li>Your exams planned day by day, up to 5 at once, even from your notes</li>
       <li>All the 3D any time, and save or print your notes and boards</li>
     </ul>
-    <p class="plus-foot">Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.</p>
+    <p class="plus-foot">${serverPay ? 'One payment, and it never renews: 7 days to change your mind. Everything else in Cassie stays free.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
     <form class="plus-early" novalidate hidden>
       <label for="plus-early-mail">Your email, so Cassie can tell you the day it opens</label>
       <input id="plus-early-mail" type="email" autocomplete="email" inputmode="email" placeholder="juan@gmail.com" required>
       <p class="plus-err" role="alert" hidden></p>
     </form>
     <div class="plus-actions">
-      ${earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : '<button type="button" class="plus-go plus-join">Get the Pasado Pass early</button>'}
+      ${serverPay && payPrices ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">The Pasado Pass: ${escapeHtml(priceLine('plus', 'sem'))}</button>`
+        : earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : '<button type="button" class="plus-go plus-join">Get the Pasado Pass early</button>'}
       <a class="plus-see" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
       <button type="button" class="plus-ok">Not now</button>
@@ -8460,6 +8562,7 @@ function plusSheet(what, why, src = 'plus', title) {
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
     else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
+    else if (e.target.closest('.plus-buy')) { close(); buyPlan('plus', e.target.closest('.plus-buy').dataset.bill); }
     else if (e.target.closest('.plus-join')) {
       // signed in: one tap, with the account's email; otherwise the email field first
       if (!authToken() && form.hidden) { form.hidden = false; e.target.closest('.plus-join').textContent = 'Keep my spot'; mail.focus(); return; }
@@ -8501,6 +8604,9 @@ function free3d(k, seen) {
 // After any sign-in: bring the account's profile here, or ask the profile questions once.
 function afterSignIn(res) {
   signedIn(res.token, res.account, res.plan);
+  let waiting = null;
+  try { waiting = JSON.parse(sessionStorage.getItem(BUY_KEY) || 'null'); sessionStorage.removeItem(BUY_KEY); } catch (e) { /* storage blocked */ }
+  if (waiting) setTimeout(() => buyPlan(waiting.plan, waiting.bill, waiting.cur), 300); // (signed in to buy: on to the checkout)
   if (res.account.data && res.account.data.profile) {
     const firstHere = !!frLoad(); // (signing in was this device's first run)
     frSave(null); // (the account already knows them: no questions)
@@ -9052,6 +9158,14 @@ else if (!state.profile) {
   firstRun();
 }
 if (state.profile) track('open');
+// back from PayMongo (?paid=…), or sent from the website's pricing to buy (?buy=plus-month-usd)
+{
+  const q = new URLSearchParams(location.search), paid = q.get('paid'), buy = q.get('buy');
+  if (paid || buy) history.replaceState(null, '', location.pathname + location.hash);
+  if (paid && /^(cancel|cas_[a-f0-9]{24})$/.test(paid)) setTimeout(() => paidReturn(paid), 400);
+  else if (buy) { const [pl, bi, cu] = buy.split('-'); setTimeout(() => buyPlan(pl === 'pro' ? 'pro' : 'plus', ['month', 'sem', 'year'].includes(bi) ? bi : 'month', cu === 'usd' || cu === 'php' ? cu : payCur()), 500); }
+  else setTimeout(() => refreshPlan().then(planReminder).catch(() => {}), 1500);
+}
 // back from Google with the page kept as it was (the back button on a phone): say it was cancelled
 window.addEventListener('pageshow', (e) => {
   if (!e.persisted || !accountsOn()) return;

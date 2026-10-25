@@ -1043,7 +1043,7 @@ test('terms.html: every paid plan is a pass that never renews by itself (Monthly
   expect(/one payment for a set time, and they never renew by themselves/.test(paid) && /Nothing is ever charged again unless you choose to buy another pass/.test(paid), 'terms: passes never renew, nothing is charged again: ' + paid);
   expect(/Monthly: one payment for 30 days\.\s*It never renews/.test(paid) && /a few days before it ends/.test(paid), 'terms: Monthly is 30 days, with a reminder before it ends: ' + paid);
   expect(/A Semester pass (\(the Pasado Pass\) )?is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms: the Semester pass never renews, with a reminder: ' + paid);
-  expect(/Yearly: one payment for 12 months\.\s*It never renews, and we remind you\s+a month before it ends/.test(paid), 'terms: Yearly is 12 months, with a reminder a month before: ' + paid);
+  expect(/Yearly: one payment for 12 months\.\s*It never renews, and we remind you\s+in the app a month before it ends/.test(paid), 'terms: Yearly is 12 months, with a reminder a month before: ' + paid);
   expect(/7 days to change your mind/.test(paid), 'terms: 7 days to change your mind');
   expect(!/renews automatically|until you cancel|before every renewal/i.test(paid), 'terms promise nothing about renewing: ' + paid);
   const all = await page.locator('body').innerText();
@@ -1051,7 +1051,8 @@ test('terms.html: every paid plan is a pass that never renews by itself (Monthly
   await ctx.close();
   // and still no payment code anywhere until the payment account is ready
   const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
-  expect(!/lemonsqueezy\.com|LEMON_API_KEY|api\.paymongo\.com|PAYMONGO_SECRET|\/billing\//i.test(code), 'no payment code until the payment account is ready');
+  expect(!/lemonsqueezy\.com|LEMON_API_KEY/i.test(code) && !/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{8,}|whsk_[A-Za-z0-9]{8,}/.test(code), 'payments go through PayMongo only, and no key is ever written in the code (keys are Cloudflare Secrets)');
+  expect(/Payments are made on PayMongo's secure page/.test(paid.replace(/’/g, "'")) && /Cassie never sees your card number/.test(paid) && /A US\$ price is charged in pesos/.test(paid), 'terms: how paying works');
 });
 
 test('the pricing page and the app’s Plans say exactly what the server allows: questions, smarter answers and pictures per plan, nothing unlimited but your own key, nothing that isn’t built', async (b) => {
@@ -1856,6 +1857,98 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
   } finally { await fetch(`${SERVER}/__reset`); await actx.close(); }
 });
 
+test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ plan is charged its peso price, card only), the signed “paid” message gives the plan once (a forged one is refused, a wrong amount gives nothing, buying again adds the days), the return screen says until when and what was paid, a reminder before it ends, the dashboard counts it (view-only password too), and the website’s buttons buy', async (b) => {
+  const crypto = require('crypto');
+  await serverMode({ payOn: true, paymongo: 'ok' });
+  const post = (p, body, headers = {}) => fetch(SERVER + p, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  const dump = async () => (await (await fetch(`${SERVER}/__dump`)).json()).tables;
+  const paidEvent = (session, ref, centavos, method = 'gcash') => JSON.stringify({ data: { id: 'evt_test', attributes: { type: 'checkout_session.payment.paid', livemode: false, data: { id: session, attributes: { reference_number: ref, payments: [{ id: 'pay_test_' + ref.slice(-6), attributes: { amount: centavos, source: { type: method } } }] } } } } });
+  const signed = (raw, secret = 'whsk_test_fake_paymongo') => { const t = Math.floor(Date.now() / 1000); return { 'paymongo-signature': `t=${t},te=${crypto.createHmac('sha256', secret).update(`${t}.${raw}`).digest('hex')},li=` }; };
+  const { ctx, page, errors } = await open(b, { state: { plan: null } });
+  try {
+    await page.route('https://checkout.paymongo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: '<title>PayMongo checkout</title><h1>PayMongo checkout</h1>' }));
+    const cfg = await page.evaluate(async (srv) => (await fetch(srv + '/config')).json(), SERVER);
+    expect(cfg.pay === true && cfg.prices.php.plus.month.php === 149 && cfg.prices.usd.plus.month.shown === 'US$7.99' && cfg.prices.usd.plus.month.php === 499 && cfg.prices.php.pro.sem.php === 1999, 'the server says payments are on, with every price (US$7.99 is charged ₱499): ' + JSON.stringify(cfg.prices && cfg.prices.usd.plus));
+    // signed out: Get Plus asks to sign in first, then goes on to PayMongo by itself
+    await page.waitForFunction(() => serverPay === true, null, { timeout: 5000 });
+    await page.evaluate(() => plusSheet('More questions today', 'You’ve used today’s free questions.', 'limit'));
+    const buy = page.locator('.plus-sheet .plus-buy[data-bill="month"]');
+    const cur = await page.evaluate(() => payCur());
+    expect(new RegExp(cur === 'usd' ? 'US\\$7\\.99 for 30 days \\(charged as ₱499\\)' : '₱149 for 30 days').test(await buy.innerText()) && /Pasado Pass/.test(await page.locator('.plus-sheet .plus-buy[data-bill="sem"]').innerText()), 'the sheet’s buttons buy, with the price: ' + await buy.innerText());
+    await buy.click();
+    await page.waitForSelector('.auth-page .auth-form', { timeout: 5000 });
+    const mail = `buyer${Date.now()}@example.com`;
+    await page.fill('.auth-form input[name=email]', mail); await page.fill('.auth-form input[name=age]', '19'); await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+    await Promise.all([page.waitForURL(/checkout\.paymongo\.com\/cs_test_/, { timeout: 15000 }), page.click('.auth-go')]);
+    const mode1 = await serverMode({});
+    const sent = mode1.paymongoCalls.at(-1), at = sent.body.data.attributes, item = at.line_items[0];
+    expect(/^Basic /.test(sent.auth) && Buffer.from(sent.auth.slice(6), 'base64').toString() === 'sk_test_fake_paymongo:', 'PayMongo is asked with the secret key from Cloudflare (never from the page)');
+    expect(item.currency === 'PHP' && item.amount === (cur === 'usd' ? 49900 : 14900) && item.quantity === 1 && /Cassie Plus, 30 days/.test(item.name) && (cur === 'usd' ? /US\$7\.99, charged as ₱499 \(PHP\)/.test(item.description) : /Never renews/.test(item.description)), 'one pass, in pesos, at the server’s price: ' + JSON.stringify(item));
+    expect(JSON.stringify(at.payment_method_types) === (cur === 'usd' ? '["card"]' : '["card","gcash","paymaya"]') && /\/app\.html\?paid=cas_[a-f0-9]{24}$/.test(at.success_url) && /paid=cancel$/.test(at.cancel_url) && at.send_email_receipt === true && at.billing.email === mail, 'GCash, Maya and card (a US$ plan: card), back to Cassie after, a receipt by email: ' + JSON.stringify([at.payment_method_types, at.success_url]));
+    let pay = (await dump()).payments.find((x) => x.id === at.reference_number);
+    expect(pay && pay.status === 'pending' && pay.plan === 'plus' && pay.bill === 'month' && pay.live === 0 && !(await dump()).plans.some((x) => x.note && x.note.includes(pay.id)), 'a pending payment, and no plan until PayMongo says it’s paid');
+    // a forged "paid" message gives nothing; PayMongo's signed one gives the plan, once
+    const raw = paidEvent(pay.session, pay.id, pay.php * 100);
+    expect((await post('/pay/webhook', raw, signed(raw, 'whsk_wrong_secret'))).status === 401 && (await post('/pay/webhook', raw, {})).status === 401, 'a message without PayMongo’s signature is refused');
+    expect((await dump()).payments.find((x) => x.id === pay.id).status === 'pending', 'and nothing was given');
+    expect((await post('/pay/webhook', raw, signed(raw))).status === 204, 'the signed message is taken');
+    let t1 = await dump();
+    const acct = t1.accounts.find((x) => x.email === mail), plan1 = t1.plans.find((x) => x.account === acct.id);
+    expect(plan1 && plan1.plan === 'plus' && Math.abs(plan1.until - Date.now() - 30 * 864e5) < 120e3 && /paid month/.test(plan1.note) && t1.payments.find((x) => x.id === pay.id).status === 'paid' && t1.payments.find((x) => x.id === pay.id).method === 'gcash', 'Plus for 30 days, the payment marked paid (GCash): ' + JSON.stringify(plan1));
+    await post('/pay/webhook', raw, signed(raw)); // (PayMongo may send it twice)
+    expect((await dump()).plans.find((x) => x.account === acct.id).until === plan1.until, 'sent twice, given once');
+    // back in Cassie: until when, and what was paid
+    await page.goto(APP + '?paid=' + pay.id);
+    await page.waitForFunction(() => /You have Cassie Plus until/.test((document.querySelector('.pay-sheet h3') || {}).textContent || ''), null, { timeout: 15000 });
+    const back = await page.locator('.pay-sheet').innerText();
+    expect((cur === 'usd' ? /Paid ₱499 \(US\$7\.99\)/ : /Paid ₱149\b/).test(back) && /never renews by itself/.test(back) && !/[?&]paid=/.test(page.url()), 'the return screen: until when, what was paid, never renews: ' + back);
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/paid-return.png' });
+    await page.click('.pay-sheet .plus-ok');
+    expect(await page.evaluate(() => planName()) === 'plus', 'the app knows it has Plus');
+    // buying again before it ends adds the days on; a wrong amount gives nothing
+    const token = await page.evaluate(() => localStorage.getItem('cassie.auth'));
+    const again = await (await post('/pay/checkout', { plan: 'plus', bill: 'sem', cur: 'php' }, { authorization: 'Bearer ' + token })).json();
+    expect(/^https:\/\/checkout\.paymongo\.com\//.test(again.url) && again.php === 599, 'a semester pass: ₱599');
+    const p2 = (await dump()).payments.find((x) => x.id === again.id);
+    const bad = paidEvent(p2.session, p2.id, 100);
+    await post('/pay/webhook', bad, signed(bad));
+    expect((await dump()).payments.find((x) => x.id === p2.id).status === 'mismatch' && (await dump()).plans.find((x) => x.account === acct.id).until === plan1.until, 'paid the wrong amount: no plan');
+    const p3 = await (await post('/pay/checkout', { plan: 'plus', bill: 'sem', cur: 'php' }, { authorization: 'Bearer ' + token })).json();
+    const r3 = (await dump()).payments.find((x) => x.id === p3.id), ok3 = paidEvent(r3.session, r3.id, 59900, 'card');
+    await post('/pay/webhook', ok3, signed(ok3));
+    const plan3 = (await dump()).plans.find((x) => x.account === acct.id);
+    expect(Math.abs(plan3.until - plan1.until - 152 * 864e5) < 5000 && /paid sem/.test(plan3.note), 'buying again before it ends adds the semester on top: ' + JSON.stringify(plan3));
+    // the page can't set its own price, and signed out it can't buy
+    expect((await post('/pay/checkout', { plan: 'plus', bill: 'month', cur: 'php', php: 1 }, { authorization: 'Bearer ' + token }).then((r) => r.json())).php === 149, 'a price sent by the page is ignored');
+    expect((await post('/pay/checkout', { plan: 'plus', bill: 'month' })).status === 401, 'signed out: no checkout');
+    // the reminder: a few days before it ends, once a day
+    await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 2 * 864e5 + 3600e3, bill: 'month' }; state.planRemindedDay = ''; planReminder(); });
+    const rem = await page.locator('.pay-sheet').innerText();
+    expect(/Your Cassie Plus ends in 3 days|Your Cassie Plus ends in 2 days/.test(rem) && /never renews by itself/.test(rem) && /Get 30 days more/.test(rem), 'a reminder before it ends, with a way to get more: ' + rem);
+    await page.click('.pay-sheet .plus-ok');
+    await page.evaluate(() => planReminder());
+    expect(await page.locator('.pay-sheet').count() === 0, 'once a day');
+    // the dashboard: test payments counted apart; the view-only password reads it, but can't give plans
+    const st = await (await fetch(`${SERVER}/stats?days=7`, { headers: { authorization: 'Bearer test-view-token-0123456789' } })).json();
+    expect(st.payments && st.payments.php === 0 && st.payments.tests >= 2 && st.payments.list.some((x) => x.email === mail && x.live === 0) && st.payments.active.plus >= 1, 'the view-only password reads the payments (test ones apart): ' + JSON.stringify({ ...st.payments, list: st.payments && st.payments.list.length }));
+    expect((await fetch(`${SERVER}/admin/plan?email=${encodeURIComponent(mail)}`, { headers: { authorization: 'Bearer test-view-token-0123456789' } })).status === 401, 'the view-only password can’t give or see plans');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+  // the website: with payments on, Get Plus buys (in the app), and a US$ price says its pesos
+  const wctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+  await wctx.addInitScript((srv) => { window.CASSIE_SERVER = srv; }, SERVER);
+  const w = await wctx.newPage();
+  try {
+    await w.goto(`http://localhost:${APP_PORT}/index.html#pricing`);
+    await w.waitForFunction(() => document.querySelector('[data-plan="plus"]').textContent === 'Get Plus' || document.querySelector('[data-plan="plus"]').textContent === 'Get the Pasado Pass', null, { timeout: 5000 });
+    await w.click('#pricing [data-cur="usd"]');
+    expect(await w.locator('[data-php-note="plus"]').innerText() === 'Charged as ₱499 (PHP). Your bank converts it.' && /US\$7\.99/.test(await w.locator('[data-price="plus"]').innerText()), 'a US$ price, and the pesos it is charged as');
+    expect(await w.locator('[data-plan="pro"]').innerText() === 'Get Pro', 'Pro buys too');
+    await w.click('#pricing [data-bill="sem"]');
+    await Promise.all([w.waitForURL(/app\.html\?buy=plus-sem-usd/, { timeout: 8000 }), w.click('#pricing [data-plan="plus"]')]);
+  } finally { await wctx.close(); await serverMode({ payOn: false }); await fetch(`${SERVER}/__reset`); }
+});
+
 test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester pass one tap away, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
   const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
@@ -1878,7 +1971,7 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /the Pasado Pass gets you ready/.test(await page.locator('#pricing .sub').innerText()) && /one payment covers your whole semester/i.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub lead with the result');
   await page.click('#pricing [data-cur="usd"]');
   p = await plus();
-  expect(/\$31\.99/.test(p) && /about \$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === '$31.99 for the whole semester: about $0.21 a day.', 'Worldwide: the $ price a day: ' + p);
+  expect(/US\$31\.99/.test(p) && /about US\$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === 'US$31.99 for the whole semester: about US$0.21 a day.', 'Worldwide: the US$ price a day (US$, so nobody reads it as their own dollars): ' + p);
   await page.click('#pricing [data-cur="php"]');
   await page.click('#pricing [data-bill="month"]');
   p = await plus();
@@ -1965,7 +2058,7 @@ test('privacy.html explains every table Cassie’s server keeps (a new table fai
     users: /Anonymous usage counts/, events: /Anonymous usage counts/, words: /topic words/, feedback: /Problem reports/, quota: /Counts for fair limits/,
     chats: /Counts for fair limits/, accounts: /Your account/, sessions: /your sign ins/, health: null /* (Cassie's own checks: no one's data) */,
     rooms: /Study rooms/, room_members: /Study rooms/, room_ops: /Study rooms/, room_here: /where your pointer is/, plans: /your plan \(Free, Plus or Pro\) and when it ends/,
-    scores: /Daily puzzles/, identities: /Google or Apple, we keep which one/, push_subs: /Study reminders/, early: /The early list/,
+    scores: /Daily puzzles/, identities: /Google or Apple, we keep which one/, push_subs: /Study reminders/, early: /The early list/, payments: /Payments\s*, if you buy a plan/,
   };
   const unknown = tables.filter((t) => !(t in SAID));
   expect(!unknown.length, 'the server keeps a table privacy.html doesn’t explain: ' + unknown.join(', ') + '. Say on the page what it holds, then add it here.');
@@ -1993,7 +2086,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     [/^api\.groq\.com$/, 'Groq'], [/^generativelanguage\.googleapis\.com$/, 'Google Gemini'], [/^api\.anthropic\.com$/, 'Anthropic'],
     [/^api\.elevenlabs\.io$/, 'ElevenLabs'], [/^image\.pollinations\.ai$/, 'Pollinations'], [/^api\.openalex\.org$/, 'OpenAlex'],
     [/\.wikipedia\.org$/, 'Wikipedia'], [/^api\.worldbank\.org$/, 'World Bank'], [/^huggingface\.co$/, 'Hugging Face'],
-    [/^(accounts|www)\.google(apis)?\.com$|^docs\.google\.com$/, 'Google'], [/^appleid\.apple\.com$/, 'Apple'],
+    [/^(accounts|www)\.google(apis)?\.com$|^docs\.google\.com$/, 'Google'], [/^appleid\.apple\.com$/, 'Apple'], [/^api\.paymongo\.com$/, 'PayMongo'],
     [/\.workers\.dev$/, 'Cloudflare'], // Cassie's own server runs on Cloudflare
   ];
   const libs = /three\.module|GLTFLoader|OrbitControls|BufferGeometryUtils|RoomEnvironment|RoundedBoxGeometry|meshopt/;
