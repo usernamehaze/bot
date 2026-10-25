@@ -1792,7 +1792,7 @@ test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance tab
   const text = async (sel) => (await page.locator(sel).innerText()).replace(/\s+/g, ' ');
   expect(await page.locator('.set-plans [data-bill="m"]').getAttribute('aria-pressed') === 'true', 'Monthly is picked at first');
   let plus = await text('.set-plans .plan-plus'), pro = await text('.set-plans .plan-pro');
-  expect(/₱149 a month/.test(plus) && !/₱599 a semester/.test(plus) && !/Pasado Pass/.test(plus) && /Renews each month until you cancel in Settings\. 7 days to change your mind\. Or ₱599 once for the whole semester\./.test(plus), 'Plus, a month: ' + plus);
+  expect(/₱149 a month/.test(plus) && !/₱599 a semester/.test(plus) && !/Pasado Pass/.test(plus) && /One payment for 30 days\. Never renews\. 7 days to change your mind\. Or ₱599 once for the whole semester\./.test(plus), 'Plus, a month: ' + plus);
   expect(/₱499 a month/.test(pro) && !/₱1,999 a semester/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Get Pro early/.test(pro), 'Pro, a month: ' + pro);
   const priceRow = () => page.evaluate(() => [...document.querySelectorAll('.set-plans .plan-compare tbody tr:first-child td')].map((x) => x.innerText.trim()).join('|'));
   expect(await priceRow() === '₱0|₱149 a month|₱499 a month', 'the table, a month: ' + await priceRow());
@@ -1870,7 +1870,7 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   const plus = async () => (await page.locator('#pricing .plan', { has: page.locator('h3:text-is("Plus")') }).innerText()).replace(/\s+/g, ' ');
   expect(await page.locator('#pricing [data-bill="month"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Monthly');
   let p = await plus();
-  expect(/₱149/.test(p) && /Renews each month until you cancel in Settings\. 7 days to change your mind\./.test(p) && !(await page.locator('#pricing [data-pass]').isVisible()) && await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get Plus early', 'Monthly first: ₱149, renews until you cancel, Get Plus early (no Pasado Pass label): ' + p);
+  expect(/₱149/.test(p) && /One payment for 30 days\. Never renews/.test(p) && /no subscription/.test(p) && !(await page.locator('#pricing [data-pass]').isVisible()) && await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get Plus early', 'Monthly first: ₱149 for 30 days, never renews, Get Plus early (no Pasado Pass label): ' + p);
   expect(await page.locator('#pricing [data-anchor]').innerText() === '₱149 a month: about ₱5 a day, less than one hour with a tutor.', 'the comparison line follows Monthly: ' + await page.locator('#pricing [data-anchor]').innerText());
   expect(/From ₱149 a month, or one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the sub says both');
   await page.click('#pricing [data-bill="sem"]');
@@ -1887,7 +1887,7 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   await page.click('#pricing [data-cur="php"]');
   await page.click('#pricing [data-bill="month"]');
   p = await plus();
-  expect(!(await page.locator('#pricing [data-pass]').isVisible()) && /₱149/.test(p) && /Renews each month until you cancel in Settings\. 7 days to change your mind\./.test(p), 'Monthly: no Pasado Pass label, and it says it renews until you cancel: ' + p);
+  expect(!(await page.locator('#pricing [data-pass]').isVisible()) && /₱149/.test(p) && /One payment for 30 days\. Never renews/.test(p), 'Monthly: no Pasado Pass label, and it says it renews until you cancel: ' + p);
   // every promise on the page is in the terms
   const faq = (await page.locator('#faq').textContent()).replace(/\s+/g, ' ');
   expect(/What is the Pasado Pass\?/.test(faq) && /5 months for one payment of ₱599/.test(faq), 'the FAQ explains the Pasado Pass');
@@ -1895,7 +1895,8 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
     [/Never renews/i, /Semester pass \(the Pasado Pass\) is one payment and never renews/],
     [/One payment for 5 months/, /lasts 5 months/],
     [/7 days to change your mind/, /7 days to change your mind\. If you're not happy with the first payment for any plan, email askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked\./],
-    [/Renews each month until you cancel in Settings/, /renews automatically until you cancel/],
+    [/One payment for 30 days/, /Monthly: one payment for 30 days\.<\/strong> It never renews|Monthly: one payment for 30 days\. It never renews/],
+    [/does the monthly plan renew by itself\?/i, /never renew by themselves/],
     [/about a week before it does/, /about a week before it ends/],
     [/askcassie\.study@gmail\.com within 7 days of paying and you get all of it back, no questions asked/, /askcassie\.study@gmail\.com within 7 days of paying and you get all of it back\. No questions asked/],
   ];
@@ -1903,7 +1904,10 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   await page.click('#pricing [data-bill="sem"]');
   const onPage = monthly + ' ' + (await page.locator('#pricing').innerText()) + ' ' + faq;
   for (const [said, inTerms] of promises) expect(said.test(onPage) && inTerms.test(terms), `the page says ${said} and the terms say ${inTerms}`);
-  expect(/Founding price\. A Monthly or Yearly plan keeps the price you started with for as long as it keeps renewing/.test(terms), 'the founding price is in the terms');
+  expect(/Founding price\. If you buy your next pass before the one you have ends, you keep the price you started with/.test(terms), 'the founding price is in the terms');
+  // nothing renews by itself: no page, no plan and no term says it does
+  const said = [fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8'), fs.readFileSync(path.join(ROOT, 'landing/landing.js'), 'utf8'), terms, onPage].join(' ');
+  expect(!/renews (?:each|every|automatically)|until you cancel|cancel any ?time|billed (?:monthly|yearly)|before (?:each|every) renewal/i.test(said), 'no plan renews by itself, and nothing says one does: ' + (said.match(/.{40}(?:renews (?:each|every|automatically)|until you cancel|cancel any ?time|billed (?:monthly|yearly)|before (?:each|every) renewal).{20}/i) || [''])[0]);
   expect(!/[—–]/.test(onPage), 'no dashes on the pricing page');
   await ctx.close();
   // the phone sizes: nothing spills sideways, every pricing button is 44px

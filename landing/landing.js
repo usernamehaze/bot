@@ -121,8 +121,8 @@
   const perDay = (c, n) => (c === 'php' ? PRICES[c].sym + Math.max(1, Math.round(n / 152)) : PRICES[c].sym + (n / 152).toFixed(2));
   const UNDER = {
     sem: 'One payment for 5 months. Never renews. 7 days to change your mind.',
-    month: 'Renews each month until you cancel in Settings. 7 days to change your mind.',
-    year: 'Renews each year until you cancel in Settings. 7 days to change your mind.',
+    month: 'One payment for 30 days. Never renews: buy again when you need it. 7 days to change your mind.',
+    year: 'One payment for 12 months. Never renews. 7 days to change your mind.',
   };
   function renderPrices() {
     const p = PRICES[cur];
@@ -131,8 +131,8 @@
       const v = p[k][bill];
       $(`[data-price="${k}"]`).textContent = fmt(cur, v);
       const per = $(`[data-price="${k}"]`).nextElementSibling; per.textContent = { month: '/ month', sem: '/ semester', year: '/ year' }[bill];
-      $(`[data-bill-note="${k}"]`).textContent = bill === 'month' ? 'billed monthly · cancel anytime'
-        : bill === 'sem' ? `about ${perDay(cur, v)} a day` : `that’s ${fmt(cur, v / 12)} a month · billed yearly`;
+      $(`[data-bill-note="${k}"]`).textContent = bill === 'month' ? `about ${cur === 'php' ? PRICES[cur].sym + Math.max(1, Math.round(v / 30)) : PRICES[cur].sym + (v / 30).toFixed(2)} a day · no subscription`
+        : bill === 'sem' ? `about ${perDay(cur, v)} a day` : `that’s ${fmt(cur, v / 12)} a month · one payment`;
       const under = $(`[data-under="${k}"]`); if (under) under.textContent = UNDER[bill];
     });
     const pass = $('[data-pass]'); if (pass) pass.hidden = bill !== 'sem'; // (the Semester pass is the Pasado Pass)
