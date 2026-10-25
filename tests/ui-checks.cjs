@@ -128,6 +128,10 @@ async function contrastIssues(page, sel = 'body') {
         let top = r.top, bottom = r.bottom;
         for (const b of bars) {
           if (b.x.contains(e) || b.r.right <= r.left || b.r.left >= r.right || b.r.bottom <= top || b.r.top >= bottom) continue;
+          // only a bar in front of the words (a fixed background layer behind them doesn't count)
+          const hx = (Math.max(b.r.left, r.left) + Math.min(b.r.right, r.right)) / 2, hy = (Math.max(b.r.top, top) + Math.min(b.r.bottom, bottom)) / 2;
+          const h = document.elementFromPoint(hx, hy);
+          if (!h || !b.x.contains(h)) continue;
           if (b.r.top <= top) top = Math.max(top, b.r.bottom + 1); else bottom = Math.min(bottom, b.r.top - 1);
         }
         if (bottom - top < 6) continue;
