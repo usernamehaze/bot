@@ -1900,7 +1900,7 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
     const raw = paidEvent(pay.session, pay.id, pay.php * 100);
     expect((await post('/pay/webhook', raw, signed(raw, 'whsk_wrong_secret'))).status === 401 && (await post('/pay/webhook', raw, {})).status === 401, 'a message without PayMongo’s signature is refused');
     expect((await dump()).payments.find((x) => x.id === pay.id).status === 'pending', 'and nothing was given');
-    expect((await post('/pay/webhook', raw, signed(raw))).status === 204, 'the signed message is taken');
+    expect((await post('/pay/webhook', raw, signed(raw))).status === 200, 'the signed message is taken, with the plain 200 PayMongo asks for');
     let t1 = await dump();
     const acct = t1.accounts.find((x) => x.email === mail), plan1 = t1.plans.find((x) => x.account === acct.id);
     expect(plan1 && plan1.plan === 'plus' && Math.abs(plan1.until - Date.now() - 30 * 864e5) < 120e3 && /paid month/.test(plan1.note) && t1.payments.find((x) => x.id === pay.id).status === 'paid' && t1.payments.find((x) => x.id === pay.id).method === 'gcash', 'Plus for 30 days, the payment marked paid (GCash): ' + JSON.stringify(plan1));
@@ -1941,6 +1941,15 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
     const st = await (await fetch(`${SERVER}/stats?days=7`, { headers: { authorization: 'Bearer test-view-token-0123456789' } })).json();
     expect(st.payments && st.payments.php === 0 && st.payments.tests >= 2 && st.payments.list.some((x) => x.email === mail && x.live === 0) && st.payments.active.plus >= 1, 'the view-only password reads the payments (test ones apart): ' + JSON.stringify({ ...st.payments, list: st.payments && st.payments.list.length }));
     expect((await fetch(`${SERVER}/admin/plan?email=${encodeURIComponent(mail)}`, { headers: { authorization: 'Bearer test-view-token-0123456789' } })).status === 401, 'the view-only password can’t give or see plans');
+    // Connect PayMongo (owner password only): makes the webhook to /pay/webhook once, and shows its secret that once
+    const hookBy = (tok) => fetch(`${SERVER}/admin/paymongo-webhook`, { method: 'POST', headers: { authorization: 'Bearer ' + tok } });
+    expect((await hookBy('test-view-token-0123456789')).status === 401, 'the view-only password can’t connect PayMongo');
+    const made = await (await hookBy('test-admin-token-0123456789')).json();
+    const hookCall = (await serverMode({})).paymongoCalls.filter((c) => /\/v1\/webhooks$/.test(c.url) && c.body.data).at(-1);
+    expect(made.created && made.secret === 'whsk_live_made_by_test' && /\/pay\/webhook$/.test(made.url) && JSON.stringify(hookCall.body.data.attributes.events) === '["checkout_session.payment.paid"]', 'Connect PayMongo makes the webhook for paid checkouts, and shows its secret: ' + JSON.stringify(made));
+    const twice = await (await hookBy('test-admin-token-0123456789')).json();
+    expect(twice.exists && !twice.secret, 'pressed again: it says it is connected, and never shows a secret again');
+    expect(!JSON.stringify((await dump())).includes('whsk_live_made_by_test'), 'the secret is never kept on Cassie’s server');
     expect(!errors.length, 'page errors: ' + errors.join('; '));
   } finally { await ctx.close(); }
   // the website: with payments on, Get Plus buys (in the app), and a US$ price says its pesos

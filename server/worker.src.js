@@ -676,17 +676,17 @@ async function payWebhook(request, env, ctx) {
   const a = (evt && evt.data && evt.data.attributes) || {};
   const want = await hmacHex(String(env.PAYMONGO_WEBHOOK_SECRET), `${sig.t}.${raw}`);
   if (!sig.t || !sameText(String((a.livemode ? sig.li : sig.te) || ''), want)) return new Response('bad signature', { status: 401 });
-  if (a.type !== 'checkout_session.payment.paid') return new Response(null, { status: 204 }); // (other events: nothing to do)
+  if (a.type !== 'checkout_session.payment.paid') return new Response('ok', { status: 200 }); // (other events: nothing to do)
   const cs = a.data || {}, ca = cs.attributes || {};
   const row = await env.DB.prepare('SELECT * FROM payments WHERE session = ? OR id = ?').bind(String(cs.id || ''), String(ca.reference_number || '')).first();
-  if (!row) { ctx.waitUntil(logProblem(env, 'pay: webhook', 'a paid checkout Cassie has no record of').catch(() => {})); return new Response(null, { status: 204 }); }
-  if (row.status === 'paid') return new Response(null, { status: 204 }); // (PayMongo may send it twice: the plan is given once)
+  if (!row) { ctx.waitUntil(logProblem(env, 'pay: webhook', 'a paid checkout Cassie has no record of').catch(() => {})); return new Response('ok', { status: 200 }); }
+  if (row.status === 'paid') return new Response('ok', { status: 200 }); // (PayMongo may send it twice: the plan is given once)
   const p = (ca.payments || [])[0] || {}, pa = p.attributes || {};
   const amount = pa.amount != null ? +pa.amount : (ca.line_items || []).reduce((t, x) => t + (+x.amount || 0) * (+x.quantity || 1), 0);
   if (amount && amount !== row.php * 100) { // never a plan for a different amount than its price
     await env.DB.prepare("UPDATE payments SET status = 'mismatch', paid = ? WHERE id = ?").bind(Date.now(), row.id).run();
     ctx.waitUntil(logProblem(env, 'pay: webhook', `amount ${amount} for a ${row.php * 100} plan`).catch(() => {}));
-    return new Response(null, { status: 204 });
+    return new Response('ok', { status: 200 });
   }
   // the plan: the same plan still running gets the days added on; otherwise it starts now
   const now = Date.now(), cur = await env.DB.prepare('SELECT plan, until FROM plans WHERE account = ?').bind(row.account).first();
@@ -697,7 +697,27 @@ async function payWebhook(request, env, ctx) {
     env.DB.prepare("UPDATE payments SET status = 'paid', paid = ?, pay_ref = ?, method = ?, live = ? WHERE id = ?")
       .bind(now, String(p.id || '').slice(0, 60), String((pa.source && pa.source.type) || ca.payment_method_used || '').slice(0, 20), a.livemode ? 1 : 0, row.id),
   ]);
-  return new Response(null, { status: 204 });
+  return new Response('ok', { status: 200 });
+}
+
+// "Connect PayMongo" on the dashboard (owner password only): creates PayMongo's webhook to /pay/webhook with the
+// key already in Cloudflare, and shows its secret ONCE, for the owner to add as PAYMONGO_WEBHOOK_SECRET (it is
+// never stored or logged here). One already there is reported, not made twice.
+async function adminPayHook(request, env, url) {
+  const no = await adminOk(request, env);
+  if (no) return json({ error: no.error }, no.status);
+  if (!env.PAYMONGO_SECRET_KEY) return json({ error: 'Add PAYMONGO_SECRET_KEY in Cloudflare first (your sk_live_ key), then try again.' }, 400);
+  const hook = `${url.origin}/pay/webhook`, auth = { authorization: 'Basic ' + btoa(String(env.PAYMONGO_SECRET_KEY) + ':'), accept: 'application/json' };
+  try {
+    const list = await (await fetch('https://api.paymongo.com/v1/webhooks', { headers: auth })).json().catch(() => ({}));
+    const old = ((list && list.data) || []).find((w) => w.attributes && w.attributes.url === hook);
+    if (old) return json({ exists: true, id: old.id, status: old.attributes.status, live: !!old.attributes.livemode, url: hook });
+    const res = await fetch('https://api.paymongo.com/v1/webhooks', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ data: { attributes: { url: hook, events: ['checkout_session.payment.paid'] } } }) });
+    const out = await res.json().catch(() => ({}));
+    const a = (out && out.data && out.data.attributes) || {};
+    if (!res.ok || !a.secret_key) return json({ error: `PayMongo said no (${res.status}): ${((out.errors || [])[0] || {}).detail || 'no reason given'}` }, 502);
+    return json({ created: true, id: out.data.id, live: !!a.livemode, url: hook, secret: a.secret_key });
+  } catch (e) { return json({ error: 'Couldn’t reach PayMongo. Try again in a minute.' }, 502); }
 }
 
 // The owner gives (or ends) a plan: POST /admin/plan {"email": "...", "plan": "pro", "days": 30}
@@ -1772,6 +1792,7 @@ export default {
       if (tooFast(request, url.pathname)) return json({ error: 'Cassie is very busy right now because lots of people are asking at once. Wait a minute, then try again.', code: 'busy' }, 429, { ...cors(request.headers.get('origin') || '', env), 'retry-after': '60' });
       if (request.method === 'GET' && url.pathname === '/config') return await config(request, env);
       if (url.pathname === '/admin/plan' && (request.method === 'GET' || request.method === 'POST')) return await adminPlan(request, env, url);
+      if (url.pathname === '/admin/paymongo-webhook' && request.method === 'POST') return await adminPayHook(request, env, url);
       if (request.method === 'GET' && url.pathname === '/ask') return await ask(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/chat') return await chat(request, env, ctx);
       if (request.method === 'POST' && url.pathname === '/image') return await image(request, env, ctx);

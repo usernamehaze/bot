@@ -220,6 +220,8 @@
         ${tile('Features used', fmt(d.range && d.range.uses), `last ${d.days} days`)}
       </div>
       ${brainCard(d)}
+      <div class="card" style="margin-bottom:14px"><h2>Connect PayMongo</h2><p class="sub">Once your PayMongo key (PAYMONGO_SECRET_KEY) is in Cloudflare, this makes PayMongo tell Cassie when a student pays. It shows a secret once: add it in Cloudflare as a Secret named PAYMONGO_WEBHOOK_SECRET, then Deploy. Never share it.</p>
+        <button id="paymongo-connect">Connect PayMongo</button><p id="paymongo-msg" class="muted" style="margin:10px 0 0;word-break:break-all"></p></div>
       <div class="card" style="margin-bottom:14px"><h2>Plans</h2><p class="sub">Give an account Plus or Pro (or take it back). They sign in to Cassie with that email, then reopen the app. Give yourself Pro to try every Plus extra.</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
           <input id="plan-email" type="email" placeholder="Their Cassie email" autocomplete="off" style="flex:1 1 220px">
@@ -280,6 +282,18 @@
         const name = j.name ? j.name + ' (' + j.email + ')' : j.email;
         m.textContent = j.plan === 'free' ? `${name} is on Free.` : `${name} has ${j.plan === 'pro' ? 'Pro' : 'Plus'} until ${new Date(j.until).toLocaleDateString()}.`;
       } catch (e) { m.textContent = 'Couldn’t do it: ' + e.message; }
+    };
+    document.getElementById('paymongo-connect').onclick = async () => {
+      const m = document.getElementById('paymongo-msg');
+      m.textContent = 'Connecting…';
+      try {
+        const r = await fetch('admin/paymongo-webhook', { method: 'POST', headers: { authorization: 'Bearer ' + token } });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+        m.textContent = j.exists
+          ? `Already connected (${j.live ? 'live' : 'test'}, ${j.status}). If PAYMONGO_WEBHOOK_SECRET isn't in Cloudflare yet, find the webhook's secret in PayMongo, or ask Claude to make a new one.`
+          : `Connected (${j.live ? 'live' : 'test'}). Now add this in Cloudflare as a Secret named PAYMONGO_WEBHOOK_SECRET, then Deploy. It is shown only this once: ${j.secret}`;
+      } catch (e) { m.textContent = 'Couldn’t connect: ' + e.message; }
     };
     document.getElementById('plan-give').onclick = () => planCall(true);
     document.getElementById('plan-look').onclick = () => planCall(false);
