@@ -8482,6 +8482,8 @@ function planReminder() {
   const left = p.until - Date.now(), days = Math.ceil(left / 864e5), warn = { month: 3, sem: 7, year: 30 }[p.bill] || 3;
   const today = phDay();
   if (left <= 0 || days > warn || state.planRemindedDay === today) return;
+  // never on top of something the student is in the middle of: it comes back when that closes
+  if (document.querySelector('.plus-sheet, .ex-sheet, .auth-page, .fr, .tour-card, .tour-offer')) { setTimeout(planReminder, 4000); return; }
   state.planRemindedDay = today; save();
   const name = p.plan === 'pro' ? 'Pro' : 'Plus', bill = p.bill || 'month';
   const sh = paySheet(`Your Cassie ${name} ends ${days <= 1 ? 'tomorrow' : `in ${days} days`}`, '');
