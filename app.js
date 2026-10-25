@@ -3554,7 +3554,9 @@ try { const pc = JSON.parse(sessionStorage.getItem('cassie.pay') || 'null'); if 
 const configReady = !SERVER ? Promise.resolve() : (() => {
   return fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
     serverClaude = !!(c && c.claude); serverPictures = !!(c && c.pictures);
-    serverPay = !!(c && c.pay); payPrices = (c && c.prices) || null;
+    // (a test key: only on a tester's device, after opening the app with ?paytest=1)
+    let tester = false; try { if (/[?&]paytest=1\b/.test(location.search)) sessionStorage.setItem('cassie.paytest', '1'); tester = sessionStorage.getItem('cassie.paytest') === '1'; } catch (e) { /* storage blocked */ }
+    serverPay = !!(c && (c.pay || (c.test && tester))); payPrices = (c && c.prices) || null;
     try { sessionStorage.setItem('cassie.pay', JSON.stringify({ on: serverPay, prices: payPrices })); } catch (e) { /* storage blocked */ }
     payLabels();
     try { sessionStorage.setItem('cassie.claude', serverClaude ? '1' : '0'); sessionStorage.setItem('cassie.pictures', serverPictures ? '1' : '0'); } catch (e) { /* storage blocked */ }
