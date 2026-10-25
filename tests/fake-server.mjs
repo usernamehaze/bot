@@ -96,6 +96,12 @@ export async function startFakeServer(port = 4630) {
     if (u.startsWith('https://api.paymongo.com/')) { // fake PayMongo: a checkout session (mode.paymongo 'ok' | 'down')
       const body = JSON.parse(init.body || '{}');
       mode.paymongoCalls = [...(mode.paymongoCalls || []), { url: u, auth: (init.headers || {}).authorization, body }].slice(-10);
+      if (u.endsWith('/v1/webhooks')) { // the webhook list, and making one (it shows its secret once)
+        if (!init.method || init.method === 'GET') return Response.json({ data: mode.paymongoHooks || [] });
+        const hook = { id: 'hook_test_1', attributes: { url: body.data.attributes.url, events: body.data.attributes.events, livemode: true, status: 'enabled', secret_key: 'whsk_live_made_by_test' } };
+        mode.paymongoHooks = [...(mode.paymongoHooks || []), { id: hook.id, attributes: { ...hook.attributes, secret_key: undefined } }];
+        return Response.json({ data: hook });
+      }
       if (mode.paymongo === 'down') return Response.json({ errors: [{ code: 'resource_failed_state', detail: 'down' }] }, { status: 500 });
       const id = `cs_test_${Date.now()}${mode.paymongoCalls.length}`;
       return Response.json({ data: { id, type: 'checkout_session', attributes: { checkout_url: `https://checkout.paymongo.com/${id}`, reference_number: body.data.attributes.reference_number } } });
