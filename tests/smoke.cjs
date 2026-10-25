@@ -1094,7 +1094,7 @@ test('the pricing page and the app’s Plans say exactly what the server allows:
 function deskSeed() {
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
   const add = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-  const progress = { [today]: { answered: 6, right: 5, quizzes: 1, cardsUp: 3, tasks: 1, focus: 25 }, [add(today, -1)]: { answered: 10, right: 7, quizzes: 2, fixed: 2, focus: 50 }, [add(today, -8)]: { answered: 4, right: 2, quizzes: 1, focus: 25 } };
+  const progress = { [today]: { answered: 6, right: 5, quizzes: 1, cardsUp: 3, tasks: 1, focus: 25 }, [add(today, -1)]: { answered: 10, right: 7, quizzes: 2, fixed: 2, focus: 50 }, [add(today, -7)]: { answered: 4, right: 2, quizzes: 1, focus: 25 } /* (7 days ago: always last week, even on a Monday) */ };
   const exams = [
     { id: 'ex1', name: 'Gen Chem finals', date: add(today, 5), topics: 'Stoichiometry, gas laws', from: today, at: 1, stats: {}, marks: { stoichiometry: 'rrwr' }, days: [{ date: today, tasks: [{ kind: 'learn', topic: 'Stoichiometry', done: true }, { kind: 'quiz', topic: 'Gas laws' }] }, { date: add(today, 1), tasks: [{ kind: 'cards', topic: 'Gas laws' }, { kind: 'mistakes' }] }] },
     { id: 'ex2', name: 'Bio 1 midterm', date: add(today, 12), topics: 'Cells', from: today, at: 2, stats: {}, days: [{ date: add(today, 2), tasks: [{ kind: 'learn', topic: 'Cells' }, { kind: 'quiz', topic: 'Cells' }] }] },
