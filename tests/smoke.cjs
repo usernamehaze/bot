@@ -3727,7 +3727,7 @@ test('exam plans: Cassie makes a dated day by day plan, today’s tasks open the
   await page.click('.plus-sheet .plus-ok');
   expect(await page.evaluate(() => state.exams.length) === 1, 'Free keeps the plan it has');
   // Plus can make 5
-  await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 864e5 }; save(); refreshHub(); });
+  await page.evaluate(() => { state.plan = { plan: 'plus', until: Date.now() + 30 * 864e5 }; save(); refreshHub(); }); // (30 days: far from its end, so no reminder)
   for (let k = 2; k <= 5; k++) {
     await page.click(`${hub} .ex-new`);
     await page.waitForSelector('.ex-sheet .ex-form');
