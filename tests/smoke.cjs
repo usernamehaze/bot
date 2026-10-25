@@ -1859,8 +1859,17 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
 
 test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ plan is charged its peso price, card only), the signed “paid” message gives the plan once (a forged one is refused, a wrong amount gives nothing, buying again adds the days), the return screen says until when and what was paid, a reminder before it ends, the dashboard counts it (view-only password too), and the website’s buttons buy', async (b) => {
   const crypto = require('crypto');
-  await serverMode({ payOn: true, paymongo: 'ok' });
   const post = (p, body, headers = {}) => fetch(SERVER + p, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  // a test key (sk_test_…): the public site stays on the early list, and only a listed tester can buy
+  const tmail = `tester${Date.now()}@example.com`, omail = `other${Date.now()}@example.com`;
+  await serverMode({ payOn: true, paymongo: 'ok', payTesters: tmail });
+  const cfgT = await (await fetch(SERVER + '/config', { headers: { origin: 'http://localhost' } })).json();
+  expect(cfgT.pay === false && cfgT.test === true && cfgT.prices && cfgT.prices.php.plus.month.php === 149, 'a test key: payments stay off for everyone, with the prices ready: ' + JSON.stringify([cfgT.pay, cfgT.test]));
+  const tokOf = async (email) => (await (await post('/auth/signup', { email, password: 'secret-pass-1', age: 20 })).json()).token;
+  const other = await post('/pay/checkout', { plan: 'plus', bill: 'month', cur: 'php' }, { authorization: 'Bearer ' + await tokOf(omail) });
+  const tester = await (await post('/pay/checkout', { plan: 'plus', bill: 'month', cur: 'php' }, { authorization: 'Bearer ' + await tokOf(tmail) })).json();
+  expect(other.status === 403 && /^https:\/\/checkout\.paymongo\.com\//.test(tester.url || ''), 'with a test key, nobody but a listed tester can buy (no free plans with PayMongo’s test cards): ' + other.status);
+  await serverMode({ payOn: 'live', payTesters: '' });
   const dump = async () => (await (await fetch(`${SERVER}/__dump`)).json()).tables;
   const paidEvent = (session, ref, centavos, method = 'gcash') => JSON.stringify({ data: { id: 'evt_test', attributes: { type: 'checkout_session.payment.paid', livemode: false, data: { id: session, attributes: { reference_number: ref, payments: [{ id: 'pay_test_' + ref.slice(-6), attributes: { amount: centavos, source: { type: method } } }] } } } } });
   const signed = (raw, secret = 'whsk_test_fake_paymongo') => { const t = Math.floor(Date.now() / 1000); return { 'paymongo-signature': `t=${t},te=${crypto.createHmac('sha256', secret).update(`${t}.${raw}`).digest('hex')},li=` }; };
@@ -1882,11 +1891,11 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
     await Promise.all([page.waitForURL(/checkout\.paymongo\.com\/cs_test_/, { timeout: 15000 }), page.click('.auth-go')]);
     const mode1 = await serverMode({});
     const sent = mode1.paymongoCalls.at(-1), at = sent.body.data.attributes, item = at.line_items[0];
-    expect(/^Basic /.test(sent.auth) && Buffer.from(sent.auth.slice(6), 'base64').toString() === 'sk_test_fake_paymongo:', 'PayMongo is asked with the secret key from Cloudflare (never from the page)');
+    expect(/^Basic /.test(sent.auth) && Buffer.from(sent.auth.slice(6), 'base64').toString() === 'sk_live_fake_paymongo:', 'PayMongo is asked with the secret key from Cloudflare (never from the page)');
     expect(item.currency === 'PHP' && item.amount === (cur === 'usd' ? 49900 : 14900) && item.quantity === 1 && /Cassie Plus, 30 days/.test(item.name) && (cur === 'usd' ? /US\$7\.99, charged as ₱499 \(PHP\)/.test(item.description) : /Never renews/.test(item.description)), 'one pass, in pesos, at the server’s price: ' + JSON.stringify(item));
     expect(JSON.stringify(at.payment_method_types) === (cur === 'usd' ? '["card"]' : '["card","gcash","paymaya"]') && /\/app\.html\?paid=cas_[a-f0-9]{24}$/.test(at.success_url) && /paid=cancel$/.test(at.cancel_url) && at.send_email_receipt === true && at.billing.email === mail, 'GCash, Maya and card (a US$ plan: card), back to Cassie after, a receipt by email: ' + JSON.stringify([at.payment_method_types, at.success_url]));
     let pay = (await dump()).payments.find((x) => x.id === at.reference_number);
-    expect(pay && pay.status === 'pending' && pay.plan === 'plus' && pay.bill === 'month' && pay.live === 0 && !(await dump()).plans.some((x) => x.note && x.note.includes(pay.id)), 'a pending payment, and no plan until PayMongo says it’s paid');
+    expect(pay && pay.status === 'pending' && pay.plan === 'plus' && pay.bill === 'month' && pay.live === 1 && !(await dump()).plans.some((x) => x.note && x.note.includes(pay.id)), 'a pending payment, and no plan until PayMongo says it’s paid');
     // a forged "paid" message gives nothing; PayMongo's signed one gives the plan, once
     const raw = paidEvent(pay.session, pay.id, pay.php * 100);
     expect((await post('/pay/webhook', raw, signed(raw, 'whsk_wrong_secret'))).status === 401 && (await post('/pay/webhook', raw, {})).status === 401, 'a message without PayMongo’s signature is refused');

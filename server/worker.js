@@ -777,7 +777,11 @@ const PAY_DAYS = { month: 30, sem: 152, year: 365 };
 const PAY_PHP = { plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } };
 const PAY_USD = { plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } };
 const PAY_LONG = { month: '30 days', sem: 'the semester (5 months)', year: '12 months' };
-const payOn = (env) => !!env.PAYMONGO_SECRET_KEY;
+// a live key: everyone can buy. A test key (sk_test_…): only the emails in PAY_TESTERS, from the app with
+// ?paytest=1, so nobody gets a plan with PayMongo's test cards while the owner is trying it out
+const payLive = (env) => /^sk_live_/.test(String(env.PAYMONGO_SECRET_KEY || ''));
+const payOn = (env) => payLive(env);
+const payTester = (env, email) => !!email && String(env.PAY_TESTERS || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean).includes(String(email).toLowerCase());
 function payPrice(env, plan, bill, cur) {
   if (!PAY_PHP[plan] || !PAY_DAYS[bill]) return null;
   if (cur === 'usd') {
@@ -795,9 +799,10 @@ async function pay(request, env, url, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   await ensureSchema(env.DB);
-  if (!payOn(env)) return json({ error: 'Paid plans are almost here. Everything on Free works today.', code: 'pay_off' }, 503, h);
+  if (!env.PAYMONGO_SECRET_KEY) return json({ error: 'Paid plans are almost here. Everything on Free works today.', code: 'pay_off' }, 503, h);
   const acc = await accountFromRequest(request, env);
   if (!acc) return json({ error: 'Sign in first, so the plan has an account to belong to.', code: 'signin' }, 401, h);
+  if (!payLive(env) && !payTester(env, acc.email)) return json({ error: 'Paid plans are almost here. Everything on Free works today.', code: 'pay_off' }, 403, h);
   // the student's own payment, after PayMongo sends them back (the plan arrives with PayMongo's message)
   if (request.method === 'GET' && url.pathname === '/pay/status') {
     const row = await env.DB.prepare('SELECT status, plan, bill, php, shown FROM payments WHERE id = ? AND account = ?').bind(String(url.searchParams.get('id') || '').slice(0, 40), acc.id).first();
@@ -900,8 +905,8 @@ async function config(request, env) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
   // with payments on: every pass's price, in pesos and in US$ (with the pesos it is charged as), from the server's own table
-  const prices = payOn(env) ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c)]))]))])) : null;
-  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), prices }, 200, { ...h, 'cache-control': 'max-age=300' });
+  const prices = env.PAYMONGO_SECRET_KEY ? Object.fromEntries(['php', 'usd'].map((c) => [c, Object.fromEntries(['plus', 'pro'].map((pl) => [pl, Object.fromEntries(Object.keys(PAY_DAYS).map((bi) => [bi, payPrice(env, pl, bi, c)]))]))])) : null;
+  return json({ claude: !!env.ANTHROPIC_KEY, pictures: geminiPicturesOn(env), pay: payOn(env), test: !!env.PAYMONGO_SECRET_KEY && !payLive(env), prices }, 200, { ...h, 'cache-control': 'max-age=300' });
 }
 
 /* ---------------------------------------------------------------- talking with Cassie
