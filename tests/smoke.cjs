@@ -1035,28 +1035,23 @@ test('support.html: the help page the stores link to loads with no errors, every
   await ctx.close();
 });
 
-test('terms.html promises an easy cancel and a reminder before every renewal, and the subscriptions plan matches it (no payment code yet)', async (b) => {
+test('terms.html: every paid plan is a pass that never renews by itself (Monthly 30 days, the Semester Pasado Pass, Yearly 12 months), each with a reminder before it ends and 7 days to change your mind (no payment code yet)', async (b) => {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   await page.goto(`http://localhost:${APP_PORT}/terms.html`);
   const paid = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find((x) => /Paid plans/.test(x.textContent)); let t = '', n = h && h.nextElementSibling; while (n && n.tagName !== 'H2') { t += n.innerText + '\n'; n = n.nextElementSibling; } return t; });
-  expect(/Cancelling never takes more steps than subscribing/.test(paid) && /cancel yourself in the app, from Settings/i.test(paid), 'terms promise cancelling takes no more steps than subscribing: ' + paid);
-  expect(/reminder before every renewal/i.test(paid) && /in the app and by email/.test(paid) && /never less than 3 days before/.test(paid), 'terms promise a reminder before each automatic renewal: ' + paid);
-  expect(/Yearly plans also get a reminder a month before/.test(paid), 'terms promise yearly plans a reminder a month before: ' + paid);
-  expect(/A Semester pass (\(the Pasado Pass\) )?is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms promise the Semester pass never renews and the student is told before it ends: ' + paid);
+  expect(/one payment for a set time, and they never renew by themselves/.test(paid) && /Nothing is ever charged again unless you choose to buy another pass/.test(paid), 'terms: passes never renew, nothing is charged again: ' + paid);
+  expect(/Monthly: one payment for 30 days\.\s*It never renews/.test(paid) && /a few days before it ends/.test(paid), 'terms: Monthly is 30 days, with a reminder before it ends: ' + paid);
+  expect(/A Semester pass (\(the Pasado Pass\) )?is one payment and never renews/.test(paid) && /about a week before it ends/.test(paid), 'terms: the Semester pass never renews, with a reminder: ' + paid);
+  expect(/Yearly: one payment for 12 months\.\s*It never renews, and we remind you\s+a month before it ends/.test(paid), 'terms: Yearly is 12 months, with a reminder a month before: ' + paid);
+  expect(/7 days to change your mind/.test(paid), 'terms: 7 days to change your mind');
+  expect(!/renews automatically|until you cancel|before every renewal/i.test(paid), 'terms promise nothing about renewing: ' + paid);
   const all = await page.locator('body').innerText();
   expect(!/[—–]/.test(all), 'no dashes in the terms');
   await ctx.close();
-  // the plan behind those promises, and still no payment code anywhere
-  const plan = fs.readFileSync(path.join(ROOT, 'docs/subscriptions-plan.md'), 'utf8');
-  expect(/## 2\. Cancelling: 3 taps, from Settings/.test(plan) && /shortest subscribe path is \*\*3 taps\*\*/.test(plan), 'the plan has the cancel flow and its tap count');
-  expect(/\*\*7 days before\*\* the renewal/.test(plan) && /\*\*30 days before\*\* and \*\*7 days before\*\*/.test(plan) && /\*\*7 days before\*\* it ends/.test(plan), 'the plan says when each reminder email goes out (monthly, yearly, semester)');
-  expect(/from \*\*askcassie\.study@gmail\.com\*\*/.test(plan) && /Renewal reminder email \*\*off\*\*/.test(plan), 'Cassie sends the emails from askcassie.study@gmail.com, and Lemon Squeezy\'s own reminder is off (no double emails)');
-  expect(/Semester\*\* \(single payment\)/.test(plan) && /\| 2 \| A new database table `subscriptions`\. \| \*\*Approved\.\*\* \|/.test(plan), 'the Semester pass is a single payment, and the new table is approved');
-  for (const ev of ['subscription_created', 'subscription_updated', 'subscription_payment_success', 'subscription_payment_failed', 'subscription_cancelled', 'subscription_resumed', 'subscription_expired', 'order_created']) expect(plan.includes('`' + ev + '`'), 'the plan lists the webhook ' + ev);
-  expect(!/[—–]/.test(plan), 'no dashes in the plan');
+  // and still no payment code anywhere until the payment account is ready
   const code = ['app.js', 'server/worker.src.js', 'extension/background.js', 'landing/landing.js'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
-  expect(!/lemonsqueezy\.com|LEMON_API_KEY|\/billing\//i.test(code), 'no payment code until the Lemon Squeezy links arrive');
+  expect(!/lemonsqueezy\.com|LEMON_API_KEY|api\.paymongo\.com|PAYMONGO_SECRET|\/billing\//i.test(code), 'no payment code until the payment account is ready');
 });
 
 test('the pricing page and the app’s Plans say exactly what the server allows: questions, smarter answers and pictures per plan, nothing unlimited but your own key, nothing that isn’t built', async (b) => {
