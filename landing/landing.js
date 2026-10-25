@@ -106,12 +106,14 @@
   const PRICES = {
     // sem = a Semester pass: one payment for 5 months (about 20% off)
     php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } },
-    usd: { sym: '$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } },
+    usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
   let cur = tz === 'Asia/Manila' || /-ph$|^fil|^tl/.test(lang) ? 'php' : 'usd';
   let bill = 'month'; // (₱149 a month first; the semester Pasado Pass is one tap away)
+  // with payments on (Cassie's server says so), the buttons buy, and a US$ price says the pesos it is charged as
+  let payOn = false, payPrices = null;
   const fmt = (c, n) => {
     const p = PRICES[c];
     if (c === 'php') return p.sym + Math.round(n).toLocaleString('en-PH');
@@ -140,10 +142,24 @@
     const days = { month: 30, sem: 152, year: 365 }[bill], v = p.plus[bill];
     const daily = cur === 'php' ? PRICES[cur].sym + Math.max(1, Math.round(v / days)) : PRICES[cur].sym + (v / days).toFixed(2);
     if (anchor) anchor.textContent = `${fmt(cur, v)} ${{ month: 'a month', sem: 'for the whole semester', year: 'a year' }[bill]}: about ${daily} a day${cur === 'php' ? ', less than one hour with a tutor' : ''}.`;
-    const go = $('[data-plan="plus"]'); if (go) go.textContent = bill === 'sem' ? 'Get the Pasado Pass early' : 'Get Plus early'; // (the Pasado Pass is the semester one)
+    const early = payOn ? '' : ' early';
+    const go = $('[data-plan="plus"]'); if (go) go.textContent = (bill === 'sem' ? 'Get the Pasado Pass' : 'Get Plus') + early; // (the Pasado Pass is the semester one)
+    const goPro = $('[data-plan="pro"]'); if (goPro) goPro.textContent = 'Get Pro' + early;
+    ['plus', 'pro'].forEach((k) => {
+      const note = $(`[data-php-note="${k}"]`), pp = payPrices && payPrices.usd && payPrices.usd[k] && payPrices.usd[k][bill];
+      if (!note) return;
+      note.hidden = !(cur === 'usd' && pp);
+      if (pp) note.textContent = `Charged as ₱${pp.php.toLocaleString('en-PH')} (PHP). Your bank converts it.`;
+    });
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }
+  if (SERVER) fetch(SERVER + '/config').then((r) => (r.ok ? r.json() : null)).then((c) => {
+    if (!c || !c.pay) return;
+    payOn = true; payPrices = c.prices || null;
+    const fine = $('#pricing .fine'); if (fine) fine.textContent = 'Every plan is one payment for the time you pick, and nothing renews by itself. Pay with GCash, Maya or a card on PayMongo’s secure page; US$ prices are charged in pesos. Daily limits start again at midnight, Philippine time, and weekly ones on Monday.';
+    renderPrices();
+  }).catch(() => { /* the early list still works */ });
   $$('[data-cur]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.cur; renderPrices(); }));
   $$('[data-bill]').forEach((b) => b.addEventListener('click', () => { bill = b.dataset.bill; renderPrices(); }));
   renderPrices();
@@ -156,6 +172,7 @@
     const input = $('input', form), msg = $('.early-msg', form), go = $('button', form);
     a.addEventListener('click', (e) => {
       e.preventDefault();
+      if (payOn) { location.href = `app.html?buy=${plan}-${bill}-${cur}`; return; }
       if (!SERVER) { toast('Paid plans are almost here. Everything on Free works today.'); return; }
       a.hidden = true; form.hidden = false; input.focus();
     });

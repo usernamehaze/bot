@@ -267,6 +267,9 @@ h2 { font: 600 clamp(32px, 4.4vw, 52px)/1.08 var(--sans); letter-spacing: -.025e
 .plan.feat .tag, .plan.feat .bill, .plan.feat .price span, .plan.feat .under { color: var(--feat-mute); }
 .plan.feat ul { border-color: var(--feat-line); }
 .plan.feat .btn.solid { background: var(--feat-ink); color: var(--feat); }
+.plan .php-note { margin: -16px 0 20px; font-size: 13.5px; line-height: 1.45; color: var(--mute); }
+.plan .php-note[hidden] { display: none; }
+.plan.feat .php-note { color: var(--feat-mute); }
 .plan .bonus-h { margin: 20px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .plan ul.bonus { margin-top: 10px; padding-top: 0; border-top: 0; }
 /* the early list: an email, then "you're on the list" */
