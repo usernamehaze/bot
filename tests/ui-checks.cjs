@@ -111,6 +111,8 @@ async function contrastIssues(page, sel = 'body') {
     const onTop = (e, x, y) => { const h = document.elementFromPoint(x, y); return !!h && (h === e || e.contains(h)); };
     // words half cut off by a scrolling box (a sheet's bottom edge) aren't really showing: skip them
     const clipped = (e, r) => { for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) { const o = getComputedStyle(p).overflowY; if (o === 'auto' || o === 'scroll' || o === 'hidden') { const q = p.getBoundingClientRect(); if (r.top < q.top - 1 || r.bottom > q.bottom + 1) return true; } } return false; };
+    // bars fixed to the screen (a see-through menu bar): words scrolling under one are only measured below it
+    const bars = [...document.querySelectorAll('body *')].filter((x) => getComputedStyle(x).position === 'fixed' && x.getClientRects().length).map((x) => ({ x, r: x.getBoundingClientRect() })).filter((b) => b.r.width > 40 && b.r.height > 8);
     for (const s of document.querySelectorAll(sel)) {
       if (!s.getClientRects().length) continue;
       const walk = document.createTreeWalker(s, NodeFilter.SHOW_TEXT);
@@ -123,7 +125,13 @@ async function contrastIssues(page, sel = 'body') {
         // (words partly under something else, a floating tab bar say, are only half showing: skip them)
         const inset = (k, a, b) => a + (b - a) * k;
         if (![[0.5, 0.5], [0.1, 0.15], [0.9, 0.15], [0.1, 0.85], [0.9, 0.85], [0.5, 0.02], [0.5, 0.98]].every(([kx, ky]) => onTop(e, inset(kx, r.left, r.right), inset(ky, r.top, r.bottom))) || clipped(e, r)) continue;
-        out.push({ text: n.textContent.trim().slice(0, 30), color: st.color, size: parseFloat(st.fontSize), bold: +st.fontWeight >= 700, r: { x: r.left, y: r.top, w: r.width, h: r.height } });
+        let top = r.top, bottom = r.bottom;
+        for (const b of bars) {
+          if (b.x.contains(e) || b.r.right <= r.left || b.r.left >= r.right || b.r.bottom <= top || b.r.top >= bottom) continue;
+          if (b.r.top <= top) top = Math.max(top, b.r.bottom + 1); else bottom = Math.min(bottom, b.r.top - 1);
+        }
+        if (bottom - top < 6) continue;
+        out.push({ text: n.textContent.trim().slice(0, 30), color: st.color, size: parseFloat(st.fontSize), bold: +st.fontWeight >= 700, r: { x: r.left, y: top, w: r.width, h: bottom - top } });
       }
       for (const e of s.querySelectorAll('input[placeholder], textarea[placeholder]')) { // empty boxes show their placeholder
         if (e.value || !e.placeholder || !e.getClientRects().length) continue;
