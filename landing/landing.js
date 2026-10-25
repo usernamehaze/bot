@@ -111,7 +111,7 @@
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();
   let cur = tz === 'Asia/Manila' || /-ph$|^fil|^tl/.test(lang) ? 'php' : 'usd';
-  let bill = 'sem'; // (the Pasado Pass first: one payment for the semester)
+  let bill = 'month'; // (₱149 a month first; the semester Pasado Pass is one tap away)
   const fmt = (c, n) => {
     const p = PRICES[c];
     if (c === 'php') return p.sym + Math.round(n).toLocaleString('en-PH');
@@ -137,7 +137,10 @@
     });
     const pass = $('[data-pass]'); if (pass) pass.hidden = bill !== 'sem'; // (the Semester pass is the Pasado Pass)
     const anchor = $('[data-anchor]');
-    if (anchor) anchor.textContent = `${fmt(cur, p.plus.sem)} for the whole semester: about ${perDay(cur, p.plus.sem)} a day${cur === 'php' ? ', less than one hour with a tutor' : ''}.`;
+    const days = { month: 30, sem: 152, year: 365 }[bill], v = p.plus[bill];
+    const daily = cur === 'php' ? PRICES[cur].sym + Math.max(1, Math.round(v / days)) : PRICES[cur].sym + (v / days).toFixed(2);
+    if (anchor) anchor.textContent = `${fmt(cur, v)} ${{ month: 'a month', sem: 'for the whole semester', year: 'a year' }[bill]}: about ${daily} a day${cur === 'php' ? ', less than one hour with a tutor' : ''}.`;
+    const go = $('[data-plan="plus"]'); if (go) go.textContent = bill === 'sem' ? 'Get the Pasado Pass early' : 'Get Plus early'; // (the Pasado Pass is the semester one)
     $$('[data-cur]').forEach((b) => b.classList.toggle('on', b.dataset.cur === cur));
     $$('[data-bill]').forEach((b) => b.classList.toggle('on', b.dataset.bill === bill));
   }

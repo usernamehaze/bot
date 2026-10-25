@@ -1825,7 +1825,7 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
   try {
     await page.goto(`http://localhost:${APP_PORT}/index.html#pricing`);
     const go = page.locator('#pricing [data-plan="plus"]');
-    expect(await go.innerText() === 'Get the Pasado Pass early', 'the button says what you get: ' + await go.innerText());
+    expect(await go.innerText() === 'Get Plus early', 'the button says what you get (Monthly first): ' + await go.innerText());
     await go.click();
     await page.waitForSelector('#pricing [data-early="plus"]:not([hidden]) input');
     if (process.env.SHOTS) await page.locator('#pricing .plan.feat').screenshot({ path: process.env.SHOTS + '/pricing-pass.png' });
@@ -1861,20 +1861,26 @@ test('the website’s Get the Pasado Pass early: an email field, a refused throw
   } finally { await fetch(`${SERVER}/__reset`); await actx.close(); }
 });
 
-test('the Pasado Pass: the pricing page opens on Semester with the pass, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
+test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester pass one tap away, its price a day in ₱ and $, Never renews and 7 days to change your mind; every promise is in the terms; the app’s Plans and Plus sheet say the same; no “Most popular”', async (b) => {
   const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   await page.goto(`http://localhost:${APP_PORT}/index.html`);
   await page.click('#pricing [data-cur="php"]');
   const plus = async () => (await page.locator('#pricing .plan', { has: page.locator('h3:text-is("Plus")') }).innerText()).replace(/\s+/g, ' ');
-  expect(await page.locator('#pricing [data-bill="sem"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Semester');
+  expect(await page.locator('#pricing [data-bill="month"]').evaluate((e) => e.classList.contains('on')), 'the Billing switch opens on Monthly');
   let p = await plus();
+  expect(/₱149/.test(p) && /Renews each month until you cancel in Settings\. 7 days to change your mind\./.test(p) && !(await page.locator('#pricing [data-pass]').isVisible()) && await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get Plus early', 'Monthly first: ₱149, renews until you cancel, Get Plus early (no Pasado Pass label): ' + p);
+  expect(await page.locator('#pricing [data-anchor]').innerText() === '₱149 a month: about ₱5 a day, less than one hour with a tutor.', 'the comparison line follows Monthly: ' + await page.locator('#pricing [data-anchor]').innerText());
+  expect(/From ₱149 a month, or one payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the sub says both');
+  await page.click('#pricing [data-bill="sem"]');
+  p = await plus();
+  expect(await page.locator('#pricing [data-plan="plus"]').innerText() === 'Get the Pasado Pass early', 'Semester: the button is the Pasado Pass');
   expect(/Pasado Pass/.test(p) && /₱599/.test(p) && /about ₱4 a day/.test(p) && /One payment for 5 months\. Never renews\. 7 days to change your mind\./.test(p), 'the Plus card is the Pasado Pass: ' + p);
   expect(/Best for school/i.test(p) && /Your exam, planned day by day/.test(p) && /up to 5 exam plans/i.test(p) && /Plus these bonuses/i.test(p) && /All the 3D, any time/.test(p), 'the result first, then the named bonuses: ' + p);
   expect(/Everything in Free, including the Finals Reviewer Kit/.test(await page.locator('#pricing .plan.feat details.all').textContent()), 'what Free has too sits under See everything');
   expect(await page.locator('#pricing [data-anchor]').innerText() === '₱599 for the whole semester: about ₱4 a day, less than one hour with a tutor.', 'the comparison line: ' + await page.locator('#pricing [data-anchor]').innerText());
-  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /the Pasado Pass gets you ready/.test(await page.locator('#pricing .sub').innerText()) && /One payment covers your whole semester/.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub lead with the result');
+  expect(/Pasado ka dito\./.test(await page.locator('#pricing h2').innerText()) && /the Pasado Pass gets you ready/.test(await page.locator('#pricing .sub').innerText()) && /one payment covers your whole semester/i.test(await page.locator('#pricing .sub').innerText()), 'the headline and sub lead with the result');
   await page.click('#pricing [data-cur="usd"]');
   p = await plus();
   expect(/\$31\.99/.test(p) && /about \$0\.21 a day/.test(p) && await page.locator('#pricing [data-anchor]').innerText() === '$31.99 for the whole semester: about $0.21 a day.', 'Worldwide: the $ price a day: ' + p);

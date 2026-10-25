@@ -26,7 +26,7 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=174';
+import { MUSEUM } from './museum.js?v=175';
 import { GAMES } from './games.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
