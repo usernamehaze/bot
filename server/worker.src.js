@@ -134,7 +134,7 @@ async function sendReminders(env, now = Date.now()) {
     const streakEnds = s.streak > 0 && s.streak_day === yesterday; // (studied yesterday, not yet today)
     if (!dueToday && !streakEnds) continue;
     let r = null;
-    try { r = await fetch(s.endpoint, { method: 'POST', headers: { authorization: await vapidAuth(env, s.endpoint), ttl: '14400', urgency: 'normal', 'content-length': '0' } }); } catch (e) { /* tried again next hour */ }
+    try { r = await fetch(s.endpoint, { method: 'POST', headers: { authorization: await vapidAuth(env, s.endpoint), ttl: '14400', urgency: 'normal', 'content-length': '0' }, signal: AbortSignal.timeout(15000) }); } catch (e) { /* tried again next hour */ }
     if (r && (r.status === 404 || r.status === 410)) await env.DB.prepare('DELETE FROM push_subs WHERE id = ?').bind(s.id).run(); // (turned off in the browser)
     else if (r && r.ok) { await env.DB.prepare('UPDATE push_subs SET last_sent = ? WHERE id = ?').bind(day, s.id).run(); sent++; }
   }
@@ -707,7 +707,7 @@ async function pay(request, env, url, ctx) {
   let res, out;
   try {
     res = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
-      method: 'POST',
+      method: 'POST', signal: AbortSignal.timeout(20000), // (PayMongo not answering: the student is told, not left waiting)
       headers: { 'content-type': 'application/json', accept: 'application/json', authorization: 'Basic ' + btoa(String(env.PAYMONGO_SECRET_KEY) + ':') },
       body: JSON.stringify({ data: { attributes: {
         line_items: [{ currency: 'PHP', amount: price.php * 100, name, quantity: 1, description: note }],
@@ -894,7 +894,7 @@ async function ask(request, env, ctx) {
   if (env.ANTHROPIC_KEY) { try { reply = await askClaude(env, { messages }, 'haiku'); } catch (e) { reply = null; } if (reply) src = 'shortcut-claude'; }
   for (const model of env.GROQ_KEY && !reply ? CHAT_MODELS : []) {
     try {
-      const r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify({ model, messages, max_tokens: 2500, temperature: 0.4 }) });
+      const r = await fetch(`${GROQ}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.GROQ_KEY}` }, body: JSON.stringify({ model, messages, max_tokens: 2500, temperature: 0.4 }) , signal: AbortSignal.timeout(30000) });
       if (r.ok) { reply = (await r.json()).choices?.[0]?.message?.content || null; if (reply) break; }
     } catch (e) { /* next model */ }
   }

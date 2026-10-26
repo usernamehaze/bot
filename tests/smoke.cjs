@@ -368,6 +368,24 @@ test('the service worker: a file with its version in the address (app.js?v=…) 
   expect(fetched.filter((u) => u === plain).length === 2, 'a file without a version: checked with the network each time: ' + JSON.stringify(fetched));
 });
 
+test('a server that never answers: the chat gives up with a plain message (no endless spinner)', async (b) => {
+  const { ctx, page, errors } = await open(b, {});
+  try {
+    let hang = true;
+    await page.route(/\/chat$/, async (route) => { if (hang) return; return route.continue(); }); // (never answered while hang is on)
+    await page.evaluate(() => { SERVER_WAIT.chat = 1500; });
+    const t0 = Date.now();
+    await page.fill('#prompt-input', 'What is osmosis?');
+    await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('#chat-log .bubble-assistant.error', { timeout: 8000 });
+    const msg = await page.locator('#chat-log .bubble-assistant.error').last().innerText();
+    expect(/took too long/.test(msg) && Date.now() - t0 < 8000, 'a plain message, soon: ' + msg);
+    expect(!(await page.locator('#chat-log .typing, #chat-log .bubble-typing').count()), 'no spinner left behind');
+    hang = false;
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+});
+
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
   const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
