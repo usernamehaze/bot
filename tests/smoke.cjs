@@ -587,7 +587,7 @@ test('the real server: the studio voice uses the model set in ELEVENLABS_MODEL, 
     for (const [model, voice, style] of [[undefined, 'man', true], ['eleven_v4_turbo', 'man', false], ['eleven_v4', 'woman', false]]) {
       const { call } = await realServer({ ELEVENLABS_API_KEY: 'test-key', ...(model ? { ELEVENLABS_MODEL: model } : {}) });
       sent.length = 0;
-      const r = await call('POST', '/speak', { text: 'Hello from Cassie ' + model, voice, uid: 'aaaaaaaa-1' });
+      const r = await call('POST', '/speak', { text: 'Hello from Cassie ' + model, voice, uid: 'aaaaaaaa-1' }, { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' }); // (the extension: no sign-in, a Free allowance per install)
       const b = sent[0] && sent[0].body;
       expect(r.status === 200 && b, `${model || 'the default'}: Cassie speaks: ` + r.status + ' ' + r.text.slice(0, 120));
       expect(b.model_id === (model || 'eleven_flash_v2_5'), 'the model sent: ' + b.model_id);
@@ -613,15 +613,16 @@ test('the real server: the studio voice counts the ElevenLabs account’s own cr
     let s1 = await realServer({ ELEVENLABS_API_KEY: 'k', SPEAK_MONTHLY_CHARS: '125000' });
     const reset = Date.UTC(2026, 10, 3, 4) / 1000;
     eleven.sub = { character_limit: 100000, character_count: 99960, next_character_count_reset_unix: reset };
-    const left = await s1.call('GET', '/speak?uid=aaaaaaaa-1');
+    const ext = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' }; // (the extension: no sign-in, a Free allowance per install)
+    const left = await s1.call('GET', '/speak?uid=aaaaaaaa-1', null, ext);
     expect(left.json.on && left.json.left === 40 && left.json.back === '2026-11-03', 'the account’s own credits and renewal day: ' + left.text);
     // a key that can't read its account, and the credits run out: one try, then resting (no more calls)
     const s2 = await realServer({ ELEVENLABS_API_KEY: 'k' });
     eleven = { sub: null, tts: 0, out: true };
-    const a = await s2.call('POST', '/speak', { text: 'Hello there.', uid: 'aaaaaaaa-1' });
-    const b2 = await s2.call('POST', '/speak', { text: 'And again.', uid: 'aaaaaaaa-1' });
+    const a = await s2.call('POST', '/speak', { text: 'Hello there.', uid: 'aaaaaaaa-1' }, ext);
+    const b2 = await s2.call('POST', '/speak', { text: 'And again.', uid: 'aaaaaaaa-1' }, ext);
     expect(a.status === 429 && b2.status === 429 && eleven.tts === 1, 'out of credits: resting (429), and ElevenLabs asked once: ' + JSON.stringify([a.status, b2.status, eleven.tts]));
-    const after = await s2.call('GET', '/speak?uid=aaaaaaaa-1');
+    const after = await s2.call('GET', '/speak?uid=aaaaaaaa-1', null, ext);
     const d = new Date(Date.now() + 8 * 3600e3), first = `${d.getUTCMonth() === 11 ? d.getUTCFullYear() + 1 : d.getUTCFullYear()}-${String(d.getUTCMonth() === 11 ? 1 : d.getUTCMonth() + 2).padStart(2, '0')}-01`;
     expect(after.json.on && after.json.left === 0 && after.json.back === first, 'the app is told it’s resting (until the 1st when the key can’t say): ' + after.text);
     const probs = s2.DB.db.prepare("SELECT text FROM feedback WHERE feature = 'voice: elevenlabs'").all().map((r) => r.text);
@@ -629,34 +630,80 @@ test('the real server: the studio voice counts the ElevenLabs account’s own cr
   } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
 });
 
-test('voice for 5 minutes straight: the real server lets one student hear about 15 minutes a day (it stopped at 3,000 characters, about 5 minutes), says why when it stops (x-speak, readable by the app), and the app says she’s back tomorrow instead of “not available”', async (b) => {
+test('studio voice by the month, per account: Free 7,500, Plus 15,000 and Pro 30,000 characters with no daily limit; a guest in the app is told to sign in; past the month a kind message (x-speak mine) the app explains; Cassie says when half is used; podcasts have no daily rule', async (b) => {
   const realFetch = globalThis.fetch, hadCaches = 'caches' in globalThis;
   globalThis.caches = { default: { match: async () => null, put: async () => {} } };
-  globalThis.fetch = async (u, o) => (/elevenlabs\.io\/v1\/user\/subscription/.test(String(u)) ? new Response('{}', { status: 401 }) : /elevenlabs\.io/.test(String(u)) ? new Response(new Uint8Array([1, 2]), { status: 200 }) : realFetch(u, o));
+  globalThis.fetch = async (u, o) => (/elevenlabs\.io\/v1\/user\/subscription/.test(String(u)) ? new Response('{}', { status: 401 }) : /elevenlabs\.io/.test(String(u)) ? new Response(new Uint8Array([1, 2]), { status: 200, headers: { 'content-type': 'audio/mpeg' } }) : realFetch(u, o));
   try {
-    const { call } = await realServer({ ELEVENLABS_API_KEY: 'k', SPEAK_MONTHLY_CHARS: '125000' });
-    // about 5 minutes of a voice chat: 10 spoken answers of 600 characters
+    const { call, DB } = await realServer({ ELEVENLABS_API_KEY: 'k' });
+    const hd = (r, k) => (r.headers && r.headers.get ? r.headers.get(k) : '') || '';
+    // a guest in the app: no studio voice, and the reason
+    const g = await call('GET', '/speak?uid=aaaaaaaa-guest');
+    expect(g.json.guest === true && g.json.left === 0, 'a guest: none, signs in for it: ' + g.text);
+    const gp = await call('POST', '/speak', { text: 'Hello', uid: 'aaaaaaaa-guest' });
+    expect(gp.status === 401 && hd(gp, 'x-speak') === 'guest' && /Sign in/.test(gp.text), 'a guest asking: 401, sign in: ' + gp.status + ' ' + gp.text);
+    // a Free account: 7,500 this month, more than a day's old 12,000 limit is fine on Plus
+    const up = await call('POST', '/auth/signup', { email: 'voice@example.com', password: 'longenough1', age: 20 });
+    const auth = { authorization: 'Bearer ' + up.json.token };
+    const f = await call('GET', '/speak?uid=aaaaaaaa-free', null, auth);
+    expect(f.json.max === 7500 && f.json.left === 7500 && f.json.plan === 'free' && f.json.used === 0, 'Free: 7,500 a month: ' + f.text);
     const said = [];
-    for (let i = 0; i < 10; i++) said.push((await call('POST', '/speak', { text: `Answer ${i} ` + 'x'.repeat(590), uid: 'aaaaaaaa-5' })).status);
-    expect(said.every((st) => st === 200), '5 minutes of talk all spoken: ' + said.join(','));
-    // far past 15 minutes: she rests for the day, and says that's why
-    let last;
-    for (let i = 0; i < 12; i++) last = await call('POST', '/speak', { text: `More ${i} ` + 'y'.repeat(690), uid: 'aaaaaaaa-5' });
-    const hd = (k) => (last.headers && last.headers.get ? last.headers.get(k) : (last.headers || {})[k]) || '';
-    expect(last.status === 429 && hd('x-speak') === 'day' && /x-speak/.test(hd('access-control-expose-headers')), 'past the day: 429, x-speak day, and the app may read it: ' + last.status + ' ' + JSON.stringify([hd('x-speak'), hd('access-control-expose-headers')]));
+    for (let i = 0; i < 13; i++) said.push((await call('POST', '/speak', { text: `Line ${i} ` + 'x'.repeat(600), uid: 'aaaaaaaa-free' }, auth)).status);
+    expect(said.slice(0, 12).every((st) => st === 200) && said[12] === 429, 'Free: 12 lines (about 7,300) spoken, the 13th is past the month: ' + said.join(','));
+    const past = await call('POST', '/speak', { text: 'One more ' + 'z'.repeat(600), uid: 'aaaaaaaa-free' }, auth);
+    expect(past.status === 429 && hd(past, 'x-speak') === 'mine' && /this month’s studio voice/.test(past.text), 'past the month: 429, x-speak mine: ' + past.text);
+    const f2 = await call('GET', '/speak?uid=aaaaaaaa-free', null, auth);
+    expect(f2.json.used <= 7500 && f2.json.left < 700, 'a refused line is not counted: ' + f2.text);
+    // Plus: 15,000 a month and no daily limit (14,000 in one day, all spoken)
+    const id = DB.db.prepare('SELECT id FROM accounts WHERE email = ?').get('voice@example.com').id;
+    DB.db.prepare('INSERT INTO plans (account, plan, until) VALUES (?, ?, ?)').run(id, 'plus', Date.now() + 864e5);
+    const p0 = await call('GET', '/speak?uid=aaaaaaaa-free', null, auth);
+    expect(p0.json.max === 15000 && p0.json.plan === 'plus', 'Plus: 15,000 a month: ' + p0.text);
+    const more = [];
+    for (let i = 0; i < 10; i++) more.push((await call('POST', '/speak', { text: `More ${i} ` + 'y'.repeat(690), uid: 'aaaaaaaa-free' }, auth)).status);
+    expect(more.every((st) => st === 200), 'Plus: no daily limit, 14,000 in a day: ' + more.join(','));
+    DB.db.prepare('UPDATE plans SET plan = ? WHERE account = ?').run('pro', id);
+    expect((await call('GET', '/speak?uid=aaaaaaaa-free', null, auth)).json.max === 30000, 'Pro: 30,000 a month');
   } finally { globalThis.fetch = realFetch; if (!hadCaches) delete globalThis.caches; }
-  // the app: the voice runs out partway through a Listen, and the line says why and when
-  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast' }, fakeGroq: () => ({ text: Array.from({ length: 8 }, (_, i) => `Sentence ${i + 1} says cells need energy.`).join(' ') }) });
-  await ctx.addInitScript(FAKE_VOICE, { studio: { failFrom: 1, failStatus: 429, failHeaders: { 'x-speak': 'day' } } });
+  // the app: signed in, half the month used: Cassie says so once; the voice runs out partway through a Listen and the line says why
+  const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test', hearing: 'fast', account: { email: 'v@example.com', name: 'V', providers: [] } }, fakeGroq: () => ({ text: Array.from({ length: 8 }, (_, i) => `Sentence ${i + 1} about cells and what they need to live.`).join(' ') }) });
+  await ctx.addInitScript(FAKE_VOICE, { studio: { failFrom: 1, failStatus: 429, failHeaders: { 'x-speak': 'mine' } } });
   await page.reload();
   await page.waitForFunction(() => window.CassieVoice.studio.known() && window.CassieVoice.studio.on(), null, { timeout: 5000 });
   await ask(page, 'What do cells need?');
   await page.click('.bubble-assistant .listen-btn');
   await page.waitForFunction(() => window.__notes.length > 0, null, { timeout: 15000 });
   const note = (await page.evaluate(() => window.__notes))[0];
-  expect(/listened to Cassie a lot today/.test(note) && /back tomorrow/.test(note) && !/isn’t available/.test(note), 'the line says why and when: ' + note);
+  expect(/used this month’s studio voice/.test(note) && /comes back on/.test(note), 'the line says why and when: ' + note);
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
+  // half the month used: a note once (not again after a reload); a guest is told to sign in, and a podcast asks them to
+  for (const [who, studio] of [['half', { max: 7500, used: 3800, left: 3700 }], ['guest', { guest: true }]]) {
+    const o = await open(b, { server: false, device: 'Pixel 7', state: { groqKey: 'gsk_test', ...(who === 'half' ? { account: { email: 'v@example.com', name: 'V', providers: [] } } : {}) } });
+    await o.ctx.addInitScript(FAKE_VOICE, { studio });
+    await o.page.reload();
+    await o.page.waitForFunction(() => window.CassieVoice.studio.known(), null, { timeout: 5000 });
+    if (who === 'half') {
+      await o.page.waitForSelector('.voice-half', { timeout: 5000 });
+      const t = await o.page.locator('.voice-half').innerText();
+      expect(/used half of this month’s studio voice/.test(t) && /3,700 of 7,500/.test(t) && !/[–—]/.test(t), 'the half note: ' + t);
+      await o.page.reload();
+      await o.page.waitForFunction(() => window.CassieVoice.studio.known(), null, { timeout: 5000 });
+      await o.page.waitForTimeout(800);
+      expect(!(await o.page.locator('.voice-half').count()), 'said once a month');
+      await o.page.evaluate(() => openPodcast('Cells need energy.', 'Cells'));
+      const facts = await o.page.locator('.pod-sheet').innerText();
+      expect(/No daily limit/.test(facts) && !/Back tomorrow|one a day|one a week/.test(facts) && !(await o.page.locator('.pod-go').isDisabled()), 'a podcast: no daily rule: ' + facts);
+    } else {
+      expect(await o.page.evaluate(() => window.CassieVoice.studio.guest()), 'a guest');
+      await o.page.evaluate(() => openPodcast('Cells need energy.', 'Cells'));
+      await o.page.waitForSelector('.pod-sheet .pod-go', { state: 'visible' }); await o.page.waitForTimeout(400);
+      const facts = await o.page.locator('.pod-sheet').innerText();
+      expect(/isn’t available for guests/.test(facts) && await o.page.locator('.pod-go').innerText() === 'Sign in', 'a guest podcast asks to sign in: ' + facts);
+    }
+    expect(!o.errors.length, `${who}: page errors: ` + o.errors.join('; '));
+    await o.ctx.close();
+  }
 });
 
 test('the real server: a picture that fails gives the use back to whoever it was counted to (with no id it is counted per network)', async () => {
@@ -1427,7 +1474,7 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   await d.ctx.close();
 });
 
-test('podcast mode: under a long answer (and from a file in Study tools), the cost and the allowance first, then Jessica and Chris talk it through: a transcript, Back, Play, Skip, speed and an MP3 download; Free makes one a week, Plus and Pro one a day; a resting voice says so and keeps the script', async (b) => {
+test('podcast mode: under a long answer (and from a file in Study tools), the cost and the allowance first, then Jessica and Chris talk it through: a transcript, Back, Play, Skip, speed and an MP3 download; no daily or weekly rule (it comes out of the monthly voice); a resting voice says so and keeps the script', async (b) => {
   const LINES = [['Jessica', 'Welcome! Today we talk about photosynthesis.'], ['Chris', 'So how do plants make food?'], ['Jessica', 'They use light, water and carbon dioxide to make glucose.'], ['Chris', 'Recap: light, water, carbon dioxide make glucose and oxygen.']];
   const LONG = 'Photosynthesis is how plants make food. ' + 'Plants use light, water and carbon dioxide to make glucose and oxygen in their leaves. '.repeat(10);
   const fakeGroq = (body) => ({ text: /podcast script/.test(JSON.stringify(body.messages)) ? JSON.stringify({ lines: LINES.map(([who, say]) => ({ who, say })) }) : LONG });
@@ -1449,7 +1496,7 @@ test('podcast mode: under a long answer (and from a file in Study tools), the co
     await page.click('#chat-log .bubble-assistant .pod-make');
     await page.waitForSelector('.pod-sheet');
     const first = (await page.locator('.pod-sheet').innerText()).replace(/\s+/g, ' ');
-    expect(/2,700 characters of Cassie’s voice, and you have 9,000 left/.test(first) && (plan ? /makes one a day/ : /Free makes one a week/).test(first), `${label}: the cost and the allowance first: ` + first);
+    expect(/2,700 characters of Cassie’s voice, and you have 9,000 left this month/.test(first) && /No daily limit/.test(first), `${label}: the cost and the allowance first: ` + first);
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/podcast-cost-${viewport.width}.png` });
     await page.click('.pod-go');
     await page.waitForSelector('.pod-line', { timeout: 10000 });
@@ -1468,12 +1515,10 @@ test('podcast mode: under a long answer (and from a file in Study tools), the co
     const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('[data-p="dl"]')]);
     expect(/podcast\.mp3$/.test(dl.suggestedFilename()), 'one MP3 to keep: ' + dl.suggestedFilename());
     await page.click('.pod-x');
-    // the allowance: used for this week (Free) or today (Plus)
+    // no daily or weekly rule: another one straight away (the voice it uses comes off the month)
     await page.click('#chat-log .bubble-assistant .pod-make');
     const again = (await page.locator('.pod-sheet').innerText()).replace(/\s+/g, ' ');
-    expect((plan ? /Your next one is tomorrow/ : /Your next one is on/).test(again), `${label}: one ${plan ? 'a day' : 'a week'}: ` + again);
-    if (!plan) { await page.click('.pod-go'); await page.waitForSelector('.plus-sheet:not(.pod-sheet)', { timeout: 3000 }); }
-    else expect(await page.locator('.pod-go').isDisabled(), 'Plus: back tomorrow');
+    expect(!/Your next one|Back tomorrow/.test(again) && !(await page.locator('.pod-go').isDisabled()) && await page.locator('.pod-go').innerText() === 'Make my podcast', `${label}: another one now: ` + again);
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
@@ -4471,7 +4516,7 @@ const FAKE_VOICE = (opts) => {
       const url = new URL(typeof input === 'string' ? input : input.url, location.href);
       if (url.pathname !== '/speak') return realFetch(input, init);
       const c = window.__studioCfg;
-      if (!init.method || init.method === 'GET') return new Response(JSON.stringify(c.on ? { on: true, left: c.left, back: c.back } : { on: false, left: 0 }), { headers: { 'content-type': 'application/json' } });
+      if (!init.method || init.method === 'GET') return new Response(JSON.stringify(!c.on ? { on: false, left: 0 } : c.guest ? { on: true, left: 0, back: '', guest: true } : { on: true, left: c.left, back: c.back, ...(c.max ? { max: c.max, used: c.used || 0 } : {}) }), { headers: { 'content-type': 'application/json' } });
       const body = JSON.parse(init.body), ok = c.on && !(c.failFrom != null && window.__studio.length >= c.failFrom);
       window.__studio.push({ text: body.text, voice: body.voice, ok });
       if (!ok) { if (c.failHeaders) c.left = 0; return new Response('{"error":{"message":"the studio voice failed"}}', { status: c.failStatus || 502, headers: c.failHeaders || {} }); } // (failHeaders: used up, so nothing is left)
@@ -7897,7 +7942,7 @@ test('server: GET /speak says how many studio characters are left (a number) and
     d = await left();
     const now = new Date(Date.now() + 8 * 3600e3), y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
     const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
-    expect(JSON.stringify(Object.keys(d).sort()) === '["back","left","on"]' && d.on === true && d.left === 1000 && typeof d.left === 'number' && d.back === next, 'on: the month’s 1000 left, back on the 1st: ' + JSON.stringify(d));
+    expect(JSON.stringify(Object.keys(d).sort()) === '["back","left","max","on","plan","used"]' && d.max === 7500 && d.on === true && d.left === 1000 && typeof d.left === 'number' && d.back === next, 'on: the month’s 1000 left, back on the 1st: ' + JSON.stringify(d));
     expect((await left()).left === 1000, 'asking again counts nothing');
     const said = await fetch(SERVER + '/speak', { method: 'POST', headers: { ...hdr, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Hello there, student.', voice: 'woman', uid: 'voice-test-uid-1' }) });
     expect(said.status === 200 && /audio\/mpeg/.test(said.headers.get('content-type')), 'a sentence is said: ' + said.status);

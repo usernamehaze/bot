@@ -47,8 +47,9 @@
  *   ASK_LIMIT        Shortcut answers per network per day (default 40)
  *   TRANSCRIBE_DAILY_LIMIT  voice recordings written down per network per day (default 3000)
  *   ELEVENLABS_API_KEY  (secret) Cassie's studio voice: reads answers, quizzes and flashcards aloud
- *   SPEAK_DAILY_CHARS   characters of studio voice per student per day (default 12000, about 15 minutes)
- *   SPEAK_MONTHLY_CHARS characters of studio voice for the whole app per month (default 9500)
+ *   SPEAK_FREE_MONTH / SPEAK_PLUS_MONTH / SPEAK_PRO_MONTH  characters of studio voice per account per month
+ *                       (defaults 7500, 15000, 30000; no daily limit; guests in the app sign in for it)
+ *   SPEAK_MONTHLY_CHARS characters of studio voice for the whole app per month (default 105000)
  *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
@@ -1358,8 +1359,9 @@ const autoCode = (t) => (/^[a-z][a-z0-9_]{0,39}$/.test(String(t || '')) ? String
 // worker → Settings → Variables and Secrets; never in the app). GET /speak?uid=… says whether it's
 // on, how many studio characters are left (this month's, or this student's today if that is less),
 // and the day the allowance comes back; POST /speak { text, voice: 'woman' | 'man', uid } answers with an MP3.
-// Credits cost money, so: each student gets SPEAK_DAILY_CHARS a day (default 12000, about 15 minutes of talk), the whole app
-// SPEAK_MONTHLY_CHARS a month (default 9500, under ElevenLabs' free 10,000), and the same words
+// Credits cost money, so: each account gets a monthly allowance by plan (SPEAK_FREE_MONTH 7500, SPEAK_PLUS_MONTH 15000,
+// SPEAK_PRO_MONTH 30000; no daily limit), guests in the app get none (they sign in for it; the browser extension,
+// which has no sign-in, counts as Free per install), the whole app SPEAK_MONTHLY_CHARS a month (default 105000), and the same words
 // (a flashcard, a quiz question) are kept in Cloudflare's cache for 30 days, so they're paid for
 // once. When it's off or used up, the app types instead: Cassie never speaks in another voice.
 const ELEVEN = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -1375,7 +1377,18 @@ const ELEVEN_VOICES = { woman: 'cgSgspJ2msm6clMCkdW9', man: 'iP95p4xoKVk53GoZ742
    a plan change), so without this she kept asking a voice with nothing left. A key that can't read its
    subscription leaves only Cassie's own counts. */
 let elevenCredits = null;
-const SPEAK_DAY = 12000; // (3000 ran out after about 5 minutes of voice chat)
+const SPEAK_APP_MONTH = 105000; // (the whole app, a month: under the ElevenLabs plan's 110,000)
+// whose voice allowance this is, and how big it is a month: an account by its plan; the extension by its install; a guest none
+async function speakWho(request, env, uidRaw) {
+  const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v) ? +v : d);
+  const max = (plan) => (plan === 'pro' ? n(env.SPEAK_PRO_MONTH, 30000) : plan === 'plus' ? n(env.SPEAK_PLUS_MONTH, 15000) : n(env.SPEAK_FREE_MONTH, 7500));
+  const { plan, account } = await planOf(request, env);
+  if (account) return { key: 'spa:' + account, max: max(plan), plan };
+  const uid = /^[\w-]{8,64}$/.test(String(uidRaw || '')) ? String(uidRaw) : '';
+  if (uid && /^chrome-extension:\/\//.test(request.headers.get('origin') || '')) return { key: 'spx:' + uid, max: max('free'), plan: 'free' };
+  return { guest: true, max: 0, plan: 'free' };
+}
+const nextMonthOf = (month) => { const [y, m] = month.split('-').map(Number); return `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`; };
 async function elevenLeft(env) {
   if (elevenCredits && Date.now() - elevenCredits.at < 10 * 60e3) return elevenCredits;
   try {
@@ -1388,36 +1401,32 @@ async function elevenLeft(env) {
     return elevenCredits;
   } catch (e) { return null; }
 }
-async function speakLeft(env, uidRaw) {
+async function speakLeft(request, env, uidRaw) {
   if (!env.ELEVENLABS_API_KEY) return { on: false, left: 0 };
-  const monthMax = +env.SPEAK_MONTHLY_CHARS || 9500, dayMax = +env.SPEAK_DAILY_CHARS || SPEAK_DAY;
-  const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
-  const uid = /^[\w-]{8,64}$/.test(String(uidRaw || '')) ? String(uidRaw) : 'anon';
-  let usedMonth = 0, usedDay = 0;
+  const monthMax = +env.SPEAK_MONTHLY_CHARS || SPEAK_APP_MONTH;
+  const month = dayOf(Date.now()).slice(0, 7), back = nextMonthOf(month);
+  if (env.DB) await ensureSchema(env.DB);
+  const who = await speakWho(request, env, uidRaw);
+  if (who.guest) return { on: true, left: 0, back: '', guest: true, used: 0, max: 0 }; // (sign in for the studio voice)
+  let usedApp = 0, used = 0;
   if (env.DB) {
-    await ensureSchema(env.DB);
-    const read = (k, period) => env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind(k, period).first().then((r) => (r && r.n) || 0);
-    [usedMonth, usedDay] = await Promise.all([read('SP:month', month), read('sp:' + uid, day)]);
+    const read = (k) => env.DB.prepare('SELECT n FROM quota WHERE k = ? AND day = ?').bind(k, month).first().then((r) => (r && r.n) || 0);
+    [usedApp, used] = await Promise.all([read('SP:month'), read(who.key)]);
   }
-  const monthLeft = Math.max(0, monthMax - usedMonth), dayLeft = Math.max(0, dayMax - usedDay);
-  const [y, m] = month.split('-').map(Number);
-  const nextMonth = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`;
-  const tomorrow = dayOf(now + 864e5);
-  const mine = { on: true, left: Math.min(monthLeft, dayLeft), back: monthLeft <= dayLeft ? nextMonth : tomorrow };
+  const mine = { on: true, left: Math.max(0, Math.min(monthMax - usedApp, who.max - used)), back, used: Math.min(used, who.max), max: who.max, plan: who.plan };
   // the account's own credits, when they're the smaller (back: the day ElevenLabs renews them)
   const credits = await elevenLeft(env);
-  return credits && credits.left < mine.left ? { on: true, left: credits.left, back: credits.back || nextMonth } : mine; // (a key that can't say when: the 1st)
+  return credits && credits.left < mine.left ? { ...mine, left: credits.left, back: credits.back || back } : mine;
 }
 async function speak(request, env, ctx) {
   const h = allowedOrigin(request, env);
   if (!h) return new Response('forbidden', { status: 403 });
-  if (request.method === 'GET') return json(await speakLeft(env, new URL(request.url).searchParams.get('uid')), 200, h);
+  if (request.method === 'GET') return json(await speakLeft(request, env, new URL(request.url).searchParams.get('uid')), 200, h);
   if (request.method !== 'POST') return new Response('not found', { status: 404, headers: h });
   if (!env.ELEVENLABS_API_KEY) return chatError('Cassie’s studio voice isn’t set up.', 503, h, { 'x-speak': 'off' });
   let b; try { b = await request.json(); } catch (e) { return chatError('bad json', 400, h); }
   const text = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 700);
   if (!text) return chatError('Nothing to say.', 400, h);
-  const uid = /^[\w-]{8,64}$/.test(String(b.uid || '')) ? String(b.uid) : 'anon';
   const voice = b.voice === 'man' ? (env.ELEVENLABS_VOICE_MAN || ELEVEN_VOICES.man) : (env.ELEVENLABS_VOICE_WOMAN || ELEVEN_VOICES.woman);
   const model = env.ELEVENLABS_MODEL || 'eleven_flash_v2_5';
   const audio = (body, extra = {}) => new Response(body, { status: 200, headers: { ...h, 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400', ...extra } });
@@ -1428,11 +1437,14 @@ async function speak(request, env, ctx) {
   if (hit) return audio(hit.body, { 'x-speak': 'cache' });
   const now = Date.now(), day = dayOf(now), month = day.slice(0, 7);
   if (elevenCredits && elevenCredits.left < text.length && Date.now() - elevenCredits.at < 10 * 60e3) return chatError('Cassie’s studio voice is resting until its credits come back.', 429, h, { 'x-speak': 'month' });
+  if (env.DB) await ensureSchema(env.DB);
+  const who = await speakWho(request, env, b.uid);
+  if (who.guest) return chatError('Cassie’s studio voice needs an account. Sign in to use it.', 401, h, { 'x-speak': 'guest' }, 'speak_signin');
   if (env.DB) {
-    await ensureSchema(env.DB);
-    const [mine, all] = await Promise.all([countUse(env.DB, 'sp:' + uid, day, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
-    if (all > (+env.SPEAK_MONTHLY_CHARS || 9500)) return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' });
-    if (mine > (+env.SPEAK_DAILY_CHARS || SPEAK_DAY)) return chatError('That’s a lot of listening today. Cassie types her answers until tomorrow.', 429, h, { 'x-speak': 'day' });
+    const [mine, all] = await Promise.all([countUse(env.DB, who.key, month, text.length), countUse(env.DB, 'SP:month', month, text.length)]);
+    const giveBack = () => env.DB.batch([who.key, 'SP:month'].map((k) => countUseQuery(env.DB, k, month, -text.length)));
+    if (all > (+env.SPEAK_MONTHLY_CHARS || SPEAK_APP_MONTH)) { await giveBack(); return chatError('Cassie’s studio voice is resting until next month.', 429, h, { 'x-speak': 'month' }); }
+    if (mine > who.max) { await giveBack(); return chatError('You’ve used this month’s studio voice. It comes back on the 1st.', 429, h, { 'x-speak': 'mine' }); }
   }
   let r;
   // the man's voice is steady and measured; Cassie's own stays lively

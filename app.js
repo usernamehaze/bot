@@ -1946,7 +1946,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=179').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=180').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2019,14 +2019,10 @@ function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ ph
 
 /* ---------- Podcast mode: Jessica and Chris talk through your notes (about 3 minutes) ----------
    Cassie writes a short two person script from the notes only, then it plays line by line in the
-   studio voices (/speak, with its daily and monthly limits), with the transcript, Back, Pause, Skip,
-   speed and a download. Free: one a week; Plus and Pro: one a day. Shown before: what it costs. */
+   studio voices (/speak), with the transcript, Back, Pause, Skip, speed and a download. No daily limit:
+   it comes out of the account's monthly studio voice (Free 7,500, Plus 15,000, Pro 30,000 characters);
+   guests sign in for it. Shown before: what it costs. */
 const POD_CHARS = 2700; // (about 3 minutes of talk)
-function podAllowance() {
-  const today = phDay(), wk = weekStart(today), p = state.podcasts || {};
-  if (isSubscriber()) return { ok: p.day !== today, per: 'one a day', next: 'tomorrow' };
-  return { ok: p.week !== wk, per: 'one a week', next: dayName(dayAdd(wk, 7), { weekday: 'long', day: 'numeric', month: 'long' }) };
-}
 function podPrompt(text) {
   return 'Write a short podcast script, about 3 minutes (380 to 420 words), where two study friends, Jessica and Chris, talk through these notes for a student reviewing for an exam.\n'
     + 'Use ONLY what is in the notes. If something is not in them, do not say it, and never invent numbers, names or dates.\n'
@@ -2057,8 +2053,8 @@ function podcastFromFile() {
 function openPodcast(text, title) {
   document.querySelector('.pod-sheet')?.remove();
   const CV = window.CassieVoice, left = CV && CV.studio.known() ? CV.studio.left() : null;
-  const voiceOk = !!(SERVER && CV && CV.studio.on() && (left == null || left >= POD_CHARS));
-  const allow = podAllowance();
+  const guest = !!(CV && CV.studio.guest && CV.studio.guest()); // (the studio voice said so: not signed in)
+  const voiceOk = !guest && !!(SERVER && CV && CV.studio.on() && (left == null || left >= POD_CHARS));
   const w = document.createElement('div');
   w.className = 'plus-sheet pod-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-h');
   w.innerHTML = `<div class="plus-card pod-card">
@@ -2069,12 +2065,13 @@ function openPodcast(text, title) {
     <p class="pod-status" aria-live="polite"></p>
     <div class="plus-actions"><button type="button" class="plus-go pod-go">Make my podcast</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
   w.querySelector('#pod-h').textContent = title;
-  w.querySelector('.pod-cost').textContent = voiceOk
-    ? `It uses about ${POD_CHARS.toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left` : ''}.`
-    : 'Cassie’s voice is resting right now, so you get the script to read. It still counts as your podcast.';
-  w.querySelector('.pod-allow').textContent = `${isSubscriber() ? 'Your plan' : 'Free'} makes ${allow.per}.${allow.ok ? '' : ` Your next one is ${allow.next === 'tomorrow' ? 'tomorrow' : 'on ' + allow.next}.`}`;
+  const max = CV && CV.studio.max ? CV.studio.max() : 0;
+  w.querySelector('.pod-cost').textContent = guest ? 'Podcasts use Cassie’s studio voice, which isn’t available for guests. Sign in (it’s free) to make one.'
+    : voiceOk ? `It uses about ${POD_CHARS.toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left this month` : ''}.`
+    : `You don’t have enough of Cassie’s voice left this month${left != null ? ` (${left.toLocaleString('en-PH')} left)` : ''}, so you get the script to read.`;
+  w.querySelector('.pod-allow').textContent = `No daily limit: podcasts come out of your monthly voice${max ? ` (${max.toLocaleString('en-PH')} characters on your plan)` : ''}.`;
   const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
-  if (!allow.ok) { go.textContent = isSubscriber() ? 'Back tomorrow' : 'Get one every day with Plus'; if (isSubscriber()) go.disabled = true; }
+  if (guest) go.textContent = 'Sign in';
   let player = null;
   const close = () => { if (player) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -2082,13 +2079,12 @@ function openPodcast(text, title) {
   w.querySelector('.pod-x').addEventListener('click', close);
   w.addEventListener('click', (e) => { if (e.target === w) close(); });
   go.addEventListener('click', async () => {
-    if (!podAllowance().ok) { if (!isSubscriber()) plusSheet('A podcast every day', 'Free makes one podcast a week. Plus makes one every day.'); return; }
+    if (guest) { close(); openAuth({ mode: 'signup' }); return; }
     if (!canChat()) { close(); openSettings(); return; }
     go.disabled = true; status.textContent = 'Cassie is writing the script…';
     try {
       const lines = parsePodcast(await askCassie([{ role: 'user', content: podPrompt(text) }]));
       if (lines.length < 2) throw new Error('no script');
-      const today = phDay(); state.podcasts = { day: today, week: weekStart(today) }; save();
       track('feature', 'podcast');
       w.querySelector('.pod-facts').remove(); go.remove(); w.querySelector('.plus-why').remove(); status.textContent = '';
       w.querySelector('.pod-x').textContent = 'Close';
@@ -2111,13 +2107,13 @@ function podPlayer(card, lines, title, voiceOk) {
   const audio = new Audio(), clips = new Map(), urls = [];
   let at = 0, playing = false, rate = 1, stopped = false;
   const clip = (i) => {
-    if (!clips.has(i)) clips.set(i, fetch(SERVER + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: lines[i].say, voice: lines[i].who === 'Chris' ? 'man' : 'woman', uid: installId() }) })
+    if (!clips.has(i)) clips.set(i, fetch(SERVER + '/speak', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ text: lines[i].say, voice: lines[i].who === 'Chris' ? 'man' : 'woman', uid: installId() }) })
       .then((r) => { if (!r.ok) throw Object.assign(new Error('voice ' + r.status), { why: r.headers.get('x-speak') || '' }); return r.blob(); }));
     const p = clips.get(i); p.catch(() => {}); return p;
   };
   const mark = () => ol.querySelectorAll('.pod-line').forEach((li) => { const on = +li.dataset.i === at; li.classList.toggle('on', on); if (on) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current'); });
   const setPlay = (on) => { playing = on; playBtn.textContent = on ? '⏸' : '▶'; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); };
-  const rest = (e) => { setPlay(false); note.textContent = e && e.why === 'day' ? CassieErrors.say('voice_today') : e && e.why === 'month' ? CassieErrors.say('voice_resting', { date: 'next month' }) : CassieErrors.say('voice_typing'); };
+  const rest = (e) => { setPlay(false); note.textContent = e && e.why === 'guest' ? CassieErrors.say('voice_signin') : e && e.why === 'mine' ? CassieErrors.say('voice_mine', { date: 'the 1st' }) : e && e.why === 'day' ? CassieErrors.say('voice_today') : e && e.why === 'month' ? CassieErrors.say('voice_resting', { date: 'next month' }) : CassieErrors.say('voice_typing'); };
   function play(i) {
     if (stopped || i < 0) return;
     if (i >= lines.length) { setPlay(false); return; }
@@ -6185,7 +6181,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=179');
+      exploreMod = await import('./explore/cell3d.js?v=180');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6235,7 +6231,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=179');
+      labsMod = await import('./labs/labs.js?v=180');
       islandRest();
     }
     labsMod.open({
@@ -7119,7 +7115,23 @@ if (window.CassieMic) window.CassieMic.setup({ transcribe: (blob) => transcribeA
 const boardHear = () => (window.CassieMic && window.CassieMic.can() ? window.CassieMic.listen : null);
 // Cassie's voice (voice.js): Bella, her studio voice, through Cassie's server. It is the only voice.
 const humanVoiceWanted = () => !!window.CassieVoice && window.CassieVoice.supported();
-if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId() });
+if (window.CassieVoice && SERVER) window.CassieVoice.studio.setup({ server: SERVER, uid: installId(), token: () => authToken() }); // (the voice is per account: signed in, its plan's month)
+if (window.CassieVoice) window.CassieVoice.onChange(voiceHalfNote);
+// half of this month's studio voice used: Cassie says so, once a month per account
+function voiceHalfNote() {
+  const S = window.CassieVoice && window.CassieVoice.studio;
+  if (!S || !S.known() || S.guest() || !S.max() || !state.account) return;
+  const used = S.used(), max = S.max(), mark = `${state.account.email}|${phDay().slice(0, 7)}`;
+  if (used < max / 2 || state.voiceHalf === mark) return;
+  state.voiceHalf = mark; save();
+  const back = /^\d{4}-\d{2}-\d{2}$/.test(S.back()) ? new Date(S.back() + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : 'the 1st';
+  const n = document.createElement('p'); // (a note on screen for a few seconds, like the voice's own notes)
+  n.className = 'cv-note voice-half'; n.setAttribute('role', 'status');
+  n.textContent = `Heads up: you’ve used half of this month’s studio voice. ${Math.max(0, max - used).toLocaleString('en-PH')} of ${max.toLocaleString('en-PH')} characters left, and it all comes back on ${back}.`;
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 9000);
+}
+function voiceAgain() { try { if (window.CassieVoice && SERVER) window.CassieVoice.studio.refresh(); } catch (e) { /* ignore */ } }
 let voiceUI = null;
 
 // Turn an answer into something that sounds right read aloud.
@@ -8054,10 +8066,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=179').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=180').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=179', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=180', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8387,6 +8399,7 @@ function signedIn(token, account, plan) {
   state.account = accountOf(account);
   if (plan) state.plan = plan;
   save();
+  voiceAgain(); // (the studio voice is the account's now)
 }
 // what the app keeps about the account: who, and which ways in it has (Google, Apple)
 function accountOf(a) {
@@ -8397,6 +8410,7 @@ async function signOutNow() { try { await authCall('/auth/logout', {}); } catch 
 function signedOutLocally() {
   try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
   state.account = null; state.plan = null; save(); renderProfileSummary();
+  voiceAgain(); // (a guest: no studio voice)
 }
 
 /* ---------- Plus / Pro extras ----------
@@ -8414,7 +8428,7 @@ let planAsked = 0;
 function refreshPlan(force) {
   if (!accountsOn() || !authToken() || (!force && Date.now() - planAsked < 60e3)) return Promise.resolve();
   planAsked = Date.now();
-  return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); } })
+  return authCall('/auth/me', null, 'GET').then((r) => { if (r && r.plan) { state.plan = r.plan; save(); renderAccountRow(); voiceAgain(); } })
     .catch((e) => { if (e.status === 401) signedOutLocally(); });
 }
 // Plans: Get it early opens the early list
