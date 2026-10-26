@@ -1946,7 +1946,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=177').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=178').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6160,7 +6160,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=177');
+      exploreMod = await import('./explore/cell3d.js?v=178');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6210,7 +6210,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=177');
+      labsMod = await import('./labs/labs.js?v=178');
       islandRest();
     }
     labsMod.open({
@@ -8029,10 +8029,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=177').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=178').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=177', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=178', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8090,25 +8090,12 @@ function frIntro() {
     <div class="fr-copy">
       <h1>Study smarter with Cassie</h1>
       <p>Ask anything, make flashcards, try labs and study with friends. Free.</p>
-      <button type="button" class="fr-go fr-ask">Ask your first question</button>
-      <button type="button" class="fr-later fr-start">Set up Cassie for me first</button>
+      <button type="button" class="fr-go fr-start">Get started</button>
     </div>
   </section>`;
   frMascot3d(el.querySelector('.fr-art .fr-bot'));
-  el.querySelector('.fr-ask').addEventListener('click', () => frQuick());
-  el.querySelector('.fr-start').addEventListener('click', () => frSignIn());
-  setTimeout(() => { const b = el.querySelector('.fr-ask'); if (b) b.focus({ preventScroll: true }); }, 50);
-}
-// Help first: straight to the chat with a blank profile (no age, so no usage counts); signing up and the
-// questions are offered after Cassie's first good answer (saveOffer)
-function frQuick() {
-  saveProfile({ name: '', age: 0, grade: '', gender: 'none' }, true, {});
-  state.setupLater = true; save();
-  frSave(null);
-  frClose();
-  track('open');
-  if (rescued && !rescued.full) { examReadySheet(rescued); return; } // (a plan from the Exam Rescue Plan page is ready)
-  frToAsk();
+  el.querySelector('.fr-start').addEventListener('click', () => frOnboard(0)); // (the questions first, for everyone)
+  setTimeout(() => { const b = el.querySelector('.fr-start'); if (b) b.focus({ preventScroll: true }); }, 50);
 }
 // after the first good answer of a student who went straight in: keep it, and fit Cassie to them (asked once)
 function saveOffer(after) {
@@ -8133,9 +8120,10 @@ function saveOffer(after) {
   });
   after.after(card);
 }
-// 3. Sign in (with Cassie's server), or straight to the questions
+// 5. Sign in (with Cassie's server) or Continue as a guest, once the questions are answered
 function frSignIn() {
-  if (!accountsOn() || authToken() || state.skippedAuth) { frOnboard((frLoad() || {}).at || 0); return; }
+  if (state.profile && !state.setupLater) { if (!accountsOn() || authToken() || state.skippedAuth) { frSave(null); frClose(); frLand(); return; } } // (answered: in they go)
+  else if (!accountsOn() || authToken() || state.skippedAuth) { frOnboard((frLoad() || {}).at || 0); return; } // (an older first run: sign in came first)
   frSave({ step: 'auth' });
   frClose();
   openAuth({ first: true, mode: 'signup' });
@@ -8237,7 +8225,13 @@ function frFinish(a) {
   frClose();
   syncAccount(true);
   if (typeof refreshHub === 'function') refreshHub(); // (Home puts what they came for first)
-  if (rescued && !rescued.full) { examReadySheet(rescued); return; } // (a plan from the Exam Rescue Plan page is ready)
+  if (accountsOn() && !authToken() && !state.skippedAuth) { frSignIn(); return; } // (then sign in, or Continue as a guest)
+  frLand();
+}
+// the first run is over: a plan from the Exam Rescue Plan page if one is ready, else the ask box
+function frLand() {
+  track('open');
+  if (rescued && !rescued.full) { examReadySheet(rescued); return; }
   frToAsk();
 }
 // straight to the ask box (a phone: the Chat tab; a computer: the chat page)
@@ -8634,8 +8628,10 @@ function afterSignIn(res) {
     track('open');
     try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
   } else {
-    if (state.profile && !state.setupLater) syncAccount(true); // this device already has a profile → save it to the account
-    else frOnboard(0); // the four questions (also after going straight in: the profile is still blank)
+    if (state.profile && !state.setupLater) { // this device already has a profile → save it to the account
+      syncAccount(true);
+      if (frLoad()) { frSave(null); frClose(); frLand(); } // (the first run's questions were answered just before)
+    } else frOnboard(0); // the four questions (also after going straight in: the profile is still blank)
   }
   renderProfileSummary();
 }
@@ -8883,10 +8879,12 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
       else showErr(CassieErrors.explain(e2));
     }
   });
+  if (state.profile && state.profile.age && !f.age.value) f.age.value = state.profile.age; // (the age from the first questions)
   f.querySelector('.auth-skip').addEventListener('click', () => {
     close();
     state.skippedAuth = true; save();
     if (!state.profile) frOnboard((frLoad() || {}).at || 0);
+    else if (first && frLoad()) { frSave(null); frLand(); } // (the questions are answered: a guest goes straight in)
   });
   if (!first) page.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   const tapProvider = (provider) => {
