@@ -8374,8 +8374,16 @@ async function authCall(path, body, method = 'POST', { timeout = 20000, signal }
   if (!res.ok) { const e = friendlyError((data.code || res.status < 500) && data.error ? data.error : CassieErrors.say('unknown')); e.status = res.status; e.code = data.code || ''; throw e; }
   return data;
 }
+// Labs: which tries of each lab are ticked (lab ids and ticks only)
+function labsProgress() { try { return JSON.parse(localStorage.getItem('cassie.labs') || '{}') || {}; } catch (e) { return {}; } }
+function mergeLabs(theirs) {
+  if (!theirs || typeof theirs !== 'object') return;
+  const mine = labsProgress();
+  Object.entries(theirs).forEach(([id, ticks]) => { if (!/^[\w-]{1,40}$/.test(id) || !Array.isArray(ticks)) return; const m = Array.isArray(mine[id]) ? mine[id] : []; mine[id] = ticks.slice(0, 20).map((t, i) => !!(t || m[i])).concat(m.slice(ticks.length)); });
+  try { localStorage.setItem('cassie.labs', JSON.stringify(mine)); } catch (e) { /* ignore */ }
+}
 function accountData() {
-  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [] };
+  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [], streak: window.CassieMemory ? window.CassieMemory.streakData() : null, labs: labsProgress() };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -8390,6 +8398,8 @@ function syncAccount(now) {
 }
 function applyAccountData(d) {
   if (!d) return;
+  try { if (d.streak && window.CassieMemory) window.CassieMemory.mergeStreak(d.streak); } catch (e) { /* the rest still comes back */ }
+  mergeLabs(d.labs);
   ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour', 'answerStyle', 'helpWith'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
   if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
     const mine = new Map((state.cards || []).map((c) => [c.id, c]));

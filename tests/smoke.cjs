@@ -409,6 +409,31 @@ test('a simpler start: a brand-new student sees their 4 most useful tools on Hom
   } finally { await ctx.close(); }
 });
 
+test('an account keeps the study streak and Labs progress: cleared from the browser, they come back on sign in (the later streak wins), and the privacy page says so', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
+  try {
+    await page.waitForFunction(() => !!window.CassieMemory);
+    const day = await page.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+    const saved = await page.evaluate((today) => {
+      localStorage.setItem('cassie.mem.v1', JSON.stringify({ v: 1, topics: {}, facts: [], streak: { count: 6, lastDay: today }, focusMinutes: 90 }));
+      localStorage.setItem('cassie.labs', JSON.stringify({ 'cell-explorer': [true, false, true] }));
+      return null;
+    }, day);
+    await page.reload(); await page.waitForFunction(() => !!window.CassieMemory);
+    const data = await page.evaluate(() => accountData());
+    expect(data.streak && data.streak.count === 6 && data.streak.lastDay === day && data.labs['cell-explorer'][2] === true, 'the account gets the streak and the Labs ticks: ' + JSON.stringify([data.streak, data.labs]));
+    expect(!JSON.stringify(data.streak).includes('topic'), 'only numbers and a date, never what was studied');
+    // the browser is cleared, then the account comes back
+    const back = await page.evaluate((d) => { window.CassieMemory.clearAll(); localStorage.removeItem('cassie.labs'); applyAccountData(d); return { streak: window.CassieMemory.stats().streak, labs: labsProgress() }; }, data);
+    expect(back.streak === 6 && back.labs['cell-explorer'][0] === true && back.labs['cell-explorer'][1] === false, 'back after clearing: ' + JSON.stringify(back));
+    // a longer streak already on this device is kept
+    const kept = await page.evaluate((d) => { window.CassieMemory.mergeStreak({ count: 2, lastDay: d.streak.lastDay }); return window.CassieMemory.stats().streak; }, data);
+    expect(kept === 6, 'the longer streak stays: ' + kept);
+    expect(/study streak/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')) && /Labs tries/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page says the streak and Labs progress go with an account');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+});
+
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
   const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
@@ -2219,7 +2244,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings' };
+  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Labs progress' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);

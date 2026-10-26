@@ -209,6 +209,17 @@
 
     clearAll() { data = blank(); save(); },
 
+    // the study streak and focus time go with an account (numbers and a date only, never what was studied)
+    streakData() { return { count: data.streak.count, lastDay: data.streak.lastDay, focusMinutes: data.focusMinutes || 0 }; },
+    // back from the account on this device: the later streak wins (the same day: the longer one); focus time, the larger
+    mergeStreak(s) {
+      if (!s || typeof s !== 'object') return;
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(s.lastDay || '') ? s.lastDay : '', n = Math.max(0, Math.round(+s.count || 0));
+      if (day && (day > data.streak.lastDay || (day === data.streak.lastDay && n > data.streak.count))) data.streak = { count: n, lastDay: day };
+      data.focusMinutes = Math.max(data.focusMinutes || 0, Math.max(0, +s.focusMinutes || 0));
+      save();
+    },
+
     // Called by app.js so the panel's "Review" buttons can start a quiz.
     onReview: null,
   };
