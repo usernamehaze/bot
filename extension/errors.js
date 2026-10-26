@@ -103,6 +103,7 @@
     voice_resting: 'Cassie’s voice is resting until {date}. Until then she types her answers.',
     voice_today: 'You’ve listened to Cassie a lot today, so she’ll type her answers for now. Her voice is back tomorrow.',
     voice_signin: 'Cassie’s studio voice isn’t available for guests. Sign in (it’s free) to hear her.',
+    voice_ext_account: 'Cassie’s studio voice is for signed-in Cassie accounts, so here she types her steps instead.',
     voice_mine: 'You’ve used this month’s studio voice, so Cassie types her answers. It comes back on {date}.',
     voice_not_set_up: 'Cassie’s voice isn’t switched on yet, so she types her answers.',
     mic_blocked: 'Cassie can’t hear you because the microphone is blocked for this site. Allow the microphone, then tap the mic.',
