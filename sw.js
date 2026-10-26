@@ -105,6 +105,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // A file with its version in the address (app.js?v=181) never changes (a new version has a new address), so
+  // once fetched it comes from this device straight away: faster loads and less mobile data.
+  if (/[?&]v=\d+/.test(url.search)) {
+    event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((hit) => hit || fetch(event.request).then((response) => {
+      if (response.ok && !response.redirected) cache.put(event.request, response.clone());
+      return response;
+    }))));
+    return;
+  }
+
   // Other same-origin GETs: network-first with a runtime cache. Never cache a
   // redirected response (Cache.put rejects those).
   const fresh = new Request(event.request.url, { cache: 'no-cache' });
