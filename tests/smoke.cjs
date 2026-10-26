@@ -348,6 +348,26 @@ test('web search for everyone: with no Gemini key of their own, Web asks Cassieâ
   } finally { await ctx.close(); await serverMode({ gemini: gem0, webDaily: null, webCalls: [] }); await fetch(`${SERVER}/__reset`); }
 });
 
+test('the service worker: a file with its version in the address (app.js?v=â€¦) comes from the device once fetched (no network), a file without one is still checked with the network each time', async () => {
+  const handlers = [], store = new Map(), fetched = [];
+  const cacheObj = { match: async (r) => store.get(typeof r === 'string' ? r : r.url), put: async (r, res) => { store.set(typeof r === 'string' ? r : r.url, res); }, addAll: async () => {} };
+  const self = { location: { origin: 'https://askcassie.study' }, addEventListener: (t, f) => { if (t === 'fetch') handlers.push(f); }, skipWaiting() {}, clients: { claim() {} }, registration: { scope: 'https://askcassie.study/' } };
+  const caches = { open: async () => cacheObj, match: async (r) => store.get(r.url || r), keys: async () => [], delete: async () => true };
+  const fakeFetch = async (r) => { const url = typeof r === 'string' ? r : r.url; fetched.push(url); return new Response('file ' + url, { status: 200 }); };
+  new Function('self', 'caches', 'fetch', fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))(self, caches, fakeFetch);
+  const get = async (url) => {
+    let p = null;
+    const ev = { request: new Request(url), respondWith: (x) => { p = x; } };
+    for (const h of handlers) h(ev);
+    return p ? (await p).text() : null;
+  };
+  const V = 'https://askcassie.study/app.js?v=181', plain = 'https://askcassie.study/icons/icon-192.png';
+  expect(/file/.test(await get(V)) && /file/.test(await get(V)), 'the versioned file loads both times');
+  expect(fetched.filter((u) => u === V).length === 1, 'a versioned file: the network once, then the device: ' + JSON.stringify(fetched));
+  await get(plain); await get(plain);
+  expect(fetched.filter((u) => u === plain).length === 2, 'a file without a version: checked with the network each time: ' + JSON.stringify(fetched));
+});
+
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
   const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
