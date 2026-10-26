@@ -3362,6 +3362,10 @@ function friendlyError(msg) { const e = new Error(msg); e.friendly = true; retur
    key, a fair daily allowance per person, and Workers AI as a backup brain. */
 // signed in → the server knows the student's plan (Plus and Pro belong to an account)
 const chatHeaders = () => { const t = authToken(); return { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }; };
+// a request to Cassie's server that never answers is given up on, with a plain message (older browsers: no limit)
+const waitAtMost = (ms) => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+var SERVER_WAIT = { chat: 90000, picture: 60000, hear: 45000 }; // (chat: the server's own backups can take a while)
+const tooSlow = (e) => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
 async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = false, brain, q } = {}) {
   let waits = 0;
   while (true) {
@@ -3371,9 +3375,10 @@ async function serverChat(messages, { model, maxTokens = 2048, onWait, lean = fa
         method: 'POST',
         headers: chatHeaders(),
         body: JSON.stringify({ uid: installId(), model: model || GROQ_MODELS[0], messages, max_tokens: maxTokens, temperature: 0.6, reasoning_effort: lean ? 'low' : undefined, brain, q: q ? 1 : undefined }),
+        signal: waitAtMost(SERVER_WAIT.chat),
       });
     } catch (e) {
-      throw friendlyError(CassieErrors.say('network'));
+      throw friendlyError(CassieErrors.say(tooSlow(e) ? 'timeout' : 'network'));
     }
     if (res.ok) {
       const data = await res.json();
@@ -5173,7 +5178,7 @@ async function serverGeminiImage(prompt, ref) {
   geminiPicNote = '';
   if (!SERVER || !serverPictures) return null;
   try {
-    const res = await fetch(SERVER + '/image', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ uid: installId(), gemini: true, prompt, ...(ref ? { ref } : {}) }) });
+    const res = await fetch(SERVER + '/image', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ uid: installId(), gemini: true, prompt, ...(ref ? { ref } : {}) }), signal: waitAtMost(SERVER_WAIT.picture) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok || !d.image) { if (d.used) geminiPicNote = (d.error && d.error.message) || ''; return null; }
     geminiPicNote = d.left === 0 ? (d.per === 'week' ? 'That was your last Gemini picture this week.' : 'That was your last Gemini picture today.') : '';
@@ -5182,7 +5187,9 @@ async function serverGeminiImage(prompt, ref) {
 }
 // Backup: Cassie's own server makes the picture (Workers AI).
 async function serverImage(prompt) {
-  const res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }) });
+  let res;
+  try { res = await fetch(SERVER + '/image', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid: installId(), prompt: picturePrompt(prompt) }), signal: waitAtMost(SERVER_WAIT.picture) }); }
+  catch (e) { throw friendlyError(CassieErrors.say(tooSlow(e) ? 'timeout' : 'picture_busy')); }
   let data = {};
   try { data = await res.json(); } catch (e) { /* ignore */ }
   if (!res.ok || !data.image) throw friendlyError(CassieErrors.say('picture_busy'));
@@ -7531,7 +7538,9 @@ async function transcribeAudio(blob) {
     } catch (e) { /* the server can still do it */ }
   }
   if (SERVER) {
-    const r = await fetch(SERVER + '/transcribe', { method: 'POST', body: form({ uid: installId() }) });
+    let r;
+    try { r = await fetch(SERVER + '/transcribe', { method: 'POST', body: form({ uid: installId() }), signal: waitAtMost(SERVER_WAIT.hear) }); }
+    catch (e) { throw new Error(tooSlow(e) ? 'That took too long. Try saying it again?' : 'Sorry, I couldn’t hear that. Try again?'); }
     if (r.status === 404 && SpeechRecognitionCtor && voiceChat) { voiceChat.useRecorder = false; throw new Error('Sorry, can you say that again?'); } // an older server: the browser listens instead
     if (r.ok) return String((await r.json()).text || '').trim();
     let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
