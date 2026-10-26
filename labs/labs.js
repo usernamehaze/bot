@@ -63,7 +63,7 @@ export function open(opts = {}) {
 
 const store = {
   get(k = 'cassie.labs') { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) { return {}; } },
-  set(v, k = 'cassie.labs') { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+  set(v, k = 'cassie.labs') { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } if (k === 'cassie.labs' && typeof window.syncAccount === 'function') window.syncAccount(); }, // (ticked tries go with an account)
 };
 const CURSOR = '<svg class="labs-cur" viewBox="100 80 305 350" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="#fff" stroke="#0b0a0f" stroke-width="22" stroke-linejoin="round" paint-order="stroke"/></svg>';
 const iconSvg = (inner) => `<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
