@@ -168,15 +168,21 @@ async function toSignIn(page) {
   await page.click('.fr-start');
   await page.waitForSelector('.auth-page', { timeout: 5000 });
 }
-// the five questions (anything left out is skipped)
-async function onboard(page, { name, gender, grade, age, help = [], exam, voice } = {}) {
+// the four questions (from the first one left out, Skip for now)
+async function onboard(page, { name, who, age, goals = [], style } = {}) {
   await page.waitForSelector('.fr-ob', { timeout: 8000 });
-  const next = async (k, fill) => { await page.waitForSelector(`.fr-count >> text=${k} of 5`, { timeout: 5000 }); if (fill) { await fill(); await page.click('.fr-go'); } else await page.click('.fr-skip'); };
-  await next(1, name && (async () => { await page.fill('.fr-ob input[name=name]', name); if (gender) await page.click(`.fr-ob [data-gender=${gender}]`); }));
-  await next(2, grade && (async () => { await page.selectOption('.fr-ob select[name=grade]', grade); if (age != null) await page.fill('.fr-ob input[name=age]', String(age)); }));
-  await next(3, help.length && (async () => { for (const h of help) await page.click(`.fr-ob [data-help=${h}]`); }));
-  await next(4, exam && (async () => { await page.fill('.fr-ob input[name=exam]', exam.name); await page.fill('.fr-ob input[name=examDate]', exam.date); if (exam.topics) await page.fill('.fr-ob input[name=examTopics]', exam.topics); if (exam.file) { await page.setInputFiles('.fr-notes input', exam.file); await page.waitForSelector('.fr-file-name >> text=Added:', { timeout: 8000 }); } if (exam.shots) await page.screenshot({ path: exam.shots }); }));
-  await next(5, voice && (async () => { await page.click(`.fr-ob [data-voice=${voice}]`); }));
+  const steps = [
+    name && (async () => { await page.fill('.fr-ob input[name=name]', name); }),
+    who && (async () => { await page.click(`.fr-ob [data-who=${who}]`); if (age != null) await page.fill('.fr-ob input[name=age]', String(age)); }),
+    goals.length && (async () => { for (const g of goals) await page.click(`.fr-ob [data-goal=${g}]`); }),
+    style && (async () => { await page.click(`.fr-ob [data-style=${style}]`); }),
+  ];
+  for (let k = 0; k < 4; k++) {
+    await page.waitForSelector(`.fr-count >> text=${k + 1} of 4`, { timeout: 5000 });
+    if (!steps.slice(k).some(Boolean)) { await page.click('.fr-skip'); break; }
+    if (steps[k]) await steps[k]();
+    await page.click('.fr-go');
+  }
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
 }
 
@@ -200,57 +206,50 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   expect(await page.locator('.auth-skip').innerText() === 'Continue as a guest', 'Continue as a guest');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-signin.png' });
   await page.click('.auth-skip');
-  // 4. The questions: 1 of 5 to 5 of 5
+  // 4. The questions: 1 of 4 to 4 of 4
   await page.waitForSelector('.fr-ob', { timeout: 5000 });
-  expect(/1 of 5/.test(await page.locator('.fr-count').innerText()) && /What’s your name\?/.test(await page.locator('.fr-h').innerText()), 'step 1: the name');
+  expect(/1 of 4/.test(await page.locator('.fr-count').innerText()) && /What should Cassie call you\?/.test(await page.locator('.fr-h').innerText()), 'step 1: the name');
   await page.click('.fr-go');
   expect(/Type your name/.test(await page.locator('.fr-err').innerText()), 'Next with no name says what to do');
   await page.fill('.fr-ob input[name=name]', 'Hazel');
-  await page.click('.fr-ob [data-gender=female]');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-1.png' });
   await page.click('.fr-go');
-  await page.waitForSelector('.fr-count >> text=2 of 5');
-  expect(/What are you studying\?/.test(await page.locator('.fr-h').innerText()), 'step 2: studying');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
+  expect(/Where are you in your learning\?/.test(await page.locator('.fr-h').innerText()), 'step 2: where you are');
   // Back keeps the answer
   await page.click('.fr-back');
-  await page.waitForSelector('.fr-count >> text=1 of 5');
+  await page.waitForSelector('.fr-count >> text=1 of 4');
   expect(await page.inputValue('.fr-ob input[name=name]') === 'Hazel', 'Back keeps the name');
   await page.click('.fr-go');
-  await page.waitForSelector('.fr-count >> text=2 of 5');
-  const levels = await page.$$eval('.fr-ob select[name=grade] option', (o) => o.map((x) => x.textContent));
-  expect(levels.includes('Nursery') && levels.includes('Working professional'), 'every level, nursery to work');
-  await page.selectOption('.fr-ob select[name=grade]', 'Grade 10');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
+  const levels = await page.$$eval('.fr-ob [data-who]', (o) => o.map((x) => x.textContent));
+  expect(levels.join('|') === 'Elementary|Junior High|Senior High|College / University|Reviewing for a board exam|Teacher or parent|Working / lifelong learner', 'everyone has a pill: ' + levels);
+  await page.click('.fr-go');
+  expect(/Tap the one that fits you/.test(await page.locator('.fr-err').innerText()), 'Next with no pick says what to do');
+  await page.click('.fr-ob [data-who=jhs]');
   await page.fill('.fr-ob input[name=age]', '15');
   // a reload carries on at the same step, with the answers
   await page.reload();
-  await page.waitForSelector('.fr-count >> text=2 of 5', { timeout: 5000 });
+  await page.waitForSelector('.fr-count >> text=2 of 4', { timeout: 5000 });
   expect(!(await page.locator('.fr-welcome, .fr-intro').count()), 'no welcome or intro again mid-way');
-  expect(await page.inputValue('.fr-ob select[name=grade]') === 'Grade 10' && await page.inputValue('.fr-ob input[name=age]') === '15', 'the answers are back after a reload');
+  expect(await page.getAttribute('.fr-ob [data-who=jhs]', 'aria-checked') === 'true' && await page.inputValue('.fr-ob input[name=age]') === '15', 'the answers are back after a reload');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-2.png' });
   await page.click('.fr-go');
-  await page.waitForSelector('.fr-count >> text=3 of 5');
-  await page.click('.fr-ob [data-help=exams]'); await page.click('.fr-ob [data-help=flashcards]');
+  await page.waitForSelector('.fr-count >> text=3 of 4');
+  await page.click('.fr-ob [data-goal=exam]'); await page.click('.fr-ob [data-goal=labs]');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-3.png' });
   await page.click('.fr-go');
-  // an exam coming up: optional (empty goes on); half filled in says what's missing
-  await page.waitForSelector('.fr-count >> text=4 of 5');
-  expect(/Got an exam coming up\?/.test(await page.locator('.fr-h').innerText()), 'step 4: an exam');
-  await page.fill('.fr-ob input[name=exam]', 'Gen Chem finals');
-  await page.click('.fr-go');
-  expect(/Pick the day of your exam/.test(await page.locator('.fr-err').innerText()), 'a name with no day says what to do');
-  await page.fill('.fr-ob input[name=exam]', '');
-  await page.click('.fr-go');
-  await page.waitForSelector('.fr-count >> text=5 of 5');
+  await page.waitForSelector('.fr-count >> text=4 of 4');
   expect(/Start studying/.test(await page.locator('.fr-go').innerText()), 'the last step says Start studying');
-  await page.click('.fr-ob [data-voice=man]');
+  await page.click('.fr-ob [data-style=deep]');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-4.png' });
   await page.click('.fr-go');
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
   const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
   const p = st.profile;
-  expect(p && p.name === 'Hazel' && p.grade === 'Grade 10' && p.age === 15 && p.gender === 'female' && p.role === 'student' && p.field === '' && p.at > 0, 'the profile, as the old form saved it: ' + JSON.stringify(p));
+  expect(p && p.name === 'Hazel' && p.grade === 'Junior High' && p.age === 15 && p.gender === 'none' && p.role === 'student' && p.field === '' && p.at > 0, 'the profile, as the old form saved it: ' + JSON.stringify(p));
   expect(st.audience === 'student' && st.level === 'middle' && st.analytics.usage === true && st.analytics.topics === false, 'audience, level and counts as before: ' + JSON.stringify([st.audience, st.level, st.analytics]));
-  expect(JSON.stringify(st.helpWith) === '["exams","flashcards"]' && st.voiceGender === 'man', 'what she helps with, and her voice: ' + JSON.stringify([st.helpWith, st.voiceGender]));
+  expect(JSON.stringify(st.helpWith) === '["exam","labs"]' && st.answerStyle === 'deep', 'what they came for, and how they like to learn: ' + JSON.stringify([st.helpWith, st.answerStyle]));
   expect(await page.evaluate(() => localStorage.getItem('cassie.firstRun')) === null, 'the first run is finished');
   // a returning student goes straight in (no welcome)
   await page.reload();
@@ -273,7 +272,41 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   await onboard(page, {});
   const q = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
   expect(q && q.name === '' && q.grade === '' && q.age === 0 && q.gender === 'none', 'skipped: an empty profile: ' + JSON.stringify(q));
+  expect(await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 3000 }).then(() => true, () => false), 'skipped: straight to the ask box');
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('the four first questions fit everyone: name, where you are, what brings you, how you like to learn; Home greets you by name and puts what you came for first; Skip for now on any screen goes straight to the ask box', async (b) => {
+  let { ctx, page, errors } = await open(b, { state: null, device: 'iPhone 13', viewport: { width: 360, height: 740 } });
+  await toSignIn(page);
+  await page.click('.auth-skip');
+  await page.waitForSelector('.fr-ob', { timeout: 5000 });
+  const skip = await page.evaluate(() => { const k = document.querySelector('.fr-skip'), r = k.getBoundingClientRect(); return { text: k.textContent, top: r.top, right: innerWidth - r.right, h: r.height, wide: document.documentElement.scrollWidth <= innerWidth }; });
+  expect(skip.text === 'Skip for now' && skip.top < 80 && skip.right < 40 && skip.h >= 44 && skip.wide, 'Skip for now sits in the top corner, 44px, no sideways scroll at 360px: ' + JSON.stringify(skip));
+  await onboard(page, { name: 'Haze', who: 'board', age: 23, goals: ['read'], style: 'deep' });
+  expect(await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 3000 }).then(() => true, () => false), 'done: straight to the ask box');
+  expect(!(await page.locator('.tour-offer, .fr, .plus-sheet').count()), 'no extra screen after the questions');
+  const r = await page.evaluate(() => ({ p: state.profile, line: profileLine(state.profile), sys: buildSystemPrompt({ tutor: true }), level: state.level }));
+  expect(r.p.grade === 'Board exam reviewee' && r.level === 'college' && /reviewing for a board exam/.test(r.line), 'a board exam reviewee: ' + JSON.stringify([r.p, r.level]));
+  expect(/They like deep answers/.test(r.sys), 'how they like to learn reaches Cassie');
+  await page.evaluate(() => window.CassieNative.go('home'));
+  await page.waitForSelector('#home .hub-me', { timeout: 5000 });
+  expect(/^(Morning|Afternoon|Evening), Haze$/.test(await page.locator('#home .hub-me').innerText()), 'Home greets them by name');
+  const boxes = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
+  expect(boxes[0] === 'research', 'readings and PDFs put Research first: ' + boxes);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // Skip for now on the first screen
+  ({ ctx, page, errors } = await open(b, { state: null }));
+  await toSignIn(page);
+  await page.click('.auth-skip');
+  await page.waitForSelector('.fr-count >> text=1 of 4', { timeout: 5000 });
+  await page.click('.fr-skip');
+  await page.waitForFunction(() => !document.querySelector('.fr') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 5000 });
+  expect(await page.evaluate(() => !!state.profile && state.setupLater === false && localStorage.getItem('cassie.firstRun') === null), 'skipped: a profile, and the first run is over');
+  expect(!(await page.locator('.tour-offer').count()), 'skipped: no tour popping up');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
@@ -325,7 +358,7 @@ test('help first: Ask your first question goes straight to the chat (no sign in,
         await page.fill('.auth-form input[name=password]', 'secret-pass-1');
         await page.click('.auth-go');
         await page.waitForSelector('.fr-ob', { timeout: 10000 });
-        expect(/What’s your name\?/.test(await page.locator('.fr-h').innerText()), 'after signing up, the questions (the profile was blank)');
+        expect(/What should Cassie call you\?/.test(await page.locator('.fr-h').innerText()), 'after signing up, the questions (the profile was blank)');
         await page.fill('.fr-ob input[name=name]', 'Ana');
         for (let i = 0; i < 5; i++) { if (!(await page.locator('.fr-ob').count())) break; await page.click(i === 0 ? '.fr-go' : '.fr-skip'); await page.waitForTimeout(150); }
         await page.waitForFunction(() => !document.querySelector('.fr-ob'), null, { timeout: 5000 });
@@ -346,14 +379,13 @@ test('every age is welcome: nursery to work, with an account too', async (b) => 
   const signupStatus = (body) => page.evaluate(async ([srv, bb]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bb) })).status, [SERVER, body]);
   expect(await signupStatus({ email: `kid${Date.now()}@example.com`, password: 'secret-pass-1', age: 6 }) === 200, 'a 6-year-old can make an account');
   await page.click('.auth-skip');
-  await page.waitForSelector('.fr-ob');
-  await page.fill('.fr-ob input[name=name]', 'Mia'); await page.click('.fr-go');
-  const levels = await page.$$eval('.fr-ob select[name=grade] option', (o) => o.map((x) => x.textContent));
-  await page.click('.fr-back');
-  expect(levels.includes('Nursery') && levels.includes('Kindergarten') && levels.includes('Grade 1') && levels.includes('4th year college') && levels.includes('Working professional'), 'levels go from nursery to work: ' + levels);
-  await onboard(page, { name: 'Mia', age: 4, grade: 'Nursery', gender: 'none' });
+  await onboard(page, { name: 'Mia', who: 'elem', age: 4 });
   const r = await page.evaluate(() => ({ p: state.profile, an: state.analytics, line: profileLine(state.profile) }));
-  expect(r.p.age === 4 && r.p.grade === 'Nursery', 'a 4-year-old in nursery can use Cassie: ' + JSON.stringify(r.p));
+  expect(r.p.age === 4 && r.p.grade === 'Elementary', 'a 4-year-old can use Cassie: ' + JSON.stringify(r.p));
+  await page.evaluate(() => openProfile(false));
+  const all = await page.$$eval('.profile-card select[name=grade] option', (o) => o.map((x) => x.textContent));
+  expect(all.includes('Nursery') && all.includes('Elementary') && all.includes('4th year college') && all.includes('Board exam reviewee') && all.includes('Working professional') && await page.inputValue('.profile-card select[name=grade]') === 'Elementary', 'the profile form has every level, and shows the one picked: ' + all);
+  await page.evaluate(() => document.querySelector('.profile-overlay').remove());
   expect(!r.an.usage && !r.an.topics, 'nothing is counted for a young child');
   expect(/very young child/.test(r.line), 'Cassie talks simply to a little one');
   // a working person
@@ -383,10 +415,10 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.click('.auth-go');
   await page.waitForSelector('.fr-ob');
   await page.fill('.fr-ob input[name=name]', 'Hazel'); await page.click('.fr-go');
-  await page.waitForSelector('.fr-count >> text=2 of 5');
+  await page.waitForSelector('.fr-count >> text=2 of 4');
   expect(await page.inputValue('.fr-ob input[name=age]') === '16', 'the age typed when signing up is filled in');
   await page.click('.fr-back');
-  await onboard(page, { name: 'Hazel', grade: 'Grade 11', gender: 'female' });
+  await onboard(page, { name: 'Hazel', who: 'shs', age: 16 });
   await page.evaluate(() => syncAccount(true));
   await page.waitForTimeout(800);
   await ctx.close();
@@ -403,7 +435,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   await page.click('.auth-go');
   await page.waitForSelector('.auth-page', { state: 'detached' });
   const p = await page.evaluate(() => state.profile);
-  expect(p && p.name === 'Hazel' && p.grade === 'Grade 11', 'profile did not come back: ' + JSON.stringify(p));
+  expect(p && p.name === 'Hazel' && p.grade === 'Senior High', 'profile did not come back: ' + JSON.stringify(p));
   expect(await page.locator('.profile-overlay, .fr').count() === 0, 'asked the profile questions again');
   await tapSettings(page);
   expect(/Signed in as/.test(await page.locator('#account-row').textContent()), 'settings should say signed in');
@@ -2051,7 +2083,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings' };
+  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
@@ -3464,7 +3496,7 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   await ctx.close();
 });
 
-test('first run: an exam given in the questions becomes a plan as soon as they’re done (then the tour is offered), and the whole plan opens only with its button', async (b) => {
+test('an exam plan from Home: the form makes the plan and closes by itself, and the whole plan opens only with its button', async (b) => {
   const fakeGroq = (body) => {
     const t = JSON.stringify(body);
     if (!/day by day study plan/.test(t)) return { text: 'Hi!' };
@@ -3475,16 +3507,15 @@ test('first run: an exam given in the questions becomes a plan as soon as they�
   const date = await page.evaluate(() => dayAdd(phDay(), 6));
   await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
   if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
-  await onboard(page, { name: 'Mika', grade: 'Grade 10', exam: { name: 'Gen Chem finals', date, topics: 'Stoichiometry, gas laws' } });
+  await onboard(page, { name: 'Mika', who: 'shs' });
+  await page.evaluate(() => openExamSheet());
+  await page.fill('.ex-sheet input[name=name]', 'Gen Chem finals'); await page.fill('.ex-sheet input[name=date]', date); await page.fill('.ex-sheet textarea[name=topics]', 'Stoichiometry, gas laws');
+  await page.click('.ex-sheet .ex-make');
   await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
   const asked = groqCalls.filter((c) => /day by day study plan/.test(JSON.stringify(c)));
   expect(asked.length === 1 && /Gen Chem finals/.test(JSON.stringify(asked[0])) && /Stoichiometry, gas laws/.test(JSON.stringify(asked[0])), 'Cassie was asked for the plan with what was typed');
   expect(!(await page.locator('.ex-sheet').count()), 'the form closed by itself once the plan was made');
   await page.waitForSelector('#home .hub .ex-plan', { timeout: 10000 });
-  // the tour is offered after the plan (not on top of it)
-  const offered = await page.waitForSelector('.tour-offer', { timeout: 5000 }).then(() => true, () => false);
-  expect(offered && !(await page.locator('.ex-sheet').count()), 'the tour is offered once the plan is made, not on top of the form');
-  await page.click('.tour-offer button:last-child').catch(() => {});
   // the whole plan: hidden until its button, then shown
   const days = page.locator('#home .hub .ex-plan .ex-days');
   expect(!(await days.isVisible()), 'the whole plan is hidden at first');
@@ -3494,7 +3525,7 @@ test('first run: an exam given in the questions becomes a plan as soon as they�
   await ctx.close();
 });
 
-test('first run with an exam: the card says Your Exam Plan with the subject and topics, the tour comes next, then See my exam plan goes to the plan (phone: from the Chat tab after the tour; computer: from a chat, after Not now); the sidebar Menu is a pill with an arrow that opens the tools', async (b) => {
+test('a new exam plan: the card says Your Exam Plan with the subject and topics, then See my exam plan goes to the plan (phone: from the Chat tab; computer: from a chat); the sidebar Menu is a pill with an arrow that opens the tools', async (b) => {
   const fakeGroq = (body) => {
     const t = JSON.stringify(body);
     if (!/day by day study plan/.test(t)) return { text: 'Hi!' };
@@ -3508,8 +3539,9 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     const date = await page.evaluate(() => dayAdd(phDay(), 6));
     await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
     if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
-    await onboard(page, { name: 'Mika', grade: 'Grade 10', exam: { name: 'Gen Chem finals', date, topics: 'Stoichiometry, gas laws' } });
-    await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
+    await onboard(page, { name: 'Mika', who: 'shs' });
+    await page.evaluate((d) => openExamSheet({ name: 'Gen Chem finals', date: d, topics: 'Stoichiometry, gas laws', auto: true, then: (e) => { window.madePlan = e; } }), date);
+    await page.waitForFunction(() => (state.exams || []).length === 1 && window.madePlan, null, { timeout: 10000 });
     // the card: Your Exam Plan, then what subject and what topics (a computer: Home lists the plan, Study plan has the card)
     if (!phone) { await page.evaluate(() => deskGo('home')); await page.waitForSelector('#chat-log .dk-plans .dk-row', { timeout: 10000 }); expect(await page.locator('#chat-log .dk-plans .dk-row b').first().innerText() === 'Gen Chem finals', 'Home lists the new plan'); await page.evaluate(() => deskGo('plan')); }
     const card = page.locator(where).first();
@@ -3517,15 +3549,7 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
     const head = await card.locator('.ex-head').innerText();
     if (!phone) await page.evaluate(() => deskGo('home'));
     expect(/^Your Exam Plan\b/.test(head) && /Subject:\s*Gen Chem finals/.test(head) && /Topics:\s*Stoichiometry, gas laws/.test(head), `${viewport.width}: the card says Your Exam Plan, the subject and the topics: ` + head);
-    // the tour is next, and no plan prompt yet
-    await page.waitForSelector('.tour-offer', { timeout: 5000 });
-    expect(!(await page.locator('.ex-ready-sheet').count()), `${viewport.width}: no plan prompt before the tour`);
-    if (phone) { // the tour, then leave it on the Chat tab
-      await page.click('.tour-offer [data-t="go"]');
-      await page.waitForFunction(() => window.CassieTour.active, null, { timeout: 5000 });
-      expect(!(await page.locator('.ex-ready-sheet').count()), 'no plan prompt during the tour');
-      await page.evaluate(() => window.CassieTour.stop());
-    } else await page.click('.tour-offer [data-t="later"]');
+    await page.evaluate(() => examReadySheet(window.madePlan));
     await page.waitForSelector('.ex-ready-sheet', { timeout: 5000 });
     const sheet = await page.locator('.ex-ready-sheet').innerText();
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/exam-ready-${viewport.width}.png` });
@@ -3554,7 +3578,7 @@ test('first run with an exam: the card says Your Exam Plan with the subject and 
   }
 });
 
-test('first run: the exam step shows no example subject (just Put your exam or subject), and Free can add notes or slides once: the plan is made from the notes with no topics typed; after that, notes in the first questions are Plus', async (b) => {
+test('exam plans from notes: Free can use notes once (the plan is made from the notes, with no topics typed); after that, notes are Plus', async (b) => {
   const fakeGroq = (body) => {
     const t = JSON.stringify(body);
     if (!/day by day study plan/.test(t)) return { text: 'Hi!' };
@@ -3567,39 +3591,23 @@ test('first run: the exam step shows no example subject (just Put your exam or s
   const date = await page.evaluate(() => dayAdd(phDay(), 5));
   await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
   if (await page.locator('.auth-skip').count()) await page.click('.auth-skip');
-  // the exam step, before anything is typed: no subject that looks filled in
-  const peek = async () => {
-    await page.waitForSelector('.fr-count >> text=4 of 5', { timeout: 8000 });
-    return page.evaluate(() => ({ exam: document.querySelector('.fr-ob input[name=exam]').placeholder, topics: document.querySelector('.fr-ob input[name=examTopics]').placeholder, file: document.querySelector('.fr-file').textContent, note: document.querySelector('.fr-file-name').textContent }));
-  };
-  for (let i = 0; i < 3; i++) await page.click('.fr-skip');
-  const P = await peek();
-  if (process.env.SHOTS) { await page.waitForTimeout(700); await page.screenshot({ path: process.env.SHOTS + '/onboard-exam-empty.png' }); }
-  expect(P.exam === 'Put your exam or subject' && P.topics === 'Put your topics' && !/Gen Chem|Stoichiometry/i.test(P.exam + P.topics), 'no example subject or topics in the boxes: ' + JSON.stringify(P));
-  expect(/notes or slides/.test(P.file) && /Free once/.test(P.note), 'notes or slides, free once: ' + JSON.stringify(P));
-  // notes and no topics: the plan comes from the notes
-  await page.fill('.fr-ob input[name=exam]', 'Bio finals'); await page.fill('.fr-ob input[name=examDate]', date);
-  await page.setInputFiles('.fr-notes input', notes);
-  await page.waitForSelector('.fr-file-name >> text=Added: bio-notes.txt', { timeout: 8000 });
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/onboard-exam-notes.png' });
-  await page.click('.fr-go');
-  await page.click('.fr-skip'); // (the voice)
+  await onboard(page, { name: 'Bea' });
+  await page.evaluate(() => openExamSheet());
+  expect(await page.locator('.ex-sheet .ex-file-btn').innerText() === 'Use my notes (free once)', 'Free: notes, once');
+  await page.fill('.ex-sheet input[name=name]', 'Bio finals'); await page.fill('.ex-sheet input[name=date]', date);
+  await page.click('.ex-sheet .ex-file-btn').catch(() => {});
+  await page.setInputFiles('.ex-sheet .ex-file input', notes);
+  await page.waitForSelector('.ex-sheet .ex-file-name >> text=bio-notes.txt', { timeout: 8000 });
+  await page.click('.ex-sheet .ex-make');
   await page.waitForFunction(() => (state.exams || []).length === 1, null, { timeout: 10000 });
   const asked = JSON.stringify(groqCalls.filter((c) => /day by day study plan/.test(JSON.stringify(c))));
   expect(/Bio finals/.test(asked) && /the topics in the notes below/.test(asked) && /Krebs cycle/.test(asked), 'Cassie planned from the notes');
   expect(await page.evaluate(() => state.freeNotesPlan === true), 'Free’s one plan from notes is used');
-  await page.waitForSelector('.tour-offer', { timeout: 5000 }); await page.click('.tour-offer [data-t="later"]');
-  await page.waitForSelector('.ex-ready-sheet', { timeout: 6000 });
-  expect(!(await page.locator('.tour-offer').count()), 'the tour note is gone before the plan window opens');
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/onboard-notes-ready.png' });
-  expect(/Topics:\s*Photosynthesis, Cell respiration/.test(await page.locator('.ex-ready-sheet').innerText()), 'the topics come from the plan');
-  await page.click('.ex-ready-sheet .plus-ok');
-  // the first questions again (a new start): notes are Plus now
-  await page.evaluate(() => { frOnboard(3); });
-  const Q = await peek();
-  expect(/come with Plus/.test(Q.note), 'after the free one, notes say Plus: ' + JSON.stringify(Q));
-  await page.click('.fr-file');
-  await page.waitForSelector('.plus-sheet:not(.ex-ready-sheet)', { timeout: 3000 });
+  // the next plan: notes are Plus
+  await page.evaluate(() => { state.exams = []; save(); openExamSheet(); });
+  expect(await page.locator('.ex-sheet .ex-file-btn').innerText() === 'Use my notes (Plus)', 'after the free one, notes say Plus');
+  await page.click('.ex-sheet .ex-file-btn');
+  await page.waitForSelector('.plus-sheet', { timeout: 3000 });
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -3680,7 +3688,8 @@ test('exam plans: Cassie makes a dated day by day plan, today’s tasks open the
   await page.click('.ex-make');
   const errs = await page.locator('.ex-sheet .field-err:not([hidden])').allInnerTexts();
   expect(errs.includes(await page.evaluate(() => CassieErrors.say('exam_name_needed'))) && errs.includes(await page.evaluate(() => CassieErrors.say('exam_date_needed'))), 'empty fields say what to do: ' + errs.join(' | '));
-  // Plans from your notes are Plus
+  // Plans from your notes are Plus (once Free's one from notes is used)
+  await page.evaluate(() => { state.freeNotesPlan = true; });
   await page.click('.ex-file-btn');
   await page.waitForSelector('.plus-sheet');
   expect(/Plans from your notes comes with Plus/.test(await page.locator('.plus-sheet h3').innerText()), 'a plan from a file is a Plus extra');
@@ -4661,7 +4670,7 @@ async function walkTour(page, where) {
   return visited;
 }
 const tourGone = (page) => page.evaluate(() => !document.querySelector('.tour-card, .tour-ring, .tour-veil, .tour-offer') && !document.documentElement.classList.contains('touring') && getComputedStyle(document.getElementById('cassie-cursor')).display === 'none');
-test.slow('the tour: offered once after the first run (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
+test.slow('the tour: never pops up after the first questions (they go straight to the ask box); offered once (as a guest and signed in), Not now says where it is and Settings, Help, Take the tour starts it; every stop points at the real control on a phone and a computer; Back, Next, Skip and Escape; voice off never speaks; about 90 seconds, 2 sentences a stop, no dashes, 44px, nothing off screen at 390x844, 360x740 and 1280x800', async (b) => {
   const PHONE = ['ask', 'quiz', 'talk', 'home', 'labs', 'games', 'cards', 'board', 'about', 'settings'];
   // 1. a guest on a phone: the first run, then "a quick tour?" once
   let { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, state: null });
@@ -4670,6 +4679,9 @@ test.slow('the tour: offered once after the first run (as a guest and signed in)
   await toSignIn(page);
   await page.click('.auth-skip');
   await onboard(page, { name: 'Gia' });
+  await page.waitForTimeout(1500);
+  expect(!(await page.locator('.tour-offer').count()), 'no tour pops up after the first questions');
+  await page.evaluate(() => window.CassieTour.offer());
   await page.waitForSelector('.tour-offer', { timeout: 5000 });
   const offerText = await page.locator('.tour-offer').innerText();
   expect(/Want a quick tour\? It takes about 90 seconds\./.test(offerText) && /Show me around/.test(offerText) && /Not now/.test(offerText), 'the offer: ' + offerText);
@@ -4724,6 +4736,7 @@ test.slow('the tour: offered once after the first run (as a guest and signed in)
   await page.fill('.auth-form input[name=password]', 'secret-pass-1');
   await page.click('.auth-go');
   await onboard(page, { name: 'Hazel' });
+  await page.evaluate(() => window.CassieTour.offer());
   await page.waitForSelector('.tour-offer', { timeout: 5000 });
   await page.click('.tour-offer [data-t="go"]');
   stops = await walkTour(page, '1280x800');
