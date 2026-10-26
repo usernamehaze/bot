@@ -1913,6 +1913,7 @@ function hubHero(name, returning, due, phone) {
 }
 // the bell: what's waiting today (cards due, the focus timer, your streak, today's lab)
 let hubRemindOpen = false;
+var hubMoreOpen = (() => { try { return sessionStorage.getItem('cassie.moreTools') === '1'; } catch (e) { return false; } })(); // (More tools tapped: all of them for the rest of this visit)
 function hubReminders(due, streak) {
   const box = document.createElement('div');
   box.className = 'hub-remind' + (hubRemindOpen ? ' open' : ''); // (Home is redrawn often on a phone: the open state lives in hubRemindOpen)
@@ -1998,7 +1999,18 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const hero = hubHero(name, returning, due, phone), remind = hubReminders(due, streakNow);
   const boxes = document.createElement('div');
   boxes.className = 'hub-boxes';
-  boxes.innerHTML = goalFirst(HUB_BOXES, (x) => x[0]).map(([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`).join('');
+  // a brand-new student sees their 4 most useful tools (what they came for first); the rest are one tap away
+  const allBoxes = goalFirst(HUB_BOXES, (x) => x[0]), boxHtml = ([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`;
+  const fewer = !returning && !hubMoreOpen && allBoxes.length > 4;
+  boxes.innerHTML = (fewer ? allBoxes.slice(0, 4) : allBoxes).map(boxHtml).join('') + (fewer ? `<button type="button" class="hub-more" aria-expanded="false">More tools <small>${allBoxes.length - 4} more</small></button>` : '');
+  const moreBtn = boxes.querySelector('.hub-more');
+  if (moreBtn) moreBtn.addEventListener('click', () => {
+    hubMoreOpen = true;
+    try { sessionStorage.setItem('cassie.moreTools', '1'); } catch (e) { /* this visit only */ }
+    moreBtn.remove();
+    boxes.insertAdjacentHTML('beforeend', allBoxes.slice(4).map(boxHtml).join(''));
+    const next = boxes.querySelectorAll('.hub-box')[4]; if (next) next.focus({ preventScroll: true });
+  });
   if (phone) { // a phone: the header, Today's Lab, then (back again) Today, Continue, the boxes and Quick actions
     el.prepend(hero, remind, hubTodayLab());
     const quick = [...el.querySelectorAll('.hub-h')].find((h2) => /Quick actions/.test(h2.textContent));

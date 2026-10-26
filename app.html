@@ -247,6 +247,7 @@
         <button type="button" data-go="privacy">Privacy and data</button>
         <button type="button" data-go="plans">Plans</button>
         <button type="button" data-go="help">Help</button>
+        <button type="button" data-go="advanced">Advanced</button>
         <button type="button" data-go="all">All settings</button>
       </nav>
 
@@ -286,55 +287,6 @@
           <p class="field-hint" id="profile-summary"></p>
           <button type="button" id="edit-profile-btn" class="new-chat-btn" style="margin:6px 0 12px">Edit your profile</button>
           </div>
-          <details class="settings-group set-row" id="settings-keys" data-k="api keys groq gemini model brains">
-        <summary>
-          <span class="sg-title">API keys</span>
-          <span class="sg-sub" id="keys-sub">Connect Cassie's free brains</span>
-        </summary>
-        <div class="sg-body">
-          <p class="field-hint" id="keys-optional" hidden>Optional: Cassie already works without a key. Add your own free key if you ask a lot of questions every day, so you never run out.</p>
-          <label class="field">
-            <span>Groq API key: free (chat, highlight &amp; code)</span>
-            <input type="password" id="groq-key-input" placeholder="gsk_...">
-          </label>
-          <p class="field-hint">
-            Powers all text answers: higher free limits (~30/min).
-            <a class="key-link" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a free Groq key →</a>
-          </p>
-          <ol class="key-steps">
-            <li>Sign in (no credit card).</li>
-            <li>Click <strong>Create API Key</strong>.</li>
-            <li>Copy it and paste above.</li>
-          </ol>
-          <label class="field">
-            <span>Groq model</span>
-            <select id="groq-model-select">
-              <option value="openai/gpt-oss-120b">GPT-OSS 120B: smartest (best for hard problems)</option>
-              <option value="llama-3.3-70b-versatile">Llama 3.3 70B: balanced</option>
-              <option value="openai/gpt-oss-20b">GPT-OSS 20B: fast reasoning</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Google (Gemini) API key: free (works on its own, or with Groq)</span>
-            <input type="password" id="gemini-key-input" placeholder="AIza... / AQ...">
-          </label>
-          <p class="field-hint">
-            Enough on its own: chat, whole files, photos, pictures and web answers. With a Groq key too, everyday chat is faster and Gemini handles files, photos and the web.
-            <a class="key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Get a free Google key →</a>
-          </p>
-          <ol class="key-steps">
-            <li>Sign in with your Google account.</li>
-            <li>Click <strong>Create API key</strong>.</li>
-            <li>Copy it and paste above.</li>
-          </ol>
-          <p class="field-hint">
-            Optional: photos, files and graphs already work without it. Add it to turn
-            on Web answers with sources. Note:
-            Google turns <em>image generation</em> off on the free tier, so making
-            pictures may need billing enabled on your Google account.
-          </p>
-        </div>
-      </details>
         </div>
       </section>
       <section class="set-sec" data-sec="study" aria-labelledby="set-h-study">
@@ -523,6 +475,61 @@
           </ol>
           <p>Now select words in Safari, Notes or a PDF → <b>Share</b> → <b>Ask Cassie</b>. To have it at the top of the Share menu: Share → scroll to the bottom → <b>Edit Actions…</b> → tap the green <b>+</b> next to Ask Cassie → drag it to the top → <b>Done</b>.</p>
           <p class="muted">Quickest anywhere: copy the words, open Cassie, and paste.</p>
+        </div>
+      </details>
+        </div>
+      </section>
+      <!-- Advanced: your own AI keys (Cassie already works without them), out of a new student's way -->
+      <section class="set-sec" data-sec="advanced" aria-labelledby="set-h-advanced">
+        <h3 class="set-sec-h" id="set-h-advanced">Advanced</h3>
+        <div class="set-group">
+          <details class="settings-group set-row" id="settings-keys" data-k="api keys groq gemini model brains">
+        <summary>
+          <span class="sg-title">API keys</span>
+          <span class="sg-sub" id="keys-sub">Connect Cassie's free brains</span>
+        </summary>
+        <div class="sg-body">
+          <p class="field-hint" id="keys-optional" hidden>Optional: Cassie already works without a key. Add your own free key if you ask a lot of questions every day, so you never run out.</p>
+          <label class="field">
+            <span>Groq API key: free (chat, highlight &amp; code)</span>
+            <input type="password" id="groq-key-input" placeholder="gsk_...">
+          </label>
+          <p class="field-hint">
+            Powers all text answers: higher free limits (~30/min).
+            <a class="key-link" href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a free Groq key →</a>
+          </p>
+          <ol class="key-steps">
+            <li>Sign in (no credit card).</li>
+            <li>Click <strong>Create API Key</strong>.</li>
+            <li>Copy it and paste above.</li>
+          </ol>
+          <label class="field">
+            <span>Groq model</span>
+            <select id="groq-model-select">
+              <option value="openai/gpt-oss-120b">GPT-OSS 120B: smartest (best for hard problems)</option>
+              <option value="llama-3.3-70b-versatile">Llama 3.3 70B: balanced</option>
+              <option value="openai/gpt-oss-20b">GPT-OSS 20B: fast reasoning</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Google (Gemini) API key: free (works on its own, or with Groq)</span>
+            <input type="password" id="gemini-key-input" placeholder="AIza... / AQ...">
+          </label>
+          <p class="field-hint">
+            Enough on its own: chat, whole files, photos, pictures and web answers. With a Groq key too, everyday chat is faster and Gemini handles files, photos and the web.
+            <a class="key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Get a free Google key →</a>
+          </p>
+          <ol class="key-steps">
+            <li>Sign in with your Google account.</li>
+            <li>Click <strong>Create API key</strong>.</li>
+            <li>Copy it and paste above.</li>
+          </ol>
+          <p class="field-hint">
+            Optional: photos, files and graphs already work without it. Add it to turn
+            on Web answers with sources. Note:
+            Google turns <em>image generation</em> off on the free tier, so making
+            pictures may need billing enabled on your Google account.
+          </p>
         </div>
       </details>
         </div>
