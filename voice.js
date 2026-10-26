@@ -36,15 +36,17 @@
   const supported = () => !!AC;
 
   /* ---------- the studio allowance: is Bella here, and how much can she still say? ---------- */
-  // left: characters she can still say (this month's, or this student's today if that is less);
-  // back: the day ('YYYY-MM-DD') it comes back when it runs out
-  let studio = { server: '', uid: '', on: false, left: 0, back: '', known: false, off: false };
+  // left: characters she can still say (this account's month, or the app's if that is less);
+  // back: the day ('YYYY-MM-DD') it comes back when it runs out; guest: not signed in (no studio voice);
+  // used / max: this account's month so far, and its plan's allowance
+  let studio = { server: '', uid: '', token: null, on: false, left: 0, back: '', known: false, off: false, guest: false, used: 0, max: 0 };
+  const authHeaders = () => { const t = typeof studio.token === 'function' ? studio.token() : ''; return t ? { authorization: 'Bearer ' + t } : {}; };
   function refresh() {
     if (!studio.server) return Promise.resolve(studio);
-    return fetch(studio.server + '/speak?uid=' + encodeURIComponent(studio.uid || ''))
+    return fetch(studio.server + '/speak?uid=' + encodeURIComponent(studio.uid || ''), { headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d) studio = { ...studio, on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '', known: true, off: false, why: +d.left > 0 ? '' : studio.why };
+        if (d) studio = { ...studio, on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '', known: true, off: false, guest: !!d.guest, used: Math.max(0, +d.used || 0), max: Math.max(0, +d.max || 0), why: d.guest ? 'guest' : +d.left > 0 ? '' : studio.why };
         emit();
         return studio;
       })
@@ -55,13 +57,14 @@
   const CHAT_CHARS = 1200;
   function canSay(chars) { return studio.on && !studio.off && !!audioCtx() && studio.left >= Math.max(1, chars || 0); }
   async function studioClip(text, gender) {
-    const r = await fetch(studio.server + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: gender === 'man' ? 'man' : 'woman', uid: studio.uid }) });
+    const r = await fetch(studio.server + '/speak', { method: 'POST', headers: { 'content-type': 'application/json', ...authHeaders() }, body: JSON.stringify({ text, voice: gender === 'man' ? 'man' : 'woman', uid: studio.uid }) });
     if (!r.ok) {
-      // used up or off: she types until it's back (why: 'day' = this student's day, 'month' = the app's credits)
+      // used up or off: she types until it's back (why: 'mine' = this account's month, 'month' = the app's credits, 'guest' = sign in)
+      if (r.status === 401) { studio.off = true; studio.left = 0; studio.guest = true; studio.why = 'guest'; emit(); }
       if (r.status === 429 || r.status === 503) { studio.off = true; studio.left = 0; studio.why = r.headers.get('x-speak') || ''; if (studio.why === 'day') studio.back = dayFrom(1); emit(); refresh().then(() => { studio.off = true; studio.left = 0; }); }
       throw Object.assign(new Error('studio ' + r.status), { usedUp: r.status === 429 || r.status === 503 });
     }
-    if (r.headers.get('x-speak') !== 'cache') { studio.left = Math.max(0, studio.left - text.length); emit(); } // (said before: free)
+    if (r.headers.get('x-speak') !== 'cache') { studio.left = Math.max(0, studio.left - text.length); studio.used += text.length; emit(); } // (said before: free)
     const buf = await r.arrayBuffer();
     return await new Promise((res, rej) => audioCtx().decodeAudioData(buf, res, rej));
   }
@@ -77,6 +80,8 @@
   const line = () => {
     const E = window.CassieErrors;
     if (!E) return 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.';
+    if (studio.why === 'guest' || studio.guest) return E.say('voice_signin');
+    if (studio.why === 'mine') return E.say('voice_mine', { date: backWhen(studio.back) });
     if (studio.why === 'day' || (studio.known && studio.on && studio.left < 400 && studio.back === dayFrom(1))) return E.say('voice_today');
     if (studio.why === 'month' || (studio.known && studio.on && studio.left < 400)) return E.say('voice_resting', { date: backWhen(studio.back) });
     return E.say('voice_typing');
@@ -219,7 +224,7 @@
     sentences,
     notice,
     played: () => played.slice(),
-    studio: { setup: setupStudio, refresh, ready: () => canSay(1), on: () => studio.on, left: () => studio.left, back: () => studio.back, known: () => studio.known },
+    studio: { setup: setupStudio, refresh, ready: () => canSay(1), on: () => studio.on, left: () => studio.left, back: () => studio.back, known: () => studio.known, guest: () => studio.guest, used: () => studio.used, max: () => studio.max },
     supported,
     unlock,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
