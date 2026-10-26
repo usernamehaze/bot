@@ -50,6 +50,7 @@
  *   SPEAK_FREE_MONTH / SPEAK_PLUS_MONTH / SPEAK_PRO_MONTH  characters of studio voice per account per month
  *                       (defaults 7500, 15000, 30000; no daily limit; guests in the app sign in for it)
  *   SPEAK_MONTHLY_CHARS characters of studio voice for the whole app per month (default 105000)
+ *   SECTION_PER_MIN     file sections (big PDFs read in parts) for the whole app per minute (default 60); chat questions never wait on it
  *   ELEVENLABS_VOICE_WOMAN / ELEVENLABS_VOICE_MAN / ELEVENLABS_MODEL  optional voice and model choices
  *   ALLOW_EXTENSION  set to "off" to stop the Chrome / Edge extension using this server
  *   ALLOWED_ORIGINS  comma-separated sites allowed to use this server
@@ -939,6 +940,14 @@ async function chat(request, env, ctx) {
   if (minuteHits.size > 5000) minuteHits.clear();
   if (n > perMin || nIp > perMin * 10) return chatError('Whoa, lots of questions! Give me a few seconds, then ask again.', 429, h, { 'retry-after': String(60 - Math.floor((now / 1000) % 60)) });
   await ensureSchema(env.DB);
+  // file sections (a big PDF read in parts, not a question) share an app-wide budget a minute (SECTION_PER_MIN, 60), so a
+  // few big reviewers in exam week can't use up the AI for everyone's chat; past it the app waits and carries on by itself
+  if (!(body.q === 1 || body.q === true)) {
+    const secMax = +env.SECTION_PER_MIN || 60;
+    if ((await countUse(env.DB, 'sec:all', 'm' + minute)) > secMax) {
+      return chatError('Lots of students are reading files right now. Cassie carries on in a moment.', 429, h, { 'retry-after': String(Math.min(30, 60 - Math.floor((now / 1000) % 60))) }, 'sections_busy');
+    }
+  }
   // the student's plan (free unless they're signed in to a paid account) sets their allowance
   const { plan, account } = await planOf(request, env), L = limitsFor(env, plan), perDay = L.all;
   const who = account ? 'a:' + account : uid; // a paid plan counts per account, across devices

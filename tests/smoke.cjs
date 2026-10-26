@@ -525,6 +525,22 @@ async function realServer(env = {}) {
   };
   return { call, DB, w };
 }
+test('the real server: file sections (big PDFs read in parts) share an app-wide budget a minute, so chat questions never wait on them; past it a wait the app handles by itself (retry-after up to 30 s)', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u, o) => (/api\.groq\.com/.test(String(u)) ? new Response(JSON.stringify({ choices: [{ message: { content: 'A section summary.' } }] }), { status: 200, headers: { 'content-type': 'application/json' } }) : realFetch(u, o));
+  try {
+    const { call } = await realServer({ GROQ_KEY: 'gsk_test_fake', SECTION_PER_MIN: '3', DAILY_LIMIT: '500', FREE_DAILY_QUESTIONS: '500' });
+    const msg = (t) => [{ role: 'user', content: t }];
+    const parts = [];
+    for (let i = 0; i < 4; i++) parts.push(await call('POST', '/chat', { uid: `part-uid-${i}x`, messages: msg('Summarise section ' + i) }));
+    expect(parts.slice(0, 3).every((r) => r.status === 200), 'the first 3 sections this minute: ' + parts.map((r) => r.status).join(','));
+    const busy = parts[3], wait = +busy.headers.get('retry-after');
+    expect(busy.status === 429 && busy.json.error.code === 'sections_busy' && wait >= 1 && wait <= 30, 'the 4th waits (the app retries by itself): ' + busy.status + ' ' + busy.text + ' retry-after ' + wait);
+    const q = await call('POST', '/chat', { uid: 'chat-uid-1x', q: 1, messages: msg('What is osmosis?') });
+    expect(q.status === 200, 'a chat question is never held back by file sections: ' + q.status + ' ' + q.text.slice(0, 120));
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('the real server on a real database: study rooms (make, join, draw, see each other), the puzzle score board and accounts (sign up, save, plan, sign out) all work, and a paid plan is read from the session', async () => {
   const { call, DB } = await realServer({ DAILY_LIMIT: '0', PLUS_DAILY_LIMIT: '0' });
   const A = 'aaaaaaaa-1', B = 'bbbbbbbb-2', C = 'cccccccc-3';
