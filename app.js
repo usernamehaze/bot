@@ -234,6 +234,11 @@ const TEACH_INSTRUCTION = `RIGHT NOW the student is teaching YOU out loud. They 
 - When they say they're done (or "that's all"), give a short spoken report: what they explained well, what was missing or wrong (with the right idea), and one thing to review next.
 - If they haven't picked a topic yet, ask what they're going to teach you.`;
 
+// how they like to learn (the first questions): the answer's usual shape, unless they ask for another
+const STYLE_INSTRUCTION = {
+  brief: 'They like quick answers: lead with a few short bullet points with the key facts, and offer to go deeper. A longer answer only when they ask for one or the task needs it (an essay, a full solution).',
+  deep: 'They like deep answers: break things down step by step, explain the why behind each step, and add a worked example.',
+};
 // Build the system prompt with the chosen level and (for chat) any active
 // tutor mode. Highlight-popover calls pass tutor:false.
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
@@ -247,6 +252,7 @@ function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   }
   if (state.profile) sp += `\n\n${profileLine(state.profile)}`;
   if (workMode()) sp += `\n\n${PRO_INSTRUCTION}`;
+  if (STYLE_INSTRUCTION[state.answerStyle] && mode !== 'voice' && mode !== 'teach') sp += `\n\n${STYLE_INSTRUCTION[state.answerStyle]}`; // (how they like to learn, from the first questions)
   if (tutor && counselorMode) sp += `\n\n${COUNSELOR_INSTRUCTION}`;
   if (tutor && quizMode) sp += `\n\n${QUIZ_INSTRUCTION}`;
   if (tutor && mode === 'hint') sp += `\n\n${HINT_INSTRUCTION}`;
@@ -1838,6 +1844,20 @@ const HUB_BOXES = [
   ['board', 'Board', 'Draw, sketch or graph', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4M7 13l3-3 2.5 2.5L17 8"/></svg>'],
   ['talk', 'Talk', 'A voice chat with Cassie', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>'],
 ];
+// what they came for (the first questions) goes first on Home: the boxes, then the Quick actions
+const GOAL_TOOLS = {
+  exam: ['quiz', 'cards', 'timer', 'Make study notes', 'Solve step by step'],
+  read: ['research', 'Make study notes', 'Podcast my notes', 'cards'],
+  homework: ['Solve step by step', 'Explain a topic', 'board', 'quiz'],
+  learn: ['Explain a topic', 'research', 'talk', 'Explore in 3D'],
+  labs: ['lab', 'games', 'today', 'Explore in 3D'],
+};
+function goalFirst(list, keyOf) {
+  const goals = (state.helpWith || []).filter((g) => GOAL_TOOLS[g]);
+  if (!goals.length) return list;
+  const rank = (x) => { const k = keyOf(x); for (let i = 0; i < goals.length; i++) { const j = GOAL_TOOLS[goals[i]].findIndex((t) => k === t || k.startsWith(t)); if (j >= 0) return i * 10 + j; } return 1e3; };
+  return list.map((x, i) => [x, rank(x), i]).sort((p, q) => p[1] - q[1] || p[2] - q[2]).map((x) => x[0]);
+}
 // the Quick actions the boxes already cover (each feature shows once on Home)
 const HUB_BOXED = /^(Quiz me|Research a topic|Labs: try a simulation|Study together|Flashcards)/;
 const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
@@ -1926,7 +1946,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=176').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=177').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -1959,7 +1979,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
       <h2 class="hub-h">Continue</h2>
       <div class="hub-recent"></div>
       <h2 class="hub-h">Quick actions</h2>
-      <div class="hub-quick">${HOME_EXAMPLES.map((ex, i) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
+      <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
     el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
     el.querySelector('.hub-today').after(examSection(), weekCard()); // (the exam plans, then the week, under Today)
     const list = el.querySelector('.hub-recent');
@@ -1978,7 +1998,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const hero = hubHero(name, returning, due, phone), remind = hubReminders(due, streakNow);
   const boxes = document.createElement('div');
   boxes.className = 'hub-boxes';
-  boxes.innerHTML = HUB_BOXES.map(([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`).join('');
+  boxes.innerHTML = goalFirst(HUB_BOXES, (x) => x[0]).map(([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`).join('');
   if (phone) { // a phone: the header, Today's Lab, then (back again) Today, Continue, the boxes and Quick actions
     el.prepend(hero, remind, hubTodayLab());
     const quick = [...el.querySelectorAll('.hub-h')].find((h2) => /Quick actions/.test(h2.textContent));
@@ -2972,10 +2992,11 @@ function openExamSheet(pre = null) {
     chips.appendChild(c);
   });
   let notes = (pre && pre.notes && pre.notes.text) || null;
-  const fromStart = !!notes; // (Free's one plan from notes, from the first questions)
+  const fromStart = !!notes;
   const fileIn = w.querySelector('input[type=file]');
+  if (!isSubscriber() && notesFree()) w.querySelector('.ex-file-btn').textContent = 'Use my notes (free once)';
   w.querySelector('.ex-file-btn').addEventListener('click', () => {
-    if (!isSubscriber()) { plusSheet('Plans from your notes', 'Plus builds your exam plan from your notes, slides or reviewer.'); return; }
+    if (!isSubscriber() && !notesFree()) { plusSheet('Plans from your notes', 'Plus builds your exam plan from your notes, slides or reviewer.'); return; }
     fileIn.click();
   });
   fileIn.addEventListener('change', async () => {
@@ -3004,7 +3025,7 @@ function openExamSheet(pre = null) {
     try {
       const e = await makeExamPlan({ name: noDashes(f.name.value.trim()).slice(0, 60), date: f.date.value, topics: noDashes(f.topics.value.trim()).slice(0, 600), notes });
       made = e;
-      if (fromStart && !isSubscriber()) { state.freeNotesPlan = true; save(); }
+      if (notes && !isSubscriber()) { state.freeNotesPlan = true; save(); } // (Free's one plan from notes is used)
       close();
       if (onPhoneHome()) window.CassieNative.go('home');
       refreshHub();
@@ -6139,7 +6160,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=176');
+      exploreMod = await import('./explore/cell3d.js?v=177');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6189,7 +6210,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=176');
+      labsMod = await import('./labs/labs.js?v=177');
       islandRest();
     }
     labsMod.open({
@@ -7880,19 +7901,22 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
 // Stored only in this browser.
 const GRADE_GROUPS = [
   ['Preschool', 'elementary', ['Nursery', 'Kindergarten']],
-  ['Elementary', 'elementary', ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']],
-  ['Junior High School', 'middle', ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10']],
-  ['Senior High School', 'high', ['Grade 11', 'Grade 12']],
-  ['College / University', 'college', ['1st year college', '2nd year college', '3rd year college', '4th year college', '5th year college']],
+  ['Elementary', 'elementary', ['Elementary', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6']],
+  ['Junior High School', 'middle', ['Junior High', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10']],
+  ['Senior High School', 'high', ['Senior High', 'Grade 11', 'Grade 12']],
+  ['College / University', 'college', ['College', '1st year college', '2nd year college', '3rd year college', '4th year college', '5th year college']],
   ['Graduate school', 'college', ['Graduate school']],
+  ['Board exam', 'college', ['Board exam reviewee']],
   ['Working', 'auto', ['Working professional']],
 ];
 const WORKING = 'Working professional';
 const levelForGrade = (g) => { const grp = GRADE_GROUPS.find((x) => x[2].includes(g)); return grp ? grp[1] : 'auto'; };
 const ageBand = (a) => (!a ? '' : a < 13 ? 'under 13' : a < 18 ? '13-17' : a < 25 ? '18-24' : a < 35 ? '25-34' : a < 50 ? '35-49' : '50+');
 function profileLine(p) {
-  const who = p.role === 'pro' ? `a working professional${p.field ? ` (${p.field})` : ''}`
+  const who = p.role === 'pro' ? (p.who === 'teach' ? 'a teacher or parent' : `a working professional${p.field ? ` (${p.field})` : ''}`)
     : /^(Nursery|Kindergarten)$/.test(p.grade || '') ? `a little one in ${p.grade.toLowerCase()}`
+    : p.grade === 'Board exam reviewee' ? 'reviewing for a board exam (like the LET)'
+    : /^(Elementary|Junior High|Senior High|College)$/.test(p.grade || '') ? `${p.grade === 'Elementary' ? 'an elementary' : 'a ' + p.grade.toLowerCase()} student`
     : `a ${p.grade || 'student'} student`.replace('a Graduate school student', 'a graduate student');
   const young = (p.age && p.age < 8) || /^(Nursery|Kindergarten)$/.test(p.grade || '');
   return `You're helping ${p.name || 'the user'}${p.age ? `, age ${p.age}` : ''} - ${who}. Use their name now and then when talking with them, but never inside a paper, essay or anything they will hand in. Pitch every explanation to that level.${young ? ' They are a very young child: use very short sentences, simple everyday words and a warm, playful tone, and keep everything safe.' : p.age && p.age < 13 ? ' They are a young child: keep it simple, warm and safe.' : ''}`;
@@ -7943,9 +7967,10 @@ const HELP_WITH = [['homework', 'Homework'], ['exams', 'Exams'], ['notes', 'Note
 function frLoad() { try { return JSON.parse(localStorage.getItem(FR_KEY) || 'null'); } catch (e) { return null; } }
 function frSave(s) { try { if (s) localStorage.setItem(FR_KEY, JSON.stringify(s)); else localStorage.removeItem(FR_KEY); } catch (e) { /* ignore */ } }
 // the profile, saved exactly as the profile form saves it (and Cassie's colours follow it)
-function saveProfile({ name, age, grade, gender }, first, prev = {}) {
+function saveProfile({ name, age, grade, gender, who }, first, prev = {}) {
   const role = grade === WORKING ? 'pro' : 'student';
   state.profile = { name, role, grade: role === 'student' ? grade : '', field: role === 'pro' ? (prev.field || '') : '', age, gender, at: prev.at || Date.now() };
+  if (who === 'teach') state.profile.who = 'teach'; // (a teacher or parent, from the first questions)
   state.audience = role === 'pro' ? 'pro' : 'student';
   state.level = role === 'pro' ? 'auto' : levelForGrade(grade);
   // anonymous usage counts stay as they were (changeable in Settings); never for under-13s,
@@ -8004,10 +8029,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=176').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=177').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=176', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=177', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8083,9 +8108,7 @@ function frQuick() {
   frClose();
   track('open');
   if (rescued && !rescued.full) { examReadySheet(rescued); return; } // (a plan from the Exam Rescue Plan page is ready)
-  if (onPhoneHome()) { window.CassieNative.go('chat'); setTimeout(() => promptInput.focus(), 60); return; }
-  if (document.body.classList.contains('desk-on')) deskGo('chat'); // (a computer opens on Home, which has no ask box)
-  setTimeout(() => promptInput.focus(), 60); // (after the first-run screen has gone)
+  frToAsk();
 }
 // after the first good answer of a student who went straight in: keep it, and fit Cassie to them (asked once)
 function saveOffer(after) {
@@ -8117,36 +8140,46 @@ function frSignIn() {
   frClose();
   openAuth({ first: true, mode: 'signup' });
 }
-// 4. The questions, one a screen: name, studying, help with, voice
+// 4. The questions, one a screen: your name, where you are in your learning, what brings you, how you
+// like to learn. Every screen has Skip for now (it keeps what's answered and goes straight in).
+// Where you are: [key, what the pill says, the level saved in the profile (GRADE_GROUPS)]
+const FR_WHO = [['elem', 'Elementary', 'Elementary'], ['jhs', 'Junior High', 'Junior High'], ['shs', 'Senior High', 'Senior High'], ['college', 'College / University', 'College'],
+  ['board', 'Reviewing for a board exam', 'Board exam reviewee'], ['teach', 'Teacher or parent', WORKING], ['work', 'Working / lifelong learner', WORKING]];
+const FR_GOALS = [['exam', 'Getting ready for an exam'], ['read', 'Getting through readings and PDFs'], ['homework', 'Homework and math problems'], ['learn', 'Learning something new'], ['labs', 'Exploring labs and games']];
+const FR_STYLES = [['brief', 'Quick bullet summaries'], ['deep', 'Deep step-by-step breakdowns'], ['voice', 'Voice and audio explanations']];
+// an older profile's level, as one of the pills
+function whoOfGrade(g) {
+  if (!g) return '';
+  if (g === WORKING) return 'work';
+  const own = FR_WHO.find((x) => x[2] === g);
+  if (own) return own[0];
+  return { elementary: 'elem', middle: 'jhs', high: 'shs', college: 'college' }[levelForGrade(g)] || '';
+}
 function frOnboard(at = 0) {
   const prev = frLoad() || {};
-  const a = { name: '', gender: '', grade: '', age: '', help: [], exam: { name: '', date: '', topics: '' }, voice: state.voiceGender === 'man' ? 'man' : 'woman', ...(prev.answers || {}) };
-  const kept = activeExams()[0]; // (a plan already here, like one from the Exam Rescue Plan page: its exam is filled in)
-  if (kept && !a.exam.name) a.exam = { name: kept.name, date: kept.date, topics: kept.topics || '' };
+  const a = { name: '', gender: '', who: '', age: '', goals: [], style: '', ...(prev.answers || {}) };
+  if (!a.who && a.grade) a.who = whoOfGrade(a.grade); // (an onboarding left halfway in the older questions)
+  if (!Array.isArray(a.goals)) a.goals = [];
   if (!a.name && state.account && state.account.name) a.name = state.account.name;
+  const TOTAL = FR_TOTAL;
+  at = Math.max(0, Math.min(TOTAL - 1, at | 0)); // (the older questions had five screens)
   const keep = () => frSave({ step: 'ob', at, answers: a });
   keep();
   const el = frShell();
   el.dataset.step = 'ob' + (at + 1);
-  const TOTAL = 5, EXAM = 3, today = phDay();
+  const pills = (list, attr, role) => list.map(([v, l]) => `<button type="button" class="fr-pick" ${role ? 'role="radio"' : 'aria-pressed="false"'} data-${attr}="${v}">${l}</button>`).join('');
   const Q = [
-    { h: 'What’s your name?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
-        <div class="fr-q2"><span id="fr-g">You are</span><div class="fr-seg" role="radiogroup" aria-labelledby="fr-g">${[['female', 'Female'], ['male', 'Male'], ['none', 'Prefer not to say']].map(([v, l]) => `<button type="button" role="radio" data-gender="${v}">${l}</button>`).join('')}</div></div>` },
-    { h: 'What are you studying?', body: `<select class="fr-big fr-select" name="grade" aria-label="What you are studying"><option value="">Choose your level</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select>
-        <label class="fr-q2"><span>Your age</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
-    { h: 'What do you want help with?', sub: 'Pick any.', body: `<div class="fr-picks">${HELP_WITH.map(([v, l]) => `<button type="button" class="fr-pick" data-help="${v}" aria-pressed="false">${l}</button>`).join('')}</div>` },
-    // an exam coming up: Cassie plans for it the moment the questions are done (empty: no plan)
-    { h: 'Got an exam coming up?', sub: 'Cassie makes you a day by day plan to it. Leave this empty if not.', body: `<input class="fr-big" name="exam" maxlength="60" autocomplete="off" placeholder="Put your exam or subject" aria-label="Your exam or subject">
-        <label class="fr-q2"><span>Exam day</span><input class="fr-age fr-wide" name="examDate" type="date" min="${today}" max="${dayAdd(today, 365)}"></label>
-        <label class="fr-q2"><span>Topics</span><input class="fr-age fr-wide" name="examTopics" maxlength="600" autocomplete="off" placeholder="Put your topics"></label>
-        <div class="fr-q2 fr-notes"><button type="button" class="fr-file">Or add your notes or slides</button><input type="file" accept=".pdf,.docx,.pptx,.txt" hidden><small class="fr-file-name">${frNotes ? '' : notesFree() ? 'PDF, PowerPoint or Word. Free once, right now.' : 'PDF, PowerPoint or Word. Plans from notes come with Plus.'}</small></div>` },
-    { h: 'How should Cassie sound?', sub: 'Tap one to hear her.', body: `<div class="fr-voices" role="radiogroup" aria-label="Cassie’s voice">${[['woman', 'Woman'], ['man', 'Man']].map(([v, l]) => `<button type="button" role="radio" class="fr-voice" data-voice="${v}"><span class="fr-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>${l}</button>`).join('')}</div>` },
+    { h: 'What should Cassie call you?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="given-name" placeholder="Your first name" aria-label="Your first name">` },
+    { h: 'Where are you in your learning?', body: `<div class="fr-picks" role="radiogroup" aria-label="Where you are in your learning">${pills(FR_WHO, 'who', true)}</div>
+        <label class="fr-q2"><span>Your age (optional)</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
+    { h: 'What brings you to Cassie today?', sub: 'Pick any.', body: `<div class="fr-picks">${pills(FR_GOALS, 'goal', false)}</div>` },
+    { h: 'How do you like to learn?', sub: 'Optional. Pick one, or skip it.', body: `<div class="fr-picks" role="radiogroup" aria-label="How you like to learn">${pills(FR_STYLES, 'style', true)}</div>` },
   ][at];
   el.innerHTML = `<form class="fr-ob" novalidate>
     <div class="fr-top">
       <button type="button" class="fr-back"${at === 0 ? ' hidden' : ''}>‹ Back</button>
       <div class="fr-progress"><span class="fr-bar"><i style="width:${((at + 1) / TOTAL) * 100}%"></i></span><span class="fr-count">${at + 1} of ${TOTAL}</span></div>
-      <button type="button" class="fr-skip">Skip</button>
+      <button type="button" class="fr-skip">Skip for now</button>
     </div>
     <div class="fr-mid">
       <h1 class="fr-h">${Q.h}</h1>
@@ -8160,79 +8193,60 @@ function frOnboard(at = 0) {
   const say = (m) => { err.textContent = m; err.hidden = !m; };
   // fill in what's known, and keep each answer as it changes
   if (f.name) f.name.value = a.name;
-  if (f.grade) { f.grade.value = a.grade; f.age.value = a.age; }
-  if (f.exam) {
-    f.exam.value = a.exam.name; f.examDate.value = a.exam.date; f.examTopics.value = a.exam.topics;
-    // notes or slides: read here, in the browser; Cassie plans from them (Free: once, in these questions)
-    const pick = f.querySelector('.fr-notes input'), shown = f.querySelector('.fr-file-name');
-    if (frNotes) shown.textContent = `Added: ${frNotes.name}`;
-    f.querySelector('.fr-file').addEventListener('click', () => {
-      if (!notesFree() && !isSubscriber()) { plusSheet('Plans from your notes', 'Free gets one plan from notes in the first questions. Plus builds every exam plan from your notes, slides or reviewer.'); return; }
-      pick.click();
-    });
-    pick.addEventListener('change', async () => {
-      const file = pick.files && pick.files[0];
-      if (!file) return;
-      shown.textContent = 'Reading your notes…'; say('');
-      try { const doc = await readDocument(file); if (!doc.text) throw new Error('empty'); frNotes = { name: file.name, text: doc.text }; shown.textContent = `Added: ${file.name}`; }
-      catch (e2) { frNotes = null; shown.textContent = ''; say(CassieErrors.say('exam_file_failed')); }
-    });
-  }
+  if (f.age) f.age.value = a.age;
   const mark = () => {
-    f.querySelectorAll('[data-gender]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.gender === a.gender)));
-    f.querySelectorAll('[data-help]').forEach((b) => b.setAttribute('aria-pressed', String(a.help.includes(b.dataset.help))));
-    f.querySelectorAll('[data-voice]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.voice === a.voice)));
+    f.querySelectorAll('[data-who]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.who === a.who)));
+    f.querySelectorAll('[data-goal]').forEach((b) => b.setAttribute('aria-pressed', String(a.goals.includes(b.dataset.goal))));
+    f.querySelectorAll('[data-style]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.style === a.style)));
   };
   mark();
-  const examIn = () => { if (f.exam) a.exam = { name: noDashes(f.exam.value.trim()).slice(0, 60), date: f.examDate.value, topics: noDashes(f.examTopics.value.trim()).slice(0, 600) }; };
-  f.addEventListener('input', () => { if (f.name) a.name = f.name.value.trim(); if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } examIn(); say(''); keep(); });
-  f.addEventListener('change', () => { if (f.grade) { a.grade = f.grade.value; a.age = f.age.value; } examIn(); keep(); });
+  const typed = () => { if (f.name) a.name = f.name.value.trim(); if (f.age) a.age = f.age.value; };
+  f.addEventListener('input', () => { typed(); say(''); keep(); });
   f.addEventListener('click', (e) => {
-    const g = e.target.closest('[data-gender]'), h = e.target.closest('[data-help]'), v = e.target.closest('[data-voice]');
-    if (g) a.gender = g.dataset.gender;
-    if (h) a.help = a.help.includes(h.dataset.help) ? a.help.filter((x) => x !== h.dataset.help) : [...a.help, h.dataset.help];
-    if (v) {
-      a.voice = v.dataset.voice; state.voiceGender = a.voice; save();
-      try { if (window.CassieVoice && window.CassieVoice.speak) window.CassieVoice.speak('Hi! I’m Cassie, your study buddy.', { gender: a.voice }); } catch (e2) { /* a sample is a nice extra */ }
-    }
-    if (g || h || v) { say(''); mark(); keep(); }
+    const w = e.target.closest('[data-who]'), g = e.target.closest('[data-goal]'), s = e.target.closest('[data-style]');
+    if (w) a.who = w.dataset.who;
+    if (g) a.goals = a.goals.includes(g.dataset.goal) ? a.goals.filter((x) => x !== g.dataset.goal) : [...a.goals, g.dataset.goal];
+    if (s) a.style = a.style === s.dataset.style ? '' : s.dataset.style; // (optional: a second tap clears it)
+    if (w || g || s) { say(''); mark(); keep(); }
   });
   const go = (k) => { if (k >= TOTAL) frFinish(a); else { frSave({ step: 'ob', at: k, answers: a }); frOnboard(k); } };
   el.querySelector('.fr-back').addEventListener('click', () => go(Math.max(0, at - 1)));
-  el.querySelector('.fr-skip').addEventListener('click', () => go(at + 1));
+  el.querySelector('.fr-skip').addEventListener('click', () => { typed(); frFinish(a); }); // (what's answered so far is kept)
   f.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (at === 0 && !a.name) { say('Type your name, or tap Skip.'); f.name.focus(); return; }
-    if (at === 1 && !a.grade) { say('Choose your level, or tap Skip.'); f.grade.focus(); return; }
+    typed();
+    if (at === 0 && !a.name) { say('Type your name, or tap Skip for now.'); f.name.focus(); return; }
+    if (at === 1 && !a.who) { say('Tap the one that fits you, or tap Skip for now.'); f.querySelector('[data-who]').focus(); return; }
     if (at === 1 && a.age && !(Math.round(+a.age) >= 2 && Math.round(+a.age) <= 100)) { say('Type an age from 2 to 100, or leave it empty.'); f.age.focus(); return; }
-    if (at === EXAM && (a.exam.name || a.exam.date || a.exam.topics)) { // (all empty: no exam, on we go)
-      const d = a.exam.date, why = !a.exam.name ? ['exam_name_needed', f.exam] : !d ? ['exam_date_needed', f.examDate] : d < today ? ['exam_date_past', f.examDate] : d > dayAdd(today, 365) ? ['exam_date_far', f.examDate] : !a.exam.topics && !frNotes ? ['exam_topics_needed', f.examTopics] : null;
-      if (why) { say(CassieErrors.say(why[0])); why[1].focus(); return; }
-    }
     go(at + 1);
   });
-  setTimeout(() => { const first = f.querySelector('.fr-big, .fr-pick, .fr-voice'); if (first && !f.contains(document.activeElement)) first.focus({ preventScroll: true }); }, 60);
+  setTimeout(() => { const first = f.querySelector('.fr-big, .fr-pick'); if (first && !f.contains(document.activeElement)) first.focus({ preventScroll: true }); }, 60);
 }
+var FR_TOTAL = 4; // (var: the first questions can open before this line runs)
+// done (or skipped): the answers go in the profile, and the student lands straight on the ask box
 function frFinish(a) {
-  const age = Math.round(+a.age) || 0;
-  saveProfile({ name: a.name || '', age: age >= 2 && age <= 100 ? age : 0, grade: a.grade || '', gender: a.gender || 'none' }, true, state.profile || {});
+  const age = Math.round(+a.age) || 0, p0 = state.profile || {};
+  const who = FR_WHO.find((x) => x[0] === a.who);
+  saveProfile({ name: a.name || '', age: age >= 2 && age <= 100 ? age : 0, grade: who ? who[2] : (a.grade || ''), gender: a.gender || p0.gender || 'none', who: who ? who[0] : '' }, true, p0);
   state.setupLater = false;
-  state.helpWith = a.help || [];
-  state.voiceGender = a.voice === 'man' ? 'man' : 'woman';
+  state.helpWith = Array.isArray(a.goals) ? a.goals : [];
+  state.answerStyle = FR_STYLES.some((x) => x[0] === a.style) ? a.style : '';
+  if (a.style === 'voice') state.voiceOut = true; // (answers are read aloud)
   save();
   frSave(null);
   frClose();
   syncAccount(true);
-  // an exam was given: Cassie makes its plan now (the exam form, filled in, with Try again if it fails), then the tour, then the plan
-  const ex = a.exam || {}, notes = frNotes;
-  frNotes = null;
-  const same = activeExams().find((x) => x.name === ex.name && x.date === ex.date);
-  if (same && !notes) offerTour(() => examReadySheet(same)); // (that plan is already made)
-  else if (ex.name && ex.date && (ex.topics || notes)) setTimeout(() => openExamSheet({ ...ex, notes, auto: true, then: (e) => offerTour(e ? () => examReadySheet(e) : null) }), 300);
-  else offerTour();
+  if (typeof refreshHub === 'function') refreshHub(); // (Home puts what they came for first)
+  if (rescued && !rescued.full) { examReadySheet(rescued); return; } // (a plan from the Exam Rescue Plan page is ready)
+  frToAsk();
 }
-// notes or slides added in the first questions (kept in memory only: a reload asks again)
-var frNotes = null; // (var: the first questions can open before this line runs)
+// straight to the ask box (a phone: the Chat tab; a computer: the chat page)
+function frToAsk() {
+  if (onPhoneHome()) { window.CassieNative.go('chat'); setTimeout(() => promptInput.focus(), 60); return; }
+  if (document.body.classList.contains('desk-on')) deskGo('chat'); // (a computer opens on Home, which has no ask box)
+  setTimeout(() => promptInput.focus(), 60); // (after the first-run screen has gone)
+}
+// Free gets one exam plan made from notes (the first one); Plus, every one
 function notesFree() { return !state.freeNotesPlan; }
 // right after the first run (signed in or as a guest): a quick tour?, asked once, ever; after: once it's over
 function offerTour(after = null) { setTimeout(() => { if (window.CassieTour) window.CassieTour.offer(after); else if (after) after(); }, 700); }
@@ -8309,7 +8323,7 @@ async function authCall(path, body, method = 'POST', { timeout = 20000, signal }
   return data;
 }
 function accountData() {
-  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null };
+  return { profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [] };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -8324,7 +8338,7 @@ function syncAccount(now) {
 }
 function applyAccountData(d) {
   if (!d) return;
-  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour', 'answerStyle', 'helpWith'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
   if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
     const mine = new Map((state.cards || []).map((c) => [c.id, c]));
     d.cards.forEach((c) => { if (!c || !c.id || !c.f) return; const m = mine.get(c.id); if (!m || (c.seen || 0) > (m.seen || 0)) mine.set(c.id, c); });

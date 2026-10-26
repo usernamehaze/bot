@@ -2160,9 +2160,9 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .save-offer-line { border: 1px solid var(--border); background: transparent; color: var(--text); }
 /* 4. The questions */
 .fr-ob { width: min(440px, 100%); min-height: min(640px, calc(var(--fr-h, 100dvh) - 24px - var(--safe-top) - var(--safe-bottom))); display: flex; flex-direction: column; gap: 16px; animation: frIn .35s ease both; }
-.fr-top { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; gap: 8px; }
+.fr-top { display: grid; grid-template-columns: 92px 1fr 92px; align-items: center; gap: 8px; }
 .fr-back, .fr-skip { min-height: 44px; border: 0; background: none; color: var(--text); font: inherit; font-weight: 650; cursor: pointer; padding: 0 4px; }
-.fr-back { justify-self: start; } .fr-skip { justify-self: end; grid-column: 3; color: var(--muted); }
+.fr-back { justify-self: start; } .fr-skip { justify-self: end; grid-column: 3; color: var(--muted); font-weight: 600; text-align: right; line-height: 1.15; }
 .fr-back[hidden] { display: block; visibility: hidden; }
 .fr-progress { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .fr-bar { width: 100%; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
@@ -2186,7 +2186,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-seg, .fr-picks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .fr-seg button, .fr-pick { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
 .fr-pick { min-height: 52px; padding: 0 20px; font-size: 1.02rem; }
-.fr-seg button[aria-checked="true"], .fr-pick[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.fr-seg button[aria-checked="true"], .fr-pick[aria-pressed="true"], .fr-pick[aria-checked="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .fr-voices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .fr-voice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 120px; border-radius: 20px; border: 2px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
 .fr-voice[aria-checked="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--primary-ink); }
