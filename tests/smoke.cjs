@@ -386,6 +386,29 @@ test('a server that never answers: the chat gives up with a plain message (no en
   } finally { await ctx.close(); }
 });
 
+test('a simpler start: a brand-new student sees their 4 most useful tools on Home and More tools for the rest (what they came for first); a returning one sees them all; API keys sit in Settings, Advanced, not under Account', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', state: { helpWith: ['labs'], tab: 'home' } });
+  try {
+    await page.evaluate(() => window.CassieNative && window.CassieNative.go('home'));
+    await page.waitForSelector('#home .hub-box', { timeout: 8000 });
+    const first = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
+    expect(first.length === 4 && first[0] === 'lab' && first.includes('games'), 'new: 4 boxes, labs first for a labs fan: ' + first);
+    const more = page.locator('#home .hub-more');
+    const bb = await more.boundingBox();
+    expect(/More tools/.test(await more.innerText()) && bb.height >= 44, 'More tools, 44px');
+    await more.click();
+    const all = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
+    expect(all.length > 4 && all.includes('room') && !(await page.locator('#home .hub-more').count()), 'More tools shows the rest (the study room too): ' + all);
+    // a returning student (a chat already): every box at once
+    await page.evaluate(() => { state.chats.push({ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'hi' }], updatedAt: Date.now() }); hubMoreOpen = false; save(); refreshHub(); });
+    await page.waitForFunction(() => document.querySelectorAll('#home .hub-box').length > 4 && !document.querySelector('#home .hub-more'), null, { timeout: 5000 });
+    // API keys: under Advanced, not Account
+    const where = await page.evaluate(() => { const k = document.getElementById('settings-keys'); return { sec: k.closest('.set-sec').dataset.sec, title: k.closest('.set-sec').querySelector('.set-sec-h').textContent }; });
+    expect(where.sec === 'advanced' && where.title === 'Advanced', 'API keys are in Advanced: ' + JSON.stringify(where));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+});
+
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
   const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];
@@ -8650,6 +8673,9 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
     const hub = phone ? '#home .hub' : '#chat-log .hub';
     const start = async (o = {}) => {
       const r = await open(b, { device, viewport, scale: 1, lite: 'off', server: !!o.server, state: { groqKey: 'gsk_test', tab: 'home' } });
+      // (More tools already tapped this visit: every box shows; a brand-new student's 4 and More tools are tested on their own)
+      await r.ctx.addInitScript(() => { try { sessionStorage.setItem('cassie.moreTools', '1'); } catch (e) { /* ignore */ } });
+      await r.page.reload();
       r.page.on('dialog', (d) => d.dismiss().catch(() => {}));
       await r.page.waitForSelector(hub + ' .hub-boxes', { timeout: 10000 });
       return r;
