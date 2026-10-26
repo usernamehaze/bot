@@ -587,7 +587,8 @@ test('the real server: the studio voice uses the model set in ELEVENLABS_MODEL, 
     for (const [model, voice, style] of [[undefined, 'man', true], ['eleven_v4_turbo', 'man', false], ['eleven_v4', 'woman', false]]) {
       const { call } = await realServer({ ELEVENLABS_API_KEY: 'test-key', ...(model ? { ELEVENLABS_MODEL: model } : {}) });
       sent.length = 0;
-      const r = await call('POST', '/speak', { text: 'Hello from Cassie ' + model, voice, uid: 'aaaaaaaa-1' }, { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' }); // (the extension: no sign-in, a Free allowance per install)
+      const up = await call('POST', '/auth/signup', { email: 'model@example.com', password: 'longenough1', age: 20 }); // (the studio voice is for accounts)
+      const r = await call('POST', '/speak', { text: 'Hello from Cassie ' + model, voice, uid: 'aaaaaaaa-1' }, { authorization: 'Bearer ' + up.json.token });
       const b = sent[0] && sent[0].body;
       expect(r.status === 200 && b, `${model || 'the default'}: Cassie speaks: ` + r.status + ' ' + r.text.slice(0, 120));
       expect(b.model_id === (model || 'eleven_flash_v2_5'), 'the model sent: ' + b.model_id);
@@ -613,12 +614,13 @@ test('the real server: the studio voice counts the ElevenLabs account’s own cr
     let s1 = await realServer({ ELEVENLABS_API_KEY: 'k', SPEAK_MONTHLY_CHARS: '125000' });
     const reset = Date.UTC(2026, 10, 3, 4) / 1000;
     eleven.sub = { character_limit: 100000, character_count: 99960, next_character_count_reset_unix: reset };
-    const ext = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' }; // (the extension: no sign-in, a Free allowance per install)
-    const left = await s1.call('GET', '/speak?uid=aaaaaaaa-1', null, ext);
+    const signup = async (srv) => ({ authorization: 'Bearer ' + (await srv.call('POST', '/auth/signup', { email: 'credits@example.com', password: 'longenough1', age: 20 })).json.token }); // (the studio voice is for accounts)
+    const left = await s1.call('GET', '/speak?uid=aaaaaaaa-1', null, await signup(s1));
     expect(left.json.on && left.json.left === 40 && left.json.back === '2026-11-03', 'the account’s own credits and renewal day: ' + left.text);
     // a key that can't read its account, and the credits run out: one try, then resting (no more calls)
     const s2 = await realServer({ ELEVENLABS_API_KEY: 'k' });
     eleven = { sub: null, tts: 0, out: true };
+    const ext = await signup(s2);
     const a = await s2.call('POST', '/speak', { text: 'Hello there.', uid: 'aaaaaaaa-1' }, ext);
     const b2 = await s2.call('POST', '/speak', { text: 'And again.', uid: 'aaaaaaaa-1' }, ext);
     expect(a.status === 429 && b2.status === 429 && eleven.tts === 1, 'out of credits: resting (429), and ElevenLabs asked once: ' + JSON.stringify([a.status, b2.status, eleven.tts]));
@@ -7932,7 +7934,9 @@ test('phones: maths copied from a PDF is cleaned and rebuilt before solving', as
 
 test('server: GET /speak says how many studio characters are left (a number) and when they come back, counting nothing', async () => {
   await fetch(SERVER + '/__reset');
-  const hdr = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' };
+  const ext = { origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' };
+  const token = (await (await fetch(SERVER + '/auth/signup', { method: 'POST', headers: { ...ext, 'content-type': 'application/json' }, body: JSON.stringify({ email: `voice${Date.now()}@example.com`, password: 'longenough1', age: 20 }) })).json()).token;
+  const hdr = { ...ext, authorization: 'Bearer ' + token }; // (the studio voice is for accounts)
   const left = async (uid = 'voice-test-uid-1') => (await fetch(`${SERVER}/speak?uid=${uid}`, { headers: hdr })).json();
   try {
     await serverMode({ speakOn: false });
@@ -7948,6 +7952,10 @@ test('server: GET /speak says how many studio characters are left (a number) and
     expect(said.status === 200 && /audio\/mpeg/.test(said.headers.get('content-type')), 'a sentence is said: ' + said.status);
     d = await left('voice-test-uid-2');
     expect(d.left === 1000 - 'Hello there, student.'.length, 'what was said comes off the month: ' + JSON.stringify(d));
+    // the extension (no sign-in): no studio voice, it types instead
+    const g = await (await fetch(`${SERVER}/speak?uid=voice-test-uid-3`, { headers: ext })).json();
+    const gp = await fetch(SERVER + '/speak', { method: 'POST', headers: { ...ext, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'Hi', voice: 'woman', uid: 'voice-test-uid-3' }) });
+    expect(g.guest === true && g.left === 0 && gp.status === 401, 'not signed in (the extension too): no studio voice: ' + JSON.stringify(g) + ' ' + gp.status);
     expect((await serverMode({})).elevenCalls === 1, 'one call to ElevenLabs');
   } finally { await serverMode({ speakOn: false, speakMonth: null }); }
 });

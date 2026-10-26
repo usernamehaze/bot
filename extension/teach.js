@@ -612,10 +612,10 @@
        or if Bella stops partway, the steps are typed and the card says so once. Nothing waits for a tap. */
     let voiceOn = true, autoOn = true, at0 = 0, timer = 0, alive = true, studio = false, src = null, clipFor = null;
     const vnote = $('.ct-vnote');
-    const typing = () => {
+    const typing = (guest) => {
       studio = false;
       if (!vnote.hidden) return;
-      vnote.textContent = window.CassieErrors ? window.CassieErrors.say('voice_typing') : 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.';
+      vnote.textContent = window.CassieErrors ? window.CassieErrors.say(guest ? 'voice_ext_account' : 'voice_typing') : 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.';
       vnote.hidden = false;
     };
     let actx = null;
@@ -640,7 +640,7 @@
       const left = await chrome.runtime.sendMessage({ type: 'CASSIE_SPEAK_LEFT' }).catch(() => null);
       if (!alive) return;
       studio = !!(left && left.on && left.left >= need && audio());
-      if (!studio) typing();
+      if (!studio) typing(!!(left && left.guest));
     }
     const readPace = (text) => Math.min(9000, 1400 + text.length * 45);
     function speakThen(text, then) {

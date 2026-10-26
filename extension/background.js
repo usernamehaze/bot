@@ -158,7 +158,7 @@ async function speakLeft() {
   const r = await fetch(CASSIE_SERVER + '/speak?uid=' + encodeURIComponent(await cassieUid()));
   if (!r.ok) return { on: false, left: 0 };
   const d = await r.json();
-  return { on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '' };
+  return { on: !!d.on, left: Math.max(0, +d.left || 0), back: typeof d.back === 'string' ? d.back : '', guest: !!d.guest }; // (guest: the studio voice is for signed-in accounts)
 }
 async function speakClip(text) {
   const r = await fetch(CASSIE_SERVER + '/speak', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, voice: 'woman', uid: await cassieUid() }) });
