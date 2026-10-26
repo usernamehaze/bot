@@ -77,6 +77,8 @@
     const setCard = document.querySelector('#settings-panel .settings-card');
     const before = { phone: phone(), tab: state.tab, settings: !settingsPanel.hidden ? (setCard && setCard.dataset.page) || 'all' : null, homeTop: (document.getElementById('home') || {}).scrollTop || 0, focus: document.activeElement };
     if (before.settings) closeSettings();
+    // a brand-new student's Home shows 4 tools and More tools: the tour opens them all, so every stop is there
+    if (window.hubMoreOpen === false && typeof refreshHub === 'function') { window.hubMoreOpen = true; refreshHub(); }
     // a computer's dashboard pages have no ask box: the tour shows a new chat, where every stop is
     if (!before.phone && document.body.classList.contains('desk-on') && typeof deskGo === 'function') { before.desk = deskPage; deskGo('chat'); }
     const root = document.documentElement;
