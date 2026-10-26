@@ -1946,7 +1946,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=178').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=179').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -5008,6 +5008,7 @@ async function handleSend(text, opts = {}) {
       rb.addEventListener('click', () => openReader(doc));
       bubble.appendChild(rb);
     }
+    if (!doc && !image) webChip(bubble, sendText, reply);
     showFollowups();
     saveOffer(bubble);
     setCursorMode('idle');
@@ -5501,11 +5502,35 @@ async function askGeminiGrounded(q) {
   return { text: text || '(no response)', sources };
 }
 
+// No Gemini key of their own: Cassie's server searches (its key; a few a day, see /web on the server)
+async function askServerWeb(q) {
+  let res;
+  try { res = await fetch(SERVER + '/web', { method: 'POST', headers: chatHeaders(), body: JSON.stringify({ q, uid: installId(), system: buildSystemPrompt() }) }); }
+  catch (e) { throw friendlyError(CassieErrors.say('network')); }
+  let d = {};
+  try { d = await res.json(); } catch (e) { /* empty */ }
+  if (!res.ok) throw friendlyError((d.error && d.error.message) || CassieErrors.say('unknown'));
+  return { text: d.text || '(no response)', sources: Array.isArray(d.sources) ? d.sources : [] };
+}
+// Under an answer about the real world or something recent (a show, the news, a price, a person),
+// or one where Cassie says she isn't sure: one tap to look it up on the web. Never searches by itself.
+const WEB_ASK_RE = /\b(movies?|films?|series|shows?|drama|k-?drama|episodes?|seasons?|netflix|anime|actors?|actress|singers?|celebrit(y|ies)|news|latest|recent(ly)?|today|this (week|month|year)|current(ly)?|prices?|how much|stocks?|weather|scores?|won|elections?|president|released?|release date|20[2-9]\d|who is)\b/i;
+const WEB_UNSURE_RE = /\b(don'?t|do not) have (reliable|up[- ]to[- ]date|current|recent)|can'?t (browse|access the (web|internet))|my (knowledge|training)|as of my\b/i;
+function webChip(bubble, question, reply) {
+  if (!state.geminiKey && !SERVER) return;
+  if (!WEB_ASK_RE.test(question) && !WEB_UNSURE_RE.test(reply)) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'web-chip';
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Search the web';
+  b.addEventListener('click', () => { b.remove(); runWebCheck(question); });
+  bubble.appendChild(b);
+}
+
 async function runWebCheck(text) {
   text = (text || '').trim();
   if (!text) { promptInput.placeholder = 'Type a question first, then tap Web…'; promptInput.focus(); return; }
   taskOutfit = 'graduate'; dressCassie(); track('feature', 'web'); trackWords(text);
-  if (!state.geminiKey) {
+  if (!state.geminiKey && !SERVER) {
     openSettings();
     detourToElement(geminiKeyInput, { click: true, resumeAfter: 1200 });
     renderMessage('assistant', 'Web fact-checking uses Google Gemini’s search. Add your free Gemini key in Settings (the images key) to turn it on.');
@@ -5522,7 +5547,7 @@ async function runWebCheck(text) {
   botMood('searching');
   const typing = renderTyping();
   try {
-    const { text: answer, sources } = await askGeminiGrounded(text);
+    const { text: answer, sources } = state.geminiKey ? await askGeminiGrounded(text) : await askServerWeb(text);
     typing.remove();
     let out = answer;
     if (sources.length) {
@@ -6160,7 +6185,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=178');
+      exploreMod = await import('./explore/cell3d.js?v=179');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6210,7 +6235,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=178');
+      labsMod = await import('./labs/labs.js?v=179');
       islandRest();
     }
     labsMod.open({
@@ -8029,10 +8054,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=178').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=179').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=178', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=179', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

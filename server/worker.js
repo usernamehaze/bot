@@ -558,6 +558,68 @@ async function askGemini(env, messages, maxTokens = 2048) {
   return { reply: null, detail: detail ? 'Gemini ' + detail.replace(/ · $/, '') : '' };
 }
 
+/* Web search (the Web chip): a Gemini answer grounded in Google Search, on the owner's GEMINI_KEY.
+   Every search costs the owner money, so each person gets WEB_DAILY a day on Free (5), WEB_DAILY_PAID on
+   Plus and Pro (30), and the whole app WEB_DAILY_ALL (300); past that, a plain message. POST /web {q, uid, system} */
+async function geminiSearch(env, q, system) {
+  if (geminiBlocked.until > Date.now()) return { text: '', detail: geminiBlockedText() };
+  let detail = '';
+  const list = await geminiModels(env);
+  for (const model of [...new Set(env.GEMINI_MODEL ? [env.GEMINI_MODEL, ...list] : list)].filter((m) => !geminiGone.has(m)).slice(0, 2)) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_KEY }, signal: AbortSignal.timeout(30000),
+        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents: [{ role: 'user', parts: [{ text: q }] }], tools: [{ google_search: {} }] }),
+      });
+      if (r.ok) {
+        const cand = (await r.json()).candidates?.[0] || {};
+        const text = (cand.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join('').trim();
+        const seen = new Set(), sources = [];
+        (cand.groundingMetadata?.groundingChunks || []).forEach((c) => { const uri = c.web && c.web.uri; if (uri && !seen.has(uri)) { seen.add(uri); sources.push({ title: clean(c.web.title || uri, 200), uri: clean(uri, 2000) }); } });
+        if (text) return { text, sources };
+        detail += `${model}: empty answer · `;
+      } else {
+        let m = ''; try { m = (await r.json()).error?.message || ''; } catch (e) { /* not JSON */ }
+        if (LOCATION_BLOCKED.test(m)) { geminiBlocked = { until: Date.now() + 10 * 60e3, where: lastColo }; return { text: '', detail: geminiBlockedText() }; }
+        if (r.status === 404) { gemini.at = 0; if (/no longer available|not found/i.test(m)) geminiGone.add(model); }
+        detail += `${model}: ${reasonOf(r.status, m)} · `;
+      }
+    } catch (e) { detail += `${model}: ${e.name === 'TimeoutError' ? 'no answer in 30 s' : reasonOf(0, e.message)} · `; }
+  }
+  return { text: '', detail: 'Gemini search ' + detail.replace(/ · $/, '') };
+}
+async function web(request, env, ctx) {
+  const h = allowedOrigin(request, env);
+  if (!h) return new Response('forbidden', { status: 403 });
+  let body = {};
+  try { body = await request.json(); } catch (e) { /* empty */ }
+  const q = String(body.q || '').replace(/\s+/g, ' ').trim().slice(0, 1000);
+  if (q.length < 2) return chatError('Type a question first, then tap Web.', 400, h);
+  if (!env.GEMINI_KEY) return chatError('Web search isn’t on yet.', 503, h, {}, 'web_off');
+  await ensureSchema(env.DB);
+  const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v) ? +v : d);
+  const today = dayOf(Date.now()), ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const { plan, account } = await planOf(request, env);
+  const uid = /^[\w-]{8,64}$/.test(body.uid || '') ? body.uid : '';
+  const who = account ? 'a:' + account : uid ? 'u:' + uid : 'ip:' + ip;
+  const free = n(env.WEB_DAILY, 5), paid = n(env.WEB_DAILY_PAID, 30), mine = plan === 'free' ? free : paid, all = n(env.WEB_DAILY_ALL, 300);
+  const keys = ['web:' + who, 'web:i:' + ip, 'web:all'];
+  const [used, usedIp, usedAll] = (await env.DB.batch(keys.map((k) => countUseQuery(env.DB, k, today)))).map((r) => r.results?.[0]?.n || 0);
+  if (usedAll > all) { await uncountUses(env.DB, keys); return chatError('Web search is resting until tomorrow. Ask Cassie in the chat, or try Web again tomorrow.', 429, h, {}, 'web_all'); }
+  if (used > mine || usedIp > Math.max(mine, 5) * 25) {
+    await uncountUses(env.DB, keys);
+    return chatError(plan === 'free' && paid > free ? `You’ve used today’s ${mine} free web searches. They come back at midnight. Plus and Pro get ${paid} a day.` : `You’ve used today’s ${mine} web searches. They come back at midnight.`, 429, h, {}, 'web_daily');
+  }
+  const out = await geminiSearch(env, q, typeof body.system === 'string' ? body.system.slice(0, 12000) : '');
+  if (!out.text) {
+    await uncountUses(env.DB, keys);
+    ctx.waitUntil(logProblem(env, 'web', out.detail));
+    return chatError('Web search isn’t answering right now. Try again in a minute.', 503, h, {}, 'web_failed');
+  }
+  ctx.waitUntil(countChat(env, today, 'web'));
+  return json({ text: out.text, sources: out.sources.slice(0, 8), left: Math.max(0, mine - used) }, 200, h);
+}
+
 function geminiBlockedText() {
   return `Google doesn't allow its free Gemini API from where Cloudflare is running Cassie right now${geminiBlocked.where ? ` (data centre ${geminiBlocked.where})` : ''}. Groq and Workers AI answer instead. Fix: Cloudflare → Workers & Pages → cassie → Settings → Placement → Smart.`;
 }
@@ -1983,6 +2045,7 @@ export default {
       if (request.method === 'POST' && url.pathname === '/care') { const h = allowedOrigin(request, env); if (!h) return new Response('forbidden', { status: 403 }); if (env.DB) { await ensureSchema(env.DB); countCare(env, ctx); } return new Response(null, { status: 204, headers: h }); }
       if (url.pathname.startsWith('/auth/')) return await auth(request, env, url.pathname);
       if (request.method === 'POST' && url.pathname === '/early') return await early(request, env);
+      if (request.method === 'POST' && url.pathname === '/web') return await web(request, env, ctx);
       if (url.pathname.startsWith('/pay/')) return await pay(request, env, url, ctx);
       if (request.method === 'GET' && url.pathname === '/admin/early') return await adminEarly(request, env);
       if (url.pathname.startsWith('/room')) return await room(request, env, url);

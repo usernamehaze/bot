@@ -1347,6 +1347,9 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 body.reader-open #mascot { display: none; }
 body:has(#settings-panel:not([hidden])) #mascot { visibility: hidden; } /* (she sat on the settings) */
 .reader-open-btn { display: inline-block; margin-top: 10px; }
+/* under an answer about the real world: one tap to look it up on the web */
+.web-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.web-chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .share-tip { margin-top: 12px; font-size: .8rem; color: var(--muted); line-height: 1.45; }
 .share-tip[hidden] { display: none; }
 
