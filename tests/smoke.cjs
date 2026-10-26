@@ -1442,7 +1442,7 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
     await page.click('#side-general #settings-btn');
     await page.waitForSelector('#settings-panel:not([hidden]) .set-nav', { timeout: 4000 });
     const nav = await page.evaluate(() => [...document.querySelectorAll('.set-nav [data-go]')].map((x) => x.textContent));
-    expect(nav.join() === 'You,Account,Study,Appearance,Voice and sound,Privacy and data,Plans,Help,All settings', 'the list: ' + nav.join());
+    expect(nav.join() === 'You,Account,Study,Appearance,Voice and sound,Privacy and data,Plans,Help,Advanced,All settings', 'the list: ' + nav.join());
     const geo = await page.evaluate(() => { const n = document.querySelector('.set-nav').getBoundingClientRect(), c = document.querySelector('.settings-card').getBoundingClientRect(); return { navLeft: n.left - c.left, navW: n.width, cardW: c.width }; });
     expect(geo.navLeft < 40 && geo.navW >= 200 && geo.cardW > 900, 'the list on the left of a wide page: ' + JSON.stringify(geo));
     for (const [go, title, inside] of [['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['plans', 'Plans', '.plan-compare'], ['appearance', 'Appearance', '#accent-swatches']]) {
