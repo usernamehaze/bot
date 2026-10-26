@@ -314,6 +314,40 @@ test('the four first questions fit everyone: name, where you are, what brings yo
   await ctx.close();
 });
 
+test('web search for everyone: with no Gemini key of their own, Web asks Cassie’s server, which answers from Google Search with Sources; a question about a show gets a Search the web chip under the answer; past the daily cap a kind message', async (b) => {
+  await fetch(`${SERVER}/__reset`);
+  const gem0 = (await serverMode({})).gemini; // (the server's Gemini key is on unless 'off')
+  await serverMode({ groq: 'ok', ai: 'ok', gemini: gem0 === 'off' ? 'busy' : gem0, webDaily: 2, webSearch: 'ok', webCalls: [] });
+  const { ctx, page, errors } = await open(b, {});
+  try {
+    expect(await page.evaluate(() => !state.geminiKey), 'no Gemini key of their own');
+    await ask(page, 'What is the plot of the drama Doctor X?');
+    await page.waitForSelector('#chat-log .web-chip', { timeout: 5000 });
+    const chip = await page.locator('#chat-log .web-chip').boundingBox();
+    expect(/Search the web/.test(await page.locator('#chat-log .web-chip').innerText()) && chip.height >= 43.5, 'the chip: Search the web, 44px');
+    const before = await page.locator('#chat-log .bubble-assistant').count();
+    await page.click('#chat-log .web-chip');
+    await page.waitForFunction((n) => document.querySelectorAll('#chat-log .bubble-assistant').length > n && /Sources/.test([...document.querySelectorAll('#chat-log .bubble-assistant')].at(-1).innerText), before, { timeout: 10000 });
+    const last = await page.locator('#chat-log .bubble-assistant').last().innerText();
+    expect(/freelance surgeon/.test(last) && /example\.com/.test(last) && /example\.org/.test(last), 'the answer from the web, with its Sources: ' + last);
+    const calls = (await serverMode({})).webCalls || [];
+    expect(calls.length === 1 && /Doctor X/.test(calls[0].q) && calls[0].system, 'the server searched once with the question: ' + JSON.stringify(calls));
+    expect(!(await page.locator('#chat-log .web-chip').count()), 'the chip is gone once used');
+    // a question that isn't about the world or anything recent: no chip
+    await ask(page, 'Explain photosynthesis simply');
+    expect(!(await page.locator('#chat-log .bubble-assistant').last().locator('.web-chip').count()), 'no chip on a school question');
+    // the daily cap (2 here): the 2nd search works, the 3rd says so kindly and nothing is searched
+    await page.evaluate(() => runWebCheck('Latest Doctor X season?'));
+    await page.waitForFunction(() => (document.querySelectorAll('#chat-log .bubble-assistant') || []).length && /Sources/.test([...document.querySelectorAll('#chat-log .bubble-assistant')].at(-1).innerText), null, { timeout: 10000 });
+    await page.evaluate(() => runWebCheck('Who stars in Doctor X?'));
+    await page.waitForFunction(() => /used today’s 2 free web searches/.test(document.getElementById('chat-log').innerText), null, { timeout: 10000 });
+    const msg = await page.evaluate(() => document.getElementById('chat-log').innerText.match(/You’ve used today’s 2 free web searches[^\n]*/)[0]);
+    expect(/come back at midnight/.test(msg) && /Plus and Pro get 30 a day/.test(msg) && !/[–—]/.test(msg), 'the cap message: ' + msg);
+    expect(((await serverMode({})).webCalls || []).length === 2, 'nothing searched past the cap');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); await serverMode({ gemini: gem0, webDaily: null, webCalls: [] }); await fetch(`${SERVER}/__reset`); }
+});
+
 test('an update reaches every device: the pages, the service worker cache and the Labs modules (the Museum too) carry one version, so a browser never keeps an old Labs', async () => {
   const read = (f) => fs.readFileSync(require('path').join(ROOT, f), 'utf8');
   const v = (read('sw.js').match(/cassie-v(\d+)/) || [])[1];

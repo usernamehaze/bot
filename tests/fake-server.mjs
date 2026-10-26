@@ -88,6 +88,11 @@ export async function startFakeServer(port = 4630) {
         if (mode.geminiPictures === 'nobilling') return Response.json({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0' } }, { status: 429 });
         return Response.json({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' } }] } }] });
       }
+      if ((body.tools || []).some((t) => t.google_search)) { // web search (mode.webSearch 'ok' | 'down')
+        mode.webCalls = [...(mode.webCalls || []), { q: body.contents.at(-1).parts[0].text, system: !!body.systemInstruction }].slice(-10);
+        if (mode.webSearch === 'down') return Response.json({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }, { status: 503 });
+        return Response.json({ candidates: [{ content: { parts: [{ text: 'Doctor X is a Japanese medical drama about a freelance surgeon who never fails.' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.com/doctor-x', title: 'example.com' } }, { web: { uri: 'https://example.org/drama', title: 'example.org' } }] } }] });
+      }
       if (mode.gemini !== 'ok') return Response.json({ error: { code: 503, message: 'This model is currently experiencing high demand.' } }, { status: 503 });
       const parts = body.contents.at(-1).parts;
       const asMsgs = [{ role: 'user', content: parts.map((p) => (p.inlineData ? { type: 'image_url' } : { type: 'text', text: p.text })) }];
@@ -143,6 +148,7 @@ export async function startFakeServer(port = 4630) {
     get PAY_TESTERS() { return mode.payTesters || ''; },
     PAYMONGO_WEBHOOK_SECRET: 'whsk_test_fake_paymongo', VIEW_TOKEN: 'test-view-token-0123456789',
     get GEMINI_KEY() { return mode.gemini === 'off' ? undefined : 'AIza_server_test'; },
+    get WEB_DAILY() { return mode.webDaily == null ? undefined : String(mode.webDaily); }, get WEB_DAILY_ALL() { return mode.webAll == null ? undefined : String(mode.webAll); },
     get ELEVENLABS_API_KEY() { return mode.speakOn ? 'not-a-real-elevenlabs-key' : undefined; }, // (mode.speakOn: the studio voice is switched on)
     get SPEAK_MONTHLY_CHARS() { return mode.speakMonth == null ? undefined : String(mode.speakMonth); },
     AI: { async run(model, input) {
