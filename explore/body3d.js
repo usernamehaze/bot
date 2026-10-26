@@ -30,7 +30,9 @@ export const SYSTEMS = [
   { id: 'reproductive', name: 'Reproductive', on: true, parts: [['visceral', 'genital_systems']] },
 ];
 // the organs a first tap picks (a tap again inside one picks the exact part): whole organs, and whole muscles
-const MAIN_ORGAN = /^(heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|eye_[lr]|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
+const MAIN_ORGAN = /^(hypophysis|heart|left_lung|right_lung|larynx|nose|trachea|liver|stomach|pancreas|gallbladder|o?esophagus|small_intestine|large_intestine|tongue|kidney_[lr]|urinary_bladder|cerebrum|cerebellum|brainstem|spinal_cord|eyeball|eye_[lr]|thyroid_gland|spleen|thymus|hypophysis|uterus|breast_[lr])$|^(?!.*_of_).*_muscle(_[lr])?$/;
+// the names students search for: the model uses the textbook ones (Hypophysis, Suprarenal gland)
+const EVERYDAY = { hypophysis: 'Pituitary gland', adenohypophysis: 'Pituitary gland, front lobe', neurohypophysis: 'Pituitary gland, back lobe', suprarenal_gland_l: 'Adrenal gland', suprarenal_gland_r: 'Adrenal gland' };
 // parts only a boy's body has (a girl's body shows the female organs instead)
 const MALE_ONLY = /^(male_genital_system|urogenital_region_[lr]|urethra)$|penis|scrot|testicular|ductus_deferens|prostat|seminal/;
 const SYS_COLOR = { female: '#d98c9a', regions: '#e2b095', skeletal: '#e6d8bd', visceral: '#c98270', cardiovascular: '#c8322f', nervous: '#f0cf5a', muscular: '#b5473e', lymphoid: '#97bf5a' };
@@ -178,6 +180,7 @@ export function createBody(ctx) {
         if (color) { femaleColor.set(i, color); index.mesh.push(i); }
       });
       index.femaleMesh0 = index.mesh.length - femaleColor.size;
+      index.s.forEach((r) => { if (EVERYDAY[r[0]]) r[1] = EVERYDAY[r[0]]; }); // (the name students know; the Latin one still shows on the card)
       index.lower = index.s.map((r) => r[1].toLowerCase());
       const shown = new Set();
       index.chunks.forEach((c) => { for (let m = c.meshStart; m < c.meshStart + c.meshCount; m++) if (index.mesh[m] >= 0) shown.add(index.mesh[m]); });

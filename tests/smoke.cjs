@@ -5767,6 +5767,34 @@ test('Explore 3D body on a laptop (1366 wide, a mouse): every body system chip s
   await ctx.close();
 });
 
+test.slow('Explore 3D: every endocrine gland (pituitary, hypothalamus, pineal, thyroid, parathyroids, thymus, adrenals, pancreas, ovaries, testes) is found by its everyday name with Find a part, and a tap shows its card: what it is and what it does', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' } });
+  try {
+    await open3d(page, 'body3d');
+    await page.waitForSelector('.x3d:not([hidden]) .x3d-sys', { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelector('.x3d-loading').hidden, null, { timeout: 30000 });
+    if (await page.locator('.x3d-sys[data-sys="endocrine"]').getAttribute('aria-pressed') !== 'true') await page.click('.x3d-sys[data-sys="endocrine"]');
+    const GLANDS = [['pituitary', /^Pituitary gland/], ['hypothalamus', /^Hypothalamus/], ['pineal', /^Pineal gland/], ['thyroid', /^Thyroid gland/], ['parathyroid', /parathyroid gland/i],
+      ['thymus', /thymus/i], ['adrenal', /^Adrenal gland/], ['pancreas', /^Pancreas/], ['ovary', /^Ovary/], ['testis', /^Testis/]];
+    const report = [];
+    for (const [q, want] of GLANDS) {
+      await page.fill('.x3d-search', '');
+      await page.fill('.x3d-search', q);
+      const found = await page.waitForFunction((w) => { const r = document.querySelector('.x3d-results'); return r && !r.hidden && [...r.querySelectorAll('button')].some((x) => new RegExp(w.src, w.flags).test(x.innerText)); }, { src: want.source, flags: want.flags }, { timeout: 8000 }).then(() => true, () => false);
+      if (!found) { report.push(`${q}: not found (results: ${await page.evaluate(() => [...document.querySelectorAll('.x3d-results button')].map((x) => x.innerText.split('\n')[0]).join(' | '))})`); continue; }
+      const first = await page.evaluate(() => (document.querySelector('.x3d-results button') || {}).innerText || '');
+      if (!want.test(first.split('\n')[0])) report.push(`${q}: found, but not the first result (first: ${first.split('\n')[0]})`);
+      await page.evaluate((w) => { const re = new RegExp(w.src, w.flags); [...document.querySelectorAll('.x3d-results button')].find((x) => re.test(x.innerText)).click(); }, { src: want.source, flags: want.flags });
+      const card = await page.waitForFunction((w) => { const h = document.querySelector('.x3d-sheet h3'); return h && !document.querySelector('.x3d-sheet').hidden && new RegExp(w.src, w.flags).test(h.textContent); }, { src: want.source, flags: want.flags }, { timeout: 30000 }).then(() => true, () => false);
+      if (!card) { report.push(`${q}: tapped, but no card (shows: ${await page.evaluate(() => document.querySelector('.x3d-sheet h3') && document.querySelector('.x3d-sheet h3').textContent)})`); continue; }
+      const like = await page.locator('.x3d-like').innerText(), does = await page.locator('.x3d-does').innerText();
+      if (!/What it is:/.test(like) || !/What it does:/.test(does) || does.replace(/What it does:/, '').trim().length < 20 || /[–—]/.test(like + does)) report.push(`${q}: the card is missing its words: ${like} / ${does}`);
+    }
+    expect(!report.length, 'the glands: ' + report.join(' || '));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+  } finally { await ctx.close(); }
+});
+
 test.slow('Explore 3D: the human body — 10 systems, tap or find a part to learn what it is, a girl’s body, ask Cassie', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, scale: 1, state: { groqKey: 'gsk_test' }, fakeGroq: (body) => ({ text: /two short sentences/.test(JSON.stringify(body)) ? 'The **hepatic artery** brings oxygen-rich blood to the liver.' : 'The femur is the thigh bone, the longest bone in the body.' }) });
   await open3d(page, 'body3d');
@@ -9263,7 +9291,7 @@ test.slow('every screen at 390x844, 360x740 and 1280x800: every button can be ta
   };
   await Promise.all(lanes.map(async (lane) => { for (const sz of lane) await sweep(sz); }));
   if (process.env.TAP_REPORT) fs.writeFileSync(process.env.TAP_REPORT, bad.join('\n'));
-  expect(!bad.length, `${bad.length} screens with buttons that can't be tapped properly:\n` + bad.join('\n'));
+  expect(!bad.length, `${bad.length} screens with buttons that can't be tapped properly: ` + bad.join(' || '));
 });
 
 // Every control on every screen and in every lab, tapped for real on a phone (390x844, a finger) and a
