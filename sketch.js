@@ -41,6 +41,10 @@
   .csk-wrap.side .csk-panel { width: 100%; height: 100%; border-radius: 16px 0 0 16px; box-shadow: -10px 0 40px rgba(0,0,0,.28); }
   @media (max-width: 700px) { .csk-panel { width: 100vw; height: 100%; border-radius: 0; } .csk-wrap.side .csk-panel { border-radius: 0; } }
   .csk-dark .csk-panel { background: #1d1d20; color: #ececec; }
+  /* moved or resized by the student: a floating window anywhere on screen, the page usable around it */
+  .csk-wrap.csk-float { background: none; pointer-events: none; }
+  .csk-wrap.csk-float .csk-panel { position: fixed; max-width: none; max-height: none; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  .csk-wrap.csk-float .csk-head { cursor: move; touch-action: none; }
   .csk-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(127,127,127,.25); }
   .csk-title { font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .csk-btn { appearance: none; border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; border-radius: 10px;
@@ -457,6 +461,10 @@
     root.appendChild(wrap);
     const $ = (s) => wrap.querySelector(s);
     $('.csk-title').textContent = opts.title || 'Board';
+    // move it by its title bar, resize it from any edge: it floats where it was put, at that size, next time too
+    const float = () => { if (!wrap.classList.contains('csk-float')) { const r = $('.csk-panel').getBoundingClientRect(); wrap.classList.remove('side'); wrap.classList.add('csk-float'); boxMove.apply({ x: r.left, y: r.top, w: r.width, h: r.height }); } };
+    const boxMove = movable($('.csk-panel'), $('.csk-head'), 'cassie.box.board', { onStart: float });
+    boxMove.restore().then((b) => { if (b) { wrap.classList.remove('side'); wrap.classList.add('csk-float'); } });
     const stage = $('.csk-stage'), boardEl = $('.csk-board');
     const bg = $('.csk-bg'), obj = $('.csk-obj'), ink = $('.csk-ink'), live = $('.csk-live'), fx = $('.csk-fx');
     const note = $('.csk-note');
@@ -1108,6 +1116,7 @@
       else if (act === 'save') savePop();
       else if (act === 'dock') {
         const side = !wrap.classList.contains('side');
+        if (wrap.classList.contains('csk-float')) { wrap.classList.remove('csk-float'); $('.csk-panel').removeAttribute('style'); boxMove.forget(); } // (docked again: no longer floating)
         wrap.classList.toggle('side', side);
         t.innerHTML = svg(side ? 'full' : 'side');
         setTimeout(fit, 30);
@@ -1418,5 +1427,69 @@
     return current;
   }
 
-  window.CassieSketch = { open, isOpen: () => !!current, close: () => current && current.close(), session: () => current, paint: paintStroke };
+  /* Move a window by its handle, and resize it from any edge or corner (an 8px grab zone with the right cursor; touch too).
+     Kept on screen, from 260x180 up to 90% of the screen; the last size and place are remembered (the extension:
+     chrome.storage.local, the app: localStorage). Used by the board and by the extension's pop-up. */
+  const BOX_MIN = { w: 260, h: 180 }, EDGE = 8;
+  const RESIZE_CURSOR = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' };
+  const extStore = () => { try { return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local ? chrome.storage.local : null; } catch (e) { return null; } };
+  function boxLoad(key) {
+    const ext = extStore();
+    return new Promise((res) => {
+      if (ext) { try { ext.get([key], (o) => res((o && o[key]) || null)); } catch (e) { res(null); } return; }
+      try { res(JSON.parse(localStorage.getItem(key) || 'null')); } catch (e) { res(null); }
+    });
+  }
+  function boxSave(key, b) {
+    const ext = extStore();
+    if (ext) { try { ext.set({ [key]: b }); } catch (e) { /* only remembering */ } return; }
+    try { localStorage.setItem(key, JSON.stringify(b)); } catch (e) { /* only remembering */ }
+  }
+  function clampBox(b) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.round(Math.max(Math.min(BOX_MIN.w, vw), Math.min(vw * 0.9, b.w)));
+    const h = Math.round(Math.max(Math.min(BOX_MIN.h, vh), Math.min(vh * 0.9, b.h)));
+    return { x: Math.round(Math.min(Math.max(0, b.x), vw - w)), y: Math.round(Math.min(Math.max(0, b.y), vh - h)), w, h };
+  }
+  function movable(el, handle, key, opts = {}) {
+    let drag = null;
+    const rectOf = () => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+    const apply = (b) => {
+      b = clampBox(b);
+      el.style.left = b.x + 'px'; el.style.top = b.y + 'px'; el.style.width = b.w + 'px'; el.style.height = b.h + 'px';
+      el.style.right = 'auto'; el.style.bottom = 'auto'; el.style.boxSizing = 'border-box'; // (the size is the whole window, border included)
+      el.dataset.moved = '1';
+      if (opts.onBox) opts.onBox(b);
+      return b;
+    };
+    const zone = (e) => {
+      const r = el.getBoundingClientRect();
+      if (e.clientX < r.left - 1 || e.clientX > r.right + 1 || e.clientY < r.top - 1 || e.clientY > r.bottom + 1) return '';
+      return (e.clientY - r.top < EDGE ? 'n' : r.bottom - e.clientY < EDGE ? 's' : '') + (e.clientX - r.left < EDGE ? 'w' : r.right - e.clientX < EDGE ? 'e' : '');
+    };
+    el.addEventListener('pointermove', (e) => { if (!drag) { const z = zone(e); el.style.cursor = z ? RESIZE_CURSOR[z] : ''; } });
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      const z = zone(e);
+      const onHandle = !z && handle && handle.contains(e.target) && !e.target.closest('button, input, a, select, textarea, label');
+      if (!z && !onHandle) return;
+      if (opts.onStart) opts.onStart();
+      drag = { z, sx: e.clientX, sy: e.clientY, b: rectOf() };
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      e.preventDefault(); e.stopPropagation();
+    }, true);
+    el.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy, s = drag.b, z = drag.z;
+      if (!z) { apply({ ...s, x: s.x + dx, y: s.y + dy }); return; }
+      let w = s.w + (z.includes('e') ? dx : z.includes('w') ? -dx : 0), h = s.h + (z.includes('s') ? dy : z.includes('n') ? -dy : 0);
+      const c = clampBox({ x: 0, y: 0, w, h }); w = c.w; h = c.h;
+      apply({ x: z.includes('w') ? s.x + s.w - w : s.x, y: z.includes('n') ? s.y + s.h - h : s.y, w, h }); // (the opposite edge stays put)
+    });
+    const end = () => { if (!drag) return; drag = null; boxSave(key, rectOf()); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    return { restore: () => boxLoad(key).then((b) => (b && b.w ? apply(b) : null)), apply, forget: () => boxSave(key, null) };
+  }
+
+  window.CassieSketch = { movable, open, isOpen: () => !!current, close: () => current && current.close(), session: () => current, paint: paintStroke };
 })();
