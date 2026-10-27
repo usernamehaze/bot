@@ -4667,7 +4667,7 @@ test('onboarding: Step 2’s levels sit two across and Next shows without scroll
   await ctx.close();
 });
 
-test('Home on a phone: a student who picked goals sees 4 boxes (the rest in More tools) and the first one leads (a 2px accent edge and a glow); no goals, no lead', async (b) => {
+test('Home on a phone: a student who picked goals sees 4 boxes (the rest in More tools) and the first one leads (a 2px accent edge and a glow); no goals: no box leads (the ask box does)', async (b) => {
   const look = async (state) => {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', progress: { '2026-10-20': { asked: 2 } }, ...state } });
     await page.waitForSelector('#home .hub-box', { timeout: 8000 });
@@ -4679,7 +4679,43 @@ test('Home on a phone: a student who picked goals sees 4 boxes (the rest in More
   const g = await look({ helpWith: ['exam'] });
   expect(g.n === 4 && g.more && g.first === 'quiz' && g.lead === 'quiz' && g.border === '2px' && g.glow && g.glow !== 'none', 'goals: 4 boxes, More tools, the first leads: ' + JSON.stringify(g));
   const n = await look({ helpWith: [] });
-  expect(n.n > 4 && !n.more && !n.lead, 'no goals: every box, none leading: ' + JSON.stringify(n));
+  expect(n.n > 4 && !n.more && n.lead === 'ask', 'no goals: every box, none leading (the ask box leads instead): ' + JSON.stringify(n));
+});
+
+test('Home has exactly one lead: a phone with no goals leads with the ask box (Ask a question for a brand-new student), a computer’s dashboard with Ask Cassie; a 2px accent edge and a glow, AA on every theme', async (b) => {
+  const lead = async (o, scheme = 'light') => {
+    const { ctx, page, errors } = await open(b, { server: false, lite: 'off', ...o });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { if (!document.documentElement.classList.contains('native')) deskGo('home'); }); // (a computer: its dashboard)
+    try { await page.waitForSelector('.hub-lead', { timeout: 8000 }); } catch (e) { throw new Error('no lead: ' + JSON.stringify(o.state) + ' ' + await page.evaluate(() => [document.querySelectorAll('.hub-lead').length, !!document.getElementById('home-ask'), document.body.className, (document.querySelector('.hub-lead') || {}).outerHTML || ''].join(' | ').slice(0, 400))); }
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => {
+      const all = [...document.querySelectorAll('.hub-lead')].filter((e) => e.getClientRects().length), e = all[0], cs = e && getComputedStyle(e), box = e && e.getBoundingClientRect();
+      // the edge against what's behind it (3:1)
+      const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number), lum = (c) => { const v = rgb(c).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      let p = e && e.parentElement, bg = 'rgb(255,255,255)';
+      for (; p; p = p.parentElement) { const c = getComputedStyle(p).backgroundColor; if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; } }
+      const a = lum(cs.borderTopColor), c2 = lum(bg), ratio = (Math.max(a, c2) + 0.05) / (Math.min(a, c2) + 0.05);
+      return { n: all.length, id: e && (e.id || e.dataset.hub || e.dataset.dk), cls: e && e.className, border: cs && cs.borderTopWidth, glow: cs && cs.boxShadow, h: box && Math.round(box.height), ratio: Math.round(ratio * 100) / 100 };
+    });
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+    return r;
+  };
+  const ok = (r) => r.n === 1 && r.border === '2px' && r.glow && r.glow !== 'none' && r.h >= 44 && r.ratio >= 3;
+  const back = await lead({ device: 'iPhone 13', state: { groqKey: 'gsk_test', tab: 'home', helpWith: [], progress: { '2026-10-20': { asked: 2 } } } });
+  const backDark = await lead({ device: 'iPhone 13', state: { groqKey: 'gsk_test', tab: 'home', helpWith: [], accent: 'mono', progress: { '2026-10-20': { asked: 2 } } } }, 'dark');
+  expect(ok(backDark), 'a phone, Monochrome and dark: the edge still shows (3:1): ' + JSON.stringify(backDark));
+  expect(ok(back) && back.id === 'home-ask' && /hub-ask/.test(back.cls), 'a phone, no goals: the ask box leads: ' + JSON.stringify(back));
+  const fresh = await lead({ device: 'iPhone 13', state: { groqKey: 'gsk_test', tab: 'home', helpWith: [] } });
+  expect(ok(fresh) && fresh.id === 'home-ask' && /hub-card/.test(fresh.cls), 'a brand-new student: Ask a question leads: ' + JSON.stringify(fresh));
+  const goal = await lead({ device: 'iPhone 13', state: { groqKey: 'gsk_test', tab: 'home', helpWith: ['exam'], progress: { '2026-10-20': { asked: 2 } } } });
+  expect(ok(goal) && goal.id === 'quiz', 'goals still win: the first goal box leads, alone: ' + JSON.stringify(goal));
+  for (const accent of ['cassie', 'mono']) for (const scheme of ['light', 'dark']) {
+    const pc = await lead({ device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: { groqKey: 'gsk_test', accent } }, scheme);
+    expect(ok(pc) && pc.id === 'ask', `a computer (${accent}, ${scheme}): Ask Cassie leads: ` + JSON.stringify(pc));
+  }
 });
 
 test('keep your work: after a first real study moment a signed-out student sees one card to sign in with Google (never over the ask box), once, and once more a week later; never when signed in', async (b) => {
