@@ -276,7 +276,7 @@ const magnetLab = {
 /* ---------------- Lenses and mirrors ---------------- */
 const KINDS = { convex: ['Convex lens', 1, false], concave: ['Concave lens', -1, false], cmirror: ['Concave mirror', 1, true], vmirror: ['Convex mirror', -1, true] };
 const opticsLab = {
-  id: 'optics', name: 'Lenses & mirrors', subject: 'physics', topic: 'lenses and curved mirrors: ray diagrams, focal length, real and virtual images, magnification',
+  id: 'optics', name: 'Lenses and mirrors', subject: 'physics', topic: 'lenses and curved mirrors: ray diagrams, focal length, real and virtual images, magnification',
   blurb: 'Drag the object along the bench. Three rays find the image: real or virtual, upright or upside down.',
   words: 'lens mirror optics ray diagram focal length image real virtual magnification convex concave',
   icon: '<path d="M4 26h40"/><path d="M24 8c4 6 4 30 0 36M24 8c-4 6-4 30 0 36"/><path d="M8 26V14M8 14l-2 3M8 14l2 3"/><path d="M8 14l16 4 14 14" stroke-dasharray="3 3"/>',
