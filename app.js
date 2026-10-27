@@ -2032,6 +2032,45 @@ function goalFirst(list, keyOf) {
   const rank = (x) => { const k = keyOf(x); for (let i = 0; i < goals.length; i++) { const j = GOAL_TOOLS[goals[i]].findIndex((t) => k === t || k.startsWith(t)); if (j >= 0) return i * 10 + j; } return 1e3; };
   return list.map((x, i) => [x, rank(x), i]).sort((p, q) => p[1] - q[1] || p[2] - q[2]).map((x) => x[0]);
 }
+/* ---------- keep your work: one gentle card after a first real study moment (never blocking) ----------
+   A quiz stopped, a flashcard round done, or a 3rd answered question: a signed-out student sees one small
+   card to sign in with Google. Once, and once more a week later if they still haven't. */
+function studyMoment(kind) {
+  if (kind === 'answer') { state.answered = (state.answered || 0) + 1; if (state.answered < 3) return; }
+  if (!accountsOn() || authToken()) return;
+  const n = state.saveNudge || { n: 0, at: 0 };
+  if (n.n >= 2 || (n.n === 1 && Date.now() - n.at < 7 * 864e5)) return;
+  state.saveNudge = { n: n.n + 1, at: Date.now() }; save();
+  showSaveNudge();
+}
+function showSaveNudge() {
+  document.querySelector('.save-nudge')?.remove();
+  const c = document.createElement('div');
+  c.className = 'save-nudge'; c.setAttribute('role', 'status');
+  c.innerHTML = '<p>Sign in with Google to keep your notes safe on your phone and the web.</p><button type="button" class="save-nudge-go">Sign in</button><button type="button" class="save-nudge-x" aria-label="Not now">×</button>';
+  c.querySelector('.save-nudge-go').addEventListener('click', () => { c.remove(); openAuth(); });
+  c.querySelector('.save-nudge-x').addEventListener('click', () => c.remove());
+  document.body.appendChild(c);
+}
+document.addEventListener('cassie:studied', (e) => { botMood('proud', 3000); studyMoment((e.detail && e.detail.kind) || 'cards'); }); // (cards.js: a flashcard round is done)
+// a press: pills, chips, Home's boxes and the tabs give a little (CSS), and on Android a 10 ms tap you can feel
+const PRESS = '.fr-pick, .fr-seg button, .hub-q, .hub-box, .hub-card, .hub-w, .hub-more, .tab, .dk-chip, .home-example';
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest || !e.target.closest(PRESS) || !/Android/i.test(navigator.userAgent) || !navigator.vibrate) return;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  try { navigator.vibrate(10); } catch (err) { /* no buzz, no matter */ }
+}, true);
+// an empty screen: a still, flat Cassie above its words
+function cassieEmpty(box) {
+  if (!box || !window.CassieBot || box.querySelector('.es-bot')) return box;
+  const h = document.createElement('div');
+  h.className = 'es-bot'; h.setAttribute('aria-hidden', 'true');
+  const mark = box.querySelector('.es-mark');
+  if (mark) mark.replaceWith(h); else box.prepend(h);
+  try { window.CassieBot.create(h, { state: 'idle', flat: true }).pause(true); } catch (e) { h.remove(); }
+  return box;
+}
+window.cassieEmpty = cassieEmpty;
 // the Quick actions the boxes already cover (each feature shows once on Home)
 const HUB_BOXED = /^(Quiz me|Research a topic|Labs: try a simulation|Study together|Flashcards)/;
 const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
@@ -2121,7 +2160,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=191').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=192').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2175,8 +2214,10 @@ function buildHub({ ideas = false, phone = false } = {}) {
   boxes.className = 'hub-boxes';
   // a brand-new student sees their 4 most useful tools (what they came for first); the rest are one tap away
   const allBoxes = goalFirst(HUB_BOXES, (x) => x[0]), boxHtml = ([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`;
-  const fewer = !returning && !hubMoreOpen && allBoxes.length > 4;
+  const goals = (state.helpWith || []).some((g) => GOAL_TOOLS[g]);
+  const fewer = (!returning || (phone && goals)) && !hubMoreOpen && allBoxes.length > 4;
   boxes.innerHTML = (fewer ? allBoxes.slice(0, 4) : allBoxes).map(boxHtml).join('') + (fewer ? `<button type="button" class="hub-more" aria-expanded="false">More tools <small>${allBoxes.length - 4} more</small></button>` : '');
+  if (phone && goals) { const lead = boxes.querySelector('.hub-box'); if (lead) lead.classList.add('hub-lead'); } // (what they came for, first and marked)
   const moreBtn = boxes.querySelector('.hub-more');
   if (moreBtn) moreBtn.addEventListener('click', () => {
     hubMoreOpen = true;
@@ -2625,7 +2666,7 @@ function deskChats() {
     card.querySelector('.dk-del').addEventListener('click', () => { if (!confirm('Delete this chat?')) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
     grid.appendChild(card);
   });
-  if (!list.length) grid.replaceWith(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Try another filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? '' : 'Ask Cassie', onAction: () => deskAct('ask') }));
+  if (!list.length) grid.replaceWith(cassieEmpty(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Try another filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? '' : 'Ask Cassie', onAction: () => deskAct('ask') })));
   el.querySelector('.dk-count').textContent = `${list.length} ${list.length === 1 ? 'chat' : 'chats'}`;
   el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskChatsFilter = b.dataset.f; renderHistory(); } });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk="ask"]'); if (b) deskAct('ask'); });
@@ -2667,7 +2708,7 @@ function deskPlan() {
   el.querySelectorAll('.dk-col').forEach((c) => {
     const n = c.querySelectorAll('.dk-task').length;
     c.querySelector('.dk-n').textContent = n;
-    if (!n) c.querySelector('.dk-col-list').replaceWith(CassieErrors.empty({ title: c.dataset.col === 'done' ? 'Nothing done yet' : 'Nothing here', text: c.dataset.col === 'done' ? 'Tick a task when it’s done and it moves here.' : activeExams().length ? 'No tasks for this filter.' : 'Make an exam plan and its tasks show up here.' }));
+    if (!n) c.querySelector('.dk-col-list').replaceWith((!tasks.length && c.dataset.col === 'now' ? cassieEmpty : (x) => x)(CassieErrors.empty({ title: c.dataset.col === 'done' ? 'Nothing done yet' : 'Nothing here', text: c.dataset.col === 'done' ? 'Tick a task when it’s done and it moves here.' : activeExams().length ? 'No tasks for this filter.' : 'Make an exam plan and its tasks show up here.' })));
   });
   el.querySelector('.dk-count').textContent = `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} shown`;
   el.querySelector('.dk-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { deskPlanFilter = b.dataset.f; renderHistory(); } });
@@ -5150,7 +5191,7 @@ async function handleSend(text, opts = {}) {
   progressAdd({ asked: 1 }); // (a day you asked Cassie something is a day you studied)
 
   setCursorMode('thinking');
-  if (doc || many) botMood('reading');
+  if (doc || many || image) botMood('reading');
   const typingBubble = renderTyping();
   sendBtn.disabled = true;
   const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit: continuing in ${secs}s…`); botMood('busy'); };
@@ -5205,6 +5246,7 @@ async function handleSend(text, opts = {}) {
     setCursorMode('idle');
     mascotCelebrate();
     maybeCelebrate(reply); // confetti if she's praising a correct answer
+    studyMoment('answer'); // (a 3rd answered question: a first real study moment)
     try { if (window.CassieMemory) { window.CassieMemory.scanExchange(sendText, reply); updateMemoryDot(); } } catch (e) { /* ignore */ }
     detourToElement(bubble, { click: true, resumeAfter: 900 });
     speak(reply);
@@ -6381,7 +6423,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=191');
+      exploreMod = await import('./explore/cell3d.js?v=192');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6431,7 +6473,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=191');
+      labsMod = await import('./labs/labs.js?v=192');
       islandRest();
     }
     labsMod.open({
@@ -6505,6 +6547,7 @@ if (quizBtn) {
       );
     } else {
       const saved = (state.mistakes || []).length;
+      botMood('proud', 3000); studyMoment('quiz'); // (a quiz finished: Cassie is proud of them)
       renderMessage('assistant', saved
         ? `Quiz stopped. Nice work! I saved ${saved} question${saved === 1 ? '' : 's'} to practise again. Tap “Review my mistakes” on the home screen (New chat) any time, or turn them into flashcards (Ideas → Flashcards).`
         : 'Quiz stopped. Nice work! Ask me anything or start another quiz whenever you like.');
@@ -7164,12 +7207,12 @@ function renderChatList() {
   const chats = [...state.chats].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   chatList.innerHTML = '';
   if (!chats.length) {
-    chatList.appendChild(CassieErrors.empty({
+    chatList.appendChild(cassieEmpty(CassieErrors.empty({
       title: 'No chats yet',
       text: 'Every chat you start with Cassie is kept here, so you can come back to it.',
       action: 'Ask your first question',
       onAction: () => { closeSidebar(); document.querySelector('.tabbar [data-tab="chat"]')?.click(); promptInput.focus(); },
-    }));
+    })));
     return;
   }
   chats.forEach((c) => {
@@ -8268,10 +8311,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=191').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=192').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=191', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=192', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8396,7 +8439,8 @@ function frOnboard(at = 0) {
   el.dataset.step = 'ob' + (at + 1);
   const pills = (list, attr, role) => list.map(([v, l]) => `<button type="button" class="fr-pick" ${role ? 'role="radio"' : 'aria-pressed="false"'} data-${attr}="${v}">${l}</button>`).join('');
   const Q = [
-    { h: 'What should Cassie call you?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="given-name" placeholder="Your first name" aria-label="Your first name">` },
+    { h: 'What should Cassie call you?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="given-name" placeholder="Your first name" aria-label="Your first name">
+        <button type="button" class="fr-skipall">Want to dive straight in? Skip setup</button>` },
     { h: 'Where are you in your learning?', body: `<div class="fr-picks" role="radiogroup" aria-label="Where you are in your learning">${pills(FR_WHO, 'who', true)}</div>
         <label class="fr-q2"><span>Your age (optional)</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
     { h: 'What brings you to Cassie today?', sub: 'Pick any.', body: `<div class="fr-picks">${pills(FR_GOALS, 'goal', false)}</div>` },
@@ -8439,6 +8483,8 @@ function frOnboard(at = 0) {
   const go = (k) => { if (k >= TOTAL) frFinish(a); else { frSave({ step: 'ob', at: k, answers: a }); frOnboard(k); } };
   el.querySelector('.fr-back').addEventListener('click', () => go(Math.max(0, at - 1)));
   el.querySelector('.fr-skip').addEventListener('click', () => { typed(); frFinish(a); }); // (what's answered so far is kept)
+  const all = el.querySelector('.fr-skipall'); // (the name is kept; the rest can wait, and Home is where they land)
+  if (all) all.addEventListener('click', () => { typed(); frHome = true; frFinish(a); });
   f.addEventListener('submit', (e) => {
     e.preventDefault();
     typed();
@@ -8474,7 +8520,9 @@ function frLand() {
   frToAsk();
 }
 // straight to the ask box (a phone: the Chat tab; a computer: the chat page)
+var frHome = false; // (Skip setup: land on Home, not the ask box)
 function frToAsk() {
+  if (frHome) { frHome = false; if (onPhoneHome()) window.CassieNative.go('home'); else if (document.body.classList.contains('desk-on')) deskGo('home'); return; }
   if (onPhoneHome()) { window.CassieNative.go('chat'); setTimeout(() => promptInput.focus(), 60); return; }
   if (document.body.classList.contains('desk-on')) deskGo('chat'); // (a computer opens on Home, which has no ask box)
   setTimeout(() => promptInput.focus(), 60); // (after the first-run screen has gone)

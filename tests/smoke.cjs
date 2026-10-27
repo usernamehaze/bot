@@ -399,8 +399,10 @@ test('a simpler start: a brand-new student sees their 4 most useful tools on Hom
     await more.click();
     const all = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
     expect(all.length > 4 && all.includes('room') && !(await page.locator('#home .hub-more').count()), 'More tools shows the rest (the study room too): ' + all);
-    // a returning student (a chat already): every box at once
+    // a returning student (a chat already) on a phone: with goals, still their 4 and More tools; with none, every box at once
     await page.evaluate(() => { state.chats.push({ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'hi' }], updatedAt: Date.now() }); hubMoreOpen = false; save(); refreshHub(); });
+    await page.waitForFunction(() => document.querySelectorAll('#home .hub-box').length === 4 && document.querySelector('#home .hub-more'), null, { timeout: 5000 });
+    await page.evaluate(() => { state.helpWith = []; save(); refreshHub(); });
     await page.waitForFunction(() => document.querySelectorAll('#home .hub-box').length > 4 && !document.querySelector('#home .hub-more'), null, { timeout: 5000 });
     // API keys: under Advanced, not Account
     const where = await page.evaluate(() => { const k = document.getElementById('settings-keys'); return { sec: k.closest('.set-sec').dataset.sec, title: k.closest('.set-sec').querySelector('.set-sec-h').textContent }; });
@@ -4632,6 +4634,203 @@ test('board on a phone: a calm header (More holds Save and Close), the Ask bar t
   await D.ctx.close();
 });
 
+test('onboarding: Step 2’s levels sit two across and Next shows without scrolling (360x740, 390x844), and Skip setup after the name lands on Home with the name kept', async (b) => {
+  for (const viewport of [{ width: 360, height: 740 }, { width: 390, height: 844 }]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, server: false, state: null });
+    await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
+    await page.waitForSelector('.fr-ob');
+    const skip = await page.locator('.fr-skipall').boundingBox();
+    expect(skip && skip.height >= 44 && /Skip setup/.test(await page.locator('.fr-skipall').innerText()), viewport.width + ': Skip setup under the name, 44px');
+    await page.fill('.fr-ob input[name=name]', 'Mara'); await page.click('.fr-go');
+    await page.waitForSelector('.fr-count >> text=2 of 4');
+    const g = await page.evaluate(() => {
+      const picks = [...document.querySelectorAll('.fr-ob [data-who]')], go = document.querySelector('.fr-go').getBoundingClientRect(), fr = document.querySelector('.fr');
+      return { cols: new Set(picks.map((p) => Math.round(p.getBoundingClientRect().left))).size, clipped: picks.filter((p) => p.scrollWidth > p.clientWidth + 1 || p.scrollHeight > p.clientHeight + 1).map((p) => p.textContent),
+        goBottom: go.bottom, h: innerHeight, scrolls: fr.scrollHeight > fr.clientHeight + 1, age: document.querySelector('.fr-age').getBoundingClientRect().bottom };
+    });
+    expect(g.cols === 2 && !g.clipped.length, viewport.width + ': two columns, no level cut off: ' + JSON.stringify(g));
+    expect(g.goBottom <= g.h && g.age <= g.h && !g.scrolls, viewport.width + ': Next and the age field on screen without scrolling: ' + JSON.stringify(g));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // Skip setup: the name is kept, the rest waits, and Home is where they land
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, state: null });
+  await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
+  await page.waitForSelector('.fr-ob');
+  await page.fill('.fr-ob input[name=name]', 'Mara');
+  await page.click('.fr-skipall');
+  await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
+  await page.waitForTimeout(400);
+  const land = await page.evaluate(() => ({ name: state.profile && state.profile.name, home: !!document.querySelector('.tabbar [data-tab="home"].on'), chat: !!document.querySelector('.tabbar [data-tab="chat"].on') }));
+  expect(land.name === 'Mara' && land.home && !land.chat, 'Skip setup: the name kept, on Home: ' + JSON.stringify(land));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Home on a phone: a student who picked goals sees 4 boxes (the rest in More tools) and the first one leads (a 2px accent edge and a glow); no goals, no lead', async (b) => {
+  const look = async (state) => {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', progress: { '2026-10-20': { asked: 2 } }, ...state } });
+    await page.waitForSelector('#home .hub-box', { timeout: 8000 });
+    const r = await page.evaluate(() => { const bx = [...document.querySelectorAll('#home .hub-box')], lead = document.querySelector('#home .hub-lead'), cs = lead && getComputedStyle(lead); return { n: bx.length, more: !!document.querySelector('#home .hub-more'), first: bx[0] && bx[0].dataset.hub, lead: lead && lead.dataset.hub, border: cs && cs.borderTopWidth, glow: cs && cs.boxShadow }; });
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+    return r;
+  };
+  const g = await look({ helpWith: ['exam'] });
+  expect(g.n === 4 && g.more && g.first === 'quiz' && g.lead === 'quiz' && g.border === '2px' && g.glow && g.glow !== 'none', 'goals: 4 boxes, More tools, the first leads: ' + JSON.stringify(g));
+  const n = await look({ helpWith: [] });
+  expect(n.n > 4 && !n.more && !n.lead, 'no goals: every box, none leading: ' + JSON.stringify(n));
+});
+
+test('keep your work: after a first real study moment a signed-out student sees one card to sign in with Google (never over the ask box), once, and once more a week later; never when signed in', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: true, state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.waitForSelector('#prompt-input');
+  const card = () => page.locator('.save-nudge').count();
+  await page.evaluate(() => { studyMoment('answer'); studyMoment('answer'); });
+  expect(await card() === 0, 'not after 2 answers');
+  await page.evaluate(() => studyMoment('answer'));
+  expect(await card() === 1 && /Sign in with Google to keep your notes safe on your phone and the web\./.test(await page.locator('.save-nudge').innerText()), 'the 3rd answer: the card');
+  const over = await page.evaluate(() => { const a = document.querySelector('.save-nudge').getBoundingClientRect(), p = document.getElementById('prompt-input').getBoundingClientRect(); return !(a.bottom <= p.top || a.top >= p.bottom || a.right <= p.left || a.left >= p.right); });
+  expect(!over, 'it never covers the ask box');
+  await page.fill('#prompt-input', 'still typing'); // (the ask box still takes a tap and words)
+  await page.click('.save-nudge-x');
+  expect(await card() === 0, 'dismissed');
+  await page.evaluate(() => studyMoment('quiz'));
+  expect(await card() === 0, 'once only (not again the same week)');
+  await page.evaluate(() => { state.saveNudge.at -= 8 * 864e5; studyMoment('cards'); });
+  expect(await card() === 1, 'once more, a week later');
+  await page.click('.save-nudge-x');
+  await page.evaluate(() => { state.saveNudge.at -= 8 * 864e5; studyMoment('cards'); });
+  expect(await card() === 0, 'never a third time');
+  await page.evaluate(() => { state.saveNudge = null; localStorage.setItem(AUTH_KEY, 'token-test'); studyMoment('quiz'); });
+  expect(await card() === 0, 'never when signed in');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('tab bar on a phone: each of the 6 tabs at least 48px wide and 44px tall, none overlapping, all on screen (320, 360, 390 wide)', async (b) => {
+  for (const width of [320, 360, 390]) {
+    for (const tab of ['home', 'games']) { // (the open tab shows its name: the widest it gets)
+      const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width, height: 760 }, server: false, state: { groqKey: 'gsk_test', tab } });
+      await page.waitForSelector('.tabbar .tab');
+      await page.waitForTimeout(400);
+      const r = await page.$$eval('.tabbar .tab', (ts) => ts.map((t) => { const q = t.getBoundingClientRect(); return [q.left, q.right, q.width, q.height]; }));
+      const overlap = r.some((a, i) => i && a[0] < r[i - 1][1] - 0.5), off = r.some((a) => a[0] < 0 || a[1] > innerWidthOf(width));
+      expect(r.length === 6 && r.every((a) => a[2] >= 48 && a[3] >= 44) && !overlap && !off, `${width} (${tab} open): ` + JSON.stringify(r.map((a) => [Math.round(a[0]), Math.round(a[2]), Math.round(a[3])])));
+      await ctx.close();
+    }
+  }
+  function innerWidthOf(w) { return w; }
+});
+
+test('Cassie’s moods: thinking while an answer comes, reading a photo, proud when a quiz or a flashcard round is finished', async (b) => {
+  const slow = async () => { await new Promise((r) => setTimeout(r, 1500)); return { text: 'Here you go. Question 1: what is 2 + 2?' }; };
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', server: false, lite: 'off', fakeGroq: slow, state: { groqKey: 'gsk_test' } });
+  await page.waitForSelector('#prompt-input');
+  const mood = () => page.evaluate(() => (typeof bot2d !== 'undefined' && bot2d ? bot2d.state : ''));
+  const sawWhile = async (want, act) => { const seen = new Set(); const t = setInterval(async () => { try { seen.add(await mood()); } catch (e) { /* page busy */ } }, 60); await act(); clearInterval(t); return seen.has(want) ? want : [...seen].join(','); };
+  expect(await sawWhile('thinking', () => ask(page, 'what is photosynthesis')) === 'thinking', 'thinking while the answer comes');
+  expect(await sawWhile('reading', () => sendPhoto(page, 'what is this')) === 'reading', 'reading a photo');
+  await page.click('#quiz-btn');
+  await page.waitForFunction(() => !document.getElementById('send-btn').disabled, null, { timeout: 10000 });
+  await page.click('#quiz-btn');
+  expect(await mood() === 'proud', 'a quiz finished: proud');
+  await page.evaluate(() => { bot2d.setState('idle'); window.CassieCards.add([{ f: 'What is H2O?', b: 'Water' }], 'Chem'); window.CassieCards.open(); });
+  await page.click('[data-study="Chem"]'); await page.click('.fc-card'); await page.click('[data-grade="good"]');
+  await page.waitForSelector('.fc-done');
+  expect(await mood() === 'proud', 'a flashcard round finished: proud');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('press feedback: pills, chips, Home boxes and tabs scale to 0.96 while pressed (none with Reduce Motion), and Android gives a 10 ms buzz (never with Reduce Motion, never on an iPhone)', async (b) => {
+  const run = async (device, reduce) => {
+    const ctx = await b.newContext({ ...devices[device], reducedMotion: reduce ? 'reduce' : 'no-preference', serviceWorkers: 'block' });
+    await ctx.addInitScript(([seed]) => { window.CASSIE_SERVER = ''; if (!sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seed); sessionStorage.setItem('seeded', '1'); } window.__buzz = []; if (navigator.vibrate) navigator.vibrate = (ms) => { window.__buzz.push(ms); return true; }; }, [JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'off', tab: 'home', groqKey: 'gsk_test', helpWith: ['exam'] })]);
+    const page = await ctx.newPage(); await page.goto(APP);
+    await page.waitForSelector('#home .hub-box', { timeout: 8000 });
+    await page.locator('#home .hub-box').first().scrollIntoViewIfNeeded(); await page.waitForTimeout(300);
+    const box = await page.locator('#home .hub-box').first().boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(200);
+    const r = await page.evaluate(() => ({ t: getComputedStyle(document.querySelector('#home .hub-box:active') || document.querySelector('#home .hub-box')).transform, buzz: window.__buzz }));
+    await page.mouse.up();
+    await ctx.close();
+    return r;
+  };
+  const android = await run('Pixel 7', false);
+  expect(/matrix\(0\.96/.test(android.t) && android.buzz.join() === '10', 'Android: scales to 0.96 and buzzes 10 ms: ' + JSON.stringify(android));
+  const still = await run('Pixel 7', true);
+  expect(!/matrix\(0\.96/.test(still.t) && !still.buzz.length, 'Reduce Motion: no scaling, no buzz: ' + JSON.stringify(still));
+  const iphone = await run('iPhone 13', false);
+  expect(/matrix\(0\.96/.test(iphone.t) && !iphone.buzz.length, 'iPhone: scales, no buzz: ' + JSON.stringify(iphone));
+});
+
+test('empty screens: Flashcards, Chats and the Study plan show a still, flat Cassie above their words', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  const bot = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const svg = e.querySelector('.es-bot svg.cassie-bot'), r = e.querySelector('.es-bot') && e.querySelector('.es-bot').getBoundingClientRect(); return { svg: !!svg, hidden: e.querySelector('.es-bot') && e.querySelector('.es-bot').getAttribute('aria-hidden'), w: r && Math.round(r.width), first: e.firstElementChild && e.firstElementChild.className, title: (e.querySelector('.es-title') || {}).textContent }; }, sel);
+  await page.evaluate(() => window.CassieCards.open());
+  await page.waitForSelector('.fc .empty-state');
+  const fc = await bot('.fc .empty-state');
+  expect(fc && fc.svg && fc.hidden === 'true' && fc.w === 64 && fc.first === 'es-bot' && fc.title === 'No flashcards yet', 'Flashcards: ' + JSON.stringify(fc));
+  await page.evaluate(() => window.CassieCards.close());
+  await page.evaluate(() => deskGo('chats'));
+  await page.waitForSelector('.desk-chats .empty-state, .desk .empty-state', { timeout: 5000 });
+  const ch = await bot('.desk .empty-state');
+  expect(ch && ch.svg && ch.title === 'No chats yet', 'Chats: ' + JSON.stringify(ch));
+  await page.evaluate(() => deskGo('plan'));
+  await page.waitForSelector('.desk-plan .empty-state', { timeout: 5000 });
+  const pl = await bot('.desk-plan [data-col="now"] .empty-state');
+  expect(pl && pl.svg && pl.w === 64, 'Study plan: ' + JSON.stringify(pl));
+  const moving = await page.evaluate(async () => { const s = document.querySelector('.desk-plan .es-bot svg').outerHTML; await new Promise((r) => setTimeout(r, 900)); return s !== document.querySelector('.desk-plan .es-bot svg').outerHTML; });
+  expect(!moving, 'she keeps still');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+// what a screen's buttons, pills and cards have that's cut off or spilling over their edge (ellipsis is on purpose)
+const clipIssues = (page) => page.evaluate(() => {
+  const out = [], seen = new Set();
+  const shown = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let x = e; x; x = x.parentElement) { const c = getComputedStyle(x); if (c.display === 'none' || c.visibility === 'hidden' || +c.opacity === 0) return false; } return true; };
+  document.querySelectorAll('button, a.btn, .fr-pick, .hub-box, .hub-card, .hub-w, .hub-q, .dk-chip, .chip, [role="button"], .tab').forEach((e) => {
+    if (seen.has(e) || !shown(e) || !e.innerText || !e.innerText.trim()) return;
+    seen.add(e);
+    const c = getComputedStyle(e);
+    if (c.textOverflow === 'ellipsis') return;
+    const kids = [e, ...e.querySelectorAll('b, small, span, em')].filter((k) => shown(k) && getComputedStyle(k).textOverflow !== 'ellipsis' && k.innerText && k.innerText.trim());
+    const bad = kids.find((k) => k.scrollWidth > k.clientWidth + 1 && getComputedStyle(k).display !== 'inline');
+    if (bad) out.push(`${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]} "${e.innerText.trim().slice(0, 30)}" ${bad.scrollWidth}>${bad.clientWidth}`);
+  });
+  return out;
+});
+test.slow('layout pass: Home, onboarding, Chat, Cards, Labs, Games, You and the board at 360x740, 390x844, 412x915 and 1280x800: no button, pill or card has its words cut off or spilling over its edge', async (b) => {
+  const SIZES = [['Pixel 7', { width: 360, height: 740 }], ['iPhone 13', { width: 390, height: 844 }], ['Pixel 7', { width: 412, height: 915 }], ['Desktop Chrome', { width: 1280, height: 800 }]];
+  const SCREENS = [
+    ['home', async () => {}, { tab: 'home' }],
+    ...[0, 1, 2, 3].map((k) => [`onboarding ${k + 1}`, async (page) => { await page.evaluate((at) => { localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'ob', at })); }, k); await page.reload(); await page.waitForSelector('.fr-ob', { timeout: 8000 }); }, null]),
+    ['chat', async (page) => { await ask(page, 'what is photosynthesis'); }],
+    ['cards', async (page) => { await page.evaluate(() => window.CassieCards.open()); await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 }); }],
+    ['labs', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
+    ['games', async (page) => { await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector(LABS_READY, { timeout: 20000 }); }],
+    ['you', async (page) => { await page.evaluate(() => openSettings('profile')); await page.waitForSelector('#settings-panel:not([hidden])'); }],
+    ['board', async (page) => { await page.evaluate(() => openSketch()); await page.waitForSelector('.csk-live', { timeout: 15000 }); }],
+  ];
+  // (the check itself: a button whose words don't fit is caught)
+  { const { ctx, page } = await open(b, { server: false });
+    const caught = await page.evaluate(() => { const x = document.createElement('button'); x.className = 'probe'; x.style.cssText = 'position:fixed;top:10px;left:10px;width:60px;overflow:hidden;white-space:nowrap;z-index:9999'; x.textContent = 'A label far too long for this button'; document.body.appendChild(x); return true; }) && await clipIssues(page);
+    expect(caught.some((x) => /probe/.test(x)), 'the clipping check catches a cut-off button: ' + JSON.stringify(caught));
+    await ctx.close(); }
+  const bad = [];
+  for (const [device, viewport] of SIZES) {
+    for (const [name, go, st = {}] of SCREENS.filter((x) => !process.env.LAYOUT_ONLY || x[0].startsWith(process.env.LAYOUT_ONLY))) {
+      const { ctx, page } = await open(b, { device, viewport, server: false, lite: 'on', state: st === null ? null : { groqKey: 'gsk_test', ...st }, fakeGroq: () => ({ text: 'Photosynthesis is how plants make food.' }) });
+      try { await page.waitForTimeout(300); await go(page); await page.waitForTimeout(400); const is = await clipIssues(page); if (is.length) bad.push(`${name} @ ${viewport.width}x${viewport.height}: ${is.join(' | ')}`); }
+      catch (e) { bad.push(`${name} @ ${viewport.width}: could not open: ${e.message.split('\n')[0]}`); }
+      await ctx.close();
+    }
+  }
+  expect(!bad.length, bad.length + ' screens with words cut off: ' + bad.join(' || '));
+});
+
 test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
   const ctx = await b.newContext({ ...devices['iPhone 13'], serviceWorkers: 'block' });
   await ctx.addInitScript((v) => {
@@ -5521,7 +5720,7 @@ test.slow('a mic on every box where a student writes to Cassie (app, Labs, the b
     { name: 'Report a problem', sel: '.profile-overlay textarea[name=text]', open: async (page) => { await page.evaluate(() => openReport()); await page.waitForSelector('.profile-overlay textarea[name=text]'); },
       kept: (page) => page.evaluate(() => !!document.querySelector('.profile-overlay textarea[name=text]')) },
     { name: 'the study room note', sel: '.sr-foot textarea.sr-in', open: async (page) => {
-      await page.click('#board-btn'); await page.click('.csk-btn:has-text("Study together")'); await page.click('[data-room="new"]');
+      await page.click('#board-btn'); await studyTogether(page); await page.click('[data-room="new"]');
       await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
       await page.click('[data-room-act="study"]'); await page.click('.sr-tabs [data-tab="notes"]'); await page.waitForSelector('.sr-foot textarea.sr-in'); },
       kept: (page) => page.evaluate(() => !/plants make/.test((document.querySelector('.sr-body') || {}).textContent || '')) },
@@ -8709,6 +8908,14 @@ test('5 students at once on one school network: everyone gets an answer, even pa
 
 // ---- what went wrong for real users: providers retiring or refusing their picture models ----
 const redPng = (page) => page.evaluate(() => { const c = document.createElement('canvas'); c.width = c.height = 40; const g = c.getContext('2d'); g.fillStyle = 'red'; g.fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+// the board's Study together: in its header on a computer, in its More menu on a phone
+async function studyTogether(page) {
+  await page.waitForSelector('.csk-live', { timeout: 15000 });
+  const head = page.locator('.csk-head .csk-btn:has-text("Study together")');
+  if (await head.isVisible()) { await head.click(); return; }
+  await page.click('.csk-head [data-act="more"]');
+  await page.click('.csk-more [data-more="extra"]:has-text("Study together")');
+}
 async function sendPhoto(page, q) {
   await page.setInputFiles('#file-input', { name: 'eq.png', mimeType: 'image/png', buffer: Buffer.from(await redPng(page), 'base64') });
   await page.waitForSelector('#attach-preview:not([hidden])', { timeout: 10000 });
@@ -9838,7 +10045,7 @@ const TAP_SCREENS = [
   ['flashcards', async (page) => { await page.evaluate(() => window.CassieCards.open()); await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 }); await page.waitForTimeout(400); }, { state: { cards: [{ id: 'c1', f: 'Powerhouse of the cell?', b: 'Mitochondria', deck: 'Biology', box: 0, due: 0, at: 0 }] } }],
   ['study room', async (page) => {
     await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
-    await page.click('#board-btn'); await page.click('.csk-btn:has-text("Study together")'); await page.click('[data-room="new"]');
+    await page.click('#board-btn'); await studyTogether(page); await page.click('[data-room="new"]');
     await page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
     await page.click('[data-room-act="study"]'); await page.waitForTimeout(600);
   }, { server: true }],

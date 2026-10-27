@@ -166,12 +166,12 @@
       <p class="fc-how">Cards you miss come back in minutes; ones you know come back after 1, 3, 7, 16 and 35 days, so you remember them for the exam, not just tonight.</p>`;
     // no cards yet: why, and one next step (write the first one here)
     const none = body().querySelector('.fc-empty');
-    if (none && window.CassieErrors) none.replaceWith(window.CassieErrors.empty({
+    if (none && window.CassieErrors) none.replaceWith((window.cassieEmpty || ((x) => x))(window.CassieErrors.empty({
       title: 'No flashcards yet',
       text: 'Tap ＋ Flashcards under any of Cassie’s answers and she’ll make cards from it. Or write your own.',
       action: 'Write a card',
       onAction: () => { const d = body().querySelector('.fc-new'); d.open = true; d.querySelector('[name=f]').focus(); },
-    }));
+    })));
     const form = body().querySelector('.fc-form');
     const check = window.CassieErrors ? window.CassieErrors.form(form, { f: (v) => (!v.trim() ? 'card_front' : ''), b: (v) => (!v.trim() ? 'card_back' : '') }) : { check: () => true };
     form.noValidate = true;
@@ -241,6 +241,7 @@
         <div class="fc-row"><button type="button" class="fc-btn" data-back-home="1">All decks</button>${left ? `<button type="button" class="fc-btn main" data-study="${esc(session.deck)}">Study more</button>` : ''}</div></div>`;
       body().querySelector('[data-back-home]').addEventListener('click', () => { session = null; renderHome(); });
       session = { ...session, list: [], card: null };
+      if (session.done) document.dispatchEvent(new CustomEvent('cassie:studied', { detail: { kind: 'cards' } })); // (a round done: Cassie is proud)
       return;
     }
     session.card = session.list[session.i];
