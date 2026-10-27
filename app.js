@@ -967,6 +967,9 @@ const CASSIE_LINES = {
     late: ["It's late. Rest soon, okay?", 'Getting late, {name}. Sleep helps you remember.', 'Studying late? Rest soon.', "Don't forget to sleep. Your brain needs it.", 'One more, then rest soon?', "It's past 10. Be kind to yourself and rest soon."],
     happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Hope it is a good one.', '{hi}! Glad you stopped by.', '{hi}! Learn something fun today.'],
     honor: ['Today is {h}. 🇵🇭', "It's {h} today. We remember the ones who stood up for us.", 'Today is {h}, {name}. A good day to thank our heroes.', '{h} today. Their courage is part of our story.', 'Today we remember: {h}. 🇵🇭', "It's {h}. Learning is one way to honor them."],
+    stressed: ["Hey, breathe. We'll take it one step at a time.", "You're not alone in this, {name}. Let's go slow.", "Tough day? I'm right here with you.", "It's okay to find this hard. That's how learning feels.", "Small steps. You've got more in you than you think.", "Let's break it into tiny pieces together."],
+    cheer: ['Yay! That energy! 🎉', "Let's gooo, {name}!", 'Love that! Keep it up! ✨', 'Woohoo! 🙌', "That's the spirit!", 'Look at you go! 💪'],
+    back: ['Last time we looked at "{topic}". Want to pick it up again?', 'Hi {name}! Back to "{topic}"?', 'Welcome back! Still on "{topic}"?', 'Want a quick review of "{topic}" today?', 'I remember "{topic}". Shall we keep going?', 'Good to see you! "{topic}" again, or something new?'],
     quiet: ["It's {h}. Take a quiet moment today.", '{h} today. Be gentle with yourself.', "It's {h}, {name}. I'll keep things calm.", 'A quiet {h}. Study at your own pace.', "It's {h}. Thinking of you and your family.", '{h} today. Rest when you need to.'],
   },
   tl: {
@@ -977,6 +980,9 @@ const CASSIE_LINES = {
     late: ['Gabi na. Rest soon, ha?', 'Late na, {name}. Tulog ka rin, okay?', 'Puyat na naman? Rest soon.', "'Wag kalimutang matulog, ha.", 'Isa pa, tapos pahinga na?', 'Lampas 10 na. Rest soon, okay?'],
     happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Enjoy today!', '{hi}! Buti dumaan ka.', '{hi}! Aral tayo nang masaya.'],
     honor: ['Ngayon ay {h}. 🇵🇭', '{h} ngayon. Alalahanin natin ang mga bayani.', "{h} ngayon, {name}. Salamat sa ating mga bayani.", '{h} ngayon. Parte ng kwento natin ang tapang nila.', 'Today we remember: {h}. 🇵🇭', '{h} ngayon. Ang pag-aaral ay paraan para parangalan sila.'],
+    stressed: ['Hinga muna. Isa-isang step lang tayo.', "Hindi ka nag-iisa, {name}. Dahan-dahan lang.", 'Rough day? Andito lang ako.', 'Okay lang mahirapan. Ganyan talaga pag nag-aaral.', 'Kaya mo pa, promise. Small steps lang.', "Hatiin natin sa maliliit na parts, ha?"],
+    cheer: ['Yay! Ganyan nga! 🎉', "Let's gooo, {name}!", 'Love it! Tuloy lang! ✨', 'Woohoo! 🙌', 'Ayan! Ganyang energy!', 'Galing mo talaga! 💪'],
+    back: ['Last time, "{topic}" tayo. Ituloy natin?', 'Hi {name}! Balik tayo sa "{topic}"?', 'Welcome back! "{topic}" pa rin ba?', 'Quick review ng "{topic}" today?', 'Naaalala ko pa ang "{topic}". Tuloy natin?', 'Uy! "{topic}" ulit, or bago naman?'],
     quiet: ['{h} ngayon. Take a quiet moment.', '{h} ngayon. Dahan-dahan lang, ha.', "{h} ngayon, {name}. Tahimik lang tayo today.", 'Tahimik na {h}. Aral ka sa sarili mong pace.', '{h} ngayon. Ingat kayo ng pamilya mo.', '{h} ngayon. Pahinga ka kung kailangan.'],
   },
 };
@@ -994,6 +1000,43 @@ function noteLanguage(text) {
   const words = String(text || '').split(/\s+/).filter(Boolean).length, hits = (String(text || '').match(TL_WORDS) || []).length;
   try { if (hits >= 2) localStorage.setItem('cassie.taglish', '1'); else if (words >= 4 && !hits) localStorage.setItem('cassie.taglish', '0'); } catch (e) { /* */ }
 }
+// how the student chats (numbers only, never their words): emoji, casual or formal, and how long
+// their messages are, as running averages; she matches it (playful or calm, short or fuller)
+const STYLE_KEY = 'cassie.chatStyle';
+const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/gu;
+const CASUAL = /\b(haha+|hehe+|lol|lmao|omg|bro|sis|bes|beh|lods|pls|plz|tysm|ty|ikr|idk|grabe|charot|lesgo|ayy+|yay+|huhu+)\b|!{2,}|\?{2,}/i;
+const FORMAL = /^(good (morning|afternoon|evening)|hello|dear|please|could you|would you|may i|kindly)\b|\b(thank you|po)\b/i;
+function chatStyle() { try { return JSON.parse(localStorage.getItem(STYLE_KEY)) || null; } catch (e) { return null; } }
+function noteStyle(text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  const words = t.split(/\s+/).length, emoji = (t.match(EMOJI) || []).length;
+  const casual = CASUAL.test(t) || (t === t.toLowerCase() && /[a-z]/.test(t) && !/[.?!]$/.test(t)) ? 1 : 0;
+  const formal = FORMAL.test(t) || (/^[A-Z]/.test(t) && /[.?]$/.test(t) && !emoji) ? 1 : 0;
+  const old = chatStyle(), k = old ? 0.3 : 1, mix = (a, b) => Math.round(((a == null ? b : a) * (1 - k) + b * k) * 100) / 100;
+  const st = { emoji: mix(old && old.emoji, Math.min(emoji, 3)), casual: mix(old && old.casual, casual), formal: mix(old && old.formal, formal), words: mix(old && old.words, Math.min(words, 60)) };
+  try { localStorage.setItem(STYLE_KEY, JSON.stringify(st)); } catch (e) { /* */ }
+}
+const chatTone = () => { const st = chatStyle(); if (!st) return 'plain'; if (st.emoji >= 0.5 || st.casual >= 0.5) return 'playful'; if (st.formal >= 0.5) return 'calm'; return 'plain'; };
+// the mood of what they just sent: stressed gets a gentle line, excited gets a cheer
+const STRESSED = /\b(stress(ed)?|tired|exhausted|nervous|anxious|overwhelm(ed|ing)?|i('?m| am) going to fail|i give up|can'?t do this|so hard|pagod|hirap|kinakabahan|ayoko na|di ko na kaya|hindi ko kaya|bagsak|suko na)\b/i;
+const EXCITED = /\b(yay+|i passed|we passed|pumasa|nakuha ko|i got it|got it!|so happy|excited|let'?s go+|lesgo|ang saya|woo+hoo+|finally!)\b/i;
+const chatMood = (text) => (STRESSED.test(text || '') ? 'stressed' : EXCITED.test(text || '') ? 'cheer' : '');
+// shape a line to how they chat: calm drops the emoji and the shouting; playful adds a little sparkle
+function shapeLine(t, moment) {
+  const tone = chatTone();
+  if (tone === 'calm' || moment === 'quiet' || moment === 'honor' || moment === 'stressed') t = t.replace(EMOJI, '').replace(/\uFE0F/g, '').replace(/!/g, '.').replace(/\.{2,}/g, '.').replace(/\s+([.?,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  else if (tone === 'playful' && !EMOJI.test(t) && Math.random() < 0.5) t += ' ' + ['😄', '✨', '🙌', '💪', '😊'][Math.floor(Math.random() * 5)];
+  EMOJI.lastIndex = 0;
+  return t;
+}
+// short texters get the shorter lines, long writers the fuller ones
+function byLength(pool) {
+  const st = chatStyle();
+  if (!st || pool.length < 4) return pool;
+  const sorted = pool.slice().sort((a, b) => a.length - b.length), half = Math.ceil(sorted.length / 2);
+  return st.words < 6 ? sorted.slice(0, half) : st.words > 15 ? sorted.slice(-half) : pool;
+}
 const chatLang = () => { try { return localStorage.getItem('cassie.taglish') === '1' ? 'tl' : 'en'; } catch (e) { return 'en'; } };
 const firstName = () => ((state.profile && state.profile.name) || '').trim().split(/\s+/)[0].slice(0, 30);
 const lastLine = {};
@@ -1002,9 +1045,25 @@ function cassieLine(list, key, vars = {}) {
   const name = firstName();
   let pool = list.filter((t) => name || !t.includes('{name}'));
   if (pool.length > 1) pool = pool.filter((t) => t !== lastLine[key]);
+  pool = byLength(pool);
   const t = pool[Math.floor(Math.random() * pool.length)];
   lastLine[key] = t;
-  return t.replace(/\{(\w+)\}/g, (_, k) => (k === 'name' ? name : vars[k] != null ? vars[k] : ''));
+  return shapeLine(t.replace(/\{(\w+)\}/g, (_, k) => (k === 'name' ? name : vars[k] != null ? vars[k] : '')), key);
+}
+// a little bubble of her own (typing hints, a drag): only when she hasn't spoken for 2 minutes
+function chatterSay(text, ms) {
+  if (Date.now() - lastChatAt < CHAT_GAP) return false;
+  lastChatAt = Date.now();
+  mascotSay(shapeLine(text, 'chatter'), ms);
+  return true;
+}
+// the last topic they studied before today, in their own (tidy) words, if it came up more than once
+function lastTopic() {
+  try {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const t = window.CassieMemory && window.CassieMemory.recentTopics(6).find((x) => x.seen >= 2 && (x.last || 0) < start.getTime() && /^[a-z][a-z ]{2,39}$/.test(x.name));
+    return t ? t.name : '';
+  } catch (e) { return ''; }
 }
 // say a line for a moment, unless she said something in the last 2 minutes (a tap: force)
 function cassieChat(moment, vars, { force = false, ms = 3600 } = {}) {
@@ -1047,7 +1106,9 @@ function streakChat() {
 function helloChat() {
   if (!onceADay('cassie.helloDay')) return lateChat();
   const h = todayHoliday();
-  return h ? holidayChat(h) : cassieChat('open');
+  if (h) return holidayChat(h);
+  const topic = lastTopic();
+  return topic && Math.random() < 0.5 ? cassieChat('back', { topic }) : cassieChat('open');
 }
 // tapping her: a line, and tapped again right after, the one that follows on from it
 let tapPair = null, tapAt = 0, tapStep = 0;
@@ -1134,7 +1195,9 @@ function mascotOnSend(text) {
   resetIdle();
   if (mascotAsleep) wakeMascot();
   noteLanguage(text);
-  lateChat();
+  noteStyle(text);
+  const mood = chatMood(text);
+  if (!(mood && cassieChat(mood))) lateChat();
 }
 
 // ---- confetti burst for celebrating a correct answer ----
@@ -1368,7 +1431,7 @@ if (mascotBtn && mascot) {
       mascotDragging = false;
       mascotUserMoved = true;
       mascot.classList.remove('dragging');
-      mascotSay(angryDrag ? 'Hey! Careful 😠' : 'Wheee… so dizzy 😵', 1800);
+      chatterSay(angryDrag ? 'Hey! Careful 😠' : 'Wheee… so dizzy 😵', 1800);
       setTimeout(() => { if (!mascotDragging && !mascotAsleep) set3D('neutral'); }, 1400);
       resetIdle();
     }
@@ -1403,8 +1466,7 @@ if (mascotBtn && mascot) {
       set3D('thinking');
       const now = Date.now();
       if (now - lastTypeSay > 3500 && promptInput.value.trim().length >= 1) {
-        lastTypeSay = now;
-        mascotSay(TYPING_MSGS[Math.floor(Math.random() * TYPING_MSGS.length)], 2400);
+        if (chatterSay(TYPING_MSGS[Math.floor(Math.random() * TYPING_MSGS.length)], 2400)) lastTypeSay = now;
       }
       clearTimeout(typingRevertTimer);
       typingRevertTimer = setTimeout(() => {
@@ -2059,7 +2121,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=188').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=189').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6316,7 +6378,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=188');
+      exploreMod = await import('./explore/cell3d.js?v=189');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6366,7 +6428,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=188');
+      labsMod = await import('./labs/labs.js?v=189');
       islandRest();
     }
     labsMod.open({
@@ -8203,10 +8265,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=188').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=189').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=188', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=189', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
