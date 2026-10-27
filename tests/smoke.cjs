@@ -4337,7 +4337,7 @@ test('board: paste a screenshot with Ctrl+V', async (b) => {
     const dt = new DataTransfer(); dt.items.add(new File([blob], 'screenshot.png', { type: 'image/png' }));
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   });
-  await page.waitForFunction(() => { const p = window.CassieSketch.session().parts(); return p.image && p.w === 600 && p.h === 300; }, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const p = window.CassieSketch.session().pictures(); return p.length === 1 && Math.abs(p[0].w / p[0].h - 2) < 0.01; }, null, { timeout: 5000 });
   await ctx.close();
 });
 
@@ -4360,7 +4360,8 @@ test('board: an open canvas: room to draw around a picture, the Hand moves the v
   // the view's buttons: 44px, named
   for (const a of ['zout', 'zin', 'fit']) { const r = await page.locator(`[data-act="${a}"]`).boundingBox(); expect(r && r.width >= 44 && r.height >= 44 && await page.locator(`[data-act="${a}"]`).getAttribute('aria-label'), a + ': 44px with a name: ' + JSON.stringify(r)); }
   await pastePicture(page);
-  await page.waitForFunction(() => window.CassieSketch.session().parts().w === 600, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.CassieSketch.session().pictures().length === 1, null, { timeout: 5000 });
+  const pic = (await S('pictures'))[0];
   // zoom out, then the Hand moves the view to the left: nothing is drawn
   for (let i = 0; i < 3; i++) await page.click('[data-act="zout"]');
   const z0 = (await S('view')).zoom;
@@ -4373,11 +4374,11 @@ test('board: an open canvas: room to draw around a picture, the Hand moves the v
   expect(await S('strokeCount') === 0 && v1.x > v0.x + 100, 'the Hand moved the view, drew nothing: ' + JSON.stringify([v0, v1]));
   // from inside the picture to 400px past its right edge: the whole line is kept
   await page.click('[data-tool="pen"]');
-  const start = await on(500, 150), edge = await on(600, 150);
+  const my = pic.y + pic.h / 2, start = await on(pic.x + pic.w * 0.8, my), edge = await on(pic.x + pic.w, my);
   await drag(start, [edge[0] + 400, edge[1]]);
   const line = await S('lastStroke');
-  const xs = line.points.map((p) => p[0]), right = Math.max(...xs);
-  expect(Math.min(...xs) < 520 && right > 600 + 300, 'the stroke goes well past the picture: ' + JSON.stringify([Math.min(...xs), right]));
+  const xs = line.points.map((p) => p[0]), right = Math.max(...xs), wpx = (await on(1, 0))[0] - (await on(0, 0))[0];
+  expect(Math.min(...xs) < pic.x + pic.w * 0.85 && right > pic.x + pic.w + 300 / wpx, 'the stroke goes well past the picture: ' + JSON.stringify([Math.min(...xs), right, pic]));
   // the Hand again: the ink stays where it is in the board, only where it shows moves
   await page.click('[data-tool="hand"]');
   const seen0 = await on(line.points[0][0], line.points[0][1]);
@@ -4400,16 +4401,109 @@ test('board: an open canvas: room to draw around a picture, the Hand moves the v
   await page.click('[data-act="fit"]');
   const box = await page.locator('.csk-live').boundingBox();
   const inside = async (x, y) => { const q = await on(x, y); return q[0] >= box.x - 1 && q[0] <= box.x + box.width + 1 && q[1] >= box.y - 1 && q[1] <= box.y + box.height + 1; };
-  expect(await inside(0, 0) && await inside(600, 300) && await inside(right, 150), 'Fit shows the picture and the whole line');
+  expect(await inside(pic.x, pic.y) && await inside(pic.x + pic.w, pic.y + pic.h) && await inside(right, my), 'Fit shows the picture and the whole line');
   // the saved picture takes in all of it (wider than the picture and the line)
   await page.click('[data-act="save"]');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.csk-pop [data-pop="png"]')]);
   const png = fs.readFileSync(await dl.path()), w = png.readUInt32BE(16);
-  expect(png.slice(1, 4).toString() === 'PNG' && w > right, 'the PNG is as wide as everything: ' + w + ' vs ' + right);
+  expect(png.slice(1, 4).toString() === 'PNG' && w > right - pic.x, 'the PNG is as wide as everything: ' + w + ' vs ' + (right - pic.x));
   const parts = await S('parts');
-  expect(parts.w > right && parts.image && parts.strokes[0].points.every((p) => p[0] >= 0 && p[0] <= parts.w), 'Cassie gets the same frame: ' + parts.w);
+  expect(parts.w > right - pic.x && parts.image && parts.strokes[0].points.every((p) => p[0] >= 0 && p[0] <= parts.w), 'Cassie gets the same frame: ' + parts.w);
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
+});
+
+test('board: pictures are things on the board: the Move tool picks one (corner handles resize it, its menu locks it as the background, sends it to the back or deletes it), a pen draws on a locked one, undo takes one away, an old board file keeps its picture, and a room shares them', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-live');
+  const S = (f, a) => page.evaluate(([f, a]) => window.CassieSketch.session()[f](a), [f, a]);
+  const on = (x, y) => S('screenOf', [x, y]);
+  const P = () => S('pictures');
+  const center = (p) => on(p.x + p.w / 2, p.y + p.h / 2);
+  await pastePicture(page, 'Picture one');
+  await page.waitForFunction(() => window.CassieSketch.session().pictures().length === 1, null, { timeout: 5000 });
+  const [a0] = await P();
+  const live = await page.locator('.csk-live').boundingBox();
+  expect(a0.mode === 'free' && a0.w <= live.width * 0.6 / ((await on(1, 0))[0] - (await on(0, 0))[0]) + 1, 'a picture goes in the middle of the view, at most 60% of its width: ' + JSON.stringify(a0));
+  // Move: tap it, its menu shows (44px buttons)
+  await page.click('[data-tool="select"]');
+  await page.mouse.click(...(await center(a0)));
+  await page.waitForSelector('.csk-picmenu:not([hidden])');
+  const btns = await page.$$eval('.csk-picmenu .csk-btn:not([hidden])', (bs) => bs.map((x) => { const r = x.getBoundingClientRect(); return [x.textContent.trim(), Math.round(r.height)]; }));
+  expect(btns.map((x) => x[0]).join('|') === 'Lock as background|Send to back|Delete' && btns.every((x) => x[1] >= 44), 'the picture menu: ' + JSON.stringify(btns));
+  // the bottom-right handle: bigger, the same shape
+  const se = await on(a0.x + a0.w, a0.y + a0.h);
+  await page.mouse.move(se[0], se[1]); await page.mouse.down(); await page.mouse.move(se[0] + 80, se[1] + 10, { steps: 6 }); await page.mouse.up();
+  const [a1] = await P();
+  expect(a1.w > a0.w + 40 && Math.abs(a1.w / a1.h - a0.w / a0.h) < 0.02 && Math.abs(a1.x - a0.x) < 1 && Math.abs(a1.y - a0.y) < 1, 'resized from its corner, shape kept: ' + JSON.stringify([a0, a1]));
+  // a second picture lands on top; Send to back puts it under the first
+  await pastePicture(page, 'Picture two');
+  await page.waitForFunction(() => window.CassieSketch.session().pictures().length === 2, null, { timeout: 5000 });
+  let ps = await P(); const second = ps.find((p) => p.id !== a0.id);
+  expect(ps[ps.length - 1].id === second.id, 'the new picture is on top');
+  await page.mouse.click(...(await center(second)));
+  await page.click('.csk-picmenu [data-pic="back"]');
+  ps = await P();
+  expect(ps[0].id === second.id && ps[1].id === a0.id, 'Send to back: it is under the other picture now: ' + JSON.stringify(ps.map((p) => [p.id === a0.id ? 'one' : 'two', p.z])));
+  // the first: Lock as background; the menu then says Unlock; a pen stroke starts on it and it stays put
+  await page.mouse.click(...(await on(a1.x + a1.w * 0.6, a1.y + a1.h * 0.4)));
+  await page.click('.csk-picmenu [data-pic="mode"]');
+  expect((await P()).find((p) => p.id === a0.id).mode === 'background' && (await page.locator('.csk-picmenu [data-pic="mode"]').innerText()).trim() === 'Unlock', 'locked as the background, and Unlock is offered: ' + JSON.stringify(await P()));
+  await page.click('[data-tool="pen"]');
+  const from = await on(a1.x + a1.w * 0.85, a1.y + a1.h * 0.85);
+  await page.mouse.move(from[0], from[1]); await page.mouse.down(); await page.mouse.move(from[0] + 120, from[1] + 40, { steps: 6 }); await page.mouse.up();
+  const locked = (await P()).find((p) => p.id === a0.id);
+  expect(await S('strokeCount') === 1 && locked.x === a1.x && locked.y === a1.y, 'the pen drew on the locked picture, which stayed put');
+  // Delete: the other picture goes
+  await page.click('[data-tool="select"]');
+  const sp = (await P()).find((p) => p.id === second.id);
+  await page.mouse.click(...(await on(sp.x + 6, sp.y + 6)));
+  await page.click('.csk-picmenu [data-pic="del"]');
+  expect((await P()).length === 1 && (await P())[0].id === a0.id, 'Delete took the picture away');
+  // undo: a picture just added goes again
+  await pastePicture(page, 'Picture three');
+  await page.waitForFunction(() => window.CassieSketch.session().pictures().length === 2, null, { timeout: 5000 });
+  await page.click('[data-act="undo"]');
+  expect((await P()).length === 1 && await S('strokeCount') === 1, 'undo took the new picture away, the stroke stays');
+  // an old board file (its picture was the page): the picture is back at 0,0 as the background, the strokes where they were
+  const old = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 600; c.height = 300; const x = c.getContext('2d'); x.fillStyle = '#ffd'; x.fillRect(0, 0, 600, 300); return { cassie: 'board', v: 1, title: 'Old', w: 600, h: 300, grid: false, image: c.toDataURL('image/jpeg', 0.8), strokes: [{ tool: 'pen', color: '#1b1b1d', size: 4, points: [[100, 100], [300, 200], [500, 250]] }] }; });
+  const file = path.join(require('os').tmpdir(), 'cassie-old-board.json'); fs.writeFileSync(file, JSON.stringify(old));
+  page.once('dialog', (d) => d.accept());
+  await page.click('[data-act="save"]');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.csk-pop [data-pop="open"]')]);
+  await chooser.setFiles(file);
+  await page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1 && window.CassieSketch.session().pictures().length === 1, null, { timeout: 5000 });
+  const op = (await P())[0], ol = await S('lastStroke');
+  expect(op.x === 0 && op.y === 0 && op.w === 600 && op.h === 300 && op.mode === 'background' && JSON.stringify(ol.points) === '[[100,100],[300,200],[500,250]]', 'the old board: picture and strokes in place: ' + JSON.stringify([op, ol.points]));
+  const parts = await S('parts');
+  expect(parts.w === 600 && parts.h === 300 && /^data:image\/jpeg/.test(parts.image || ''), 'Cassie gets that picture as it was');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // a room: a picture one person adds shows for the other (made small enough for the room)
+  const A = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Ana Reyes' } } });
+  const B = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Ben Cruz' } } });
+  try {
+    await A.page.click('#board-btn');
+    await A.page.click('.csk-btn:has-text("Study together")');
+    await A.page.click('[data-room="new"]');
+    await A.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    const code = await A.page.locator('.csk-room b').innerText();
+    await B.page.goto(APP + '?room=' + code);
+    await B.page.waitForSelector('.csk-room:not([hidden]) b', { timeout: 10000 });
+    // a big, busy photo: too big for one room step until it's made smaller
+    await A.page.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 2400; c.height = 1600; const x = c.getContext('2d');
+      for (let i = 0; i < 4000; i++) { x.fillStyle = `hsl(${(i * 37) % 360} 70% ${30 + (i % 50)}%)`; x.fillRect((i * 97) % 2400, (i * 53) % 1600, 30 + (i % 40), 20 + (i % 30)); }
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      const dt = new DataTransfer(); dt.items.add(new File([blob], 'photo.png', { type: 'image/png' }));
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await B.page.waitForFunction(() => window.CassieSketch.session().pictures().length === 1, null, { timeout: 15000 });
+    const [ap] = await A.page.evaluate(() => window.CassieSketch.session().pictures()), [bp] = await B.page.evaluate(() => window.CassieSketch.session().pictures());
+    expect(Math.abs(ap.x - bp.x) < 1 && Math.abs(ap.w - bp.w) < 1 && Math.abs(ap.w / ap.h - 1.5) < 0.02, 'Ben sees Ana’s picture where she put it: ' + JSON.stringify([ap, bp]));
+    expect(A.errors.length === 0 && B.errors.length === 0, 'page errors: ' + A.errors.concat(B.errors).join('; '));
+  } finally { await A.ctx.close(); await B.ctx.close(); }
 });
 
 test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
