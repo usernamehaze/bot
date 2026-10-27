@@ -4305,6 +4305,44 @@ test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
   await ctx.close();
 });
 
+test('Cassie dresses for the holidays (Philippine time) and says so; two taps in a row get two connected lines', async (b) => {
+  const FLAG = 'M-28 -60 H38 V-38 H-28 Z', CANDLE = 'M0 -66 Q11 -51';
+  const day = async (iso) => {
+    const { ctx, page, errors } = await open(b, { server: false, setup: (c) => c.clock.setFixedTime(new Date(iso + 'T10:00:00+08:00')) });
+    await page.waitForSelector('#mascot.has2d svg.cassie-bot', { state: 'attached', timeout: 8000 });
+    await page.waitForFunction(() => { const m = document.getElementById('mascot-bubble'); return m && !m.hidden && m.textContent.trim(); }, null, { timeout: 8000 });
+    const said = await page.locator('#mascot-bubble').textContent();
+    const acc = await page.evaluate(() => [...document.querySelectorAll('#mascot svg.cassie-bot :is(.cb-acc-top, .cb-acc-face, .cb-acc-neck)')].map((g) => g.innerHTML).join(''));
+    return { ctx, page, errors, said, acc };
+  };
+  const june = await day('2026-06-12');
+  expect(june.acc.includes(FLAG), 'on 12 June she wears the little flag: ' + june.acc.slice(0, 80));
+  expect(/Happy Independence Day/.test(june.said), 'on 12 June she says Happy Independence Day: ' + june.said);
+  expect(!/[–—]/.test(june.said), 'no dashes in what she says');
+  await june.ctx.close();
+  const nov = await day('2026-11-01');
+  expect(nov.acc.includes(CANDLE) && !nov.acc.includes(FLAG), 'on 1 November (Undas) she wears the candle');
+  expect(!/Happy|🎉/.test(nov.said), 'Undas gets a quiet word, nothing festive: ' + nov.said);
+  await nov.ctx.close();
+  const plain = await day('2026-07-15');
+  expect(plain.acc === '', 'a normal day: no holiday accessory: ' + plain.acc.slice(0, 80));
+  expect(!/Happy|Today is|ngayon/.test(plain.said), 'a normal day: no holiday line: ' + plain.said);
+  // two taps in a row: the second line follows on from the first (not a repeat)
+  const { page } = plain;
+  await page.evaluate(() => { document.getElementById('mascot-bubble').hidden = true; });
+  const taps = [];
+  for (let i = 0; i < 2; i++) {
+    await page.click('#mascot-btn');
+    await page.waitForFunction(() => !document.getElementById('mascot-bubble').hidden, null, { timeout: 3000 });
+    taps.push(await page.locator('#mascot-bubble').textContent());
+  }
+  const pairs = await page.evaluate(() => TAP_PAIRS.en.map((p) => [p[0], p[1]]));
+  const fill = (t) => t.replace('{name}', 'Test');
+  expect(taps[0] !== taps[1] && pairs.some(([a, c]) => fill(a) === taps[0] && fill(c) === taps[1]), 'two taps: two different lines from the same little exchange: ' + JSON.stringify(taps));
+  expect(plain.errors.length === 0, 'page errors: ' + plain.errors.join('; '));
+  await plain.ctx.close();
+});
+
 test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cassie', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'felt' } });
   await page.waitForTimeout(600);

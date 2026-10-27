@@ -119,6 +119,15 @@
     bow: { layer: 'top', svg: `<path d="M0 0 L-38 -24 Q-48 0 -38 22 Z M0 0 L38 -24 Q48 0 38 22 Z" fill="#f2a7b5" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><circle r="10" fill="#e88aa0" stroke="${INK}" stroke-width="4"/>` },
     sampaguita: { layer: 'top', svg: `<g stroke="${INK}" stroke-width="3"><g fill="#fff">${[0, 72, 144, 216, 288].map((a) => `<ellipse rx="9" ry="16" transform="rotate(${a}) translate(0 -14)"/>`).join('')}</g><circle r="7" fill="#f6e3a1"/></g><path d="M18 18 Q34 28 48 18" stroke="#3f7a4a" stroke-width="5" fill="none" stroke-linecap="round"/>` },
     pencil: { layer: 'top', svg: `<g transform="rotate(-38)"><rect x="-56" y="-9" width="88" height="18" rx="3" fill="#f4c542" stroke="${INK}" stroke-width="4"/><path d="M32 -9 L54 0 L32 9 Z" fill="#f1dcb5" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M47 -3 L54 0 L47 3Z" fill="${INK}"/><rect x="-64" y="-9" width="12" height="18" rx="3" fill="#f2a7b5" stroke="${INK}" stroke-width="4"/></g>` },
+    // the holidays (see holiday() below): small, and drawn the same way
+    flag: { layer: 'top', svg: `<path d="M-30 18 V-64" stroke="${INK}" stroke-width="5" stroke-linecap="round"/><path d="M-28 -60 H38 V-38 H-28 Z" fill="#2856a3"/><path d="M-28 -38 H38 V-16 H-28 Z" fill="#d8343c"/><path d="M-28 -60 L6 -38 L-28 -16 Z" fill="#fff"/><circle cx="-17" cy="-38" r="5" fill="#f4c542"/><path d="M-28 -60 H38 V-16 H-28 Z" fill="none" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><circle cx="-30" cy="-66" r="5" fill="#e8b84a"/>` },
+    candle: { layer: 'top', svg: `<rect x="-12" y="-34" width="24" height="50" rx="4" fill="${PAPER}" stroke="${INK}" stroke-width="4"/><path d="M0 -34 V-42" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><path d="M0 -66 Q11 -51 0 -42 Q-11 -51 0 -66Z" fill="#f4c542" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>` },
+    heart: { layer: 'top', svg: `<path d="M0 18 C-46 -10 -30 -54 0 -32 C30 -54 46 -10 0 18Z" fill="#e8577a" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M-20 -24 Q-14 -32 -6 -28" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".6"/>` },
+    pumpkin: { layer: 'top', svg: `<ellipse cx="-16" cy="-8" rx="22" ry="24" fill="#f08a24" stroke="${INK}" stroke-width="4"/><ellipse cx="16" cy="-8" rx="22" ry="24" fill="#f08a24" stroke="${INK}" stroke-width="4"/><ellipse cy="-8" rx="15" ry="26" fill="#f59a3a" stroke="${INK}" stroke-width="4"/><path d="M0 -32 Q2 -44 10 -48" fill="none" stroke="#3f7a4a" stroke-width="6" stroke-linecap="round"/>` },
+    lantern: { layer: 'top', svg: `<path d="M0 -64 V-50" stroke="${INK}" stroke-width="3" stroke-linecap="round"/><ellipse cy="-24" rx="34" ry="24" fill="#d8343c" stroke="${INK}" stroke-width="4"/><path d="M-14 -46 Q-22 -24 -14 -2 M14 -46 Q22 -24 14 -2" fill="none" stroke="#a8242b" stroke-width="3"/><rect x="-14" y="-54" width="28" height="8" rx="3" fill="#e8b84a" stroke="${INK}" stroke-width="3"/><rect x="-14" y="-4" width="28" height="8" rx="3" fill="#e8b84a" stroke="${INK}" stroke-width="3"/><path d="M0 4 V20" stroke="#e8b84a" stroke-width="4" stroke-linecap="round"/>` },
+    ribbon: { layer: 'top', svg: `<path d="M0 -12 C-28 -62 28 -62 0 -12 L-18 16 M0 -12 L18 16" fill="none" stroke="${INK}" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M0 -12 C-28 -62 28 -62 0 -12 L-18 16 M0 -12 L18 16" fill="none" stroke="#f4c542" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>` },
+    leaf: { layer: 'top', svg: `<path d="M-30 14 Q-36 -40 30 -50 Q36 4 -30 14Z" fill="#4c9a5b" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M-26 10 Q0 -14 22 -40" fill="none" stroke="#2f6b3a" stroke-width="3" stroke-linecap="round"/>` },
+    apple: { layer: 'top', svg: `<path d="M0 -34 C-30 -50 -46 -8 -24 12 C-14 20 -6 18 0 14 C6 18 14 20 24 12 C46 -8 30 -50 0 -34Z" fill="#d8343c" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M0 -34 Q2 -46 8 -54" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/><path d="M6 -46 Q22 -58 30 -44 Q16 -38 6 -46Z" fill="#4c9a5b" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>` },
     scarf: { layer: 'neck', svg: `<path d="M-70 -8 Q0 22 70 -8 L74 10 Q0 40 -74 10 Z" fill="#d8343c" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><path d="M30 14 L40 58 L60 54 L52 8" fill="#c22a32" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>` },
   };
 
@@ -428,20 +437,76 @@
     return api;
   }
 
-  // Seasonal outfits for the Philippines: the long "ber months" Christmas season,
-  // Halloween, and graduation season.
+  /* ---------------- the holidays (Philippine time) ----------------
+     tone: 'happy' days get a cheerful greeting; 'honor' days remember someone; 'quiet' days
+     (Holy Week, Undas) get a candle and a quiet word, nothing silly. */
+  const H8 = 8 * 36e5; // the Philippines: UTC+8, no daylight saving
+  const phDate = (d) => { const p = new Date(d.getTime() + H8); return { y: p.getUTCFullYear(), m: p.getUTCMonth() + 1, day: p.getUTCDate() }; };
+  const dayNum = (y, m, day) => Date.UTC(y, m - 1, day) / 864e5;
+  // Easter Sunday (the Gregorian computus): Holy Week is the week before it
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    return dayNum(y, Math.floor((h + l - 7 * m + 114) / 31), ((h + l - 7 * m + 114) % 31) + 1);
+  }
+  // a new moon (Meeus, Astronomical Algorithms ch. 49, the main terms; within minutes), as a time in ms
+  function newMoon(k) {
+    const T = k / 1236.85, r = Math.PI / 180, E = 1 - 0.002516 * T;
+    const M = (2.5534 + 29.1053567 * k) * r, Mp = (201.5643 + 385.81693528 * k) * r, F = (160.7108 + 390.67050284 * k) * r, O = (124.7746 - 1.56375588 * k) * r;
+    const jde = 2451550.09766 + 29.530588861 * k + 0.00015437 * T * T
+      - 0.4072 * Math.sin(Mp) + 0.17241 * E * Math.sin(M) + 0.01608 * Math.sin(2 * Mp) + 0.01039 * Math.sin(2 * F) + 0.00739 * E * Math.sin(Mp - M)
+      - 0.00514 * E * Math.sin(Mp + M) + 0.00208 * E * E * Math.sin(2 * M) - 0.00111 * Math.sin(Mp - 2 * F) - 0.00057 * Math.sin(Mp + 2 * F)
+      + 0.00056 * E * Math.sin(2 * Mp + M) - 0.00042 * Math.sin(3 * Mp) + 0.00042 * E * Math.sin(M + 2 * F) + 0.00038 * E * Math.sin(M - 2 * F)
+      - 0.00024 * E * Math.sin(2 * Mp - M) - 0.00017 * Math.sin(O);
+    return (jde - 2440587.5) * 864e5 - 69e3;
+  }
+  // Lunar New Year: the first new moon on or after 21 January, by the date in China (also UTC+8)
+  function lunarNewYear(y) {
+    const from = dayNum(y, 1, 21);
+    for (let k = Math.floor((from * 864e5 - Date.UTC(2000, 0, 6)) / (29.530588861 * 864e5)) - 1; ; k++) {
+      const p = phDate(new Date(newMoon(k))), n = dayNum(p.y, p.m, p.day);
+      if (n >= from) return n;
+    }
+  }
+  const lastMonday = (y, m) => { const end = dayNum(y, m + 1, 0); return end - ((new Date(end * 864e5).getUTCDay() + 6) % 7); };
+  const HOLIDAYS = [
+    { id: 'newyear', name: 'New Year', acc: 'party', tone: 'happy', on: (y, n) => n === dayNum(y, 1, 1) },
+    { id: 'lunar', name: 'Lunar New Year', acc: 'lantern', tone: 'happy', on: (y, n) => n === lunarNewYear(y) },
+    { id: 'valentine', name: "Valentine's Day", acc: 'heart', tone: 'happy', on: (y, n) => n === dayNum(y, 2, 14) },
+    { id: 'edsa', name: 'EDSA People Power Day', acc: 'ribbon', tone: 'honor', on: (y, n) => n === dayNum(y, 2, 25) },
+    { id: 'holyweek', name: 'Holy Week', acc: 'candle', tone: 'quiet', on: (y, n) => { const e = easter(y); return n >= e - 7 && n < e; } }, // Palm Sunday to Black Saturday
+    { id: 'valor', name: 'Araw ng Kagitingan', acc: 'flag', tone: 'honor', on: (y, n) => n === dayNum(y, 4, 9) },
+    { id: 'earth', name: 'Earth Day', acc: 'leaf', tone: 'happy', on: (y, n) => n === dayNum(y, 4, 22) },
+    { id: 'independence', name: 'Independence Day', acc: 'flag', tone: 'happy', on: (y, n) => n === dayNum(y, 6, 12) },
+    { id: 'heroes', name: 'National Heroes Day', acc: 'flag', tone: 'honor', on: (y, n) => n === lastMonday(y, 8) },
+    { id: 'teachers', name: "Teachers' Day", acc: 'apple', tone: 'happy', on: (y, n) => n === dayNum(y, 10, 5) },
+    { id: 'halloween', name: 'Halloween', acc: 'pumpkin', tone: 'happy', on: (y, n) => n === dayNum(y, 10, 31) },
+    { id: 'undas', name: 'Undas', acc: 'candle', tone: 'quiet', on: (y, n) => n === dayNum(y, 11, 1) || n === dayNum(y, 11, 2) },
+    { id: 'bonifacio', name: 'Bonifacio Day', acc: 'flag', tone: 'honor', on: (y, n) => n === dayNum(y, 11, 30) },
+    { id: 'christmas', name: 'Christmas', acc: 'santa', tone: 'happy', on: (y, n) => n === dayNum(y, 12, 24) || n === dayNum(y, 12, 25) },
+    { id: 'rizal', name: 'Rizal Day', acc: 'flag', tone: 'honor', on: (y, n) => n === dayNum(y, 12, 30) },
+  ];
+  // today's holiday in the Philippines, or null: { id, name, acc, tone }
+  function holiday(d = new Date()) {
+    const p = phDate(d), n = dayNum(p.y, p.m, p.day);
+    const h = HOLIDAYS.find((x) => x.on(p.y, n));
+    return h ? { id: h.id, name: h.name, acc: h.acc, tone: h.tone } : null;
+  }
+
+  // Seasonal outfits for the Philippines: a holiday's own accessory on its days, the long
+  // "ber months" Christmas season, Halloween week, and the New Year.
   function seasonal(d = new Date()) {
-    const m = d.getMonth() + 1, day = d.getDate();
-    if (m === 10 && day >= 25 || m === 11 && day <= 2) return 'witch';
+    const h = holiday(d);
+    if (h) return h.acc;
+    const { m, day } = phDate(d);
+    if (m === 10 && day >= 25) return 'witch';
     if (m === 12 || (m === 11 && day >= 15)) return 'santa';
     if (m === 1 && day <= 2) return 'party';
-    if (m === 2 && day === 14) return 'bow';
-    if (m === 6 && day === 12) return 'salakot'; // Independence Day
     return null;
   }
 
   window.CassieBot = {
-    create, seasonal, failed3d,
+    create, seasonal, holiday, failed3d,
     STATES: Object.keys(STATES), COLORS: Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color || null])), ACCESSORIES: Object.keys(ACC),
     construction: { POINTER, TAIL_PIVOT, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
     defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK }, // (the 3D Cassie draws her face from these)
