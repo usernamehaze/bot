@@ -35,6 +35,8 @@
   const CSS = `
   .csk-wrap { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center;
     background: rgba(12,12,14,.46); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1b1d; }
+  .csk-wrap { --csk-ctl-bg: #f6f5f2; --csk-ctl-ink: #1b1b1d; --csk-ctl-line: rgba(27,27,29,.28); }
+  .csk-wrap.csk-dark { --csk-ctl-bg: #26262a; --csk-ctl-ink: #ececec; --csk-ctl-line: rgba(236,236,236,.3); }
   .csk-wrap.side { inset: 0 0 0 auto; width: min(560px, 100vw); background: none; pointer-events: none; }
   .csk-panel { pointer-events: auto; background: #f6f5f2; width: min(1180px, 100vw); height: min(860px, 100vh); display: flex; flex-direction: column;
     border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
@@ -98,6 +100,11 @@
   .csk-board canvas.csk-fx { pointer-events: none; }
   .csk-board canvas.csk-live.grab { cursor: grab; }
   .csk-board canvas.csk-live.place { cursor: copy; }
+  /* the view: zoom out, zoom in, fit everything (bottom right of the board) */
+  .csk-zoom { position: absolute; z-index: 5; right: 18px; bottom: 18px; display: flex; gap: 4px; padding: 4px; border-radius: 14px;
+    background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+  .csk-zoom .csk-btn { min-width: 44px; height: 44px; border-color: transparent; font-size: 13px; }
+  .csk-zoom .csk-btn svg { width: 19px; height: 19px; }
   .csk-pop { position: absolute; z-index: 6; left: 12px; right: 12px; margin: 0 auto; max-width: 380px; max-height: 70%; overflow: auto; box-sizing: border-box;
     background: #fbfaf8; color: #1b1b1d; border: 1px solid rgba(127,127,127,.3); border-radius: 14px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
   .csk-dark .csk-pop { background: #26262a; color: #ececec; }
@@ -145,6 +152,10 @@
 
   const ICON = {
     select: '<path d="M6 3l12 9-5.5 1L10 19z"/>',
+    hand: '<path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V11M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14c0 3.6-2.4 6.5-6 6.5-2.6 0-4-1.4-5.5-3.8L3.4 13a1.5 1.5 0 0 1 2.5-1.6L8 13.5"/>',
+    zin: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M7.5 10.5h6M10.5 7.5v6"/>',
+    zout: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M7.5 10.5h6"/>',
+    fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1"/>',
     pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
     laser: '<circle cx="7" cy="17" r="3"/><path d="M9.5 14.5L19 5"/><path d="M14 3.5l.8 2.2M20.5 10l-2.2-.8M18.5 3.5l-1 1.6"/>',
     note: '<path d="M5 4h14v10l-5 6H5z"/><path d="M19 14h-5v6"/>',
@@ -430,6 +441,7 @@
         <div class="csk-note" hidden></div>
         <div class="csk-tools">
           <button class="csk-btn" data-tool="select" title="Move. Drag sticky notes and cards, tap a card to flip it">${svg('select')}</button>
+          <button class="csk-btn" data-tool="hand" title="Hand: drag to move around the board (or hold Space, or use two fingers)" aria-label="Hand: move around the board">${svg('hand')}</button>
           <button class="csk-btn on" data-tool="pen" title="Pen">${svg('pen')}</button>
           <button class="csk-btn" data-tool="hl" title="Highlighter">${svg('hl')}</button>
           <button class="csk-btn" data-tool="line" title="Straight line">${svg('line')}</button>
@@ -456,6 +468,10 @@
         ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie">${opts.hear ? `<button class="csk-btn csk-mic" type="button" aria-label="Say it instead of typing" title="Say it instead of typing">${MIC}</button>` : ''}<button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
         <div class="csk-stage"><div class="csk-board">
           <canvas class="csk-bg"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-obj"></canvas><canvas class="csk-live"></canvas><canvas class="csk-fx"></canvas>
+        </div><div class="csk-zoom" role="group" aria-label="View">
+          <button class="csk-btn" data-act="zout" title="Zoom out" aria-label="Zoom out">${svg('zout')}</button>
+          <button class="csk-btn" data-act="zin" title="Zoom in" aria-label="Zoom in">${svg('zin')}</button>
+          <button class="csk-btn" data-act="fit" title="Fit: show everything on the board" aria-label="Fit: show everything on the board">${svg('fit')}</button>
         </div></div>
       </div>`;
     root.appendChild(wrap);
@@ -493,6 +509,55 @@
     const editable = (st) => !room || !!st.mine;
     function share(st) { if (!room) return; st.id = st.id || rid(); st.mine = true; st.u = room.me; room.send({ t: 'add', s: pack(st) }); }
 
+    // The board is an open world; the canvases are a window onto it. cam: the world point at the
+    // canvas's top-left and how many canvas pixels one world unit takes. W x H is the page: the
+    // part shown first, and the size things are laid out for (everyone in a room shares 1600 x 1000).
+    const cam = { x: 0, y: 0, k: 1 };
+    let dpr = 1, CW = 1, CH = 1, viewed = false, pan = null, pinch = null, spaceDown = false;
+    const Z_MIN = 0.25, Z_MAX = 4;
+    const touches = new Map();
+    const pageK = () => Math.min(CW / W, CH / H);
+    const zoomNow = () => cam.k / pageK();
+    const useView = (ctx) => ctx.setTransform(cam.k, 0, 0, cam.k, -cam.x * cam.k, -cam.y * cam.k);
+    const wipe = (ctx) => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); };
+    const cssOf = (wx, wy) => [(wx - cam.x) * cam.k / dpr, (wy - cam.y) * cam.k / dpr]; // world → px inside the board
+    const worldAt = (cx, cy) => [cam.x + cx * dpr / cam.k, cam.y + cy * dpr / cam.k]; // px inside the board → world
+    function setZoom(z, cx = CW / dpr / 2, cy = CH / dpr / 2) { // (around a point on screen, which stays put)
+      const at = worldAt(cx, cy);
+      cam.k = clamp(z, Z_MIN, Z_MAX) * pageK();
+      cam.x = at[0] - cx * dpr / cam.k; cam.y = at[1] - cy * dpr / cam.k;
+      drawAll();
+    }
+    // show a world rectangle whole, centred, with a margin
+    function frame(r, margin = 24) {
+      const m = margin * dpr, k = Math.min((CW - 2 * m) / Math.max(1, r.w), (CH - 2 * m) / Math.max(1, r.h));
+      cam.k = clamp(k / pageK(), Z_MIN, Z_MAX) * pageK();
+      cam.x = r.x + r.w / 2 - CW / 2 / cam.k; cam.y = r.y + r.h / 2 - CH / 2 / cam.k;
+    }
+    // where everything on the board is (null when it's empty)
+    function boundsOf(list) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const add = (a, b, c, d) => { x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, c); y1 = Math.max(y1, d); };
+      const walk = (st, ox = 0, oy = 0) => {
+        if (st.tool === 'group') { (st.items || []).forEach((it) => walk(it, ox, oy)); return; }
+        if (st.tool === 'eraser') return;
+        if (st.w != null && st.x != null) { add(ox + st.x, oy + st.y, ox + st.x + st.w, oy + st.y + st.h); return; }
+        if (st.tool === 'text') {
+          measure.font = `${st.weight || 600} ${st.size}px system-ui, sans-serif`;
+          const lines = String(st.text || '').split('\n'), w = Math.max(...lines.map((l) => measure.measureText(l).width));
+          add(ox + st.x, oy + st.y, ox + st.x + w, oy + st.y + lines.length * st.size * 1.25); return;
+        }
+        const pad = (st.tool === 'hl' ? st.size * 4 : st.size || 3) / 2;
+        (st.points || []).forEach((q) => add(ox + q[0] - pad, oy + q[1] - pad, ox + q[0] + pad, oy + q[1] + pad));
+      };
+      list.forEach((st) => walk(st));
+      return isFinite(x0) ? { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) } : null;
+    }
+    const union = (a, b) => (!a ? b : !b ? a : (() => { const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y); return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }; })());
+    const contentBounds = () => union(bgImage ? { x: 0, y: 0, w: W, h: H } : null, boundsOf(strokes));
+    function fitAll() { frame(contentBounds() || { x: 0, y: 0, w: W, h: H }); drawAll(); }
+    function drawAll() { drawBg(); redraw(); const lx = live.getContext('2d'); wipe(lx); if (drawing && drawing.tool !== 'eraser') { useView(lx); paint(lx, drawing); } placeCursors(); if (trails.size && !fxRaf) fxRaf = requestAnimationFrame(fxLoop); }
+
     function setSize() {
       if (room) { // everyone in a room draws on the same page
         W = 1600; H = 1000;
@@ -507,33 +572,47 @@
         const r = stage.getBoundingClientRect();
         W = 1600; H = Math.round(Math.min(2800, Math.max(700, 1600 * ((r.height - 20) / Math.max(1, r.width - 20)))));
       }
-      [bg, obj, ink, live, fx].forEach((c) => { c.width = W; c.height = H; });
+      viewed = false;
       fit();
     }
+    // the board fills its area; the view keeps its middle and its zoom when that area changes
     function fit() {
       const r = stage.getBoundingClientRect();
-      const aw = Math.max(50, r.width - 20), ah = Math.max(50, r.height - 20);
-      const s = Math.min(aw / W, ah / H);
-      boardEl.style.width = Math.round(W * s) + 'px';
-      boardEl.style.height = Math.round(H * s) + 'px';
+      const aw = Math.max(50, Math.round(r.width - 20)), ah = Math.max(50, Math.round(r.height - 20));
+      const mid = viewed ? worldAt(CW / dpr / 2, CH / dpr / 2) : null, z = viewed ? zoomNow() : 1;
+      boardEl.style.width = aw + 'px'; boardEl.style.height = ah + 'px';
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      CW = Math.round(aw * dpr); CH = Math.round(ah * dpr);
+      [bg, obj, ink, live, fx].forEach((c) => { if (c.width !== CW) c.width = CW; if (c.height !== CH) c.height = CH; });
+      if (!viewed) { frame({ x: 0, y: 0, w: W, h: H }, 0); viewed = true; }
+      else { cam.k = z * pageK(); cam.x = mid[0] - CW / 2 / cam.k; cam.y = mid[1] - CH / 2 / cam.k; }
+      drawAll();
     }
-    function drawBg() {
-      const x = bg.getContext('2d');
-      x.fillStyle = paper; x.fillRect(0, 0, W, H);
+    // the paper, the picture and the grid, for a view of the world (the screen, or a saved picture)
+    function paintBg(x, v, cw, ch) {
+      x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = paper; x.fillRect(0, 0, cw, ch);
+      x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k);
       if (bgImage) x.drawImage(bgImage, 0, 0, W, H);
       if (grid) {
-        const step = Math.round(Math.min(W, H) / 20);
-        x.strokeStyle = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.08)'; x.lineWidth = 1;
-        for (let gx = 0; gx <= W; gx += step) { x.beginPath(); x.moveTo(gx + .5, 0); x.lineTo(gx + .5, H); x.stroke(); }
-        for (let gy = 0; gy <= H; gy += step) { x.beginPath(); x.moveTo(0, gy + .5); x.lineTo(W, gy + .5); x.stroke(); }
+        let step = Math.round(Math.min(W, H) / 20);
+        while (step * v.k < 6) step *= 2; // (zoomed far out: fewer lines)
+        const gx0 = Math.floor(v.x / step) * step, gy0 = Math.floor(v.y / step) * step, gx1 = v.x + cw / v.k, gy1 = v.y + ch / v.k;
+        x.strokeStyle = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.08)'; x.lineWidth = 1 / v.k;
+        x.beginPath();
+        for (let gx = gx0; gx <= gx1; gx += step) { x.moveTo(gx, gy0); x.lineTo(gx, gy1); }
+        for (let gy = gy0; gy <= gy1; gy += step) { x.moveTo(gx0, gy); x.lineTo(gx1, gy); }
+        x.stroke();
       }
+    }
+    function drawBg() {
+      paintBg(bg.getContext('2d'), cam, CW, CH);
       $('[data-act="grid"]').classList.toggle('on', grid);
     }
     function paint(ctx, s) { paintStroke(ctx, s); }
+    function paintInk(x, v) { x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k); strokes.forEach((s) => { if (!isObj(s)) paint(x, s); }); }
     function redraw() {
       const x = ink.getContext('2d');
-      x.clearRect(0, 0, W, H);
-      strokes.forEach((s) => { if (!isObj(s)) paint(x, s); });
+      wipe(x); paintInk(x, cam);
       redrawObjs();
       $('[data-act="undo"]').disabled = !strokes.length;
       $('[data-act="redo"]').disabled = !redo.length;
@@ -571,7 +650,7 @@
     }
     function redrawObjs() {
       const x = obj.getContext('2d'), now = performance.now();
-      x.clearRect(0, 0, W, H);
+      wipe(x); useView(x);
       strokes.filter(isObj).sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((s) => paintObj(x, s, now));
       if ((glide.size || flipAnim.size) && !objRaf) objRaf = requestAnimationFrame(() => { objRaf = 0; redrawObjs(); });
     }
@@ -598,15 +677,15 @@
     function newNote(pt) {
       const big = Math.max(1, Math.min(2.2, scaleK() / 2)); // a readable size on a small screen too
       const w = Math.round(220 * big), h = Math.round(190 * big);
-      const st = { tool: 'note', id: rid(), x: clamp(pt[0] - w / 2, 0, W - w), y: clamp(pt[1] - h / 2, 0, H - h), w, h, color: noteColor, text: '', n: myName, z: ++zTop, _fresh: true };
+      const st = { tool: 'note', id: rid(), x: pt[0] - w / 2, y: pt[1] - h / 2, w, h, color: noteColor, text: '', n: myName, z: ++zTop, _fresh: true };
       strokes.push(st); sel = st; redraw();
       editNote(st);
     }
     function editNote(st) {
-      const br = boardEl.getBoundingClientRect(), k = br.width / W;
+      const k = cam.k / dpr, at = cssOf(st.x, st.y);
       const box = document.createElement('div');
       box.className = 'csk-notebox'; box.contentEditable = 'true'; box.setAttribute('aria-label', 'Sticky note');
-      Object.assign(box.style, { left: st.x * k + 'px', top: st.y * k + 'px', width: st.w * k + 'px', height: st.h * k + 'px', background: st.color, fontSize: Math.max(12, 22 * k) + 'px' });
+      Object.assign(box.style, { left: at[0] + 'px', top: at[1] + 'px', width: st.w * k + 'px', height: st.h * k + 'px', background: st.color, fontSize: Math.max(12, 22 * k) + 'px' });
       box.innerText = st.text || '';
       boardEl.appendChild(box);
       st._editing = true; editing = true; redrawObjs();
@@ -641,7 +720,8 @@
       const n = cards.length, cols = Math.min(n, Math.max(1, Math.ceil(Math.sqrt(n * 1.7 * Math.min(1, (W / H) / 1.6))))), rows = Math.ceil(n / cols), gap = 18;
       let cw = Math.min(Math.max(320, 165 * scaleK()), (W * 0.92 - gap * (cols - 1)) / cols), ch = cw * 0.62;
       if (rows * ch + gap * (rows - 1) > H * 0.88) { ch = (H * 0.88 - gap * (rows - 1)) / rows; cw = ch / 0.62; }
-      const x0 = (W - (cols * cw + (cols - 1) * gap)) / 2, y0 = (H - (rows * ch + (rows - 1) * gap)) / 2;
+      const mid = worldAt(CW / dpr / 2, CH / dpr / 2); // (around the middle of what's on screen)
+      const x0 = mid[0] - (cols * cw + (cols - 1) * gap) / 2, y0 = mid[1] - (rows * ch + (rows - 1) * gap) / 2;
       cards.forEach((c, i) => {
         const st = { tool: 'card', id: rid(), x: x0 + (i % cols) * (cw + gap), y: y0 + Math.floor(i / cols) * (ch + gap), w: cw, h: ch, f: String(c.f).trim().slice(0, 300), b: String(c.b).trim().slice(0, 600), flip: false, i: i + 1, of: n, z: ++zTop };
         strokes.push(st); share(st);
@@ -676,7 +756,7 @@
       const T = TEMPLATES.find((t) => t[0] === kind);
       if (!T) return;
       const k = clamp(Math.min(W / 1600, H / 1000), 0.4, 1.2);
-      const cx = clamp(pt[0], (T[2][0] / 2) * k + 8, W - (T[2][0] / 2) * k - 8), cy = clamp(pt[1], (T[2][1] / 2) * k + 8, H - (T[2][1] / 2) * k - 8);
+      const cx = pt[0], cy = pt[1];
       const tc = (color === '#ffffff' && !dark) || (color === '#1b1b1d' && dark) ? (dark ? '#ececec' : '#1b1b1d') : color;
       const soft = dark ? 'rgba(255,255,255,.16)' : 'rgba(0,0,0,.13)';
       const at = (it) => {
@@ -705,7 +785,7 @@
     function fxLoop() {
       fxRaf = 0;
       const x = fx.getContext('2d'), now = performance.now(), k = Math.max(W / 1600, 0.5);
-      x.clearRect(0, 0, W, H);
+      wipe(x); useView(x);
       for (const [key, t] of trails) {
         t.pts = t.pts.filter((p) => now - p[2] < 2000);
         if (!t.pts.length) { trails.delete(key); continue; }
@@ -773,7 +853,7 @@
         const pts = (Array.isArray(h.p.t) ? h.p.t : []).slice(-120).filter((q) => Array.isArray(q) && isFinite(q[0]) && isFinite(q[1]));
         let base = Math.max(now + 20, c.end);
         if (base - now > 1500) { base = now + 20; c.q.length = 0; } // never fall far behind
-        pts.forEach((q) => c.q.push({ at: base + clamp(+q[2] || 0, 0, 5000), x: clamp(+q[0], 0, W), y: clamp(+q[1], 0, H), l: q[3] | 0 }));
+        pts.forEach((q) => c.q.push({ at: base + clamp(+q[2] || 0, 0, 5000), x: clamp(+q[0], -1e6, 1e6), y: clamp(+q[1], -1e6, 1e6), l: q[3] | 0 }));
         c.end = c.q.length ? c.q[c.q.length - 1].at : base;
         if (h.p.g) c.q.push({ at: c.end + 1, gone: true });
         label(c);
@@ -781,6 +861,8 @@
       for (const c of curs.values()) if (!seen.has(c.uid)) { c.el.hidden = true; c.q.length = 0; }
       if (!curRaf) curRaf = requestAnimationFrame(curLoop);
     }
+    function placeCursor(c) { const p = cssOf(c.x, c.y); c.el.style.left = p[0] + 'px'; c.el.style.top = p[1] + 'px'; }
+    function placeCursors() { for (const c of curs.values()) if (c.x != null && !c.el.hidden) placeCursor(c); }
     function label(c) {
       const sp = c.el.querySelector('span');
       sp.textContent = c.name + (c.a ? ' · ' + c.a : '');
@@ -794,8 +876,7 @@
         while (c.q.length && c.q[0].at <= now) {
           const q = c.q.shift();
           if (q.gone) { c.el.hidden = true; continue; }
-          c.el.hidden = false;
-          c.el.style.left = (q.x / W * 100) + '%'; c.el.style.top = (q.y / H * 100) + '%';
+          c.el.hidden = false; c.x = q.x; c.y = q.y; placeCursor(c);
           if (q.l) laserAdd(c.uid, c.color, q.x, q.y, q.l === 2);
         }
         if (c.q.length) busy = true;
@@ -805,12 +886,48 @@
 
     function toBoard(e) {
       const r = live.getBoundingClientRect();
-      return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)];
+      return worldAt(e.clientX - r.left, e.clientY - r.top);
     }
-    // scale tool sizes with the board so a "thin pen" looks thin on screen
-    const scaleK = () => W / Math.max(1, live.getBoundingClientRect().width);
+    // scale tool sizes with the view so a "thin pen" looks thin on screen
+    const scaleK = () => dpr / cam.k;
+    const capture = (id) => { try { live.setPointerCapture(id); } catch (e) { /* (a pointer the browser no longer knows) */ } };
+
+    // ---- moving around: the Hand tool, Space or the middle button, two fingers, the wheel ----
+    function startPinch() {
+      const [a, b] = [...touches.values()], r = live.getBoundingClientRect();
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: zoomNow(), at: worldAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top) };
+      // whatever the first finger started is undone: two fingers move the view
+      if (drawing) { if (drawing.tool === 'eraser') { const i = strokes.indexOf(drawing); if (i >= 0) strokes.splice(i, 1); } drawing = null; }
+      drag = null; laserDown = false; pan = null;
+      drawAll();
+    }
+    function movePinch() {
+      const [a, b] = [...touches.values()], r = live.getBoundingClientRect();
+      const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+      cam.k = clamp(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, Z_MIN, Z_MAX) * pageK();
+      cam.x = pinch.at[0] - mx * dpr / cam.k; cam.y = pinch.at[1] - my * dpr / cam.k; // (the point between the fingers stays under them)
+      drawAll();
+    }
+    live.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = live.getBoundingClientRect();
+      if (e.ctrlKey || e.metaKey) { setZoom(zoomNow() * Math.exp(-clamp(e.deltaY, -60, 60) * 0.01), e.clientX - r.left, e.clientY - r.top); return; }
+      const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX, dy = e.shiftKey && !e.deltaX ? 0 : e.deltaY;
+      cam.x += dx * dpr / cam.k; cam.y += dy * dpr / cam.k; drawAll();
+    }, { passive: false });
+    live.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // (no autoscroll)
 
     live.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') {
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2) { e.preventDefault(); skipClick = true; startPinch(); return; }
+        if (touches.size > 2 || pinch) return;
+      }
+      if (e.button === 1 || (e.button === 0 && (tool === 'hand' || spaceDown))) {
+        e.preventDefault(); closePop(); capture(e.pointerId);
+        pan = { sx: e.clientX, sy: e.clientY, x: cam.x, y: cam.y }; live.style.cursor = 'grabbing'; skipClick = true;
+        return;
+      }
       if (e.button > 0) return;
       e.preventDefault();
       closePop();
@@ -821,7 +938,7 @@
       const hit = grabs ? (onHandle(pt) ? 'x' : objAt(pt)) : null;
       if (tool === 'select' || hit) {
         e.preventDefault();
-        live.setPointerCapture(e.pointerId);
+        capture(e.pointerId);
         skipClick = !!hit;
         if (hit === 'x') { removeObj(sel); return; }
         sel = hit;
@@ -831,7 +948,7 @@
       }
       if (sel) { sel = null; redrawObjs(); }
       if (tool === 'text' || tool === 'note' || tool === 'place') return; // placed on click (below) so a new box keeps focus
-      live.setPointerCapture(e.pointerId);
+      capture(e.pointerId);
       if (tool === 'laser') { laserDown = true; laserAdd('me', myColor, pt[0], pt[1], true); track(pt, 2); return; }
       drawing = { tool, color, size: size * scaleK(), points: [pt] };
       redo.length = 0;
@@ -839,12 +956,15 @@
       track(pt);
     });
     live.addEventListener('pointermove', (e) => {
+      if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch) { if (touches.size === 2) movePinch(); return; }
+      if (pan) { cam.x = pan.x - (e.clientX - pan.sx) * dpr / cam.k; cam.y = pan.y - (e.clientY - pan.sy) * dpr / cam.k; drawAll(); return; }
       const pt = toBoard(e);
       if (drag) {
         const s = drag.s;
         if (!drag.moved && Math.hypot(pt[0] - drag.at[0], pt[1] - drag.at[1]) < 6 * scaleK()) return;
         drag.moved = true;
-        s.x = clamp(pt[0] - drag.dx, -s.w * 0.6, W - s.w * 0.4); s.y = clamp(pt[1] - drag.dy, -s.h * 0.6, H - s.h * 0.4);
+        s.x = pt[0] - drag.dx; s.y = pt[1] - drag.dy;
         redrawObjs(); track(pt);
         return;
       }
@@ -853,17 +973,22 @@
         track(pt, 1);
         return;
       }
-      if (!drawing && ['select', 'pen', 'hl', 'line', 'text', 'note'].includes(tool)) live.style.cursor = objAt(pt) ? 'grab' : toolCursor(tool);
+      if (!drawing && ['select', 'pen', 'hl', 'line', 'text', 'note'].includes(tool)) live.style.cursor = spaceDown ? 'grab' : objAt(pt) ? 'grab' : toolCursor(tool);
       track(pt);
       if (!drawing) return;
       const pts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
       pts.forEach((pe) => drawing.points.push(toBoard(pe)));
       if (drawing.tool === 'eraser') { redraw(); return; }
       const x = live.getContext('2d');
-      x.clearRect(0, 0, W, H);
+      wipe(x); useView(x);
       paint(x, drawing);
     });
-    const end = () => {
+    const end = (e) => {
+      if (e && touches.has(e.pointerId)) {
+        touches.delete(e.pointerId);
+        if (pinch) { if (!touches.size) pinch = null; return; } // (the last finger of a pinch draws nothing)
+      }
+      if (pan) { pan = null; live.style.cursor = spaceDown ? 'grab' : toolCursor(tool); return; }
       if (drag) {
         const d = drag;
         drag = null;
@@ -881,7 +1006,7 @@
       const d = drawing;
       if (d.tool !== 'eraser') strokes.push(d);
       drawing = null;
-      live.getContext('2d').clearRect(0, 0, W, H);
+      wipe(live.getContext('2d'));
       redraw();
       share(d);
     };
@@ -901,7 +1026,7 @@
     live.addEventListener('pointerleave', () => { if (room && !drawing && !drag && !laserDown && !editing) { pres.gone = true; pres.dirty = true; } });
 
     function placeText(e, pt) {
-      const r = live.getBoundingClientRect(), br = boardEl.getBoundingClientRect();
+      const br = boardEl.getBoundingClientRect();
       const px = size * 6; // on-screen font size
       const ta = document.createElement('div');
       ta.className = 'csk-text'; ta.contentEditable = 'true';
@@ -916,7 +1041,7 @@
         const text = ta.innerText.replace(/\n+$/, '');
         ta.remove();
         if (!text.trim()) return;
-        const st = { tool: 'text', color, size: px * (W / r.width), x: pt[0], y: pt[1], text };
+        const st = { tool: 'text', color, size: px * scaleK(), x: pt[0], y: pt[1], text };
         strokes.push(st);
         redo.length = 0; redraw();
         share(st);
@@ -1001,7 +1126,7 @@
       closePop();
       if ((a === 'pdf' || a === 'json' || a === 'open') && plusLocked()) { opts.premium.ask(a === 'pdf' ? 'Saving the board as a PDF' : 'Board files'); return; }
       if (a === 'png') download(snapshot(), fileName('png'));
-      else if (a === 'pdf') { const u = URL.createObjectURL(pdfFromJpeg(composite().toDataURL('image/jpeg', 0.92), W, H)); download(u, fileName('pdf')); setTimeout(() => URL.revokeObjectURL(u), 5000); }
+      else if (a === 'pdf') { const c = composite(); const u = URL.createObjectURL(pdfFromJpeg(c.toDataURL('image/jpeg', 0.92), c.width, c.height)); download(u, fileName('pdf')); setTimeout(() => URL.revokeObjectURL(u), 5000); }
       else if (a === 'json') { const u = URL.createObjectURL(new Blob([JSON.stringify(boardData())], { type: 'application/json' })); download(u, fileName('json')); setTimeout(() => URL.revokeObjectURL(u), 5000); }
       else if (a === 'open') $('.csk-boardfile').click();
     }
@@ -1041,11 +1166,11 @@
       fixedSize = img ? null : { w: clamp(num(d.w, 1600) | 0, 200, 4000), h: clamp(num(d.h, 1000) | 0, 150, 4000) };
       strokes.length = 0; redo.length = 0; sel = null;
       list.forEach((st) => { st.z = ++zTop; strokes.push(st); });
-      setSize(); drawBg(); redraw();
+      setSize(); fitAll();
       toast('Board opened');
     }
     $('.csk-boardfile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) openBoardFile(f); });
-    const toolCursor = (name) => ({ text: 'text', select: 'default', note: 'copy', place: 'copy' }[name] || 'crosshair');
+    const toolCursor = (name) => ({ text: 'text', select: 'default', note: 'copy', place: 'copy', hand: 'grab' }[name] || 'crosshair');
     function setTool(name) {
       tool = name;
       wrap.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === name));
@@ -1087,7 +1212,7 @@
         if (tool === 'note') { if (pop && pop.dataset.kind === 'note') closePop(); else notePop(); } else closePop();
         return;
       }
-      if (t.dataset.ink) { color = t.dataset.ink; syncInk(); if (['eraser', 'select', 'laser', 'place', 'note'].includes(tool)) setTool('pen'); return; }
+      if (t.dataset.ink) { color = t.dataset.ink; syncInk(); if (['eraser', 'select', 'hand', 'laser', 'place', 'note'].includes(tool)) setTool('pen'); return; }
       if (t.dataset.size) { size = +t.dataset.size; sizesEl.querySelectorAll('.csk-size').forEach((b) => b.classList.toggle('on', b === t)); return; }
       const act = t.dataset.act;
       const again = pop && pop.dataset.kind === act;
@@ -1112,6 +1237,9 @@
         } else if (strokes.length && confirm('Clear everything you drew?')) { strokes.length = 0; redo.length = 0; redraw(); }
       }
       else if (act === 'grid') { grid = !grid; drawBg(); }
+      else if (act === 'zin') setZoom(zoomNow() * 1.25);
+      else if (act === 'zout') setZoom(zoomNow() / 1.25);
+      else if (act === 'fit') fitAll();
       else if (act === 'pic') $('.csk-picfile').click();
       else if (act === 'save') savePop();
       else if (act === 'dock') {
@@ -1369,23 +1497,50 @@
     // The board as plain data (original picture + strokes). Reading pixels back from
     // a page canvas comes out blank on some machines' graphics drivers, so callers
     // that can (the extension) rebuild the picture from this instead.
+    // the part of the world a saved picture shows: everything on the board with a margin (the page when it's empty)
+    function exportRect() {
+      const b = contentBounds();
+      if (!b) return { x: 0, y: 0, w: W, h: H };
+      if (bgImage && b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H) return { x: 0, y: 0, w: W, h: H }; // (drawn on the picture only: the picture's own frame)
+      const m = Math.round(Math.max(b.w, b.h) * 0.03) + 16;
+      return { x: Math.floor(b.x - m), y: Math.floor(b.y - m), w: Math.ceil(b.w + 2 * m), h: Math.ceil(b.h + 2 * m) };
+    }
+    const shifted = (s, dx, dy) => {
+      const c = { ...s };
+      if (c.points) c.points = c.points.map((p) => [p[0] + dx, p[1] + dy]);
+      if (c.x != null) { c.x += dx; c.y += dy; }
+      if (c.items) c.items = c.items.map((it) => shifted(it, dx, dy));
+      return c;
+    };
     function parts() {
-      const src = bgImage && bgImage.src && /^data:image\//.test(bgImage.src) ? bgImage.src : null;
+      const r = exportRect(), dx = -r.x, dy = -r.y, same = !dx && !dy && r.w === W && r.h === H;
+      let src = bgImage && bgImage.src && /^data:image\//.test(bgImage.src) ? bgImage.src : null;
+      if (bgImage && !same) { // (the picture is part of a bigger frame: the paper and the picture, as one)
+        try { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; paintBg(c.getContext('2d'), { x: r.x, y: r.y, k: 1 }, r.w, r.h); src = c.toDataURL('image/jpeg', 0.9); } catch (e) { src = null; }
+      }
       // notes and cards go as a card shape plus lines of words, so anything that draws strokes can draw them
       const asGroup = (s) => ({ tool: 'group', obj: s.tool, text: s.text, n: s.n, f: s.f, b: s.b, flip: !!s.flip, items: objPieces(s, !!s.flip).map((it) => ({ ...it, x: it.x + s.x, y: it.y + s.y })) });
-      return { image: src, strokes: strokes.map((s) => (isObj(s) ? asGroup(s) : { ...s, points: s.points ? s.points.map((p) => [p[0], p[1]]) : undefined })), w: W, h: H, paper };
+      return { image: src, strokes: strokes.map((s) => shifted(isObj(s) ? asGroup(s) : { ...s }, dx, dy)), w: r.w, h: r.h, paper };
     }
     function composite() {
-      const was = sel; sel = null; redrawObjs(); // no selection box in the picture
-      const c = document.createElement('canvas'); c.width = W; c.height = H;
-      const x = c.getContext('2d');
-      x.drawImage(bg, 0, 0); x.drawImage(ink, 0, 0); x.drawImage(obj, 0, 0);
-      sel = was; if (was) redrawObjs();
+      const r = exportRect(), k = Math.min(1, 4000 / Math.max(r.w, r.h)), cw = Math.max(1, Math.round(r.w * k)), ch = Math.max(1, Math.round(r.h * k));
+      const v = { x: r.x, y: r.y, k };
+      const layer = () => { const c = document.createElement('canvas'); c.width = cw; c.height = ch; return c; };
+      const c = layer(), inkC = layer(), objC = layer();
+      paintBg(c.getContext('2d'), v, cw, ch);
+      paintInk(inkC.getContext('2d'), v);
+      const ox = objC.getContext('2d'), was = sel; sel = null; // no selection box in the picture
+      ox.setTransform(k, 0, 0, k, -r.x * k, -r.y * k);
+      strokes.filter(isObj).sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((s) => paintObj(ox, s, Infinity));
+      sel = was;
+      const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(inkC, 0, 0); x.drawImage(objC, 0, 0);
       return c;
     }
     function snapshot() { return composite().toDataURL('image/png'); }
+    function onKeyUp(e) { if (e.key === ' ' && spaceDown) { spaceDown = false; if (!pan) live.style.cursor = toolCursor(tool); } }
     function onKey(e) {
       if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || ''))) return;
+      if (e.key === ' ' && !(e.target && e.target.closest && e.target.closest('button'))) { e.preventDefault(); if (!spaceDown) { spaceDown = true; if (!drawing) live.style.cursor = 'grab'; } return; } // (hold Space and drag: move around)
       if (e.key === 'Escape') { e.stopPropagation(); if (pop) closePop(); else if (tool === 'place') setTool('pen'); else close(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && editable(sel) && strokes.includes(sel)) { e.preventDefault(); removeObj(sel); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $(e.shiftKey ? '[data-act="redo"]' : '[data-act="undo"]').click(); }
@@ -1395,6 +1550,7 @@
       window.removeEventListener('resize', fit);
       if (refit) refit.disconnect();
       document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('keyup', onKeyUp, true);
       document.removeEventListener('paste', onPaste, true);
       wrap.remove();
       if (current && current.wrap === wrap) current = null;
@@ -1408,12 +1564,13 @@
     const refit = window.ResizeObserver ? new ResizeObserver(() => fit()) : null;
     if (refit) refit.observe(stage);
     document.addEventListener('keydown', onKey, true);
-    setSize(); drawBg(); redraw();
+    document.addEventListener('keyup', onKeyUp, true);
+    setSize();
     // On a dark picture (e.g. a dark-mode graph), start with white ink so it shows.
     if (bgImage) {
       try {
         const t = document.createElement('canvas'); t.width = 24; t.height = 24;
-        const tx = t.getContext('2d'); tx.drawImage(bg, 0, 0, 24, 24);
+        const tx = t.getContext('2d'); tx.drawImage(bgImage, 0, 0, 24, 24);
         const d = tx.getImageData(0, 0, 24, 24).data;
         let lum = 0; for (let i = 0; i < d.length; i += 4) lum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
         color = lum / (d.length / 4) < 0.45 ? '#ffffff' : '#1b1b1d';
@@ -1423,7 +1580,11 @@
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
     current = { wrap, close, snapshot, showNote, setTitle, draw, remote, setRoom, parts, presence, others, dropCards, toast,
-      objects: () => strokes.filter(isObj).map(pack), strokeCount: () => strokes.length, drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
+      objects: () => strokes.filter(isObj).map(pack), strokeCount: () => strokes.length,
+      // the view: where it looks and how far in; a board point on screen (page px), for anyone who points at the board
+      view: () => ({ x: cam.x, y: cam.y, zoom: zoomNow() }), fit: fitAll,
+      screenOf: (p) => { const r = live.getBoundingClientRect(), q = cssOf(p[0], p[1]); return [r.left + q[0], r.top + q[1]]; },
+      lastStroke: () => (strokes.length ? pack(strokes[strokes.length - 1]) : null), drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
     return current;
   }
 

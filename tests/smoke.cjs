@@ -3611,18 +3611,18 @@ test('board room: sticky notes, flashcards on the board, live cursors with names
     // Ana flips one (Move tool, tap) and drags the other — Ben sees both
     await A.page.click('[data-tool="select"]');
     const cards = (await objs(A.page)).filter((o) => o.tool === 'card');
-    const box = await A.page.locator('.csk-live').boundingBox(), k = box.width / 1600;
+    const on = (page, x, y) => page.evaluate((p) => window.CassieSketch.session().screenOf(p), [x, y]);
     const c0 = cards[0], c1 = cards[1];
-    await A.page.mouse.click(box.x + (c0.x + c0.w / 2) * k, box.y + (c0.y + c0.h / 2) * k);
+    await A.page.mouse.click(...(await on(A.page, c0.x + c0.w / 2, c0.y + c0.h / 2)));
     await B.page.waitForFunction((id) => window.CassieSketch.session().objects().find((o) => o.id === id).flip === true, c0.id, { timeout: 8000 });
-    await A.page.mouse.move(box.x + (c1.x + 20) * k, box.y + (c1.y + 20) * k); await A.page.mouse.down();
-    await A.page.mouse.move(box.x + (c1.x + 20) * k, box.y + (c1.y + 220) * k, { steps: 8 }); await A.page.mouse.up();
+    await A.page.mouse.move(...(await on(A.page, c1.x + 20, c1.y + 20))); await A.page.mouse.down();
+    const to = await on(A.page, c1.x + 20, c1.y + 220); await A.page.mouse.move(to[0], to[1], { steps: 8 }); await A.page.mouse.up();
     await B.page.waitForFunction(([id, y]) => Math.abs(window.CassieSketch.session().objects().find((o) => o.id === id).y - y) < 4, [c1.id, c1.y + 200], { timeout: 8000 });
     if (process.env.SHOTS) await A.page.screenshot({ path: process.env.SHOTS + '/board-room-tools.png' });
     // Ben can move Ana's note but can't throw it away
     await B.page.click('[data-tool="select"]');
     const note = (await objs(B.page)).find((o) => o.tool === 'note');
-    await B.page.mouse.click(box.x + (note.x + 30) * k, box.y + (note.y + 30) * k);
+    await B.page.mouse.click(...(await on(B.page, note.x + 30, note.y + 30)));
     await B.page.keyboard.press('Delete');
     await B.page.waitForTimeout(1500);
     expect((await objs(A.page)).some((o) => o.tool === 'note'), 'Ana’s note stays');
@@ -3663,9 +3663,9 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   // with the pen on, dragging a card moves it — it doesn't draw on the board
   await page.click('[data-tool="pen"]');
   const card = (await page.evaluate(() => window.CassieSketch.session().objects()))[0];
-  const bb = await page.locator('.csk-live').boundingBox(), kk = bb.width / (await page.evaluate(() => document.querySelector('.csk-live').width));
-  await page.mouse.move(bb.x + (card.x + 30) * kk, bb.y + (card.y + 30) * kk); await page.mouse.down();
-  await page.mouse.move(bb.x + (card.x + 30) * kk, bb.y + (card.y + 130) * kk, { steps: 8 }); await page.mouse.up();
+  const on = (x, y) => page.evaluate((p) => window.CassieSketch.session().screenOf(p), [x, y]);
+  await page.mouse.move(...(await on(card.x + 30, card.y + 30))); await page.mouse.down();
+  const to = await on(card.x + 30, card.y + 130); await page.mouse.move(to[0], to[1], { steps: 8 }); await page.mouse.up();
   const moved = (await page.evaluate(() => window.CassieSketch.session().objects())).find((o) => o.id === card.id);
   expect(Math.abs(moved.y - card.y - 100) < 3 && await page.evaluate(() => window.CassieSketch.session().strokeCount()) === 3, 'the card moved and nothing was drawn: ' + (moved.y - card.y));
   // and a tool that's on switches off when tapped again (back to Move)
@@ -4337,7 +4337,78 @@ test('board: paste a screenshot with Ctrl+V', async (b) => {
     const dt = new DataTransfer(); dt.items.add(new File([blob], 'screenshot.png', { type: 'image/png' }));
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   });
-  await page.waitForFunction(() => { const c = document.querySelector('.csk-bg'); return c && c.width === 600 && c.height === 300; }, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const p = window.CassieSketch.session().parts(); return p.image && p.w === 600 && p.h === 300; }, null, { timeout: 5000 });
+  await ctx.close();
+});
+
+// a 600 x 300 picture pasted on the board (as a screenshot would be)
+const pastePicture = (page, words = 'Solve: 2x + 3 = 11') => page.evaluate(async (words) => {
+  const c = document.createElement('canvas'); c.width = 600; c.height = 300;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 600, 300); x.fillStyle = '#111'; x.font = '28px sans-serif'; x.fillText(words, 40, 80);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  const dt = new DataTransfer(); dt.items.add(new File([blob], 'screenshot.png', { type: 'image/png' }));
+  document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+}, words);
+
+test('board: an open canvas: room to draw around a picture, the Hand moves the view (not the ink), two fingers pinch-zoom, Fit shows everything, saving takes it all (1280x800)', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  await page.click('#board-btn');
+  await page.waitForSelector('.csk-live');
+  const S = (f, a) => page.evaluate(([f, a]) => window.CassieSketch.session()[f](a), [f, a]);
+  const on = (x, y) => S('screenOf', [x, y]);
+  const drag = async (from, to) => { await page.mouse.move(from[0], from[1]); await page.mouse.down(); await page.mouse.move(to[0], to[1], { steps: 8 }); await page.mouse.up(); };
+  // the view's buttons: 44px, named
+  for (const a of ['zout', 'zin', 'fit']) { const r = await page.locator(`[data-act="${a}"]`).boundingBox(); expect(r && r.width >= 44 && r.height >= 44 && await page.locator(`[data-act="${a}"]`).getAttribute('aria-label'), a + ': 44px with a name: ' + JSON.stringify(r)); }
+  await pastePicture(page);
+  await page.waitForFunction(() => window.CassieSketch.session().parts().w === 600, null, { timeout: 5000 });
+  // zoom out, then the Hand moves the view to the left: nothing is drawn
+  for (let i = 0; i < 3; i++) await page.click('[data-act="zout"]');
+  const z0 = (await S('view')).zoom;
+  expect(Math.abs(z0 - 1 / 1.25 ** 3) < 0.02, 'zoom out three times: ' + z0);
+  await page.click('[data-tool="hand"]');
+  const live = await page.locator('.csk-live').boundingBox(), mid = [live.x + live.width / 2, live.y + live.height / 2];
+  const v0 = await S('view');
+  await drag(mid, [mid[0] - 300, mid[1]]);
+  const v1 = await S('view');
+  expect(await S('strokeCount') === 0 && v1.x > v0.x + 100, 'the Hand moved the view, drew nothing: ' + JSON.stringify([v0, v1]));
+  // from inside the picture to 400px past its right edge: the whole line is kept
+  await page.click('[data-tool="pen"]');
+  const start = await on(500, 150), edge = await on(600, 150);
+  await drag(start, [edge[0] + 400, edge[1]]);
+  const line = await S('lastStroke');
+  const xs = line.points.map((p) => p[0]), right = Math.max(...xs);
+  expect(Math.min(...xs) < 520 && right > 600 + 300, 'the stroke goes well past the picture: ' + JSON.stringify([Math.min(...xs), right]));
+  // the Hand again: the ink stays where it is in the board, only where it shows moves
+  await page.click('[data-tool="hand"]');
+  const seen0 = await on(line.points[0][0], line.points[0][1]);
+  await drag(mid, [mid[0] - 150, mid[1] + 60]);
+  const seen1 = await on(line.points[0][0], line.points[0][1]);
+  expect(JSON.stringify(await S('lastStroke')) === JSON.stringify(line) && Math.abs(seen1[0] - seen0[0] + 150) < 3 && Math.abs(seen1[1] - seen0[1] - 60) < 3, 'the view moved with the hand, the ink did not: ' + JSON.stringify([seen0, seen1]));
+  // two fingers spread apart: zoom in around them (and nothing is drawn)
+  await page.click('[data-tool="pen"]');
+  const za = (await S('view')).zoom;
+  await page.evaluate(([cx, cy]) => {
+    const c = document.querySelector('.csk-live');
+    const ev = (type, id, x) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 11, clientX: x, clientY: cy, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
+    ev('pointerdown', 11, cx - 40); ev('pointerdown', 12, cx + 40);
+    for (let i = 1; i <= 6; i++) { ev('pointermove', 11, cx - 40 - i * 15); ev('pointermove', 12, cx + 40 + i * 15); }
+    ev('pointerup', 11, cx - 130); ev('pointerup', 12, cx + 130);
+  }, mid);
+  const zb = (await S('view')).zoom;
+  expect(zb > za * 2 && await S('strokeCount') === 1, 'a pinch zooms in, draws nothing: ' + JSON.stringify([za, zb]));
+  // Fit: the picture and the line, all on screen
+  await page.click('[data-act="fit"]');
+  const box = await page.locator('.csk-live').boundingBox();
+  const inside = async (x, y) => { const q = await on(x, y); return q[0] >= box.x - 1 && q[0] <= box.x + box.width + 1 && q[1] >= box.y - 1 && q[1] <= box.y + box.height + 1; };
+  expect(await inside(0, 0) && await inside(600, 300) && await inside(right, 150), 'Fit shows the picture and the whole line');
+  // the saved picture takes in all of it (wider than the picture and the line)
+  await page.click('[data-act="save"]');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('.csk-pop [data-pop="png"]')]);
+  const png = fs.readFileSync(await dl.path()), w = png.readUInt32BE(16);
+  expect(png.slice(1, 4).toString() === 'PNG' && w > right, 'the PNG is as wide as everything: ' + w + ' vs ' + right);
+  const parts = await S('parts');
+  expect(parts.w > right && parts.image && parts.strokes[0].points.every((p) => p[0] >= 0 && p[0] <= parts.w), 'Cassie gets the same frame: ' + parts.w);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
