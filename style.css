@@ -2917,7 +2917,7 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 
 /* --- Home on a phone: what they came for leads (a thicker accent edge and a soft glow) --- */
 :root { --lead-line: var(--primary); --lead-glow: color-mix(in srgb, var(--primary) 24%, transparent); }
-.hub .hub-box.hub-lead { border: 2px solid var(--lead-line); box-shadow: 0 0 0 4px var(--lead-glow), 0 10px 26px var(--lead-glow); }
+.hub .hub-box.hub-lead, .hub .hub-ask.hub-lead, .hub .hub-card.hub-lead, .desk .dk-btn.hub-lead { border: 2px solid var(--lead-line); box-shadow: 0 0 0 4px var(--lead-glow), 0 10px 26px var(--lead-glow); }
 
 /* --- keep your work: a small card at the top, never over the ask box --- */
 .save-nudge { position: fixed; z-index: 320; top: calc(var(--safe-top, 0px) + 10px); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 24px)); box-sizing: border-box;
