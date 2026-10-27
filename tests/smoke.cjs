@@ -4506,6 +4506,132 @@ test('board: pictures are things on the board: the Move tool picks one (corner h
   } finally { await A.ctx.close(); await B.ctx.close(); }
 });
 
+test('board on a phone: a calm header (More holds Save and Close), the Ask bar tucks away while you draw, Undo and Redo float (a two-finger tap undoes), Shape snap, Paper choices, a mind map, and the Laser in reach', async (b) => {
+  const S = (page, f, a) => page.evaluate(([f, a]) => window.CassieSketch.session()[f](a), [f, a]);
+  const vis = (page, sel) => page.$$eval(sel, (els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }).map((e) => (e.getAttribute('aria-label') || e.textContent).trim()));
+  // a phone (390x844)
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, state: { groqKey: 'gsk_test' } });
+  await page.evaluate(() => openSketch());
+  await page.waitForSelector('.csk-live');
+  const head = await vis(page, '.csk-head > *');
+  expect(head.length === 3 && head[0] === 'Your board' && /Send to Cassie/.test(head[1]) && head[2] === 'More', 'the phone header: the title, Send to Cassie and More only: ' + JSON.stringify(head));
+  const mb = await page.locator('.csk-head [data-act="more"]').boundingBox();
+  expect(mb.width >= 44 && mb.height >= 44 && await page.locator('.csk-head [data-act="more"]').getAttribute('aria-haspopup') === 'menu', 'More is 44px and opens a menu');
+  await page.click('.csk-head [data-act="more"]');
+  const items = await vis(page, '.csk-more [role="menuitem"]');
+  expect(items.includes('Save or open') && items.includes('Close board'), 'More holds Save and Close: ' + JSON.stringify(items));
+  await page.keyboard.press('Escape');
+  expect(await page.locator('.csk-more').isHidden() && await page.locator('.csk-wrap').count() === 1, 'Escape closes the menu, not the board');
+  await page.click('.csk-head [data-act="more"]'); await page.click('.csk-more [data-more="save"]');
+  await page.waitForSelector('.csk-pop[data-kind="save"]');
+  await page.keyboard.press('Escape');
+  // the Laser is in reach (on screen, not under anything)
+  const lz = await page.locator('[data-tool="laser"]').boundingBox();
+  expect(lz && lz.y >= 0 && lz.y + lz.height <= 844 && lz.height >= 44 && await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y).closest('[data-tool="laser"]'), [lz.x + lz.width / 2, lz.y + lz.height / 2]), 'the Laser can be tapped on a phone: ' + JSON.stringify(lz));
+  // Undo and Redo float (not in the toolbar), 44px, and follow the board
+  expect(!(await page.locator('.csk-tools [data-act="undo"]').isVisible()) && await page.locator('.csk-zoom [data-act="undo"]').isVisible(), 'Undo floats on a phone');
+  for (const a of ['undo', 'redo']) { const r = await page.locator(`.csk-zoom [data-act="${a}"]`).boundingBox(); expect(r.width >= 44 && r.height >= 44, a + ' is 44px'); }
+  expect(await page.locator('.csk-zoom [data-act="undo"]').isDisabled(), 'nothing drawn: Undo is off');
+  // the Ask bar tucks away while drawing, the ink on screen stays put, and it comes back
+  const box0 = await page.locator('.csk-live').boundingBox(), askH = (await page.locator('.csk-ask').boundingBox()).height;
+  const line = async (x0, y0, x1, y1, hold) => { await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move(x1, y1, { steps: 6 }); if (hold) await hold(); await page.mouse.up(); };
+  await line(box0.x + 60, box0.y + 40, box0.x + 200, box0.y + 80);
+  const first = await S(page, 'lastStroke'), seen0 = await S(page, 'screenOf', first.points[0]);
+  let mid = null;
+  await line(box0.x + 80, box0.y + 130, box0.x + 220, box0.y + 170, async () => { mid = { ask: (await page.locator('.csk-ask').boundingBox()).height, live: (await page.locator('.csk-live').boundingBox()).height, seen: await S(page, 'screenOf', first.points[0]) }; });
+  expect(askH >= 44 && mid.ask < 2 && Math.abs(mid.live - box0.height - askH) < 3, 'drawing: the Ask bar tucks away and the board takes its height: ' + JSON.stringify([askH, mid, box0.height]));
+  expect(Math.abs(mid.seen[0] - seen0[0]) < 1.5 && Math.abs(mid.seen[1] - seen0[1]) < 1.5, 'the ink stayed where it was on screen: ' + JSON.stringify([seen0, mid.seen]));
+  await page.waitForTimeout(1800);
+  expect((await page.locator('.csk-ask').boundingBox()).height >= 44 && Math.abs((await S(page, 'screenOf', first.points[0]))[1] - seen0[1]) < 1.5, 'the Ask bar is back 1.5 s later, the ink still in place');
+  await line(box0.x + 90, box0.y + 210, box0.x + 230, box0.y + 240);
+  await page.focus('.csk-ask input');
+  expect((await page.locator('.csk-ask').boundingBox()).height >= 44, 'the Ask bar is back at once when its box gets the focus');
+  // the floating Undo and Redo
+  expect(await S(page, 'strokeCount') === 3, 'three strokes: ' + await S(page, 'strokeCount'));
+  await page.click('.csk-zoom [data-act="undo"]');
+  expect(await S(page, 'strokeCount') === 2 && !(await page.locator('.csk-zoom [data-act="redo"]').isDisabled()), 'Undo, and Redo is on');
+  await page.click('.csk-zoom [data-act="redo"]');
+  expect(await S(page, 'strokeCount') === 3, 'Redo');
+  // two fingers: a quick tap undoes one stroke, a drag only moves the view
+  const fingers = (moves) => page.evaluate(([cx, cy, moves]) => {
+    const c = document.querySelector('.csk-live');
+    const ev = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 21, clientX: x, clientY: y, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
+    ev('pointerdown', 21, cx - 40, cy); ev('pointerdown', 22, cx + 40, cy);
+    for (let i = 1; i <= moves; i++) { ev('pointermove', 21, cx - 40, cy + i * 12); ev('pointermove', 22, cx + 40, cy + i * 12); }
+    ev('pointerup', 21, cx - 40, cy + moves * 12); ev('pointerup', 22, cx + 40, cy + moves * 12);
+  }, [box0.x + box0.width / 2, box0.y + box0.height / 2, moves]);
+  await fingers(0);
+  expect(await S(page, 'strokeCount') === 2, 'a two-finger tap undid one stroke');
+  await fingers(6);
+  expect(await S(page, 'strokeCount') === 2, 'a two-finger drag undid nothing');
+  // a mind map from Quick shapes
+  await page.click('[data-act="shapes"]'); await page.click('.csk-pop [data-k="mind"]');
+  await page.mouse.click(box0.x + box0.width / 2, box0.y + box0.height / 2);
+  const mm = await S(page, 'lastStroke');
+  expect(await S(page, 'strokeCount') === 3 && mm.tool === 'group' && mm.items.filter((x) => x.tool === 'rect').length === 6, 'a mind map: a bubble and 6 branches');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  // More: Close closes the board
+  await page.click('.csk-head [data-act="more"]'); await page.click('.csk-more [data-more="close"]');
+  await page.waitForSelector('.csk-wrap', { state: 'detached', timeout: 3000 });
+  await ctx.close();
+
+  // a computer (1280x800): the header as it was, Shape snap, Paper
+  const D = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  const p = D.page;
+  await p.evaluate(() => openSketch());
+  await p.waitForSelector('.csk-live');
+  const dh = await vis(p, '.csk-head > *');
+  expect(!dh.includes('More') && dh.some((x) => /Close/.test(x)) && (await p.locator('.csk-head [data-act="save"]').isVisible()), 'a computer keeps its header: ' + JSON.stringify(dh));
+  expect(await p.locator('.csk-tools [data-act="undo"]').isVisible() && await p.locator('.csk-zoom [data-act="undo"]').isVisible(), 'a computer: Undo in both places');
+  const bx = await p.locator('.csk-live').boundingBox();
+  const stroke = async (pts) => { await p.mouse.move(bx.x + pts[0][0], bx.y + pts[0][1]); await p.mouse.down(); for (const q of pts.slice(1)) await p.mouse.move(bx.x + q[0], bx.y + q[1]); await p.mouse.up(); return S(p, 'lastStroke'); };
+  const wob = (i) => Math.sin(i * 1.7) * 3;
+  const edge = (a, c, n, k0) => Array.from({ length: n }, (_, i) => [a[0] + (c[0] - a[0]) * i / n + wob(i + k0), a[1] + (c[1] - a[1]) * i / n + wob(i + k0 + 3)]);
+  const rect = (x, y, w, h) => [...edge([x, y], [x + w, y], 12, 0), ...edge([x + w, y], [x + w, y + h], 8, 1), ...edge([x + w, y + h], [x, y + h], 12, 2), ...edge([x, y + h], [x, y], 8, 3), [x + 2, y + 1]];
+  const tri = (x, y, w, h) => [...edge([x, y + h], [x + w / 2, y], 10, 0), ...edge([x + w / 2, y], [x + w, y + h], 10, 1), ...edge([x + w, y + h], [x, y + h], 10, 2), [x + 1, y + h - 1]];
+  const circle = (cx, cy, r) => Array.from({ length: 41 }, (_, i) => [cx + (r + wob(i)) * Math.cos(i / 40 * Math.PI * 2), cy + (r + wob(i)) * Math.sin(i / 40 * Math.PI * 2)]);
+  const straight = (x, y, len) => Array.from({ length: 16 }, (_, i) => [x + len * i / 15, y + wob(i) * 0.8]);
+  const scribble = (x, y) => Array.from({ length: 30 }, (_, i) => [x + (i % 2 ? 60 : 0) + i * 3, y + (i % 3) * 25]);
+  // snap off: as drawn
+  const off = await stroke(rect(80, 80, 220, 140));
+  expect(off.tool === 'pen', 'Shape snap off: the box stays as drawn');
+  await p.click('.csk-tools [data-act="snap"]');
+  expect(await p.locator('.csk-tools [data-act="snap"]').getAttribute('aria-pressed') === 'true' && await p.evaluate(() => localStorage.getItem('cassie.board.snap')) === 'true', 'Shape snap is on, and remembered');
+  const flatOrUp = (it) => { const [a, c] = it.points; return Math.abs(a[0] - c[0]) < 0.5 || Math.abs(a[1] - c[1]) < 0.5; };
+  const r = await stroke(rect(380, 80, 220, 140));
+  expect(r.tool === 'group' && r.items.length === 4 && r.items.every((it) => it.tool === 'line' && flatOrUp(it)), 'a wobbly box comes out a clean rectangle: ' + JSON.stringify(r).slice(0, 300));
+  const t = await stroke(tri(680, 80, 200, 160));
+  expect(t.tool === 'group' && t.items.length === 3 && t.items.every((it) => it.tool === 'line'), 'a wobbly triangle comes out three straight sides: ' + JSON.stringify(t).slice(0, 300));
+  const c = await stroke(circle(200, 400, 80));
+  const cx = c.points.reduce((m, q) => m + q[0], 0) / c.points.length, cy = c.points.reduce((m, q) => m + q[1], 0) / c.points.length;
+  const radii = c.points.map((q) => Math.hypot(q[0] - cx, q[1] - cy)), rr = radii.reduce((m, v) => m + v, 0) / radii.length;
+  expect(c.tool === 'pen' && c.points.length >= 60 && radii.every((v) => Math.abs(v - rr) / rr < 0.06), 'a wobbly circle comes out round');
+  const l = await stroke(straight(420, 420, 300));
+  expect(l.tool === 'line' && l.points.length === 2 && Math.abs(l.points[0][1] - l.points[1][1]) < 0.5, 'a wobbly line comes out straight: ' + JSON.stringify(l.points));
+  const sc = await stroke(scribble(760, 360));
+  expect(sc.tool === 'pen' && sc.points.length >= 20, 'a scribble is never snapped');
+  // Paper: each choice draws something different, and is kept in a board file
+  const bgSum = () => p.evaluate(() => { const c = document.querySelector('.csk-bg'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let s = 0; for (let i = 0; i < d.length; i += 4 * 13) s = (s * 31 + d[i] + d[i + 1] * 3 + d[i + 2] * 7) % 1e9; return s; });
+  const sums = {};
+  for (const k of ['blank', 'graph', 'lined', 'plane', 'cornell']) { await p.click('.csk-tools [data-act="paper"]'); await p.click(`.csk-pop [data-pop="paper"][data-k="${k}"]`); expect(await S(p, 'paper') === k, 'paper: ' + k); sums[k] = await bgSum(); }
+  expect(new Set(Object.values(sums)).size === 5, 'each paper looks different: ' + JSON.stringify(sums));
+  await p.click('[data-act="save"]');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('.csk-pop [data-pop="json"]')]);
+  const saved = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
+  expect(saved.paper === 'cornell', 'the board file keeps the paper: ' + saved.paper);
+  // an older file with graph paper (grid: true) opens on Graph
+  const file = path.join(require('os').tmpdir(), 'cassie-grid-board.json');
+  fs.writeFileSync(file, JSON.stringify({ cassie: 'board', v: 1, title: 'Old', w: 1600, h: 1000, grid: true, image: null, strokes: [{ tool: 'pen', color: '#1b1b1d', size: 4, points: [[10, 10], [200, 200]] }] }));
+  p.once('dialog', (d) => d.accept());
+  await p.click('[data-act="save"]');
+  const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.click('.csk-pop [data-pop="open"]')]);
+  await chooser.setFiles(file);
+  await p.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 5000 });
+  expect(await S(p, 'paper') === 'graph', 'grid: true opens as Graph');
+  expect(!D.errors.length, 'page errors: ' + D.errors.join('; '));
+  await D.ctx.close();
+});
+
 test('an iPhone (reports 2 cores) is not forced into Lite mode', async (b) => {
   const ctx = await b.newContext({ ...devices['iPhone 13'], serviceWorkers: 'block' });
   await ctx.addInitScript((v) => {
@@ -8330,7 +8456,7 @@ test('board: Cassie draws on it when asked', async (b) => {
   const note = await page.locator('.csk-note').textContent();
   expect(/parabola/.test(note) && !/cassie-board|"fn"/.test(note), 'the note shows words only: ' + note);
   // undo takes Cassie's whole drawing away in one step
-  await page.click('[data-act="undo"]');
+  await page.click('.csk-zoom [data-act="undo"]');
   expect(await page.evaluate(() => window.CassieSketch.session().drawn()) === 0, 'undo should remove her drawing');
   await ctx.close();
 });

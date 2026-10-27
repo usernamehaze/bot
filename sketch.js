@@ -109,6 +109,22 @@
   .csk-picmenu { position: absolute; z-index: 6; display: flex; gap: 4px; padding: 4px; border-radius: 14px; white-space: nowrap;
     background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 6px 22px rgba(0,0,0,.22); }
   .csk-picmenu[hidden], .csk-picmenu [hidden] { display: none; }
+  /* phones: Save, Dock and Close wait in a More menu; the Ask bar tucks away while you draw */
+  .csk-more-btn { display: none !important; }
+  .csk-more { position: absolute; z-index: 8; right: 10px; top: 56px; min-width: 210px; display: grid; gap: 2px; padding: 6px; border-radius: 14px;
+    background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 12px 36px rgba(0,0,0,.25); }
+  .csk-more[hidden] { display: none; }
+  .csk-more button { appearance: none; border: 0; background: transparent; color: inherit; min-height: 44px; padding: 0 12px; border-radius: 10px;
+    display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .csk-more button:hover, .csk-more button:focus-visible { background: rgba(127,127,127,.16); }
+  .csk-more button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .csk-ask.csk-tucked { height: 0; min-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; overflow: hidden; }
+  .csk-btn[aria-pressed="true"] { background: var(--csk-ctl-ink); color: var(--csk-ctl-bg); border-color: var(--csk-ctl-ink); }
+  @media (max-width: 700px) {
+    .csk-head [data-act="save"], .csk-head [data-act="dock"], .csk-head [data-act="close"], .csk-head [data-extra] { display: none !important; }
+    .csk-head .csk-more-btn { display: inline-flex !important; min-width: 44px !important; height: 44px !important; }
+    .csk-tools [data-act="undo"], .csk-tools [data-act="redo"] { display: none !important; } /* (they float at the bottom right) */
+  }
   .csk-picmenu .csk-btn { min-height: 44px; height: 44px; padding: 0 12px; border-color: transparent; }
   .csk-pop { position: absolute; z-index: 6; left: 12px; right: 12px; margin: 0 auto; max-width: 380px; max-height: 70%; overflow: auto; box-sizing: border-box;
     background: #fbfaf8; color: #1b1b1d; border: 1px solid rgba(127,127,127,.3); border-radius: 14px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
@@ -161,6 +177,8 @@
     zin: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M7.5 10.5h6M10.5 7.5v6"/>',
     zout: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M7.5 10.5h6"/>',
     fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1"/>',
+    more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+    snap: '<path d="M4.5 19L12 5.5 19.5 19z"/><circle cx="12" cy="5.5" r="1.5"/><circle cx="4.5" cy="19" r="1.5"/><circle cx="19.5" cy="19" r="1.5"/>',
     pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
     laser: '<circle cx="7" cy="17" r="3"/><path d="M9.5 14.5L19 5"/><path d="M14 3.5l.8 2.2M20.5 10l-2.2-.8M18.5 3.5l-1 1.6"/>',
     note: '<path d="M5 4h14v10l-5 6H5z"/><path d="M19 14h-5v6"/>',
@@ -318,7 +336,7 @@
   }
 
   // Quick shapes to draw on: built around (0, 0), then placed where the student taps
-  const TEMPLATES = [['grid', 'Coordinate grid', [660, 660]], ['venn2', 'Venn diagram: 2 sets', [700, 480]], ['venn3', 'Venn diagram: 3 sets', [640, 620]], ['flow', 'Flowchart boxes', [560, 640]], ['gates', 'Logic gates', [740, 470]]];
+  const TEMPLATES = [['grid', 'Coordinate grid', [660, 660]], ['venn2', 'Venn diagram: 2 sets', [700, 480]], ['venn3', 'Venn diagram: 3 sets', [640, 620]], ['flow', 'Flowchart boxes', [560, 640]], ['gates', 'Logic gates', [740, 470]], ['mind', 'Mind map', [820, 560]]];
   function template(kind, ink, soft) {
     const it = [];
     const pen = (pts, c = ink, size = 4) => it.push({ tool: 'pen', color: c, size, points: pts });
@@ -373,8 +391,80 @@
         txt(name, gx + 55, gy + 52, 20, ink, true);
       };
       [['AND', -305, -110], ['OR', -55, -110], ['NOT', 195, -110], ['NAND', -305, 110], ['NOR', -55, 110], ['XOR', 195, 110]].forEach(([n, x, y]) => cell(x, y, n));
+    } else if (kind === 'mind') { // a centre bubble and 6 branches, each to a box
+      const p = []; for (let a = 0; a <= 96; a++) p.push([130 * Math.cos(a / 96 * Math.PI * 2), 70 * Math.sin(a / 96 * Math.PI * 2)]); pen(p);
+      txt('Main idea', 0, -14, 26, ink, true);
+      [-90, -30, 30, 90, 150, 210].forEach((deg) => {
+        const a = deg * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a), bx = 300 * c, by = 205 * sn;
+        const t = Math.min(80 / Math.max(1e-6, Math.abs(c * 300)), 28 / Math.max(1e-6, Math.abs(sn * 205)), 1);
+        pen([[130 * c, 70 * sn], [bx - bx * t, by - by * t]]);
+        box(bx - 80, by - 28, 160, 56, 14);
+      });
     }
     return it;
+  }
+
+  // Ramer-Douglas-Peucker: the few points a rough stroke really turns at
+  function rdp(pts, eps) {
+    if (pts.length < 3) return pts.slice();
+    const a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    let far = 0, at = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i], d = L < 1e-6 ? Math.hypot(p[0] - a[0], p[1] - a[1]) : Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / L;
+      if (d > far) { far = d; at = i; }
+    }
+    if (far <= eps) return [a, b];
+    return rdp(pts.slice(0, at + 1), eps).slice(0, -1).concat(rdp(pts.slice(at), eps));
+  }
+  // What a pen stroke clearly is (a line, an arrow, a triangle, a box, a circle), drawn clean in the same
+  // place, colour and size; anything unclear: null (it stays as drawn).
+  function snapStroke(d, minSize) {
+    const p = d.points;
+    if (!p || p.length < 4) return null;
+    const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs), y1 = Math.max(...ys), bw = x1 - x0, bh = y1 - y0, big = Math.max(bw, bh);
+    if (big < minSize) return null;
+    let L = 0; for (let i = 1; i < p.length; i++) L += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    const a = p[0], z = p[p.length - 1], ends = Math.hypot(z[0] - a[0], z[1] - a[1]);
+    const line = (u, v) => ({ tool: 'line', color: d.color, size: d.size, points: [u, v] });
+    const group = (shape, items) => ({ tool: 'group', by: 'snap', shape, items });
+    const straight = (u, v) => { // (nearly level or upright: exactly so)
+      const ang = Math.atan2(v[1] - u[1], v[0] - u[0]), deg = ((ang * 180 / Math.PI) % 90 + 90) % 90;
+      if (deg < 6 || deg > 84) { const flat = Math.abs(Math.cos(ang)) > Math.abs(Math.sin(ang)); return flat ? [u, [v[0], u[1]]] : [u, [u[0], v[1]]]; }
+      return [u, v];
+    };
+    const eps = 0.06 * Math.hypot(bw, bh);
+    if (ends > 0.22 * big) { // an open stroke: a line, or an arrow (a straight shaft, then a small head at its far end)
+      if (ends / L > 0.94) { const [u, v] = straight(a, z); return line(u, v); }
+      const v = rdp(p, eps);
+      if (v.length >= 3 && v.length <= 6) {
+        const tip = v[1], shaft = Math.hypot(tip[0] - a[0], tip[1] - a[1]), ti = p.indexOf(tip);
+        let sl = 0; for (let i = 1; i <= ti; i++) sl += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+        const head = p.slice(ti).every((q) => Math.hypot(q[0] - tip[0], q[1] - tip[1]) <= 0.45 * shaft);
+        if (shaft / L > 0.55 && shaft / sl > 0.94 && head && L - sl >= 0.12 * shaft) {
+          const [u, t] = straight(a, tip), ang = Math.atan2(t[1] - u[1], t[0] - u[0]), hl = Math.min(0.28 * shaft, Math.max(14, d.size * 5)), sp = 0.5;
+          return group('arrow', [line(u, t), line(t, [t[0] - hl * Math.cos(ang - sp), t[1] - hl * Math.sin(ang - sp)]), line(t, [t[0] - hl * Math.cos(ang + sp), t[1] - hl * Math.sin(ang + sp)])]);
+        }
+      }
+      return null;
+    }
+    // a closed stroke: a triangle, a box or a circle
+    let c = rdp(p.concat([a]), eps);
+    if (Math.hypot(c[c.length - 1][0] - c[0][0], c[c.length - 1][1] - c[0][1]) < 0.22 * big) c = c.slice(0, -1);
+    if (c.length === 3) {
+      const area = Math.abs((c[1][0] - c[0][0]) * (c[2][1] - c[0][1]) - (c[2][0] - c[0][0]) * (c[1][1] - c[0][1])) / 2;
+      if (area > 0.25 * bw * bh) return group('triangle', [line(c[0], c[1]), line(c[1], c[2]), line(c[2], c[0])]);
+    }
+    if (c.length === 4) {
+      const level = c.every((q, i) => { const r = c[(i + 1) % 4], deg = ((Math.atan2(r[1] - q[1], r[0] - q[0]) * 180 / Math.PI) % 90 + 90) % 90; return deg < 20 || deg > 70; });
+      if (level) return group('rect', [line([x0, y0], [x1, y0]), line([x1, y0], [x1, y1]), line([x1, y1], [x0, y1]), line([x0, y1], [x0, y0])]);
+    }
+    if (c.length >= 5 && bw > 0 && bh > 0) {
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = bw / 2, ry = bh / 2;
+      const off = p.reduce((m, q) => m + Math.abs(Math.hypot((q[0] - cx) / rx, (q[1] - cy) / ry) - 1), 0) / p.length;
+      if (off < 0.12) { const pts = []; for (let i = 0; i <= 72; i++) pts.push([cx + rx * Math.cos(i / 72 * Math.PI * 2), cy + ry * Math.sin(i / 72 * Math.PI * 2)]); return { tool: 'pen', color: d.color, size: d.size, points: pts }; }
+    }
+    return null;
   }
 
   let current = null;
@@ -447,7 +537,9 @@
           <button class="csk-btn" data-act="save" title="Save or open: picture, PDF or a board file">${svg('save')}</button>
           ${opts.allowDock ? `<button class="csk-btn" data-act="dock" title="Dock to the side / full screen">${svg(opts.dock === 'side' ? 'full' : 'side')}</button>` : ''}
           <button class="csk-btn" data-act="close" title="Close board" aria-label="Close">${svg('close')}</button>
+          <button class="csk-btn csk-more-btn" data-act="more" title="More: save, close" aria-label="More" aria-haspopup="menu" aria-expanded="false">${svg('more')}</button>
         </div>
+        <div class="csk-more" role="menu" aria-label="More" hidden></div>
         <div class="csk-room" hidden aria-live="polite"></div>
         <div class="csk-note" hidden></div>
         <div class="csk-tools">
@@ -462,16 +554,17 @@
           <span class="csk-sep"></span>
           <button class="csk-btn" data-tool="note" title="Sticky notes">${svg('note')}</button>
           <button class="csk-btn" data-act="cards" title="Flashcards on the board">${svg('cards')}</button>
-          <button class="csk-btn" data-act="shapes" title="Quick shapes: graph grid, Venn, flowchart, logic gates">${svg('shapes')}</button>
+          <button class="csk-btn" data-act="shapes" title="Quick shapes: graph grid, Venn, flowchart, logic gates, mind map">${svg('shapes')}</button>
+          <button class="csk-btn" data-act="snap" aria-pressed="false" title="Shape snap: rough lines, arrows, triangles, boxes and circles come out clean" aria-label="Shape snap">${svg('snap')}</button>
           <span class="csk-sep"></span>
           <span class="csk-inks"></span>
           <span class="csk-sep"></span>
           <span class="csk-sizes"></span>
           <span class="csk-sep"></span>
-          <button class="csk-btn" data-act="undo" title="Undo">${svg('undo')}</button>
-          <button class="csk-btn" data-act="redo" title="Redo">${svg('redo')}</button>
+          <button class="csk-btn" data-act="undo" title="Undo" aria-label="Undo">${svg('undo')}</button>
+          <button class="csk-btn" data-act="redo" title="Redo" aria-label="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="clear" title="Clear your drawing">${svg('trash')}</button>
-          <button class="csk-btn" data-act="grid" title="Graph paper">${svg('grid')}</button>
+          <button class="csk-btn" data-act="paper" title="Paper: blank, graph, lined, Cartesian plane or Cornell" aria-label="Paper">${svg('grid')}</button>
           <button class="csk-btn" data-act="pic" title="Add a picture (or paste one with Ctrl+V, or drop one on the board)" aria-label="Add a picture">${svg('image')}</button>
           <input type="file" accept="image/*" class="csk-hidden csk-picfile">
           <input type="file" accept=".json,application/json" class="csk-hidden csk-boardfile">
@@ -485,6 +578,8 @@
             <button class="csk-btn" data-pic="del">Delete</button>
           </div>
         </div><div class="csk-zoom" role="group" aria-label="View">
+          <button class="csk-btn" data-act="undo" title="Undo" aria-label="Undo">${svg('undo')}</button>
+          <button class="csk-btn" data-act="redo" title="Redo" aria-label="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="zout" title="Zoom out" aria-label="Zoom out">${svg('zout')}</button>
           <button class="csk-btn" data-act="zin" title="Zoom in" aria-label="Zoom in">${svg('zin')}</button>
           <button class="csk-btn" data-act="fit" title="Fit: show everything on the board" aria-label="Fit: show everything on the board">${svg('fit')}</button>
@@ -498,13 +593,31 @@
     const boxMove = movable($('.csk-panel'), $('.csk-head'), 'cassie.box.board', { onStart: float });
     boxMove.restore().then((b) => { if (b) { wrap.classList.remove('side'); wrap.classList.add('csk-float'); } });
     const stage = $('.csk-stage'), boardEl = $('.csk-board');
+    const moreBtn = $('[data-act="more"]'), moreMenu = $('.csk-more');
+    function closeMore(back) { if (moreMenu.hidden) return; moreMenu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); if (back) moreBtn.focus(); }
+    function toggleMore() {
+      if (!moreMenu.hidden) { closeMore(); return; }
+      const item = (k, label, icon, i) => `<button type="button" role="menuitem" data-more="${k}"${i != null ? ` data-i="${i}"` : ''}>${icon ? svg(icon) : ''}<span>${esc(label)}</span></button>`;
+      moreMenu.innerHTML = (opts.extra || []).map((b, i) => item('extra', b.label, '', i)).join('')
+        + item('save', 'Save or open', 'save')
+        + (opts.allowDock ? item('dock', wrap.classList.contains('side') ? 'Full screen' : 'Dock to the side', wrap.classList.contains('side') ? 'full' : 'side') : '')
+        + item('close', 'Close board', 'close');
+      moreMenu.style.top = ($('.csk-head').offsetHeight + 6) + 'px';
+      moreMenu.hidden = false; moreBtn.setAttribute('aria-expanded', 'true');
+      const f = moreMenu.querySelector('button'); if (f) f.focus();
+    }
+    // a tap anywhere but the menu closes it
+    wrap.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target) && !moreBtn.contains(e.target)) closeMore(); }, true);
     const bg = $('.csk-bg'), obj = $('.csk-obj'), ink = $('.csk-ink'), live = $('.csk-live'), fx = $('.csk-fx');
     const note = $('.csk-note');
 
     // ---- state ----
     let W = 1600, H = 1000;
     const first = await loadImage(opts.image);
-    let grid = !first && opts.grid !== false;
+    // the paper under everything: blank, graph, lined, a Cartesian plane or a Cornell page (yours alone, even in a room)
+    const PAPERS = [['blank', 'Blank'], ['graph', 'Graph'], ['lined', 'Lined'], ['plane', 'Cartesian plane'], ['cornell', 'Cornell notes']];
+    let sheet = !first && opts.grid !== false ? 'graph' : 'blank';
+    let snapOn = false;
     const paper = dark ? '#1d1d20' : '#ffffff';
     let tool = 'pen', color = dark ? '#ffffff' : '#1b1b1d', size = SIZES[0];
     const strokes = [], redo = [];
@@ -544,6 +657,7 @@
     let dpr = 1, CW = 1, CH = 1, viewed = false, pan = null, pinch = null, spaceDown = false;
     const Z_MIN = 0.25, Z_MAX = 4;
     const touches = new Map();
+    let tapT0 = 0;
     const pageK = () => Math.min(CW / W, CH / H);
     const zoomNow = () => cam.k / pageK();
     const useView = (ctx) => ctx.setTransform(cam.k, 0, 0, cam.k, -cam.x * cam.k, -cam.y * cam.k);
@@ -610,6 +724,7 @@
       fit();
     }
     // the board fills its area; the view keeps its middle and its zoom when that area changes
+    let anchor = null; // (the board's place on screen before the Ask bar tucked or came back)
     function fit() {
       const r = stage.getBoundingClientRect();
       const aw = Math.max(50, Math.round(r.width - 20)), ah = Math.max(50, Math.round(r.height - 20));
@@ -619,6 +734,7 @@
       CW = Math.round(aw * dpr); CH = Math.round(ah * dpr);
       [bg, obj, ink, live, fx].forEach((c) => { if (c.width !== CW) c.width = CW; if (c.height !== CH) c.height = CH; });
       if (!viewed) { frame({ x: 0, y: 0, w: W, h: H }, 0); viewed = true; }
+      else if (anchor) { const r1 = live.getBoundingClientRect(); cam.x += (r1.left - anchor[0]) * dpr / cam.k; cam.y += (r1.top - anchor[1]) * dpr / cam.k; cam.k = anchor[2]; anchor = null; }
       else { cam.k = z * pageK(); cam.x = mid[0] - CW / 2 / cam.k; cam.y = mid[1] - CH / 2 / cam.k; }
       drawAll();
     }
@@ -626,15 +742,39 @@
     function paintBg(x, v, cw, ch) {
       x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = paper; x.fillRect(0, 0, cw, ch);
       x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k);
-      if (grid) {
-        let step = Math.round(Math.min(W, H) / 20);
+      const soft = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.08)', strong = dark ? 'rgba(255,255,255,.62)' : 'rgba(0,0,0,.58)';
+      const vx1 = v.x + cw / v.k, vy1 = v.y + ch / v.k;
+      const rules = (step, across = true, down = true) => {
         while (step * v.k < 6) step *= 2; // (zoomed far out: fewer lines)
-        const gx0 = Math.floor(v.x / step) * step, gy0 = Math.floor(v.y / step) * step, gx1 = v.x + cw / v.k, gy1 = v.y + ch / v.k;
-        x.strokeStyle = dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.08)'; x.lineWidth = 1 / v.k;
-        x.beginPath();
-        for (let gx = gx0; gx <= gx1; gx += step) { x.moveTo(gx, gy0); x.lineTo(gx, gy1); }
-        for (let gy = gy0; gy <= gy1; gy += step) { x.moveTo(gx0, gy); x.lineTo(gx1, gy); }
+        const gx0 = Math.floor(v.x / step) * step, gy0 = Math.floor(v.y / step) * step;
+        x.strokeStyle = soft; x.lineWidth = 1 / v.k; x.beginPath();
+        if (down) for (let gx = gx0; gx <= vx1; gx += step) { x.moveTo(gx, gy0); x.lineTo(gx, vy1); }
+        if (across) for (let gy = gy0; gy <= vy1; gy += step) { x.moveTo(gx0, gy); x.lineTo(vx1, gy); }
         x.stroke();
+      };
+      const label = (t, lx, ly, size) => { x.fillStyle = strong; x.font = `600 ${size}px system-ui, sans-serif`; x.textBaseline = 'top'; x.fillText(t, lx, ly); };
+      const unit = Math.round(Math.min(W, H) / 20);
+      if (sheet === 'graph') rules(unit);
+      else if (sheet === 'lined') {
+        rules(Math.round(H / 24), true, false);
+        x.strokeStyle = 'rgba(217,58,58,.4)'; x.lineWidth = 1.5 / v.k; x.beginPath(); x.moveTo(W * 0.08, v.y); x.lineTo(W * 0.08, vy1); x.stroke(); // (the margin)
+      } else if (sheet === 'plane') {
+        rules(unit);
+        const ox = Math.round(W / 2 / unit) * unit, oy = Math.round(H / 2 / unit) * unit;
+        x.strokeStyle = strong; x.lineWidth = 2 / v.k; x.beginPath(); x.moveTo(v.x, oy); x.lineTo(vx1, oy); x.moveTo(ox, v.y); x.lineTo(ox, vy1); x.stroke();
+        if (unit * v.k >= 14) {
+          const fs = unit * 0.42;
+          for (let i = Math.ceil((v.x - ox) / unit); ox + i * unit <= vx1; i++) if (i && i % 2 === 0) label(String(i), ox + i * unit - fs * 0.3, oy + fs * 0.3, fs);
+          for (let i = Math.ceil((v.y - oy) / unit); oy + i * unit <= vy1; i++) if (i && i % 2 === 0) label(String(-i), ox + fs * 0.35, oy + i * unit - fs * 0.5, fs);
+          label('x', vx1 - fs * 1.4, oy - fs * 1.5, fs * 1.2); label('y', ox + fs * 0.4, v.y + fs * 0.3, fs * 1.2);
+        }
+      } else if (sheet === 'cornell') { // a cue column, the notes, and a summary strip across the page
+        const cx = W * 0.3, sy = H * 0.78, fs = Math.round(H / 40), gap = Math.round(H / 24);
+        x.strokeStyle = soft; x.lineWidth = 1 / v.k; x.beginPath();
+        for (let gy = H * 0.1; gy < sy - gap / 2; gy += gap) { x.moveTo(cx, gy); x.lineTo(W, gy); }
+        x.stroke();
+        x.strokeStyle = strong; x.lineWidth = 2 / v.k; x.beginPath(); x.rect(0, 0, W, H); x.moveTo(cx, 0); x.lineTo(cx, sy); x.moveTo(0, sy); x.lineTo(W, sy); x.stroke();
+        label('Cues', W * 0.02, H * 0.025, fs); label('Notes', cx + W * 0.02, H * 0.025, fs); label('Summary', W * 0.02, sy + H * 0.025, fs);
       }
       picOrder().forEach((st) => {
         const im = picImg(st);
@@ -646,7 +786,7 @@
     function drawBg() {
       picSig = pics().map((p) => [p.id, p.x, p.y, p.w, p.h, p.mode, p.z].join()).join('|');
       paintBg(bg.getContext('2d'), cam, CW, CH);
-      $('[data-act="grid"]').classList.toggle('on', grid);
+      $('[data-act="paper"]').classList.toggle('on', sheet !== 'blank');
     }
     function paint(ctx, s) { paintStroke(ctx, s); }
     function paintInk(x, v) { x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k); strokes.forEach((s) => { if (!isObj(s) && !isPic(s)) paint(x, s); }); }
@@ -655,8 +795,8 @@
       const x = ink.getContext('2d');
       wipe(x); paintInk(x, cam);
       redrawObjs();
-      $('[data-act="undo"]').disabled = !strokes.some((x) => !x._base);
-      $('[data-act="redo"]').disabled = !redo.length;
+      wrap.querySelectorAll('[data-act="undo"]').forEach((b) => { b.disabled = !strokes.some((x) => !x._base); });
+      wrap.querySelectorAll('[data-act="redo"]').forEach((b) => { b.disabled = !redo.length; });
       // (nothing of yours to clear: greyed out, like Undo, so a tap never does nothing)
       $('[data-act="clear"]').disabled = room ? !strokes.some((x) => x.mine || !x.u) : !strokes.some((x) => !x._base); // (a stroke just drawn is yours before it's sent)
     }
@@ -981,10 +1121,20 @@
     const scaleK = () => dpr / cam.k;
     const capture = (id) => { try { live.setPointerCapture(id); } catch (e) { /* (a pointer the browser no longer knows) */ } };
 
+    const phone = () => !!(window.matchMedia && matchMedia('(max-width: 700px)').matches);
+    let tuckT = 0;
+    function tuck(on) {
+      const f = $('.csk-ask');
+      clearTimeout(tuckT);
+      if (!f || f.classList.contains('csk-tucked') === on) return;
+      const r = live.getBoundingClientRect(); anchor = [r.left, r.top, cam.k];
+      f.classList.toggle('csk-tucked', on);
+      fit();
+    }
     // ---- moving around: the Hand tool, Space or the middle button, two fingers, the wheel ----
     function startPinch() {
       const [a, b] = [...touches.values()], r = live.getBoundingClientRect();
-      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: zoomNow(), at: worldAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top) };
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: zoomNow(), at: worldAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top), cam0: { ...cam }, moved: 0 };
       // whatever the first finger started is undone: two fingers move the view
       if (drawing) { if (drawing.tool === 'eraser') { const i = strokes.indexOf(drawing); if (i >= 0) strokes.splice(i, 1); } drawing = null; }
       drag = null; laserDown = false; pan = null;
@@ -1008,7 +1158,8 @@
 
     live.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') {
-        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (!touches.size) tapT0 = performance.now();
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
         if (touches.size === 2) { e.preventDefault(); skipClick = true; startPinch(); return; }
         if (touches.size > 2 || pinch) return;
       }
@@ -1050,12 +1201,16 @@
       capture(e.pointerId);
       if (tool === 'laser') { laserDown = true; laserAdd('me', myColor, pt[0], pt[1], true); track(pt, 2); return; }
       drawing = { tool, color, size: size * scaleK(), points: [pt] };
+      if (phone()) tuck(true);
       redo.length = 0;
       if (tool === 'eraser') { strokes.push(drawing); redraw(); }
       track(pt);
     });
     live.addEventListener('pointermove', (e) => {
-      if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.has(e.pointerId)) {
+        const q = touches.get(e.pointerId); q.x = e.clientX; q.y = e.clientY;
+        if (pinch) pinch.moved = Math.max(pinch.moved, Math.hypot(q.x - q.sx, q.y - q.sy));
+      }
       if (pinch) { if (touches.size === 2) movePinch(); return; }
       if (pan) { cam.x = pan.x - (e.clientX - pan.sx) * dpr / cam.k; cam.y = pan.y - (e.clientY - pan.sy) * dpr / cam.k; drawAll(); return; }
       const pt = toBoard(e);
@@ -1091,7 +1246,15 @@
     const end = (e) => {
       if (e && touches.has(e.pointerId)) {
         touches.delete(e.pointerId);
-        if (pinch) { if (!touches.size) pinch = null; return; } // (the last finger of a pinch draws nothing)
+        if (pinch) { // (the last finger of a pinch draws nothing; two fingers tapped together: Undo)
+          if (!touches.size) {
+            const tap = performance.now() - tapT0 < 250 && pinch.moved < 10;
+            if (tap) { Object.assign(cam, pinch.cam0); drawAll(); const u = $('[data-act="undo"]'); if (!u.disabled) u.click(); }
+            pinch = null;
+            if (phone()) tuckT = setTimeout(() => tuck(false), 1500);
+          }
+          return;
+        }
       }
       if (pan) { pan = null; live.style.cursor = spaceDown ? 'grab' : toolCursor(tool); return; }
       if (drag) {
@@ -1100,7 +1263,7 @@
         if (isPic(d.s)) { if (d.moved) { sendPic(d.s); drawBg(); } redrawObjs(); return; }
         if (d.moved) {
           const s = d.s;
-          if (s.tool === 'note' && grid) { const st = Math.round(Math.min(W, H) / 40); s.x = Math.round(s.x / st) * st; s.y = Math.round(s.y / st) * st; }
+          if (s.tool === 'note' && sheet === 'graph') { const st = Math.round(Math.min(W, H) / 40); s.x = Math.round(s.x / st) * st; s.y = Math.round(s.y / st) * st; }
           sendUpdate(s);
         } else if (d.s.tool === 'card') flipCard(d.s);
         else if (d.s.tool === 'note' && editable(d.s)) editNote(d.s);
@@ -1109,7 +1272,9 @@
       }
       if (laserDown) { laserDown = false; return; }
       if (!drawing) return;
-      const d = drawing;
+      let d = drawing;
+      if (phone()) tuckT = setTimeout(() => tuck(false), 1500);
+      if (d.tool === 'pen' && snapOn) d = snapStroke(d, 40 * scaleK()) || d; // (one undo step: the clean shape replaces the rough one)
       if (d.tool !== 'eraser') strokes.push(d);
       drawing = null;
       wipe(live.getContext('2d'));
@@ -1206,11 +1371,15 @@
         <button class="csk-btn" data-pop="json">Board file (.json). Open it again later${plus}</button>
         <button class="csk-btn" data-pop="open">Open a board file…${plus}</button></div>`);
     }
+    function paperPop() {
+      openPop('paper', `<h4>Paper</h4><div class="csk-list">${PAPERS.map(([k, n]) => `<button class="csk-btn${k === sheet ? ' on' : ''}" data-pop="paper" data-k="${k}" aria-pressed="${k === sheet}">${n}</button>`).join('')}</div>`);
+    }
     function popErr(msg) { const el = pop && pop.querySelector('.csk-poperr'); if (el) { el.hidden = false; el.textContent = msg; } }
     async function popAct(b) {
       const a = b.dataset.pop;
       if (a === 'nc') { noteColor = b.dataset.c; closePop(); toast('Tap the board to add a note'); return; }
       if (a === 'tidy') { closePop(); tidyNotes(); return; }
+      if (a === 'paper') { sheet = b.dataset.k; closePop(); drawBg(); return; }
       if (a === 'drop') {
         const list = parseDeck(pop.querySelector('textarea').value);
         if (!list.length) { popErr('Put one card per line, like “Osmosis: water moving across a membrane”.'); return; }
@@ -1251,7 +1420,7 @@
     const fileName = (ext) => `cassie-board-${new Date().toISOString().slice(0, 10)}.${ext}`;
     // the whole board as a file: open it again later (or in a room, add it for everyone)
     function boardData() { // (pictures go in as things on the board, each with its own picture)
-      return { cassie: 'board', v: 2, title: $('.csk-title').textContent, w: W, h: H, grid, image: null, strokes: strokes.filter((x) => !isPic(x) || x.src).map(pack) };
+      return { cassie: 'board', v: 2, title: $('.csk-title').textContent, w: W, h: H, grid: sheet === 'graph', paper: sheet, image: null, strokes: strokes.filter((x) => !isPic(x) || x.src).map(pack) };
     }
     async function openBoardFile(f) {
       let d;
@@ -1269,7 +1438,7 @@
         return;
       }
       if (strokes.length && !confirm('Open this board file? What’s on your board now will be replaced.')) return;
-      grid = d.image ? false : d.grid !== false;
+      sheet = PAPERS.some((q) => q[0] === d.paper) ? d.paper : d.image ? 'blank' : d.grid !== false ? 'graph' : 'blank';
       fixedSize = { w: fw, h: fh };
       strokes.length = 0; redo.length = 0; sel = null; imgs.clear();
       list.forEach((st, i) => { if (!isPic(st)) st.z = ++zTop; else { st.id = st.id || rid(); if (i === 0 && d.image) st._base = true; } strokes.push(st); });
@@ -1312,6 +1481,12 @@
       if (t.dataset.extra != null) { const b = (opts.extra || [])[+t.dataset.extra]; if (b && b.onClick) b.onClick(); return; }
       if (t.dataset.pop) { popAct(t); return; }
       if (t.dataset.pic) { picAct(t); return; }
+      if (t.dataset.more) { // (the same as the header's own buttons)
+        const k = t.dataset.more; closeMore();
+        if (k === 'extra') { const b = (opts.extra || [])[+t.dataset.i]; if (b && b.onClick) b.onClick(); }
+        else { const h = $(`.csk-head [data-act="${k}"]`); if (h) h.click(); }
+        return;
+      }
       if (t.dataset.tool) {
         // tap a tool that's already on to switch it off: back to Move, so a drag never draws by accident
         if (t.dataset.tool === tool && tool !== 'select') { setTool('select'); closePop(); toast('Drawing is off. Drag notes and cards freely, or tap a tool to draw again'); return; }
@@ -1325,7 +1500,7 @@
       const act = t.dataset.act;
       const again = pop && pop.dataset.kind === act;
       if (act !== 'check' && act !== 'dock') closePop();
-      if ((act === 'cards' || act === 'shapes' || act === 'save') && again) return;
+      if ((act === 'cards' || act === 'shapes' || act === 'save' || act === 'paper') && again) return;
       if (act === 'cards') cardsPop();
       else if (act === 'shapes') shapesPop();
       else if (act === 'close') close();
@@ -1347,7 +1522,9 @@
           sel = null; redo.length = 0; redraw();
         }
       }
-      else if (act === 'grid') { grid = !grid; drawBg(); }
+      else if (act === 'paper') paperPop();
+      else if (act === 'snap') { snapOn = !snapOn; t.setAttribute('aria-pressed', String(snapOn)); boxSave('cassie.board.snap', snapOn); toast(snapOn ? 'Shape snap is on: rough lines, arrows, triangles, boxes and circles come out clean' : 'Shape snap is off'); }
+      else if (act === 'more') toggleMore();
       else if (act === 'zin') setZoom(zoomNow() * 1.25);
       else if (act === 'zout') setZoom(zoomNow() / 1.25);
       else if (act === 'fit') fitAll();
@@ -1685,9 +1862,10 @@
     function snapshot() { return composite().toDataURL('image/png'); }
     function onKeyUp(e) { if (e.key === ' ' && spaceDown) { spaceDown = false; if (!pan) live.style.cursor = toolCursor(tool); } }
     function onKey(e) {
+      if (e.key === 'Escape' && !moreMenu.hidden) { e.stopPropagation(); closeMore(true); return; }
       if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || ''))) return;
       if (e.key === ' ' && !(e.target && e.target.closest && e.target.closest('button'))) { e.preventDefault(); if (!spaceDown) { spaceDown = true; if (!drawing) live.style.cursor = 'grab'; } return; } // (hold Space and drag: move around)
-      if (e.key === 'Escape') { e.stopPropagation(); if (pop) closePop(); else if (tool === 'place') setTool('pen'); else close(); }
+      if (e.key === 'Escape') { e.stopPropagation(); if (!moreMenu.hidden) closeMore(true); else if (pop) closePop(); else if (tool === 'place') setTool('pen'); else close(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && editable(sel) && strokes.includes(sel)) { e.preventDefault(); removeObj(sel); } // (a note, a card or a picture)
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $(e.shiftKey ? '[data-act="redo"]' : '[data-act="undo"]').click(); }
     }
@@ -1724,8 +1902,11 @@
       } catch (e) { /* cross-origin picture — keep the default */ }
     }
     if (opts.note) showNote(opts.note);
+    boxLoad('cassie.board.snap').then((v) => { snapOn = v === true; const b = $('[data-act="snap"]'); if (b) b.setAttribute('aria-pressed', String(snapOn)); });
+    if (askForm) askForm.addEventListener('focusin', () => tuck(false));
     requestAnimationFrame(fit);
     current = { wrap, close, snapshot, showNote, setTitle, draw, remote, setRoom, parts, presence, others, dropCards, toast,
+      paper: () => sheet,
       objects: () => strokes.filter(isObj).map(pack), strokeCount: () => strokes.filter((x) => !isPic(x)).length,
       pictures: () => picOrder().map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h, mode: p.mode, z: p.z })),
       // the view: where it looks and how far in; a board point on screen (page px), for anyone who points at the board
