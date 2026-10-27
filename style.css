@@ -2907,3 +2907,38 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 .pod-ctrl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pod-ctrl button:disabled { opacity: .6; cursor: default; }
 .pod-note { margin: 0; min-height: 1em; color: var(--text); font-size: .86rem; }
+
+/* --- onboarding: Step 2's levels two across (Next stays on screen on a small phone); Skip setup after the name --- */
+.fr[data-step="ob2"] .fr-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fr[data-step="ob2"] .fr-pick { min-height: 50px; padding: 6px 12px; border-radius: 16px; font-size: .95rem; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+.fr[data-step="ob2"] .fr-pick:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.fr[data-step="ob2"] .fr-mid { gap: 10px; }
+.fr-skipall { align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--primary-ink); font: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* --- Home on a phone: what they came for leads (a thicker accent edge and a soft glow) --- */
+:root { --lead-line: var(--primary); --lead-glow: color-mix(in srgb, var(--primary) 24%, transparent); }
+.hub .hub-box.hub-lead { border: 2px solid var(--lead-line); box-shadow: 0 0 0 4px var(--lead-glow), 0 10px 26px var(--lead-glow); }
+
+/* --- keep your work: a small card at the top, never over the ask box --- */
+.save-nudge { position: fixed; z-index: 320; top: calc(var(--safe-top, 0px) + 10px); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 24px)); box-sizing: border-box;
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 18px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(var(--shade-rgb), .22); }
+.save-nudge p { flex: 1; margin: 0; font-size: .9rem; line-height: 1.35; }
+.save-nudge button { min-height: 44px; min-width: 44px; border-radius: 12px; border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+.save-nudge-go { padding: 0 14px; background: var(--primary); color: var(--on-primary); }
+.save-nudge-x { background: transparent; color: var(--text); font-size: 1.3rem; }
+
+/* --- a press: pills, chips, Home's boxes and the tabs give a little (not with Reduce Motion) --- */
+@media (prefers-reduced-motion: no-preference) {
+  .fr-pick, .fr-seg button, .hub-q, .hub .hub-box, .hub-card, .hub-w, .hub-more, .dk-chip { transition: transform .12s ease, background .2s, color .2s, border-color .2s; }
+  .tab { transition: background .25s, color .25s, padding .25s, transform .12s ease; }
+  .fr-pick:active, .fr-seg button:active, .hub-q:active, .hub .hub-box:active, .hub-card:active, .hub-w:active, .hub-more:active, .dk-chip:active, .tab:active { transform: scale(.96); }
+}
+
+/* --- an empty screen: a still, flat Cassie above its words --- */
+.empty-state .es-bot { width: 64px; height: 64px; margin-bottom: var(--sp-1); }
+.es-bot .cassie-bot { width: 100%; height: 100%; display: block; }
+
+/* --- the tab bar: every tab at least 48px wide; on a narrow phone (370px and less) the open tab is its icon only, so all 6 fit --- */
+.tab { min-width: 48px; }
+@media (max-width: 370px) { .tab, .tab.on { min-width: 48px; padding: 0 10px; } .tab.on span { display: none; } }
