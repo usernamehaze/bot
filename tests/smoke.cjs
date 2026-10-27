@@ -1221,7 +1221,7 @@ test('support.html: the help page the stores link to loads with no errors, every
   const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => h.startsWith(location.origin)));
   // (the extension zip is made when the site is built, like the landing page's own download link)
   for (const l of links) { if (/cassie-extension\.zip$/.test(l)) { expect(fs.existsSync(path.join(ROOT, '_site/cassie-extension.zip')), 'the built site has the extension download'); continue; } const r = await page.request.get(l); expect(r.ok(), 'a link on the help page is broken: ' + l + ' ' + r.status()); }
-  expect(links.length >= 4, 'it links home, privacy, terms and the extension download: ' + links.length);
+  expect(links.length >= 4, 'it links home, privacy, terms and the extension in the store: ' + links.length);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll on a phone');
   for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await contrastIssues(page, 'body'); expect(!bad.length, `readable in ${scheme} mode: ` + bad.join(' | ')); }
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -1327,7 +1327,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (scheme === 'light') {
       // the sidebar and the top bar
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'cassie-extension.zip' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
       expect(side.topIcons === 'top-bell,top-me' && side.ask === 'none', 'like the reference: only the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
@@ -2289,6 +2289,7 @@ test('privacy.html names every outside service the code calls (a new one fails u
     'schemas.openxmlformats.org': 'names inside Word and PowerPoint files', 'www.w3.org': 'SVG and XML names',
     'askcassie.study': 'Cassie’s own site', 'www.askcassie.study': 'Cassie’s own site', 'askcassie.pages.dev': 'Cassie’s own site', 'usernamehaze.github.io': 'Cassie’s own site', 'speak.cassie': 'a cache key, not a site',
     'scholar.google.com': 'a link the student taps', 'doi.org': 'citation links',
+    'chromewebstore.google.com': 'a link the student taps (Add to Chrome: the extension in the Chrome Web Store)',
     'commons.wikimedia.org': 'a link the student taps (where a museum picture comes from; the pictures are kept in the app)',
     'epa.culturalcenter.gov.ph': 'a museum picture’s credit link', '21am.culturalcenter.gov.ph': 'a museum picture’s credit link', 'salcedoauctions.com': 'a museum picture’s credit link', 'www.artandmarket.net': 'a museum picture’s credit link',
     'ncmh.gov.ph': 'where care.js’s crisis numbers were checked (a note in the code)',
@@ -3015,24 +3016,21 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   expect(zipped === extver, `the built zip is version ${zipped}, the extension is ${extver}`);
   expect(JSON.parse(fs.readFileSync(path.join(built, 'extension-version.json'), 'utf8')).version === extver, 'extension-version.json has the extension’s version');
   const site = fs.readFileSync(path.join(built, 'index.html'), 'utf8');
-  const links = site.match(/cassie-extension\.zip[^"]*/g) || [];
-  expect(links.length >= 2 && links.every((l) => l === 'cassie-extension.zip?v=' + extver), 'every link to the zip ends with ?v=' + extver + ': ' + links.join(', '));
   expect(site.includes('Version ' + extver), 'the built page shows Version ' + extver);
   // a computer: the button is in the header, just before Open Cassie, on one line at 1024, 1280 and 1440
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
   const page = await ctx.newPage();
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP.replace('app.html', 'index.html'));
-  const head = page.locator('.nav a[href^="cassie-extension.zip"]');
+  const head = page.locator('.nav a[data-ext]');
   expect(await head.count() === 1 && await head.isVisible(), 'the extension button is in the header');
-  expect(await head.getAttribute('href') === 'cassie-extension.zip?v=' + extver, 'the header link has the version: ' + await head.getAttribute('href'));
   expect((await page.locator('[data-ext-version]').innerText()).trim() === 'Version ' + extver, 'Version ' + extver + ' under the button');
-  expect(await page.locator('.final a[href^="cassie-extension.zip"]').count() === 0, 'the last section has no extension button');
-  expect(await page.locator('details a[href^="cassie-extension.zip"]').count() === 1, 'the FAQ still has its link');
+  expect(await page.locator('.final a[data-ext]').count() === 0, 'the last section has no extension button');
+  expect(await page.locator('details a[data-ext]').count() === 1, 'the FAQ still has its link');
   for (const width of [1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     const g = await page.evaluate(() => {
-      const ext = document.querySelector('.nav a[href^="cassie-extension.zip"]').getBoundingClientRect();
+      const ext = document.querySelector('.nav a[data-ext]').getBoundingClientRect();
       const open = document.querySelector('.nav a[href="start.html"]').getBoundingClientRect();
       const nav = document.querySelector('.nav'); const n = nav.getBoundingClientRect();
       const kids = [...nav.querySelectorAll('a, .btn')].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect());
@@ -3058,7 +3056,7 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
   await tab.close();
   const phone = await b.newContext({ ...devices['iPhone 13'], viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   const pp = await phone.newPage(); await pp.goto(APP.replace('app.html', 'index.html'));
-  expect(!(await pp.locator('.nav a[href^="cassie-extension.zip"]').isVisible()), '390x844: no extension button in the header');
+  expect(!(await pp.locator('.nav a[data-ext]').isVisible()), '390x844: no extension button in the header');
   expect(await pp.locator('.nav a[href="start.html"]').isVisible(), '390x844: Open Cassie is still there');
   await phone.close();
   // the extension: a newer version on the site shows the note in the popup; the same version doesn't
@@ -3104,6 +3102,57 @@ test('the Chrome extension: its button sits beside Open Cassie on computers (non
     expect(!(await p.locator('#update-note').isVisible()), 'the same version: no note');
     await p.close();
   } finally { await ectx.close(); fs.rmSync(profile, { recursive: true, force: true }); }
+});
+
+test('the extension comes from the browser store in one click (no download): every link goes to the store, Edge, Opera and Brave are named, Firefox is told it is coming, and a store copy never asks to download an update', async (b) => {
+  const STORE = 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj';
+  // no page links to the zip any more
+  for (const f of ['index.html', 'app.html', 'support.html', 'tour.js']) expect(!/href="cassie-extension\.zip/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), f + ' still links to the zip download');
+  const UA = {
+    chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+    edge: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0',
+    opera: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 OPR/125.0.0.0',
+    firefox: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
+  };
+  const want = { chrome: ['Add to Chrome', STORE], edge: ['Add to Edge', STORE], opera: ['Add to Opera', STORE], firefox: ['Coming to Firefox', 'support.html#firefox'] };
+  for (const [who, ua] of Object.entries(UA)) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, userAgent: ua, serviceWorkers: 'block' });
+    const page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(APP.replace('app.html', 'index.html'));
+    const got = await page.evaluate(() => [...document.querySelectorAll('a[data-ext]')].map((a) => ({ t: a.textContent.trim(), h: a.getAttribute('href'), d: a.hasAttribute('download') })));
+    expect(got.length >= 3 && got.every((l) => l.h === want[who][1] && !l.d), who + ': every extension link goes to ' + want[who][1] + ': ' + JSON.stringify(got));
+    expect(got.filter((l) => l.t === want[who][0]).length === 2, who + ': the header and the FAQ say ' + want[who][0] + ': ' + JSON.stringify(got));
+    expect(!errors.length, who + ': page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // the app's sidebar names the browser too
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, userAgent: UA.edge, serviceWorkers: 'block' });
+  const page = await ctx.newPage(); await page.goto(APP);
+  const side = await page.evaluate(() => { const a = document.querySelector('a.side-ext'); return a && { t: a.querySelector('b').textContent, h: a.getAttribute('href'), d: a.hasAttribute('download') }; });
+  expect(side && side.t === 'Cassie for Edge' && side.h === STORE && !side.d, 'the sidebar: ' + JSON.stringify(side));
+  await ctx.close();
+  // a copy from a store (its manifest has an update_url): a newer version on the site shows no Download note
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-store-'));
+  fs.cpSync(path.join(ROOT, 'extension'), tmp, { recursive: true });
+  const man = JSON.parse(fs.readFileSync(path.join(tmp, 'manifest.json'), 'utf8')); man.update_url = 'https://clients2.google.com/service/update2/crx';
+  fs.writeFileSync(path.join(tmp, 'manifest.json'), JSON.stringify(man));
+  const profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-'));
+  const ectx = await chromium.launchPersistentContext(profile, {
+    headless: true, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${tmp}`, `--load-extension=${tmp}`],
+  });
+  try {
+    await ectx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (route) => route.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ectx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof checkForUpdate === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    await sw.evaluate(async () => { await chrome.storage.local.remove('cassieUpdate'); self.CASSIE_UPDATE_URL = 'https://askcassie.pages.dev/extension-version.json'; self.fetch = () => Promise.resolve(new Response(JSON.stringify({ version: '99.0.0' }), { headers: { 'content-type': 'application/json' } })); });
+    const p = await ectx.newPage(); await p.goto(`chrome-extension://${new URL(sw.url()).host}/popup.html`); await p.waitForTimeout(700);
+    expect(!(await p.locator('#update-note').isVisible()), 'a store copy: no Download note (the store updates it)');
+  } finally { await ectx.close(); fs.rmSync(profile, { recursive: true, force: true }); fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
 test('no key: Cassie answers through the server', async (b) => {
@@ -5003,7 +5052,7 @@ test('after the tour, on a computer: a video of how the Chrome extension works, 
       label: box.getAttribute('role') === 'dialog' && !!box.getAttribute('aria-labelledby') };
   });
   expect(v.dur > 30 && v.dur < 50 && v.w === 1280 && v.h === 720, 'the video loads: ' + JSON.stringify(v));
-  expect(v.get === 'Get the Chrome extension' && v.href === 'cassie-extension.zip' && v.download, 'Get the Chrome extension downloads it: ' + JSON.stringify(v));
+  expect(v.get === 'Add to Chrome' && v.href === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && !v.download, 'Add to Chrome opens the Chrome Web Store: ' + JSON.stringify(v));
   expect(v.fits && !v.small.length && !/[–—]/.test(v.text) && v.label && v.focus === 'Close' && v.seen === true, 'on screen, 44px, no dashes, a labelled dialog, Close has the focus, remembered: ' + JSON.stringify(v));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/tour-video.png' });
   // in light and dark: every word readable
@@ -7648,7 +7697,7 @@ test('the landing page is calm, like linear.app: one message and one button in t
       expect(L.menu.length <= 5 && (w > 760 || L.menu.join() === 'Open Cassie'), `${tag}: 5 or fewer things in the menu (just Open Cassie on a phone): ` + L.menu.join(', '));
       expect(L.sections <= 7, `${tag}: 7 or fewer sections: ` + L.sections);
       for (const need of ['start.html', 'rescue.html', 'let.html', 'privacy.html', 'terms.html', 'support.html', 'bot.html', '#pricing', '#faq']) expect(L.hrefs.includes(need), `${tag}: a link to ${need}`);
-      expect(L.hrefs.some((x) => /^cassie-extension\.zip\?v=/.test(x)), `${tag}: the extension download`);
+      expect(L.hrefs.some((x) => x === "https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj"), `${tag}: the extension in the Chrome Web Store`);
       expect(L.height <= maxH, `${tag}: a short page (was 26,600px on a computer and 33,900px on a phone): ${L.height}px`);
       expect(L.canvases <= 1 && L.loops.every((c) => /subjects/.test(c)), `${tag}: one moving background, and only the subjects strip loops (the button's light turns 3 times, then rests): ` + JSON.stringify([L.canvases, L.loops]));
       expect(await page.evaluate(() => document.querySelector('.subjects').classList.contains('off') && getComputedStyle(document.querySelector('.subjects ul')).animationPlayState === 'paused'), `${tag}: the strip rests while off screen`);
