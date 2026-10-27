@@ -1521,7 +1521,7 @@
     if (!draw && /\b(graph|plot|sketch|draw)\b/i.test(q || '')) { const eq = B.findEquation(q) || B.findEquation(reply); if (eq) draw = B.graphSpec(eq); }
     return draw ? { reply: clean, draw } : clean;
   };
-  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nLook at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question, work it out step by step and give the answer. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
+  const SNIP_PROMPT = (ctx) => `A student snipped this part of a webpage to study it (a graph, diagram, picture, equation, or question). Page context:\n"""\n${ctx}\n"""\n\nFirst, copy out exactly every word and every line of code you can read in the picture, even in an unusual font or style, into "copied": code keeps its line breaks and indentation (use \\n for new lines), and nothing is left out or invented; leave it empty only if nothing is readable. Then look at the picture carefully and teach it like a friendly step-by-step tutor: what it shows, how to read it, and the reasoning behind it. If it is a question or code, work it out or explain what the code does step by step and give the answer. If the picture has nothing you can read, say what it shows and make the last step ONE specific question about it; never just ask for more context. Reply with ONLY minified JSON, no prose, no code fence, exactly: {"headline":"one short sentence naming what this is","copied":"the exact text or code you read","steps":["step 1","step 2","step 3"]}. Give 3 to 6 short steps, max ~20 words each. Read every label and number you can see; don't invent ones you can't.`;
 
   // The words inside the snipped box, sent along with the picture: if a model
   // struggles to read the screenshot, Cassie still knows the question.
@@ -1533,10 +1533,10 @@
     const say = (n) => sess && sess.showNote(n);
     say({ reply: 'Cassie is reading your picture…' });
     try {
-      const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 800, undefined, { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' });
+      const raw = await askVision(image, withBoxText(SNIP_PROMPT(ctx || (document.title ? 'Page: ' + document.title : '')), boxText), null, 1600, undefined, { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' });
       if (SEEMS_BLANK.test(raw) && boxText.length >= 25) { explainFromText(sess, boxText, '', 'I read the words in your box:'); return; }
       const data = parseBoardJSON(raw);
-      if (sess) { sess.setTitle('Your snip'); sess.showNote({ headline: data.headline, steps: data.steps }); }
+      if (sess) { sess.setTitle('Your snip'); sess.showNote({ headline: data.headline, copied: data.copied, steps: data.steps }); }
     } catch (e) {
       // keep the snip anyway: it shows up in the Cassie app, where they can ask again
       try { chrome.runtime.sendMessage({ type: 'CASSIE_LOG', log: { kind, q: kind === 'paste' ? 'Explain the picture I pasted' : 'Explain my snip' }, reply: `I couldn't read this one just then (${errorText(e)}). Ask me about it here and I'll try again.`, image }); } catch (x) { /* extension reloaded */ }
@@ -1630,7 +1630,7 @@
 
   function parseBoardJSON(text) {
     const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
-    const clean = (d) => ({ headline: String(d.headline || '').trim(), steps: (Array.isArray(d.steps) ? d.steps : []).map((x) => String(x).trim()).filter(Boolean) });
+    const clean = (d) => ({ headline: String(d.headline || '').trim(), copied: typeof d.copied === 'string' ? d.copied.replace(/\s+$/, '') : '', steps: (Array.isArray(d.steps) ? d.steps : []).map((x) => String(x).trim()).filter(Boolean) });
     try { const m = t.match(/\{[\s\S]*\}/); if (m) { const d = JSON.parse(m[0]); if (d && (d.headline || d.steps)) return clean(d); } } catch (e) { /* cut off — pull the pieces out below */ }
     if (/"(headline|steps)"\s*:/.test(t)) {
       // the answer was cut off mid-JSON: keep every complete piece (and the last partial step)
@@ -2003,10 +2003,43 @@ Situation: "${text}"`;
     const range = sel.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return; // ignore selecting our own popover text
     const text = selectionText(sel);
+    // a picture in the highlight (a screenshot of code, a styled or drawn question), or almost no text: Cassie reads the picture
+    if ((!text || text.length < 15 || selectionHasPicture(range)) && highlightAsPicture(range, text)) return;
     if (!text || text.length < 2 || text === lastAutoText) return;
     lastAutoText = text;
     popover.hidden = false;
     showChoice(text, range.getBoundingClientRect());
+  }
+  // Does the highlight hold or touch a picture: an <img>, <canvas>, <svg>, a video's poster, or a background picture?
+  // (tiny icons don't count)
+  function selectionHasPicture(range) {
+    const node = range.commonAncestorContainer, root = node.nodeType === 1 ? node : node.parentElement;
+    if (!root) return false;
+    const box = range.getBoundingClientRect(), PIC = 'img, canvas, svg, video[poster]';
+    const touches = (el) => { const r = el.getBoundingClientRect(); return r.width >= 24 && r.height >= 16 && r.left < box.right + 2 && r.right > box.left - 2 && r.top < box.bottom + 2 && r.bottom > box.top - 2; };
+    const up = root.closest(PIC);
+    if (up && touches(up)) return true;
+    for (const el of root.querySelectorAll(PIC)) if (range.intersectsNode(el) && touches(el)) return true;
+    let n = 0;
+    for (const el of [root, ...root.querySelectorAll('*')]) {
+      if (++n > 400) break;
+      if (range.intersectsNode(el) && /url\(/.test(getComputedStyle(el).backgroundImage || '') && touches(el)) return true;
+    }
+    return false;
+  }
+  // the highlight's box (8px more each side, kept on screen), read as a picture with any words in it
+  function highlightAsPicture(range, text) {
+    const b = range.getBoundingClientRect();
+    if (b.width < 8 || b.height < 8) return false;
+    const key = `pic:${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)}:${text || ''}`;
+    if (key === lastAutoText) return true;
+    lastAutoText = key;
+    const left = Math.max(0, b.left - 8), top = Math.max(0, b.top - 8);
+    const r = { left, top, width: Math.min(window.innerWidth, b.right + 8) - left, height: Math.min(window.innerHeight, b.bottom + 8) - top };
+    const node = range.commonAncestorContainer, el = node.nodeType === 1 ? node : node.parentElement;
+    window.getSelection().removeAllRanges(); // (the blue highlight would be in the picture)
+    snipAndExplain(r, el, r.left + r.width / 2, r.top + r.height / 2);
+    return true;
   }
 
   // Primary trigger: mouseup is the reliable "user finished selecting with the
