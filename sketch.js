@@ -72,6 +72,8 @@
   .csk-note .csk-reply p { margin: 0 0 6px; }
   .csk-note .csk-reply ul, .csk-note .csk-reply ol { margin: 0 0 6px; padding-left: 20px; }
   .csk-note .csk-reply li { margin: 2px 0; }
+  .csk-note .csk-copied-h { display: block; margin: 6px 0 2px; font-size: 13px; opacity: .75; }
+  .csk-note .csk-copied { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(127, 127, 127, .14); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; overflow-x: auto; }
   .csk-note strong { font-weight: 700; }
   .csk-note code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   .csk-note[hidden] { display: none; }
@@ -1194,6 +1196,11 @@
       note.hidden = false;
       note.innerHTML = '';
       if (n.headline) { const b = document.createElement('b'); b.innerHTML = mdInline(String(n.headline).replace(/\*\*/g, '')); note.appendChild(b); }
+      if (n.copied) { // the exact words or code read from a picture, kept as they are (lines and indents)
+        const h = document.createElement('span'); h.className = 'csk-copied-h'; h.textContent = 'What I read:';
+        const pre = document.createElement('pre'); pre.className = 'csk-copied'; pre.textContent = String(n.copied).replace(/^```[\w-]*\n?|\n?```$/g, '');
+        note.append(h, pre);
+      }
       if (n.steps && n.steps.length) {
         const ol = document.createElement('ol');
         n.steps.forEach((s) => { const li = document.createElement('li'); li.innerHTML = mdInline(s); ol.appendChild(li); });

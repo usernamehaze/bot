@@ -5388,6 +5388,51 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   }
 });
 
+test('extension: highlighting a screenshot of code (or a picture, or under 15 letters) sends Cassie a picture of the highlight, and she copies the code out first, then explains; a plain text highlight still sends only the text', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
+    headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    const code = '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120"><rect width="420" height="120" fill="#1e1e1e"/><text x="12" y="40" font-family="Comic Sans MS" font-size="22" fill="#9cdcfe">for i in range(3):</text><text x="44" y="80" font-family="Comic Sans MS" font-size="22" fill="#ce9178">print(i * 2)</text></svg>';
+    const html = `<!doctype html><html><head><title>Week 3 quiz</title></head><body style="font:18px sans-serif;margin:40px">
+      <p id="plain">Photosynthesis turns light, water and carbon dioxide into sugar and oxygen.</p>
+      <p id="q">What does this print? <img id="shot" alt="" src="data:image/svg+xml,${encodeURIComponent(code)}" width="420" height="120"> Explain.</p></body></html>`;
+    await ctx.route(/example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
+    let sw = null;
+    for (let i = 0; i < 80 && !sw; i++) {
+      for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof readPicture === 'function').catch(() => false)) { sw = w; break; }
+      if (!sw) await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(sw, 'the Cassie extension did not start');
+    await sw.evaluate(() => {
+      self.__prompts = []; self.__images = []; self.__texts = [];
+      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 30)); return JSON.stringify({ headline: 'A loop that prints even numbers', copied: 'for i in range(3):\n    print(i * 2)', steps: ['It counts 0, 1, 2.', 'Each one is doubled.', 'It prints 0, 2, 4.'] }); };
+      return chrome.storage.local.set({ cassieHighlight: 'on' });
+    });
+    const page = ctx.pages()[0] || await ctx.newPage();
+    await page.goto('https://example.com/course/quiz');
+    await page.bringToFront();
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
+    await page.waitForTimeout(500);
+    const highlight = (sel) => page.evaluate((s) => { const r = document.createRange(); r.selectNode(document.querySelector(s)); const g = getSelection(); g.removeAllRanges(); g.addRange(r); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); }, sel);
+    // a plain text highlight: the Explain / Answer choice, and no picture
+    await highlight('#plain');
+    await page.waitForTimeout(1500);
+    expect((await sw.evaluate(() => self.__prompts.length)) === 0, 'a plain text highlight sends no picture');
+    // the screenshot of code: a picture of the highlight goes to Cassie, and the code comes back copied out
+    await highlight('#shot');
+    await page.locator('.csk-copied', { hasText: 'print(i * 2)' }).waitFor({ timeout: 20000 }); // (the board is in Cassie's shadow root)
+    const sent = await sw.evaluate(() => ({ p: self.__prompts.slice(), img: self.__images.slice() }));
+    expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]), 'one picture went to Cassie: ' + JSON.stringify(sent.img));
+    expect(/copy out exactly every word and every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /never just ask for more context/.test(sent.p[0]), 'the prompt asks for the code first: ' + sent.p[0].slice(0, 300));
+    const shown = { copied: await page.locator('.csk-copied').textContent(), note: await page.locator('.csk-note').innerText() };
+    expect(shown.copied === 'for i in range(3):\n    print(i * 2)' && /What I read/.test(shown.note) && /prints 0, 2, 4/.test(shown.note) && !/[–—]/.test(shown.note), 'the board shows the code as read (indent kept), then the steps: ' + JSON.stringify(shown));
+  } finally { await ctx.close(); }
+});
+
 test('Cursor Cassie lessons: only the lesson is numbered (not Drive’s toolbar, thumbnails or the list under it), loops hug their part, nothing is drawn on blank space or the top bar, drawings follow the page or offer Look again; the card drags, resizes, minimizes, is remembered and moves off what she points at; follow-up questions typed or said (care first), saved in Your lessons; a cut-off reply keeps its whole steps and an unusable one is asked for once more', async () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
   expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage', 'no new permission: ' + manifest.permissions.join());
