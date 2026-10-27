@@ -50,6 +50,7 @@
     .popover.sized[hidden] { display: none; }
     .popover.sized .body { flex: 1 1 auto; min-height: 0; max-height: none; }
     .header { cursor: move; touch-action: none; }
+    .dock-back { display: block; width: 100%; min-height: 44px; margin-top: 6px; border: 0; background: none; color: inherit; font: 600 13px/1.2 inherit; font-family: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
     .hidden-note { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483647; margin: 0; padding: 10px 16px; border-radius: 999px;
       background: #1c1d2b; color: #ffffff; font: 600 14px/1.3 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
     .header {
@@ -303,6 +304,8 @@
   `;
   shadow.appendChild(style);
 
+  // the side buttons, hidden on this site with "Hide here": is that so, and bring them back (set where they're built)
+  let dockHidden = () => false, dockBack = () => {};
   const popover = document.createElement('div');
   popover.className = 'popover';
   popover.hidden = true;
@@ -341,6 +344,7 @@
   // opens Explain/Answer/Code for it; otherwise the "ask about this page" box.
   function summonHud() {
     highlightsBack();
+    dockBack(); // (the side buttons too, when they were hidden on this site)
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
     const range = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
@@ -607,7 +611,11 @@
     hideBtn.addEventListener('click', () => {
       dock.dataset.off = '1'; dock.hidden = true; closeDock();
       savePref({ off: true });
+      // how to get them back, said once on each site
+      try { chrome.storage.local.get(['cassieDock'], ({ cassieDock }) => { if (!((cassieDock || {})[site] || {}).hideNoted) { savePref({ hideNoted: true }); screenNote('Side buttons hidden on this site. Double-tap Ctrl, or click the Cassie icon in the toolbar, to bring them back.'); } }); } catch (e) { /* the toolbar popup still brings them back */ }
     });
+    dockHidden = () => dock.dataset.off === '1';
+    dockBack = () => { if (dock.dataset.off !== '1') return; delete dock.dataset.off; if (!dockBusy) dock.hidden = false; placeDock(); savePref({ off: false }); };
     try {
       chrome.storage.onChanged.addListener((changes) => {
         if (!changes.cassieDock) return;
@@ -691,10 +699,13 @@
       chrome.storage.local.get(['cassieHideNoted'], (o) => { if (!(o && o.cassieHideNoted)) { chrome.storage.local.set({ cassieHideNoted: true }); hiddenNote(); } });
     } catch (e) { /* the switch still works */ }
   }
-  function hiddenNote() {
+  function hiddenNote() { screenNote('Hidden. Double-tap Ctrl to bring Cassie back.'); }
+  // a short note at the bottom of the screen for 5 seconds
+  function screenNote(text) {
+    shadow.querySelectorAll('.hidden-note').forEach((x) => x.remove());
     const n = document.createElement('p');
     n.className = 'hidden-note'; n.setAttribute('role', 'status');
-    n.textContent = 'Hidden. Double-tap Ctrl to bring Cassie back.';
+    n.textContent = text;
     shadow.appendChild(n);
     setTimeout(() => n.remove(), 5000);
   }
@@ -1821,6 +1832,7 @@
         <button type="button" class="choice-btn" data-mode="answer">Answer</button>
         <button type="button" class="choice-btn" data-mode="code">Code</button>
       </div>
+      ${dockHidden() ? '<button type="button" class="dock-back">Show side buttons</button>' : ''}
     `;
     positionPopover(rect);
   }
@@ -1828,6 +1840,8 @@
   body.addEventListener('click', (e) => {
     const lv = e.target.closest('.level-btn');
     if (lv) { try { chrome.storage.local.set({ cassieCodeLevel: lv.dataset.level }); } catch (err) { /* only remembering */ } runCode(pendingText, pendingRect, lv.dataset.level); return; }
+    const back = e.target.closest('.dock-back');
+    if (back) { dockBack(); back.remove(); return; }
     const btn = e.target.closest('.choice-btn');
     if (!btn) return;
     if (pendingPic) { runPicture(btn.dataset.mode); return; }
