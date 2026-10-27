@@ -5418,6 +5418,50 @@ async function boardMoves(page, openBoard, label) {
   expect(['x', 'y', 'w', 'h'].every((k) => Math.abs(again[k] - kept[k]) <= 3), `${label}: after a reload the board opens at the same size and place: ` + JSON.stringify([kept, again]));
 }
 
+test('extension: side buttons hidden with Hide here come back with a double Ctrl tap or Show side buttons in the pop-up, and hiding says how (once per site)', async () => {
+  const ext = path.join(ROOT, 'extension');
+  const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
+    headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
+    args: ['--headless=new', `--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  try {
+    await ctx.route(/example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><title>Course</title></head><body style="font:18px sans-serif;margin:60px"><p id="p">Mitosis is how one cell divides into two identical cells.</p></body></html>' }));
+    await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
+    const page = ctx.pages()[0] || await ctx.newPage();
+    const load = async (reload) => { if (reload) await page.reload(); else await page.goto('https://example.com/course'); await page.bringToFront(); await page.waitForFunction(() => { const h = document.getElementById('cassie-ext-host-92f1'); return h && h.shadowRoot.querySelector('.dock'); }, null, { timeout: 10000 }); await page.waitForTimeout(700); };
+    const R = "document.getElementById('cassie-ext-host-92f1').shadowRoot";
+    const st = () => page.evaluate((r) => { const s = eval(r), d = s.querySelector('.dock'), p = s.querySelector('.popover'), back = s.querySelector('.popover .dock-back'); return { dock: !d.hidden && d.dataset.off !== '1', note: (s.querySelector('.hidden-note') || {}).textContent || '', pop: !p.hidden, back: back ? { text: back.textContent, h: back.getBoundingClientRect().height } : null }; }, R);
+    await load();
+    expect((await st()).dock, 'the side buttons start shown');
+    // Hide here: gone, and the note says how to bring them back
+    await page.evaluate((r) => eval(r).querySelector('.dock-hide').click(), R);
+    await page.waitForTimeout(400);
+    let s = await st();
+    expect(!s.dock && /Side buttons hidden on this site\. Double-tap Ctrl, or click the Cassie icon in the toolbar, to bring them back\./.test(s.note) && !/[–—]/.test(s.note), 'hidden, with the note: ' + JSON.stringify(s));
+    await load(true);
+    expect(!(await st()).dock, 'still hidden after a reload');
+    // double Ctrl: back (and after a reload too)
+    await page.keyboard.press('Control'); await page.keyboard.press('Control');
+    await page.waitForTimeout(400);
+    expect((await st()).dock, 'a double Ctrl tap brings the side buttons back');
+    await load(true); // (a reload clears the pop-up it opened; highlights stay on)
+    expect((await st()).dock, 'and they stay back after a reload');
+    // hide again: no note the second time; then Show side buttons in the pop-up brings them back
+    await page.evaluate((r) => eval(r).querySelector('.dock-hide').click(), R);
+    await page.waitForTimeout(400);
+    s = await st();
+    expect(!s.dock && !s.note, 'hidden again, the note only came once on this site: ' + JSON.stringify(s));
+    await page.evaluate(() => { const r = document.createRange(); r.selectNodeContents(document.getElementById('p')); const g = getSelection(); g.removeAllRanges(); g.addRange(r); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); });
+    await page.waitForTimeout(400);
+    s = await st();
+    expect(!s.dock && s.pop && s.back && s.back.text === 'Show side buttons' && s.back.h >= 44, 'the pop-up offers Show side buttons, 44px: ' + JSON.stringify(s));
+    await page.evaluate((r) => eval(r).querySelector('.popover .dock-back').click(), R);
+    await page.waitForTimeout(300);
+    s = await st();
+    expect(s.dock && !s.back, 'Show side buttons brings them back: ' + JSON.stringify(s));
+  } finally { await ctx.close(); }
+});
+
 test('extension: the pop-up is for highlights (a code screenshot opens it too, and Explain reads the picture: What I read, indents kept), closing it keeps it closed on every tab until Ctrl is tapped twice, and it moves by its header and resizes from its edges, remembered after a reload', async () => {
   const ext = path.join(ROOT, 'extension');
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
