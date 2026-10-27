@@ -45,6 +45,13 @@
       overflow: hidden;
     }
     .popover[hidden] { display: none; }
+    /* moved or resized by the student: that size, the answer scrolls inside */
+    .popover.sized { display: flex; flex-direction: column; max-width: none; }
+    .popover.sized[hidden] { display: none; }
+    .popover.sized .body { flex: 1 1 auto; min-height: 0; max-height: none; }
+    .header { cursor: move; touch-action: none; }
+    .hidden-note { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483647; margin: 0; padding: 10px 16px; border-radius: 999px;
+      background: #1c1d2b; color: #ffffff; font: 600 14px/1.3 system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
     .header {
       display: flex;
       align-items: center;
@@ -316,27 +323,10 @@
   // works, happy when she's done, sad if something breaks.
   function setEmotion(name) { if (avatar) avatar.dataset.emo = name || 'idle'; }
 
-  // Feature: drag the popover anywhere by its header (it then stays put).
-  let dragging = false, dragDX = 0, dragDY = 0;
-  header.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button')) return; // let the close button work
-    dragging = true;
-    const r = popover.getBoundingClientRect();
-    dragDX = e.clientX - r.left; dragDY = e.clientY - r.top;
-    popover.dataset.moved = '1';
-    try { header.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-    e.preventDefault();
-  });
-  header.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    const w = popover.offsetWidth, h = popover.offsetHeight;
-    const left = Math.max(6, Math.min(e.clientX - dragDX, window.innerWidth - w - 6));
-    const top = Math.max(6, Math.min(e.clientY - dragDY, window.innerHeight - h - 6));
-    popover.style.left = left + 'px'; popover.style.top = top + 'px';
-  });
-  function endDrag(e) { dragging = false; try { header.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ } }
-  header.addEventListener('pointerup', endDrag);
-  header.addEventListener('pointercancel', endDrag);
+  // Feature: drag the popover anywhere by its header, and resize it from any edge or corner; the size and place are
+  // remembered for next time (the board's own mover, from sketch.js)
+  const popMove = window.CassieSketch && window.CassieSketch.movable ? window.CassieSketch.movable(popover, header, 'cassieBoxPopover', { onBox: () => popover.classList.add('sized') }) : null;
+  if (popMove) popMove.restore();
 
   // Feature: remember the cursor so the hotkey HUD appears where you're looking.
   let lastMouse = { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) };
@@ -350,12 +340,15 @@
   // and never clashes with a real shortcut like Ctrl+C. If text is selected it
   // opens Explain/Answer/Code for it; otherwise the "ask about this page" box.
   function summonHud() {
+    highlightsBack();
     const sel = window.getSelection();
     const text = sel ? selectionText(sel) : '';
-    const inOurs = sel && sel.rangeCount && host.contains(sel.getRangeAt(0).commonAncestorContainer);
+    const range = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0) : null;
+    const inOurs = range && host.contains(range.commonAncestorContainer);
     popover.hidden = false;
     setEmotion('curious');
-    if (text && text.length > 1 && !inOurs) { lastAutoText = text; showChoice(text, cursorRect()); }
+    const pic = range && !inOurs ? pictureBox(range, text) : null;
+    if (pic || (text && text.length > 1 && !inOurs)) { lastAutoText = text; showChoice(text, cursorRect(), pic); }
     else { showPageAsk(cursorRect()); }
   }
   let lastCtrlTap = 0;      // when Ctrl was last released as a clean tap
@@ -662,7 +655,7 @@
     popover.hidden = true;
     lastAutoText = '';
     manualOpen = false;
-    delete popover.dataset.moved; // a fresh open re-anchors to the selection
+    if (!popover.classList.contains('sized')) delete popover.dataset.moved; // a fresh open re-anchors to the selection (unless the student put it somewhere)
     setEmotion('idle');
     gen++;
   }
@@ -687,9 +680,29 @@
   }
   function applyTheme() { popover.classList.toggle('dark', isDarkBg()); }
 
+  // Closed by the student (× or Escape): highlights stop opening Cassie on every tab, until Ctrl is tapped twice
+  // (Highlight help turns OFF, the same switch as in the side buttons and the popup).
   function dismissPopover() {
     window.getSelection()?.removeAllRanges();
     hidePopover();
+    hlOn = false;
+    try {
+      chrome.storage.local.set({ cassieHighlight: 'off' }); // (written at once: a quick Ctrl, Ctrl then × can't land out of order)
+      chrome.storage.local.get(['cassieHideNoted'], (o) => { if (!(o && o.cassieHideNoted)) { chrome.storage.local.set({ cassieHideNoted: true }); hiddenNote(); } });
+    } catch (e) { /* the switch still works */ }
+  }
+  function hiddenNote() {
+    const n = document.createElement('p');
+    n.className = 'hidden-note'; n.setAttribute('role', 'status');
+    n.textContent = 'Hidden. Double-tap Ctrl to bring Cassie back.';
+    shadow.appendChild(n);
+    setTimeout(() => n.remove(), 5000);
+  }
+  // Ctrl tapped twice: highlights open Cassie again
+  function highlightsBack() {
+    if (hlOn) return;
+    hlOn = true;
+    try { chrome.storage.local.set({ cassieHighlight: 'on' }); } catch (e) { /* this tab still listens */ }
   }
 
   function escapeHtml(str) {
@@ -1794,9 +1807,10 @@
   let pendingText = '';
   let pendingRect = null;
 
-  function showChoice(text, rect) {
+  function showChoice(text, rect, pic = null) {
     pendingText = text;
     pendingRect = rect;
+    pendingPic = pic; // (a picture highlight: read when an option is picked)
     manualOpen = false; // this HUD tracks a selection
     setEmotion('curious');
     body.classList.remove('muted');
@@ -1816,6 +1830,7 @@
     if (lv) { try { chrome.storage.local.set({ cassieCodeLevel: lv.dataset.level }); } catch (err) { /* only remembering */ } runCode(pendingText, pendingRect, lv.dataset.level); return; }
     const btn = e.target.closest('.choice-btn');
     if (!btn) return;
+    if (pendingPic) { runPicture(btn.dataset.mode); return; }
     if (btn.dataset.mode === 'code') { showCodeLevels(pendingText, pendingRect); return; }
     runExplainOrAnswer(pendingText, pendingRect, btn.dataset.mode);
   });
@@ -1968,6 +1983,47 @@ Situation: "${text}"`;
     body.scrollTop = 0;
   }
 
+  // A highlight with a picture: a picture of the highlight (the pop-up out of the way) and any words go to Cassie,
+  // who first copies out what she reads (code kept as it is), then does what was picked, all in the pop-up.
+  let pendingPic = null;
+  async function runPicture(mode) {
+    const pic = pendingPic, text = pendingText || '', rect = pendingRect;
+    codeRun = null;
+    const myGen = ++gen;
+    setContent('Cassie is reading the picture…', { muted: true });
+    setEmotion('thinking');
+    let cap = null;
+    try { cap = await captureSnip(pic); } catch (e) { cap = null; }
+    if (myGen !== gen) return;
+    if (!cap || !cap.image || cap.status !== 'ok') {
+      pendingPic = null;
+      if (text.length >= 2) { if (mode === 'code') showCodeLevels(text, rect); else runExplainOrAnswer(text, rect, mode); return; }
+      setEmotion('sad');
+      setContent('I couldn’t take a picture of that part of the page. Try the Snip tool, or paste a screenshot on the board.', { muted: true });
+      return;
+    }
+    const todo = mode === 'answer' ? 'Then work out the correct answer carefully and give ONLY the final answer (for multiple choice, the right option).'
+      : mode === 'code' ? 'Then write clean, working code that solves or implements it, in one fenced code block, and say in 1 or 2 short sentences how it works.'
+      : 'Then explain it step by step, like a friendly tutor, and give the answer with why.';
+    const prompt = `A student highlighted this part of a webpage${document.title ? ` (page: ${document.title})` : ''}${text ? `. The words they selected: """${text.slice(0, 1500)}"""` : ''}.
+First write the line "What I read:" and under it copy out exactly every word and every line of code you can read in the picture, even in an unusual font or style. Code goes in a fenced code block and keeps its line breaks and indentation. Leave nothing out and invent nothing.
+${todo}
+If the picture has nothing you can read, say what it shows and ask ONE specific question about it. Never just ask for more context.`;
+    convoLabel = `${mode === 'answer' ? 'Answer' : mode === 'code' ? 'Code' : 'Explain'}: ${text || 'a picture'}`;
+    try {
+      const reply = await askVision(cap.image, prompt, null, 1600, undefined, { kind: 'highlight', q: convoLabel });
+      if (myGen !== gen) return;
+      convo = [{ role: 'user', content: prompt + '\n\n(The picture was sent with this message.)' }, { role: 'assistant', content: reply }];
+      convoRect = rect;
+      setEmotion('happy');
+      renderAnswerView(reply || '(no response)', rect);
+    } catch (e) {
+      if (myGen !== gen) return;
+      setEmotion('sad');
+      setContent(errorText(e), { muted: true });
+    }
+  }
+
   function runExplainOrAnswer(text, rect, mode) {
     codeRun = null;
     let prompt;
@@ -1995,7 +2051,11 @@ Situation: "${text}"`;
   } catch (e) { /* ignore */ }
 
   function checkSelection() {
-    if (manualOpen || !hlOn) return; // a deliberately-summoned HUD isn't driven by the selection
+    if (!hlOn) return;
+    // a deliberately-summoned HUD isn't driven by the selection, except an untouched "Ask about this page" box
+    // (Ctrl tapped twice with nothing highlighted, then a highlight): the highlight takes over
+    const askBox = body.querySelector('.page-input');
+    if (manualOpen && !(askBox && !askBox.value.trim())) return;
     const sel = window.getSelection();
     // No selection (e.g. the user clicked elsewhere and it collapsed) — leave the
     // popover exactly as it is. It only closes via × or Escape.
@@ -2003,12 +2063,15 @@ Situation: "${text}"`;
     const range = sel.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return; // ignore selecting our own popover text
     const text = selectionText(sel);
-    // a picture in the highlight (a screenshot of code, a styled or drawn question), or almost no text: Cassie reads the picture
-    if ((!text || text.length < 15 || selectionHasPicture(range)) && highlightAsPicture(range, text)) return;
-    if (!text || text.length < 2 || text === lastAutoText) return;
-    lastAutoText = text;
+    // a picture in the highlight (a screenshot of code, a styled or drawn question), or almost no text: the same pop-up,
+    // and Cassie reads a picture of the highlight when an option is picked
+    const pic = pictureBox(range, text);
+    if (!pic && (!text || text.length < 2)) return;
+    const key = pic ? `pic:${pic.left},${pic.top},${pic.width}:${text || ''}` : text;
+    if (key === lastAutoText) return;
+    lastAutoText = key;
     popover.hidden = false;
-    showChoice(text, range.getBoundingClientRect());
+    showChoice(text, range.getBoundingClientRect(), pic);
   }
   // Does the highlight hold or touch a picture: an <img>, <canvas>, <svg>, a video's poster, or a background picture?
   // (tiny icons don't count)
@@ -2027,19 +2090,13 @@ Situation: "${text}"`;
     }
     return false;
   }
-  // the highlight's box (8px more each side, kept on screen), read as a picture with any words in it
-  function highlightAsPicture(range, text) {
+  // a highlight read as a picture: its box (8px more each side, kept on screen), or null for plain text
+  function pictureBox(range, text) {
+    if (text && text.length >= 15 && !selectionHasPicture(range)) return null;
     const b = range.getBoundingClientRect();
-    if (b.width < 8 || b.height < 8) return false;
-    const key = `pic:${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)}:${text || ''}`;
-    if (key === lastAutoText) return true;
-    lastAutoText = key;
+    if (b.width < 8 || b.height < 8) return null;
     const left = Math.max(0, b.left - 8), top = Math.max(0, b.top - 8);
-    const r = { left, top, width: Math.min(window.innerWidth, b.right + 8) - left, height: Math.min(window.innerHeight, b.bottom + 8) - top };
-    const node = range.commonAncestorContainer, el = node.nodeType === 1 ? node : node.parentElement;
-    window.getSelection().removeAllRanges(); // (the blue highlight would be in the picture)
-    snipAndExplain(r, el, r.left + r.width / 2, r.top + r.height / 2);
-    return true;
+    return { left: Math.round(left), top: Math.round(top), width: Math.round(Math.min(window.innerWidth, b.right + 8) - left), height: Math.round(Math.min(window.innerHeight, b.bottom + 8) - top) };
   }
 
   // Primary trigger: mouseup is the reliable "user finished selecting with the

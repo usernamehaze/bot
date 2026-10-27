@@ -5388,7 +5388,37 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
   }
 });
 
-test('extension: highlighting a screenshot of code (or a picture, or under 15 letters) sends Cassie a picture of the highlight, and she copies the code out first, then explains; a plain text highlight still sends only the text', async () => {
+// the board moves by its title bar and resizes from its edges (it then floats there), remembered after a reload
+async function boardMoves(page, openBoard, label) {
+  const box = () => page.locator('.csk-panel').first().evaluate((e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; });
+  await openBoard();
+  await page.locator('.csk-panel').first().waitFor({ timeout: 10000 });
+  await page.waitForTimeout(400);
+  const t = await page.locator('.csk-title').first().boundingBox();
+  const a = await box();
+  await page.mouse.move(t.x + 10, t.y + t.height / 2); await page.mouse.down(); await page.mouse.move(t.x - 90, t.y + t.height / 2 + 30, { steps: 6 }); await page.mouse.up();
+  const b = await box(), vp = page.viewportSize();
+  // (a board bigger than 90% of the screen comes down to it, and it stays on screen)
+  const w = Math.min(a.w, Math.round(vp.width * 0.9)), h = Math.min(a.h, Math.round(vp.height * 0.9));
+  const want = { x: Math.max(0, Math.min(a.x - 100, vp.width - w)), y: Math.max(0, Math.min(a.y + 30, vp.height - h)), w, h };
+  expect(['x', 'y', 'w', 'h'].every((k) => Math.abs(b[k] - want[k]) <= 3), `${label}: the board moves by its title bar: ` + JSON.stringify([a, b, want]));
+  await page.mouse.move(b.x + b.w - 3, b.y + b.h / 2); await page.mouse.down(); await page.mouse.move(b.x + b.w - 123, b.y + b.h / 2, { steps: 6 }); await page.mouse.up();
+  const c = await box();
+  expect(Math.abs(c.w - (b.w - 120)) <= 3 && c.x === b.x, `${label}: its right edge makes it narrower: ` + JSON.stringify([b, c]));
+  await page.mouse.move(c.x + c.w - 6, c.y + c.h - 6); await page.mouse.down(); await page.mouse.move(c.x + 20, c.y + 20, { steps: 6 }); await page.mouse.up();
+  const d = await box();
+  expect(d.w === 260 && d.h === 180, `${label}: the corner shrinks it down to 260x180: ` + JSON.stringify(d));
+  await page.mouse.move(d.x + d.w - 6, d.y + d.h - 6); await page.mouse.down(); await page.mouse.move(d.x + 500, d.y + 380, { steps: 6 }); await page.mouse.up();
+  const kept = await box();
+  await page.reload();
+  await openBoard();
+  await page.locator('.csk-panel').first().waitFor({ timeout: 10000 });
+  await page.waitForTimeout(400);
+  const again = await box();
+  expect(['x', 'y', 'w', 'h'].every((k) => Math.abs(again[k] - kept[k]) <= 3), `${label}: after a reload the board opens at the same size and place: ` + JSON.stringify([kept, again]));
+}
+
+test('extension: the pop-up is for highlights (a code screenshot opens it too, and Explain reads the picture: What I read, indents kept), closing it keeps it closed on every tab until Ctrl is tapped twice, and it moves by its header and resizes from its edges, remembered after a reload', async () => {
   const ext = path.join(ROOT, 'extension');
   const ctx = await chromium.launchPersistentContext(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cassie-ext-')), {
     headless: true, viewport: { width: 1280, height: 800 }, ...(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : { channel: 'chromium' }),
@@ -5397,7 +5427,7 @@ test('extension: highlighting a screenshot of code (or a picture, or under 15 le
   try {
     const code = '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120"><rect width="420" height="120" fill="#1e1e1e"/><text x="12" y="40" font-family="Comic Sans MS" font-size="22" fill="#9cdcfe">for i in range(3):</text><text x="44" y="80" font-family="Comic Sans MS" font-size="22" fill="#ce9178">print(i * 2)</text></svg>';
     const html = `<!doctype html><html><head><title>Week 3 quiz</title></head><body style="font:18px sans-serif;margin:40px">
-      <p id="plain">Photosynthesis turns light, water and carbon dioxide into sugar and oxygen.</p>
+      <p id="plain" style="margin-top:300px">Photosynthesis turns light, water and carbon dioxide into sugar and oxygen.</p>
       <p id="q">What does this print? <img id="shot" alt="" src="data:image/svg+xml,${encodeURIComponent(code)}" width="420" height="120"> Explain.</p></body></html>`;
     await ctx.route(/example\.com/, (r) => r.fulfill({ contentType: 'text/html', body: html }));
     await ctx.route(/api\.groq\.com|workers\.dev|fonts\.(googleapis|gstatic)\.com|askcassie\.pages\.dev/, (r) => r.abort());
@@ -5407,29 +5437,80 @@ test('extension: highlighting a screenshot of code (or a picture, or under 15 le
       if (!sw) await new Promise((r) => setTimeout(r, 250));
     }
     expect(sw, 'the Cassie extension did not start');
-    await sw.evaluate(() => {
-      self.__prompts = []; self.__images = []; self.__texts = [];
-      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 30)); return JSON.stringify({ headline: 'A loop that prints even numbers', copied: 'for i in range(3):\n    print(i * 2)', steps: ['It counts 0, 1, 2.', 'Each one is doubled.', 'It prints 0, 2, 4.'] }); };
-      return chrome.storage.local.set({ cassieHighlight: 'on' });
+    const fake = () => sw.evaluate(() => {
+      self.__prompts = []; self.__images = [];
+      self.readPicture = async (keys, msg) => { self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 30)); return 'What I read:\n```python\nfor i in range(3):\n    print(i * 2)\n```\nIt counts 0, 1 and 2 and prints each one doubled: 0, 2, 4.'; };
     });
+    await fake();
+    await sw.evaluate(() => chrome.storage.local.set({ cassieHighlight: 'on', cassieHideNoted: false }));
     const page = ctx.pages()[0] || await ctx.newPage();
-    await page.goto('https://example.com/course/quiz');
-    await page.bringToFront();
-    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 });
-    await page.waitForTimeout(500);
-    const highlight = (sel) => page.evaluate((s) => { const r = document.createRange(); r.selectNode(document.querySelector(s)); const g = getSelection(); g.removeAllRanges(); g.addRange(r); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); }, sel);
-    // a plain text highlight: the Explain / Answer choice, and no picture
+    const load = async (reload) => { if (reload) await page.reload(); else await page.goto('https://example.com/course/quiz'); await page.bringToFront(); await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 }); await page.waitForTimeout(500); };
+    await load();
+    const R = "document.getElementById('cassie-ext-host-92f1').shadowRoot";
+    const ui = () => page.evaluate((r) => { const s = eval(r), p = s.querySelector('.popover'), b = p.getBoundingClientRect(); return { open: !p.hidden, text: p.innerText, box: { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }, note: (s.querySelector('.hidden-note') || {}).textContent || '' }; }, R);
+    const highlight = async (sel) => { await page.evaluate((s) => { const r = document.createRange(); r.selectNode(document.querySelector(s)); const g = getSelection(); g.removeAllRanges(); g.addRange(r); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); }, sel); await page.waitForTimeout(400); };
+    const boardOpen = () => page.locator('.csk-panel').count();
+    // a plain text highlight: the pop-up, and no picture
     await highlight('#plain');
-    await page.waitForTimeout(1500);
-    expect((await sw.evaluate(() => self.__prompts.length)) === 0, 'a plain text highlight sends no picture');
-    // the screenshot of code: a picture of the highlight goes to Cassie, and the code comes back copied out
+    let u = await ui();
+    expect(u.open && /What should I do with this/.test(u.text), 'a text highlight opens the pop-up: ' + JSON.stringify(u));
+    // a code screenshot: the same pop-up, never the snip board; Explain reads a picture of it
     await highlight('#shot');
-    await page.locator('.csk-copied', { hasText: 'print(i * 2)' }).waitFor({ timeout: 20000 }); // (the board is in Cassie's shadow root)
+    u = await ui();
+    expect(u.open && /What should I do with this/.test(u.text) && !(await boardOpen()), 'a picture highlight opens the pop-up, not the snip board: ' + JSON.stringify(u));
+    expect((await sw.evaluate(() => self.__prompts.length)) === 0, 'nothing is sent until an option is picked');
+    await page.evaluate((r) => eval(r).querySelector('.choice-btn[data-mode="explain"]').click(), R);
+    await page.waitForFunction((r) => /prints each one doubled/.test(eval(r).querySelector('.popover').innerText), R, { timeout: 20000 });
     const sent = await sw.evaluate(() => ({ p: self.__prompts.slice(), img: self.__images.slice() }));
-    expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]), 'one picture went to Cassie: ' + JSON.stringify(sent.img));
-    expect(/copy out exactly every word and every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /never just ask for more context/.test(sent.p[0]), 'the prompt asks for the code first: ' + sent.p[0].slice(0, 300));
-    const shown = { copied: await page.locator('.csk-copied').textContent(), note: await page.locator('.csk-note').innerText() };
-    expect(shown.copied === 'for i in range(3):\n    print(i * 2)' && /What I read/.test(shown.note) && /prints 0, 2, 4/.test(shown.note) && !/[–—]/.test(shown.note), 'the board shows the code as read (indent kept), then the steps: ' + JSON.stringify(shown));
+    expect(sent.p.length === 1 && /^data:image\//.test(sent.img[0]) && /copy out exactly every word and every line of code/.test(sent.p[0]) && /keeps its line breaks and indentation/.test(sent.p[0]) && /Never just ask for more context/.test(sent.p[0]), 'a picture went to Cassie with the copy-first prompt: ' + JSON.stringify([sent.img, sent.p[0] && sent.p[0].slice(0, 200)]));
+    const pre = await page.evaluate((r) => (eval(r).querySelector('.popover .body pre') || {}).textContent || '', R);
+    u = await ui();
+    expect(/What I read/.test(u.text) && /for i in range\(3\):\n {4}print\(i \* 2\)/.test(pre) && !(await boardOpen()), 'the pop-up shows What I read with the code, indent kept: ' + JSON.stringify(pre));
+    // move it by its header, then resize from the right edge and the bottom right corner (260x180 up to 90% of the screen)
+    let b0 = u.box; // (corners are grabbed 6px in, inside the rounded corner)
+    await page.mouse.move(b0.x + 40, b0.y + 12); await page.mouse.down(); await page.mouse.move(b0.x + 140, b0.y + 112, { steps: 5 }); await page.mouse.up();
+    let b1 = (await ui()).box;
+    expect(Math.abs(b1.x - (b0.x + 100)) <= 2 && Math.abs(b1.y - (b0.y + 100)) <= 2, 'it moves by its header: ' + JSON.stringify([b0, b1]));
+    await page.mouse.move(b1.x + b1.w - 3, b1.y + b1.h / 2); await page.mouse.down(); await page.mouse.move(b1.x + b1.w + 150, b1.y + b1.h / 2, { steps: 5 }); await page.mouse.up();
+    let b2 = (await ui()).box;
+    expect(Math.abs(b2.w - (b1.w + 153)) <= 3 && b2.x === b1.x, 'the right edge makes it wider: ' + JSON.stringify([b1, b2]));
+    await page.mouse.move(b2.x + b2.w - 6, b2.y + b2.h - 6); await page.mouse.down(); await page.mouse.move(b2.x + 40, b2.y + 40, { steps: 5 }); await page.mouse.up();
+    let b3 = (await ui()).box;
+    expect(b3.w === 260 && b3.h === 180, 'the corner shrinks it, down to 260x180: ' + JSON.stringify(b3));
+    await page.mouse.move(b3.x + b3.w - 6, b3.y + b3.h - 6); await page.mouse.down(); await page.mouse.move(b3.x + 3000, b3.y + 3000, { steps: 5 }); await page.mouse.up();
+    let b4 = (await ui()).box;
+    expect(b4.w <= 1280 * 0.9 + 1 && b4.h <= 800 * 0.9 + 1 && b4.x + b4.w <= 1280 && b4.y + b4.h <= 800, 'it grows up to 90% of the screen and stays on screen: ' + JSON.stringify(b4));
+    await page.mouse.move(b4.x + b4.w - 6, b4.y + b4.h - 6); await page.mouse.down(); await page.mouse.move(b4.x + b4.w - 300, b4.y + b4.h - 200, { steps: 5 }); await page.mouse.up();
+    const kept = (await ui()).box;
+    // closing keeps it closed: highlights open nothing, on a reload too, with a one-time note
+    await page.evaluate((r) => eval(r).querySelector('.popover .header button').click(), R);
+    u = await ui();
+    expect(!u.open && /Double-tap Ctrl to bring Cassie back/.test(u.note), 'closed, with the note: ' + JSON.stringify(u));
+    await highlight('#plain');
+    expect(!(await ui()).open, 'closed: a highlight opens nothing');
+    await load(true);
+    await highlight('#plain');
+    expect(!(await ui()).open, 'still closed after a reload');
+    // Ctrl tapped twice: it opens (for the highlight there), and highlights open it again, after a reload too, where it was put
+    await page.keyboard.press('Control'); await page.keyboard.press('Control');
+    await page.waitForTimeout(300);
+    u = await ui();
+    expect(u.open && /What should I do with this/.test(u.text), 'double Ctrl brings it back: ' + JSON.stringify(u));
+    expect(Math.abs(u.box.w - kept.w) <= 2 && Math.abs(u.box.h - kept.h) <= 2 && Math.abs(u.box.x - kept.x) <= 2 && Math.abs(u.box.y - kept.y) <= 2, 'at the size and place it was left (after a reload): ' + JSON.stringify([kept, u.box]));
+    await page.evaluate(() => getSelection().removeAllRanges());
+    await load(true);
+    await highlight('#plain');
+    expect((await ui()).open, 'highlights open it again, after a reload too');
+    // the snip board moves and resizes the same way
+    await boardMoves(page, async () => { await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1'), null, { timeout: 10000 }); await page.waitForTimeout(400); await page.evaluate(() => [...document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelectorAll('button')].find((x) => /^Open Cassie’s board/.test(x.title)).click()); }, 'the extension');
+  } finally { await ctx.close(); }
+});
+
+test('the app: the board moves by its title bar and resizes from its edges, and opens at that size and place next time', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+  try {
+    await boardMoves(page, async () => { await page.waitForSelector('#board-btn', { timeout: 10000 }); await page.click('#board-btn'); }, 'the app');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
   } finally { await ctx.close(); }
 });
 
@@ -9873,7 +9954,11 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
     // 2. the ON/OFF switch in the side buttons (with Snip): off = highlight and copy like normal
     const hl = () => page.evaluate(() => { const b = document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'); return b && b.getAttribute('aria-pressed'); });
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl'), null, { timeout: 5000 });
-    expect(await hl() === 'true', 'the highlight switch starts ON');
+    // closing the pop-up (×) turned highlight help OFF, the same switch; the switch turns it back ON
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'false', null, { timeout: 3000 });
+    await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
+    await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'true', null, { timeout: 3000 });
+    expect(await hl() === 'true', 'the switch is ON again');
     await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').click());
     await page.waitForFunction(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock-hl').getAttribute('aria-pressed') === 'false', null, { timeout: 3000 });
     if (process.env.SHOTS) { await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.add('open')); await page.screenshot({ path: process.env.SHOTS + '/ext-hl-switch.png' }); await page.evaluate(() => document.getElementById('cassie-ext-host-92f1').shadowRoot.querySelector('.dock').classList.remove('open')); }
@@ -9896,7 +9981,11 @@ test('extension: highlight help ON or OFF (the switch next to Snip) — off, hig
     const id = new URL(sw.url()).host;
     const pop = await ctx.newPage();
     await pop.goto(`chrome-extension://${id}/popup.html`);
-    expect(await pop.locator('#hl-mode').inputValue() === 'on', 'highlight help is on');
+    expect(await pop.locator('#hl-mode').inputValue() === 'off', 'closing the pop-up turned highlight help off, and the toolbar popup says so');
+    await pop.selectOption('#hl-mode', 'on');
+    await page.bringToFront(); await page.waitForTimeout(200);
+    expect(await hl() === 'true', 'the toolbar popup turns it back on, and the side switch follows');
+    await pop.bringToFront();
     await pop.selectOption('#hl-mode', 'off');
     await page.bringToFront(); await page.waitForTimeout(200);
     expect(await hl() === 'false', 'the side switch follows the popup');
@@ -9960,6 +10049,8 @@ test('extension Code: Simple or Complete first, a code box with Copy code and Co
     const closePop = () => page.evaluate(([r]) => { const x = eval(r).querySelector('.popover .header button'); if (x && !eval(r).querySelector('.popover').hidden) x.click(); }, [root]);
     const codeFor = async (level) => {
       await closePop();
+      // (closing keeps Cassie away from highlights until Ctrl is tapped twice, as a student would)
+      await page.keyboard.press('Control'); await page.keyboard.press('Control'); await page.waitForTimeout(150);
       await select();
       await click('.choice-btn[data-mode="code"]');
       await page.waitForFunction(([r]) => eval(r).querySelectorAll('.level-btn').length === 2, [root], { timeout: 5000 });
