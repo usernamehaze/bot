@@ -105,6 +105,11 @@
     background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 2px 10px rgba(0,0,0,.18); }
   .csk-zoom .csk-btn { min-width: 44px; height: 44px; border-color: transparent; font-size: 13px; }
   .csk-zoom .csk-btn svg { width: 19px; height: 19px; }
+  /* a picture's menu (Move tool): lock it as the background, send it to the back, delete it */
+  .csk-picmenu { position: absolute; z-index: 6; display: flex; gap: 4px; padding: 4px; border-radius: 14px; white-space: nowrap;
+    background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 6px 22px rgba(0,0,0,.22); }
+  .csk-picmenu[hidden], .csk-picmenu [hidden] { display: none; }
+  .csk-picmenu .csk-btn { min-height: 44px; height: 44px; padding: 0 12px; border-color: transparent; }
   .csk-pop { position: absolute; z-index: 6; left: 12px; right: 12px; margin: 0 auto; max-width: 380px; max-height: 70%; overflow: auto; box-sizing: border-box;
     background: #fbfaf8; color: #1b1b1d; border: 1px solid rgba(127,127,127,.3); border-radius: 14px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
   .csk-dark .csk-pop { background: #26262a; color: #ececec; }
@@ -188,7 +193,8 @@
 
   // Whatever arrives from a classmate or a board file is checked before it's drawn: only known
   // kinds of stroke, only numbers where numbers go, text cut to size.
-  const TOOLS = new Set(['pen', 'hl', 'line', 'eraser', 'text', 'rect', 'group', 'note', 'card']);
+  const TOOLS = new Set(['pen', 'hl', 'line', 'eraser', 'text', 'rect', 'group', 'note', 'card', 'image']);
+  const PIC_SRC = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
   const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : d);
   const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
   function cleanStroke(s, depth = 0) {
@@ -209,6 +215,11 @@
       box(); c.r = clamp(num(s.r), 0, 400); if (typeof s.fill === 'string') c.fill = s.fill.slice(0, 60);
     } else if (s.tool === 'note') {
       box(); c.text = str(s.text, 600); c.n = str(s.n, 30); c.color = c.color || NOTE_COLORS[0][0];
+    } else if (s.tool === 'image') { // a picture: a data URL only, never a web address
+      if (depth || typeof s.src !== 'string' || s.src.length > 8e6 || !PIC_SRC.test(s.src)) return null;
+      c.x = num(s.x); c.y = num(s.y); c.w = clamp(num(s.w, 400), 8, 20000); c.h = clamp(num(s.h, 300), 8, 20000);
+      c.src = s.src; c.mode = s.mode === 'background' ? 'background' : 'free';
+      if (typeof s.z === 'number' && isFinite(s.z)) c.z = s.z;
     } else if (s.tool === 'card') {
       box(); c.f = str(s.f, 300); c.b = str(s.b, 600); c.flip = s.flip === true; c.i = clamp(num(s.i) | 0, 0, 999); c.of = clamp(num(s.of) | 0, 0, 999);
     } else {
@@ -461,13 +472,18 @@
           <button class="csk-btn" data-act="redo" title="Redo">${svg('redo')}</button>
           <button class="csk-btn" data-act="clear" title="Clear your drawing">${svg('trash')}</button>
           <button class="csk-btn" data-act="grid" title="Graph paper">${svg('grid')}</button>
-          ${opts.room ? '' : `<button class="csk-btn" data-act="pic" title="Draw on a picture, or paste one with Ctrl+V">${svg('image')}</button>`}
+          <button class="csk-btn" data-act="pic" title="Add a picture (or paste one with Ctrl+V, or drop one on the board)" aria-label="Add a picture">${svg('image')}</button>
           <input type="file" accept="image/*" class="csk-hidden csk-picfile">
           <input type="file" accept=".json,application/json" class="csk-hidden csk-boardfile">
         </div>
         ${opts.onAsk ? `<form class="csk-ask"><input type="text" placeholder="${opts.askPlaceholder || 'Ask Cassie about this…'}" aria-label="Ask Cassie">${opts.hear ? `<button class="csk-btn csk-mic" type="button" aria-label="Say it instead of typing" title="Say it instead of typing">${MIC}</button>` : ''}<button class="csk-btn primary" type="submit">Ask</button></form>` : ''}
         <div class="csk-stage"><div class="csk-board">
           <canvas class="csk-bg"></canvas><canvas class="csk-ink"></canvas><canvas class="csk-obj"></canvas><canvas class="csk-live"></canvas><canvas class="csk-fx"></canvas>
+          <div class="csk-picmenu" role="toolbar" aria-label="Picture" hidden>
+            <button class="csk-btn" data-pic="mode">Lock as background</button>
+            <button class="csk-btn" data-pic="back">Send to back</button>
+            <button class="csk-btn" data-pic="del">Delete</button>
+          </div>
         </div><div class="csk-zoom" role="group" aria-label="View">
           <button class="csk-btn" data-act="zout" title="Zoom out" aria-label="Zoom out">${svg('zout')}</button>
           <button class="csk-btn" data-act="zin" title="Zoom in" aria-label="Zoom in">${svg('zin')}</button>
@@ -487,8 +503,8 @@
 
     // ---- state ----
     let W = 1600, H = 1000;
-    let bgImage = await loadImage(opts.image);
-    let grid = !bgImage && opts.grid !== false;
+    const first = await loadImage(opts.image);
+    let grid = !first && opts.grid !== false;
     const paper = dark ? '#1d1d20' : '#ffffff';
     let tool = 'pen', color = dark ? '#ffffff' : '#1b1b1d', size = SIZES[0];
     const strokes = [], redo = [];
@@ -499,12 +515,24 @@
     let noteColor = NOTE_COLORS[0][0], zTop = 0, vSeq = 0, objRaf = 0, myColor = PEOPLE[0];
     const glide = new Map(), flipAnim = new Map(), ver = new Map();
     const isObj = (st) => !!st && (st.tool === 'note' || st.tool === 'card');
+    // Pictures sit on the paper, under the ink: a picture can be moved, resized, locked as the
+    // background or sent to the back, and drawing on one never moves it. The picture the board
+    // opened on (a snip, a photo) is locked as the background, at the start of the page.
+    const isPic = (st) => !!st && st.tool === 'image';
+    const pics = () => strokes.filter(isPic);
+    const picOrder = () => pics().sort((a, b) => (a.mode === b.mode ? (a.z || 0) - (b.z || 0) : a.mode === 'background' ? -1 : 1));
+    const imgs = new Map();
+    function picImg(st) {
+      let im = imgs.get(st.id);
+      if (!im) { im = new Image(); im.onload = () => { if (wrap.isConnected) drawBg(); }; im.src = st.src; imgs.set(st.id, im); }
+      return im instanceof HTMLCanvasElement || (im.complete && im.naturalWidth) ? im : null;
+    }
     // A live study room (opts.room = { me, send(op) }): every stroke has an id and an owner and is
     // sent to classmates when it's finished; theirs arrive through session.remote(). Undo and
     // clear only touch your own strokes, so nobody can wipe a classmate's work.
     const room = opts.room || null;
     const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-    const pack = (st) => { const c = { ...st }; delete c.mine; delete c.z; Object.keys(c).forEach((k) => { if (k[0] === '_') delete c[k]; }); if (c.points) c.points = c.points.map((q) => [Math.round(q[0]), Math.round(q[1])]); if (c.items) c.items = c.items.map(pack); return c; };
+    const pack = (st) => { const c = { ...st }; delete c.mine; if (!isPic(c)) delete c.z; Object.keys(c).forEach((k) => { if (k[0] === '_') delete c[k]; }); if (c.points) c.points = c.points.map((q) => [Math.round(q[0]), Math.round(q[1])]); if (c.items) c.items = c.items.map(pack); return c; };
     const myName = (room && room.name) || opts.name || '';
     const editable = (st) => !room || !!st.mine;
     function share(st) { if (!room) return; st.id = st.id || rid(); st.mine = true; st.u = room.me; room.send({ t: 'add', s: pack(st) }); }
@@ -554,19 +582,25 @@
       return isFinite(x0) ? { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) } : null;
     }
     const union = (a, b) => (!a ? b : !b ? a : (() => { const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y); return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }; })());
-    const contentBounds = () => union(bgImage ? { x: 0, y: 0, w: W, h: H } : null, boundsOf(strokes));
+    const contentBounds = () => boundsOf(strokes);
     function fitAll() { frame(contentBounds() || { x: 0, y: 0, w: W, h: H }); drawAll(); }
     function drawAll() { drawBg(); redraw(); const lx = live.getContext('2d'); wipe(lx); if (drawing && drawing.tool !== 'eraser') { useView(lx); paint(lx, drawing); } placeCursors(); if (trails.size && !fxRaf) fxRaf = requestAnimationFrame(fxLoop); }
 
+    if (first) {
+      const iw = first.naturalWidth || first.width, ih = first.naturalHeight || first.height, k0 = Math.min(1, 1800 / Math.max(iw, ih));
+      let src = typeof opts.image === 'string' ? opts.image : '';
+      if (!src && first instanceof HTMLCanvasElement) { try { src = first.toDataURL('image/png'); } catch (e) { src = ''; } }
+      const base = { tool: 'image', id: rid(), x: 0, y: 0, w: Math.max(200, Math.round(iw * k0)), h: Math.max(150, Math.round(ih * k0)), src, mode: 'background', z: 0, _base: true };
+      imgs.set(base.id, first); strokes.push(base);
+    }
+    const basePic = () => strokes.find((x) => x._base) || null;
     function setSize() {
       if (room) { // everyone in a room draws on the same page
         W = 1600; H = 1000;
-      } else if (fixedSize && !bgImage) { // a board file that was saved at its own size
+      } else if (fixedSize) { // a board file that was saved at its own size
         W = fixedSize.w; H = fixedSize.h;
-      } else if (bgImage) {
-        const iw = bgImage.naturalWidth || bgImage.width, ih = bgImage.naturalHeight || bgImage.height;
-        const s = Math.min(1, 1800 / Math.max(iw, ih));
-        W = Math.max(200, Math.round(iw * s)); H = Math.max(150, Math.round(ih * s));
+      } else if (basePic()) {
+        W = basePic().w; H = basePic().h;
       } else {
         // a blank page takes the shape of the space it's in (tall on a phone)
         const r = stage.getBoundingClientRect();
@@ -592,7 +626,6 @@
     function paintBg(x, v, cw, ch) {
       x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = paper; x.fillRect(0, 0, cw, ch);
       x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k);
-      if (bgImage) x.drawImage(bgImage, 0, 0, W, H);
       if (grid) {
         let step = Math.round(Math.min(W, H) / 20);
         while (step * v.k < 6) step *= 2; // (zoomed far out: fewer lines)
@@ -603,21 +636,29 @@
         for (let gy = gy0; gy <= gy1; gy += step) { x.moveTo(gx0, gy); x.lineTo(gx1, gy); }
         x.stroke();
       }
+      picOrder().forEach((st) => {
+        const im = picImg(st);
+        if (im) x.drawImage(im, st.x, st.y, st.w, st.h);
+        else { x.fillStyle = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)'; x.fillRect(st.x, st.y, st.w, st.h); } // (still loading)
+      });
     }
+    let picSig = '';
     function drawBg() {
+      picSig = pics().map((p) => [p.id, p.x, p.y, p.w, p.h, p.mode, p.z].join()).join('|');
       paintBg(bg.getContext('2d'), cam, CW, CH);
       $('[data-act="grid"]').classList.toggle('on', grid);
     }
     function paint(ctx, s) { paintStroke(ctx, s); }
-    function paintInk(x, v) { x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k); strokes.forEach((s) => { if (!isObj(s)) paint(x, s); }); }
+    function paintInk(x, v) { x.setTransform(v.k, 0, 0, v.k, -v.x * v.k, -v.y * v.k); strokes.forEach((s) => { if (!isObj(s) && !isPic(s)) paint(x, s); }); }
     function redraw() {
+      if (pics().map((p) => [p.id, p.x, p.y, p.w, p.h, p.mode, p.z].join()).join('|') !== picSig) drawBg(); // (a picture came, went or moved)
       const x = ink.getContext('2d');
       wipe(x); paintInk(x, cam);
       redrawObjs();
-      $('[data-act="undo"]').disabled = !strokes.length;
+      $('[data-act="undo"]').disabled = !strokes.some((x) => !x._base);
       $('[data-act="redo"]').disabled = !redo.length;
       // (nothing of yours to clear: greyed out, like Undo, so a tap never does nothing)
-      $('[data-act="clear"]').disabled = room ? !strokes.some((x) => x.mine || !x.u) : !strokes.length; // (a stroke just drawn is yours before it's sent)
+      $('[data-act="clear"]').disabled = room ? !strokes.some((x) => x.mine || !x.u) : !strokes.some((x) => !x._base); // (a stroke just drawn is yours before it's sent)
     }
     // ---- sticky notes and flashcards (their own layer, newest on top) ----
     const handleR = () => Math.max(15, 13 * scaleK());
@@ -652,10 +693,57 @@
       const x = obj.getContext('2d'), now = performance.now();
       wipe(x); useView(x);
       strokes.filter(isObj).sort((a, b) => (a.z || 0) - (b.z || 0)).forEach((s) => paintObj(x, s, now));
+      if (isPic(sel) && strokes.includes(sel)) { // the chosen picture: a dashed box, and a handle at each corner (none when it's locked)
+        const r = handleR() * 0.7;
+        x.save(); x.setLineDash([9 * scaleK(), 6 * scaleK()]); x.strokeStyle = dark ? '#ececec' : '#1b1b1d'; x.lineWidth = 2.5 * scaleK();
+        x.strokeRect(sel.x, sel.y, sel.w, sel.h); x.setLineDash([]);
+        if (sel.mode !== 'background') corners(sel).forEach(([, cx, cy]) => { x.fillStyle = '#ffffff'; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.strokeRect(cx - r, cy - r, r * 2, r * 2); });
+        x.restore();
+      }
+      placePicMenu();
       if ((glide.size || flipAnim.size) && !objRaf) objRaf = requestAnimationFrame(() => { objRaf = 0; redrawObjs(); });
     }
     const objAt = (pt) => strokes.filter(isObj).sort((a, b) => (b.z || 0) - (a.z || 0)).find((s) => pt[0] >= s.x && pt[0] <= s.x + s.w && pt[1] >= s.y && pt[1] <= s.y + s.h) || null;
-    const onHandle = (pt) => sel && editable(sel) && strokes.includes(sel) && Math.hypot(pt[0] - (sel.x + sel.w), pt[1] - sel.y) <= handleR() * 1.3;
+    const onHandle = (pt) => sel && !isPic(sel) && editable(sel) && strokes.includes(sel) && Math.hypot(pt[0] - (sel.x + sel.w), pt[1] - sel.y) <= handleR() * 1.3;
+    const corners = (s) => [['nw', s.x, s.y], ['ne', s.x + s.w, s.y], ['sw', s.x, s.y + s.h], ['se', s.x + s.w, s.y + s.h]];
+    // the picture under a point: the top one (free pictures sit above the locked ones)
+    const picAt = (pt) => picOrder().reverse().find((s) => pt[0] >= s.x && pt[0] <= s.x + s.w && pt[1] >= s.y && pt[1] <= s.y + s.h) || null;
+    const picCorner = (pt) => (isPic(sel) && sel.mode !== 'background' && strokes.includes(sel) ? (corners(sel).find(([, cx, cy]) => Math.hypot(pt[0] - cx, pt[1] - cy) <= handleR() * 1.4) || [])[0] || null : null);
+    // a corner dragged: the opposite corner stays put; the shape stays the same unless Shift is held
+    function resizePic(d, pt, free) {
+      const b = d.b0, ax = d.corner.includes('w') ? b.x + b.w : b.x, ay = d.corner.includes('n') ? b.y + b.h : b.y;
+      let w = Math.max(20, Math.abs(pt[0] - ax)), h = Math.max(20, Math.abs(pt[1] - ay));
+      if (!free) { const k = Math.max(w / b.w, h / b.h); w = Math.max(20, b.w * k); h = Math.max(20, b.h * k); }
+      const s = d.s; s.w = w; s.h = h; s.x = d.corner.includes('w') ? ax - w : ax; s.y = d.corner.includes('n') ? ay - h : ay;
+    }
+    // a picture moved, resized, locked or sent back: everyone gets where it is now (never the picture again)
+    function sendPic(s) {
+      if (!room) return;
+      const v = ++vSeq; ver.set(s.id, v);
+      room.send({ t: 'add', up: 1, v, s: { id: s.id, tool: 'image', x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h), mode: s.mode, z: s.z } });
+    }
+    const picMenu = $('.csk-picmenu');
+    function placePicMenu() {
+      const show = isPic(sel) && strokes.includes(sel) && tool === 'select';
+      picMenu.hidden = !show;
+      if (!show) return;
+      picMenu.querySelector('[data-pic="mode"]').textContent = sel.mode === 'background' ? 'Unlock' : 'Lock as background';
+      picMenu.querySelector('[data-pic="del"]').hidden = !editable(sel);
+      const a = cssOf(sel.x, sel.y), b = cssOf(sel.x + sel.w, sel.y + sel.h), bw = boardEl.clientWidth, bh = boardEl.clientHeight, mw = picMenu.offsetWidth, mh = picMenu.offsetHeight;
+      let top = b[1] + 12;
+      if (top + mh > bh - 8) top = a[1] - mh - 12;
+      picMenu.style.left = clamp((a[0] + b[0]) / 2 - mw / 2, 8, Math.max(8, bw - mw - 8)) + 'px';
+      picMenu.style.top = clamp(top, 8, Math.max(8, bh - mh - 8)) + 'px';
+    }
+    function picAct(b) {
+      const s = sel;
+      if (!isPic(s) || !strokes.includes(s)) return;
+      const a = b.dataset.pic;
+      if (a === 'mode') { s.mode = s.mode === 'background' ? 'free' : 'background'; toast(s.mode === 'background' ? 'Locked as the background: draw on it freely' : 'Unlocked: drag it, or a corner to resize it'); }
+      else if (a === 'back') { s.z = Math.min(0, ...pics().map((p) => p.z || 0)) - 1; toast('Sent to the back'); }
+      else if (a === 'del') { removeObj(s); return; }
+      sendPic(s); drawBg(); redrawObjs();
+    }
     // a move or a flip: everyone gets the whole note/card again (the newest version wins)
     function sendUpdate(s) {
       s.z = ++zTop;
@@ -669,6 +757,7 @@
       if (i < 0) return;
       strokes.splice(i, 1);
       if (sel === s) sel = null;
+      if (isPic(s)) imgs.delete(s.id);
       if (room && s.id) room.send({ t: 'del', ids: [s.id] });
       redraw();
     }
@@ -941,6 +1030,16 @@
         capture(e.pointerId);
         skipClick = !!hit;
         if (hit === 'x') { removeObj(sel); return; }
+        if (!hit && tool === 'select') {
+          const c = picCorner(pt);
+          if (c) { drag = { s: sel, corner: c, b0: { x: sel.x, y: sel.y, w: sel.w, h: sel.h }, at: pt, moved: false }; skipClick = true; return; }
+          const p = picAt(pt);
+          if (p) { // a locked picture is chosen (for its menu), never moved
+            sel = p; skipClick = true;
+            if (p.mode !== 'background') drag = { s: p, dx: pt[0] - p.x, dy: pt[1] - p.y, at: pt, moved: false };
+            redrawObjs(); return;
+          }
+        }
         sel = hit;
         if (hit) { drag = { s: hit, dx: pt[0] - hit.x, dy: pt[1] - hit.y, at: pt, moved: false }; hit.z = ++zTop; glide.delete(hit.id); }
         redrawObjs();
@@ -960,11 +1059,17 @@
       if (pinch) { if (touches.size === 2) movePinch(); return; }
       if (pan) { cam.x = pan.x - (e.clientX - pan.sx) * dpr / cam.k; cam.y = pan.y - (e.clientY - pan.sy) * dpr / cam.k; drawAll(); return; }
       const pt = toBoard(e);
+      if (drag && drag.corner) {
+        if (!drag.moved && Math.hypot(pt[0] - drag.at[0], pt[1] - drag.at[1]) < 3 * scaleK()) return;
+        drag.moved = true; resizePic(drag, pt, e.shiftKey); drawBg(); redrawObjs(); track(pt);
+        return;
+      }
       if (drag) {
         const s = drag.s;
         if (!drag.moved && Math.hypot(pt[0] - drag.at[0], pt[1] - drag.at[1]) < 6 * scaleK()) return;
         drag.moved = true;
         s.x = pt[0] - drag.dx; s.y = pt[1] - drag.dy;
+        if (isPic(s)) drawBg();
         redrawObjs(); track(pt);
         return;
       }
@@ -992,6 +1097,7 @@
       if (drag) {
         const d = drag;
         drag = null;
+        if (isPic(d.s)) { if (d.moved) { sendPic(d.s); drawBg(); } redrawObjs(); return; }
         if (d.moved) {
           const s = d.s;
           if (s.tool === 'note' && grid) { const st = Math.round(Math.min(W, H) / 40); s.x = Math.round(s.x / st) * st; s.y = Math.round(s.y / st) * st; }
@@ -1144,28 +1250,29 @@
     }
     const fileName = (ext) => `cassie-board-${new Date().toISOString().slice(0, 10)}.${ext}`;
     // the whole board as a file: open it again later (or in a room, add it for everyone)
-    function boardData() {
-      let image = null;
-      if (bgImage) { try { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').drawImage(bgImage, 0, 0, W, H); image = c.toDataURL('image/jpeg', 0.88); } catch (e) { image = null; } }
-      return { cassie: 'board', v: 1, title: $('.csk-title').textContent, w: W, h: H, grid, image, strokes: strokes.map(pack) };
+    function boardData() { // (pictures go in as things on the board, each with its own picture)
+      return { cassie: 'board', v: 2, title: $('.csk-title').textContent, w: W, h: H, grid, image: null, strokes: strokes.filter((x) => !isPic(x) || x.src).map(pack) };
     }
     async function openBoardFile(f) {
       let d;
       try { d = JSON.parse(await f.text()); } catch (e) { d = null; }
       if (!d || d.cassie !== 'board' || !Array.isArray(d.strokes)) { toast('That isn’t a Cassie board file'); return; }
       const list = d.strokes.map((x) => cleanStroke(x)).filter(Boolean).slice(0, 3000);
+      // an older board file: its picture was the page itself, so it goes back there, locked as the background
+      const fw = clamp(num(d.w, 1600) | 0, 200, 4000), fh = clamp(num(d.h, 1000) | 0, 150, 4000);
+      if (typeof d.image === 'string' && PIC_SRC.test(d.image)) list.unshift({ tool: 'image', x: 0, y: 0, w: fw, h: fh, src: d.image, mode: 'background', z: -1 });
       if (room) {
         if (!list.length || !confirm(`Add the ${list.length} drawings, notes and cards from this file to the room? Everyone here will see them.`)) return;
-        list.forEach((st) => { st.id = rid(); delete st.u; st.z = ++zTop; strokes.push(st); share(st); });
+        for (const st of list) { if (isPic(st)) { st.src = await roomPicture(st.src); if (!st.src) continue; } }
+        list.filter((st) => !isPic(st) || st.src).forEach((st) => { st.id = rid(); delete st.u; if (!isPic(st)) st.z = ++zTop; strokes.push(st); share(st); });
         redo.length = 0; redraw(); toast('Added to the board for everyone');
         return;
       }
       if (strokes.length && !confirm('Open this board file? What’s on your board now will be replaced.')) return;
-      const img = typeof d.image === 'string' && /^data:image\//.test(d.image) ? await loadImage(d.image) : null;
-      bgImage = img; grid = img ? false : d.grid !== false;
-      fixedSize = img ? null : { w: clamp(num(d.w, 1600) | 0, 200, 4000), h: clamp(num(d.h, 1000) | 0, 150, 4000) };
-      strokes.length = 0; redo.length = 0; sel = null;
-      list.forEach((st) => { st.z = ++zTop; strokes.push(st); });
+      grid = d.image ? false : d.grid !== false;
+      fixedSize = { w: fw, h: fh };
+      strokes.length = 0; redo.length = 0; sel = null; imgs.clear();
+      list.forEach((st, i) => { if (!isPic(st)) st.z = ++zTop; else { st.id = st.id || rid(); if (i === 0 && d.image) st._base = true; } strokes.push(st); });
       setSize(); fitAll();
       toast('Board opened');
     }
@@ -1204,6 +1311,7 @@
       if (!t || !wrap.contains(t)) return;
       if (t.dataset.extra != null) { const b = (opts.extra || [])[+t.dataset.extra]; if (b && b.onClick) b.onClick(); return; }
       if (t.dataset.pop) { popAct(t); return; }
+      if (t.dataset.pic) { picAct(t); return; }
       if (t.dataset.tool) {
         // tap a tool that's already on to switch it off: back to Move, so a drag never draws by accident
         if (t.dataset.tool === tool && tool !== 'select') { setTool('select'); closePop(); toast('Drawing is off. Drag notes and cards freely, or tap a tool to draw again'); return; }
@@ -1224,17 +1332,20 @@
       else if (act === 'undo') {
         if (room) { // your own last stroke
           for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].mine) { const [st] = strokes.splice(i, 1); redo.push(st); room.send({ t: 'del', ids: [st.id] }); redraw(); break; }
-        } else if (strokes.length) { redo.push(strokes.pop()); redraw(); }
+        } else { for (let i = strokes.length - 1; i >= 0; i--) if (!strokes[i]._base) { const [st] = strokes.splice(i, 1); if (sel === st) sel = null; redo.push(st); redraw(); break; } } // (the picture the board opened on stays)
       }
       else if (act === 'redo') { if (redo.length) { const st = redo.pop(); strokes.push(st); if (room) room.send({ t: 'add', s: pack(st) }); redraw(); } }
       else if (act === 'clear') {
         if (room) {
-          const mine = strokes.filter((x) => x.mine);
+          const mine = strokes.filter((x) => x.mine && !(isPic(x) && x.mode === 'background'));
           if (mine.length && confirm('Clear what you drew? Your classmates’ drawings stay.')) {
-            for (let i = strokes.length - 1; i >= 0; i--) if (strokes[i].mine) strokes.splice(i, 1);
+            for (let i = strokes.length - 1; i >= 0; i--) if (mine.includes(strokes[i])) strokes.splice(i, 1);
             redo.length = 0; redraw(); room.send({ t: 'del', ids: mine.map((x) => x.id) });
           }
-        } else if (strokes.length && confirm('Clear everything you drew?')) { strokes.length = 0; redo.length = 0; redraw(); }
+        } else if (strokes.some((x) => !x._base) && confirm('Clear everything you drew?')) { // (a locked background picture stays)
+          for (let i = strokes.length - 1; i >= 0; i--) if (!(isPic(strokes[i]) && strokes[i].mode === 'background')) strokes.splice(i, 1);
+          sel = null; redo.length = 0; redraw();
+        }
       }
       else if (act === 'grid') { grid = !grid; drawBg(); }
       else if (act === 'zin') setZoom(zoomNow() * 1.25);
@@ -1261,12 +1372,37 @@
     });
     // Put a picture on the board: from the picture button, a paste (Ctrl+V — e.g. after
     // Win+Shift+S / Cmd+Shift+4), or a drag-and-drop.
-    async function useImageSource(url, { ask = true } = {}) {
+    // a picture as a JPEG at most `side` px on its long side (on white, for see-through pictures)
+    function jpegOf(img, side, q) {
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, k = Math.min(1, side / Math.max(iw, ih));
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(iw * k)); c.height = Math.max(1, Math.round(ih * k));
+      const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', q);
+    }
+    // in a room, each step sent is at most 60,000 characters: a picture is made small enough to fit
+    const ROOM_PIC = 50000;
+    async function roomPicture(src) {
+      if (src.length <= ROOM_PIC) return src;
+      const img = await loadImage(src);
+      if (!img) return '';
+      for (const side of [1600, 1200, 960, 760, 600, 480, 380, 300]) for (const q of [0.8, 0.62, 0.5]) { try { const u = jpegOf(img, side, q); if (u.length <= ROOM_PIC) return u; } catch (e) { return ''; } }
+      return '';
+    }
+    async function useImageSource(url) {
       const img = await loadImage(url);
       if (!img) return false;
-      if (ask && strokes.length && !confirm('Start over on this picture? Your current drawing will be cleared.')) return false;
-      bgImage = img; grid = false; strokes.length = 0; redo.length = 0; sel = null;
-      setSize(); drawBg(); redraw();
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      let src = typeof url === 'string' && PIC_SRC.test(url) && Math.max(iw, ih) <= 1800 ? url : '';
+      try { if (!src) src = jpegOf(img, 1800, 0.9); } catch (e) { return false; } // (a picture from another site can't be kept)
+      if (room) { src = await roomPicture(src); if (!src) { toast('That picture is too big to share in the room'); return false; } }
+      // at most 60% of the view's width (and 80% of its height), in the middle of what's on screen
+      const vw = CW / cam.k, vh = CH / cam.k, k = Math.min(vw * 0.6 / iw, vh * 0.8 / ih), w = iw * k, h = ih * k, mid = worldAt(CW / dpr / 2, CH / dpr / 2);
+      const st = { tool: 'image', id: rid(), x: mid[0] - w / 2, y: mid[1] - h / 2, w, h, src, mode: 'free', z: ++zTop };
+      strokes.push(st); redo.length = 0;
+      share(st);
+      if (tool === 'select') sel = st;
+      redraw(); redrawObjs();
+      toast('Picture added. Draw on it, or use Move to resize it or lock it as the background');
       if (opts.onImage) { try { opts.onImage(typeof url === 'string' ? url : null, img); } catch (e) { /* ignore */ } }
       return true;
     }
@@ -1277,13 +1413,12 @@
       if (f) useImageSource(await fileToUrl(f));
     });
     function onPaste(e) {
-      if (room) return; // a room shares drawings only
       if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.target.tagName || ''))) return;
       const items = (e.clipboardData && e.clipboardData.items) || [];
       for (const it of items) {
         if (it.kind === 'file' && /^image\//.test(it.type)) {
           const f = it.getAsFile();
-          if (f) { e.preventDefault(); fileToUrl(f).then((u) => u && useImageSource(u, { ask: false })); return; }
+          if (f) { e.preventDefault(); fileToUrl(f).then((u) => u && useImageSource(u)); return; }
         }
       }
     }
@@ -1389,8 +1524,9 @@
       const items = [];
       const k = W / 1600, fs = Math.round(30 * k);
       // with a picture underneath, she draws on a card beside it; on a blank page, across it
-      const box = bgImage ? { x: W * 0.5, y: H * 0.05, w: W * 0.47, h: H * 0.9 } : { x: W * 0.06, y: H * 0.06, w: W * 0.88, h: H * 0.88 };
-      if (bgImage) items.push({ tool: 'rect', x: box.x, y: box.y, w: box.w, h: box.h, r: 18 * k, fill: dark ? 'rgba(29,29,32,.96)' : 'rgba(255,255,255,.96)', color: 'rgba(37,99,235,.35)', size: 3 * k });
+      const onPic = pics().length > 0;
+      const box = onPic ? { x: W * 0.5, y: H * 0.05, w: W * 0.47, h: H * 0.9 } : { x: W * 0.06, y: H * 0.06, w: W * 0.88, h: H * 0.88 };
+      if (onPic) items.push({ tool: 'rect', x: box.x, y: box.y, w: box.w, h: box.h, r: 18 * k, fill: dark ? 'rgba(29,29,32,.96)' : 'rgba(255,255,255,.96)', color: 'rgba(37,99,235,.35)', size: 3 * k });
       const ink = dark ? '#e5e7eb' : '#374151', soft = dark ? '#9ca3af' : '#6b7280';
       const text = (t, x, y, size = fs, color = ink) => items.push({ tool: 'text', color, size, x, y, text: String(t) });
       const pen = (pts, color = CASSIE_INK, size = 5 * k) => { if (pts.length) items.push({ tool: 'pen', color, size, points: pts }); };
@@ -1470,8 +1606,16 @@
         if (op.t === 'add' && op.s && op.s.id) {
           const have = strokes.find((x) => x.id === op.s.id);
           if (have) { // already here (it's yours) — or a note/card that someone moved, flipped or changed
-            if (!op.up || !isObj(have) || (drag && drag.s === have)) continue;
+            if (!op.up || (drag && drag.s === have)) continue;
             if (room && uid === room.me && op.v !== ver.get(have.id)) continue; // an older echo of your own move
+            if (isPic(have)) { // where a picture is now, its shape and its place in the pile
+              const n = op.s;
+              ['x', 'y', 'z'].forEach((k) => { if (typeof n[k] === 'number' && isFinite(n[k])) have[k] = n[k]; });
+              ['w', 'h'].forEach((k) => { if (typeof n[k] === 'number' && isFinite(n[k])) have[k] = clamp(n[k], 8, 20000); });
+              if (n.mode === 'background' || n.mode === 'free') have.mode = n.mode;
+              changed = true; continue;
+            }
+            if (!isObj(have)) continue;
             const n = cleanStroke(op.s);
             if (!n || n.tool !== have.tool) continue;
             if (n.x !== have.x || n.y !== have.y) { glide.set(have.id, { x: have.x, y: have.y, t0: performance.now() }); have.x = n.x; have.y = n.y; }
@@ -1484,10 +1628,10 @@
           const st = cleanStroke(op.s);
           if (!st) continue;
           const u = uid || st.u;
-          strokes.push({ ...st, u, z: ++zTop, mine: !!(room && u === room.me) }); changed = true;
+          strokes.push({ ...st, u, z: isPic(st) && st.z != null ? st.z : ++zTop, mine: !!(room && u === room.me) }); changed = true;
         } else if (op.t === 'del' && Array.isArray(op.ids) && uid) {
           const ids = new Set(op.ids);
-          for (let i = strokes.length - 1; i >= 0; i--) if (ids.has(strokes[i].id) && strokes[i].u === uid) { strokes.splice(i, 1); changed = true; }
+          for (let i = strokes.length - 1; i >= 0; i--) if (ids.has(strokes[i].id) && strokes[i].u === uid) { if (sel === strokes[i]) sel = null; strokes.splice(i, 1); changed = true; }
         }
       }
       if (changed) redraw();
@@ -1501,7 +1645,8 @@
     function exportRect() {
       const b = contentBounds();
       if (!b) return { x: 0, y: 0, w: W, h: H };
-      if (bgImage && b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H) return { x: 0, y: 0, w: W, h: H }; // (drawn on the picture only: the picture's own frame)
+      const bp = basePic();
+      if (bp && bp.x === 0 && bp.y === 0 && bp.w === W && bp.h === H && b.x >= 0 && b.y >= 0 && b.x + b.w <= W + 0.5 && b.y + b.h <= H + 0.5) return { x: 0, y: 0, w: W, h: H }; // (drawn on the picture only: the picture's own frame)
       const m = Math.round(Math.max(b.w, b.h) * 0.03) + 16;
       return { x: Math.floor(b.x - m), y: Math.floor(b.y - m), w: Math.ceil(b.w + 2 * m), h: Math.ceil(b.h + 2 * m) };
     }
@@ -1514,13 +1659,14 @@
     };
     function parts() {
       const r = exportRect(), dx = -r.x, dy = -r.y, same = !dx && !dy && r.w === W && r.h === H;
-      let src = bgImage && bgImage.src && /^data:image\//.test(bgImage.src) ? bgImage.src : null;
-      if (bgImage && !same) { // (the picture is part of a bigger frame: the paper and the picture, as one)
+      const P = pics(), one = P.length === 1 && P[0]._base && same;
+      let src = one && P[0].src && /^data:image\//.test(P[0].src) ? P[0].src : null;
+      if (P.length && !one) { // (the pictures are part of a bigger frame: the paper and the pictures, as one)
         try { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; paintBg(c.getContext('2d'), { x: r.x, y: r.y, k: 1 }, r.w, r.h); src = c.toDataURL('image/jpeg', 0.9); } catch (e) { src = null; }
       }
       // notes and cards go as a card shape plus lines of words, so anything that draws strokes can draw them
       const asGroup = (s) => ({ tool: 'group', obj: s.tool, text: s.text, n: s.n, f: s.f, b: s.b, flip: !!s.flip, items: objPieces(s, !!s.flip).map((it) => ({ ...it, x: it.x + s.x, y: it.y + s.y })) });
-      return { image: src, strokes: strokes.map((s) => shifted(isObj(s) ? asGroup(s) : { ...s }, dx, dy)), w: r.w, h: r.h, paper };
+      return { image: src, strokes: strokes.filter((s) => !isPic(s)).map((s) => shifted(isObj(s) ? asGroup(s) : { ...s }, dx, dy)), w: r.w, h: r.h, paper };
     }
     function composite() {
       const r = exportRect(), k = Math.min(1, 4000 / Math.max(r.w, r.h)), cw = Math.max(1, Math.round(r.w * k)), ch = Math.max(1, Math.round(r.h * k));
@@ -1542,7 +1688,7 @@
       if (e.target && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || ''))) return;
       if (e.key === ' ' && !(e.target && e.target.closest && e.target.closest('button'))) { e.preventDefault(); if (!spaceDown) { spaceDown = true; if (!drawing) live.style.cursor = 'grab'; } return; } // (hold Space and drag: move around)
       if (e.key === 'Escape') { e.stopPropagation(); if (pop) closePop(); else if (tool === 'place') setTool('pen'); else close(); }
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && editable(sel) && strokes.includes(sel)) { e.preventDefault(); removeObj(sel); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && editable(sel) && strokes.includes(sel)) { e.preventDefault(); removeObj(sel); } // (a note, a card or a picture)
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $(e.shiftKey ? '[data-act="redo"]' : '[data-act="undo"]').click(); }
     }
     function close() {
@@ -1557,7 +1703,7 @@
       if (opts.onClose) opts.onClose();
     }
     // click on the dim backdrop (full mode) closes only if nothing was drawn
-    wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap && !strokes.length) close(); });
+    wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap && !strokes.some((x) => !x._base)) close(); });
 
     window.addEventListener('resize', fit);
     // (and when its own area changes: the study panel opening, the toolbar wrapping to two rows)
@@ -1567,10 +1713,10 @@
     document.addEventListener('keyup', onKeyUp, true);
     setSize();
     // On a dark picture (e.g. a dark-mode graph), start with white ink so it shows.
-    if (bgImage) {
+    if (first) {
       try {
         const t = document.createElement('canvas'); t.width = 24; t.height = 24;
-        const tx = t.getContext('2d'); tx.drawImage(bgImage, 0, 0, 24, 24);
+        const tx = t.getContext('2d'); tx.drawImage(first, 0, 0, 24, 24);
         const d = tx.getImageData(0, 0, 24, 24).data;
         let lum = 0; for (let i = 0; i < d.length; i += 4) lum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
         color = lum / (d.length / 4) < 0.45 ? '#ffffff' : '#1b1b1d';
@@ -1580,11 +1726,12 @@
     if (opts.note) showNote(opts.note);
     requestAnimationFrame(fit);
     current = { wrap, close, snapshot, showNote, setTitle, draw, remote, setRoom, parts, presence, others, dropCards, toast,
-      objects: () => strokes.filter(isObj).map(pack), strokeCount: () => strokes.length,
+      objects: () => strokes.filter(isObj).map(pack), strokeCount: () => strokes.filter((x) => !isPic(x)).length,
+      pictures: () => picOrder().map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.w, h: p.h, mode: p.mode, z: p.z })),
       // the view: where it looks and how far in; a board point on screen (page px), for anyone who points at the board
       view: () => ({ x: cam.x, y: cam.y, zoom: zoomNow() }), fit: fitAll,
       screenOf: (p) => { const r = live.getBoundingClientRect(), q = cssOf(p[0], p[1]); return [r.left + q[0], r.top + q[1]]; },
-      lastStroke: () => (strokes.length ? pack(strokes[strokes.length - 1]) : null), drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u, { ask: false }) };
+      lastStroke: () => { const l = strokes.filter((x) => !isPic(x)); return l.length ? pack(l[l.length - 1]) : null; }, drawn: () => strokes.filter((x) => x.by === 'cassie').length, setImage: (u) => useImageSource(u) };
     return current;
   }
 
