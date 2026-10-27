@@ -223,9 +223,10 @@
       <h2 id="tv-h">Cassie on every page you read</h2>
       <video poster="landing/extension-how.jpg" controls muted playsinline preload="metadata"${still ? '' : ' autoplay'} aria-label="How the Cassie Chrome extension works"><source src="landing/extension-how.webm" type="video/webm"><source src="landing/extension-how.mp4" type="video/mp4"></video>
       <p>With the Chrome extension, highlight any words and Cassie explains them, or tap Teach me and she teaches the whole page. Free, for Chrome and Edge on a computer.</p>
-      <div class="tour-row"><a class="tour-btn tour-main" href="cassie-extension.zip" download>Get the Chrome extension</a><button type="button" class="tour-btn" data-t="close">Close</button></div>
+      <div class="tour-row"><a class="tour-btn tour-main" href="https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj" target="_blank" rel="noopener" data-ext="label">Add to Chrome</a><button type="button" class="tour-btn" data-t="close">Close</button></div>
     </div>`;
     document.body.appendChild(videoBox);
+    if (window.CassieExt) window.CassieExt.fix(videoBox); // (the right store and name for this browser)
     const close = () => {
       if (!videoBox) return;
       const v = videoBox.querySelector('video'); try { v.pause(); } catch (e) { /* ignore */ }
