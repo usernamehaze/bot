@@ -4392,6 +4392,48 @@ test('Cassie dresses for the holidays (Philippine time) and says so; two taps in
   await plain.ctx.close();
 });
 
+test('Cassie chats like the student: their energy (playful or calm), their mood (stressed or excited), what they studied last, how long they write; her own little bubbles keep to one every 2 minutes', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, setup: (c) => c.clock.setFixedTime(new Date('2026-07-15T10:00:00+08:00')) });
+  await page.waitForSelector('#mascot.has2d svg.cassie-bot', { state: 'attached', timeout: 8000 });
+  await page.waitForFunction(() => { const m = document.getElementById('mascot-bubble'); return m && !m.hidden; }, null, { timeout: 8000 }); // (her hello)
+  const EMO = /[\p{Extended_Pictographic}]/u;
+  const says = (fn) => page.evaluate(fn);
+  // a stressed message gets a gentle line (no emoji, no shouting); an excited one gets a cheer
+  const stressed = await says(() => { lastChatAt = 0; mascotOnSend("I'm so stressed, I think I'm going to fail my exam"); return document.getElementById('mascot-bubble').textContent; });
+  const gentle = await says(() => CASSIE_LINES.en.stressed.map((t) => t.replace('{name}', 'Test').replace('!', '.')));
+  expect(gentle.includes(stressed) && !EMO.test(stressed), 'stressed: a gentle line: ' + stressed);
+  const cheer = await says(() => { lastChatAt = 0; mascotOnSend('yay I passed the quiz!!'); return document.getElementById('mascot-bubble').textContent; });
+  const cheers = await says(() => CASSIE_LINES.en.cheer.map((t) => t.replace('{name}', 'Test')));
+  expect(cheers.some((c) => cheer.startsWith(c)), 'excited: a cheer: ' + cheer);
+  // the 2-minute rule: right after that, typing gets no hint and a drag gets no bubble; 2 minutes later it does
+  await says(() => { document.getElementById('mascot-bubble').hidden = true; });
+  await page.fill('#prompt-input', 'a'); await page.waitForTimeout(300);
+  expect(await says(() => document.getElementById('mascot-bubble').hidden), 'a typing hint inside the 2 minutes');
+  await says(() => { lastChatAt = Date.now() - 2 * 60 * 1000 - 1; });
+  await page.fill('#prompt-input', 'ab'); await page.waitForTimeout(300);
+  expect(!(await says(() => document.getElementById('mascot-bubble').hidden)), 'after 2 minutes a typing hint may show');
+  // playful and short: lots of emoji and slang get emoji-friendly, shorter lines; formal gets calm lines with no emoji
+  const playful = await says(() => { localStorage.removeItem('cassie.chatStyle'); for (const t of ['haha omg 😂😂', 'grabe lol 🤣', 'ty bro!!']) noteStyle(t); const out = []; for (let i = 0; i < 12; i++) out.push(cassieLine(CASSIE_LINES.en.correct, 'correct')); return { tone: chatTone(), out, short: byLength(CASSIE_LINES.en.long) }; });
+  const shortest = [...(await says(() => CASSIE_LINES.en.long))].sort((a, c) => a.length - c.length).slice(0, 3).sort();
+  expect(playful.tone === 'playful' && playful.out.some((t) => EMO.test(t)) && JSON.stringify([...playful.short].sort()) === JSON.stringify(shortest), 'playful and short: ' + JSON.stringify(playful));
+  const calm = await says(() => { localStorage.removeItem('cassie.chatStyle'); for (const t of ['Good morning. Could you please explain how photosynthesis works in plants, step by step, with an example?', 'Thank you. May I ask how the light reactions differ from the Calvin cycle in terms of their products?', 'Could you please give me three practice questions about this topic so I can check my understanding?']) noteStyle(t); const out = []; for (let i = 0; i < 12; i++) out.push(cassieLine(CASSIE_LINES.en.correct, 'correct')); return { tone: chatTone(), out }; });
+  expect(calm.tone === 'calm' && calm.out.every((t) => !EMO.test(t) && !t.includes('!')), 'formal: calm lines, no emoji: ' + JSON.stringify(calm));
+  const long = await says(() => byLength(CASSIE_LINES.en.long));
+  const sorted = [...(await says(() => CASSIE_LINES.en.long))].sort((a, c) => a.length - c.length);
+  expect(JSON.stringify([...long].sort()) === JSON.stringify(sorted.slice(-3).sort()), 'a long writer gets the fuller lines: ' + JSON.stringify(long));
+  // she remembers what they studied last (before today), on the first open of the day
+  const back = await says(() => {
+    const d = window.CassieMemory.data; d.topics['photosynthesis light reactions'] = { seen: 3, correct: 0, wrong: 0, first: Date.now() - 3 * 864e5, last: Date.now() - 864e5, ease: 2.3, interval: 1, reps: 0, due: Date.now() };
+    localStorage.removeItem('cassie.helloDay'); localStorage.removeItem('cassie.chatStyle'); lastChatAt = 0;
+    const r = Math.random; Math.random = () => 0; try { helloChat(); } finally { Math.random = r; }
+    return document.getElementById('mascot-bubble').textContent;
+  });
+  expect(back.includes('"photosynthesis light reactions"'), 'she remembers the last topic: ' + back);
+  expect(!/[–—]/.test([stressed, cheer, back].join(' ')), 'no dashes');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Appearance has no 3D Cassie any more; an old 3D choice becomes Cursor Cassie', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, lite: 'off', state: { groqKey: 'gsk_test', look: 'felt' } });
   await page.waitForTimeout(600);
