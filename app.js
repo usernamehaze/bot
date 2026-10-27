@@ -901,7 +901,7 @@ function mascotWalk() {
   }, 1200);
 }
 function mascotPlay() {
-  if (anticBusy()) return;
+  if (anticBusy() || quietDay()) return; // (Holy Week and Undas: a quiet look only)
   mascotEmote(Math.random() < 0.5 ? 'emote-happy' : 'emote-star', 1500);
   set3D(Math.random() < 0.5 ? 'happy' : 'celebratory');
   mascot.classList.add('playing');
@@ -950,6 +950,114 @@ function mascotSay(text, ms) {
   clearTimeout(mascotBubbleTimer);
   if (ms === 0) return;
   mascotBubbleTimer = setTimeout(() => { mascotBubble.hidden = true; }, ms || 4200);
+}
+
+// ---- what Cassie says, and when ----
+// A few lines for each moment, picked at random but never the same twice in a row, sometimes with
+// the student's first name, in Taglish when they write in Taglish. Her own chatter comes at most
+// once every 2 minutes; a tap always gets an answer.
+const CHAT_GAP = 2 * 60 * 1000;
+let lastChatAt = 0;
+const CASSIE_LINES = {
+  en: {
+    open: ['Good to see you today!', 'Hi {name}! Ready when you are.', 'A new day to learn something cool.', 'Welcome back! What are we studying today?', 'Hello again, {name}! 👋', "Fresh day, fresh start. Let's go!"],
+    streak: ['{n} days in a row! 🔥', 'Wow, a {n} day streak!', '{n} days straight, {name}! Proud of you.', 'Streak: {n} days. You keep showing up!', '{n} days! Small steps add up.', 'Look at you go: {n} days! 🔥'],
+    correct: ['Correct! 🎉', 'Nailed it!', 'Yes! You got it, {name}!', 'Brilliant!', "That's right! 🎉", 'Spot on!'],
+    long: ['25 minutes of focus! Nice work.', "You've been at it a while. Stretch break?", 'Great focus, {name}! Drink some water.', 'Long session! Rest your eyes for a bit.', 'So much studying! Take five if you need it.', "You're on a roll. A short break helps it stick."],
+    late: ["It's late. Rest soon, okay?", 'Getting late, {name}. Sleep helps you remember.', 'Studying late? Rest soon.', "Don't forget to sleep. Your brain needs it.", 'One more, then rest soon?', "It's past 10. Be kind to yourself and rest soon."],
+    happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Hope it is a good one.', '{hi}! Glad you stopped by.', '{hi}! Learn something fun today.'],
+    honor: ['Today is {h}. 🇵🇭', "It's {h} today. We remember the ones who stood up for us.", 'Today is {h}, {name}. A good day to thank our heroes.', '{h} today. Their courage is part of our story.', 'Today we remember: {h}. 🇵🇭', "It's {h}. Learning is one way to honor them."],
+    quiet: ["It's {h}. Take a quiet moment today.", '{h} today. Be gentle with yourself.', "It's {h}, {name}. I'll keep things calm.", 'A quiet {h}. Study at your own pace.', "It's {h}. Thinking of you and your family.", '{h} today. Rest when you need to.'],
+  },
+  tl: {
+    open: ['Uy, hello ulit! Ready ka na?', 'Hi {name}! Anong aaralin natin today?', 'Bagong araw, bagong learning!', 'Welcome back! Tara, aral tayo.', 'Hello {name}! 👋 Kumusta?', 'Good to see you ulit today!'],
+    streak: ['{n} days in a row! Galing! 🔥', 'Wow, {n} day streak na!', "{n} days straight, {name}! Proud ako sa'yo.", 'Tuloy-tuloy ka talaga: {n} days!', "{n} days na! Kaya mo 'yan.", 'Grabe, {n} days! 🔥'],
+    correct: ['Tama! 🎉', 'Galing mo!', 'Yes! Nakuha mo, {name}!', 'Ang galing!', 'Tumpak! 🎉', 'Sakto!'],
+    long: ['25 minutes na! Galing ng focus mo.', 'Medyo matagal na tayo. Stretch muna?', 'Great focus, {name}! Inom ka muna ng tubig.', 'Pahinga muna ang mata, kahit saglit.', 'Ang sipag! Break ka muna kung kailangan.', 'Tuloy-tuloy ka! Short break para tumatak.'],
+    late: ['Gabi na. Rest soon, ha?', 'Late na, {name}. Tulog ka rin, okay?', 'Puyat na naman? Rest soon.', "'Wag kalimutang matulog, ha.", 'Isa pa, tapos pahinga na?', 'Lampas 10 na. Rest soon, okay?'],
+    happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Enjoy today!', '{hi}! Buti dumaan ka.', '{hi}! Aral tayo nang masaya.'],
+    honor: ['Ngayon ay {h}. 🇵🇭', '{h} ngayon. Alalahanin natin ang mga bayani.', "{h} ngayon, {name}. Salamat sa ating mga bayani.", '{h} ngayon. Parte ng kwento natin ang tapang nila.', 'Today we remember: {h}. 🇵🇭', '{h} ngayon. Ang pag-aaral ay paraan para parangalan sila.'],
+    quiet: ['{h} ngayon. Take a quiet moment.', '{h} ngayon. Dahan-dahan lang, ha.', "{h} ngayon, {name}. Tahimik lang tayo today.", 'Tahimik na {h}. Aral ka sa sarili mong pace.', '{h} ngayon. Ingat kayo ng pamilya mo.', '{h} ngayon. Pahinga ka kung kailangan.'],
+  },
+};
+// tap her once: the first line; tap again right after: the line that follows on from it
+// (p: playful, left out on quiet days)
+const TAP_PAIRS = {
+  en: [['Hi! Need help? 🙌', "Just ask me anything. I'm right here."], ['Hey there! 👋', 'Still here! Tap me anytime you need me.'], ['You found me!', "Okay, I'm not hiding anymore. What do you need?", 'p'],
+    ['Hello, {name}!', 'Did you know I can quiz you on anything?'], ['Boop! 😊', 'That tickles! Ready to study?', 'p'], ['Need a hint?', 'Try the Hint button, or just ask me.'], ['I believe in you!', 'Really. One step at a time.']],
+  tl: [['Hi! Need help? 🙌', 'Tanong ka lang, nandito lang ako.'], ['Uy! 👋', 'Andito pa rin ako! Tap mo lang ako anytime.'], ['Nahanap mo ako!', "Sige na, 'di na ako magtatago. Ano'ng kailangan mo?", 'p'],
+    ['Hello, {name}!', 'Alam mo ba, pwede kitang i-quiz kahit ano?'], ['Boop! 😊', 'Nakikiliti ako! Aral na tayo?', 'p'], ['Need ng hint?', "Try mo 'yung Hint button, or tanong ka lang."], ["Kaya mo 'yan!", 'Promise. Isa-isang step lang.']],
+};
+const TL_WORDS = /\b(ako|ikaw|ka|ko|mo|ang|ng|mga|sa|na|po|ba|naman|lang|yung|kasi|paano|pano|ano|bakit|hindi|di|wala|meron|talaga|pa|nga|sana|tayo|natin|kayo|siya|ito|yan|dito|gusto|kailangan|ganito|ganun|pag)\b/gi;
+// whether the student writes in Taglish (remembered: only yes or no, never what they wrote)
+function noteLanguage(text) {
+  const words = String(text || '').split(/\s+/).filter(Boolean).length, hits = (String(text || '').match(TL_WORDS) || []).length;
+  try { if (hits >= 2) localStorage.setItem('cassie.taglish', '1'); else if (words >= 4 && !hits) localStorage.setItem('cassie.taglish', '0'); } catch (e) { /* */ }
+}
+const chatLang = () => { try { return localStorage.getItem('cassie.taglish') === '1' ? 'tl' : 'en'; } catch (e) { return 'en'; } };
+const firstName = () => ((state.profile && state.profile.name) || '').trim().split(/\s+/)[0].slice(0, 30);
+const lastLine = {};
+// a line for a moment: random, never the one she said last time, with the blanks filled in
+function cassieLine(list, key, vars = {}) {
+  const name = firstName();
+  let pool = list.filter((t) => name || !t.includes('{name}'));
+  if (pool.length > 1) pool = pool.filter((t) => t !== lastLine[key]);
+  const t = pool[Math.floor(Math.random() * pool.length)];
+  lastLine[key] = t;
+  return t.replace(/\{(\w+)\}/g, (_, k) => (k === 'name' ? name : vars[k] != null ? vars[k] : ''));
+}
+// say a line for a moment, unless she said something in the last 2 minutes (a tap: force)
+function cassieChat(moment, vars, { force = false, ms = 3600 } = {}) {
+  if (!mascotBubble || (!force && Date.now() - lastChatAt < CHAT_GAP)) return false;
+  const lines = CASSIE_LINES[chatLang()][moment];
+  if (!lines) return false;
+  lastChatAt = Date.now();
+  mascotSay(cassieLine(lines, moment, vars), ms);
+  return true;
+}
+const todayHoliday = () => { try { return window.CassieBot && window.CassieBot.holiday(); } catch (e) { return null; } };
+const quietDay = () => { const h = todayHoliday(); return !!h && h.tone === 'quiet'; };
+function holidayChat(h) { return cassieChat(h.tone, { h: h.name, hi: h.id === 'christmas' ? 'Merry Christmas' : 'Happy ' + h.name }, { ms: 4200 }); }
+const dayKey = (t = Date.now()) => { const d = new Date(t); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+function onceADay(key, t) { try { const k = dayKey(t); if (localStorage.getItem(key) === k) return false; localStorage.setItem(key, k); return true; } catch (e) { return false; } }
+// late at night (10pm to 4am, her own clock): a gentle "rest soon", once a night
+function lateChat() {
+  const h = new Date().getHours();
+  if (h < 22 && h >= 4) return false;
+  if (Date.now() - lastChatAt < CHAT_GAP) return false;
+  return onceADay('cassie.lateSaid', Date.now() - 5 * 36e5) && cassieChat('late');
+}
+// a long study session: 25 minutes of activity with no break over 10 minutes, once a session
+let studyFrom = 0, studyLast = 0, studySaid = false;
+function studyTick() {
+  const now = Date.now();
+  if (!studyFrom || now - studyLast > 10 * 60 * 1000) { studyFrom = now; studySaid = false; }
+  studyLast = now;
+  if (!studySaid && now - studyFrom >= 25 * 60 * 1000 && cassieChat('long')) studySaid = true;
+}
+// a streak milestone, once each
+const STREAK_MILESTONES = [3, 5, 7, 10, 14, 21, 30, 50, 75, 100, 150, 200, 250, 300, 365];
+function streakChat() {
+  const n = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+  if (!(STREAK_MILESTONES.includes(n) || (n > 365 && n % 100 === 0))) return;
+  try { if (localStorage.getItem('cassie.streakSaid') === String(n)) return; } catch (e) { return; }
+  if (cassieChat('streak', { n })) { try { localStorage.setItem('cassie.streakSaid', String(n)); } catch (e) { /* */ } }
+}
+// her hello when the app opens: a holiday or the first open of the day gets its own line
+function helloChat() {
+  if (!onceADay('cassie.helloDay')) return lateChat();
+  const h = todayHoliday();
+  return h ? holidayChat(h) : cassieChat('open');
+}
+// tapping her: a line, and tapped again right after, the one that follows on from it
+let tapPair = null, tapAt = 0, tapStep = 0;
+function tapChat() {
+  const now = Date.now(), lang = chatLang();
+  if (tapPair && tapStep === 1 && now - tapAt < 10000) { tapStep = 2; tapAt = now; lastChatAt = now; mascotSay(cassieLine([tapPair[1]], 'tap2'), 3600); return; }
+  const quiet = quietDay(), pairs = TAP_PAIRS[lang].filter((p) => !(quiet && p[2]) && (firstName() || !p[0].includes('{name}')));
+  const choices = pairs.length > 1 ? pairs.filter((p) => p !== tapPair) : pairs;
+  tapPair = choices[Math.floor(Math.random() * choices.length)]; tapStep = 1; tapAt = now; lastChatAt = now;
+  mascotSay(cassieLine([tapPair[0]], 'tap1'), 3600);
 }
 
 // ---- reactions & opinions: short, encouraging, with a matching mood ----
@@ -1025,6 +1133,8 @@ function mascotOnSend(text) {
   // (setCursorMode) and 'celebrate' once it arrives (mascotCelebrate).
   resetIdle();
   if (mascotAsleep) wakeMascot();
+  noteLanguage(text);
+  lateChat();
 }
 
 // ---- confetti burst for celebrating a correct answer ----
@@ -1092,7 +1202,8 @@ function maybeCelebrate(reply) {
     let x, y;
     if (mascot) { const r = mascot.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top; }
     launchConfetti(x, y);
-    mascotReact('celebrate', 2400);
+    mascotEmote('emote-star', 2400);
+    cassieChat('correct');
     mascotCelebrate();
   }
 }
@@ -1205,6 +1316,7 @@ function wakeMascot() {
 // Reset the 5-minute idle→sleep countdown on any real activity (also wakes her).
 function resetIdle() {
   if (mascotAsleep) wakeMascot();
+  studyTick();
   clearTimeout(idleTimer);
   idleTimer = setTimeout(sleepMascot, IDLE_SLEEP_MS);
 }
@@ -1277,7 +1389,7 @@ if (mascotBtn && mascot) {
     if (moved) { moved = false; return; } // a drag, not a tap
     if (mascotPoke()) return; // was asleep → just woke her
     set3D('encouraging');
-    mascotSay('Hi! Need help? 🙌', 2400);
+    tapChat();
     emotionHoldUntil = Date.now() + 2600;
     setTimeout(() => { if (!mascotDragging && !mascotAsleep && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2600);
   });
@@ -1329,7 +1441,7 @@ if (mascotBtn && mascot) {
     if (mascotAsleep || mascotDragging || mascot.classList.contains('thinking') || mascot.classList.contains('happy')) return; // already busy with a question
     set3D('encouraging');
     botMood('greeting'); // Cursor Cassie waves hello
-    mascotSay('Hi, I’m Cassie! 👋', 2600);
+    if (!helloChat()) { mascotSay('Hi, I’m Cassie! 👋', 2600); lastChatAt = Date.now(); }
     setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2400);
   }, 1400);
 }
@@ -1947,7 +2059,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=186').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=187').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -4840,7 +4952,10 @@ function captureQuizMarks(reply) {
       if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
       else state.mistakes.unshift({ q: q.slice(0, 400), a: (a || '').slice(0, 300), at: Date.now(), due: Date.now() + DAY_MS, misses: 1 });
       setTimeout(() => botMood('encourage', 3200), 50); // a missed question: kind, not sad
-    } else if (i >= 0) {
+    } else {
+      setTimeout(() => cassieChat('correct'), 60); // (a right quiz answer)
+    }
+    if (!/missed/i.test(kind) && i >= 0) {
       const m = state.mistakes[i];
       m.right = (m.right || 0) + 1;
       if (m.right >= 2) state.mistakes.splice(i, 1); // right twice → learned
@@ -4967,6 +5082,7 @@ async function handleSend(text, opts = {}) {
     if (window.CassieMemory) {
       window.CassieMemory.maybeRememberFrom(sendText);
       window.CassieMemory.recordQuestion(sendText);
+      streakChat();
     }
   } catch (e) { /* ignore */ }
   progressAdd({ asked: 1 }); // (a day you asked Cassie something is a day you studied)
@@ -6200,7 +6316,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=186');
+      exploreMod = await import('./explore/cell3d.js?v=187');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6250,7 +6366,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=186');
+      labsMod = await import('./labs/labs.js?v=187');
       islandRest();
     }
     labsMod.open({
@@ -8087,10 +8203,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=186').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=187').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=186', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=187', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

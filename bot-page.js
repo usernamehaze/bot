@@ -72,7 +72,7 @@
     moods.appendChild(c); mini(c.querySelector('.bot'), s);
     c.onclick = () => { auto = false; play(s); document.querySelectorAll('#moods .cell').forEach((x) => x.classList.toggle('on', x === c)); scrollTo({ top: 0, behavior: 'smooth' }); };
   });
-  const ACCS = { gradcap: 'Research & Web', glasses: 'Professional', sunglasses: 'summer', headphones: 'focus timer', beanie: 'rainy days', salakot: 'June 12', party: 'New Year', santa: 'ber months', witch: 'Halloween', crown: 'top streak', bow: 'Talk mode', sampaguita: 'national flower', pencil: 'Quiz me', scarf: 'cold weather' };
+  const ACCS = { gradcap: 'Research & Web', glasses: 'Professional', sunglasses: 'summer', headphones: 'focus timer', beanie: 'rainy days', salakot: 'Filipino hat', party: 'New Year', santa: 'ber months', witch: 'Halloween', crown: 'top streak', bow: 'Talk mode', sampaguita: 'national flower', pencil: 'Quiz me', scarf: 'cold weather', flag: 'Independence & heroes', candle: 'Holy Week & Undas', heart: "Valentine's", pumpkin: 'Halloween', lantern: 'Lunar New Year', ribbon: 'EDSA Day', leaf: 'Earth Day', apple: "Teachers' Day" };
   const accs = document.getElementById('accs');
   B.ACCESSORIES.forEach((a) => {
     const c = document.createElement('div'); c.className = 'cell';
