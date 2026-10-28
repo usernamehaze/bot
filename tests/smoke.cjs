@@ -7881,7 +7881,7 @@ test('Learn’s levels are where the topic is really taught (docs/learn-levels.m
   }
 });
 
-test('Learn is folders, not scattered cards (1280x800 and 390x844): For you (levels), Today’s Lab, Simulations (a folder per subject) and Study tools (a folder per use) in that order, no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
+test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Lab first, then For you (levels), Simulations (a folder per subject) and Study tools (a folder per use) in that order, no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
   const SHOTS = process.env.SHOTS;
   for (const [size, device, viewport] of [['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }], ['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
@@ -7894,15 +7894,15 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): For you (lev
       const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
       if (ph) return { order: [...document.querySelectorAll('.lp-home > .lp-h')].filter(vis).map((h) => h.textContent), chips: document.querySelectorAll('.lp-chips button').length,
         n: ['.lp-foryou', '.lp-sims', '.lp-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length), today: vis(document.querySelector('.lp-rec .lp-card')) };
-      const tops = ['.labs-foryou', '.labs-today', '.labs-sims', '.labs-toolsf'].map((s) => { const e = document.querySelector(s); return vis(e) ? e.getBoundingClientRect().top : -1; });
-      return { order: ['For you', 'Today’s Lab', 'Simulations', 'Study tools'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
+      const tops = ['.labs-today', '.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => { const e = document.querySelector(s); return vis(e) ? e.getBoundingClientRect().top : -1; });
+      return { order: ['Today’s Lab', 'For you', 'Simulations', 'Study tools'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
         cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
-    expect(parts.order.join('|') === 'For you|Today’s Lab|Simulations|Study tools', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
+    expect(parts.order.join('|') === 'Today’s Lab|For you|Simulations|Study tools', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
     expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[5,7,4]', `${size}: no chips, tabs or card grid; 5 level, 7 subject and 4 study tool folders: ` + JSON.stringify(parts));
     if (SHOTS) {
-      if (phone) { await page.evaluate(() => document.querySelector('.lp-sims').scrollIntoView({ block: 'center' })); await page.waitForTimeout(500); }
-      else { await page.evaluate(() => document.querySelector('.labs-sims').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
+      if (phone) { await page.evaluate(() => document.querySelector('.lp-home').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
+      else { await page.evaluate(() => { document.querySelector('.labs-scroll').scrollTop = 0; }); await page.waitForTimeout(500); }
       await page.screenshot({ path: `${SHOTS}/learnC-${phone ? 'phone' : 'desk'}.png` });
     }
     // open every folder: its count is what it holds, and together they hold every lab
