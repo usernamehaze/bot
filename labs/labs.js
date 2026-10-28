@@ -26,7 +26,7 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=200';
+import { MUSEUM } from './museum.js?v=201';
 import { GAMES } from './games.js';
 import { KIDS } from './kids.js';
 
@@ -100,10 +100,10 @@ function createView() {
         <header class="lp-head"><h2>Learn</h2><button type="button" class="lp-find" aria-label="Search labs" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button></header>
         <input type="search" class="lp-q" placeholder="Find a lab or a study tool" aria-label="Find a lab or a study tool" autocomplete="off" hidden>
         <div class="lp-home">
-          <h3 class="lp-h">For you</h3>
-          <div class="lp-foryou"></div>
           <h3 class="lp-h">Today’s Lab</h3>
           <div class="lp-rec"></div>
+          <h3 class="lp-h">For you</h3>
+          <div class="lp-foryou"></div>
           <h3 class="lp-h">Simulations</h3>
           <div class="lp-sims"></div>
           <h3 class="lp-h">Study tools</h3>
@@ -119,8 +119,8 @@ function createView() {
       </div>
       <div class="labs-scroll">
         <div class="labs-board" hidden></div>
-        <div class="labs-foryou"></div>
         <div class="labs-today"></div>
+        <div class="labs-foryou"></div>
         <div class="labs-sims"></div>
         <div class="labs-toolsf"></div>
         <div class="labs-grid" role="list"></div>
