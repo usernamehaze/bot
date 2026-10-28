@@ -7815,6 +7815,38 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
   }
 });
 
+test('Learn’s level folders move like the recording on a computer (1280x800): the pointer over a folder tips its pocket forward at least 15deg and lifts the papers at least 20% of the folder, whatever the browser says about hover; a click fans them out before the level opens; Reduce Motion keeps a gentle lift with no turn', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+  await page.click('#labs-btn'); await page.waitForSelector('.labs-foryou .lf', { timeout: 15000 });
+  await page.waitForTimeout(400);
+  const F = '.labs-foryou .lf[data-level="elem"]';
+  const look = () => page.$eval(F, (f) => {
+    const fr = f.getBoundingClientRect(), mid = f.querySelectorAll('.lf-paper')[1].getBoundingClientRect(), m = getComputedStyle(f.querySelector('.lf-front')).transform;
+    const v = (m.match(/matrix3d\(([^)]+)\)/) || [])[1]; const n = v ? v.split(',').map(Number) : null;
+    return { h: fr.height, top: mid.top, turn: n ? Math.abs(Math.atan2(n[6], n[5]) * 180 / Math.PI) : 0, open: f.classList.contains('lf-open'), fan: getComputedStyle(f.querySelector('.lf-paper')).transform };
+  });
+  const rest = await look();
+  await page.hover(F); await page.waitForTimeout(450);
+  const lean = await look();
+  const rise = (rest.top - lean.top) / rest.h;
+  expect(rise >= 0.2 && lean.turn >= 15, 'the pointer over a folder: papers rise ≥20% and the pocket tips ≥15deg: ' + JSON.stringify({ rise, turn: lean.turn }));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-lean.png', clip: { x: 0, y: 150, width: 1280, height: 330 } });
+  await page.click(F); await page.waitForTimeout(120);
+  const fanned = await look();
+  expect(fanned.open && (rest.top - fanned.top) / rest.h > rise, 'a click: the papers fly up and fan out first: ' + JSON.stringify(fanned));
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-open.png', clip: { x: 0, y: 100, width: 1280, height: 380 } });
+  await page.waitForSelector('.labs-foryou .lf-back-btn', { timeout: 3000 });
+  await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector(F);
+  // Reduce Motion: a gentle lift, no turn
+  await page.emulateMedia({ reducedMotion: 'reduce' }); await page.mouse.move(5, 790); await page.waitForTimeout(300);
+  const rest2 = await look();
+  await page.hover(F); await page.waitForTimeout(300);
+  const soft = await look();
+  expect((rest2.top - soft.top) / rest2.h >= 0.05 && soft.turn < 1, 'Reduce Motion: still a gentle lift, no turn: ' + JSON.stringify({ rise: (rest2.top - soft.top) / rest2.h, turn: soft.turn }));
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
