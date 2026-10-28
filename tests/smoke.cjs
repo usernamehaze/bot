@@ -7683,7 +7683,7 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
     await page.waitForFunction(() => document.querySelector('#settings-panel .settings-card').dataset.page === 'profile');
   }
   // each tab's own icon moves when tapped
-  const moving = (t) => page.evaluate((tab) => { const b = document.querySelector(`.tab[data-tab="${tab}"]`), s = b.querySelector('svg'); return { cls: b.classList.contains('tab-anim'), n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length }; }, t);
+  const moving = (t) => page.evaluate((tab) => { const b = document.querySelector(`.tab[data-tab="${tab}"]`), s = b.querySelector('svg'); return { cls: b.classList.contains('tab-anim'), n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running' && /^tab-/.test(a.animationName || '')).length }; }, t);
   for (const t of ['home', 'chat', 'labs', 'games', 'cards', 'you']) {
     await page.click(`.tab[data-tab="${t}"]`);
     const m = await moving(t);

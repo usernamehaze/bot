@@ -969,7 +969,7 @@ const CASSIE_LINES = {
     honor: ['Today is {h}. 🇵🇭', "It's {h} today. We remember the ones who stood up for us.", 'Today is {h}, {name}. A good day to thank our heroes.', '{h} today. Their courage is part of our story.', 'Today we remember: {h}. 🇵🇭', "It's {h}. Learning is one way to honor them."],
     stressed: ["Hey, breathe. We'll take it one step at a time.", "You're not alone in this, {name}. Let's go slow.", "Tough day? I'm right here with you.", "It's okay to find this hard. That's how learning feels.", "Small steps. You've got more in you than you think.", "Let's break it into tiny pieces together."],
     cheer: ['Yay! That energy! 🎉', "Let's gooo, {name}!", 'Love that! Keep it up! ✨', 'Woohoo! 🙌', "That's the spirit!", 'Look at you go! 💪'],
-    back: ['Last time we looked at "{topic}". Want to pick it up again?', 'Hi {name}! Back to "{topic}"?', 'Welcome back! Still on "{topic}"?', 'Want a quick review of "{topic}" today?', 'I remember "{topic}". Shall we keep going?', 'Good to see you! "{topic}" again, or something new?'],
+    back: ['Last time we looked at "{topic}". Want to pick it up again?', 'Hi {name}! Back to "{topic}"?', 'Welcome back! Still on "{topic}"?', 'Want a quick review of "{topic}" today?', 'I remember "{topic}". Shall we pick it back up?', 'Good to see you! "{topic}" again, or something new?'],
     quiet: ["It's {h}. Take a quiet moment today.", '{h} today. Be gentle with yourself.', "It's {h}, {name}. I'll keep things calm.", 'A quiet {h}. Study at your own pace.', "It's {h}. Thinking of you and your family.", '{h} today. Rest when you need to.'],
   },
   tl: {
