@@ -243,7 +243,7 @@ export function atomsOf(f) {
 }
 const massOf = (atoms) => Object.entries(atoms).reduce((s2, [e, c]) => s2 + MASS[e] * c, 0);
 const crackerLab = {
-  id: 'cracker', name: 'Formula Cracker', subject: 'games', levels: ['hs', 'college', 'grad'],
+  id: 'cracker', name: 'Formula Cracker', subject: 'games', levels: ['hs', 'college'],
   blurb: 'A Wordle for maths, code and chemistry: crack the hidden function rule, regular expression or chemical compound in six guesses, using what it does as clues.',
   words: 'wordle guess formula equation function rule regex regular expression pattern chemical compound molar mass algebra puzzle',
   icon: '<rect x="4" y="10" width="8" height="8" rx="1"/><rect x="14" y="10" width="8" height="8" rx="1"/><rect x="24" y="10" width="8" height="8" rx="1"/><rect x="34" y="10" width="8" height="8" rx="1"/><rect x="4" y="22" width="8" height="8" rx="1"/><rect x="14" y="22" width="8" height="8" rx="1"/><path d="M27 34l5 5 9-12"/>',
@@ -710,7 +710,7 @@ const EVENTS = [
 const demandAt = (p, dShock) => Math.max(0, 200 * (1 + dShock) - 2 * p); // buyers want less as the price rises
 const supplyAt = (p, sShock) => Math.max(0, 2 * p * (1 + sShock)); // farmers sell more as the price rises
 const marketLab = {
-  id: 'economy', name: 'City Market', subject: 'games', levels: ['hs', 'college', 'grad'],
+  id: 'economy', name: 'City Market', subject: 'games', levels: ['hs', 'college'],
   blurb: 'Run your city’s rice market for a year: set the price, the sales tax and public spending. Avoid shortages and surpluses, keep people happy and the budget healthy through typhoons and fiestas.',
   words: 'economics supply demand equilibrium price ceiling tax budget shortage surplus market simulation government city money',
   icon: '<path d="M6 42V6M6 42h36"/><path d="M10 10c10 6 18 18 28 28" stroke-dasharray="3 3"/><path d="M10 38c10-6 18-18 28-28"/><circle cx="24" cy="24" r="3"/>',

@@ -40,7 +40,7 @@ const levelNow = () => (typeof labLevel === 'function' && labLevel()) || '';
 const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', history: 'History', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game', kids: 'For little ones' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
-  { id: 'body3d', name: 'Human body 3D', subject: 'biology', levels: ['hs', 'college', 'grad'], blurb: 'Turn, zoom and pull apart the real body, 10 systems, tap any part.', explore: 'body',
+  { id: 'body3d', name: 'Human body 3D', subject: 'biology', levels: ['elem', 'hs'], blurb: 'Turn, zoom and pull apart the real body, 10 systems, tap any part.', explore: 'body',
     icon: '<path d="M24 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/><path d="M17 18h14l-2 12h-3l-1 12h-2l-1-12h-3z"/><path d="M17 18l-5 10M31 18l5 10"/>' },
   { id: 'cells3d', name: 'Cells 3D: animal & plant', subject: 'biology', levels: ['hs', 'college'], blurb: 'A cell cut open in 3D: pick Animal or Plant, tap an organelle to see what it does.', explore: 'cells',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
@@ -228,7 +228,7 @@ function createView() {
         onAction: () => { close(); if (opts.onAsk) opts.onAsk(`Explain ${q0} to me.`, {}); },
       }));
     }
-    const t = todays(), tp = progress(t);
+    const t = LABS.find((l) => l.id === (typeof todayLab === 'function' && todayLab())) || todays(), tp = progress(t); // (the student's level, like the phone)
     const today = $('.labs-today');
     today.hidden = !!q || section !== 'learn' || (subject !== 'all' && subject !== t.subject);
     today.innerHTML = `<button type="button" class="labs-feature" data-lab="${t.id}">

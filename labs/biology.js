@@ -18,7 +18,7 @@ function gametes(geno) { // ["YyRr"] → ["YR", "Yr", "yR", "yr"]
 function child(g1, g2) { let s = ''; for (let i = 0; i < g1.length; i++) s += sortPair(g1[i], g2[i]); return s; }
 
 const punnettLab = {
-  id: 'punnett', name: 'Punnett squares', subject: 'biology', levels: ['hs', 'college', 'grad'], topic: 'genetics: dominant and recessive alleles, genotypes, phenotypes and Punnett squares',
+  id: 'punnett', name: 'Punnett squares', subject: 'biology', levels: ['hs', 'grad'], topic: 'genetics: dominant and recessive alleles, genotypes, phenotypes and Punnett squares',
   blurb: 'Cross two pea plants, see every possible offspring, then grow a hundred for real.',
   words: 'genetics punnett square dominant recessive allele genotype phenotype mendel inheritance heredity',
   icon: '<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M24 8v32M8 24h32"/><circle cx="16" cy="16" r="3"/><circle cx="32" cy="16" r="3"/><circle cx="16" cy="32" r="3"/><circle cx="32" cy="32" r="2" />',
@@ -162,7 +162,7 @@ function drawPart(ctx, k, x, y, s) {
   ctx.restore();
 }
 const cellLab = {
-  id: 'build-cell', name: 'Build a cell', subject: 'biology', levels: ['elem', 'hs'], topic: 'animal and plant cells: organelles and what they do',
+  id: 'build-cell', name: 'Build a cell', subject: 'biology', levels: ['hs', 'grad'], topic: 'animal and plant cells: organelles and what they do',
   blurb: 'Put the right organelles into an animal cell or a plant cell, then let Cassie check your cell.',
   words: 'cell organelles nucleus mitochondria chloroplast vacuole cell wall ribosome animal plant biology build',
   icon: '<rect x="6" y="8" width="36" height="32" rx="6"/><circle cx="20" cy="22" r="6"/><ellipse cx="32" cy="30" rx="5" ry="3"/><path d="M30 14h6"/>',

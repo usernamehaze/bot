@@ -221,7 +221,7 @@ const VOCAB = {
   ] },
 };
 const vocabLab = {
-  id: 'vocab', name: 'Vocabulary Flash-Chain', subject: 'tools', levels: ['elem', 'hs', 'college', 'grad'], wide: true,
+  id: 'vocab', name: 'Vocabulary Flash-Chain', subject: 'tools', levels: ['elem', 'hs'], wide: true,
   blurb: 'Match terms to their meanings by dragging, literary devices, Tayutay, medical, legal, tech or your own words. Keep the chain going!',
   words: 'vocabulary terms definitions matching drag drop literary devices medical legal acronyms tayutay glossary',
   icon: '<rect x="5" y="9" width="15" height="9" rx="2"/><rect x="28" y="9" width="15" height="9" rx="2"/><rect x="5" y="30" width="15" height="9" rx="2"/><rect x="28" y="30" width="15" height="9" rx="2"/><path d="M20 13.5h8M20 34.5c4 0 4-21 8-21"/>',
@@ -376,7 +376,7 @@ const TIMELINES = {
   ] },
 };
 const timelineLab = {
-  id: 'timeline', name: 'Timeline Builder', subject: 'tools', levels: ['hs', 'college', 'grad'], wide: true,
+  id: 'timeline', name: 'Timeline Builder', subject: 'tools', levels: ['hs', 'college'], wide: true,
   blurb: 'Drag events, dates or process steps into the right order, history, a story’s plot, the SDLC, mitosis, then check it or let Cassie grade it.',
   words: 'timeline chronology order sequence history dates events plot sdlc process steps mitosis rizal',
   icon: '<path d="M6 24h36"/><circle cx="12" cy="24" r="3"/><circle cx="24" cy="24" r="3"/><circle cx="36" cy="24" r="3"/><path d="M12 21v-9M24 27v9M36 21v-9"/><rect x="7" y="7" width="10" height="5" rx="1"/><rect x="19" y="36" width="10" height="5" rx="1"/><rect x="31" y="7" width="10" height="5" rx="1"/>',
@@ -511,7 +511,7 @@ function structureOf(roles) {
   return { checks, score: Math.round((checks.filter((c) => c[0]).length / checks.length) * 100) };
 }
 const essayLab = {
-  id: 'essay', name: 'Argument & Essay Deconstructor', subject: 'tools', levels: ['hs', 'college', 'grad'], wide: true,
+  id: 'essay', name: 'Argument & Essay Deconstructor', subject: 'tools', levels: ['hs', 'college'], wide: true,
   blurb: 'Paste a paragraph and see its Claim, Evidence, Reasoning, Counter-argument and Conclusion in colour. Then test how well the argument holds together.',
   words: 'essay argument paragraph claim evidence counterargument rebuttal conclusion structure writing persuasive cer',
   icon: '<path d="M10 8h28M10 16h20M10 24h28M10 32h16M10 40h24"/><path d="M8 6v12M8 22v12" stroke-width="3.5"/>',
@@ -608,7 +608,7 @@ function cardsByRule(text, n) {
   return out;
 }
 const matrixLab = {
-  id: 'cardmatrix', name: 'Smart Flashcard Matrix', subject: 'tools', levels: ['hs', 'college', 'grad'], wide: true,
+  id: 'cardmatrix', name: 'Smart Flashcard Matrix', subject: 'tools', levels: ['college', 'grad'], wide: true,
   blurb: 'Turn notes, a pasted passage or a PDF into a flashcard deck in seconds, edit it in a grid, study it here, and keep it with spaced repetition.',
   words: 'flashcards cards deck spaced repetition notes pdf text generate study review memory anki quizlet',
   icon: '<rect x="5" y="7" width="16" height="12" rx="2"/><rect x="27" y="7" width="16" height="12" rx="2"/><rect x="5" y="29" width="16" height="12" rx="2"/><rect x="27" y="29" width="16" height="12" rx="2"/><path d="M33 33l3 3 5-6"/>',
@@ -743,7 +743,7 @@ function cornellByRule(text) {
   return { title: '', rows: rows.filter((r) => r.notes.length).slice(0, 12), summary };
 }
 const cornellLab = {
-  id: 'cornell', name: 'Cornell Notes', subject: 'tools', levels: ['hs', 'college', 'grad'], wide: true,
+  id: 'cornell', name: 'Cornell Notes', subject: 'tools', levels: ['hs', 'college'], wide: true,
   blurb: 'Paste messy lecture notes or slides and get a clean Cornell page: cue questions, notes, and a summary. Then cover the notes and test yourself.',
   words: 'cornell notes note-taking summary summarize cues lecture slides study method review',
   icon: '<rect x="7" y="5" width="34" height="38" rx="2"/><path d="M7 13h34M18 13v20M7 33h34M22 19h14M22 24h14M22 29h10M11 38h26"/>',

@@ -7718,7 +7718,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     const f = await forYou(page), L = await levelsOf(page);
     expect(f[0] && f[0].k === 'pre' && f[0].mine && f[0].label === 'Nursery and Kindergarten' && f.filter((x) => x.mine).length === 1, 'Kindergarten’s first folder is Nursery and Kindergarten, in dark glass: ' + JSON.stringify(f));
     expect(f.length === 5 && await page.locator('details.lp-other').count() === 0, 'five folders, no Other levels dropdown: ' + f.length);
-    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).includes(k)).length + (['hs', 'college', 'grad'].includes(k) ? 1 : 0) + (['hs', 'college'].includes(k) ? 1 : 0)])); });
+    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).includes(k)).length + (['elem', 'hs'].includes(k) ? 1 : 0) + (['hs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells)
     expect(f.every((x) => x.papers === 3 && x.label && x.count === want[x.k] && x.go[0] >= 44 && x.go[1] >= 44), 'every folder: 3 papers, a label, its lab count and a 44px button: ' + JSON.stringify([f, want]));
     const kids = await openLevel(page, 'pre');
     expect(JSON.stringify(kids.slice().sort()) === JSON.stringify(['count', 'shapes', 'trace-letters', 'trace-numbers']) && await page.$eval('.lp-list h3', (h) => h.textContent) === 'Nursery and Kindergarten', 'the folder holds the 4 little ones’ labs: ' + kids);
@@ -7845,6 +7845,29 @@ test('Learn’s level folders move like the recording on a computer (1280x800): 
   expect((rest2.top - soft.top) / rest2.h >= 0.05 && soft.turn < 1, 'Reduce Motion: still a gentle lift, no turn: ' + JSON.stringify({ rise: (rest2.top - soft.top) / rest2.h, turn: soft.turn }));
   expect(errors.length === 0, 'page errors: ' + errors.join('; '));
   await ctx.close();
+});
+
+test('Learn’s levels are where the topic is really taught (docs/learn-levels.md): no lab in more than 2 levels, every level has at least 4, the table lists every lab with its sources, and the computer’s Today’s Lab comes from the student’s level (Kindergarten, Grade 5, Grade 11, College)', async (b) => {
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/learn-levels.md'), 'utf8');
+  const names = { pre: 'pre', 'Kindergarten': 'pre', 'Grade 5': 'elem', 'Grade 11': 'hs', '2nd year college': 'college' };
+  let first = true;
+  for (const grade of ['Kindergarten', 'Grade 5', 'Grade 11', '2nd year college']) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade, age: grade === 'Kindergarten' ? 5 : 16 } } });
+    const L = await page.evaluate(async () => { const m = await import('./labs/labs.js'); return m.LABS.map((l) => ({ id: l.id, name: l.name, games: l.subject === 'puzzles' || l.subject === 'games', levels: l.levels || [] })); });
+    if (first) {
+      first = false;
+      const many = L.filter((l) => l.levels.length > 2 || !l.levels.length);
+      expect(!many.length, 'every lab is in 1 or 2 levels: ' + many.map((l) => l.id + ':' + l.levels));
+      for (const k of ['pre', 'elem', 'hs', 'college', 'grad']) { const n = L.filter((l) => !l.games && l.levels.includes(k)).length; expect(n >= 4, `${k} has at least 4 labs: ${n}`); }
+      const missing = L.filter((l) => !doc.includes(`| ${l.name} |`));
+      expect(!missing.length && /deped\.gov\.ph/.test(doc) && /prc\.gov\.ph/.test(doc) && /ched\.gov\.ph/.test(doc) && !/[–—]/.test(doc), 'docs/learn-levels.md lists every lab and cites DepEd, CHED and PRC: ' + missing.map((l) => l.name));
+    }
+    await page.click('#labs-btn'); await page.waitForSelector('.labs-today [data-lab]', { timeout: 15000 });
+    const id = await page.$eval('.labs-today [data-lab]', (x) => x.dataset.lab), lv = names[grade];
+    expect((L.find((l) => l.id === id) || { levels: [] }).levels.includes(lv), `${grade}: the computer’s Today’s Lab (${id}) is from their level (${lv})`);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
 });
 
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
@@ -10090,7 +10113,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.waitForSelector('.lp-list:not([hidden]) .lp-row canvas[data-preview]');
   await page.waitForTimeout(600);
   const learn = await page.evaluate(() => ({ title: document.querySelector('.lp-list h3').textContent, rows: [...document.querySelectorAll('.lp-row')].map((r) => r.dataset.lab), withPv: document.querySelectorAll('.lp-row canvas[data-pv]').length }));
-  expect(learn.title === 'High school' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'solar', 'atom'].every((x) => learn.rows.includes(x)), 'High school: its labs and 3D views, each with a preview: ' + JSON.stringify(learn));
+  expect(learn.title === 'High school' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'waves', 'atom'].every((x) => learn.rows.includes(x)), 'High school: its labs and 3D views, each with a preview: ' + JSON.stringify(learn));
   for (let i = 0; i < 4; i++) { const moving = await page.evaluate(() => document.querySelectorAll('.lp canvas[data-moving="1"]').length); expect(moving <= 3, 'at most 3 previews move at once: ' + moving); await page.waitForTimeout(250); }
   await page.click('.lp-row[data-lab="pendulum"]');
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"] .lab-controls > *', { timeout: 20000 });

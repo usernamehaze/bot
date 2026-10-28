@@ -279,7 +279,7 @@ const pendulumLab = {
 
 /* ---------------- Waves on a string ---------------- */
 const wavesLab = {
-  id: 'waves', name: 'Wave string', subject: 'physics', levels: ['hs', 'college'], topic: 'waves: wavelength, frequency, speed, reflection and standing waves',
+  id: 'waves', name: 'Wave string', subject: 'physics', levels: ['hs'], topic: 'waves: wavelength, frequency, speed, reflection and standing waves',
   blurb: 'Wiggle one end of a string. Watch waves travel, bounce back and stand still.',
   words: 'wave wavelength frequency amplitude reflection standing wave string',
   icon: '<path d="M4 24c4-10 8-10 12 0s8 10 12 0 8-10 12 0 4 6 4 6"/><path d="M4 14v20M44 18v12"/>',
@@ -374,7 +374,7 @@ const wavesLab = {
 /* ---------------- Bending light ---------------- */
 const MEDIA = { air: ['Air', 1.0], water: ['Water', 1.33], glass: ['Glass', 1.5], diamond: ['Diamond', 2.42] };
 const lightLab = {
-  id: 'refraction', name: 'Bending light', subject: 'physics', levels: ['hs', 'college'], topic: 'refraction, Snell’s law and total internal reflection',
+  id: 'refraction', name: 'Bending light', subject: 'physics', levels: ['hs'], topic: 'refraction, Snell’s law and total internal reflection',
   blurb: 'Aim a laser into water, glass or diamond and watch it bend, or bounce right back.',
   words: 'light refraction snell law reflection total internal critical angle optics laser index',
   icon: '<path d="M4 26h40"/><path d="M8 6l16 20 8 18"/><path d="M24 26l16-20" stroke-dasharray="3 3"/>',

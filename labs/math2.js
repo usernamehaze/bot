@@ -163,7 +163,7 @@ function meshOf(kind, d) {
   return T;
 }
 const solidsLab = {
-  id: 'solids', name: '3D shapes', subject: 'math', levels: ['elem', 'hs'], topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
+  id: 'solids', name: '3D shapes', subject: 'math', levels: ['elem'], topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
   blurb: 'Turn 13 solids: cubes, spheres, cones, prisms, a torus… Make them any size and watch volume and surface area change.',
   words: 'volume surface area 3d solids geometry cube sphere cylinder cone pyramid prism cuboid',
   icon: '<path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/>',

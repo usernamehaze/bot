@@ -1999,12 +1999,12 @@ const HUB_ICON = {
 // Home's big boxes: every study feature, one tap away (each opens it the way its own button does)
 const TODAY_LABS = ['pendulum', 'ph', 'fractions', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'magnets', 'build-cell', 'optics', 'units', 'ice-steam', 'vectors', 'colour', 'metals', 'interest'];
 // Today's Lab comes from the student's own level (labLevel(); each lab's levels are in its own file)
-const TODAY_BY_LEVEL = {
+const TODAY_BY_LEVEL = { // (each pick is one of that level's labs: docs/learn-levels.md)
   pre: ['trace-letters', 'count', 'shapes', 'trace-numbers'],
-  elem: ['fractions', 'build-cell', 'colour', 'magnets', 'units', 'ice-steam', 'solids', 'rocket', 'solar'],
-  hs: TODAY_LABS.filter((id) => id !== 'fractions'),
-  college: ['pendulum', 'ph', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'optics', 'vectors', 'interest'],
-  grad: ['punnett', 'atom', 'function', 'chance', 'interest', 'fractions', 'solar', 'atlas'],
+  elem: ['fractions', 'colour', 'magnets', 'units', 'ice-steam', 'solids', 'solar'],
+  hs: TODAY_LABS.filter((id) => id !== 'fractions' && id !== 'units'),
+  college: ['pendulum', 'projectile', 'function', 'balance', 'optics', 'vectors', 'interest'],
+  grad: ['punnett', 'atom', 'ph', 'chance', 'fractions', 'solar', 'build-cell'],
 };
 const todayLab = () => { const list = TODAY_BY_LEVEL[labLevel()] || TODAY_LABS; return list[Math.floor(Date.now() / 864e5) % list.length]; };
 // (names, subjects and about how long each takes, for the phone's Today's Lab card)

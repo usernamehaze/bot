@@ -6,7 +6,7 @@ import { viewSwitch } from './bench3d.js';
 
 /* ---------------- Function lab ---------------- */
 const fnLab = {
-  id: 'function', name: 'Function lab', subject: 'math', levels: ['hs', 'college', 'grad'], topic: 'functions, derivatives (slopes) and integrals (areas)',
+  id: 'function', name: 'Function lab', subject: 'math', levels: ['hs', 'college'], topic: 'functions, derivatives (slopes) and integrals (areas)',
   blurb: 'Type any function. Slide along it to see the slope, the bend and the area under it.',
   words: 'graph graphing derivative tangent slope integral area calculus curve',
   icon: '<path d="M6 40h36M10 44V6"/><path d="M12 36c6-2 8-22 14-22s8 14 14 12"/><path d="M20 30l16-10" stroke-dasharray="3 3"/><circle cx="28" cy="25" r="2.5"/>',
@@ -270,7 +270,7 @@ const MODES = {
   spin: { name: 'Spinner', out: ['Gold', 'Blue', 'Red'], p: [1 / 2, 1 / 3, 1 / 6], roll: () => { const r = Math.random(); return r < 1 / 2 ? 0 : r < 5 / 6 ? 1 : 2; } },
 };
 const chanceLab = {
-  id: 'chance', name: 'Chance machine', subject: 'math', levels: ['hs', 'college', 'grad'], topic: 'probability: theory versus experiment, and the law of large numbers',
+  id: 'chance', name: 'Chance machine', subject: 'math', levels: ['hs', 'grad'], topic: 'probability: theory versus experiment, and the law of large numbers',
   blurb: 'Flip, roll and spin thousands of times and watch real results creep toward the theory.',
   words: 'probability coin dice spinner random statistics experiment',
   icon: '<rect x="6" y="14" width="20" height="20" rx="4"/><circle cx="12" cy="20" r="1.6"/><circle cx="20" cy="28" r="1.6"/><circle cx="16" cy="24" r="1.6"/><circle cx="35" cy="24" r="9"/><path d="M35 15v18M31 19l4-4 4 4"/>',
@@ -409,7 +409,7 @@ const UNITS = {
 const toC = (v, u) => (u === '°C' ? v : u === '°F' ? ((v - 32) * 5) / 9 : v - 273.15);
 const fromC = (c, u) => (u === '°C' ? c : u === '°F' ? (c * 9) / 5 + 32 : c + 273.15);
 const unitsLab = {
-  id: 'units', name: 'Unit converter', subject: 'math', levels: ['elem', 'hs'], topic: 'unit conversion and the metric system',
+  id: 'units', name: 'Unit converter', subject: 'math', levels: ['elem'], topic: 'unit conversion and the metric system',
   blurb: 'Length, mass, time, temperature, speed, area, volume and data, with the working shown.',
   words: 'convert conversion metric imperial km miles celsius fahrenheit',
   icon: '<rect x="4" y="16" width="16" height="16" rx="4"/><rect x="28" y="16" width="16" height="16" rx="4"/><path d="M21 24h6M24 21l3 3-3 3"/><path d="M9 24h6M33 24h6"/>',
@@ -477,7 +477,7 @@ const unitsLab = {
 
 /* ---------------- Interest ---------------- */
 const interestLab = {
-  id: 'interest', name: 'Money grows', subject: 'math', levels: ['hs', 'college', 'grad'], topic: 'simple interest versus compound interest',
+  id: 'interest', name: 'Money grows', subject: 'math', levels: ['hs', 'college'], topic: 'simple interest versus compound interest',
   blurb: 'Same deposit, same rate: simple vs compound interest, year by year.',
   words: 'interest compound simple savings bank money exponential growth',
   icon: '<path d="M6 42h36"/><rect x="9" y="30" width="6" height="12"/><rect x="21" y="22" width="6" height="20"/><rect x="33" y="10" width="6" height="32"/><path d="M8 26l12-8 8 4 12-14"/>',
@@ -560,7 +560,7 @@ const interestLab = {
 
 /* ---------------- (a + b)² as a picture ---------------- */
 const squareLab = {
-  id: 'square-proof', name: 'Picture proofs', subject: 'math', levels: ['hs', 'college'], topic: 'algebra identities: (a + b)², a² − b² = (a + b)(a − b)',
+  id: 'square-proof', name: 'Picture proofs', subject: 'math', levels: ['hs', 'grad'], topic: 'algebra identities: (a + b)², a² − b² = (a + b)(a − b)',
   blurb: 'See why (a + b)² = a² + 2ab + b², pull the square apart and let the areas prove it.',
   words: 'algebra identity square expand factor difference of squares proof',
   icon: '<rect x="6" y="6" width="22" height="22"/><rect x="31" y="6" width="11" height="22"/><rect x="6" y="31" width="22" height="11"/><rect x="31" y="31" width="11" height="11"/>',
@@ -634,7 +634,7 @@ const squareLab = {
 
 /* ---------------- Tower of Hanoi ---------------- */
 const hanoiLab = {
-  id: 'hanoi', name: 'Tower of Hanoi', subject: 'math', levels: ['hs', 'college'], topic: 'the Tower of Hanoi, recursion and powers of 2',
+  id: 'hanoi', name: 'Tower of Hanoi', subject: 'math', levels: ['college'], topic: 'the Tower of Hanoi, recursion and powers of 2',
   blurb: 'Move the whole tower to the last peg, one disk at a time, never a big one on a small one.',
   words: 'puzzle recursion hanoi tower disks game',
   icon: '<path d="M4 42h40M12 42V14M24 42V14M36 42V14"/><rect x="5" y="34" width="14" height="5" rx="2"/><rect x="7" y="28" width="10" height="5" rx="2"/><rect x="31" y="34" width="10" height="5" rx="2"/>',
