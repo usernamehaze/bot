@@ -2246,7 +2246,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Labs progress' };
+  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
