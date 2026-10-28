@@ -796,7 +796,9 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 .lf-pv { display: block; width: 100%; height: 100%; mix-blend-mode: multiply; opacity: .85; } /* (the live drawing printed onto the art) */
 .lf-ico { display: grid; place-items: center; width: 100%; height: 70%; color: #fff; }
 .lf-ico svg { width: 34%; height: auto; fill: none; stroke: currentColor; stroke-width: 2.4; }
-.lf-paper i { position: absolute; top: 5px; right: 6px; max-width: 86%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 6px;
+.labs .lf i { font-style: normal; }
+.lf-papers, .lf-paper, .lf-ico { display: block; }
+.lf-paper .lf-cap { position: absolute; top: 5px; right: 6px; max-width: 86%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 6px;
   background: rgba(var(--lf-glass), .94); color: var(--lf-ink); font: 600 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; }
 .lf-front { position: absolute; left: 0; right: 0; bottom: 0; height: 60%; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 12px;
   border-radius: 16px; border: 1px solid var(--lf-line); background: linear-gradient(180deg, rgba(var(--lf-glass), .58), rgba(var(--lf-glass), .9) 70%);
@@ -804,7 +806,8 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -12px 22px rgba(255, 255, 255, .35), 0 10px 24px rgba(var(--lf-shadow), .2);
   transform-origin: 50% 100%; transition: transform .22s ease-out; }
 .lf-txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.lf-txt b { font-size: .86rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 370px) { .lf-front { gap: 6px; padding: 9px 8px 9px 10px; } .lf-txt b { font-size: .8rem; } } /* (Kindergarten fits beside the button at 360) */
+.lf-txt b { -webkit-hyphens: auto; hyphens: auto; overflow-wrap: break-word; font-size: .86rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .lf-txt small { font: 500 .7rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--lf-muted); }
 .lf-go { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--lf-ink); background: rgba(var(--lf-glass), .98); border: 1px solid var(--lf-edge);
   box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(var(--lf-shadow), .18); }

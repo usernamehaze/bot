@@ -284,11 +284,11 @@ function createView() {
       const labs = levelLabs(k), own = k === mine;
       const papers = labs.slice(0, 3).map((l) => {
         const pid = l.id === 'cells3d' ? 'cells3d' : l.id;
-        return `<span class="lf-paper">${previewIds.has(pid) ? `<canvas class="lf-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : `<span class="lf-ico">${iconSvg(l.icon)}</span>`}<i>${esc(l.name)} · ${esc(NAMES[l.subject] || '')}</i></span>`;
+        return `<i class="lf-paper">${previewIds.has(pid) ? `<canvas class="lf-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : `<i class="lf-ico">${iconSvg(l.icon)}</i>`}<i class="lf-cap">${esc(l.name)} · ${esc(NAMES[l.subject] || '')}</i></i>`;
       }).join('');
       return `<button type="button" class="lf${own ? ' lf-mine' : ''}" data-level="${k}" role="listitem" aria-label="${esc(name)}, ${labs.length} labs${own ? ', your level' : ''}">
-        <span class="lf-tab" aria-hidden="true"></span><span class="lf-back" aria-hidden="true"></span>
-        <span class="lf-papers" aria-hidden="true">${papers}</span>
+        <i class="lf-tab" aria-hidden="true"></i><i class="lf-back" aria-hidden="true"></i>
+        <i class="lf-papers" aria-hidden="true">${papers}</i>
         <span class="lf-front"><span class="lf-txt"><b>${esc(name)}</b><small>${labs.length} labs</small></span>
           <span class="lf-go" aria-hidden="true">${own ? '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>'}</span></span></button>`;
     }).join('');
