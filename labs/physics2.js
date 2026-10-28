@@ -420,7 +420,7 @@ function drawGate(ctx, type, x, y, s, on) {
   return outX + (bubble ? 10 : 0);
 }
 const logicLab = {
-  id: 'logic', name: 'Logic gates', subject: 'physics', levels: ['hs', 'college'], topic: 'logic gates (AND, OR, NOT, NAND, NOR, XOR) and truth tables',
+  id: 'logic', name: 'Logic gates', subject: 'physics', levels: ['college'], topic: 'logic gates (AND, OR, NOT, NAND, NOR, XOR) and truth tables',
   blurb: 'Flip switches into AND, OR, NOT and friends. Then solve circuit puzzles in as few moves as you can.',
   words: 'logic gates and or not nand nor xor truth table boolean circuit digital electronics computer science',
   icon: '<path d="M8 14h8M8 34h8M16 8h10a16 16 0 0 1 0 32H16z"/><path d="M42 24h-6"/>',
@@ -523,7 +523,7 @@ const logicLab = {
 const ENGINES = { solid: ['Solid fuel', 260], kerosene: ['Kerosene + oxygen', 311], hydrogen: ['Hydrogen + oxygen', 450] };
 const G0 = 9.80665, R_EARTH = 6371e3;
 const rocketLab = {
-  id: 'rocket', name: 'Rocket workshop', subject: 'physics', levels: ['elem', 'hs'], topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
+  id: 'rocket', name: 'Rocket workshop', subject: 'physics', levels: ['hs'], topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
   blurb: 'Build a 3D rocket, engines, fuel, stages, and launch it from the pad. Can it lift off, reach space, or have enough Δv for orbit?',
   words: 'rocket launch thrust weight stages delta v orbit space newton tsiolkovsky fuel',
   icon: '<path d="M24 4c6 6 8 14 8 22v8H16v-8c0-8 2-16 8-22z"/><circle cx="24" cy="18" r="3"/><path d="M16 28l-6 8v4l6-4M32 28l6 8v4l-6-4M20 40l4 6 4-6"/>',

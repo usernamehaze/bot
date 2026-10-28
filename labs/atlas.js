@@ -39,7 +39,7 @@ const safeUrl = (u) => (/^https:\/\/[a-z]+\.wikipedia\.org\//.test(u || '') ? u 
 const safeImg = (u) => (/^https:\/\/upload\.wikimedia\.org\//.test(u || '') ? u : null);
 
 export const atlasLab = {
-  id: 'atlas', name: 'World atlas', subject: 'geography', levels: ['elem', 'hs', 'college', 'grad'], topic: 'world geography: countries, capitals, populations, languages and their history',
+  id: 'atlas', name: 'World atlas', subject: 'geography', levels: ['elem', 'hs'], topic: 'world geography: countries, capitals, populations, languages and their history',
   blurb: 'Tap any country for its flag, capital, population, languages and a short history, or search any place in the world.',
   words: 'atlas world map countries flags capitals population geography history places cities search',
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M14 12l4 4-2 5 4 3M32 30l3 4"/>',

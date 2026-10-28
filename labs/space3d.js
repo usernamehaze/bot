@@ -77,7 +77,7 @@ const UNIVERSE = [
 const LEVELS = [['solar', 'Solar system'], ['galaxy', 'Milky Way'], ['local', 'Local Group'], ['universe', 'Universe']];
 
 export const space3dLab = {
-  id: 'space3d', name: 'Solar system & beyond (3D)', subject: 'space', levels: ['elem', 'hs'], three: true,
+  id: 'space3d', name: 'Solar system & beyond (3D)', subject: 'space', levels: ['elem', 'grad'], three: true,
   topic: 'the solar system, the Milky Way galaxy, the Local Group of galaxies and the large-scale structure of the universe',
   blurb: 'Fly round the planets in 3D, then zoom out to the Milky Way, our neighbour galaxies and the whole observable universe. Tap anything to learn about it.',
   words: 'space solar system planets 3d sun moon galaxy milky way andromeda universe stars astronomy zoom nebula black hole',
