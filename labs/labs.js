@@ -26,7 +26,7 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=199';
+import { MUSEUM } from './museum.js?v=200';
 import { GAMES } from './games.js';
 import { KIDS } from './kids.js';
 
@@ -53,7 +53,6 @@ const is3d = (l) => !!(l.explore || l.three);
 
 // the phone's Labs tab: a sliding row of filters, Today's Lab, and For you (Learn, Study tools),
 // each with a live mini preview (previews.js). Computers keep the shelf above.
-const LP_CHIPS = [['all', 'All'], ['science', 'Science'], ['maths', 'Maths'], ['history', 'History'], ['3d', '3D'], ['tools', 'Study tools'], ['games', 'Games']];
 const SCIENCE = new Set(['biology', 'chemistry', 'physics', 'space', 'geography']);
 const phoneQ = matchMedia('(max-width: 760px)');
 let pvMod = null;
@@ -100,31 +99,30 @@ function createView() {
       <div class="lp" hidden>
         <header class="lp-head"><h2>Learn</h2><button type="button" class="lp-find" aria-label="Search labs" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button></header>
         <input type="search" class="lp-q" placeholder="Find a lab or a study tool" aria-label="Find a lab or a study tool" autocomplete="off" hidden>
-        <div class="lp-chips" role="group" aria-label="Show">${LP_CHIPS.map(([id, n]) => `<button type="button" data-lp="${id}" aria-pressed="${id === 'all'}">${n}</button>`).join('')}</div>
         <div class="lp-home">
-          <h3 class="lp-h">Recommended</h3>
-          <div class="lp-rec"></div>
           <h3 class="lp-h">For you</h3>
           <div class="lp-foryou"></div>
+          <h3 class="lp-h">Today’s Lab</h3>
+          <div class="lp-rec"></div>
+          <h3 class="lp-h">Simulations</h3>
+          <div class="lp-sims"></div>
+          <h3 class="lp-h">Study tools</h3>
+          <div class="lp-toolsf"></div>
         </div>
         <div class="lp-list" hidden>
           <header class="lp-list-head"><button type="button" class="lp-back" aria-label="Back">‹</button><h3></h3></header>
           <div class="lp-rows" role="list"></div>
         </div>
       </div>
-      <div class="labs-tabs" role="tablist" aria-label="Learn shelves">
-        <button type="button" role="tab" data-section="learn" aria-selected="true">Simulations <small>simulations · 3D · atlas</small></button>
-        <button type="button" role="tab" data-section="games" aria-selected="false" hidden>Games &amp; puzzles <small>daily puzzles · games</small></button>
-        <button type="button" role="tab" data-section="tools" aria-selected="false">Study tools <small>notes · cards · essays · art</small></button>
-      </div>
       <div class="labs-tools">
         <input type="search" class="labs-search" placeholder="Find a lab: pendulum, planets, sudoku, timeline, Cornell notes…" aria-label="Find a lab or a puzzle" autocomplete="off">
-        <div class="labs-chips" role="group" aria-label="Subject">${SUBJECTS.map(([id, n]) => `<button type="button" data-subject="${id}" aria-pressed="${id === 'all'}">${n}</button>`).join('')}</div>
       </div>
       <div class="labs-scroll">
         <div class="labs-board" hidden></div>
         <div class="labs-foryou"></div>
         <div class="labs-today"></div>
+        <div class="labs-sims"></div>
+        <div class="labs-toolsf"></div>
         <div class="labs-grid" role="list"></div>
         <div class="labs-empty" hidden></div>
       </div>
@@ -151,7 +149,7 @@ function createView() {
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const shelf = $('.labs-shelf'), labView = $('.lab-view'), grid = $('.labs-grid'), search = $('.labs-search');
-  let deskLevel = '';
+  let deskGroup = ''; // (a computer: the folder that is open, like 'level:hs' or 'subject:physics')
   let opts = {}, subject = 'all', section = 'learn', current = null, mounted = null, openTry = -1, touched = false;
   // a goal only ticks once the student has done something in the lab (some labs start in a state
   // that already meets a goal — that isn't the student finding it)
@@ -192,25 +190,28 @@ function createView() {
     search.placeholder = games ? 'Find a game or puzzle: sudoku, circuit, map blitz…' : 'Find a lab: pendulum, planets, timeline, Cornell notes…';
     $('.lab-back span').textContent = games ? 'Games' : 'Learn';
     root.querySelectorAll('[data-section]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === section)));
-    $('.labs-chips').hidden = section !== 'learn';
     shelf.dataset.shelf = section;
     root.dataset.section = section; // (the app's Games button shows as on while the games are open)
   }
   function renderShelf() {
     const q = search.value.trim().toLowerCase();
-    // For you on a computer: the level folders, or one level's labs with a way back
-    const fy = $('.labs-foryou'), forYou = !q && section === 'learn' && subject === 'all';
-    fy.hidden = !forYou;
-    if (forYou) {
-      const lv = deskLevel && LEVELS.find(([k]) => k === deskLevel);
-      if (lv) fy.innerHTML = `<div class="lf-head"><button type="button" class="lab-btn lf-back-btn" aria-label="Back to all levels">‹ Back</button><h3>${esc(lv[1])}</h3></div>`;
-      else { fy.innerHTML = '<h3 class="lf-h">For you</h3>'; fy.appendChild(folders(true)); previews().then(() => pv(fy)); }
-    }
-    if (forYou && deskLevel) {
-      grid.replaceChildren(...levelLabs(deskLevel).map(card));
+    // a computer's Learn: the level folders, Today's Lab, then the Simulations and Study tools folders;
+    // a folder opened: its labs, with a way back; searching (or the games): the cards
+    const home = !q && section === 'learn';
+    const fy = $('.labs-foryou'), sims = $('.labs-sims'), tf = $('.labs-toolsf');
+    fy.hidden = !home; sims.hidden = tf.hidden = !home || !!deskGroup; grid.hidden = home && !deskGroup;
+    if (home && deskGroup) {
+      fy.innerHTML = `<div class="lf-head"><button type="button" class="lab-btn lf-back-btn" aria-label="Back to Learn">‹ Back</button><h3>${esc(groupName(deskGroup))}</h3></div>`;
+      grid.replaceChildren(...groupLabs(deskGroup).map(card));
       $('.labs-empty').hidden = true; $('.labs-today').hidden = true;
       renderBoard(false);
       return;
+    }
+    if (home) {
+      fy.innerHTML = '<h3 class="lf-h">For you</h3>'; fy.appendChild(folders(true));
+      sims.innerHTML = '<h3 class="lf-h">Simulations</h3>'; sims.appendChild(simFolders());
+      tf.innerHTML = '<h3 class="lf-h">Study tools</h3>'; tf.appendChild(toolFolders());
+      previews().then(() => { pv(fy); pv(sims); pv(tf); });
     }
     // searching looks on Labs' two shelves (or, in Games, at the games)
     const list = [...EXPLORE, ...LABS].filter((l) => (q
@@ -254,8 +255,7 @@ function createView() {
   // a list: the Learn labs and 3D views, the study tools, or one filter's labs
   function lpShow(kind, found) {
     const learn = [...EXPLORE, ...SIMS];
-    const lv = kind.startsWith('level:') && LEVELS.find(([k]) => k === kind.slice(6));
-    const lists = { search: ['Search', found || []], ...(lv ? { [kind]: [lv[1], levelLabs(lv[0])] } : {}),
+    const lists = { search: ['Search', found || []], ...(/^(level|subject|tools):/.test(kind) ? { [kind]: [groupName(kind), groupLabs(kind)] } : {}),
       learn: ['Simulations', learn], tools: ['Study tools', LABS.filter((l) => shelfOf(l) === 'tools')], science: ['Science', learn.filter((l) => SCIENCE.has(l.subject))],
       maths: ['Maths', learn.filter((l) => l.subject === 'math')], history: ['History', learn.filter((l) => l.subject === 'history')], '3d': ['3D', learn.filter(is3d)], games: ['Games', LABS.filter((l) => shelfOf(l) === 'games')],
     };
@@ -277,30 +277,56 @@ function createView() {
   // out, then its labs open. On a computer the same folders sit at the top of the shelf.
   const levelLabs = (k) => [...EXPLORE, ...LABS].filter((l) => shelfOf(l) !== 'games' && (l.levels || []).includes(k));
   const still = () => document.documentElement.classList.contains('lite') || matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function folders(desk) {
-    const mine = levelNow(), order = [...LEVELS.filter(([k]) => k === mine), ...LEVELS.filter(([k]) => k !== mine)];
-    const grid = el('div', 'lf-grid'); grid.setAttribute('role', 'list');
-    grid.innerHTML = order.map(([k, name]) => {
-      const labs = levelLabs(k), own = k === mine;
+  // the folders below For you: Simulations by subject, Study tools by what they are for
+  const SUBJECT_FOLDERS = [['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Earth and Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
+  const TOOL_FOLDERS = [['notes', 'Notes', ['cornell']], ['cards', 'Flashcards and words', ['cardmatrix', 'vocab']], ['writing', 'Writing and research', ['essay', 'thesis']], ['time', 'Timelines', ['timeline']]];
+  const toolLabs = () => LABS.filter((l) => shelfOf(l) === 'tools');
+  function groupLabs(key) {
+    const [kind, k] = key.split(':');
+    if (kind === 'level') return levelLabs(k);
+    if (kind === 'subject') return [...EXPLORE, ...SIMS].filter((l) => (k === '3d' ? is3d(l) : l.subject === k));
+    if (kind === 'tools') { const t = TOOL_FOLDERS.find((x) => x[0] === k); return t ? t[2].map((id) => LABS.find((l) => l.id === id)).filter(Boolean) : toolLabs(); }
+    return [];
+  }
+  function groupName(key) {
+    const [kind, k] = key.split(':');
+    const all = { level: LEVELS, subject: [...SUBJECT_FOLDERS, ['3d', '3D']], tools: [...TOOL_FOLDERS, ['all', 'Study tools']] }[kind] || [];
+    return (all.find((x) => x[0] === k) || [])[1] || '';
+  }
+  // a row of glass folders: [{ key, name, own }], each with up to 3 of its labs as papers
+  function folderGrid(groups, cls = '') {
+    const grid = el('div', 'lf-grid' + (cls ? ' ' + cls : '')); grid.setAttribute('role', 'list');
+    grid.innerHTML = groups.map(({ key, name, own }) => {
+      const labs = groupLabs(key), level = key.startsWith('level:') ? ` data-level="${key.slice(6)}"` : '';
       const papers = labs.slice(0, 3).map((l) => {
         const pid = l.id === 'cells3d' ? 'cells3d' : l.id;
         return `<i class="lf-paper">${previewIds.has(pid) ? `<canvas class="lf-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : `<i class="lf-ico">${iconSvg(l.icon)}</i>`}<i class="lf-cap">${esc(l.name)} · ${esc(NAMES[l.subject] || '')}</i></i>`;
       }).join('');
-      return `<button type="button" class="lf${own ? ' lf-mine' : ''}" data-level="${k}" role="listitem" aria-label="${esc(name)}, ${labs.length} labs${own ? ', your level' : ''}">
+      const n = `${labs.length} ${labs.length === 1 ? (key.startsWith('tools:') ? 'tool' : 'lab') : (key.startsWith('tools:') ? 'tools' : 'labs')}`;
+      return `<button type="button" class="lf${own ? ' lf-mine' : ''}" data-group="${key}"${level} role="listitem" aria-label="${esc(name)}, ${n}${own ? ', your level' : ''}">
         <i class="lf-tab" aria-hidden="true"></i><i class="lf-back" aria-hidden="true"></i>
         <i class="lf-papers" aria-hidden="true">${papers}</i>
-        <span class="lf-front"><span class="lf-txt"><b>${esc(name)}</b><small>${labs.length} labs</small></span>
+        <span class="lf-front"><span class="lf-txt"><b>${esc(name)}</b><small>${n}</small></span>
           <span class="lf-go" aria-hidden="true">${own ? '<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>'}</span></span></button>`;
     }).join('');
+    return grid;
+  }
+  // the level folders (the student's own first), with a line on how they work
+  function folders(desk) {
+    const mine = levelNow(), order = [...LEVELS.filter(([k]) => k === mine), ...LEVELS.filter(([k]) => k !== mine)];
     const box = el('div', 'lf-box');
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    box.append(grid, hint);
+    box.append(folderGrid(order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine }))), hint);
     return box;
   }
+  const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
+  const toolFolders = () => folderGrid(TOOL_FOLDERS.map(([k, name]) => ({ key: 'tools:' + k, name })), 'lf-tools');
   function lpForYou() {
     const box = $('.lp-foryou');
     box.dataset.level = levelNow() || 'none';
     box.replaceChildren(folders(false));
+    $('.lp-sims').replaceChildren(simFolders());
+    $('.lp-toolsf').replaceChildren(toolFolders());
   }
   // a folder's papers fan out, then its level opens (Reduce Motion or Lite mode: at once)
   // (Reduce Motion or Lite mode: the gentle version in labs.css, and a shorter wait)
@@ -320,7 +346,7 @@ function createView() {
   root.addEventListener('focusout', (e) => lean(e.target.closest('.lf'), false));
   function lpHomeView() { lpList.hidden = true; lpHome.hidden = false; lp.dataset.view = 'home'; lpChip('all'); lpRec(); lpForYou(); pv(lpHome); previews().then(() => { if (lp.dataset.view === 'home') { lpForYou(); pv(lpHome); } }); } // (again once the previews are known)
   // the level changed (Edit profile): For you and Today's Lab follow at once
-  function levelChanged() { if (lp.dataset.view === 'home') lpHomeView(); if (!root.hidden && !phoneOn()) { deskLevel = ''; renderShelf(); } }
+  function levelChanged() { if (lp.dataset.view === 'home') lpHomeView(); if (!root.hidden && !phoneOn()) { deskGroup = ''; renderShelf(); } }
   function lpChip(id) { lp.querySelectorAll('[data-lp]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lp === id))); }
   let previewIds = new Set();
   previews().then((m) => { if (m) previewIds = new Set(m.PREVIEW_IDS); });
@@ -339,7 +365,7 @@ function createView() {
       return;
     }
     const f = e.target.closest('.lf');
-    if (f) { openFolder(f, () => { lpChip(''); previews().then(() => lpShow('level:' + f.dataset.level)); }); return; }
+    if (f) { openFolder(f, () => previews().then(() => lpShow(f.dataset.group))); return; }
     const go = e.target.closest('[data-lp-open]');
     if (go) { lpChip(go.dataset.lpOpen === 'tools' ? 'tools' : 'all'); previews().then(() => lpShow(go.dataset.lpOpen)); return; }
     if (e.target.closest('.lp-back')) { lpHomeView(); return; }
@@ -627,17 +653,17 @@ function createView() {
       requestAnimationFrame(() => setTimeout(() => { c.classList.remove('opening'); if (!root.hidden && !shelf.hidden) openLab(id); }));
     }
     // a computer's level folders: open one level, or back to all of them
-    const f = e.target.closest('.labs-foryou .lf');
-    if (f) { openFolder(f, () => { deskLevel = f.dataset.level; renderShelf(); $('.labs-scroll').scrollTop = 0; }); return; }
-    if (e.target.closest('.lf-back-btn')) { deskLevel = ''; renderShelf(); return; }
+    const f = e.target.closest('.labs-scroll .lf');
+    if (f) { openFolder(f, () => { deskGroup = f.dataset.group; renderShelf(); $('.labs-scroll').scrollTop = 0; }); return; }
+    if (e.target.closest('.lf-back-btn')) { deskGroup = ''; renderShelf(); return; }
     const sec = e.target.closest('.labs-tabs [data-section]');
-    if (sec && shelf.contains(sec)) { deskLevel = ''; setSection(sec.dataset.section); search.value = ''; renderShelf(); return; }
+    if (sec && shelf.contains(sec)) { deskGroup = ''; setSection(sec.dataset.section); search.value = ''; renderShelf(); return; }
     const s = e.target.closest('[data-subject], [data-subject-go]');
     if (s && shelf.contains(s)) {
       const v = s.dataset.subject || s.dataset.subjectGo;
       if (v === 'puzzles') { setSection('games'); renderShelf(); return; }
       setSection('learn');
-      subject = v; deskLevel = '';
+      subject = v; deskGroup = '';
       root.querySelectorAll('[data-subject]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.subject === subject)));
       renderShelf();
     }
@@ -661,9 +687,11 @@ function createView() {
     else {
       // the Games button (or Labs) asks for a shelf: leave any lab that's open and show it
       if (opts.section && !labView.hidden) backToShelf();
+      if (!opts.section && !opts.subject) deskGroup = ''; // (Learn opened: from its start)
       if (opts.subject === 'puzzles' || opts.section === 'games') setSection('games');
-      else if (opts.section === 'learn' || opts.section === 'tools') setSection(opts.section);
-      else if (opts.subject) { setSection('learn'); subject = opts.subject; root.querySelectorAll('[data-subject]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.subject === subject))); }
+      else if (opts.section === 'tools') { setSection('learn'); deskGroup = 'tools:all'; }
+      else if (opts.section === 'learn') { setSection('learn'); deskGroup = ''; }
+      else if (opts.subject && opts.subject !== 'all') { setSection('learn'); deskGroup = 'subject:' + opts.subject; }
       if (labView.hidden) {
         renderShelf();
         lp.dataset.view = ''; $('.lp-q').hidden = true; $('.lp-find').setAttribute('aria-pressed', 'false'); lpSync(); // (a phone: the Labs tab, from its start)
