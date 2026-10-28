@@ -26,14 +26,15 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=195';
+import { MUSEUM } from './museum.js?v=196';
 import { GAMES } from './games.js';
+import { KIDS } from './kids.js';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
-// labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone)
-const NO_HELPERS = new Set(['solar', 'space3d']);
-const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', history: 'History', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game' };
+// labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone; the little ones' labs need no reading)
+const NO_HELPERS = new Set(['solar', 'space3d', ...KIDS.map((l) => l.id)]);
+const NAMES = { biology: 'Biology', chemistry: 'Chemistry', physics: 'Physics', space: 'Space', math: 'Math', geography: 'Geography', history: 'History', puzzles: 'Puzzle', tools: 'Study tool', games: 'Game', kids: 'For little ones' };
 // the 3D explorers live in their own viewer; the shelf opens them too
 const EXPLORE = [
   { id: 'body3d', name: 'Human body 3D', subject: 'biology', blurb: 'Turn, zoom and pull apart the real body, 10 systems, tap any part.', explore: 'body',
@@ -41,10 +42,10 @@ const EXPLORE = [
   { id: 'cells3d', name: 'Cells 3D: animal & plant', subject: 'biology', blurb: 'A cell cut open in 3D: pick Animal or Plant, tap an organelle to see what it does.', explore: 'cells',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
 ];
-export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES, ...GAMES, ...TOOLS, ...MUSEUM];
+export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES, ...GAMES, ...TOOLS, ...MUSEUM, ...KIDS];
 // three shelves: Learn (simulations), Games (daily puzzles + games), Study tools
 const shelfOf = (l) => (l.subject === 'puzzles' || l.subject === 'games' ? 'games' : l.subject === 'tools' ? 'tools' : 'learn');
-const SIMS = LABS.filter((l) => shelfOf(l) === 'learn');
+const SIMS = LABS.filter((l) => shelfOf(l) === 'learn' && l.subject !== 'kids'); // (Today's Lab and For you: the little ones' labs open from Lessons)
 const is3d = (l) => !!(l.explore || l.three);
 
 // the phone's Labs tab: a sliding row of filters, Today's Lab, and For you (Learn, Study tools),

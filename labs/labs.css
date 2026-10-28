@@ -744,3 +744,22 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   /* the essay's sentences: each one its own row to tap (in a paragraph the lines sat too close) */
   .tl-para .tl-sent { display: block; min-height: 44px; margin: 4px 0; padding: 10px 12px; line-height: 1.45; }
 }
+
+/* For the little ones (kids.js): big, friendly targets (64px at least), nothing to read */
+:root { --kid-surface: rgba(255, 255, 255, .08); --kid-line: rgba(255, 255, 255, .22); --kid-ink: #f2f2f4; --kid-yes: #ffcf5a; --kid-num-bg: #f2f2f4; --kid-num-ink: #111111; }
+.kid-stage { background: radial-gradient(ellipse at 50% 30%, rgba(127, 178, 255, .1), transparent 70%); }
+.kid-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 14px; }
+.kid-btn { min-width: 64px; min-height: 64px; padding: 0 18px; border-radius: 20px; border: 2px solid var(--kid-line); background: var(--kid-surface); color: var(--kid-ink); font: 700 1.6rem/1 system-ui, sans-serif; cursor: pointer; touch-action: manipulation; }
+.kid-btn:focus-visible, .kid-thing:focus-visible { outline: 3px solid var(--lab-accent); outline-offset: 3px; }
+.kid-field { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 14px; padding: 16px; overflow-y: auto; touch-action: manipulation; }
+.kid-thing { position: relative; width: 88px; height: 88px; min-width: 64px; min-height: 64px; padding: 8px; border-radius: 22px; border: 2px solid var(--kid-line); background: var(--kid-surface); cursor: pointer; transition: transform .15s ease; }
+.kid-shapes .kid-thing { width: 120px; height: 120px; }
+.kid-thing svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.kid-thing[data-n] { border-color: var(--kid-yes); transform: scale(.94); }
+.kid-thing.kid-yes { border-color: var(--kid-yes); transform: scale(1.08); }
+.kid-num { position: absolute; top: -10px; right: -10px; min-width: 32px; height: 32px; padding: 0 6px; border-radius: 16px; background: var(--kid-num-bg); color: var(--kid-num-ink); font: 800 1.1rem/32px system-ui, sans-serif; text-align: center; }
+.kid-num:empty { display: none; }
+.kid-trace { cursor: crosshair; touch-action: none; }
+.kid-cheer { animation: kid-cheer .7s ease; }
+@keyframes kid-cheer { 0%, 100% { transform: none; } 30% { transform: scale(1.03) rotate(-1deg); } 60% { transform: scale(1.03) rotate(1deg); } }
+@media (prefers-reduced-motion: reduce) { .kid-thing, .kid-cheer { transition: none; animation: none; } .kid-thing[data-n], .kid-thing.kid-yes { transform: none; } }
