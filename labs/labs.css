@@ -764,14 +764,81 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 @keyframes kid-cheer { 0%, 100% { transform: none; } 30% { transform: scale(1.03) rotate(-1deg); } 60% { transform: scale(1.03) rotate(1deg); } }
 @media (prefers-reduced-motion: reduce) { .kid-thing, .kid-cheer { transition: none; animation: none; } .kid-thing[data-n], .kid-thing.kid-yes { transform: none; } }
 
-/* Learn's For you on a phone, by level: the student's own open and first, the others under Other levels */
-.lp-level-h { margin: 6px 2px 10px; font-size: 1rem; color: var(--text); }
-.lp-mine .lp-level-h { font-size: 1.05rem; }
-.lp-other { margin-top: 8px; }
-.lp-other > summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--lg-line); background: var(--lg-fill-thick); color: var(--text); font-weight: 650; cursor: pointer; list-style: none; }
-.lp-other > summary::-webkit-details-marker { display: none; }
-.lp-other > summary::after { content: '›'; font-size: 1.5rem; color: var(--muted); transition: transform .2s ease; }
-.lp-other[open] > summary::after { transform: rotate(90deg); }
-.lp-other > summary:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
-.lp-other .lp-level { margin-top: 16px; }
-@media (prefers-reduced-motion: reduce) { .lp-other > summary::after { transition: none; } }
+/* Learn's For you: a glass folder for each level (the student's own first, in smoky dark glass).
+   Papers (the level's first labs, live) peek out of a frosted pocket; hover (or press and hold) leans
+   the pocket back and lifts the papers; a tap fans them out before the level opens. */
+:root {
+  --lf-glass: 250, 249, 252; --lf-ink: #16151a; --lf-muted: #55535c; --lf-line: rgba(255, 255, 255, .75); --lf-edge: rgba(22, 21, 26, .1);
+  --lf-dark: 30, 26, 34; --lf-dark-ink: #f6f4f8; --lf-dark-muted: #cfcad6; --lf-shadow: 16, 14, 20;
+  /* the papers' liquid art (like the recording: streaks of blue and red, molten red, green marble) */
+  --lf-art-1: linear-gradient(118deg, #233f8f 0%, #dfe6f6 16%, #c22f45 30%, #f6d9d3 42%, #2d55b8 58%, #f3f1f6 72%, #a8263b 88%, #e9eef8 100%);
+  --lf-art-2: radial-gradient(circle at 70% 35%, #ff8a4c 0%, #e2442b 22%, #9c1a1f 45%, #3a0d12 70%), linear-gradient(160deg, #ff5a36, #2a090c);
+  --lf-art-3: conic-gradient(from 210deg at 55% 55%, #27624a, #d8c68e, #1c3a5e, #b8583a, #e6e1cf, #27624a);
+}
+.lf-h { margin: 4px 2px 12px; font-size: 1.15rem; }
+.lf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; margin: 6px 0 4px; }
+@media (min-width: 761px) { .labs-foryou .lf-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 24px 20px; } }
+.labs .lf { position: relative; display: block; width: 100%; aspect-ratio: 5 / 4; padding: 0; border: 0; background: none; color: var(--lf-ink); text-align: left; cursor: pointer; perspective: 800px; -webkit-tap-highlight-color: transparent; }
+.lf-tab, .lf-back { position: absolute; background: linear-gradient(170deg, rgba(var(--lf-glass), .97), rgba(var(--lf-glass), .78)); border: 1px solid var(--lf-edge); }
+.lf-tab { left: 0; top: 0; width: 44%; height: 22%; border-radius: 14px 18px 0 0; border-bottom: 0; }
+.lf-back { left: 0; right: 0; top: 10%; bottom: 0; border-radius: 4px 16px 18px 18px; box-shadow: 0 12px 26px rgba(var(--lf-shadow), .16); }
+.lf-papers { position: absolute; left: 9%; right: 9%; top: 15%; height: 58%; }
+.lf-paper { position: absolute; inset: 0; overflow: hidden; border-radius: 10px; background: #fff; border: 1px solid var(--lf-edge); box-shadow: 0 2px 8px rgba(var(--lf-shadow), .18);
+  transform-origin: 50% 100%; transition: transform .22s ease-out; }
+.lf-paper:nth-child(1) { transform: translate(-5%, 9%) rotate(-3deg); }
+.lf-paper:nth-child(2) { transform: translate(0, 3%); }
+.lf-paper:nth-child(3) { transform: translate(5%, 12%) rotate(3deg); }
+.lf-paper:nth-child(1) { background: var(--lf-art-1); }
+.lf-paper:nth-child(2) { background: var(--lf-art-2); }
+.lf-paper:nth-child(3) { background: var(--lf-art-3); }
+.lf-mine .lf-paper:nth-child(1) { background: var(--lf-art-2); }
+.lf-mine .lf-paper:nth-child(2) { background: var(--lf-art-1); }
+.lf-pv { display: block; width: 100%; height: 100%; mix-blend-mode: multiply; opacity: .85; } /* (the live drawing printed onto the art) */
+.lf-ico { display: grid; place-items: center; width: 100%; height: 70%; color: #fff; }
+.lf-ico svg { width: 34%; height: auto; fill: none; stroke: currentColor; stroke-width: 2.4; }
+.lf-paper i { position: absolute; top: 5px; right: 6px; max-width: 86%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border-radius: 6px;
+  background: rgba(var(--lf-glass), .94); color: var(--lf-ink); font: 600 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; }
+.lf-front { position: absolute; left: 0; right: 0; bottom: 0; height: 60%; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 12px;
+  border-radius: 16px; border: 1px solid var(--lf-line); background: linear-gradient(180deg, rgba(var(--lf-glass), .58), rgba(var(--lf-glass), .9) 70%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.7); backdrop-filter: blur(14px) saturate(1.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -12px 22px rgba(255, 255, 255, .35), 0 10px 24px rgba(var(--lf-shadow), .2);
+  transform-origin: 50% 100%; transition: transform .22s ease-out; }
+.lf-txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lf-txt b { font-size: .86rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lf-txt small { font: 500 .7rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--lf-muted); }
+.lf-go { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--lf-ink); background: rgba(var(--lf-glass), .98); border: 1px solid var(--lf-edge);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(var(--lf-shadow), .18); }
+.lf-go svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+/* the student's own level: smoky dark glass, a dark Open button */
+.labs .lf-mine { color: var(--lf-dark-ink); }
+.lf-mine .lf-tab, .lf-mine .lf-back { background: linear-gradient(170deg, rgba(var(--lf-dark), .96), rgba(var(--lf-dark), .82)); border-color: rgba(255, 255, 255, .12); }
+.lf-mine .lf-front { border-color: rgba(255, 255, 255, .22); background: linear-gradient(180deg, rgba(var(--lf-dark), .5), rgba(var(--lf-dark), .9) 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -12px 22px rgba(0, 0, 0, .25), 0 12px 26px rgba(var(--lf-shadow), .32); }
+.lf-mine .lf-txt small { color: var(--lf-dark-muted); }
+.lf-mine .lf-go { color: var(--lf-dark-ink); background: #0c0b0e; border-color: rgba(255, 255, 255, .3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 3px 8px rgba(0, 0, 0, .4); }
+/* lean: hover on a computer, press and hold on a phone */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.lite) .lf:hover .lf-front { transform: rotateX(-14deg); }
+  html:not(.lite) .lf:hover .lf-paper:nth-child(1) { transform: translate(-9%, -2%) rotate(-5deg); }
+  html:not(.lite) .lf:hover .lf-paper:nth-child(2) { transform: translate(0, -9%); }
+  html:not(.lite) .lf:hover .lf-paper:nth-child(3) { transform: translate(9%, 0) rotate(5deg); }
+}
+.lf.lf-lean .lf-front { transform: rotateX(-14deg); }
+.lf.lf-lean .lf-paper:nth-child(1) { transform: translate(-9%, -2%) rotate(-5deg); }
+.lf.lf-lean .lf-paper:nth-child(2) { transform: translate(0, -9%); }
+.lf.lf-lean .lf-paper:nth-child(3) { transform: translate(9%, 0) rotate(5deg); }
+/* open: the papers rise and fan out */
+.lf.lf-open .lf-front { transform: rotateX(-24deg); }
+.lf.lf-open .lf-paper { transition-duration: .32s; }
+.lf.lf-open .lf-paper:nth-child(1) { transform: translate(-16%, -26%) rotate(-8deg); }
+.lf.lf-open .lf-paper:nth-child(2) { transform: translate(0, -32%); }
+.lf.lf-open .lf-paper:nth-child(3) { transform: translate(16%, -24%) rotate(8deg); }
+.labs .lf:focus-visible { outline: 2px solid var(--lab-accent); outline-offset: 4px; border-radius: 18px; }
+.lf-hint { margin: 10px 2px 4px; text-align: center; font: 500 .72rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #b9b9c2); }
+.labs:not(.lp-on) .lf-hint { color: rgba(255, 255, 255, .7); }
+.labs-foryou { margin-bottom: 18px; }
+.labs-foryou .lf-h { color: #f2f2f4; }
+.lf-head { display: flex; align-items: center; gap: 12px; margin: 2px 0 12px; }
+.lf-head h3 { margin: 0; font-size: 1.2rem; }
+.lf-back-btn { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .lf .lf-front, .lf .lf-paper { transition: none; } } /* (and no lean or fan: labs.js leaves them off) */
