@@ -303,15 +303,21 @@ function createView() {
     box.replaceChildren(folders(false));
   }
   // a folder's papers fan out, then its level opens (Reduce Motion or Lite mode: at once)
+  // (Reduce Motion or Lite mode: the gentle version in labs.css, and a shorter wait)
   function openFolder(f, go) {
     if (f.classList.contains('lf-open')) return;
-    if (still()) { go(); return; }
     f.classList.add('lf-open');
-    setTimeout(() => { f.classList.remove('lf-open', 'lf-lean'); go(); }, 350);
+    setTimeout(() => { f.classList.remove('lf-open', 'lf-lean'); go(); }, still() ? 150 : 380);
   }
-  // press and hold on a phone leans the folder, as a hover does on a computer
-  root.addEventListener('pointerdown', (e) => { const f = e.pointerType !== 'mouse' && e.target.closest('.lf'); if (f && !still()) f.classList.add('lf-lean'); });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => root.addEventListener(t, () => root.querySelectorAll('.lf-lean').forEach((f) => f.classList.remove('lf-lean')), true));
+  // lean: the pointer over a folder (a mouse, a pen or a finger held down) or keyboard focus. Done here,
+  // not with CSS :hover, so it works whatever the browser says about hover
+  const lean = (f, on) => { if (f && !f.classList.contains('lf-open')) f.classList.toggle('lf-lean', on); };
+  root.addEventListener('pointerover', (e) => { const f = e.target.closest('.lf'); if (f && !(e.relatedTarget && f.contains(e.relatedTarget))) lean(f, true); });
+  root.addEventListener('pointerout', (e) => { const f = e.target.closest('.lf'); if (f && !(e.relatedTarget && f.contains(e.relatedTarget))) lean(f, false); });
+  root.addEventListener('pointerdown', (e) => lean(e.target.closest('.lf'), true));
+  root.addEventListener('pointercancel', () => root.querySelectorAll('.lf-lean').forEach((f) => lean(f, false)));
+  root.addEventListener('focusin', (e) => lean(e.target.closest('.lf'), true));
+  root.addEventListener('focusout', (e) => lean(e.target.closest('.lf'), false));
   function lpHomeView() { lpList.hidden = true; lpHome.hidden = false; lp.dataset.view = 'home'; lpChip('all'); lpRec(); lpForYou(); pv(lpHome); previews().then(() => { if (lp.dataset.view === 'home') { lpForYou(); pv(lpHome); } }); } // (again once the previews are known)
   // the level changed (Edit profile): For you and Today's Lab follow at once
   function levelChanged() { if (lp.dataset.view === 'home') lpHomeView(); if (!root.hidden && !phoneOn()) { deskLevel = ''; renderShelf(); } }

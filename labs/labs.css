@@ -784,7 +784,7 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 .lf-back { left: 0; right: 0; top: 10%; bottom: 0; border-radius: 4px 16px 18px 18px; box-shadow: 0 12px 26px rgba(var(--lf-shadow), .16); }
 .lf-papers { position: absolute; left: 9%; right: 9%; top: 15%; height: 58%; }
 .lf-paper { position: absolute; inset: 0; overflow: hidden; border-radius: 10px; background: #fff; border: 1px solid var(--lf-edge); box-shadow: 0 2px 8px rgba(var(--lf-shadow), .18);
-  transform-origin: 50% 100%; transition: transform .22s ease-out; }
+  transform-origin: 50% 100%; }
 .lf-paper:nth-child(1) { transform: translate(-5%, 9%) rotate(-3deg); }
 .lf-paper:nth-child(2) { transform: translate(0, 3%); }
 .lf-paper:nth-child(3) { transform: translate(5%, 12%) rotate(3deg); }
@@ -804,7 +804,7 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   border-radius: 16px; border: 1px solid var(--lf-line); background: linear-gradient(180deg, rgba(var(--lf-glass), .58), rgba(var(--lf-glass), .9) 70%);
   -webkit-backdrop-filter: blur(14px) saturate(1.7); backdrop-filter: blur(14px) saturate(1.7);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -12px 22px rgba(255, 255, 255, .35), 0 10px 24px rgba(var(--lf-shadow), .2);
-  transform-origin: 50% 100%; transition: transform .22s ease-out; }
+  transform-origin: 50% 100%; }
 .lf-txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 @media (max-width: 370px) { .lf-front { gap: 6px; padding: 9px 8px 9px 10px; } .lf-txt b { font-size: .8rem; } } /* (Kindergarten fits beside the button at 360) */
 .lf-txt b { -webkit-hyphens: auto; hyphens: auto; overflow-wrap: break-word; font-size: .86rem; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -819,23 +819,30 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -12px 22px rgba(0, 0, 0, .25), 0 12px 26px rgba(var(--lf-shadow), .32); }
 .lf-mine .lf-txt small { color: var(--lf-dark-muted); }
 .lf-mine .lf-go { color: var(--lf-dark-ink); background: #0c0b0e; border-color: rgba(255, 255, 255, .3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 3px 8px rgba(0, 0, 0, .4); }
-/* lean: hover on a computer, press and hold on a phone */
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  html:not(.lite) .lf:hover .lf-front { transform: rotateX(-14deg); }
-  html:not(.lite) .lf:hover .lf-paper:nth-child(1) { transform: translate(-9%, -2%) rotate(-5deg); }
-  html:not(.lite) .lf:hover .lf-paper:nth-child(2) { transform: translate(0, -9%); }
-  html:not(.lite) .lf:hover .lf-paper:nth-child(3) { transform: translate(9%, 0) rotate(5deg); }
+/* lean: the pointer over a folder, a finger held on it, or keyboard focus (labs.js adds lf-lean, so it
+   never depends on the browser's hover support); the pocket tips forward and the papers rise and fan */
+.lf .lf-front, .lf .lf-paper { transition: transform .26s cubic-bezier(.34, 1.45, .64, 1); }
+.lf.lf-lean .lf-front { transform: rotateX(-22deg); }
+.lf.lf-lean .lf-paper:nth-child(1) { transform: translate(-12%, -38%) rotate(-6deg); }
+.lf.lf-lean .lf-paper:nth-child(2) { transform: translate(0, -45%); }
+.lf.lf-lean .lf-paper:nth-child(3) { transform: translate(12%, -36%) rotate(6deg); }
+/* open: the papers fly up above the folder and spread, then the level opens */
+.lf.lf-open .lf-front { transform: rotateX(-28deg); }
+.lf.lf-open .lf-paper { transition-duration: .38s; }
+.lf.lf-open .lf-paper:nth-child(1) { transform: translate(-30%, -82%) rotate(-10deg); }
+.lf.lf-open .lf-paper:nth-child(2) { transform: translate(0, -96%); }
+.lf.lf-open .lf-paper:nth-child(3) { transform: translate(30%, -80%) rotate(10deg); }
+/* Reduce Motion or Lite mode: a gentle version, the papers rise a little, nothing turns */
+@media (prefers-reduced-motion: reduce) {
+  .lf .lf-front, .lf .lf-paper { transition: transform .15s ease-out, opacity .15s ease-out; }
+  .lf.lf-lean .lf-front, .lf.lf-open .lf-front { transform: none; }
+  .lf.lf-lean .lf-paper:nth-child(n), .lf.lf-open .lf-paper:nth-child(n) { transform: translateY(-14%); }
+  .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 }
-.lf.lf-lean .lf-front { transform: rotateX(-14deg); }
-.lf.lf-lean .lf-paper:nth-child(1) { transform: translate(-9%, -2%) rotate(-5deg); }
-.lf.lf-lean .lf-paper:nth-child(2) { transform: translate(0, -9%); }
-.lf.lf-lean .lf-paper:nth-child(3) { transform: translate(9%, 0) rotate(5deg); }
-/* open: the papers rise and fan out */
-.lf.lf-open .lf-front { transform: rotateX(-24deg); }
-.lf.lf-open .lf-paper { transition-duration: .32s; }
-.lf.lf-open .lf-paper:nth-child(1) { transform: translate(-16%, -26%) rotate(-8deg); }
-.lf.lf-open .lf-paper:nth-child(2) { transform: translate(0, -32%); }
-.lf.lf-open .lf-paper:nth-child(3) { transform: translate(16%, -24%) rotate(8deg); }
+html.lite .lf .lf-front, html.lite .lf .lf-paper { transition: transform .15s ease-out, opacity .15s ease-out; }
+html.lite .lf.lf-lean .lf-front, html.lite .lf.lf-open .lf-front { transform: none; }
+html.lite .lf.lf-lean .lf-paper:nth-child(n), html.lite .lf.lf-open .lf-paper:nth-child(n) { transform: translateY(-14%); }
+html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .labs .lf:focus-visible { outline: 2px solid var(--lab-accent); outline-offset: 4px; border-radius: 18px; }
 .lf-hint { margin: 10px 2px 4px; text-align: center; font: 500 .72rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #b9b9c2); }
 .labs:not(.lp-on) .lf-hint { color: rgba(255, 255, 255, .7); }
@@ -844,4 +851,3 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 .lf-head { display: flex; align-items: center; gap: 12px; margin: 2px 0 12px; }
 .lf-head h3 { margin: 0; font-size: 1.2rem; }
 .lf-back-btn { min-height: 44px; }
-@media (prefers-reduced-motion: reduce) { .lf .lf-front, .lf .lf-paper { transition: none; } } /* (and no lean or fan: labs.js leaves them off) */
