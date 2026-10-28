@@ -7648,6 +7648,58 @@ test('for the little ones (Nursery and Kindergarten): Trace letters accepts a tr
   }
 });
 
+test('phone You sheets (iPhone, with the notch and home bar): You, Account, Study, Voice, Privacy and data, Plans and All settings start under the status bar, end above the tab bar, are not see-through, keep Back and Close on screen (44px) while scrolling; each tab’s own icon moves when tapped (still with Reduce Motion or Lite mode)', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
+  await page.waitForSelector('html.native .tabbar .tab[data-tab="you"]');
+  await page.evaluate(() => { document.documentElement.style.setProperty('--safe-top', '47px'); document.documentElement.style.setProperty('--safe-bottom', '34px'); });
+  const check = (name) => page.evaluate((nm) => {
+    const card = document.querySelector('#settings-panel .settings-card'), head = card.querySelector('.set-head'), bar = document.querySelector('.tabbar').getBoundingClientRect();
+    const r = (e) => e.getBoundingClientRect(), cs = getComputedStyle(card), ps = getComputedStyle(document.getElementById('settings-panel'));
+    const alpha = ((cs.backgroundColor.match(/rgba?\(([^)]+)\)/) || [])[1] || '').split(',').map(Number)[3];
+    const shown = (e) => e.offsetParent !== null && getComputedStyle(e).visibility !== 'hidden';
+    const btns = [card.querySelector('.set-back'), card.querySelector('.set-x')].filter(shown);
+    card.scrollTop = card.scrollHeight; // (the last control, scrolled to)
+    const ctrls = [...card.querySelectorAll('button, input, select, a, summary')].filter(shown);
+    const last = ctrls.at(-1), lr = last && r(last), hr = r(head), cr = r(card);
+    return { nm, headTop: Math.round(hr.top), cardTop: Math.round(cr.top), cardBottom: Math.round(cr.bottom), barTop: Math.round(bar.top), lastBottom: lr && Math.round(lr.bottom), last: last && (last.textContent || last.id || last.tagName).trim().slice(0, 30),
+      bg: cs.backgroundColor, img: cs.backgroundImage, opaque: (alpha === undefined || Number.isNaN(alpha) || alpha === 1) && cs.backgroundImage === 'none' && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) && !/rgba/.test(ps.backgroundColor), behind: ps.backgroundColor,
+      headAfterScroll: Math.round(r(head).top), btns: btns.map((x) => { const q = r(x); return [Math.round(q.width), Math.round(q.height), Math.round(q.top)]; }) };
+  }, name);
+  const ok = (g) => g.headTop >= 47 && g.cardTop >= 47 && g.cardBottom <= g.barTop + 1 && g.lastBottom <= g.barTop + 1 && g.opaque && Math.abs(g.headAfterScroll - g.headTop) <= 1 && g.btns.length >= 1 && g.btns.every(([w, h, t]) => w >= 44 && h >= 44 && t >= 47);
+  await page.click('.tab[data-tab="you"]');
+  await page.waitForSelector('#settings-panel:not([hidden]) .set-profile');
+  await page.waitForTimeout(400);
+  const you = await check('You');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/you-sheet.png' });
+  expect(ok(you), 'the You sheet: ' + JSON.stringify(you));
+  for (const [go, name] of [['account', 'Account'], ['study', 'Study'], ['voice', 'Voice'], ['privacy', 'Privacy and data'], ['plans', 'Plans'], ['all', 'All settings']]) {
+    await page.evaluate(() => { document.querySelector('#settings-panel .settings-card').scrollTop = 0; });
+    await page.click(`#settings-panel .set-link[data-open="${go}"]`);
+    await page.waitForFunction((p) => document.querySelector('#settings-panel .settings-card').dataset.page === p, go);
+    await page.waitForTimeout(250);
+    const g = await check(name);
+    expect(ok(g), `the ${name} sheet: ` + JSON.stringify(g));
+    await page.click('#settings-panel .set-back');
+    await page.waitForFunction(() => document.querySelector('#settings-panel .settings-card').dataset.page === 'profile');
+  }
+  // each tab's own icon moves when tapped
+  const moving = (t) => page.evaluate((tab) => { const b = document.querySelector(`.tab[data-tab="${tab}"]`), s = b.querySelector('svg'); return { cls: b.classList.contains('tab-anim'), n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length }; }, t);
+  for (const t of ['home', 'chat', 'labs', 'games', 'cards', 'you']) {
+    await page.click(`.tab[data-tab="${t}"]`);
+    const m = await moving(t);
+    expect(m.cls && m.n >= 1, `the ${t} icon moves when tapped: ` + JSON.stringify(m));
+  }
+  // Reduce Motion: no movement, just the colour
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const t of ['home', 'games']) {
+    await page.click(`.tab[data-tab="${t}"]`);
+    const m = await moving(t);
+    expect(m.n === 0, `with Reduce Motion the ${t} icon stays still: ` + JSON.stringify(m));
+  }
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {

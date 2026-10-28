@@ -2967,3 +2967,30 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 .lessons-back { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--surface); color: var(--text); font-size: 1.6rem; line-height: 1; cursor: pointer; }
 .lessons-sub { margin: 6px 0 14px; text-align: center; color: var(--muted); }
 .desk-lessons .lessons-list { margin-top: 8px; }
+
+/* phone You sheets (You, Account, Study, Voice, Privacy, Plans, All settings): under the status bar,
+   above the floating tab bar, solid (nothing shows through), the header with Back and Close stays put */
+@media (max-width: 760px) {
+  html.native .settings-panel { position: fixed; inset: 0; padding: var(--safe-top) 0 calc(76px + var(--safe-bottom)); background: var(--surface); }
+  html.native .settings-card { max-height: 100%; background: var(--surface); background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding-bottom: 22px; }
+  html.native .set-head { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: var(--border); }
+}
+
+/* the tapped tab's own icon moves for a moment (native.js adds tab-anim and tab-anim-<tab>) */
+.tab.tab-anim svg { transform-origin: 50% 60%; animation: .42s cubic-bezier(.3, 1.4, .5, 1) both; }
+.tab.tab-anim svg path { stroke-dasharray: 1; animation: tab-draw .42s ease-out both; }
+.tab-anim-home svg { animation-name: tab-home !important; }
+.tab-anim-chat svg { animation-name: tab-chat !important; }
+.tab-anim-labs svg { transform-origin: 50% 90% !important; animation-name: tab-labs !important; }
+.tab-anim-games svg { animation-name: tab-games !important; }
+.tab-anim-cards svg { animation-name: tab-cards !important; }
+.tab-anim-you svg { transform-origin: 50% 100% !important; animation-name: tab-you !important; }
+@keyframes tab-draw { from { stroke-dashoffset: .6; } to { stroke-dashoffset: 0; } }
+@keyframes tab-home { 0% { transform: none; } 35% { transform: translateY(-4px) scaleY(1.06); } 65% { transform: translateY(1px) scaleY(.94); } 100% { transform: none; } }
+@keyframes tab-chat { 0% { transform: scale(.8); } 45% { transform: scale(1.15) rotate(-8deg); } 70% { transform: scale(1) rotate(6deg); } 100% { transform: none; } }
+@keyframes tab-labs { 0% { transform: none; } 25% { transform: rotate(-14deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } 100% { transform: none; } }
+@keyframes tab-games { 0% { transform: none; } 30% { transform: rotate(-12deg) scale(1.08); } 65% { transform: rotate(8deg); } 100% { transform: none; } }
+@keyframes tab-cards { 0% { transform: none; } 40% { transform: translate(3px, -3px) rotate(6deg); } 100% { transform: none; } }
+@keyframes tab-you { 0% { transform: none; } 30% { transform: rotate(-8deg) translateY(1px); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tab.tab-anim svg, .tab.tab-anim svg path { animation: none !important; } }
+html.lite .tab.tab-anim svg, html.lite .tab.tab-anim svg path { animation: none !important; }
