@@ -5526,7 +5526,8 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   const files = [...fs.readdirSync(ROOT).filter((f) => /\.(js|html)$/.test(f)), ...['labs', 'explore', 'extension', 'landing'].flatMap((d) => fs.readdirSync(path.join(ROOT, d)).filter((f) => /\.(js|html)$/.test(f)).map((f) => d + '/' + f))];
   const keep = files.filter((f) => /keep going/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   expect(!keep.length, '"Keep going" is still in: ' + keep.join(', '));
-  const synth = files.filter((f) => /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  // (but the little ones' labs, where Cassie says a letter or a number with the device's own free voice)
+  const synth = files.filter((f) => f !== 'labs/kids.js' && /speechSynthesis|SpeechSynthesisUtterance/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   expect(!synth.length, 'the device voice is still used in: ' + synth.join(', '));
   // the owner's voice guide: the numbers, what to raise in Cloudflare, no key, no dashes
   const guide = fs.readFileSync(path.join(ROOT, 'docs/voice-setup.md'), 'utf8');
@@ -7553,6 +7554,96 @@ test('Teach me: Cassie tutors inside a lab — steps out loud, pointing at the e
     await ph.page.click('.lab-teach');
     await ph.page.waitForFunction(() => /plus next to Protons/.test(document.querySelector('.tut-say').textContent), null, { timeout: 15000 });
     await ph.page.screenshot({ path: process.env.SHOTS + '/tutor-phone.png' });
+    await ph.ctx.close();
+  }
+});
+
+test('for the little ones (Nursery and Kindergarten): Trace letters accepts a traced A and not a scribble, Count with me says one, two, three as three are tapped, Shapes and colours names one to tap, every target is at least 64px, and Cassie says it all aloud', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, setup: async (c) => {
+    await c.addInitScript(() => {
+      window.__said = [];
+      const synth = { speaking: false, getVoices: () => [], addEventListener() {}, cancel() {}, speak(u) { window.__said.push(u.text); } };
+      Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    });
+  } });
+  const ids = await page.evaluate(async () => (await import('./labs/labs.js')).LABS.map((l) => l.id));
+  expect(['trace-letters', 'trace-numbers', 'count', 'shapes'].every((id) => ids.includes(id)), 'the four kids labs are on the shelf: ' + ids.filter((x) => /trace|count|shape/.test(x)));
+  const small = async () => page.$$eval('.lab-view:not([hidden]) .kid-btn, .lab-view:not([hidden]) .kid-thing', (bs) => bs.filter((x) => { const r = x.getBoundingClientRect(); return r.width < 64 || r.height < 64; }).map((x) => x.className + ' ' + (x.getAttribute('aria-label') || '')));
+  // the glyph's path on screen, worked out the same way the lab lays it out
+  const path = (glyph) => page.evaluate(async (g) => {
+    const { GLYPHS, samples } = await import('./labs/kids.js');
+    const c = document.querySelector('.lab-view:not([hidden]) .kid-trace'), r = c.getBoundingClientRect(), s = Math.min(r.width, r.height) * 0.72;
+    const pts = samples(GLYPHS[g], { x: (r.width - s * 0.9) / 2, y: (r.height - s) / 2, s });
+    return { pts: pts.map((p) => ({ x: r.left + p.x, y: r.top + p.y, s: p.s })), box: { x: r.left + (r.width - s * 0.9) / 2, y: r.top + (r.height - s) / 2, s } };
+  }, glyph);
+
+  // 1. Trace letters: A, followed with the finger, counts and Cassie cheers
+  await page.evaluate(() => openLabs('trace-letters'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="trace-letters"] .kid-trace');
+  await page.waitForTimeout(300);
+  expect(await page.$eval('.lab-stage', (s) => s.dataset.glyph) === 'A', 'starts on A');
+  expect((await page.evaluate(() => window.__said)).includes('A'), 'Cassie says A: ' + await page.evaluate(() => window.__said));
+  expect(await page.locator('.lab-view:not([hidden]) .lab-ask:visible, .lab-view:not([hidden]) .lab-quiz:visible').count() === 0, 'no Ask or Quiz to read for the little ones');
+  const A = await path('A');
+  let stroke = -1;
+  for (const p of A.pts) { if (p.s !== stroke) { if (stroke >= 0) await page.mouse.up(); await page.mouse.move(p.x, p.y); await page.mouse.down(); stroke = p.s; } else await page.mouse.move(p.x, p.y, { steps: 2 }); }
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('.lab-stage').dataset.done === '1', null, { timeout: 3000 }).catch(() => {});
+  expect(await page.$eval('.lab-stage', (s) => s.dataset.done) === '1', 'a traced A is accepted: ' + await page.$eval('.lab-stage', (s) => s.dataset.progress + '%'));
+  expect((await page.evaluate(() => window.__said)).some((t) => /^A! .*great job/i.test(t)), 'Cassie says A and cheers: ' + await page.evaluate(() => window.__said));
+  // 2. the next letter, scribbled over: not accepted
+  await page.click('.kid-btn[aria-label="Next one"]');
+  await page.waitForFunction(() => document.querySelector('.lab-stage').dataset.glyph === 'B');
+  const B = await path('B'), { x, y, s } = B.box;
+  await page.mouse.move(x + s * 0.5, y + s * 0.5); await page.mouse.down();
+  for (let k = 0; k < 160; k++) { const a = k * 0.7; await page.mouse.move(x + s * (0.55 + 0.3 * Math.cos(a) * Math.sin(k * 0.13)), y + s * (0.5 + 0.35 * Math.sin(a * 1.3))); }
+  for (let k = 0; k < 20; k++) await page.mouse.move(x + s * (k % 2 ? 0.95 : 0.1), y + s * (0.15 + k * 0.04));
+  await page.mouse.up();
+  const sb = await page.$eval('.lab-stage', (st) => ({ done: st.dataset.done, progress: +st.dataset.progress }));
+  expect(sb.done !== '1' && sb.progress < 80, 'a scribble is not accepted: ' + JSON.stringify(sb));
+  expect(!(await small()).length, 'every target in Trace letters is 64px: ' + await small());
+
+  // 3. Count with me: tap three, Cassie says one, two, three
+  await page.evaluate(() => openLabs('count'));
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="count"] .kid-thing');
+  await page.evaluate(() => { window.__said = []; });
+  const things = page.locator('.lab-view:not([hidden]) .kid-thing');
+  expect(await things.count() >= 3, 'at least three to count: ' + await things.count());
+  for (let k = 0; k < 3; k++) await things.nth(k).click();
+  await things.nth(0).click(); // (tapping one again doesn't count it twice)
+  const said = await page.evaluate(() => window.__said);
+  expect(JSON.stringify(said.slice(0, 3)) === '["one","two","three"]' && said.length === 3, 'counting to three says three numbers: ' + JSON.stringify(said));
+  expect(await page.$eval('.lab-stage', (st) => st.dataset.counted) === '3', 'three counted');
+  expect(!(await small()).length, 'every target in Count with me is 64px: ' + await small());
+
+  // 4. Shapes and colours: Cassie names one; a wrong tap says what it is, the right one cheers
+  await page.evaluate(() => { window.__said = []; openLabs('shapes'); });
+  await page.waitForSelector('.lab-view:not([hidden])[data-lab="shapes"] .kid-shape');
+  const want = await page.$eval('.lab-stage', (st) => st.dataset.want);
+  expect((await page.evaluate(() => window.__said)).includes(`Tap the ${want}.`), 'Cassie says which to tap: ' + await page.evaluate(() => window.__said));
+  const [colour, shape] = want.split(' ');
+  await page.click(`.lab-view:not([hidden]) .kid-shape:not([data-shape="${shape}"][data-colour="${colour}"])`);
+  expect(/Try again/.test((await page.evaluate(() => window.__said)).at(-1)), 'a wrong tap is gently told');
+  await page.click(`.lab-view:not([hidden]) .kid-shape[data-shape="${shape}"][data-colour="${colour}"]`);
+  expect(/^Yes!/.test((await page.evaluate(() => window.__said)).at(-1)), 'the right tap cheers');
+  expect(!(await small()).length, 'every target in Shapes and colours is 64px: ' + await small());
+  expect(await page.locator('.lab-view:not([hidden]) .kid-btn').count() >= 2, 'big buttons to hear it again and go on');
+
+  // no typing, no dashes in their words
+  const text = require('fs').readFileSync(require('path').join(ROOT, 'labs/kids.js'), 'utf8');
+  expect(!/[–—]/.test(text), 'no dashes in kids.js');
+  expect(await page.locator('.lab-view:not([hidden]) .lab-stage input, .lab-view:not([hidden]) .lab-panel input').count() === 0, 'nothing to type');
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  if (process.env.SHOTS) { // how they look on a phone
+    const ph = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 360, height: 740 } });
+    for (const id of ['trace-letters', 'count', 'shapes']) {
+      await ph.page.evaluate((x) => openLabs(x), id);
+      await ph.page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .kid-btn`);
+      await ph.page.waitForTimeout(400);
+      await ph.page.screenshot({ path: `${process.env.SHOTS}/kids-${id}.png` });
+    }
     await ph.ctx.close();
   }
 });
