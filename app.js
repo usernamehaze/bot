@@ -2005,6 +2005,7 @@ const LAB_INFO = { pendulum: ['Pendulum', 'Physics', 10], ph: ['pH mixer', 'Chem
   chance: ['Chance machine', 'Maths', 8], magnets: ['Magnetic field', 'Physics', 10], 'build-cell': ['Build a cell', 'Biology', 15], optics: ['Lenses and mirrors', 'Physics', 12], units: ['Unit converter', 'Maths', 5],
   'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10] };
 const HUB_BOXES = [
+  ['lessons', 'Lessons', 'Made for your level', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>'],
   ['lab', 'Labs', 'Simulations to play with', HUB_ICON.lab],
   ['games', 'Games', 'Puzzles and quick games', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01"/></svg>'],
   ['today', 'Today’s lab', 'A new lab every day', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M10 14.5l1.5 1.5 3-3"/></svg>'],
@@ -2097,6 +2098,85 @@ window.cassieEmpty = cassieEmpty;
 const HUB_BOXED = /^(Quiz me|Research a topic|Labs: try a simulation|Study together|Flashcards)/;
 const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
 const onPhoneHome = () => !!(window.CassieNative && document.documentElement.classList.contains('native'));
+/* ---------- Lessons: what each level studies, each one opening a tool Cassie already has ----------
+   The student's level (state.profile.grade) picks the list; changing the level changes it. */
+const LESSON_LEVELS = { pre: 'Nursery and Kindergarten', elem: 'Elementary', jhs: 'Junior High', shs: 'Senior High', college: 'College and board exams' };
+// [title, one line, what it opens, strand (Senior High)]
+const LESSONS = {
+  pre: [['Trace letters', 'Trace A to Z with your finger', 'lab:trace-letters'], ['Trace numbers', 'Trace 0 to 10', 'lab:trace-numbers'],
+    ['Count with me', 'Tap and count up to 10', 'lab:count'], ['Shapes and colours', 'Tap the one Cassie names', 'lab:shapes']],
+  elem: [['Read with Cassie', 'A short story, a little at a time, to read aloud', 'ask:Read with me: tell me a short story for my grade, one small part at a time (3 or 4 easy sentences). After each part, ask me one easy question about it, then wait for me.'],
+    ['Phonics and spelling', 'A spelling quiz at your level', 'quiz:phonics and spelling for my grade'], ['Times tables', 'Practise multiplying', 'quiz:the times tables from 2 to 12'],
+    ['Fractions', 'Run the Fraction Diner', 'lab:diner'], ['Science labs for kids', 'Mix colours, swing a pendulum and more', 'labs:learn']],
+  jhs: [['Algebra', 'Solve equations step by step', 'ask:Teach me algebra step by step: start with solving a one-step equation, explain it simply, then give me one to try and wait for my answer.'],
+    ['Science labs', 'Biology, chemistry and physics to play with', 'labs:learn'], ['Essay helper', 'Plan and improve an essay', 'lab:essay'], ['Quiz me', 'A practice quiz on anything', 'quiz:']],
+  shs: [['Physics labs', 'Launch, swing and bend light', 'lab:projectile', 'STEM'], ['Calculus', 'Functions, slopes and areas', 'lab:function', 'STEM'],
+    ['Accounting basics', 'Assets, liabilities and the accounting equation', 'ask:Teach me accounting basics for ABM step by step: start with the accounting equation (assets = liabilities + equity) with a simple example, then give me one to try.', 'ABM'],
+    ['Essays', 'Plan and improve an essay', 'lab:essay', 'HUMSS'], ['Research', 'Real sources for a topic', 'research', 'HUMSS'],
+    ['Practical research', 'From a research question to your methods', 'ask:Guide me through practical research for Senior High: help me write a clear research question first, then walk me through choosing a method, one step at a time.', 'Every strand']],
+  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['LET reviewer', 'Practice for the Licensure Exam for Teachers', 'quiz:the LET (Licensure Examination for Teachers), Professional Education']],
+};
+function lessonLevel() {
+  const g = (state.profile && state.profile.grade) || '';
+  if (/^(Nursery|Kindergarten)$/.test(g)) return 'pre';
+  if (g === WORKING) return 'college';
+  return { elementary: 'elem', middle: 'jhs', high: 'shs', college: 'college' }[levelForGrade(g)] || '';
+}
+// the list for this level, as buttons (Senior High: one group per strand)
+function lessonsList() {
+  const lv = lessonLevel(), box = document.createElement('div');
+  box.className = 'lessons-list'; box.dataset.level = lv || 'none';
+  if (!lv) {
+    box.innerHTML = '<p class="lessons-none">Pick your level, and your lessons show up here.</p><button type="button" class="btn lessons-level">Set my level</button>';
+    box.querySelector('.lessons-level').addEventListener('click', () => { closeLessons(); openProfile(false); });
+    return box;
+  }
+  let group = null;
+  LESSONS[lv].forEach(([t, d, go, strand]) => {
+    if (strand && (!group || group.dataset.strand !== strand)) { group = document.createElement('h3'); group.className = 'lessons-strand'; group.dataset.strand = strand; group.textContent = strand; box.appendChild(group); }
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lesson'; b.dataset.go = go;
+    b.innerHTML = '<b></b><small></small>';
+    b.querySelector('b').textContent = t; b.querySelector('small').textContent = d;
+    b.addEventListener('click', () => { closeLessons(); goLesson(go); });
+    box.appendChild(b);
+  });
+  return box;
+}
+function goLesson(go) {
+  const toChat = () => { if (onPhoneHome()) window.CassieNative.go('chat'); else if (document.body.classList.contains('desk-on')) deskGo('chat'); };
+  const [k, arg = ''] = go.split(/:(.*)/s);
+  if (k === 'lab') openLabs(arg);
+  else if (k === 'labs') openLabs(undefined, { section: arg });
+  else if (k === 'quiz') { toChat(); startQuizOn(arg); }
+  else if (k === 'ask') { toChat(); runTool({ label: 'Lesson', text: arg, send: true }); }
+  else if (k === 'research') hubAct('research');
+  else if (k === 'pdf') { toChat(); const f = document.getElementById('file-input'); if (f) f.click(); }
+  else if (k === 'plan') openExamSheet();
+}
+// a phone: the lessons on their own screen (Back closes it); a computer: its Lessons page
+function openLessons() {
+  if (document.body.classList.contains('desk-on') || (sideWide.matches && !onPhoneHome())) { deskGo('lessons'); return; }
+  closeLessons();
+  const w = document.createElement('div');
+  w.className = 'lessons-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'lessons-h');
+  const lv = lessonLevel();
+  w.innerHTML = `<div class="lessons-head"><button type="button" class="lessons-back" aria-label="Back">‹</button><h2 id="lessons-h">Lessons</h2></div><p class="lessons-sub">${lv ? 'Made for ' + LESSON_LEVELS[lv] : 'Made for your level'}</p>`;
+  w.appendChild(lessonsList());
+  w.querySelector('.lessons-back').addEventListener('click', closeLessons);
+  w.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLessons(); });
+  document.body.appendChild(w);
+  w.querySelector('.lessons-back').focus({ preventScroll: true });
+}
+function closeLessons() { document.querySelectorAll('.lessons-sheet').forEach((x) => x.remove()); }
+function deskLessons() {
+  const el = document.createElement('div');
+  el.className = 'desk desk-lessons';
+  const lv = lessonLevel();
+  el.innerHTML = deskHeader('Lessons', lv ? `Made for ${LESSON_LEVELS[lv]}. Change your level in your profile and these change too.` : 'Pick your level and your lessons show up here.');
+  el.appendChild(lessonsList());
+  return el;
+}
 // where each part of the hub goes (on a phone, through the tab bar so the right tab lights up)
 function hubAct(act) {
   const nav = (t) => (onPhoneHome() ? window.CassieNative.go(t) : null);
@@ -2104,6 +2184,7 @@ function hubAct(act) {
   if (act === 'cards') { if (onPhoneHome()) nav('cards'); else if (window.CassieCards) window.CassieCards.open(); return; }
   if (act === 'lab') { if (onPhoneHome()) nav('labs'); else openLabs(); return; }
   if (act === 'today') { openLabs(todayLab()); return; }
+  if (act === 'lessons') { openLessons(); return; }
   if (act === 'games') { openLabs(undefined, { section: 'games' }); return; }
   if (act === 'board') { nav('chat'); const bb = document.getElementById('board-btn'); if (bb) bb.click(); return; }
   if (act === 'room') { if (!SERVER) nav('chat'); const ex = HOME_EXAMPLES.find((x) => /study room/i.test(x.label)); if (ex) runTool(ex); return; } // (no server: the reason shows in the chat)
@@ -2572,6 +2653,14 @@ function deskChrome() {
   if (dot) { dot.hidden = !due; document.getElementById('top-bell').setAttribute('aria-label', `Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}`); }
 }
 setInterval(deskChrome, 2000);
+(() => { // (Lessons in the computer's Menu, just after Study plan)
+  const plan = document.querySelector('#side-nav [data-page="plan"]');
+  if (!plan || document.querySelector('#side-nav [data-page="lessons"]')) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'side-tool'; b.dataset.page = 'lessons'; b.dataset.tip = 'Lessons';
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg><span>Lessons</span>';
+  plan.after(b);
+})();
 document.querySelectorAll('.side-nav [data-page]').forEach((b) => b.addEventListener('click', () => {
   const pg = b.dataset.page;
   if (pg === 'home') goHome();
@@ -2648,7 +2737,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !topRemi
 const DESK_KEY = 'cassie.deskPage';
 var deskPage = 'home';
 try { deskPage = sessionStorage.getItem(DESK_KEY) || 'home'; } catch (e) { /* this visit only */ }
-const DESK_PAGES = { home: () => deskHome(), chat: () => deskChatStart(), chats: () => deskChats(), plan: () => deskPlan(), calendar: () => deskCalendar(), progress: () => deskProgress() };
+const DESK_PAGES = { home: () => deskHome(), chat: () => deskChatStart(), chats: () => deskChats(), plan: () => deskPlan(), lessons: () => deskLessons(), calendar: () => deskCalendar(), progress: () => deskProgress() };
 function setDeskPage(page) { deskPage = DESK_PAGES[page] ? page : 'home'; try { sessionStorage.setItem(DESK_KEY, deskPage); } catch (e) { /* ignore */ } }
 // a new chat on a computer: a hello, a few ideas, and the ask box under it
 function deskChatStart() {
@@ -8434,7 +8523,7 @@ function frSignIn() {
 // 4. The questions, one a screen: your name, where you are in your learning, what brings you, how you
 // like to learn. Every screen has Skip for now (it keeps what's answered and goes straight in).
 // Where you are: [key, what the pill says, the level saved in the profile (GRADE_GROUPS)]
-const FR_WHO = [['elem', 'Elementary', 'Elementary'], ['jhs', 'Junior High', 'Junior High'], ['shs', 'Senior High', 'Senior High'], ['college', 'College / University', 'College'],
+const FR_WHO = [['kinder', 'Nursery or Kindergarten', 'Kindergarten'], ['elem', 'Elementary', 'Elementary'], ['jhs', 'Junior High', 'Junior High'], ['shs', 'Senior High', 'Senior High'], ['college', 'College / University', 'College'],
   ['board', 'Reviewing for a board exam', 'Board exam reviewee'], ['teach', 'Teacher or parent', WORKING], ['work', 'Working / lifelong learner', WORKING]];
 const FR_GOALS = [['exam', 'Getting ready for an exam'], ['read', 'Getting through readings and PDFs'], ['homework', 'Homework and math problems'], ['learn', 'Learning something new'], ['labs', 'Exploring labs and games']];
 const FR_STYLES = [['brief', 'Quick bullet summaries'], ['deep', 'Deep step-by-step breakdowns'], ['voice', 'Voice and audio explanations']];
@@ -8442,6 +8531,7 @@ const FR_STYLES = [['brief', 'Quick bullet summaries'], ['deep', 'Deep step-by-s
 function whoOfGrade(g) {
   if (!g) return '';
   if (g === WORKING) return 'work';
+  if (/^(Nursery|Kindergarten)$/.test(g)) return 'kinder';
   const own = FR_WHO.find((x) => x[2] === g);
   if (own) return own[0];
   return { elementary: 'elem', middle: 'jhs', high: 'shs', college: 'college' }[levelForGrade(g)] || '';

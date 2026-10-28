@@ -2949,3 +2949,21 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 @keyframes lgPress { to { transform: scale(.94); } }
 @keyframes lgSpring { 0% { transform: scale(.94); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
 .lg-tint { box-shadow: inset 0 0 0 999px rgba(var(--shade-rgb), .12); transition: box-shadow .12s; }
+
+/* --- Lessons: the student's level's lessons (a phone screen of its own; a page on a computer) --- */
+.lessons-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; width: 100%; }
+.lessons-list .lessons-strand { grid-column: 1 / -1; margin: 10px 0 0; font-size: .95rem; color: var(--muted); }
+.lesson { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 76px; padding: 14px 16px; border-radius: 20px; text-align: left;
+  background: var(--surface); color: var(--text); border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); font: inherit; cursor: pointer; }
+.lesson b { font-size: 1.02rem; line-height: 1.25; }
+.lesson small { color: var(--muted); font-size: .85rem; line-height: 1.35; }
+.lesson:hover { border-color: var(--primary-ink); }
+.lessons-none { grid-column: 1 / -1; margin: 0; color: var(--muted); }
+.lessons-level { justify-self: start; min-height: 44px; }
+.lessons-sheet { position: fixed; inset: 0; z-index: 300; overflow-y: auto; background: var(--bg); color: var(--text);
+  padding: calc(var(--safe-top, 0px) + 10px) 16px calc(var(--safe-bottom, 0px) + 24px); }
+.lessons-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
+.lessons-head h2 { margin: 0; text-align: center; font-size: 1.2rem; }
+.lessons-back { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--surface); color: var(--text); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+.lessons-sub { margin: 6px 0 14px; text-align: center; color: var(--muted); }
+.desk-lessons .lessons-list { margin-top: 8px; }

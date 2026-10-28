@@ -219,7 +219,7 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   await page.click('.fr-go');
   await page.waitForSelector('.fr-count >> text=2 of 4');
   const levels = await page.$$eval('.fr-ob [data-who]', (o) => o.map((x) => x.textContent));
-  expect(levels.join('|') === 'Elementary|Junior High|Senior High|College / University|Reviewing for a board exam|Teacher or parent|Working / lifelong learner', 'everyone has a pill: ' + levels);
+  expect(levels.join('|') === 'Nursery or Kindergarten|Elementary|Junior High|Senior High|College / University|Reviewing for a board exam|Teacher or parent|Working / lifelong learner', 'everyone has a pill: ' + levels);
   await page.click('.fr-go');
   expect(/Tap the one that fits you/.test(await page.locator('.fr-err').innerText()), 'Next with no pick says what to do');
   await page.click('.fr-ob [data-who=jhs]');
@@ -1329,7 +1329,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (scheme === 'light') {
       // the sidebar and the top bar
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
       expect(side.topIcons === 'top-bell,top-me' && side.ask === 'none', 'like the reference: only the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
@@ -4715,6 +4715,63 @@ test('Home has exactly one lead: a phone with no goals leads with the ask box (A
   for (const accent of ['cassie', 'mono']) for (const scheme of ['light', 'dark']) {
     const pc = await lead({ device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, state: { groqKey: 'gsk_test', accent } }, scheme);
     expect(ok(pc) && pc.id === 'ask', `a computer (${accent}, ${scheme}): Ask Cassie leads: ` + JSON.stringify(pc));
+  }
+});
+
+test('Lessons follow the student’s level: Nursery or Kindergarten comes first in onboarding (saved as Kindergarten), each level’s Lessons menu shows its own list (phone Home box, computer sidebar under Menu), changing the level changes it, and a lesson opens its tool', async (b) => {
+  const WANT = {
+    Kindergarten: ['Trace letters', 'Trace numbers', 'Count with me', 'Shapes and colours'],
+    'Grade 3': ['Read with Cassie', 'Phonics and spelling', 'Times tables', 'Fractions', 'Science labs for kids'],
+    'Grade 8': ['Algebra', 'Science labs', 'Essay helper', 'Quiz me'],
+    'Grade 11': ['Physics labs', 'Calculus', 'Accounting basics', 'Essays', 'Research', 'Practical research'],
+    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET reviewer'],
+    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET reviewer'],
+  };
+  // onboarding: the little ones first
+  {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 360, height: 740 }, server: false, state: null });
+    await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
+    await page.fill('.fr-ob input[name=name]', 'Lia'); await page.click('.fr-go');
+    await page.waitForSelector('.fr-count >> text=2 of 4');
+    const first = await page.$eval('.fr-ob [data-who]', (x) => [x.dataset.who, x.textContent]);
+    expect(first[0] === 'kinder' && first[1] === 'Nursery or Kindergarten', 'the first level is Nursery or Kindergarten: ' + first);
+    await page.click('.fr-ob [data-who=kinder]'); await page.click('.fr-skip');
+    await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
+    expect(await page.evaluate(() => state.profile.grade) === 'Kindergarten', 'saved as Kindergarten');
+    await ctx.close();
+  }
+  // a computer: Lessons in the sidebar under Menu, after Study plan; each level its own list
+  {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
+    const nav = await page.$$eval('#side-nav [data-page]', (bs) => bs.map((x) => x.dataset.page));
+    expect(nav.indexOf('lessons') === nav.indexOf('plan') + 1, 'Lessons after Study plan in the Menu: ' + nav);
+    for (const [grade, want] of Object.entries(WANT)) {
+      await page.evaluate((g) => { state.profile.grade = g; save(); }, grade);
+      await page.click('#side-nav [data-page="lessons"]');
+      await page.waitForSelector('.desk-lessons .lesson');
+      const got = await page.$$eval('.desk-lessons .lesson b', (bs) => bs.map((x) => x.textContent));
+      expect(JSON.stringify(got) === JSON.stringify(want), `${grade}: ` + JSON.stringify(got));
+      if (grade === 'Grade 11') { const strands = await page.$$eval('.desk-lessons .lessons-strand', (h) => h.map((x) => x.textContent)); expect(strands.join() === 'STEM,ABM,HUMSS,Every strand', 'Senior High: by strand: ' + strands); }
+    }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a phone: the Lessons box on Home opens its own screen; a lesson opens its tool
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'on', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Grade 3' } } });
+    await page.evaluate(() => { try { sessionStorage.setItem('cassie.moreTools', '1'); } catch (e) { /* */ } refreshHub(); });
+    await page.waitForSelector('#home .hub-box[data-hub="lessons"]', { timeout: 8000 });
+    await page.click('#home .hub-box[data-hub="lessons"]');
+    await page.waitForSelector('.lessons-sheet .lesson');
+    const got = await page.$$eval('.lessons-sheet .lesson b', (bs) => bs.map((x) => x.textContent));
+    expect(JSON.stringify(got) === JSON.stringify(WANT['Grade 3']), 'phone, Grade 3: ' + JSON.stringify(got));
+    const back = await page.locator('.lessons-back').boundingBox();
+    expect(back.width >= 44 && back.height >= 44, 'Back is 44px');
+    await page.click('.lessons-sheet .lesson[data-go="lab:diner"]');
+    await page.waitForSelector('.lab-view:not([hidden])[data-lab="diner"]', { timeout: 20000 });
+    expect(!(await page.locator('.lessons-sheet').count()), 'the lessons screen closed');
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
   }
 });
 
@@ -9575,6 +9632,7 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
   }
   // Home's boxes: under the header, 2 across on a phone and 4 on a computer; each opens its feature
   const BOXES = [
+    ['lessons', 'lab', (p) => p.waitForSelector('.lessons-sheet .lessons-list, .desk-lessons .lessons-list', { timeout: 8000 })],
     ['lab', 'lab', (p) => p.waitForSelector(LABS_READY, { timeout: 15000 })],
     ['games', 'write', (p) => p.waitForSelector('.labs:not([hidden]) [data-lab="circuit"]', { timeout: 15000 })],
     ['today', 'lab', (p) => p.waitForFunction(() => document.querySelector(`.lab-view:not([hidden])[data-lab="${todayLab()}"]`), null, { timeout: 20000 })],
@@ -9600,7 +9658,7 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
     };
     let { ctx, page, errors } = await start();
     const g = await page.evaluate((h) => { const hero = document.querySelector(h + ' .hub-hero').getBoundingClientRect(), bx = [...document.querySelectorAll(h + ' .hub-box')].map((e) => e.getBoundingClientRect()); return { n: bx.length, under: Math.round(bx[0].top - hero.bottom), cols: new Set(bx.map((r) => Math.round(r.left))).size, min: Math.min(...bx.map((r) => r.height)) }; }, hub);
-    expect(g.n === 10 && (phone || (g.under >= 0 && g.under < 40)) && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: ten boxes${phone ? '' : ' right under the header'}, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
+    expect(g.n === 11 && (phone || (g.under >= 0 && g.under < 40)) && g.cols === (phone ? 2 : 4) && g.min >= 44, `${size}: eleven boxes (Lessons first)${phone ? '' : ' right under the header'}, ${phone ? 2 : 4} across: ` + JSON.stringify(g));
     expect(await page.locator(hub + ' .hub-q', { hasText: /^(Quiz me|Flashcards|Research a topic)$/ }).count() === 0, `${size}: no Quick action repeats a box`);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(800); const { bad } = await contrastIssues(page, hub + ' .hub-boxes'); expect(!bad.length, `${size} boxes (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
