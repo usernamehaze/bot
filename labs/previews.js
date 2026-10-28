@@ -227,6 +227,31 @@ P.body3d = (g, w, h, t, c) => {
 };
 P.cells3d = (g, w, h, t, c) => P['build-cell'](g, w, h, t, c);
 // the study tools
+// the little ones' labs (kids.js): a letter drawing itself, things counted, shapes taking turns
+P['trace-letters'] = (g, w, h, t, c) => {
+  const s = Math.min(w, h) * 0.7, x0 = (w - s * 0.8) / 2, y0 = (h - s) / 2, p = Math.min(1, (t * 0.4) % 1.3);
+  const pts = [[0.1, 1], [0.5, 0], [0.9, 1]].map(([x, y]) => [x0 + x * s * 0.8, y0 + y * s]);
+  g.setLineDash([2, 7]); g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.moveTo(x0 + s * 0.22, y0 + s * 0.6); g.lineTo(x0 + s * 0.58, y0 + s * 0.6); stroke(g, c.line, 3); g.setLineDash([]);
+  const k = Math.min(1, p) * 2, a = pts[0], m = pts[1], e = pts[2];
+  g.beginPath(); g.moveTo(a[0], a[1]);
+  if (k <= 1) g.lineTo(a[0] + (m[0] - a[0]) * k, a[1] + (m[1] - a[1]) * k); else { g.lineTo(m[0], m[1]); g.lineTo(m[0] + (e[0] - m[0]) * (k - 1), m[1] + (e[1] - m[1]) * (k - 1)); }
+  stroke(g, c.accent, 5);
+};
+P['trace-numbers'] = (g, w, h, t, c) => {
+  const s = Math.min(w, h) * 0.7, cx = w / 2, top = (h - s) / 2, p = Math.min(1, (t * 0.4) % 1.3);
+  g.setLineDash([2, 7]); line(g, cx - s * 0.15, top + s * 0.18, cx + s * 0.05, top, c.line, 3); line(g, cx + s * 0.05, top, cx + s * 0.05, top + s, c.line, 3); g.setLineDash([]);
+  line(g, cx + s * 0.05, top, cx + s * 0.05, top + s * p, c.accent, 5);
+};
+P.count = (g, w, h, t, c) => {
+  const n = 1 + Math.floor((t * 1.2) % 5), r = Math.min(w / 14, h / 6);
+  for (let i = 0; i < 5; i++) dot(g, w / 2 + (i - 2) * r * 2.6, h / 2, r, i < n ? c.accent : c.line);
+};
+P.shapes = (g, w, h, t, c) => {
+  const r = Math.min(w / 9, h / 4), on = Math.floor(t * 0.8) % 3, xs = [w * 0.22, w * 0.5, w * 0.78], y = h / 2;
+  g.beginPath(); g.arc(xs[0], y, r, 0, TAU); fill(g, on === 0 ? c.accent : c.line);
+  g.beginPath(); g.rect(xs[1] - r, y - r, r * 2, r * 2); fill(g, on === 1 ? c.accent : c.line);
+  g.beginPath(); g.moveTo(xs[2], y - r); g.lineTo(xs[2] + r, y + r); g.lineTo(xs[2] - r, y + r); g.closePath(); fill(g, on === 2 ? c.accent : c.line);
+};
 P.vocab = (g, w, h, t, c) => {
   const words = ['photon', 'osmosis', 'axiom', 'genome', 'lexicon'], k = (t * 0.6) % words.length, i0 = Math.floor(k), f = k - i0;
   for (let j = -1; j <= 1; j++) { const i = (i0 + j + words.length) % words.length, x = w / 2 + (j - ease(f)) * w * 0.42, sc = 1 - Math.abs(j - ease(f)) * 0.22;

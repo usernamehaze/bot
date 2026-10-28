@@ -15,7 +15,7 @@ function stateOf(m, Q) {
   return { T: 100 + Math.min(Q - seg4, seg5 - seg4) / (m * STEAM_C), phase: 'steam', f: 1, segs: [seg1, seg2, seg3, seg4, seg5] };
 }
 const iceLab = {
-  id: 'ice-steam', name: 'Ice to steam', subject: 'chemistry', topic: 'changes of state: heating curves, melting and boiling points, specific heat and latent heat',
+  id: 'ice-steam', name: 'Ice to steam', subject: 'chemistry', levels: ['elem', 'hs'], topic: 'changes of state: heating curves, melting and boiling points, specific heat and latent heat',
   blurb: 'Heat ice until it melts and boils. The thermometer stops while it changes state. Watch the molecules too.',
   words: 'heating curve melting boiling evaporation latent heat specific heat states of matter solid liquid gas particles',
   icon: '<path d="M18 6v24a7 7 0 1 0 6 0V6a3 3 0 0 0-6 0z"/><circle cx="21" cy="36" r="3"/><path d="M32 14c3 3 3 6 0 9M38 12c4 4 4 10 0 14"/>',
@@ -133,7 +133,7 @@ const METALS = [
   ['Gold', 'Au', 19.3, 0, 0, null, 'No reaction at all: gold stays shiny for thousands of years.', 'no reaction', 'no reaction'],
 ];
 const metalsLab = {
-  id: 'metals', name: 'Metals in water', subject: 'chemistry', topic: 'the reactivity series: reactions of metals with water and steam',
+  id: 'metals', name: 'Metals in water', subject: 'chemistry', levels: ['hs'], topic: 'the reactivity series: reactions of metals with water and steam',
   blurb: 'Drop potassium, sodium, magnesium or gold into water (or steam) and compare how they react.',
   words: 'reactivity series metals water steam hydrogen alkali potassium sodium lithium calcium magnesium zinc iron copper gold',
   icon: '<path d="M10 16h28l-3 26H13z"/><path d="M12 26h24"/><rect x="21" y="8" width="7" height="7" rx="1"/><circle cx="18" cy="33" r="1.5"/><circle cx="26" cy="30" r="1.5"/><circle cx="30" cy="36" r="1.5"/>',

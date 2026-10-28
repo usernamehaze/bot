@@ -97,7 +97,7 @@
     not_set_up: 'Cassie isn’t set up yet, so she can’t answer. Open Settings to connect her, then try again.',
     webgl: 'This browser can’t show 3D right now because its graphics are turned off. Try Chrome, or turn on “Use graphics acceleration” in its settings.',
     open_3d_failed: 'Cassie couldn’t open the 3D view, maybe because the internet dropped. Check your connection, then try again.',
-    open_labs_failed: 'Cassie couldn’t open Labs, maybe because the internet dropped. Check your connection, then try again.',
+    open_labs_failed: 'Cassie couldn’t open Learn, maybe because the internet dropped. Check your connection, then try again.',
     voice_unsupported: 'This browser can’t play Cassie’s voice, so she types her answers instead. Try Chrome, Edge or Safari.',
     voice_typing: 'Cassie’s voice isn’t available right now, so she’ll type her answers instead.',
     voice_resting: 'Cassie’s voice is resting until {date}. Until then she types her answers.',

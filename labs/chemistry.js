@@ -87,7 +87,7 @@ const EXAMPLES = [
   ['Metal + acid', 'Al + HCl -> AlCl3 + H2'], ['Tricky one', 'KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2'],
 ];
 const balanceLab = {
-  id: 'balance', name: 'Equation balancer', subject: 'chemistry', topic: 'balancing chemical equations and conservation of mass',
+  id: 'balance', name: 'Equation balancer', subject: 'chemistry', levels: ['hs', 'college'], topic: 'balancing chemical equations and conservation of mass',
   blurb: 'Set the numbers in front yourself. Cassie counts every atom on both sides.',
   words: 'balance chemical equation coefficients reaction atoms conservation stoichiometry',
   icon: '<path d="M24 8v32M10 40h28"/><path d="M8 14h32"/><path d="M8 14l-4 12h8zM40 14l-4 12h8z"/><circle cx="24" cy="8" r="2"/>',
@@ -166,7 +166,7 @@ const INDICATORS = {
   litmus: ['Litmus', (pH) => (pH < 4.5 ? 'rgb(200,50,60)' : pH > 8.3 ? 'rgb(60,90,200)' : 'rgb(130,70,150)')],
 };
 const phLab = {
-  id: 'ph', name: 'pH mixer', subject: 'chemistry', topic: 'acids, bases, neutralisation and the pH scale',
+  id: 'ph', name: 'pH mixer', subject: 'chemistry', levels: ['hs', 'college'], topic: 'acids, bases, neutralisation and the pH scale',
   blurb: 'Drip acid or base into water, watch the colour change and the pH move.',
   words: 'ph acid base alkali neutral neutralisation indicator titration litmus',
   icon: '<path d="M14 8h20M16 8v8l-8 22a3 3 0 0 0 3 4h26a3 3 0 0 0 3-4L32 16V8"/><path d="M12 30h24"/><circle cx="21" cy="35" r="1.5"/><circle cx="28" cy="33" r="1.5"/>',
@@ -297,7 +297,7 @@ const ELEMENTS = [null, ['H', 'Hydrogen', 0, [0, 1]], ['He', 'Helium', 2, [1, 2]
   ['S', 'Sulfur', 16, [16, 17, 18, 20]], ['Cl', 'Chlorine', 18, [18, 20]], ['Ar', 'Argon', 22, [18, 20, 22]], ['K', 'Potassium', 20, [20, 22]], ['Ca', 'Calcium', 20, [20, 22, 23, 24, 26, 28]]];
 const shellsOf = (e) => { const cap = [2, 8, 8, 8], out = []; for (const c of cap) { if (e <= 0) break; out.push(Math.min(c, e)); e -= c; } return out; };
 const atomLab = {
-  id: 'atom', name: 'Build an atom', subject: 'chemistry', topic: 'atomic structure: protons, neutrons, electrons, isotopes and ions',
+  id: 'atom', name: 'Build an atom', subject: 'chemistry', levels: ['hs', 'college', 'grad'], topic: 'atomic structure: protons, neutrons, electrons, isotopes and ions',
   blurb: 'Add protons, neutrons and electrons. See which element, isotope or ion you made.',
   words: 'atom proton neutron electron isotope ion element periodic table nucleus shell',
   icon: '<circle cx="24" cy="24" r="4"/><ellipse cx="24" cy="24" rx="19" ry="8"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(60 24 24)"/><ellipse cx="24" cy="24" rx="19" ry="8" transform="rotate(-60 24 24)"/>',

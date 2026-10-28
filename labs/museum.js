@@ -112,7 +112,7 @@ const credit = (a) => (COMMONS[a.id] ? `Picture: public domain, from <a href="${
 const wikiLink = (a) => `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wiki.replace(/ /g, '_'))}`;
 
 const museumLab = {
-  id: 'museum', name: 'Museum of Famous Arts', subject: 'history', wide: true,
+  id: 'museum', name: 'Museum of Famous Arts', subject: 'history', levels: ['hs', 'college', 'grad'], wide: true,
   blurb: 'Walk through masterpieces by Filipino artists, Luna, Hidalgo, Amorsolo, Botong, BenCab, and the world’s most famous paintings: who made them, when, and the story behind each.',
   words: 'art museum painting artist filipino juan luna spoliarium amorsolo national artist mona lisa starry night van gogh gallery history arts',
   topic: 'famous paintings and artists, Filipino and world',

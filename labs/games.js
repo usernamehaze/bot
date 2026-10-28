@@ -31,7 +31,7 @@ const CONDS = {
 };
 const LEVELS = { easy: { n: 5, gates: 2, vars: ['A', 'B'], pools: ['bool'] }, medium: { n: 6, gates: 3, vars: ['A', 'B', 'C'], pools: ['bool', 'bool3'] }, hard: { n: 7, gates: 4, vars: ['A', 'B', 'C', 'x'], pools: ['bool', 'bool3', 'num'] } };
 const circuitLab = {
-  id: 'circuit', name: 'Logic Circuit', subject: 'games',
+  id: 'circuit', name: 'Logic Circuit', subject: 'games', levels: ['hs', 'college'],
   blurb: 'Turn the wires so current flows from the battery to the bulb, but each gate only opens when its logic (AND, OR, NOT, XOR, if x > 4…) is TRUE. Set the switches to power them all.',
   words: 'logic gates boolean and or not xor circuit wires pipes coding programming if else conditions electricity puzzle',
   icon: '<rect x="4" y="18" width="7" height="12" rx="1"/><path d="M11 24h8M29 24h7"/><path d="M19 16h5a8 8 0 0 1 0 16h-5z"/><circle cx="40" cy="24" r="4"/><path d="M40 16v4M46 24h-2"/>',
@@ -243,7 +243,7 @@ export function atomsOf(f) {
 }
 const massOf = (atoms) => Object.entries(atoms).reduce((s2, [e, c]) => s2 + MASS[e] * c, 0);
 const crackerLab = {
-  id: 'cracker', name: 'Formula Cracker', subject: 'games',
+  id: 'cracker', name: 'Formula Cracker', subject: 'games', levels: ['hs', 'college', 'grad'],
   blurb: 'A Wordle for maths, code and chemistry: crack the hidden function rule, regular expression or chemical compound in six guesses, using what it does as clues.',
   words: 'wordle guess formula equation function rule regex regular expression pattern chemical compound molar mass algebra puzzle',
   icon: '<rect x="4" y="10" width="8" height="8" rx="1"/><rect x="14" y="10" width="8" height="8" rx="1"/><rect x="24" y="10" width="8" height="8" rx="1"/><rect x="34" y="10" width="8" height="8" rx="1"/><rect x="4" y="22" width="8" height="8" rx="1"/><rect x="14" y="22" width="8" height="8" rx="1"/><path d="M27 34l5 5 9-12"/>',
@@ -382,7 +382,7 @@ const DIAGRAMS = {
     ] },
 };
 const blitzLab = {
-  id: 'blitz', name: 'Pinning Blitz', subject: 'games',
+  id: 'blitz', name: 'Pinning Blitz', subject: 'games', levels: ['hs', 'college'],
   blurb: 'Rapid fire: countries on the world map, parts of a cell or organs of the body flash up, pin each one before the clock runs out.',
   words: 'geography map countries anatomy organs cell organelles memory speed quiz pin drag label timer blitz',
   icon: '<circle cx="24" cy="24" r="17"/><path d="M24 7v4M24 37v4M7 24h4M37 24h4"/><path d="M24 15c-4 0-7 3-7 7 0 5 7 12 7 12s7-7 7-12c0-4-3-7-7-7z"/><circle cx="24" cy="22" r="2"/>',
@@ -573,7 +573,7 @@ const RECIPES = [
   ['Turon', 8, [['bananas (saba)', 4], ['jackfruit strips (cups)', 1 / 2], ['spring roll wrappers', 8], ['brown sugar (cups)', 1 / 2]]],
 ];
 const dinerLab = {
-  id: 'diner', name: 'Fraction Diner', subject: 'games',
+  id: 'diner', name: 'Fraction Diner', subject: 'games', levels: ['elem'],
   blurb: 'Run a carinderia: slice pizzas into the right fractions, mix drinks in the right ratio and scale recipes for the crowd, before your customers lose patience.',
   words: 'fractions ratios proportion pizza slices equivalent fractions mixing ratio recipe scaling math game restaurant carinderia',
   icon: '<circle cx="18" cy="26" r="13"/><path d="M18 26V13M18 26l11 6"/><path d="M34 12h9l-2 28h-5z"/><path d="M34.5 22h8"/>',
@@ -710,7 +710,7 @@ const EVENTS = [
 const demandAt = (p, dShock) => Math.max(0, 200 * (1 + dShock) - 2 * p); // buyers want less as the price rises
 const supplyAt = (p, sShock) => Math.max(0, 2 * p * (1 + sShock)); // farmers sell more as the price rises
 const marketLab = {
-  id: 'economy', name: 'City Market', subject: 'games',
+  id: 'economy', name: 'City Market', subject: 'games', levels: ['hs', 'college', 'grad'],
   blurb: 'Run your city’s rice market for a year: set the price, the sales tax and public spending. Avoid shortages and surpluses, keep people happy and the budget healthy through typhoons and fiestas.',
   words: 'economics supply demand equilibrium price ceiling tax budget shortage surplus market simulation government city money',
   icon: '<path d="M6 42V6M6 42h36"/><path d="M10 10c10 6 18 18 28 28" stroke-dasharray="3 3"/><path d="M10 38c10-6 18-18 28-28"/><circle cx="24" cy="24" r="3"/>',

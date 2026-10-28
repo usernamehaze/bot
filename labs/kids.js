@@ -81,7 +81,7 @@ function samples(strokes, box) {
 /* ---------- Trace: a big dotted letter; follow it with a finger, in order; 80% of the path counts ---------- */
 function traceLab(id, name, list, spoken) {
   return {
-    id, name, subject: 'kids',
+    id, name, subject: 'kids', levels: ['pre'],
     blurb: `Trace ${list === LETTERS ? 'the letters A to Z' : 'the numbers 0 to 10'} with your finger. Cassie says each one aloud and cheers when you finish.`,
     words: 'trace tracing letters numbers alphabet handwriting nursery kindergarten preschool little ones',
     icon: list === LETTERS ? '<path d="M10 40L24 8l14 32M15 29h18"/>' : '<path d="M14 14l8-6v32M28 14a6 6 0 1 1 9 5L28 40h12"/>',
@@ -160,7 +160,7 @@ const THINGS = [['apple', '#ff7a7a', '<circle cx="24" cy="27" r="14"/><path d="M
   ['fish', '#7fb2ff', '<path d="M8 24c6-9 18-11 26-4l8-6v20l-8-6c-8 7-20 5-26-4z"/><circle cx="16" cy="22" r="2" fill="#1b1b1d"/>'],
   ['ball', '#c4a0ff', '<circle cx="24" cy="24" r="15"/><path d="M9 24h30M24 9c6 5 6 25 0 30M24 9c-6 5-6 25 0 30" fill="none" stroke="#1b1b1d" stroke-width="2" opacity=".35"/>']];
 const countLab = {
-  id: 'count', name: 'Count with me', subject: 'kids',
+  id: 'count', name: 'Count with me', subject: 'kids', levels: ['pre'],
   blurb: 'Tap each apple, star or fish and Cassie counts with you, up to 10.',
   words: 'count counting numbers one to ten nursery kindergarten preschool little ones',
   icon: '<circle cx="14" cy="24" r="6"/><circle cx="34" cy="24" r="6"/><path d="M14 38v4M34 38v4M24 8v6"/>',
@@ -200,7 +200,7 @@ const SHAPES = { circle: '<circle cx="24" cy="24" r="17"/>', square: '<rect x="8
   star: '<path d="M24 5l5.8 12 13.2 1.8-9.6 9.1 2.4 13.1L24 34.8 12.2 41l2.4-13.1L5 18.8l13.2-1.8z"/>', heart: '<path d="M24 41C10 31 5 24 5 16.5 5 10.7 9.4 7 14.5 7c4 0 7.4 2.3 9.5 6 2.1-3.7 5.5-6 9.5-6C38.6 7 43 10.7 43 16.5 43 24 38 31 24 41z"/>' };
 const COLOURS = { red: '#e5484d', blue: '#2f6fd6', yellow: '#f2c200', green: '#2e9e5b', orange: '#e8862a', purple: '#8e4ec6' };
 const shapesLab = {
-  id: 'shapes', name: 'Shapes and colours', subject: 'kids',
+  id: 'shapes', name: 'Shapes and colours', subject: 'kids', levels: ['pre'],
   blurb: 'Cassie names a shape and a colour, like the red circle. Tap the right one.',
   words: 'shapes colours colors circle square triangle star heart red blue yellow green nursery kindergarten preschool little ones',
   icon: '<circle cx="15" cy="16" r="8"/><rect x="26" y="8" width="15" height="15" rx="2"/><path d="M24 26l10 16H14z"/>',
