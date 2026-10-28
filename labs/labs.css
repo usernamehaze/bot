@@ -777,7 +777,7 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 }
 .lf-h { margin: 4px 2px 12px; font-size: 1.15rem; }
 .lf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; margin: 6px 0 4px; }
-@media (min-width: 761px) { .labs-foryou .lf-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 24px 20px; } }
+@media (min-width: 761px) { .labs-scroll .lf-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 24px 20px; } }
 .labs .lf { position: relative; display: block; width: 100%; aspect-ratio: 5 / 4; padding: 0; border: 0; background: none; color: var(--lf-ink); text-align: left; cursor: pointer; perspective: 800px; -webkit-tap-highlight-color: transparent; }
 .lf-tab, .lf-back { position: absolute; background: linear-gradient(170deg, rgba(var(--lf-glass), .97), rgba(var(--lf-glass), .78)); border: 1px solid var(--lf-edge); }
 .lf-tab { left: 0; top: 0; width: 44%; height: 22%; border-radius: 14px 18px 0 0; border-bottom: 0; }
@@ -851,3 +851,8 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-head { display: flex; align-items: center; gap: 12px; margin: 2px 0 12px; }
 .lf-head h3 { margin: 0; font-size: 1.2rem; }
 .lf-back-btn { min-height: 44px; }
+
+/* Learn below For you: Today's Lab, then Simulations (a folder per subject) and Study tools (a folder per use) */
+.labs-sims, .labs-toolsf { margin-bottom: 22px; }
+.labs-sims .lf-h, .labs-toolsf .lf-h { color: #f2f2f4; }
+.lp-sims, .lp-toolsf { margin-bottom: 8px; }
