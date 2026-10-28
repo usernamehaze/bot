@@ -1847,8 +1847,8 @@ const HOME_EXAMPLES = [
   { label: 'Solve step by step', icon: 'M3 5h2v2H3zM7 5h14v2H7zM3 11h2v2H3zM7 11h14v2H7zM3 17h2v2H3zM7 17h14v2H7z', text: 'Solve step by step: 3x + 7 = 22', send: true },
   { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
   { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research: effects of social media on students', send: true },
-  { label: 'Explore in 3D (in Labs)', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openLabs(null, { subject: '3d' }) },
-  { label: 'Labs: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
+  { label: 'Explore in 3D (in Learn)', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openLabs(null, { subject: '3d' }) },
+  { label: 'Learn: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
   { label: 'Study together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
   { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
   { label: 'Podcast my notes', icon: 'M12 3a7 7 0 0 0-7 7v5.5A2.5 2.5 0 0 0 7.5 18H9v-6H7v-2a5 5 0 0 1 10 0v2h-2v6h1.5a2.5 2.5 0 0 0 2.5-2.5V10a7 7 0 0 0-7-7zm-1 16h2v2h-2z', run: () => podcastFromFile() },
@@ -1892,8 +1892,8 @@ HOME_EXAMPLES.forEach((ex) => {
 // the tool that's open now gets the bar on its left
 const TOOL_OPEN = {
   Flashcards: () => !!document.querySelector('.fc:not([hidden])'),
-  'Labs: try a simulation': () => document.documentElement.classList.contains('labs-open'),
-  'Explore in 3D (in Labs)': () => document.documentElement.classList.contains('x3d-open'),
+  'Learn: try a simulation': () => document.documentElement.classList.contains('labs-open'),
+  'Explore in 3D (in Learn)': () => document.documentElement.classList.contains('x3d-open'),
   'Teach Cassie out loud': () => !!document.querySelector('.vc:not([hidden])'),
 };
 function markOpenTools() {
@@ -1998,15 +1998,25 @@ const HUB_ICON = {
 };
 // Home's big boxes: every study feature, one tap away (each opens it the way its own button does)
 const TODAY_LABS = ['pendulum', 'ph', 'fractions', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'magnets', 'build-cell', 'optics', 'units', 'ice-steam', 'vectors', 'colour', 'metals', 'interest'];
-const todayLab = () => TODAY_LABS[Math.floor(Date.now() / 864e5) % TODAY_LABS.length];
+// Today's Lab comes from the student's own level (labLevel(); each lab's levels are in its own file)
+const TODAY_BY_LEVEL = {
+  pre: ['trace-letters', 'count', 'shapes', 'trace-numbers'],
+  elem: ['fractions', 'build-cell', 'colour', 'magnets', 'units', 'ice-steam', 'solids', 'rocket', 'solar'],
+  hs: TODAY_LABS.filter((id) => id !== 'fractions'),
+  college: ['pendulum', 'ph', 'punnett', 'projectile', 'waves', 'atom', 'function', 'refraction', 'balance', 'chance', 'optics', 'vectors', 'interest'],
+  grad: ['punnett', 'atom', 'function', 'chance', 'interest', 'fractions', 'solar', 'atlas'],
+};
+const todayLab = () => { const list = TODAY_BY_LEVEL[labLevel()] || TODAY_LABS; return list[Math.floor(Date.now() / 864e5) % list.length]; };
 // (names, subjects and about how long each takes, for the phone's Today's Lab card)
 const LAB_INFO = { pendulum: ['Pendulum', 'Physics', 10], ph: ['pH mixer', 'Chemistry', 10], fractions: ['Fraction pies', 'Maths', 8], punnett: ['Punnett squares', 'Biology', 12], projectile: ['Launch lab', 'Physics', 10],
   waves: ['Wave string', 'Physics', 8], atom: ['Build an atom', 'Chemistry', 12], function: ['Function lab', 'Maths', 15], refraction: ['Bending light', 'Physics', 8], balance: ['Equation balancer', 'Chemistry', 12],
   chance: ['Chance machine', 'Maths', 8], magnets: ['Magnetic field', 'Physics', 10], 'build-cell': ['Build a cell', 'Biology', 15], optics: ['Lenses and mirrors', 'Physics', 12], units: ['Unit converter', 'Maths', 5],
-  'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10] };
+  'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10],
+  solids: ['3D shapes', 'Maths', 8], rocket: ['Rocket workshop', 'Physics', 10], solar: ['Planets today', 'Space', 8], atlas: ['World atlas', 'Geography', 10],
+  'trace-letters': ['Trace letters', 'For little ones', 5], 'trace-numbers': ['Trace numbers', 'For little ones', 5], count: ['Count with me', 'For little ones', 5], shapes: ['Shapes and colours', 'For little ones', 5] };
 const HUB_BOXES = [
   ['lessons', 'Lessons', 'Made for your level', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>'],
-  ['lab', 'Labs', 'Simulations to play with', HUB_ICON.lab],
+  ['lab', 'Learn', 'Simulations to play with', HUB_ICON.lab],
   ['games', 'Games', 'Puzzles and quick games', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01"/></svg>'],
   ['today', 'Today’s lab', 'A new lab every day', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M10 14.5l1.5 1.5 3-3"/></svg>'],
   ['cards', 'Flashcards', 'Review and make cards', HUB_ICON.cards],
@@ -2095,7 +2105,7 @@ function cassieEmpty(box) {
 }
 window.cassieEmpty = cassieEmpty;
 // the Quick actions the boxes already cover (each feature shows once on Home)
-const HUB_BOXED = /^(Quiz me|Research a topic|Labs: try a simulation|Study together|Flashcards)/;
+const HUB_BOXED = /^(Quiz me|Research a topic|Learn: try a simulation|Study together|Flashcards)/;
 const hubAgo = (t) => { const s = Math.max(0, (Date.now() - (t || 0)) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
 const onPhoneHome = () => !!(window.CassieNative && document.documentElement.classList.contains('native'));
 /* ---------- Lessons: what each level studies, each one opening a tool Cassie already has ----------
@@ -2119,8 +2129,15 @@ const LESSONS = {
 function lessonLevel() {
   const g = (state.profile && state.profile.grade) || '';
   if (/^(Nursery|Kindergarten)$/.test(g)) return 'pre';
-  if (g === WORKING) return 'college';
+  if (g === WORKING || (state.profile && state.profile.role === 'pro')) return 'college'; // (a working profile keeps no grade)
   return { elementary: 'elem', middle: 'jhs', high: 'shs', college: 'college' }[levelForGrade(g)] || '';
+}
+// the level Learn's For you and Today's Lab follow: pre | elem | hs | college | grad ('' = no level saved: everything)
+function labLevel() {
+  const p = state.profile || {}, g = p.grade || '';
+  if (p.role === 'pro' || /^(Board exam reviewee|Graduate school)$/.test(g)) return 'grad';
+  const l = lessonLevel();
+  return l === 'jhs' || l === 'shs' ? 'hs' : l;
 }
 // the list for this level, as buttons (Senior High: one group per strand)
 function lessonsList() {
@@ -2236,7 +2253,7 @@ function hubReminders(due, streak) {
     ['cards', HUB_ICON.cards, due ? `${due} ${due === 1 ? 'card' : 'cards'} to review` : 'No cards due', due ? 'Review now' : 'Make cards'],
     ['timer', HUB_ICON.timer, 'Focus timer', 'Start a focus session'],
     ['streak', HUB_ICON.streak, `${streak} day streak`, streak ? 'Keep it going today' : 'Start one today'],
-    ['lab', HUB_ICON.lab, 'Today’s lab', 'Open Labs'],
+    ['lab', HUB_ICON.lab, 'Today’s lab', 'Open Learn'],
   ];
   box.innerHTML = '<h2 class="hub-h">Reminders</h2>' + rows.map(([a, i]) => `<button type="button" class="hub-chat" data-hub="${a}"><i>${i}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`).join('');
   box.querySelectorAll('.hub-chat').forEach((b, k) => { b.querySelector('b').textContent = rows[k][2]; b.querySelector('small').textContent = rows[k][3]; });
@@ -2261,7 +2278,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=197').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=198').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2674,7 +2691,7 @@ let topHits = [], topAt = 0;
 function topSearchHits(q) {
   q = q.trim().toLowerCase();
   if (!q) return [];
-  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Labs', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
+  const pages = [['Home', () => deskGo('home')], ['Chats', () => deskGo('chats')], ['Study plan', () => deskGo('plan')], ['Calendar', () => deskGo('calendar')], ['Progress', () => deskGo('progress')], ['New chat', () => deskGo('chat')], ['Settings', () => openSettings('all')], ['Memory', () => document.getElementById('memory-btn').click()], ['Learn', () => document.getElementById('labs-btn').click()], ['Games', () => document.getElementById('games-btn').click()], ['Board', () => document.getElementById('board-btn').click()]]
     .map(([t, go]) => ({ t, kind: 'Page', go }));
   const tools = HOME_EXAMPLES.map((ex) => ({ t: ex.label, kind: 'Tool', go: () => { if (state.messages.length || deskPage !== 'chat') deskGo('chat'); runTool(ex); } }));
   const chats = state.chats.filter((c) => c.messages && c.messages.length).map((c) => ({ t: c.title || deriveTitle(c.messages) || 'Chat', kind: 'Chat', go: () => selectChat(c.id) }));
@@ -2688,7 +2705,7 @@ function showTopResults() {
   topQ.setAttribute('aria-expanded', String(!topResults.hidden));
   if (topHits.length) topQ.setAttribute('aria-activedescendant', 'top-r0'); else topQ.removeAttribute('aria-activedescendant');
 }
-function pickTop(i) { const h = topHits[i]; topQ.value = ''; showTopResults(); topQ.blur(); if (h) { deskCloseOthers({ Settings: 'settings', Memory: 'memory', Labs: 'labs', Games: 'labs', Board: 'board', Flashcards: 'cards' }[h.t] || ''); h.go(); } }
+function pickTop(i) { const h = topHits[i]; topQ.value = ''; showTopResults(); topQ.blur(); if (h) { deskCloseOthers({ Settings: 'settings', Memory: 'memory', Learn: 'labs', Games: 'labs', Board: 'board', Flashcards: 'cards' }[h.t] || ''); h.go(); } }
 topQ.addEventListener('input', showTopResults);
 topQ.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -6533,7 +6550,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=197');
+      exploreMod = await import('./explore/cell3d.js?v=198');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6582,8 +6599,8 @@ async function openLabs(lab, more = {}) {
   refreshPlan();
   try {
     if (!labsMod) {
-      islandShow('reading', 'Opening Labs…');
-      labsMod = await import('./labs/labs.js?v=197');
+      islandShow('reading', 'Opening Learn…');
+      labsMod = await import('./labs/labs.js?v=198');
       islandRest();
     }
     labsMod.open({
@@ -6614,7 +6631,7 @@ async function openLabs(lab, more = {}) {
       onClose: () => { try { labsBtn && labsBtn.focus(); } catch (e) { /* ignore */ } },
     });
   } catch (e) {
-    islandShow('oops', 'Couldn’t open Labs', 2600);
+    islandShow('oops', 'Couldn’t open Learn', 2600);
     renderMessage('assistant', CassieErrors.say('open_labs_failed'));
   }
 }
@@ -8355,7 +8372,7 @@ function openProfile(first) {
    Minimal and centred, a step at a time. Where you are is kept (FR_KEY), so a reload carries on at
    the same step; the answers end up in the same profile the old form saved. */
 const FR_KEY = 'cassie.firstRun';
-const HELP_WITH = [['homework', 'Homework'], ['exams', 'Exams'], ['notes', 'Notes'], ['flashcards', 'Flashcards'], ['labs', 'Labs']];
+const HELP_WITH = [['homework', 'Homework'], ['exams', 'Exams'], ['notes', 'Notes'], ['flashcards', 'Flashcards'], ['labs', 'Learn (simulations)']];
 function frLoad() { try { return JSON.parse(localStorage.getItem(FR_KEY) || 'null'); } catch (e) { return null; } }
 function frSave(s) { try { if (s) localStorage.setItem(FR_KEY, JSON.stringify(s)); else localStorage.removeItem(FR_KEY); } catch (e) { /* ignore */ } }
 // the profile, saved exactly as the profile form saves it (and Cassie's colours follow it)
@@ -8377,6 +8394,7 @@ function saveProfile({ name, age, grade, gender, who }, first, prev = {}) {
   if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
   try { mascotSay(first ? (name ? `Nice to meet you, ${name}! 👋` : 'Nice to meet you! 👋') : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
   renderProfileSummary();
+  if (labsMod && labsMod.levelChanged) labsMod.levelChanged(); // (Learn's For you follows the new level at once)
 }
 // the screen everything sits on (one at a time); on a computer, a centred glass card
 function frShell() {
@@ -8421,10 +8439,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=197').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=198').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=197', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=198', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

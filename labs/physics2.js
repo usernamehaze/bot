@@ -26,7 +26,7 @@ function rgb2cmyk(r, g, b) {
   return [(1 - r / 255 - k) / (1 - k), (1 - g / 255 - k) / (1 - k), (1 - b / 255 - k) / (1 - k), k];
 }
 const colourLab = {
-  id: 'colour', name: 'Colour mixer', subject: 'physics', topic: 'colour: additive mixing of light (RGB), subtractive mixing of ink (CMYK), and hue, saturation and value',
+  id: 'colour', name: 'Colour mixer', subject: 'physics', levels: ['elem', 'hs'], topic: 'colour: additive mixing of light (RGB), subtractive mixing of ink (CMYK), and hue, saturation and value',
   blurb: 'Mix coloured light, mix inks, or pick from the wheel, and see the same colour in RGB, CMYK and HSV.',
   words: 'colour color rgb cmyk hsv light ink pigment additive subtractive hue screen printer',
   icon: '<circle cx="18" cy="18" r="10"/><circle cx="30" cy="18" r="10"/><circle cx="24" cy="29" r="10"/>',
@@ -133,7 +133,7 @@ const colourLab = {
 
 /* ---------------- Magnetic field ---------------- */
 const magnetLab = {
-  id: 'magnets', name: 'Magnetic field', subject: 'physics', topic: 'magnetic fields: bar magnets, field lines, compasses and the field around a current-carrying wire',
+  id: 'magnets', name: 'Magnetic field', subject: 'physics', levels: ['elem', 'hs'], topic: 'magnetic fields: bar magnets, field lines, compasses and the field around a current-carrying wire',
   blurb: 'Drag magnets and wires around, watch the field lines, and read the field with a compass.',
   words: 'magnet magnetic field lines compass north south pole electromagnetism wire current right hand rule',
   icon: '<path d="M10 30V18a14 14 0 0 1 28 0v12"/><rect x="6" y="30" width="8" height="10"/><rect x="34" y="30" width="8" height="10"/><path d="M24 8v-4M18 10l-2-3M30 10l2-3"/>',
@@ -276,7 +276,7 @@ const magnetLab = {
 /* ---------------- Lenses and mirrors ---------------- */
 const KINDS = { convex: ['Convex lens', 1, false], concave: ['Concave lens', -1, false], cmirror: ['Concave mirror', 1, true], vmirror: ['Convex mirror', -1, true] };
 const opticsLab = {
-  id: 'optics', name: 'Lenses and mirrors', subject: 'physics', topic: 'lenses and curved mirrors: ray diagrams, focal length, real and virtual images, magnification',
+  id: 'optics', name: 'Lenses and mirrors', subject: 'physics', levels: ['hs', 'college'], topic: 'lenses and curved mirrors: ray diagrams, focal length, real and virtual images, magnification',
   blurb: 'Drag the object along the bench. Three rays find the image: real or virtual, upright or upside down.',
   words: 'lens mirror optics ray diagram focal length image real virtual magnification convex concave',
   icon: '<path d="M4 26h40"/><path d="M24 8c4 6 4 30 0 36M24 8c-4 6-4 30 0 36"/><path d="M8 26V14M8 14l-2 3M8 14l2 3"/><path d="M8 14l16 4 14 14" stroke-dasharray="3 3"/>',
@@ -420,7 +420,7 @@ function drawGate(ctx, type, x, y, s, on) {
   return outX + (bubble ? 10 : 0);
 }
 const logicLab = {
-  id: 'logic', name: 'Logic gates', subject: 'physics', topic: 'logic gates (AND, OR, NOT, NAND, NOR, XOR) and truth tables',
+  id: 'logic', name: 'Logic gates', subject: 'physics', levels: ['hs', 'college'], topic: 'logic gates (AND, OR, NOT, NAND, NOR, XOR) and truth tables',
   blurb: 'Flip switches into AND, OR, NOT and friends. Then solve circuit puzzles in as few moves as you can.',
   words: 'logic gates and or not nand nor xor truth table boolean circuit digital electronics computer science',
   icon: '<path d="M8 14h8M8 34h8M16 8h10a16 16 0 0 1 0 32H16z"/><path d="M42 24h-6"/>',
@@ -523,7 +523,7 @@ const logicLab = {
 const ENGINES = { solid: ['Solid fuel', 260], kerosene: ['Kerosene + oxygen', 311], hydrogen: ['Hydrogen + oxygen', 450] };
 const G0 = 9.80665, R_EARTH = 6371e3;
 const rocketLab = {
-  id: 'rocket', name: 'Rocket workshop', subject: 'physics', topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
+  id: 'rocket', name: 'Rocket workshop', subject: 'physics', levels: ['elem', 'hs'], topic: 'rockets: thrust, weight, Newton’s laws, the rocket equation, staging and reaching orbit',
   blurb: 'Build a 3D rocket, engines, fuel, stages, and launch it from the pad. Can it lift off, reach space, or have enough Δv for orbit?',
   words: 'rocket launch thrust weight stages delta v orbit space newton tsiolkovsky fuel',
   icon: '<path d="M24 4c6 6 8 14 8 22v8H16v-8c0-8 2-16 8-22z"/><circle cx="24" cy="18" r="3"/><path d="M16 28l-6 8v4l6-4M32 28l6 8v4l-6-4M20 40l4 6 4-6"/>',

@@ -28,7 +28,7 @@
     { id: 'home', tab: 'home', phoneAt: ['#tabbar [data-tab="home"]'], at: ['#chat-log .hub-hero', '#chat-log .hub-boxes', '#side-nav [data-page="home"]', '#new-chat-btn'],
       say: () => `Home keeps all your tools in one place${phone() ? '' : ', in every new chat'}. Once you start studying, it also shows today’s tasks, your exam plans and your week.` },
     { id: 'labs', tab: 'labs', phoneAt: ['#tabbar [data-tab="labs"]'], at: ['#labs-btn'],
-      say: () => 'Labs has simulations you can play with, like pendulums and pH. Explore 3D is there too, for the human body, cells and space.' },
+      say: () => 'Learn has simulations you can play with, like pendulums and pH. Explore 3D is there too, for the human body, cells and space.' },
     { id: 'games', tab: 'games', phoneAt: ['#tabbar [data-tab="games"]'], at: ['#games-btn'],
       say: () => 'Games has quick learning games and a new puzzle every day. They are a fun way to practise what you learn.' },
     { id: 'cards', tab: 'cards', phoneAt: ['#tabbar [data-tab="cards"]'], at: ['#side-tools .side-tool[data-tip="Flashcards"]', '[data-hub="cards"]', '#side-menu-toggle'],

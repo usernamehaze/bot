@@ -108,7 +108,7 @@ function sudokuMake(n, rand) {
   return { n, br, bc, sol, puzzle };
 }
 const sudokuLab = {
-  id: 'sudoku', name: 'Sudoku', subject: 'puzzles', blurb: 'Fill the grid so every row, column and box has each number once. A fresh 9×9 every day, or 4×4 up to 12×12, as many as you like.',
+  id: 'sudoku', name: 'Sudoku', subject: 'puzzles', levels: ['elem', 'hs', 'college', 'grad'], blurb: 'Fill the grid so every row, column and box has each number once. A fresh 9×9 every day, or 4×4 up to 12×12, as many as you like.',
   words: 'sudoku logic numbers grid daily puzzle',
   icon: '<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M18 6v36M30 6v36M6 18h36M6 30h36"/><path d="M11 12h2M23 24h2M35 36h2" stroke-width="3"/>',
   about: 'Every daily Sudoku is checked by a solver to have exactly one solution, so it can always be finished by logic, without guessing.\nNumbers that clash with another in the same row, column or box turn red (that tells you about a clash, not whether a number matches the answer).\nSizes: 4×4 (2×2 boxes), 6×6 (2×3), 8×8 (2×4), 9×9 (3×3) and 12×12 (3×4). Each made fresh and checked to have exactly one answer. The score board uses today’s 9×9: your first finish counts.',
@@ -215,7 +215,7 @@ function logicSolvable(sol, n) {
   return g.every((v) => v !== -1);
 }
 const nonogramLab = {
-  id: 'nonogram', name: 'Nonogram', subject: 'puzzles', blurb: 'Fill squares to match the number clues on each row and column. 5×5 up to 25×25, a new one any time.',
+  id: 'nonogram', name: 'Nonogram', subject: 'puzzles', levels: ['elem', 'hs', 'college', 'grad'], blurb: 'Fill squares to match the number clues on each row and column. 5×5 up to 25×25, a new one any time.',
   words: 'nonogram picross griddler picture logic daily puzzle',
   icon: '<rect x="14" y="14" width="28" height="28" rx="2"/><path d="M14 21h28M14 28h28M14 35h28M21 14v28M28 14v28M35 14v28"/><path d="M6 17h4M6 24h4M17 6v4M24 6v4" />',
   about: 'Each clue lists the runs of filled squares in that row or column, in order: “3 1” means a run of 3, a gap, then a run of 1.\nEvery daily nonogram is checked to be solvable by logic alone. You never need to guess. Any filling that matches all the clues counts as solved.\nMark squares you know are empty with ✕ to help yourself.',
@@ -300,7 +300,7 @@ function hashiMake(n, rand, want) {
   return null;
 }
 const hashiLab = {
-  id: 'hashi', name: 'Bridges', subject: 'puzzles', blurb: 'Join every island into one network: each island’s number says how many bridges touch it. Five sizes, endless puzzles.',
+  id: 'hashi', name: 'Bridges', subject: 'puzzles', levels: ['elem', 'hs', 'college', 'grad'], blurb: 'Join every island into one network: each island’s number says how many bridges touch it. Five sizes, endless puzzles.',
   words: 'hashi hashiwokakero bridges islands logic daily puzzle network',
   icon: '<circle cx="12" cy="12" r="6"/><circle cx="36" cy="12" r="6"/><circle cx="12" cy="36" r="6"/><path d="M18 11h12M18 14h12M12 18v12"/>',
   about: 'Rules: bridges run straight across or down, never cross each other or an island, and at most two bridges join the same pair of islands. Each island needs exactly as many bridges as its number, and all islands must end up connected.\nEach daily puzzle is built from a real network, so a solution always exists; any arrangement that follows every rule counts.\nTap one island and then another in line with it to add a bridge; tapping again makes it double, a third time removes it.',
@@ -398,7 +398,7 @@ const hashiLab = {
 const DIRS = [[-1, 0, 1, 4], [0, 1, 2, 8], [1, 0, 4, 1], [0, -1, 8, 2]]; // [dr, dc, my side, their side] N E S W
 const rot = (m) => ((m << 1) | (m >> 3)) & 15; // turn a quarter clockwise
 const pipesLab = {
-  id: 'pipes', name: 'Pipes', subject: 'puzzles', blurb: 'Turn the pipes so water from the middle reaches every tile, with no leaks. 4×4 up to 12×12.',
+  id: 'pipes', name: 'Pipes', subject: 'puzzles', levels: ['elem', 'hs', 'college', 'grad'], blurb: 'Turn the pipes so water from the middle reaches every tile, with no leaks. 4×4 up to 12×12.',
   words: 'pipes plumber water network rotate tiles daily puzzle',
   icon: '<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M6 24h14v-12M42 24H28v12M24 6v6M24 36v6"/><circle cx="24" cy="24" r="4"/>',
   about: 'Every pipe tile can turn. The puzzle is solved when water from the tap in the middle reaches every tile and no pipe end is left open (no leaks).\nThe daily puzzle is made by laying a real network of pipes and then turning the tiles at random, so it can always be solved.',
@@ -468,7 +468,7 @@ const pipesLab = {
 const STEP = { E: [0, 1], W: [0, -1], N: [-1, 0], S: [1, 0] };
 const BOUNCE = { '/': { E: 'N', N: 'E', W: 'S', S: 'W' }, '\\': { E: 'S', S: 'E', W: 'N', N: 'W' } };
 const mirrorsLab = {
-  id: 'mirrors', name: 'Laser mirrors', subject: 'puzzles', blurb: 'Tap the mirrors to turn them so the laser bounces its way to the glowing target. Four board sizes, a new layout every time.',
+  id: 'mirrors', name: 'Laser mirrors', subject: 'puzzles', levels: ['hs', 'college'], blurb: 'Tap the mirrors to turn them so the laser bounces its way to the glowing target. Four board sizes, a new layout every time.',
   words: 'laser mirrors reflection optics light puzzle daily',
   icon: '<rect x="6" y="6" width="36" height="36" rx="3"/><path d="M6 30h12l0-14h18" stroke-dasharray="1 0"/><path d="M14 34l8-8M32 12l8 8"/><circle cx="36" cy="16" r="3"/>',
   about: 'Each mirror is a flat mirror at 45°, so the laser turns through exactly 90° when it hits one (angle in = angle out). Grey blocks stop the beam.\nThe daily puzzle is made by drawing a real laser path first and then turning the mirrors at random, so it can always be solved. Some mirrors are decoys that aren’t needed.',
@@ -601,7 +601,7 @@ function makeEquation(rand) {
 }
 const SHOW = (ch) => ({ '*': '×', '/': '÷', '-': '−' }[ch] || ch);
 const equationLab = {
-  id: 'equation', name: 'Guess the equation', subject: 'puzzles', blurb: 'Find the hidden 8-symbol equation in six guesses. Every guess must be a true equation.',
+  id: 'equation', name: 'Guess the equation', subject: 'puzzles', levels: ['hs', 'college', 'grad'], blurb: 'Find the hidden 8-symbol equation in six guesses. Every guess must be a true equation.',
   words: 'equation guess nerdle wordle math arithmetic daily puzzle',
   icon: '<rect x="4" y="16" width="8" height="12" rx="2"/><rect x="14" y="16" width="8" height="12" rx="2"/><rect x="24" y="16" width="8" height="12" rx="2"/><rect x="34" y="16" width="10" height="12" rx="2"/><path d="M26 22h4M36 21h6M36 24h6"/>',
   about: 'The hidden equation has 8 symbols (digits and + − × ÷ =), like 12+46=58. Every guess must be a true equation, worked out with the usual order (× and ÷ before + and −). Numbers can’t start with 0.\nAfter each guess: a white square means the right symbol in the right place, an outlined square means the symbol is in the equation but somewhere else, and a dark square means it isn’t in the equation (or not that many times).\nYour score uses how many guesses you needed, then your time.',
@@ -709,7 +709,7 @@ function loadWorld() { // TopoJSON → rings of [lon, lat] for each country
   return worldPromise;
 }
 const geographyLab = {
-  id: 'geography', name: 'Geography', subject: 'puzzles', blurb: 'Name the highlighted country, pick its capital, then pin it on the map. Or find countries on the map, or tap around to explore.',
+  id: 'geography', name: 'Geography', subject: 'puzzles', levels: ['elem', 'hs', 'college', 'grad'], blurb: 'Name the highlighted country, pick its capital, then pin it on the map. Or find countries on the map, or tap around to explore.',
   words: 'geography countries capitals map world atlas daily quiz',
   icon: '<circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c-7 6-7 30 0 36M24 6c7 6 7 30 0 36"/><path d="M33 14l2 6-4 2" />',
   about: 'Map: Natural Earth (public domain) in the Natural Earth projection; borders are shown as drawn in that data and are not a statement about any disputed territory. Small countries and islands are simplified at this scale.\nEach round: name the country (100 points), pick its capital (100 points), then pin the capital, 100 points minus 1 for every 10 km you are off. The capital listed is the official capital (for example Tanzania’s is Dodoma, Myanmar’s Naypyidaw, Kazakhstan’s Astana).\nEveryone gets the same 8 countries each day.',

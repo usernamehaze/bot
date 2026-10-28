@@ -4,7 +4,7 @@ import { INK, DIM, FAINT, GRID, C, el, esc, num, canvas, drag, clock, group, sli
 
 /* ---------------- Vectors ---------------- */
 const vectorLab = {
-  id: 'vectors', name: 'Vectors', subject: 'math', topic: 'vectors: adding and subtracting, magnitude, dot product, cross product and the angle between vectors',
+  id: 'vectors', name: 'Vectors', subject: 'math', levels: ['hs', 'college'], topic: 'vectors: adding and subtracting, magnitude, dot product, cross product and the angle between vectors',
   blurb: 'Drag two vectors and watch their sum, difference, dot product, angle and cross product, in 2D or 3D.',
   words: 'vector addition subtraction dot product cross product magnitude angle components physics',
   icon: '<path d="M8 40L22 14M8 40l30-8M22 14l16 18" /><path d="M22 14l-5 2M22 14l1 5M38 32l-4-4M38 32l-5 1"/>',
@@ -163,7 +163,7 @@ function meshOf(kind, d) {
   return T;
 }
 const solidsLab = {
-  id: 'solids', name: '3D shapes', subject: 'math', topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
+  id: 'solids', name: '3D shapes', subject: 'math', levels: ['elem', 'hs'], topic: 'volume and surface area of 3D solids: cubes, cuboids, spheres, cylinders, cones, pyramids and prisms',
   blurb: 'Turn 13 solids: cubes, spheres, cones, prisms, a torus… Make them any size and watch volume and surface area change.',
   words: 'volume surface area 3d solids geometry cube sphere cylinder cone pyramid prism cuboid',
   icon: '<path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/>',
@@ -259,7 +259,7 @@ const SEQS = {
     py: (p) => `def steps(n):\n    if n == 1:\n        return 0               # reached 1: stop\n    if n % 2 == 0:\n        return 1 + steps(n // 2)\n    return 1 + steps(3 * n + 1)\n\nprint(steps(${p.c}))` },
 };
 const recursionLab = {
-  id: 'recursion', name: 'Recursion', subject: 'math', topic: 'sequences and recursion: arithmetic and geometric sequences, Fibonacci, factorials and recursive functions in Python',
+  id: 'recursion', name: 'Recursion', subject: 'math', levels: ['college'], topic: 'sequences and recursion: arithmetic and geometric sequences, Fibonacci, factorials and recursive functions in Python',
   blurb: 'See each term of a sequence built from the one before, in math and in Python.',
   words: 'recursion sequence arithmetic geometric fibonacci factorial collatz python programming recursive function',
   icon: '<rect x="4" y="18" width="10" height="12" rx="2"/><rect x="19" y="18" width="10" height="12" rx="2"/><rect x="34" y="18" width="10" height="12" rx="2"/><path d="M14 24h5M29 24h5"/><path d="M9 14c0-6 15-6 15 0" />',

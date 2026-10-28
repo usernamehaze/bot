@@ -431,7 +431,7 @@ test('an account keeps the study streak and Labs progress: cleared from the brow
     // a longer streak already on this device is kept
     const kept = await page.evaluate((d) => { window.CassieMemory.mergeStreak({ count: 2, lastDay: d.streak.lastDay }); return window.CassieMemory.stats().streak; }, data);
     expect(kept === 6, 'the longer streak stays: ' + kept);
-    expect(/study streak/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')) && /Labs tries/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page says the streak and Labs progress go with an account');
+    expect(/study streak/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')) && /Learn tries/.test(fs.readFileSync(path.join(ROOT, 'privacy.html'), 'utf8')), 'the privacy page says the streak and Labs progress go with an account');
     expect(!errors.length, 'page errors: ' + errors.join('; '));
   } finally { await ctx.close(); }
 });
@@ -1329,7 +1329,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
     if (scheme === 'light') {
       // the sidebar and the top bar
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
-      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Labs,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
+      expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
       expect(side.topIcons === 'top-bell,top-me' && side.ask === 'none', 'like the reference: only the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
@@ -7700,6 +7700,86 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   await ctx.close();
 });
 
+test('Learn (was Labs) follows the student’s level: For you opens on their own level first (Kindergarten: the 4 little ones’ labs; Grade 11: High school) with the other levels folded under Other levels, Today’s Lab on Home comes from their level, changing the level in the profile changes both at once, and no screen says “Labs” any more (390x844, 1280x800)', async (b) => {
+  const levelsOf = (page) => page.evaluate(async () => { const m = await import('./labs/labs.js'); return { levels: m.LEVELS.map((l) => l[0]), of: Object.fromEntries(m.LABS.map((l) => [l.id, l.levels || []])) }; });
+  const forYou = (page) => page.evaluate(() => [...document.querySelectorAll('.lp-foryou .lp-level')].map((s) => ({ k: s.dataset.level, mine: s.classList.contains('lp-mine'), folded: !!s.closest('details.lp-other'), ids: [...s.querySelectorAll('.lp-row')].map((r) => r.dataset.lab) })));
+  const learnTab = async (page) => { await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.labs:not([hidden]) .lp-foryou .lp-level, .labs:not([hidden]) .lp-foryou .lp-for', { timeout: 15000 }); await page.waitForTimeout(400); };
+  const SHOTS = process.env.SHOTS;
+
+  // 1. Kindergarten: Nursery and Kindergarten first and open, with the 4 little ones' labs
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Kindergarten', age: 5 } } });
+    await learnTab(page);
+    const f = await forYou(page), L = await levelsOf(page);
+    expect(f[0] && f[0].k === 'pre' && f[0].mine && !f[0].folded, 'Kindergarten opens on Nursery and Kindergarten: ' + JSON.stringify(f));
+    expect(JSON.stringify(f[0].ids.slice().sort()) === JSON.stringify(['count', 'shapes', 'trace-letters', 'trace-numbers']), 'the 4 little ones’ labs: ' + f[0].ids);
+    expect(JSON.stringify(f.slice(1).map((x) => x.k)) === JSON.stringify(['elem', 'hs', 'college', 'grad']) && f.slice(1).every((x) => x.folded && !x.mine && x.ids.length), 'the others in order under Other levels: ' + JSON.stringify(f.map((x) => [x.k, x.folded])));
+    expect(await page.$eval('.lp-other', (d) => !d.open && /^Other levels$/.test(d.querySelector('summary').textContent.trim())), 'Other levels is folded');
+    expect(f.every((x) => x.ids.every((id) => !L.of[id] || L.of[id].includes(x.k))), 'each section holds only its level’s labs');
+    expect(Object.keys(L.of).every((id) => L.of[id].length), 'every lab has its levels: ' + Object.keys(L.of).filter((id) => !L.of[id].length));
+    expect(['trace-letters', 'trace-numbers', 'count', 'shapes'].every((id) => JSON.stringify(L.of[id]) === '["pre"]'), 'the kids labs are Nursery and Kindergarten only');
+    expect(L.of[await page.evaluate(() => todayLab())].includes('pre'), 'a Kindergarten student’s Today’s Lab is one of theirs');
+    // Today's Lab on Home, by level: every pick is that level's and has its card info
+    const bad = await page.evaluate((of) => Object.entries(TODAY_BY_LEVEL).flatMap(([k, ids]) => ids.filter((id) => !(of[id] || []).includes(k) || !LAB_INFO[id]).map((id) => k + ':' + id)), L.of);
+    expect(!bad.length, 'Today’s Lab picks fit their level: ' + bad);
+    if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-kinder.png' });
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // 2. Grade 11: High school first; Today's Lab (Home and Learn) is a High school lab; then College in the profile: both follow at once
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 11', age: 16 } } });
+    const L = await levelsOf(page);
+    await page.waitForSelector('#home .hub-tlab-pv');
+    const home1 = await page.$eval('#home .hub-tlab-pv', (c) => c.dataset.pv);
+    expect(L.of[home1].includes('hs'), 'Grade 11: Home’s Today’s Lab is a High school lab: ' + home1);
+    await learnTab(page);
+    let f = await forYou(page);
+    expect(f[0].k === 'hs' && f[0].mine && f[0].ids.length >= 10 && !f[0].ids.some((id) => L.of[id] && JSON.stringify(L.of[id]) === '["pre"]'), 'Grade 11 opens on High school: ' + JSON.stringify(f[0]));
+    expect(L.of[await page.$eval('.lp-play', (x) => x.dataset.lab)].includes('hs'), 'Learn’s Today’s Lab is a High school one too');
+    if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-grade11.png' });
+    await page.evaluate(() => saveProfile({ ...state.profile, grade: '2nd year college' }, false, state.profile)); // (Edit profile's Save)
+    await page.waitForFunction(() => (document.querySelector('.lp-foryou .lp-mine') || {}).dataset?.level === 'college', null, { timeout: 4000 }).catch(() => {});
+    f = await forYou(page);
+    expect(f[0] && f[0].k === 'college' && f[0].mine, 'after changing to College, For you opens on College at once: ' + JSON.stringify(f.map((x) => x.k)));
+    await page.click('.tab[data-tab="home"]');
+    await page.waitForSelector('#home .hub-tlab-pv');
+    const home2 = await page.$eval('#home .hub-tlab-pv', (c) => c.dataset.pv);
+    expect(L.of[home2].includes('college'), 'and Home’s Today’s Lab is a College one: ' + home2);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // 3. no screen says "Labs" (lab names aside): the words on screen, and the names buttons are read out by
+  const said = (page) => page.evaluate(() => {
+    const out = [], seen = (e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n; (n = walk.nextNode());) if (/\bLabs\b/.test(n.nodeValue) && n.parentElement && seen(n.parentElement) && !n.parentElement.closest('script,style')) out.push(n.nodeValue.trim().slice(0, 60));
+    document.querySelectorAll('[aria-label],[title],[placeholder]').forEach((e) => { const t = ['aria-label', 'title', 'placeholder'].map((a) => e.getAttribute(a) || '').join(' '); if (/\bLabs\b/.test(t) && (seen(e) || e.matches('[role=dialog]'))) out.push(t.slice(0, 60)); });
+    return out;
+  });
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    const { ctx, page, errors } = await open(b, { device, viewport, server: false, state: { tab: 'home' } });
+    const found = [];
+    const look = async (where) => { for (const t of await said(page)) found.push(`${where}: ${t}`); };
+    if (phone) {
+      await page.waitForSelector('#home .hub-boxes'); await look('Home');
+      await learnTab(page); await look('Learn');
+      await page.click('.labs:not([hidden]) [data-lp="science"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row'); await look('Learn list');
+      await page.click('.lp-back'); await page.click('.lp-other > summary'); await page.waitForTimeout(300); await look('Other levels');
+      await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden])'); await look('You');
+    } else {
+      await page.evaluate(() => deskGo('home')); await page.waitForTimeout(500); await look('Home');
+      await page.click('#labs-btn'); await page.waitForSelector(LABS_READY, { timeout: 15000 }); await look('Learn');
+      await page.evaluate(() => openLabs('pendulum')); await page.waitForSelector('.lab-view:not([hidden]) .lab-back'); await look('a lab');
+    }
+    await page.goto(APP.replace('app.html', 'index.html')); await page.waitForTimeout(500); await look('the website');
+    expect(!found.length, `${size}: “Labs” still shows: ` + found.join(' | '));
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {
@@ -8509,7 +8589,7 @@ test('the landing page is calm, like linear.app: one message and one button in t
         await new Promise((r) => setTimeout(r, 2600));
         return { n: figs.length, labels: figs.map((f) => f.querySelector('.fig-n').textContent), titles: figs.map((f) => f.querySelector('h3').textContent), before, after: figs.map((f) => getComputedStyle(f.querySelector('.ln')).strokeDashoffset), delays: figs.map((f) => getComputedStyle(f.querySelector('.ln')).transitionDelay) };
       });
-      expect(F.n === 3 && F.labels.join() === 'FIG 0.1,FIG 0.2,FIG 0.3' && /Labs/.test(F.titles[0]) && /Flashcards/.test(F.titles[1]) && /board/i.test(F.titles[2]), `${tag}: the study tools, like Linear's figures: ` + JSON.stringify(F.titles));
+      expect(F.n === 3 && F.labels.join() === 'FIG 0.1,FIG 0.2,FIG 0.3' && /Learn/.test(F.titles[0]) && /Flashcards/.test(F.titles[1]) && /board/i.test(F.titles[2]), `${tag}: the study tools, like Linear's figures: ` + JSON.stringify(F.titles));
       expect(F.before.every((x) => parseFloat(x) > 0) && F.after.every((x) => parseFloat(x) === 0) && new Set(F.delays).size === 3, `${tag}: each drawing draws itself in, one after another: ` + JSON.stringify(F));
       const moves = await page.evaluate(async () => {
         const out = [];
@@ -9915,7 +9995,7 @@ test('phone Home is drawn again only when it needs to be (coming into view, Home
 
 test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab with a live preview), For you (Learn, Study tools) with a live preview on every row, 3 moving at once; still with Reduce Motion or Lite mode; a computer keeps its Labs shelf', async (b) => {
   const { contrastIssues, tapTargetIssues } = require('./ui-checks.cjs');
-  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null } });
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null, profile: { ...PROFILE, grade: '', who: 'teach' } } }); // (no level: For you keeps its two doors; by level: the Learn test)
   page.on('dialog', (d) => d.dismiss().catch(() => {}));
   await page.click('.tab[data-tab="labs"]');
   await page.waitForSelector('.labs:not([hidden]) .lp:not([hidden]) .lp-big[data-preview]', { timeout: 15000 });
@@ -9923,10 +10003,10 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     chips: [...document.querySelectorAll('.lp-chips button')].map((c) => c.textContent), rec: document.querySelector('.lp-card .lp-info b').textContent, want: (LAB_INFO[todayLab()] || [])[0],
     pv: document.querySelector('.lp-big').dataset.preview, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, peek: !!document.querySelector('.lp-card .lp-peek'),
     forYou: [...document.querySelectorAll('.lp-for b')].map((x) => x.textContent), forPv: [...document.querySelectorAll('.lp-for canvas[data-preview]')].length }));
-  expect(top.title === 'Labs' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
+  expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(top.chips.join() === 'All,Science,Maths,History,3D,Study tools,Games', 'the filter chips: ' + top.chips.join());
   expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
-  expect(top.forYou.join() === 'Learn,Study tools' && top.forPv === 2, 'For you: Learn and Study tools, each with a preview: ' + JSON.stringify(top));
+  expect(top.forYou.join() === 'Simulations,Study tools' && top.forPv === 2, 'For you: Simulations and Study tools, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
   const f0 = await fr('.lp-big'); await page.waitForTimeout(900);
   expect(await fr('.lp-big') > f0 + 3, 'the Recommended preview is moving');
@@ -9943,7 +10023,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.waitForSelector('.lp-list:not([hidden]) .lp-row canvas[data-preview]');
   await page.waitForTimeout(600);
   const learn = await page.evaluate(() => ({ title: document.querySelector('.lp-list h3').textContent, rows: [...document.querySelectorAll('.lp-row')].map((r) => r.dataset.lab), withPv: document.querySelectorAll('.lp-row canvas[data-pv]').length }));
-  expect(learn.title === 'Learn' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'solar', 'fractions'].every((x) => learn.rows.includes(x)), 'Learn: every lab and 3D view, each with a preview: ' + JSON.stringify(learn));
+  expect(learn.title === 'Simulations' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'solar', 'fractions'].every((x) => learn.rows.includes(x)), 'Learn: every lab and 3D view, each with a preview: ' + JSON.stringify(learn));
   for (let i = 0; i < 4; i++) { const moving = await page.evaluate(() => document.querySelectorAll('.lp canvas[data-moving="1"]').length); expect(moving <= 3, 'at most 3 previews move at once: ' + moving); await page.waitForTimeout(250); }
   await page.click('.lp-row[data-lab="pendulum"]');
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"] .lab-controls > *', { timeout: 20000 });

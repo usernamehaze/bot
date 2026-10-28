@@ -291,7 +291,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
   function prompt(q) {
     const list = targets.map((t, i) => `${i + 1}. ${t.what}`).join('\n');
     const kind = lab.subject === 'tools' ? 'study tool' : lab.subject === 'games' ? 'game' : lab.subject === 'puzzles' ? 'daily puzzle' : lab.subject === 'explore' ? '3D explorer' : 'simulation';
-    return `You are Cassie, a warm, patient tutor sitting next to a ${level || 'high school'} student who is using the "${lab.name}" ${kind} in Cassie's Labs (${lab.blurb || ''}).
+    return `You are Cassie, a warm, patient tutor sitting next to a ${level || 'high school'} student who is using the "${lab.name}" ${kind} in Cassie's Learn section (${lab.blurb || ''}).
 How it works: ${String(lab.about || '').slice(0, 900)}
 ${lab.tries && lab.tries.length ? `Goals the student can try: ${lab.tries.join(' / ')}\n` : ''}What is on the screen right now: ${described() || 'they have just opened it'}.
 The things on the screen, numbered:
