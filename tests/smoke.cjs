@@ -6989,7 +6989,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
     await page.evaluate((sec) => openLabs(undefined, { section: sec }), games.includes(id) ? 'games' : 'learn');
     await openCard(page, `.labs-grid [data-lab="${id}"]`);
     await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 25000 }); // (3D scenes build slowly with the test's software graphics)
-    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet').count() >= 1, id + ' draws something');
+    expect(await page.locator('.lab-stage canvas, .lab-stage .lab-balance, .lab-stage .lab-units, .lab-stage .puz-sudoku, .lab-stage .puz-eq, .lab-stage .tl-sheet, .lab-stage .kid-field').count() >= 1, id + ' draws something');
     expect(await page.locator('.lab-about').isVisible(), id + ' says how its model works');
     // tap the middle of the picture (nothing should break)
     const sb0 = await page.locator('.lab-stage').boundingBox();
