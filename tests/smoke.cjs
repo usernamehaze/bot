@@ -4785,7 +4785,7 @@ test('press feedback: pills, chips, Home boxes and tabs scale to 0.96 while pres
     await ctx.addInitScript(([seed]) => { window.CASSIE_SERVER = ''; if (!sessionStorage.getItem('seeded')) { localStorage.setItem('cassie.v2', seed); sessionStorage.setItem('seeded', '1'); } window.__buzz = []; if (navigator.vibrate) navigator.vibrate = (ms) => { window.__buzz.push(ms); return true; }; }, [JSON.stringify({ profile: PROFILE, seenVersion: APP_VERSION, lite: 'off', tab: 'home', groqKey: 'gsk_test', helpWith: ['exam'] })]);
     const page = await ctx.newPage(); await page.goto(APP);
     await page.waitForSelector('#home .hub-box', { timeout: 8000 });
-    await page.locator('#home .hub-box').first().scrollIntoViewIfNeeded(); await page.waitForTimeout(300);
+    await page.evaluate(() => document.querySelector('#home .hub-box').scrollIntoView({ block: 'center' })); await page.waitForTimeout(300); // (in the middle: never under the tab bar)
     const box = await page.locator('#home .hub-box').first().boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.waitForTimeout(200);
     const r = await page.evaluate(() => ({ t: getComputedStyle(document.querySelector('#home .hub-box:active') || document.querySelector('#home .hub-box')).transform, buzz: window.__buzz }));
@@ -9586,24 +9586,25 @@ test.slow('Monochrome (Graphite) is everyone’s main colour unless Blush & Sage
   }
 });
 
-test('phone Home: a peek inside the labs slides past the hello, a live Today’s Lab card, then Today, Continue, the boxes and Quick actions; still with Reduce Motion or Lite mode; a computer’s Home is the study dashboard', async (b) => {
+test('phone Home: the hello and the bell with no row of lab previews above Today’s Lab (390x844), a live Today’s Lab card, then Today, Continue, the boxes and Quick actions; still with Reduce Motion or Lite mode; a computer’s Home is the study dashboard', async (b) => {
   const seed = { groqKey: 'gsk_test', tab: 'home', chats: [{ id: 'h1', title: 'What is osmosis?', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving.' }], updatedAt: Date.now() }], cards: [{ id: 'c1', f: 'Q', b: 'A', deck: 'Bio', box: 0, due: 0, at: 0 }] };
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: seed });
-    await page.waitForSelector('#home .hub-hero-phone .hub-tile[data-preview]', { timeout: 10000 });
+    await page.waitForSelector('#home .hub-tlab-pv[data-preview]', { timeout: 10000 });
     await page.waitForTimeout(800);
-    await page.waitForFunction(() => document.querySelectorAll('#home .hub-tile[data-preview]').length >= 8, null, { timeout: 8000 }); // (Home is redrawn now and then: its previews come straight back)
     const h = await page.evaluate(() => {
       const hub = document.querySelector('#home .hub'), kids = [...hub.children];
       const at = (sel) => kids.findIndex((k) => k.matches(sel)), atH = (re) => kids.findIndex((k) => k.matches('.hub-h') && re.test(k.textContent));
-      const run = document.querySelector('.hub-strip-run');
-      return { hello: document.querySelector('#home .hub-me').textContent, tiles: document.querySelectorAll('#home .hub-tile[data-preview]').length, anim: getComputedStyle(run).animationName,
+      // every lab preview on Home, and how many sit above Today's Lab (there should be none)
+      const tl = document.querySelector('#home .hub-tlab').getBoundingClientRect().top;
+      const above = [...document.querySelectorAll('#home canvas[data-pv]')].filter((c) => !c.closest('.hub-tlab') && c.getBoundingClientRect().bottom <= tl + 1);
+      return { hello: document.querySelector('#home .hub-me').textContent, above: above.length, hero: Math.round(document.querySelector('#home .hub-hero').getBoundingClientRect().height),
         order: [at('.hub-hero'), at('.hub-tlab'), atH(/^Today$/), atH(/Continue/), at('.hub-boxes'), atH(/Quick actions/)],
         lab: document.querySelector('.hub-tlab b').textContent, want: (LAB_INFO[todayLab()] || [])[0], pv: document.querySelector('.hub-tlab-pv').dataset.preview, today: todayLab(),
         play: document.querySelector('.hub-tlab-go').getBoundingClientRect().width };
     });
     expect(/^(Morning|Afternoon|Evening), Test$/.test(h.hello), 'the hello: ' + h.hello);
-    expect(h.tiles >= 8 && h.anim === 'hubStrip', 'lab previews slide past in the header: ' + JSON.stringify(h));
+    expect(h.above === 0 && h.hero < 120, 'no row of lab previews above Today’s Lab, and the header is just the hello and the bell: ' + JSON.stringify(h));
     expect(h.order.every((x, i) => x >= 0 && (i === 0 || x > h.order[i - 1])), 'the header, Today’s Lab, Today, Continue, the boxes, Quick actions: ' + JSON.stringify(h.order));
     expect(h.lab === h.want && h.pv === h.today && h.play >= 44, 'Today’s Lab is today’s lab with its live preview and a 44px play button: ' + JSON.stringify(h));
     // the previews keep drawing
@@ -9624,10 +9625,10 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     if (motion) { await page.emulateMedia({ reducedMotion: motion }); await page.reload(); }
     await page.waitForSelector('#home .hub-tlab-pv[data-preview]', { timeout: 10000 });
     await page.waitForTimeout(600);
-    const st = await page.evaluate(() => ({ still: [...document.querySelectorAll('#home canvas[data-preview]')].every((c) => c.dataset.still === '1'), anim: getComputedStyle(document.querySelector('.hub-strip-run')).animationName }));
+    const st = await page.evaluate(() => ({ still: [...document.querySelectorAll('#home canvas[data-preview]')].every((c) => c.dataset.still === '1') }));
     const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
     const f0 = await fr(); await page.waitForTimeout(1000); const f1 = await fr();
-    expect(st.still && st.anim === 'none' && f1 - f0 <= 2, `${why}: still previews (one frame each, not ~30 a second): ` + JSON.stringify({ ...st, f0, f1 }));
+    expect(st.still && f1 - f0 <= 2, `${why}: still previews (one frame each, not ~30 a second): ` + JSON.stringify({ ...st, f0, f1 }));
     await ctx.close();
   }
   // a computer: the study dashboard instead (no strip, no Today’s Lab card)
@@ -9635,7 +9636,7 @@ test('phone Home: a peek inside the labs slides past the hello, a live Today’s
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
     await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home');
-    const d = await page.evaluate(() => ({ strip: !!document.querySelector('#chat-log .hub-strip, #chat-log .hub-tlab, #chat-log canvas[data-pv]'), hello: document.querySelector('.dk-title').textContent }));
+    const d = await page.evaluate(() => ({ strip: !!document.querySelector('#chat-log .hub-tlab, #chat-log canvas[data-pv]'), hello: document.querySelector('.dk-title').textContent }));
     expect(!d.strip && d.hello === 'Hi, Test', 'a computer’s Home is the dashboard: ' + JSON.stringify(d));
     await ctx.close();
   }
@@ -9650,7 +9651,7 @@ test('phone Home previews: real-looking 3D scenes (like the labs) on Plus and Pr
     await page.waitForSelector(`#home .hub-tlab-pv[data-look="${want}"]`, { timeout: 20000 });
     await page.waitForTimeout(500);
     const looks = await page.evaluate(() => [...document.querySelectorAll('#home canvas[data-preview]')].map((c) => c.dataset.look).filter(Boolean));
-    expect(looks.length >= 3 && looks.every((l) => l === want), `${who}: every preview is ${want}: ` + looks.join(','));
+    expect(looks.length >= 1 && looks.every((l) => l === want), `${who}: every preview (Today’s Lab) is ${want}: ` + looks.join(','));
     expect(want === '3d' ? asked.length > 0 : asked.length === 0, `${who}: the 3D scenes are ${want === '3d' ? '' : 'not '}loaded`);
     if (want === '3d') { // and they move
       const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
