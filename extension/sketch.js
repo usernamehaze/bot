@@ -59,6 +59,19 @@
   .csk-dark .csk-btn.primary { background: #ececec; color: #1b1b1d; }
   .csk-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .csk-btn:disabled { opacity: .45; cursor: default; }
+  /* Liquid Glass tap: pressed to 0.94 with a glass bloom from where it was touched, a spring back on release;
+     with Reduce Motion or Lite mode only a brief tint */
+  .csk-btn.lg-on { position: relative; }
+  .csk-btn.lg-on::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(var(--glass-rgb, 255, 255, 255), .9) 0, transparent 70%);
+    opacity: 0; transform: scale(.4); transform-origin: var(--x, 50%) var(--y, 50%); transition: opacity .3s ease, transform .3s ease; }
+  .csk-btn.lg-on.lg-down::after { opacity: .2; transform: scale(1); }
+  .csk-btn.lg-down { animation: cskPress .12s ease forwards; }
+  .csk-btn.lg-up { animation: cskSpring .22s ease; }
+  @keyframes cskPress { to { transform: scale(.94); } }
+  @keyframes cskSpring { 0% { transform: scale(.94); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
+  .csk-btn.lg-tint { box-shadow: inset 0 0 0 999px rgba(0,0,0,.12); transition: box-shadow .12s; }
+  .csk-dark .csk-btn.lg-tint { box-shadow: inset 0 0 0 999px rgba(255,255,255,.14); }
   .csk-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid rgba(127,127,127,.2); }
   .csk-sep { width: 1px; height: 22px; background: rgba(127,127,127,.3); margin: 0 2px; }
   .csk-sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(127,127,127,.35); cursor: pointer; padding: 0; }
@@ -1600,6 +1613,17 @@
       }
     }
     document.addEventListener('paste', onPaste, true);
+    // the toolbar's Liquid Glass tap (where it was touched, and the spring back)
+    wrap.addEventListener('pointerdown', (e) => {
+      const el = e.target.closest && e.target.closest('.csk-btn');
+      if (!el || e.button > 0) return;
+      const still = document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+      const cls = still ? 'lg-tint' : 'lg-down';
+      if (!still) { const r = el.getBoundingClientRect(); el.style.setProperty('--x', Math.round(e.clientX - r.left) + 'px'); el.style.setProperty('--y', Math.round(e.clientY - r.top) + 'px'); el.classList.add('lg-on'); el.classList.remove('lg-up'); }
+      el.classList.add(cls);
+      const up = () => { window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true); el.classList.remove(cls); if (!still) { el.classList.add('lg-up'); setTimeout(() => el.classList.remove('lg-up'), 240); } };
+      window.addEventListener('pointerup', up, true); window.addEventListener('pointercancel', up, true);
+    }, true);
     wrap.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
     wrap.addEventListener('drop', (e) => {
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];

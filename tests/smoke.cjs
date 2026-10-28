@@ -4801,6 +4801,38 @@ test('press feedback: pills, chips, Home boxes and tabs scale to 0.96 while pres
   expect(/matrix\(0\.96/.test(iphone.t) && !iphone.buzz.length, 'iPhone: scales, no buzz: ' + JSON.stringify(iphone));
 });
 
+test('Liquid Glass tap: a tab icon, an icon button and a board tool press to 0.94 with a glass bloom from where they were touched, then spring back; with Reduce Motion only a tint', async (b) => {
+  const press = async (page, sel) => {
+    const box = await page.locator(sel).first().boundingBox();
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4); await page.mouse.down(); await page.waitForTimeout(200);
+    const r = await page.evaluate((s) => { const e = document.querySelector(s), a = getComputedStyle(e, '::after'); return { t: getComputedStyle(e).transform, glow: +a.opacity || 0, bg: a.backgroundImage, x: e.style.getPropertyValue('--x'), tint: getComputedStyle(e).boxShadow }; }, sel);
+    await page.mouse.up(); await page.waitForTimeout(80);
+    r.spring = await page.evaluate((s) => document.querySelector(s).classList.contains('lg-up'), sel);
+    await page.waitForTimeout(300);
+    return r;
+  };
+  const board = (page) => page.evaluate(() => openSketch()).then(() => page.waitForSelector('.csk-live'));
+  for (const reduce of [false, true]) {
+    const P = await open(b, { device: 'iPhone 13', server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home' } });
+    if (reduce) { await P.page.emulateMedia({ reducedMotion: 'reduce' }); }
+    await P.page.waitForSelector('.tabbar [data-tab="labs"]');
+    const tab = await press(P.page, '.tabbar [data-tab="labs"]');
+    await P.ctx.close();
+    const D = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
+    if (reduce) { await D.page.emulateMedia({ reducedMotion: 'reduce' }); }
+    await D.page.waitForSelector('#labs-btn');
+    const icon = await press(D.page, '#labs-btn');
+    await D.page.keyboard.press('Escape'); await D.page.evaluate(() => { try { deskGo('home'); } catch (e) { /* */ } });
+    await board(D.page);
+    const tool = await press(D.page, '.csk-tools [data-tool="hl"]');
+    await D.ctx.close();
+    for (const [name, r] of [['tab icon', tab], ['icon button', icon], ['board tool', tool]]) {
+      if (!reduce) expect(/matrix\(0\.94, 0, 0, 0\.94/.test(r.t) && r.glow > 0 && /radial-gradient/.test(r.bg) && /px$/.test(r.x) && r.spring, `${name}: 0.94, a glass bloom from the touch, a spring back: ` + JSON.stringify(r));
+      else expect(!/matrix\(0\.94/.test(r.t) && !/radial-gradient/.test(r.bg) && /inset/.test(r.tint), `${name} with Reduce Motion: no scale, no bloom, a tint: ` + JSON.stringify(r));
+    }
+  }
+});
+
 test('empty screens: Flashcards, Chats and the Study plan show a still, flat Cassie above their words', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
   const bot = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const svg = e.querySelector('.es-bot svg.cassie-bot'), r = e.querySelector('.es-bot') && e.querySelector('.es-bot').getBoundingClientRect(); return { svg: !!svg, hidden: e.querySelector('.es-bot') && e.querySelector('.es-bot').getAttribute('aria-hidden'), w: r && Math.round(r.width), first: e.firstElementChild && e.firstElementChild.className, title: (e.querySelector('.es-title') || {}).textContent }; }, sel);

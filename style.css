@@ -2936,3 +2936,16 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 /* --- the tab bar: every tab at least 48px wide; on a narrow phone (370px and less) the open tab is its icon only, so all 6 fit --- */
 .tab { min-width: 48px; }
 @media (max-width: 370px) { .tab, .tab.on { min-width: 48px; padding: 0 10px; } .tab.on span { display: none; } }
+
+/* --- Liquid Glass tap on icon buttons (tabs, icon buttons, sidebar tools, the bell, the avatar): pressed to 0.94
+   with a soft glass bloom from where the finger touched, then a little spring back. app.js lgPress() sets the
+   classes and --x/--y; with Reduce Motion or Lite mode it only tints (lg-tint). --- */
+.lg-on::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(var(--glass-rgb), .93) 0, transparent 70%); /* (the glass of --lg-fill-thick) */
+  opacity: 0; transform: scale(.4); transform-origin: var(--x, 50%) var(--y, 50%); transition: opacity .3s ease, transform .3s ease; }
+.lg-on.lg-down::after { opacity: .2; transform: scale(1); }
+.lg-down { animation: lgPress .12s ease forwards; }
+.lg-up { animation: lgSpring .22s ease; }
+@keyframes lgPress { to { transform: scale(.94); } }
+@keyframes lgSpring { 0% { transform: scale(.94); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
+.lg-tint { box-shadow: inset 0 0 0 999px rgba(var(--shade-rgb), .12); transition: box-shadow .12s; }
