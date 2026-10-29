@@ -7926,6 +7926,70 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
   }
 });
 
+test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a sidebar, top bar, dashboard, Settings, Home or Learn icon plays its own short motion on the icon only (its box never moves or changes size); a tap on a Home box does the same; Reduce Motion only fades', async (b) => {
+  const motion = (page, sel) => page.$eval(sel, (h) => {
+    const svg = h.querySelector('svg:not(.hub-chev):not(.labs-cur)'), r = h.getBoundingClientRect();
+    const anims = svg ? svg.getAnimations().filter((a) => /^ic-/.test(a.animationName || '')) : [];
+    return { names: anims.map((a) => a.animationName), turns: anims.some((a) => a.effect.getKeyframes().some((k) => k.transform && k.transform !== 'none')), box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] };
+  });
+  const box = (page, sel) => page.$eval(sel, (h) => { const r = h.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; });
+  const check = async (page, sel, where, still = false) => {
+    await page.mouse.move(2, 2); await page.waitForTimeout(80);
+    const before = await box(page, sel);
+    await page.hover(sel); await page.waitForTimeout(90);
+    const m = await motion(page, sel);
+    if (still) expect(m.names.length && !m.turns, `${where}: Reduce Motion only fades (${sel}): ` + JSON.stringify(m));
+    else expect(m.names.length && m.turns, `${where}: the icon moves (${sel}): ` + JSON.stringify(m));
+    expect(JSON.stringify(m.box) === JSON.stringify(before), `${where}: its box stays put (${sel}): ${before} → ${m.box}`);
+    return m.names;
+  };
+  // a computer: the sidebar, the top bar, the dashboard, Settings and Learn
+  {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-pill');
+    const seen = new Set();
+    for (const sel of ['.side-nav [data-page="home"]', '#labs-btn', '#settings-btn', '#top-bell', '.top-search', '.dk-pill']) (await check(page, sel, '1280x800')).forEach((n) => seen.add(n));
+    await page.evaluate(() => createNewChat()); await page.waitForSelector('.dk-chip'); await page.waitForTimeout(700); // (the ideas finish coming in)
+    (await check(page, '.dk-chip', '1280x800')).forEach((n) => seen.add(n));
+    await page.evaluate(() => openSettings('profile')); await page.waitForSelector('.set-link[data-open="account"]');
+    (await check(page, '.set-link[data-open="account"]', '1280x800')).forEach((n) => seen.add(n));
+    await page.evaluate(() => document.getElementById('settings-x').click());
+    await page.click('#labs-btn'); await page.waitForSelector('.labs-feature');
+    (await check(page, '.labs-feature', '1280x800')).forEach((n) => seen.add(n));
+    expect(seen.size >= 5, 'the icons move in different ways: ' + [...seen]);
+    if (process.env.SHOTS) for (const scheme of ['light', 'dark']) { // (mid motion: the gear turning in the sidebar)
+      await page.click('.labs-x'); await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); await page.mouse.move(600, 400);
+      await page.hover('#settings-btn'); await page.waitForTimeout(150);
+      await page.screenshot({ path: `${process.env.SHOTS}/icons-desk-${scheme}.png`, clip: { x: 0, y: 0, width: 640, height: 560 } });
+      await page.click('#labs-btn'); await page.waitForSelector('.labs-feature');
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // Reduce Motion: a fade, nothing turns or moves
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.click('.labs-x'); await page.waitForTimeout(300);
+    await check(page, '#settings-btn', '1280x800', true);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a phone: a tap on a Home box
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
+    const sel = '#home .hub-box[data-hub="lessons"]';
+    await page.waitForSelector(sel); await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300); // (clear of the tab bar)
+    const before = await box(page, sel);
+    const r = await page.$eval(sel, (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; });
+    // (the tap opens Lessons and Home may be drawn again, so the icon's classes are noted as they change)
+    await page.evaluate((s) => { window.__ic = []; const svg = document.querySelector(s + ' svg'); new MutationObserver(() => window.__ic.push(svg.getAttribute('class') || '')).observe(svg, { attributes: true, attributeFilter: ['class'] }); }, sel);
+    await page.touchscreen.tap(r[0], r[1]); await page.waitForTimeout(60);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/icons-phone-light.png` });
+    const seenCls = await page.evaluate(() => window.__ic.join(' '));
+    expect(/\bic-go\b/.test(seenCls) && /\bic-(pop|bounce|wiggle|spin|tilt|nod|slide)\b/.test(seenCls), '390x844: a tap on a Home box moves its icon: ' + seenCls);
+    expect(JSON.stringify(await box(page, sel)) === JSON.stringify(before), '390x844: the box stays put');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {

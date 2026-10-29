@@ -2994,3 +2994,24 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 @keyframes tab-you { 0% { transform: none; } 30% { transform: rotate(-8deg) translateY(1px); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tab.tab-anim svg, .tab.tab-anim svg path { animation: none !important; } }
 html.lite .tab.tab-anim svg, html.lite .tab.tab-anim svg path { animation: none !important; }
+
+/* every icon moves (app.js icGo): only the svg, never the words; its lines draw themselves in */
+svg.ic-go { transform-box: fill-box; transform-origin: 50% 50%; animation: .45s cubic-bezier(.34, 1.5, .64, 1) both; }
+svg.ic-go:not(.ic-soft) [pathLength] { stroke-dasharray: 1; animation: ic-draw .45s ease-out both; }
+svg.ic-pop { animation-name: ic-pop; }
+svg.ic-bounce { animation-name: ic-bounce; transform-origin: 50% 100%; }
+svg.ic-wiggle { animation-name: ic-wiggle; }
+svg.ic-spin { animation-name: ic-spin; animation-timing-function: cubic-bezier(.3, 1.3, .6, 1); }
+svg.ic-tilt { animation-name: ic-tilt; transform-origin: 50% 90%; }
+svg.ic-nod { animation-name: ic-nod; transform-origin: 50% 100%; }
+svg.ic-slide { animation-name: ic-slide; }
+svg.ic-soft { animation: ic-soft .15s ease-out both; }
+@keyframes ic-draw { from { stroke-dashoffset: .6; } to { stroke-dashoffset: 0; } }
+@keyframes ic-pop { 0% { transform: scale(.82); } 55% { transform: scale(1.14); } 100% { transform: none; } }
+@keyframes ic-bounce { 0%, 100% { transform: none; } 35% { transform: translateY(-22%) scaleY(1.06); } 65% { transform: translateY(4%) scaleY(.94); } }
+@keyframes ic-wiggle { 0%, 100% { transform: none; } 25% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(-4deg); } }
+@keyframes ic-spin { from { transform: rotate(0); } to { transform: rotate(90deg); } }
+@keyframes ic-tilt { 0%, 100% { transform: none; } 30% { transform: rotate(-14deg); } 65% { transform: rotate(9deg); } }
+@keyframes ic-nod { 0%, 100% { transform: none; } 35% { transform: rotate(-9deg) translateY(4%); } 70% { transform: rotate(6deg); } }
+@keyframes ic-slide { 0% { transform: none; } 40% { transform: translateX(22%); opacity: .6; } 41% { transform: translateX(-22%); } 100% { transform: none; opacity: 1; } }
+@keyframes ic-soft { from { opacity: .45; } to { opacity: 1; } }
