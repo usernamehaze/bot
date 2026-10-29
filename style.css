@@ -1830,7 +1830,7 @@ html.native .home:not([hidden]) {
   --lg-blur-card: blur(18px) saturate(1.8); /* (cards: real frost, a little lighter than the floating bars so many on screen stay quick) */
   /* the glass of cards: see-through panes that take a breath of the picked colour, a rim that catches
      the light on one corner and fades along the edges, a soft sheen, and a glow at the foot */
-  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .6), rgba(var(--glass-rgb), .34));
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .48), rgba(var(--glass-rgb), .24));
   --lg-tint: color-mix(in srgb, var(--primary) 8%, transparent);
   --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .95), rgba(var(--hi-rgb), .28) 34%, rgba(var(--hi-rgb), .1) 62%, rgba(var(--hi-rgb), .7));
   --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .55), rgba(var(--hi-rgb), 0) 52%);
@@ -1853,7 +1853,7 @@ html.native .home:not([hidden]) {
     --lg-lift: 0 12px 34px rgba(var(--shade-rgb), .45), 0 1px 3px rgba(var(--shade-rgb), .3);
     --lg-ink: rgba(var(--hi-rgb), .74);
     --lg-pick: color-mix(in srgb, var(--primary) 24%, transparent);
-    --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .86), rgba(var(--glass-rgb), .74));
+    --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
     --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .5), rgba(var(--hi-rgb), .1) 34%, rgba(var(--hi-rgb), .04) 62%, rgba(var(--hi-rgb), .3));
     --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .07), rgba(var(--hi-rgb), 0) 52%);
     --lg-tint: color-mix(in srgb, var(--primary) 12%, transparent);
@@ -1862,10 +1862,10 @@ html.native .home:not([hidden]) {
 }
 /* Monochrome (no colour picked): cool, neutral greys behind clear glass, so the glass still shows */
 :root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .06); --lg-glow: rgba(255, 255, 255, .25);
-  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .26));
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .4), rgba(var(--glass-rgb), .18));
   --amb-1: rgba(104, 114, 142, .5); --amb-2: rgba(160, 170, 194, .55); --amb-3: rgba(70, 78, 100, .32); }
 @media (prefers-color-scheme: dark) { :root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .03); --lg-glow: rgba(255, 255, 255, .04);
-  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .86), rgba(var(--glass-rgb), .74));
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
   --amb-1: rgba(150, 158, 186, .26); --amb-2: rgba(96, 104, 128, .34); --amb-3: rgba(210, 214, 228, .1); } }
 .topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar {
   background: var(--lg-fill); border: 1px solid var(--lg-line);
