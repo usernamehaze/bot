@@ -2093,6 +2093,35 @@ document.addEventListener('pointerdown', (e) => {
   const el = e.target.closest && e.target.closest(LG_TAP);
   if (el && e.button <= 0) lgPress(el, e);
 }, true);
+// every icon moves (style.css: ic-go and ic-<motion>): the pointer over it (a mouse, a pen, or a finger as
+// it touches) or keyboard focus. Only the icon moves, never the words; each motion fits what it draws, and
+// its lines draw themselves in. Done here, not with CSS :hover, so it works whatever the browser says.
+// Reduce Motion or Lite mode: a short fade only. (The tab bar has its own, in native.js.)
+const IC_HOST = '.hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
+const IC_MOTIONS = [['spin', /setting|gear|refresh|sync|memory|redo|again/], ['nod', /\byou\b|profile|account|person|sign in|edit/], ['bounce', /home|bell|remind|notif|streak|today|timer|focus/],
+  ['wiggle', /card|note|flash|plan|calendar|deck|board|draw|write|essay/], ['tilt', /lab|learn|game|quiz|simulat|\b3d\b|science|puzzle|test/], ['slide', /next|open|continue|arrow|›|research|search/],
+  ['pop', /chat|ask|talk|message|new|add|help|\+/]];
+const IC_ALL = ['ic-go', 'ic-soft', ...IC_MOTIONS.map((m) => 'ic-' + m[0])];
+function icGo(host) {
+  const svg = host.querySelector('svg:not(.hub-chev):not(.labs-cur)');
+  if (!svg || svg.closest('.tab')) return;
+  if (!svg.dataset.ic) {
+    const words = [host.getAttribute('aria-label'), host.dataset.hub, host.dataset.dk, host.dataset.open, host.id, host.textContent.slice(0, 60)].join(' ').toLowerCase();
+    svg.dataset.ic = (IC_MOTIONS.find(([, re]) => re.test(words)) || ['pop'])[0];
+    svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((p) => p.setAttribute('pathLength', '1'));
+  }
+  const still = document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const cls = still ? 'ic-soft' : 'ic-' + svg.dataset.ic;
+  svg.classList.remove(...IC_ALL); void svg.getBoundingClientRect(); // (again from the start)
+  svg.classList.add('ic-go', cls);
+  clearTimeout(svg._ic); svg._ic = setTimeout(() => svg.classList.remove(...IC_ALL), 480);
+}
+document.addEventListener('pointerover', (e) => {
+  const h = e.target.closest && e.target.closest(IC_HOST);
+  if (h && !(e.relatedTarget && h.contains(e.relatedTarget))) icGo(h);
+}, true);
+document.addEventListener('pointerdown', (e) => { const h = e.pointerType !== 'mouse' && e.target.closest && e.target.closest(IC_HOST); if (h) icGo(h); }, true); // (a tap, even where no pointerover comes first)
+document.addEventListener('focusin', (e) => { const h = e.target.closest && e.target.closest(IC_HOST); if (h && h.matches(':focus-visible')) icGo(h); }, true);
 // an empty screen: a still, flat Cassie above its words
 function cassieEmpty(box) {
   if (!box || !window.CassieBot || box.querySelector('.es-bot')) return box;
