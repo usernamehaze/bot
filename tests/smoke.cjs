@@ -8026,6 +8026,8 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
     await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-card'); await page.waitForTimeout(400);
     ok(await glass(page, ['.dk-card']), '1280x800 dashboard');
+    const side = await page.$eval('.sidebar', (e) => { const c = getComputedStyle(e); return { blur: c.backdropFilter, img: c.backgroundImage }; });
+    expect(/blur/.test(side.blur) && /rgba\([^)]*, 0\.[0-8]\d*\)/.test(side.img), '1280x800: the sidebar is see-through glass too: ' + JSON.stringify(side).slice(0, 300));
     await readable(page, '.desk', '1280x800 dashboard');
     await page.evaluate(() => createNewChat()); await page.waitForSelector('.composer');
     ok(await glass(page, ['.composer']), '1280x800 ask box');

@@ -1002,13 +1002,15 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 
 /* ---------- glassmorphism + ambient glow ---------- */
 @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-  .highlight-popover, .settings-card, #sidebar {
+  .highlight-popover, .settings-card {
     -webkit-backdrop-filter: blur(16px) saturate(1.3);
     backdrop-filter: blur(16px) saturate(1.3);
   }
+  #sidebar { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
   .highlight-popover { background: color-mix(in srgb, var(--surface) 78%, transparent); }
   .settings-card { background: color-mix(in srgb, var(--surface) 86%, transparent); }
-  #sidebar { background: color-mix(in srgb, var(--surface) 88%, transparent); }
+  #sidebar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), var(--lg-fill-side); } /* (see-through glass, like the boxes) */
+  @media (max-width: 760px) { #sidebar { background: var(--lg-fill-thick); } } /* (a phone's menu slides over the chat: thicker, so its small words stay readable) */
 }
 .highlight-popover {
   border: 1px solid var(--border);
@@ -1831,6 +1833,7 @@ html.native .home:not([hidden]) {
   /* the glass of cards: see-through panes that take a breath of the picked colour, a rim that catches
      the light on one corner and fades along the edges, a soft sheen, and a glow at the foot */
   --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .48), rgba(var(--glass-rgb), .24));
+  --lg-fill-side: linear-gradient(180deg, rgba(var(--glass-rgb), .62), rgba(var(--glass-rgb), .46)); /* (the sidebar: see-through, a little thicker than the boxes, it is all words) */
   --lg-tint: color-mix(in srgb, var(--primary) 8%, transparent);
   --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .95), rgba(var(--hi-rgb), .28) 34%, rgba(var(--hi-rgb), .1) 62%, rgba(var(--hi-rgb), .7));
   --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .55), rgba(var(--hi-rgb), 0) 52%);
@@ -1854,6 +1857,7 @@ html.native .home:not([hidden]) {
     --lg-ink: rgba(var(--hi-rgb), .74);
     --lg-pick: color-mix(in srgb, var(--primary) 24%, transparent);
     --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
+    --lg-fill-side: linear-gradient(180deg, rgba(var(--glass-rgb), .8), rgba(var(--glass-rgb), .68));
     --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .5), rgba(var(--hi-rgb), .1) 34%, rgba(var(--hi-rgb), .04) 62%, rgba(var(--hi-rgb), .3));
     --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .07), rgba(var(--hi-rgb), 0) 52%);
     --lg-tint: color-mix(in srgb, var(--primary) 12%, transparent);
@@ -1873,7 +1877,8 @@ html.native .home:not([hidden]) {
   box-shadow: var(--lg-edge), var(--lg-lift);
 }
 /* text-heavy surfaces use the thicker glass, so every word stays easy to read */
-.settings-card, .sidebar { background: var(--lg-fill-thick); }
+.settings-card { background: var(--lg-fill-thick); }
+.sidebar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), var(--lg-fill-side); }
 /* the top bar floats: the chat scrolls up underneath it (native.js keeps --topbar-h) */
 .topbar { position: relative; z-index: 7; border-width: 0 0 1px; box-shadow: var(--lg-edge), 0 6px 22px rgba(var(--ink-rgb), .06); }
 #chat-log { margin-top: calc(-1 * var(--topbar-h, 0px)); padding-top: calc(var(--topbar-h, 0px) + 16px); scroll-padding-top: var(--topbar-h, 0px); }
@@ -1889,13 +1894,13 @@ html.native .tabbar { background: var(--lg-fill); }
    The glass is made of tokens, so turning them solid here turns every glass surface solid. */
 html.lite {
   --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
-  --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border)); --lg-hair: 0 0 0 0 transparent; --amb-sheet: none;
+  --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-fill-side: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border)); --lg-hair: 0 0 0 0 transparent; --amb-sheet: none;
   --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border);
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root {
     --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
-    --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border));
+    --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-fill-side: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border));
     --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border); --lg-ink: var(--text);
   }
   .tab.on { background: var(--text); color: var(--surface); }
@@ -2865,7 +2870,7 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   .side-tool .app-label { overflow: hidden; text-overflow: ellipsis; }
   #side-general .memory-dot { position: static; margin-left: auto; }
   body:not(.side-open) #side-apps .side-tool, body:not(.side-open) #side-general .side-tool { justify-content: center; padding: 8px 0; }
-  .sidebar { background: var(--surface); }
+  .sidebar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), var(--lg-fill-side); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); } /* (glass, like the boxes: the backdrop shows through) */
   /* the dashboard pages have no ask box: Ask Cassie opens a chat */
   body.desk-on #composer, body.desk-on #quick-actions, body.desk-on #attach-preview { display: none !important; }
   /* the top bar's search: a real box, and its results under it */
