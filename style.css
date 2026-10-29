@@ -1825,7 +1825,9 @@ html.native .home:not([hidden]) {
   --lg-line: color-mix(in srgb, var(--primary) 12%, rgba(var(--ink-rgb), .06));
   --lg-edge: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 -1px 0 rgba(255, 255, 255, .35), inset 0 0 0 .5px rgba(255, 255, 255, .55);
   --lg-lift: 0 10px 30px rgba(18, 17, 23, .10), 0 1px 3px rgba(18, 17, 23, .06);
+  --lg-lift-up: 0 16px 38px rgba(18, 17, 23, .16), 0 2px 6px rgba(18, 17, 23, .08); /* (a glass card lifted under the pointer) */
   --lg-blur: blur(26px) saturate(1.6);
+  --lg-blur-card: blur(10px) saturate(1.5); /* (cards: their fill is nearly solid, so a light blur reads the same and costs far less) */
   --lg-ink: rgba(var(--ink-rgb), .68);
   --lg-pick: color-mix(in srgb, var(--primary) 14%, transparent);
 }
@@ -1861,12 +1863,12 @@ html.native .tabbar { background: var(--lg-fill); }
 /* Solid instead of glass: Lite mode (slow phones), Reduce Transparency and Increase Contrast.
    The glass is made of tokens, so turning them solid here turns every glass surface solid. */
 html.lite {
-  --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none;
+  --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
   --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border);
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root {
-    --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none;
+    --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
     --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border); --lg-ink: var(--text);
   }
   .tab.on { background: var(--text); color: var(--surface); }
@@ -3019,14 +3021,17 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
 /* liquid glass everywhere (like the reference: frosted panes with a bright rim over soft colour).
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
    them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
-.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row {
-  background: var(--lg-fill-thick); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row {
+  background: var(--lg-fill-thick); -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
   border: 1px solid var(--lg-line);
   box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift);
   transition: transform .18s ease, box-shadow .18s ease;
 }
+/* while the board or Learn covers the page, the cards behind stop blurring the moving backdrop (nobody sees it, and it costs frames) */
+html.labs-open :is(#app, #home), html.board-open :is(#app, #home) { --lg-blur-card: none; }
+.dk-stat.dk-stat-main { background: var(--primary); border-color: var(--primary); } /* (the highlighted number keeps its colour, under the glass rim) */
 @media (min-width: 761px) { .settings-card { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift); } }
-.gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), 0 16px 38px rgba(18, 17, 23, .16), 0 2px 6px rgba(18, 17, 23, .08) !important; }
+.gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), var(--lg-lift-up) !important; }
 .gl-down { transform: scale(.98); }
 @media (prefers-reduced-motion: reduce) { .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row { transition: box-shadow .15s ease; } .gl-up, .gl-down { transform: none; } }
 html.lite .gl-up, html.lite .gl-down { transform: none; }
@@ -3034,4 +3039,4 @@ html.lite .gl-up, html.lite .gl-down { transform: none; }
 html.native:not(.lite) body { background:
   radial-gradient(120% 55% at 0% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 62%),
   radial-gradient(110% 50% at 100% 35%, color-mix(in srgb, var(--secondary) 12%, transparent), transparent 66%),
-  radial-gradient(100% 45% at 20% 100%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%), var(--bg); background-attachment: fixed; }
+  radial-gradient(100% 45% at 20% 100%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%), var(--bg); }

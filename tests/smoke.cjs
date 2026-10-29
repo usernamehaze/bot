@@ -4896,7 +4896,8 @@ test('Liquid Glass tap: a tab icon, an icon button and a board tool press to 0.9
     const tool = await press(D.page, '.csk-tools [data-tool="hl"]');
     await D.ctx.close();
     for (const [name, r] of [['tab icon', tab], ['icon button', icon], ['board tool', tool]]) {
-      if (!reduce) expect(/matrix\(0\.94, 0, 0, 0\.94/.test(r.t) && r.glow > 0 && /radial-gradient/.test(r.bg) && /px$/.test(r.x) && r.spring, `${name}: 0.94, a glass bloom from the touch, a spring back: ` + JSON.stringify(r));
+      const k = +((r.t.match(/^matrix\(([\d.]+)/) || [])[1] || 1); // (pressed to 0.94; a frame either side of the end counts)
+      if (!reduce) expect(k >= 0.935 && k <= 0.945 && r.glow > 0 && /radial-gradient/.test(r.bg) && /px$/.test(r.x) && r.spring, `${name}: 0.94, a glass bloom from the touch, a spring back: ` + JSON.stringify(r));
       else expect(!/matrix\(0\.94/.test(r.t) && !/radial-gradient/.test(r.bg) && /inset/.test(r.tint), `${name} with Reduce Motion: no scale, no bloom, a tint: ` + JSON.stringify(r));
     }
   }
@@ -6137,7 +6138,8 @@ test('Apple design: the loading page is a launch screen (the app’s own backgro
       const menu = document.querySelector('.side-menu-label');
       return { glassyContent: content.filter(blur).map((e) => e.className), content: content.length, glassControls: controls.filter(blur).length, controls: controls.length, menu: menu && shown(menu) ? parseFloat(getComputedStyle(menu).fontSize) : null };
     });
-    expect(A.content > 0 && !A.glassyContent.length, `${viewport.width}: Home’s cards are solid, not glass: ` + JSON.stringify(A));
+    // (the owner chose liquid glass for the cards too, Oct 2026: the cards are glass now; the "liquid glass everywhere" test checks them)
+    expect(A.content > 0 && A.glassyContent.length === A.content, `${viewport.width}: Home’s cards are liquid glass, like the controls: ` + JSON.stringify(A));
     expect(A.controls > 0 && A.glassControls === A.controls, `${viewport.width}: the floating controls keep their glass: ` + JSON.stringify(A));
     expect(A.menu === null || A.menu >= 10, `${viewport.width}: the sidebar’s Menu label is at least 10px: ` + A.menu);
     expect(!errors.length, 'page errors: ' + errors.join('; '));

@@ -2112,9 +2112,9 @@ function icGo(host) {
   }
   const still = document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const cls = still ? 'ic-soft' : 'ic-' + svg.dataset.ic;
-  svg.classList.remove(...IC_ALL); void svg.getBoundingClientRect(); // (again from the start)
-  svg.classList.add('ic-go', cls);
-  clearTimeout(svg._ic); svg._ic = setTimeout(() => svg.classList.remove(...IC_ALL), 480);
+  svg.classList.remove(...IC_ALL); // (again from the start, on the next frame: no layout forced in the middle of a tap)
+  clearTimeout(svg._ic);
+  requestAnimationFrame(() => { svg.classList.add('ic-go', cls); svg._ic = setTimeout(() => svg.classList.remove(...IC_ALL), 480); });
 }
 document.addEventListener('pointerover', (e) => {
   const h = e.target.closest && e.target.closest(IC_HOST);
@@ -6064,7 +6064,9 @@ function attachDataUrl(dataUrl, prompt) {
 function openSketch(opts = {}) {
   if (!window.CassieSketch) return;
   deskCloseOthers('board');
+  document.documentElement.classList.add('board-open'); // (style.css: the cards behind stop blurring while the board is up)
   window.CassieSketch.open({
+    onClose: () => document.documentElement.classList.remove('board-open'),
     title: opts.title || 'Your board',
     dark: opts.dark != null ? opts.dark : prefersDark(),
     image: opts.image || null,
