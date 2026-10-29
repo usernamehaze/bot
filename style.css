@@ -1840,7 +1840,7 @@ html.native .home:not([hidden]) {
   --amb-2: color-mix(in srgb, var(--secondary) 36%, transparent);
   --amb-3: color-mix(in srgb, var(--primary) 26%, transparent);
   --lg-hair: 0 0 0 .5px rgba(var(--ink-rgb), .1); /* (a fine edge, so a pane reads on a light page) */
-  --amb-sheet: radial-gradient(70% 30% at 10% 6%, var(--amb-1), transparent 72%), radial-gradient(60% 28% at 95% 45%, var(--amb-2), transparent 72%), radial-gradient(70% 30% at 25% 98%, var(--amb-3), transparent 72%); /* (a phone sheet: the same shapes behind its glass) */
+  --amb-sheet: radial-gradient(70% 30% at 10% 6%, color-mix(in srgb, var(--amb-1) 50%, transparent), transparent 72%), radial-gradient(60% 28% at 95% 45%, color-mix(in srgb, var(--amb-2) 50%, transparent), transparent 72%), radial-gradient(70% 30% at 25% 98%, color-mix(in srgb, var(--amb-3) 50%, transparent), transparent 72%); /* (half as strong: sheets are full of small words) */ /* (a phone sheet: the same shapes behind its glass) */
   --lg-ink: rgba(var(--ink-rgb), .68);
   --lg-pick: color-mix(in srgb, var(--primary) 14%, transparent);
 }
