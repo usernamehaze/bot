@@ -7990,6 +7990,61 @@ test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a
   }
 });
 
+test('liquid glass everywhere (390x844 and 1280x800): Home boxes and cards, Today’s Lab, Learn rows, Lessons, Settings groups and sheet, the dashboard cards and the ask box are frosted glass with the lift shadow, words stay readable (AA) in light and dark, and Lite mode turns them solid', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const glass = (page, sels) => page.evaluate((list) => list.map((s) => {
+    const all = [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length);
+    const bad = all.filter((e) => { const c = getComputedStyle(e); return c.backdropFilter === 'none' || !/rgba\(18, 17, 23, 0\.1\d*\) 0px 1[0-6][.\d]*px 3\d[.\d]*px/.test(c.boxShadow); });
+    return { s, n: all.length, bad: bad.length, ex: bad[0] ? (bad[0].className + ' / ' + getComputedStyle(bad[0]).boxShadow) : '' };
+  }), sels);
+  const ok = (r, where) => { const miss = r.filter((x) => !x.n || x.bad); expect(!miss.length, `${where}: glass on every surface: ` + JSON.stringify(miss)); };
+  const readable = async (page, scope, where) => { for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350); const { bad } = await contrastIssues(page, scope); expect(!bad.length, `${where} (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+  // a phone
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home', chats: [{ id: 'c1', title: 'Osmosis', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving.' }], updatedAt: Date.now() }] } });
+    await page.waitForSelector('#home .hub-box'); await page.waitForTimeout(400);
+    ok(await glass(page, ['#home .hub-box', '#home .hub-tlab']), '390x844 Home');
+    await readable(page, '#home', '390x844 Home');
+    await page.click('#home .hub-box[data-hub="lessons"]'); await page.waitForSelector('.lessons-sheet .lesson');
+    ok(await glass(page, ['.lessons-sheet .lesson']), '390x844 Lessons');
+    await page.click('.lessons-back');
+    await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-card'); await page.waitForTimeout(300);
+    ok(await glass(page, ['.lp-card']), '390x844 Learn');
+    await readable(page, '.lp', '390x844 Learn');
+    await page.click('.lp-sims .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+    ok(await glass(page, ['.lp-list .lp-row']), '390x844 Learn rows');
+    await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden]) .set-group');
+    ok(await glass(page, ['#settings-panel .set-group']), '390x844 You');
+    await readable(page, '#settings-panel', '390x844 You');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a computer
+  {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-card'); await page.waitForTimeout(400);
+    ok(await glass(page, ['.dk-card']), '1280x800 dashboard');
+    await readable(page, '.desk', '1280x800 dashboard');
+    await page.evaluate(() => createNewChat()); await page.waitForSelector('.composer');
+    ok(await glass(page, ['.composer']), '1280x800 ask box');
+    await page.evaluate(() => openSettings('profile')); await page.waitForSelector('#settings-panel:not([hidden]) .set-group');
+    ok(await glass(page, ['#settings-panel .settings-card', '#settings-panel .set-group']), '1280x800 Settings');
+    await readable(page, '#settings-panel', '1280x800 Settings');
+    // a card lifts under the pointer
+    await page.evaluate(() => { document.getElementById('settings-x').click(); deskGo('home'); });
+    await page.waitForSelector('.dk-card');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // Lite mode: solid, no blur
+  {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'on', state: { tab: 'home' } });
+    await page.waitForSelector('#home .hub-box');
+    expect(await page.$eval('#home .hub-box', (e) => getComputedStyle(e).backdropFilter) === 'none', 'Lite mode: the boxes are solid');
+    await ctx.close();
+  }
+});
+
 test.slow('Teach me and Ask Cassie in the 3D explorer: Cassie teaches the cell, pointing at its buttons and labels', async (b) => {
   const asked = [];
   const { ctx, page, errors } = await open(b, { server: false, device: 'Desktop Chrome', state: { groqKey: 'gsk_test' }, fakeGroq: (body) => {

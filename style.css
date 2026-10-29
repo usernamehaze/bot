@@ -3015,3 +3015,23 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
 @keyframes ic-nod { 0%, 100% { transform: none; } 35% { transform: rotate(-9deg) translateY(4%); } 70% { transform: rotate(6deg); } }
 @keyframes ic-slide { 0% { transform: none; } 40% { transform: translateX(22%); opacity: .6; } 41% { transform: translateX(-22%); } 100% { transform: none; opacity: 1; } }
 @keyframes ic-soft { from { opacity: .45; } to { opacity: 1; } }
+
+/* liquid glass everywhere (like the reference: frosted panes with a bright rim over soft colour).
+   Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
+   them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
+.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row {
+  background: var(--lg-fill-thick); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-line);
+  box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+@media (min-width: 761px) { .settings-card { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift); } }
+.gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), 0 16px 38px rgba(18, 17, 23, .16), 0 2px 6px rgba(18, 17, 23, .08) !important; }
+.gl-down { transform: scale(.98); }
+@media (prefers-reduced-motion: reduce) { .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row { transition: box-shadow .15s ease; } .gl-up, .gl-down { transform: none; } }
+html.lite .gl-up, html.lite .gl-down { transform: none; }
+/* a phone has no moving backdrop (it saves the battery), so a still glow of the picked colours shows through the glass */
+html.native:not(.lite) body { background:
+  radial-gradient(120% 55% at 0% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 62%),
+  radial-gradient(110% 50% at 100% 35%, color-mix(in srgb, var(--secondary) 12%, transparent), transparent 66%),
+  radial-gradient(100% 45% at 20% 100%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%), var(--bg); background-attachment: fixed; }
