@@ -2121,6 +2121,12 @@ document.addEventListener('pointerover', (e) => {
   if (h && !(e.relatedTarget && h.contains(e.relatedTarget))) icGo(h);
 }, true);
 document.addEventListener('pointerdown', (e) => { const h = e.pointerType !== 'mouse' && e.target.closest && e.target.closest(IC_HOST); if (h) icGo(h); }, true); // (a tap, even where no pointerover comes first)
+// glass that lifts: a tappable card rises 2px under the pointer and presses in a little (style.css gl-up, gl-down)
+const GL_LIFT = '.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row';
+document.addEventListener('pointerover', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget)) && e.pointerType === 'mouse') c.classList.add('gl-up'); }, true);
+document.addEventListener('pointerout', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget))) c.classList.remove('gl-up', 'gl-down'); }, true);
+document.addEventListener('pointerdown', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c) c.classList.add('gl-down'); }, true);
+['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, () => document.querySelectorAll('.gl-down').forEach((c) => c.classList.remove('gl-down')), true));
 document.addEventListener('focusin', (e) => { const h = e.target.closest && e.target.closest(IC_HOST); if (h && h.matches(':focus-visible')) icGo(h); }, true);
 // an empty screen: a still, flat Cassie above its words
 function cassieEmpty(box) {
@@ -2307,7 +2313,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=201').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=202').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6579,7 +6585,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=201');
+      exploreMod = await import('./explore/cell3d.js?v=202');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6629,7 +6635,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=201');
+      labsMod = await import('./labs/labs.js?v=202');
       islandRest();
     }
     labsMod.open({
@@ -8468,10 +8474,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=201').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=202').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=201', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=202', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
