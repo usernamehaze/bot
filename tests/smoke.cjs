@@ -7675,7 +7675,7 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
     const ctrls = [...card.querySelectorAll('button, input, select, a, summary')].filter(shown);
     const last = ctrls.at(-1), lr = last && r(last), hr = r(head), cr = r(card);
     return { nm, headTop: Math.round(hr.top), cardTop: Math.round(cr.top), cardBottom: Math.round(cr.bottom), barTop: Math.round(bar.top), lastBottom: lr && Math.round(lr.bottom), last: last && (last.textContent || last.id || last.tagName).trim().slice(0, 30),
-      bg: cs.backgroundColor, img: cs.backgroundImage, opaque: (alpha === undefined || Number.isNaN(alpha) || alpha === 1) && cs.backgroundImage === 'none' && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) && !/rgba/.test(ps.backgroundColor), behind: ps.backgroundColor,
+      bg: cs.backgroundColor, img: cs.backgroundImage, opaque: (alpha === undefined || Number.isNaN(alpha) || alpha === 1) && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) /* (soft shapes may sit on it: the colour under them is solid) */ && !/rgba/.test(ps.backgroundColor), behind: ps.backgroundColor,
       headAfterScroll: Math.round(r(head).top), btns: btns.map((x) => { const q = r(x); return [Math.round(q.width), Math.round(q.height), Math.round(q.top)]; }) };
   }, name);
   const ok = (g) => g.headTop >= 47 && g.cardTop >= 47 && g.cardBottom <= g.barTop + 1 && g.lastBottom <= g.barTop + 1 && g.opaque && Math.abs(g.headAfterScroll - g.headTop) <= 1 && g.btns.length >= 1 && g.btns.every(([w, h, t]) => w >= 44 && h >= 44 && t >= 47);
@@ -7992,7 +7992,7 @@ test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a
   }
 });
 
-test('liquid glass everywhere (390x844 and 1280x800): Home boxes and cards, Today’s Lab, Learn rows, Lessons, Settings groups and sheet, the dashboard cards and the ask box are frosted glass with the lift shadow, words stay readable (AA) in light and dark, and Lite mode turns them solid', async (b) => {
+test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home boxes and cards, Today’s Lab, Learn rows, Lessons, Settings groups and sheet, the dashboard cards and the ask box are frosted glass with the lift shadow, words stay readable (AA) in light and dark, and Lite mode turns them solid', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const glass = (page, sels) => page.evaluate((list) => list.map((s) => {
     const all = [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length);
@@ -8037,6 +8037,23 @@ test('liquid glass everywhere (390x844 and 1280x800): Home boxes and cards, Toda
     await page.waitForSelector('.dk-card');
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
+  }
+  // glass for every colour: Monochrome, Cassie's colours and a picked colour all get frosted panes, each
+  // tinted by its own colour, with that colour's shapes behind (phone and computer)
+  for (const [size, device, viewport, card] of [['390x844', 'iPhone 13', { width: 390, height: 844 }, '#home .hub-box'], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }, '.dk-card']]) {
+    const looks = {};
+    for (const accent of ['mono', 'cassie', '#1d4ed8']) {
+      const { ctx, page, errors } = await open(b, { device, viewport, server: false, lite: 'off', state: { tab: 'home', accent } });
+      await page.evaluate(() => { if (sideWide.matches) deskGo('home'); });
+      await page.waitForSelector(card); await page.waitForTimeout(300);
+      looks[accent] = await page.$eval(card, (e) => { const c = getComputedStyle(e); return { blur: c.backdropFilter, img: c.backgroundImage, tint: document.documentElement.dataset.tint, behind: getComputedStyle(document.body).backgroundImage.slice(0, 400) }; });
+      expect(/blur/.test(looks[accent].blur), `${size} ${accent}: frosted glass: ` + looks[accent].blur);
+      expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+      await ctx.close();
+    }
+    expect(looks.mono.tint === 'mono' && looks.cassie.tint === 'cassie' && looks['#1d4ed8'].tint === 'colour', `${size}: the page knows which colour the glass follows: ` + JSON.stringify(Object.values(looks).map((x) => x.tint)));
+    expect(new Set(Object.values(looks).map((x) => x.img)).size === 3, `${size}: each colour tints the glass its own way`);
+    if (size === '390x844') expect(new Set(Object.values(looks).map((x) => x.behind)).size === 3, `${size}: and shows its own colours behind it`);
   }
   // Lite mode: solid, no blur
   {

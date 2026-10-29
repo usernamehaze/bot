@@ -1827,7 +1827,20 @@ html.native .home:not([hidden]) {
   --lg-lift: 0 10px 30px rgba(18, 17, 23, .10), 0 1px 3px rgba(18, 17, 23, .06);
   --lg-lift-up: 0 16px 38px rgba(18, 17, 23, .16), 0 2px 6px rgba(18, 17, 23, .08); /* (a glass card lifted under the pointer) */
   --lg-blur: blur(26px) saturate(1.6);
-  --lg-blur-card: blur(10px) saturate(1.5); /* (cards: their fill is nearly solid, so a light blur reads the same and costs far less) */
+  --lg-blur-card: blur(18px) saturate(1.8); /* (cards: real frost, a little lighter than the floating bars so many on screen stay quick) */
+  /* the glass of cards: see-through panes that take a breath of the picked colour, a rim that catches
+     the light on one corner and fades along the edges, a soft sheen, and a glow at the foot */
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .6), rgba(var(--glass-rgb), .34));
+  --lg-tint: color-mix(in srgb, var(--primary) 8%, transparent);
+  --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .95), rgba(var(--hi-rgb), .28) 34%, rgba(var(--hi-rgb), .1) 62%, rgba(var(--hi-rgb), .7));
+  --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .55), rgba(var(--hi-rgb), 0) 52%);
+  --lg-glow: color-mix(in srgb, var(--primary) 7%, transparent);
+  /* what the glass shows: soft shapes of the picked colours behind every page */
+  --amb-1: color-mix(in srgb, var(--primary) 42%, transparent);
+  --amb-2: color-mix(in srgb, var(--secondary) 36%, transparent);
+  --amb-3: color-mix(in srgb, var(--primary) 26%, transparent);
+  --lg-hair: 0 0 0 .5px rgba(var(--ink-rgb), .1); /* (a fine edge, so a pane reads on a light page) */
+  --amb-sheet: radial-gradient(70% 30% at 10% 6%, var(--amb-1), transparent 72%), radial-gradient(60% 28% at 95% 45%, var(--amb-2), transparent 72%), radial-gradient(70% 30% at 25% 98%, var(--amb-3), transparent 72%); /* (a phone sheet: the same shapes behind its glass) */
   --lg-ink: rgba(var(--ink-rgb), .68);
   --lg-pick: color-mix(in srgb, var(--primary) 14%, transparent);
 }
@@ -1840,8 +1853,20 @@ html.native .home:not([hidden]) {
     --lg-lift: 0 12px 34px rgba(var(--shade-rgb), .45), 0 1px 3px rgba(var(--shade-rgb), .3);
     --lg-ink: rgba(var(--hi-rgb), .74);
     --lg-pick: color-mix(in srgb, var(--primary) 24%, transparent);
+    --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .86), rgba(var(--glass-rgb), .74));
+    --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .5), rgba(var(--hi-rgb), .1) 34%, rgba(var(--hi-rgb), .04) 62%, rgba(var(--hi-rgb), .3));
+    --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .07), rgba(var(--hi-rgb), 0) 52%);
+    --lg-tint: color-mix(in srgb, var(--primary) 12%, transparent);
+    --lg-glow: color-mix(in srgb, var(--primary) 6%, transparent);
   }
 }
+/* Monochrome (no colour picked): cool, neutral greys behind clear glass, so the glass still shows */
+:root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .06); --lg-glow: rgba(255, 255, 255, .25);
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .26));
+  --amb-1: rgba(104, 114, 142, .5); --amb-2: rgba(160, 170, 194, .55); --amb-3: rgba(70, 78, 100, .32); }
+@media (prefers-color-scheme: dark) { :root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .03); --lg-glow: rgba(255, 255, 255, .04);
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .86), rgba(var(--glass-rgb), .74));
+  --amb-1: rgba(150, 158, 186, .26); --amb-2: rgba(96, 104, 128, .34); --amb-3: rgba(210, 214, 228, .1); } }
 .topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar {
   background: var(--lg-fill); border: 1px solid var(--lg-line);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
@@ -1864,11 +1889,13 @@ html.native .tabbar { background: var(--lg-fill); }
    The glass is made of tokens, so turning them solid here turns every glass surface solid. */
 html.lite {
   --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
+  --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border)); --lg-hair: 0 0 0 0 transparent; --amb-sheet: none;
   --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border);
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root {
     --lg-fill: var(--surface); --lg-fill-thick: var(--surface); --lg-blur: none; --lg-blur-card: none;
+    --lg-fill-card: linear-gradient(var(--surface), var(--surface)); --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; --lg-rim: linear-gradient(var(--border), var(--border));
     --lg-edge: inset 0 0 0 0 transparent; --lg-lift: 0 1px 3px rgba(var(--shade-rgb), .12); --lg-line: var(--border); --lg-ink: var(--text);
   }
   .tab.on { background: var(--text); color: var(--surface); }
@@ -2973,8 +3000,8 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 /* phone You sheets (You, Account, Study, Voice, Privacy, Plans, All settings): under the status bar,
    above the floating tab bar, solid (nothing shows through), the header with Back and Close stays put */
 @media (max-width: 760px) {
-  html.native .settings-panel { position: fixed; inset: 0; padding: var(--safe-top) 0 calc(76px + var(--safe-bottom)); background: var(--surface); }
-  html.native .settings-card { max-height: 100%; background: var(--surface); background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding-bottom: 22px; }
+  html.native .settings-panel { position: fixed; inset: 0; padding: var(--safe-top) 0 calc(76px + var(--safe-bottom)); background: var(--bg); }
+  html.native .settings-card { max-height: 100%; background-color: var(--bg); background-image: var(--amb-sheet); -webkit-backdrop-filter: none; backdrop-filter: none; padding-bottom: 22px; }
   html.native .set-head { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: var(--border); }
 }
 
@@ -3022,14 +3049,20 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
    them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
 .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row {
-  background: var(--lg-fill-thick); -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
-  border: 1px solid var(--lg-line);
-  box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift);
+  background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-card) padding-box, var(--lg-rim) border-box;
+  -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
+  border: 1px solid transparent;
+  box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), inset 0 -14px 28px var(--lg-glow), var(--lg-hair), var(--lg-lift);
   transition: transform .18s ease, box-shadow .18s ease;
 }
 /* while the board or Learn covers the page, the cards behind stop blurring the moving backdrop (nobody sees it, and it costs frames) */
 html.labs-open :is(#app, #home), html.board-open :is(#app, #home) { --lg-blur-card: none; }
 .dk-stat.dk-stat-main { background: var(--primary); border-color: var(--primary); } /* (the highlighted number keeps its colour, under the glass rim) */
+/* Settings rows are mostly words: a thicker pane, so the small grey lines stay easy to read over the shapes */
+.set-group, .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } /* (and the ask box: words are typed there) */
+.composer { --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; } /* (the ask box: clear frost and the rim, nothing that lightens what you type) */
+@media (prefers-color-scheme: dark) { .dk-card, .dk-stat { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } } /* (the dashboard's small grey lines, in dark) */
+html.lite .set-group, html.lite .composer, html.lite .dk-card, html.lite .dk-stat { --lg-fill-card: linear-gradient(var(--surface), var(--surface)); }
 @media (min-width: 761px) { .settings-card { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift); } }
 .gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), var(--lg-lift-up) !important; }
 .gl-down { transform: scale(.98); }
@@ -3037,6 +3070,6 @@ html.labs-open :is(#app, #home), html.board-open :is(#app, #home) { --lg-blur-ca
 html.lite .gl-up, html.lite .gl-down { transform: none; }
 /* a phone has no moving backdrop (it saves the battery), so a still glow of the picked colours shows through the glass */
 html.native:not(.lite) body { background:
-  radial-gradient(120% 55% at 0% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 62%),
-  radial-gradient(110% 50% at 100% 35%, color-mix(in srgb, var(--secondary) 12%, transparent), transparent 66%),
-  radial-gradient(100% 45% at 20% 100%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%), var(--bg); }
+  radial-gradient(62% 38% at 12% 8%, var(--amb-1), transparent 72%),
+  radial-gradient(58% 36% at 92% 38%, var(--amb-2), transparent 72%),
+  radial-gradient(70% 40% at 28% 96%, var(--amb-3), transparent 72%), var(--bg); }
