@@ -2545,9 +2545,9 @@ html.native .hub-hero-phone .hub-top { padding: calc(12px + var(--safe-top)) 20p
 .hub-tlab-tag { position: absolute; top: 12px; left: 12px; align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: .72rem; font-weight: 700; }
 .hub-tlab-info b { font-size: 1.08rem; line-height: 1.2; }
 .hub-tlab-info small { color: var(--muted); font-size: .82rem; }
-.hub .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
+.hub .hub-tlab-go, .home-top .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
   background: var(--primary); color: var(--on-primary); box-shadow: var(--lg-lift); }
-.hub .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
+.hub .hub-tlab-go svg, .home-top .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
 
 /* ---------- Labs on a phone: the Labs tab ----------
    (labs/labs.js, only under 760px: a computer keeps the Labs shelf) Today's Lab, then For you
@@ -2657,7 +2657,7 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
 .dk-up svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .desk .dk-stat-main .dk-up { background: var(--on-primary); color: var(--primary); border-color: var(--on-primary); }
 /* the cards */
-.dk-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "chart chart next plans" "chats ready timer plans"; gap: 14px; }
+.dk-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "chart chart next plans" "chats ready ready plans"; gap: 14px; }
 .dk-card { display: flex; flex-direction: column; min-width: 0; padding: 16px 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--lg-edge); }
 .dk-card h2 { margin: 0; font-size: 1rem; font-weight: 700; }
 .dk-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
@@ -2719,12 +2719,12 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
 .dk-tgo svg, .dk-tstop svg { width: 22px; height: 22px; fill: currentColor; }
 /* middle widths: three columns (the lists run down two rows) */
 @media (max-width: 1499px) {
-  .dk-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "chart chart next" "plans chats ready" "plans chats timer"; }
+  .dk-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "chart chart next" "plans chats ready" "plans chats ready"; }
 }
 /* narrower computers: two columns */
 @media (max-width: 1100px) {
   .dk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "chart chart" "next plans" "chats ready" "timer timer"; }
+  .dk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "chart chart" "next plans" "chats ready"; }
 }
 @media (prefers-reduced-motion: reduce) { .dk-btn, .dk-row { transition: none; } }
 
@@ -3081,7 +3081,7 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
    them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
 .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row,
-.wk-card, .hub-chat.ex-new, .dk-col .empty-state, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .labs .labs-tabs button:not([aria-selected="true"]) {
+.wk-card, .hub-chat.ex-new, .dk-col .empty-state, .ht-tile, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .labs .labs-tabs button:not([aria-selected="true"]) {
   background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-card) padding-box, var(--lg-rim) border-box;
   -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
   border: 1px solid transparent;
@@ -3115,3 +3115,39 @@ html.native:not(.lite) body { background:
   box-shadow: var(--lg-edge), var(--lg-hair), 0 20px 60px rgba(var(--shade-rgb), .35); color: var(--text); }
 .csk-wrap .csk-zoom { background: var(--lg-fill-thick); border-color: var(--lg-line); color: var(--text); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); }
 .csk-wrap .csk-ask input { padding-top: 8px; padding-bottom: 8px; } /* (the same 34px box, the words in the middle of it) */
+/* Home's top (phone and computer): Lessons, the focus timer (minutes edited right here) and Flashcards in a row, the
+   level note under them, then the exam plans and Today's Lab */
+.home-top { display: flex; flex-direction: column; gap: 12px; margin: 0 0 18px; }
+.ht-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ht-tile { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border-radius: 20px; }
+.ht-go { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; min-height: 92px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.ht-go i { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: 4px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 16%, transparent); color: var(--text); }
+.ht-go i svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ht-go b { font-size: 1rem; font-weight: 750; line-height: 1.2; }
+.ht-timer .ht-go b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.ht-go small, .ht-go span { font-size: .78rem; line-height: 1.3; color: var(--text); }
+.home-top .ht-go em { margin-top: 4px; padding: 3px 10px; border-radius: 999px; font-style: normal; font-size: .76rem; font-weight: 700; background: var(--primary); color: var(--on-primary); }
+.ht-edit { min-height: 44px; padding: 0 6px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; }
+.ht-set { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 14px; border-radius: 18px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line, var(--border)); }
+.ht-set[hidden] { display: none; }
+.ht-set label { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--text); }
+.ht-set input { width: 64px; min-height: 44px; box-sizing: border-box; padding: 0 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .95rem; }
+.home-top .ht-save { min-height: 44px; padding: 0 22px; margin-left: auto; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.ht-note { margin: -2px 2px 0; font-size: .82rem; line-height: 1.4; color: var(--text); }
+.ht-show { cursor: default; }
+.desk .home-top .ht-tbtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
+.desk .home-top .dk-tgo, .desk .home-top .dk-tstop { width: 44px; height: 44px; }
+.desk .home-top .dk-tgo { background: var(--primary); color: var(--on-primary); }
+.desk .home-top .dk-tstop { background: transparent; color: var(--text); border: 1px solid var(--lg-line, var(--border)); }
+.desk .home-top .dk-tgo svg, .desk .home-top .dk-tstop svg { width: 20px; height: 20px; }
+.desk .home-top { margin: 0 0 18px; }
+.hub-today-one .hub-w { flex: 1 1 auto; } /* (Today keeps the streak; Flashcards and the timer moved to the top) */
+@media (max-width: 400px) { .ht-tile { padding: 10px; } .ht-go small, .ht-go span { font-size: .74rem; } }
+/* Cassie added to a phone's home screen (not a browser tab): the screen stays put, with no sideways drag, no bounce
+   and no pull to refresh; pages that scroll still scroll up and down, with no scrollbar showing */
+@media (display-mode: standalone) and (max-width: 760px) {
+  html, body { overflow-x: hidden; overscroll-behavior: none; }
+  html, body, html * { scrollbar-width: none; }
+  html ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
+.home-top .hub-tlab-info small { color: var(--text); } /* (over the glass, in both themes) */
