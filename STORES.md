@@ -106,6 +106,15 @@ to the website reach the Play Store app automatically.
      support that it checks for.
    - Click **Package for stores** → **Android** → **Generate**.
    - Package ID: something like `dev.pages.askcassie.twa`.
+   - **Settings to use** (under **All settings** before Generate):
+     - **Location delegation: OFF.** Cassie never asks where you are, so the app
+       needs no location permission (Google's location rules, mandatory from
+       Jan 27, 2027, then don't apply).
+     - **Google Play billing: OFF** for now (see the payments note in
+       `docs/play-policy-2026-10.md` before turning on paid plans in the app).
+     - **Notification delegation: ON**, so study reminders still arrive.
+     - Add **no extra Android permissions**. Cassie needs no contacts, local
+       network, all files, SMS, call log or accessibility access.
    - Download the zip and keep the **signing key** and its passwords somewhere
      safe. Without them you can never update the app.
 2. **Link the app to the website.** The zip contains `assetlinks.json`. Send it
@@ -127,6 +136,25 @@ to the website reach the Play Store app automatically.
      *Families* rules apply. Choosing **13+** is simpler for a first release.
    - Privacy policy: `https://askcassie.study/privacy.html`
 6. Send it for review. A first review can take a few days to a week.
+7. **Play Console steps from Google's October 2026 policy update** (details in
+   `docs/play-policy-2026-10.md`):
+   - **Trader status** (required from November 2026): **Policy and programs** →
+     declare whether you sell as a trader. Selling paid plans may make you a
+     trader under EU rules [unverified: check Google's help page in the Console],
+     so answer for your situation and keep your contact details current.
+   - **Permission declarations: none needed.** Cassie uses no location, contacts,
+     local network, all files, SMS or call log permission. If the Console asks,
+     answer that the app doesn't use them.
+   - **Japan payments authorization** (by Dec 1, 2026): only if you sell to or
+     from Japan. Cassie sells in the Philippines (pesos) and worldwide in US$; if
+     Japan is one of your countries, complete the form or Google holds payments.
+   - **Target audience:** choosing **13+** keeps you out of the stricter Families
+     rules. Cassie has no ads, so the Families ads SDK program doesn't apply. If you
+     ever include under 13, Families rules apply in full.
+   - **Memory and code size** (deadline Feb 2027): Google's exact thresholds are
+     [unverified] here; after each new upload, check the Console for quality
+     warnings. Cassie is a web app inside Chrome, so
+     there is little to change in the package itself.
 
 ---
 
