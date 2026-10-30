@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=206">
+<link rel="stylesheet" href="style.css?v=207">
 </head>
 <body>
 
@@ -131,6 +131,7 @@
       <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-4.9 4A4 4 0 0 0 4 9.8a4 4 0 0 0 1.4 6.4A3.5 3.5 0 0 0 9 21a3 3 0 0 0 3-3V4a2 2 0 0 0-2-2h2zm4.9 4A5 5 0 0 0 12 2a2 2 0 0 1 2 2v14a3 3 0 0 0 3 3 3.5 3.5 0 0 0 3.6-4.8A4 4 0 0 0 20 9.8 4 4 0 0 0 16.9 6z"/></svg>
       <span id="memory-dot" class="memory-dot" hidden></span>
     <span class="app-label">Memory</span></button>
+    <button type="button" id="top-theme" class="icon-btn desk-only theme-flip" aria-label="Switch to dark mode"></button>
     <button type="button" id="top-bell" class="icon-btn desk-only" aria-label="Reminders" aria-expanded="false" aria-controls="top-remind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0"/></svg><i class="top-dot" hidden></i></button>
     <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.6 7.6 0 0 0-1.7-1L14.4 2.5a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5L9 5.1a7.6 7.6 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.8 1.7 1l.4 2.6c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5l.4-2.6c.6-.2 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
@@ -338,6 +339,16 @@
       <section class="set-sec" data-sec="appearance" aria-labelledby="set-h-appearance">
         <h3 class="set-sec-h" id="set-h-appearance">Appearance</h3>
         <div class="set-group">
+          <div class="set-row" data-k="light dark mode theme night">
+          <label class="field">
+            <span>Light or dark</span>
+            <select id="theme-select">
+              <option value="auto">Auto (follows your device)</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          </div>
           <div class="set-row" data-k="colour color theme monochrome lite mode data">
           <label class="field">
             <span>Favorite colour</span>
@@ -619,25 +630,25 @@
 
 </div>
 
-<script src="extlink.js?v=206"></script>
-<script src="errors.js?v=206"></script>
-<script src="mic.js?v=206"></script>
-<script src="care.js?v=206"></script>
-<script src="memory.js?v=206"></script>
-<script src="board.js?v=206"></script>
-<script src="export.js?v=206"></script>
-<script src="sketch.js?v=206"></script>
-<script src="config.js?v=206"></script>
-<script src="cassie-bot.js?v=206"></script>
-<script src="cards.js?v=206"></script>
-<script src="cite.js?v=206"></script>
-<script src="voice.js?v=206"></script>
+<script src="extlink.js?v=207"></script>
+<script src="errors.js?v=207"></script>
+<script src="mic.js?v=207"></script>
+<script src="care.js?v=207"></script>
+<script src="memory.js?v=207"></script>
+<script src="board.js?v=207"></script>
+<script src="export.js?v=207"></script>
+<script src="sketch.js?v=207"></script>
+<script src="config.js?v=207"></script>
+<script src="cassie-bot.js?v=207"></script>
+<script src="cards.js?v=207"></script>
+<script src="cite.js?v=207"></script>
+<script src="voice.js?v=207"></script>
 <nav id="tabbar" class="tabbar" aria-label="Sections"><button type="button" class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button><button type="button" class="tab" data-tab="chat" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg><span>Chat</span></button><button type="button" class="tab" data-tab="labs" aria-label="Learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg><span>Learn</span></button><button type="button" class="tab" data-tab="games" aria-label="Games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14 14.5h-4l-.7 1.1A3.5 3.5 0 0 1 3 13.5V12a4 4 0 0 1 4-4zM8 10.5v3M6.5 12h3M15.5 11.5h.01M17.5 13.5h.01"/></svg><span>Games</span></button><button type="button" class="tab" data-tab="cards" aria-label="Cards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg><span>Cards</span></button><button type="button" class="tab" data-tab="you" aria-label="You"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>You</span></button></nav>
-<script src="app.js?v=206"></script>
-<script src="native.js?v=206"></script>
-<script src="listen.js?v=206"></script>
-<script src="tour.js?v=206"></script>
-<script src="study-room.js?v=206"></script>
-<script src="gradient.js?v=206"></script>
+<script src="app.js?v=207"></script>
+<script src="native.js?v=207"></script>
+<script src="listen.js?v=207"></script>
+<script src="tour.js?v=207"></script>
+<script src="study-room.js?v=207"></script>
+<script src="gradient.js?v=207"></script>
 </body>
 </html>

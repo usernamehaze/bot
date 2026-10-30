@@ -1343,7 +1343,7 @@ test('computer Home is a study dashboard: Hi and the two main buttons, four real
       const side = await page.evaluate(() => ({ groups: [...document.querySelectorAll('.side-group')].map((x) => x.textContent), nav: [...document.querySelectorAll('.side-nav [data-page], .side-nav a')].filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent.trim()), badge: document.querySelector('#side-nav [data-page="plan"] .side-badge').textContent, apps: [...document.querySelectorAll('#side-apps .side-tool')].map((x) => x.dataset.tip).join(), general: [...document.querySelectorAll('#side-general .side-tool')].filter((x) => !x.hidden).map((x) => x.dataset.tip).join(), topIcons: [...document.querySelectorAll('.topbar-actions > button')].filter((x) => x.getClientRects().length).map((x) => x.id).join(), ask: getComputedStyle(document.getElementById('composer')).display, ext: document.querySelector('.side-ext').getAttribute('href'), pomo: getComputedStyle(document.getElementById('pomo')).display }));
       expect(side.groups.join() === 'Menu,General' && side.nav.join() === 'Home,Chats,Study plan,Lessons,Calendar,Progress,Help' && side.apps === 'Learn,Games,Board' && side.general === 'Settings,Memory,Help' && side.badge === '1' && side.ext === 'https://chromewebstore.google.com/detail/hnafgijhojdheggkcjliffbgpdhikbpj' && side.pomo === 'none', 'the sidebar: ' + JSON.stringify(side));
       expect(await page.locator('#side-nav [data-page="home"]').getAttribute('aria-current') === 'page', 'Home is the page you are on');
-      expect(side.topIcons === 'top-bell,top-me' && side.ask === 'none', 'like the reference: only the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
+      expect(side.topIcons === 'top-theme,top-bell,top-me' && side.ask === 'none', 'like the reference: only light or dark, the bell and you in the top bar, and no ask box on Home: ' + JSON.stringify(side));
       // search: Ctrl K, then pages, tools and chats as you type
       await page.keyboard.press('Control+k');
       expect(await page.evaluate(() => document.activeElement.id === 'top-q'), 'Ctrl K opens search');
@@ -8076,6 +8076,75 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     await page.evaluate(() => deskGo('plan')); await page.waitForSelector('.dk-col .empty-state');
     const solid = await page.evaluate(() => ['.dk-col', '.dk-col .empty-state', '.hub-chat.ex-new'].map((s) => getComputedStyle(document.querySelector(s)).backdropFilter));
     expect(solid.every((f) => f === 'none'), 'Lite mode: the Study plan columns, boxes and exam bar are solid: ' + solid);
+    await ctx.close();
+  }
+});
+
+test('light or dark at a tap: the sun and moon button (top bar and Learn) and Appearance pick Light, Dark or Auto, kept after a reload; Learn, Games, the folders, Your week and the board follow it as glass over the picked colours, AA in both; Lite mode turns them solid', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); // (a quiz today, so Your week has its card)
+  const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home', accent: '#15803d', progress: { [today]: { quizzes: 1 } } } });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.evaluate(() => deskGo('home')); await page.waitForSelector('#top-theme svg');
+  const scheme = () => page.evaluate(() => ({ theme: document.documentElement.dataset.theme || 'auto', cs: getComputedStyle(document.documentElement).colorScheme, label: document.getElementById('top-theme').getAttribute('aria-label'), bg: getComputedStyle(document.body).getPropertyValue('--bg').trim() }));
+  const start = await scheme();
+  expect(start.theme === 'auto' && start.label === 'Switch to dark mode', 'starts on Auto (the device is light): ' + JSON.stringify(start));
+  const tb = await page.locator('#top-theme').boundingBox();
+  expect(tb.width >= 44 && tb.height >= 44, 'the sun and moon button is at least 44px: ' + JSON.stringify(tb));
+  await page.click('#top-theme'); await page.waitForTimeout(300);
+  const dark = await scheme();
+  expect(dark.theme === 'dark' && dark.cs === 'dark' && dark.label === 'Switch to light mode' && dark.bg !== start.bg, 'one tap: dark, on a light device: ' + JSON.stringify(dark));
+  await page.reload(); await page.waitForSelector('#top-theme svg');
+  expect((await scheme()).theme === 'dark', 'dark is kept after a reload');
+  await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#theme-select');
+  expect(await page.$eval('#theme-select', (e) => e.value) === 'dark', 'Appearance shows Dark');
+  await page.selectOption('#theme-select', 'light'); await page.waitForTimeout(300);
+  expect((await scheme()).theme === 'light', 'Appearance picks Light');
+  await page.selectOption('#theme-select', 'auto'); await page.waitForTimeout(300);
+  expect((await scheme()).theme === 'auto', 'and back to Auto');
+  await page.evaluate(() => document.getElementById('settings-x').click());
+  // each surface in each scheme: glass (see-through, frosted) over the picked colours, the folders dark in dark and light in light
+  const lum = (rgb) => { const [r, g, bl] = rgb.split(',').map(Number); return (0.2126 * r + 0.7152 * g + 0.0722 * bl) / 255; };
+  for (const want of ['light', 'dark']) {
+    await page.evaluate((t) => { setTheme(t); deskGo('progress'); }, want); await page.waitForSelector('.wk-card'); await page.waitForTimeout(400);
+    const wk = await page.$eval('.wk-card', (e) => getComputedStyle(e).backdropFilter);
+    expect(/blur/.test(wk), `${want}: Your week is glass: ` + wk);
+    await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs-foryou .lf .lf-back'); await page.waitForTimeout(800);
+    const L = await page.evaluate(() => {
+      const shelf = getComputedStyle(document.querySelector('.labs-shelf')), back = getComputedStyle(document.querySelector('.labs-foryou .lf:not(.lf-mine) .lf-back')), front = getComputedStyle(document.querySelector('.labs-foryou .lf:not(.lf-mine) .lf-front'));
+      const feat = getComputedStyle(document.querySelector('.labs .labs-feature'));
+      const glassRgb = getComputedStyle(document.querySelector('.lf')).getPropertyValue('--lf-glass').trim();
+      return { shelf: shelf.backgroundImage.slice(0, 200), back: back.backgroundImage, front: front.backdropFilter, feat: feat.backdropFilter, glassRgb, theme: document.querySelector('.labs-theme').getAttribute('aria-label') };
+    });
+    expect(/radial-gradient/.test(L.shelf) && !/rgb\(35, 38, 47\)/.test(L.shelf), `${want}: Learn shows the picked colours behind it, not its own dark: ` + L.shelf);
+    expect(/rgba\([^)]*, 0\.[0-9]+\)/.test(L.back) && /blur/.test(L.front) && /blur/.test(L.feat), `${want}: the folders and Today’s Lab are see-through glass: ` + JSON.stringify(L).slice(0, 400));
+    expect(want === 'dark' ? lum(L.glassRgb) < 0.3 : lum(L.glassRgb) > 0.8, `${want}: the folders are ${want} glass: ` + L.glassRgb);
+    expect(L.theme === (want === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'), `${want}: Learn has the sun and moon button too: ` + L.theme);
+    let r = await contrastIssues(page, '.labs-shelf');
+    expect(r.checked > 10 && !r.bad.length, `${want}: Learn reads (AA): ` + r.bad.join(' | '));
+    await page.evaluate(() => document.querySelector('.labs-x').click()); await page.waitForTimeout(400);
+    await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector('.labs .labs-card'); await page.waitForTimeout(800);
+    const g = await page.$eval('.labs .labs-card', (e) => getComputedStyle(e).backdropFilter);
+    expect(/blur/.test(g), `${want}: a game card is glass: ` + g);
+    r = await contrastIssues(page, '.labs-shelf');
+    expect(!r.bad.length, `${want}: Games reads (AA): ` + r.bad.join(' | '));
+    await page.evaluate(() => document.querySelector('.labs-x').click()); await page.waitForTimeout(400);
+    await page.click('#board-btn'); await page.waitForSelector('.csk-panel .csk-tools'); await page.waitForTimeout(500);
+    const bd = await page.$eval('.csk-panel', (e) => { const c = getComputedStyle(e); return { blur: c.backdropFilter, img: c.backgroundImage }; });
+    const zoom = await page.$eval('.csk-zoom', (e) => getComputedStyle(e).backdropFilter);
+    expect(/rgba\([^)]*, 0\.[0-8]\d*\)/.test(bd.img) && /blur/.test(zoom), `${want}: the board’s frame and tool bar are see-through glass, the zoom buttons frosted: ` + JSON.stringify([bd, zoom]).slice(0, 300));
+    r = await contrastIssues(page, '.csk-head, .csk-ask');
+    expect(!r.bad.length, `${want}: the board’s bars read (AA): ` + r.bad.join(' | '));
+    await page.keyboard.press('Escape'); await page.evaluate(() => document.querySelector('.csk-panel [data-act="close"]')?.click()); await page.waitForTimeout(400);
+  }
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // Lite mode: the same surfaces are solid
+  {
+    const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'on', state: { tab: 'home', theme: 'dark' } });
+    await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForSelector('.labs .labs-card'); await page.waitForTimeout(500);
+    const f = await page.evaluate(() => [document.documentElement.dataset.theme, getComputedStyle(document.querySelector('.labs .labs-card')).backdropFilter]);
+    expect(f[0] === 'dark' && f[1] === 'none', 'Lite mode: dark, and the game cards are solid: ' + f);
     await ctx.close();
   }
 });

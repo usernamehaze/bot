@@ -534,7 +534,7 @@
   async function open(opts = {}) {
     if (current) current.close();
     const root = opts.root || document.body;
-    const dark = opts.dark != null ? opts.dark : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches && !opts.image);
+    const th = document.documentElement.dataset.theme, dark = opts.dark != null ? opts.dark : ((th === 'dark' || (th !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)) && !opts.image);
     if (!root.querySelector || !root.querySelector('style[data-csk]')) {
       const st = document.createElement('style'); st.setAttribute('data-csk', '1'); st.textContent = CSS;
       root.appendChild(st);

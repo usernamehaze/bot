@@ -17,6 +17,7 @@ function loadState() {
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
+    theme: 'auto',          // Appearance: auto (follows the device) | light | dark
     accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
     audience: 'student',    // student | pro (from the profile: Working professional is pro)
     messages: [], // { role: 'user' | 'assistant', content: '...' }
@@ -308,6 +309,26 @@ function accentChoice() { const a = String(state.accent || '').trim().toLowerCas
 const accentHex = () => (accentChoice().startsWith('#') ? accentChoice() : '');
 function colorLum(hex) { return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0); }
 function contrastOf(a, b) { const x = colorLum(a), y = colorLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+// light or dark: Auto follows the device; Light or Dark (Appearance, or the sun and moon button) wins over it
+// (style.css: html[data-theme]). Everything that draws in the dark shade asks isDark().
+const deviceDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+function isDark() { return state.theme === 'dark' || (state.theme !== 'light' && deviceDark()); }
+const THEME_ICON = { sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>' };
+// (the sun and moon button shows where a tap takes you)
+function themeButtons() { const dark = isDark(); document.querySelectorAll('.theme-flip').forEach((b) => { b.innerHTML = dark ? THEME_ICON.sun : THEME_ICON.moon; b.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode'); }); }
+window.cassieThemeButtons = themeButtons;
+function applyTheme() {
+  const root = document.documentElement, t = state.theme === 'light' || state.theme === 'dark' ? state.theme : 'auto';
+  if (t === 'auto') delete root.dataset.theme; else root.dataset.theme = t;
+  const dark = isDark();
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  themeButtons();
+  const sel = document.getElementById('theme-select'); if (sel) sel.value = t;
+  applyAccent();
+}
+function setTheme(t) { state.theme = t; save(); applyTheme(); }
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.theme-flip'); if (b) { track('feature', 'theme'); setTheme(isDark() ? 'light' : 'dark'); } });
 // One source of truth: a picked colour becomes --primary (buttons, send, the timer, the open tab,
 // your bubbles, switches, focus), with words on it in white or near-black, whichever reads better,
 // and --primary-ink: the same colour, darker or lighter until it reads as words on the page.
@@ -318,7 +339,7 @@ function applyAccent() {
   ['--primary', '--primary-dark', '--on-primary', '--primary-ink', '--accent', '--accent-ink', '--lab-accent', '--lab-on-accent'].forEach((p) => root.style.removeProperty(p));
   if (pick.startsWith('#')) {
     const ink = contrastOf(pick, '#ffffff') >= contrastOf(pick, '#111111') ? '#ffffff' : '#111111';
-    const dark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    const dark = isDark();
     const page = getComputedStyle(root).getPropertyValue('--surface').trim() || (dark ? '#251f1c' : '#ffffff');
     let words = pick;
     for (let t = 0.05; contrastOf(words, page) < 4.5 && t <= 1; t += 0.05) words = mixHex(pick, dark ? '#ffffff' : '#000000', t);
@@ -328,7 +349,7 @@ function applyAccent() {
   updateBackdrop();
 }
 // (light and dark mode differ in the shade that reads as words)
-if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyAccent());
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme());
 /* ---------- the living gradient behind the chat ---------- */
 // Marble monochrome by default; when the student picks a colour the gradient
 // flows to that colour (soft tints in light mode, a deep glow in dark mode).
@@ -339,7 +360,7 @@ function mixHex(a, b, t) {
 }
 const darkScheme = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
 function backdropColors() {
-  const dark = !!(darkScheme && darkScheme.matches);
+  const dark = isDark();
   const c = accentHex();
   if (accentChoice() === 'mono') { // Monochrome: neutral greys
     return dark ? { color1: '#0c0c10', color2: '#262832', color3: '#454a5a', brightness: 0.9 }
@@ -2099,7 +2120,7 @@ document.addEventListener('pointerdown', (e) => {
 // its lines draw themselves in. Done here, not with CSS :hover, so it works whatever the browser says.
 // Reduce Motion or Lite mode: a short fade only. (The tab bar has its own, in native.js.)
 const IC_HOST = '.hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
-const IC_MOTIONS = [['spin', /setting|gear|refresh|sync|memory|redo|again/], ['nod', /\byou\b|profile|account|person|sign in|edit/], ['bounce', /home|bell|remind|notif|streak|today|timer|focus/],
+const IC_MOTIONS = [['spin', /setting|gear|refresh|sync|memory|redo|again|light mode|dark mode/], ['nod', /\byou\b|profile|account|person|sign in|edit/], ['bounce', /home|bell|remind|notif|streak|today|timer|focus/],
   ['wiggle', /card|note|flash|plan|calendar|deck|board|draw|write|essay/], ['tilt', /lab|learn|game|quiz|simulat|\b3d\b|science|puzzle|test/], ['slide', /next|open|continue|arrow|›|research|search/],
   ['pop', /chat|ask|talk|message|new|add|help|\+/]];
 const IC_ALL = ['ic-go', 'ic-soft', ...IC_MOTIONS.map((m) => 'ic-' + m[0])];
@@ -2314,7 +2335,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=206').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=207').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6041,7 +6062,7 @@ window.addEventListener('message', (e) => {
 document.documentElement.dataset.cassieReady = '1';
 
 /* ---------- the student's drawing board ---------- */
-const prefersDark = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+const prefersDark = () => isDark();
 
 // Put a picture (e.g. the student's sketch) into the composer as an attachment.
 function attachDataUrl(dataUrl, prompt) {
@@ -6588,7 +6609,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=206');
+      exploreMod = await import('./explore/cell3d.js?v=207');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6638,7 +6659,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=206');
+      labsMod = await import('./labs/labs.js?v=207');
       islandRest();
     }
     labsMod.open({
@@ -8477,10 +8498,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=206').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=207').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=206', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=207', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -8818,7 +8839,7 @@ function applyAccountData(d) {
   }
   lastSynced = JSON.stringify(accountData());
   save();
-  try { syncAudience(); applyAccent(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
+  try { syncAudience(); applyTheme(); applyReading(); dressCassie(); renderProfileSummary(); } catch (e) { /* ignore */ }
   if (!state.messages.length) renderHistory();
 }
 function signedIn(token, account, plan) {
@@ -9461,6 +9482,7 @@ function openReport() {
 document.getElementById('report-btn')?.addEventListener('click', () => { settingsPanel.hidden = true; openReport(); });
 if (!SERVER) { const rb = document.getElementById('report-row'); if (rb) rb.hidden = true; }
 
+document.getElementById('theme-select')?.addEventListener('change', (e) => { track('feature', 'theme'); setTheme(e.target.value); });
 const liteSelect = document.getElementById('lite-select');
 function renderLiteHint() {
   const h = document.getElementById('lite-hint');
@@ -9624,7 +9646,7 @@ async function receiveShare() {
 /* ---------- init ---------- */
 buildAccentSwatches();
 applyReading();
-applyAccent();
+applyTheme();
 renderHistory();
 updateModelPill();
 updateMemoryDot();
