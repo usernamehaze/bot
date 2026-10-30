@@ -63,3 +63,4 @@ h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; lett
   .rs-card { border: 0; padding: 0; margin: 0; }
   .rs-day { break-inside: avoid; }
 }
+.rs-actions a.rs-go, .rs-actions a.rs-line { display: grid; place-items: center; box-sizing: border-box; text-align: center; text-decoration: none; } /* (links that look like the buttons) */

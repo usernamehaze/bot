@@ -2181,7 +2181,7 @@ const LESSONS = {
     ['Accounting basics', 'Assets, liabilities and the accounting equation', 'ask:Teach me accounting basics for ABM step by step: start with the accounting equation (assets = liabilities + equity) with a simple example, then give me one to try.', 'ABM'],
     ['Essays', 'Plan and improve an essay', 'lab:essay', 'HUMSS'], ['Research', 'Real sources for a topic', 'research', 'HUMSS'],
     ['Practical research', 'From a research question to your methods', 'ask:Guide me through practical research for Senior High: help me write a clear research question first, then walk me through choosing a method, one step at a time.', 'Every strand']],
-  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['LET reviewer', 'Practice for the Licensure Exam for Teachers', 'quiz:the LET (Licensure Examination for Teachers), Professional Education']],
+  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['LET practice', 'Board-style questions for the Licensure Exam for Teachers, each one taught step by step', 'let:practice'], ['Check my LET reviewer', 'Paste, attach or snap your reviewer: Cassie answers and teaches every question', 'let:reviewer']],
 };
 function lessonLevel() {
   const g = (state.profile && state.profile.grade) || '';
@@ -2227,6 +2227,8 @@ function goLesson(go) {
   else if (k === 'research') hubAct('research');
   else if (k === 'pdf') { toChat(); const f = document.getElementById('file-input'); if (f) f.click(); }
   else if (k === 'plan') openExamSheet();
+  else if (k === 'let' && arg === 'practice') { toChat(); startQuizOn('the LET (Licensure Examination for Teachers): Professional Education and General Education', LET_QUIZ); }
+  else if (k === 'let' && arg === 'reviewer') { toChat(); promptInput.value = LET_REVIEWER + '\n'; autoGrow(); promptInput.focus(); promptInput.setSelectionRange(promptInput.value.length, promptInput.value.length); }
 }
 // a phone: the lessons on their own screen (Back closes it); a computer: its Lessons page
 function openLessons() {
@@ -2335,7 +2337,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=208').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=209').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3266,8 +3268,9 @@ function refreshHub() {
 // what a task opens: the thing Cassie already does
 function openExamTask(t, e) {
   const nav = (tab) => (onPhoneHome() ? window.CassieNative.go(tab) : null);
-  if (t.kind === 'quiz') { nav('chat'); startQuizOn(t.topic); return; }
-  if (t.kind === 'learn') { nav('chat'); if (!canChat()) { openSettings(); return; } handleSend(`Teach me ${t.topic} for my ${e.name} exam, step by step, then check that I understood.`); return; }
+  const let_ = /^LET\b/.test(e.name || ''); // (a LET plan: board-style questions)
+  if (t.kind === 'quiz') { nav('chat'); if (let_) startQuizOn(`${t.topic} for the LET (Licensure Examination for Teachers)`, LET_QUIZ); else startQuizOn(t.topic); return; }
+  if (t.kind === 'learn') { nav('chat'); if (!canChat()) { openSettings(); return; } handleSend(let_ ? `Teach me ${t.topic} for the LET, step by step, the way the board exam asks about it, then check that I understood with one board-style question of your own.` : `Teach me ${t.topic} for my ${e.name} exam, step by step, then check that I understood.`); return; }
   if (t.kind === 'mistakes') { nav('chat'); reviewMistakes(!dueMistakes().length); return; }
   if (t.kind === 'cards') {
     const deck = (state.cards || []).map((c) => c.deck).find((d) => t.topic && d && d.toLowerCase().includes(t.topic.toLowerCase()));
@@ -6553,14 +6556,18 @@ async function help3dFor(view) {
   return h;
 }
 function dropHelp3d() { if (help3d) { help3d.h.destroy(); help3d = null; } }
-function startQuizOn(topic) {
+function startQuizOn(topic, how = '') {
   if (!canChat()) { openSettings(); return; }
   quizMode = true; quizStarted(topic);
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   dressCassie();
-  handleSend(`Quiz me on: ${topic}. Ask the first question.`, {});
+  handleSend(`Quiz me on: ${topic}. ${how ? how + ' ' : ''}Ask the first question.`, {});
 }
+// the LET, Cassie's way: her own questions written like the board exam's, each one taught step by step after the answer
+const LET_QUIZ = 'Make it like the PRC board exam: your own multiple choice questions with four options (A to D), often a short classroom situation, one question at a time. After I answer, tell me if I am right, then teach it step by step: why the right answer is right and why each of the others is wrong.';
+// a reviewer the student brings (pasted, a file or a photo): every question answered and taught step by step
+const LET_REVIEWER = 'These are questions from my LET reviewer. For each one: tell me the right answer, check it against the answer key if I gave one (say so if the key looks wrong), then teach it step by step: why the right answer is right and why the other choices are wrong. Here they are:';
 // ret: { back(), leave() } when it was opened from Labs — closing goes back to Labs, asking Cassie leaves it
 // what's on the 3D screen, in words, for Cassie
 function describe3d(view) {
@@ -6609,7 +6616,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=208');
+      exploreMod = await import('./explore/cell3d.js?v=209');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6659,7 +6666,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=208');
+      labsMod = await import('./labs/labs.js?v=209');
       islandRest();
     }
     labsMod.open({
@@ -6707,6 +6714,7 @@ async function scoreCall(kind, body = {}) {
 }
 // app.html?lab=pendulum opens that lab
 { const lab = new URLSearchParams(location.search).get('lab'); if (lab) setTimeout(() => openLabs(lab), 300); }
+{ const ls = new URLSearchParams(location.search).get('lesson'); if (ls === 'let:reviewer' || ls === 'let:practice') setTimeout(() => goLesson(ls), 400); } // (from the LET page)
 
 if (quizBtn) {
   quizBtn.addEventListener('click', () => {
@@ -8498,10 +8506,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=208').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=209').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=208', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=209', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
