@@ -223,6 +223,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   cursor: pointer;
 }
 .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.theme-flip { width: 44px; height: 44px; } .theme-flip svg { fill: none; } /* (the sun and moon: light or dark at a tap) */
 .icon-btn:active { background: var(--border); }
 .icon-btn.primary { background: var(--primary); color: var(--on-primary); }
 .icon-btn.primary:active { background: var(--primary-dark); }
@@ -592,8 +593,9 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .home-example:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), .55), 0 5px 0 rgba(var(--shade-rgb), .10), 0 12px 22px rgba(var(--shade-rgb), .2); }
 .home-example:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), .4), 0 1px 0 rgba(var(--shade-rgb), .10), 0 3px 8px rgba(var(--shade-rgb), .16); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .home-example { box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), .1), 0 3px 0 rgba(var(--shade-rgb), .5), 0 8px 18px rgba(var(--shade-rgb), .5); }
+  :root:not([data-theme="light"]) .home-example{ box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), .1), 0 3px 0 rgba(var(--shade-rgb), .5), 0 8px 18px rgba(var(--shade-rgb), .5); }
 }
+:root[data-theme="dark"] .home-example{ box-shadow: inset 0 1px 0 rgba(var(--hi-rgb), .1), 0 3px 0 rgba(var(--shade-rgb), .5), 0 8px 18px rgba(var(--shade-rgb), .5); } /* (Dark picked in Appearance: the same) */
 
 /* one-tap follow-ups under the latest answer */
 .followups { display: flex; flex-wrap: wrap; gap: 6px; align-self: flex-start; margin: -2px 0 4px; }
@@ -1117,8 +1119,9 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 }
 .bubble-assistant { box-shadow: 0 6px 22px rgba(var(--shade-rgb), .07); }
 @media (prefers-color-scheme: dark) {
-  .bubble-assistant { box-shadow: 0 6px 22px rgba(var(--shade-rgb), .35); }
+  :where(:root:not([data-theme="light"])) .bubble-assistant{ box-shadow: 0 6px 22px rgba(var(--shade-rgb), .35); }
 }
+:where(:root[data-theme="dark"]) .bubble-assistant{ box-shadow: 0 6px 22px rgba(var(--shade-rgb), .35); } /* (Dark picked in Appearance: the same) */
 .quick-actions { background: transparent; }
 .quick-actions .chip {
   background: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -1810,8 +1813,9 @@ html.native .home:not([hidden]) {
 .home button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .home svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 @media (prefers-color-scheme: dark) {
-  html.native .tabbar { background: rgba(var(--dark-rgb), .82); }
+  html:where(:not([data-theme="light"])).native .tabbar{ background: rgba(var(--dark-rgb), .82); }
 }
+html:where([data-theme="dark"]).native .tabbar{ background: rgba(var(--dark-rgb), .82); } /* (Dark picked in Appearance: the same) */
 @media (prefers-reduced-motion: reduce) { .home button:active { transform: none; } html.native .tabbar, .tab { transition: none; } }
 @media (prefers-reduced-transparency: reduce) { html.native .tabbar { background: var(--dark-2); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 
@@ -1849,7 +1853,7 @@ html.native .home:not([hidden]) {
   --lg-pick: color-mix(in srgb, var(--primary) 14%, transparent);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:where(:not([data-theme="light"])){
     --lg-fill: linear-gradient(180deg, rgba(var(--glass-rgb), .66), rgba(var(--glass-rgb), .54));
     --lg-fill-thick: linear-gradient(180deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .87));
     --lg-line: color-mix(in srgb, var(--primary) 14%, rgba(var(--hi-rgb), .06));
@@ -1866,13 +1870,32 @@ html.native .home:not([hidden]) {
     --lg-glow: color-mix(in srgb, var(--primary) 6%, transparent);
   }
 }
+:root:where([data-theme="dark"]){
+    --lg-fill: linear-gradient(180deg, rgba(var(--glass-rgb), .66), rgba(var(--glass-rgb), .54));
+    --lg-fill-thick: linear-gradient(180deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .87));
+    --lg-line: color-mix(in srgb, var(--primary) 14%, rgba(var(--hi-rgb), .06));
+    --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1);
+    --lg-lift: 0 12px 34px rgba(var(--shade-rgb), .45), 0 1px 3px rgba(var(--shade-rgb), .3);
+    --lg-ink: rgba(var(--hi-rgb), .74);
+    --lg-pick: color-mix(in srgb, var(--primary) 24%, transparent);
+    --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
+    --lg-fill-col: linear-gradient(160deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .4));
+    --lg-fill-side: linear-gradient(180deg, rgba(var(--glass-rgb), .8), rgba(var(--glass-rgb), .68));
+    --lg-rim: linear-gradient(140deg, rgba(var(--hi-rgb), .5), rgba(var(--hi-rgb), .1) 34%, rgba(var(--hi-rgb), .04) 62%, rgba(var(--hi-rgb), .3));
+    --lg-sheen: radial-gradient(120% 85% at 0% 0%, rgba(var(--hi-rgb), .07), rgba(var(--hi-rgb), 0) 52%);
+    --lg-tint: color-mix(in srgb, var(--primary) 12%, transparent);
+    --lg-glow: color-mix(in srgb, var(--primary) 6%, transparent);
+  } /* (Dark picked in Appearance: the same) */
 /* Monochrome (no colour picked): cool, neutral greys behind clear glass, so the glass still shows */
 :root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .06); --lg-glow: rgba(255, 255, 255, .25);
   --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .4), rgba(var(--glass-rgb), .18));
   --amb-1: rgba(104, 114, 142, .5); --amb-2: rgba(160, 170, 194, .55); --amb-3: rgba(70, 78, 100, .32); }
-@media (prefers-color-scheme: dark) { :root[data-tint="mono"] { --lg-tint: rgba(255, 255, 255, .03); --lg-glow: rgba(255, 255, 255, .04);
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"]))[data-tint="mono"]{ --lg-tint: rgba(255, 255, 255, .03); --lg-glow: rgba(255, 255, 255, .04);
   --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
   --amb-1: rgba(150, 158, 186, .26); --amb-2: rgba(96, 104, 128, .34); --amb-3: rgba(210, 214, 228, .1); } }
+:root:where([data-theme="dark"])[data-tint="mono"]{ --lg-tint: rgba(255, 255, 255, .03); --lg-glow: rgba(255, 255, 255, .04);
+  --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .76), rgba(var(--glass-rgb), .6));
+  --amb-1: rgba(150, 158, 186, .26); --amb-2: rgba(96, 104, 128, .34); --amb-3: rgba(210, 214, 228, .1); } /* (Dark picked in Appearance: the same) */
 .topbar, .composer, #quick-actions .chip, .settings-card, .sidebar, html.native .tabbar {
   background: var(--lg-fill); border: 1px solid var(--lg-line);
   -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
@@ -2740,7 +2763,7 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
   .top-timer i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .top-timer b { font-variant-numeric: tabular-nums; }
   #top-bell { position: relative; }
-  #top-bell svg { fill: none; }
+  #top-bell svg, #top-theme svg { fill: none; }
   .top-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); border: 2px solid var(--surface); }
   .top-dot[hidden] { display: none; }
   .top-me { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-left: 8px; padding: 0 10px 0 4px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -3058,7 +3081,7 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
    them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
 .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row,
-.wk-card, .hub-chat.ex-new, .dk-col .empty-state {
+.wk-card, .hub-chat.ex-new, .dk-col .empty-state, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .labs .labs-tabs button:not([aria-selected="true"]) {
   background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-card) padding-box, var(--lg-rim) border-box;
   -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
   border: 1px solid transparent;
@@ -3071,7 +3094,8 @@ html.labs-open :is(#app, #home), html.board-open :is(#app, #home) { --lg-blur-ca
 /* Settings rows are mostly words: a thicker pane, so the small grey lines stay easy to read over the shapes */
 .set-group, .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } /* (and the ask box: words are typed there) */
 .composer { --lg-tint: transparent; --lg-glow: transparent; --lg-sheen: none; } /* (the ask box: clear frost and the rim, nothing that lightens what you type) */
-@media (prefers-color-scheme: dark) { .dk-card, .dk-stat, .wk-card, .hub-chat.ex-new { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } } /* (the dashboard's small grey lines, in dark) */
+@media (prefers-color-scheme: dark) { :where(:root:not([data-theme="light"])) .dk-card, :where(:root:not([data-theme="light"])) .dk-stat, :where(:root:not([data-theme="light"])) .wk-card, :where(:root:not([data-theme="light"])) .hub-chat.ex-new{ --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } }
+:where(:root[data-theme="dark"]) .dk-card, :where(:root[data-theme="dark"]) .dk-stat, :where(:root[data-theme="dark"]) .wk-card, :where(:root[data-theme="dark"]) .hub-chat.ex-new{ --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .92), rgba(var(--glass-rgb), .84)); } /* (Dark picked in Appearance: the same) */ /* (the dashboard's small grey lines, in dark) */
 html.lite .set-group, html.lite .composer, html.lite .dk-card, html.lite .dk-stat, html.lite .wk-card, html.lite .hub-chat.ex-new { --lg-fill-card: linear-gradient(var(--surface), var(--surface)); }
 @media (min-width: 761px) { .settings-card { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift); } }
 .gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), var(--lg-lift-up) !important; }
@@ -3083,3 +3107,11 @@ html.native:not(.lite) body { background:
   radial-gradient(62% 38% at 12% 8%, var(--amb-1), transparent 72%),
   radial-gradient(58% 36% at 92% 38%, var(--amb-2), transparent 72%),
   radial-gradient(70% 40% at 28% 96%, var(--amb-3), transparent 72%), var(--bg); }
+/* the board in the app: its frame, tool bar, Ask bar and zoom pill are thick glass over the page (the drawing
+   sheet itself stays solid, so what is drawn stays easy to see). Lite mode turns the glass solid. */
+.csk-wrap .csk-panel, .csk-wrap.csk-dark .csk-panel {
+  background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-thick) padding-box, var(--lg-rim) border-box;
+  border: 1px solid transparent; /* (no blur behind the frame: over the whole screen it slows every tap on the tools; the thick pane needs none) */
+  box-shadow: var(--lg-edge), var(--lg-hair), 0 20px 60px rgba(var(--shade-rgb), .35); color: var(--text); }
+.csk-wrap .csk-zoom { background: var(--lg-fill-thick); border-color: var(--lg-line); color: var(--text); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); }
+.csk-wrap .csk-ask input { padding-top: 8px; padding-bottom: 8px; } /* (the same 34px box, the words in the middle of it) */
