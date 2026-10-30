@@ -1807,7 +1807,7 @@ test('the LET Rescue Plan (let.html, linked from the Rescue Plan and the landing
     page.on('request', (r) => { const u = new URL(r.url()); if (/let\.html/.test(r.frame().url()) && u.origin !== new URL(APP).origin) away.push(u.href); });
     await page.goto(LET);
     const elem = (await page.inputValue('[name=topics]')).split('\n');
-    expect(elem.length === 23 && elem.includes('Assessment of Student Learning') && elem.includes('Filipino: komunikasyon at pagbasa') && await page.locator('[name=major]').isHidden(), 'Elementary: Professional and General Education filled in, no major: ' + elem.length);
+    expect(elem.length === 30 && elem.includes('Code of Ethics for Professional Teachers') && elem.includes('Filipino: Komunikasyon at Pagbasa at Pagsulat') && await page.locator('[name=major]').isHidden(), 'Elementary: Professional and General Education filled in, no major: ' + elem.length);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(150); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, 'body'); expect(!bad.length, 'the form, ' + scheme + ': readable: ' + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
     await page.selectOption('[name=level]', 'secondary');
@@ -1817,7 +1817,7 @@ test('the LET Rescue Plan (let.html, linked from the Rescue Plan and the landing
     expect(/major/.test(await page.locator('#rs-err').innerText()), 'no major: it asks');
     await page.fill('[name=major]', 'English');
     const sec = (await page.inputValue('[name=topics]')).split('\n');
-    expect(sec.length === 32 && sec[0] === 'English: linguistics and the structure of English' && sec.includes('English: teaching literature') && sec.includes('Developmental Reading') && sec.includes('Facilitating Learning') && sec.includes('Field Study and Practice Teaching'), 'Secondary: the major’s own areas first, then all of Professional and General Education: ' + sec.slice(0, 3));
+    expect(sec.length === 39 && sec[0] === 'English: linguistics and the structure of English' && sec.includes('English: teaching literature') && sec.includes('Teaching reading') && sec.includes('Learning theories and motivation') && sec.includes('Field study and practice teaching'), 'Secondary: the major’s own areas first, then all of Professional and General Education: ' + sec.slice(0, 3));
     await page.click('#rs-form .rs-go');
     await page.waitForSelector('#rs-plan:not([hidden]) .rs-day');
     await page.waitForTimeout(1200);
@@ -2258,7 +2258,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
+  const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
@@ -2318,14 +2318,14 @@ test('the LET, Cassie’s way: every major gets its own areas and all of Profess
   // the topics: each major its own areas, no commas (a comma splits topics), Prof Ed and Gen Ed in full
   const T = await page.evaluate(() => { const s = document.createElement('script'); s.src = 'rescue.js'; document.head.appendChild(s); return new Promise((r) => { s.onload = () => r(['Mathematics', 'Biological Science', 'Physical Science', 'Social Studies', 'Values Education', 'MAPEH', 'TLE', 'Agriculture and Fishery Arts', 'Filipino', 'Home Economics'].map((m) => [m, CassieRescue.letTopics('secondary', m)]).concat([['elementary', CassieRescue.letTopics('elementary', '')]])); }); });
   const by = Object.fromEntries(T);
-  expect(by.Mathematics.includes('Math: calculus') && by['Biological Science'].includes('Biology: genetics and evolution') && by['Physical Science'].includes('Physics: mechanics and vectors') && by['Social Studies'].includes('Social Studies: Asian studies') && by['Values Education'].includes('Values Ed: personhood development') && by.MAPEH.includes('PE: folk dance and other dance forms') && by.TLE.includes('TLE: drafting') && by['Agriculture and Fishery Arts'].includes('Agri-Fishery: pests and diseases') && by.Filipino.includes('Filipino: panitikan'), 'each major has its own areas');
+  expect(by.Mathematics.includes('Math: calculus') && by['Biological Science'].includes('Biology: genetics and evolution') && by['Physical Science'].includes('Physics: mechanics and vectors') && by['Social Studies'].includes('Social Studies: Asian history and world affairs') && by['Values Education'].includes('Values Ed: personhood development') && by.MAPEH.includes('PE: folk dance and other dance forms') && by.TLE.includes('TLE: drafting') && by['Agriculture and Fishery Arts'].includes('Agri-Fishery: pests and diseases') && by.Filipino.includes('Filipino: Panitikang Pilipino'), 'each major has its own areas');
   expect(by['Home Economics'][0] === 'Home Economics: the content', 'a major Cassie doesn’t know still gets the content, teaching it and practice');
-  expect(by.elementary.length === 23 && by.elementary.includes('Developmental Reading') && by.elementary.includes('Facilitating Learning') && by.elementary.includes('Government and the Constitution') && !by.elementary.some((x) => /Calculus|^Math:/.test(x)), 'Elementary: all of Prof Ed and Gen Ed, no major: ' + by.elementary.length);
+  expect(by.elementary.length === 30 && by.elementary.includes('Teaching reading') && by.elementary.includes('Learning theories and motivation') && by.elementary.includes('Government and the Constitution with human rights') && !by.elementary.some((x) => /calculus/i.test(x)), 'Elementary: all of Prof Ed and Gen Ed, no major: ' + by.elementary.length);
   expect(T.every(([, l]) => l.every((x) => !/[,–—]/.test(x))), 'no commas or dashes in any topic');
   const last = () => { const m = groqCalls.at(-1).messages.filter((x) => x.role === 'user').at(-1); return typeof m.content === 'string' ? m.content : JSON.stringify(m.content); };
   // LET practice (Lessons): Cassie's own board-style questions, taught step by step after each answer
   await page.evaluate(() => goLesson('let:practice')); await page.waitForTimeout(1200);
-  expect(/Quiz me on: the LET/.test(last()) && /PRC board exam/.test(last()) && /four options \(A to D\)/.test(last()) && /your own multiple choice/.test(last()) && /step by step/.test(last()), 'LET practice is board-style and taught step by step: ' + last().slice(0, 300));
+  expect(/Quiz me on: the LET/.test(last()) && /PRC board exam/.test(last()) && /four options/.test(last()) && /each choice on its own line/.test(last()) && /your own multiple choice/.test(last()) && /step by step/.test(last()), 'LET practice is board-style and taught step by step: ' + last().slice(0, 300));
   // a LET plan's quiz and learn tasks are board-style; another exam's are not
   await page.evaluate(() => { openExamTask({ kind: 'quiz', topic: 'Assessment of Student Learning' }, { name: 'LET Secondary: Mathematics' }); });
   await page.waitForTimeout(1200);
@@ -2416,6 +2416,97 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
   expect(!D.errors.length, 'page errors: ' + D.errors.join('; '));
   await D.ctx.close();
+});
+
+test('quiz choices on their own lines: every quiz asks for A., B., C., D. one a line and no answer before the student answers, then the explanation step by step; a reply with the choices run together still shows them one a line, and a normal sentence is left alone', async (b) => {
+  const QUIZ1 = 'Which stage is Ana in?\n\nA. Sensorimotor B. Preoperational C. Concrete operational D. Formal operational';
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: QUIZ1 }) });
+  await page.evaluate(() => startQuizOn('Piaget')); await page.waitForTimeout(1500);
+  const sys = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'system').map((m) => m.content));
+  expect(/each choice on its own line as A\. \.\.\., B\. \.\.\., C\. \.\.\., D\. \.\.\./.test(sys) && /Never give the answer, a hint of it or the explanation before the student answers/.test(sys) && /explain step by step why it is right and why each other choice is wrong/.test(sys) && /Then ask the next question, laid out the same way/.test(sys), 'the quiz rules ask for one choice a line and the answer only after: ' + sys.slice(0, 300));
+  const shown = await page.evaluate(() => [...[...document.querySelectorAll('#chat-log .bubble-assistant')].pop().querySelectorAll('.md-choice')].map((x) => x.textContent));
+  expect(JSON.stringify(shown) === JSON.stringify(['A. Sensorimotor', 'B. Preoperational', 'C. Concrete operational', 'D. Formal operational']), 'run-together choices show one a line: ' + JSON.stringify(shown));
+  const other = await page.evaluate(() => { const d = document.createElement('div'); renderFormatted(d, 'Plan A. Then B. Then C. Done.\n\nA) one B) two C) three D) four\n\n**A.** red **B.** blue **C.** green **D.** gold'); return { first: d.querySelector('p').textContent, choices: [...d.querySelectorAll('.md-choice')].map((x) => x.textContent) }; });
+  expect(other.first === 'Plan A. Then B. Then C. Done.' && other.choices.length === 8 && other.choices[0] === 'A. one' && other.choices[7] === 'D. gold', 'a sentence is left alone; A) and bold choices split too: ' + JSON.stringify(other));
+  expect(await page.evaluate(() => /each choice on its own line/.test(LET_QUIZ) && /never show the answer before I answer/.test(LET_QUIZ)), 'LET practice asks the same');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('Quiz me, Explain a topic, Solve step by step and Research a topic wait for the student’s own topic: the words go in the ask box with the cursor at the end and nothing is sent (no made-up topic); Quiz me on <topic> then starts a real quiz', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Q1?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  await page.evaluate(() => deskGo('chat'));
+  const WANT = { 'Quiz me': 'Quiz me on: ', 'Explain a topic': 'Explain this topic simply: ', 'Solve step by step': 'Solve this step by step: ', 'Research a topic': 'Research this topic with real sources: ' };
+  for (const [label, words] of Object.entries(WANT)) {
+    const before = groqCalls.length;
+    await page.click(`#side-tools .side-tool[data-tip="${label}"]`).catch(() => page.evaluate((l) => runTool(HOME_EXAMPLES.find((x) => x.label === l)), label));
+    await page.waitForTimeout(500);
+    const box = await page.$eval('#prompt-input', (e) => ({ v: e.value, at: e.selectionStart, focus: document.activeElement === e }));
+    expect(box.v === words && box.at === words.length && box.focus && groqCalls.length === before, `${label}: “${words}” waits in the ask box, nothing sent: ` + JSON.stringify(box));
+    await page.keyboard.press('Enter'); await page.waitForTimeout(400);
+    expect(groqCalls.length === before, `${label}: Enter with no topic sends nothing`);
+  }
+  expect(await page.evaluate(() => !HOME_EXAMPLES.some((x) => /water cycle|photosynthesis|3x \+ 7|social media/.test(x.text))), 'no made-up topics left in the starters');
+  await page.fill('#prompt-input', 'Quiz me on: the water cycle'); await page.keyboard.press('Enter'); await page.waitForTimeout(1500);
+  const sent = groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content;
+  expect(/Quiz me on: the water cycle\. Ask the first question\./.test(JSON.stringify(sent)) && await page.evaluate(() => quizMode), 'Quiz me on <topic> starts a real quiz: ' + JSON.stringify(sent).slice(0, 120));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie asks the student’s LET by taps (level, major, focus, topics to start with), saves it, puts Prof Ed first, teaches one lesson at a time with 3 board-style checks, keeps what’s done after a reload, and shows on Lessons, Home’s Lessons tile, the Study plan page and the LET page', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 22 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  // the map
+  const M = await page.evaluate(() => letRescue().then((R) => ({ e: R.letParts('elementary', ''), m: R.letParts('secondary', 'Filipino'), v: R.letParts('secondary', 'Values Education'), s: R.letParts('secondary', 'Social Studies'), sc: R.letParts('secondary', 'General Science') })));
+  expect(M.e.profed.includes('Code of Ethics for Professional Teachers') && M.e.profed.includes('Magna Carta for Teachers and Education Act 1982') && M.e.profed.includes('Test construction and item analysis') && M.e.profed.includes('Teaching reading') && !M.e.major.length, 'Prof Ed: ethics, the laws, assessment and reading; Elementary has no major');
+  expect(M.e.gened.includes('Economics taxation and agrarian reform') && M.e.gened.includes('Filipino: Masining na Pagpapahayag') && M.e.gened.includes('Society and culture with family planning'), 'Gen Ed: the social sciences in full');
+  expect(M.m.major.includes('Filipino: Sining ng Pakikipagtalastasan') && M.v.major.includes('Values Ed: work ethics and community service') && M.s.major.includes('Social Studies: Asian history and world affairs') && M.sc.major[0] === 'Science: integrated science', 'the majors: ' + JSON.stringify([M.m.major, M.v.major.slice(-4)]));
+  expect([M.e, M.m, M.v, M.s, M.sc].every((p) => [...p.profed, ...p.gened, ...p.major].every((t) => t.length <= 50 && !/[,–—]/.test(t))), 'short names, no commas or dashes');
+  // it shows where a reviewee looks: Home's Lessons tile, Lessons, the Study plan page
+  await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
+  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'LET course', 'Home’s Lessons tile is the LET course for a reviewee');
+  await page.evaluate(() => deskGo('plan')); await page.waitForSelector('.desk-plan .dk-letc');
+  await page.evaluate(() => deskGo('lessons')); await page.waitForTimeout(400);
+  expect(await page.locator('.lesson[data-go="let:course"]').count() >= 1, 'Lessons has the LET course');
+  // the questions, by taps
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-pick');
+  expect(/Which LET are you taking\?/.test(await page.locator('.letc').innerText()) && /60% Professional Education/.test(await page.locator('.letc').innerText()), 'it asks the level, with the weights');
+  await page.click('.letc .letc-pick >> text=Secondary');
+  await page.click('.letc .letc-pick >> text=Mathematics');
+  expect(/What should we focus on/.test(await page.locator('.letc').innerText()), 'then the focus');
+  await page.click('.letc .letc-part[data-part="gened"]'); // (Prof Ed and the major only)
+  await page.click('.letc .letc-go');
+  await page.click('.letc .letc-topic >> text=Math: calculus');
+  await page.click('.letc .letc-go');
+  const c = await page.evaluate(() => state.letCourse);
+  expect(c.level === 'secondary' && c.major === 'Mathematics' && JSON.stringify(c.parts) === '["profed","major"]' && c.first[0] === 'Math: calculus' && c.order[0] === 'Math: calculus' && c.order[1] === 'Code of Ethics for Professional Teachers' && !c.order.some((t) => /^English:|Economics/.test(t)), 'saved: the picked topic first, then Prof Ed (the anchor), then the major, no Gen Ed: ' + JSON.stringify(c).slice(0, 300));
+  const n = c.order.length;
+  expect(new RegExp(`0 of ${n} lessons`).test(await page.locator('.letc').innerText()), 'progress shows');
+  const taps = await page.$$eval('.letc button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
+  expect(!taps.length, 'every button is at least 44px: ' + taps);
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.letc-card'); expect(!bad.length, `the course reads (${scheme}): ` + bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  // a lesson: taught for the LET, 3 board-style checks laid out one choice a line
+  await page.click('.letc .letc-next'); await page.waitForTimeout(1500);
+  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content), rules = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'system').map((m) => m.content));
+  expect(/Teach me \\"Math: calculus\\" for the LET/.test(ask) && /3 board-style questions of your own/.test(ask) && /each choice on its own line/.test(rules) && !/each choice on its own line/.test(ask), 'the lesson asks in a few words, the layout rules go to Cassie: ' + ask.slice(0, 200));
+  await page.waitForSelector('#chat-log .md-choice', { timeout: 8000 }).catch(() => {});
+  const lc = await page.evaluate(() => { const bs = [...document.querySelectorAll('#chat-log .bubble-assistant')]; return bs.length ? bs.pop().querySelectorAll('.md-choice').length : -1; });
+  expect(lc === 4, 'its check shows A to D one a line: ' + lc);
+  // kept after a reload, and shown on Home
+  await page.reload(); await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
+  expect(await page.evaluate(() => !!state.letCourse.done['Math: calculus']), 'the lesson stays done after a reload');
+  expect(new RegExp(`1 of ${n} lessons`).test(await page.$eval('.desk-home .ht-lessons small', (e) => e.textContent)), 'Home shows the progress');
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-count');
+  expect(new RegExp(`1 of ${n} lessons`).test(await page.locator('.letc .letc-count').innerText()), 'and so does the course');
+  expect(await page.evaluate(() => !!accountData().letCourse), 'it syncs with the account');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the LET page: the weights
+  const L = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 } });
+  await L.page.goto(APP.replace('app.html', 'let.html'));
+  expect(/Secondary is 20% General Education, 40% Professional Education and 40% your major/.test(await L.page.locator('.rs-weights').innerText()), 'the LET page shows the weights');
+  await L.ctx.close();
 });
 
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
@@ -4857,8 +4948,8 @@ test('Lessons follow the student’s level: Nursery or Kindergarten comes first 
     'Grade 3': ['Read with Cassie', 'Phonics and spelling', 'Times tables', 'Fractions', 'Science labs for kids'],
     'Grade 8': ['Algebra', 'Science labs', 'Essay helper', 'Quiz me'],
     'Grade 11': ['Physics labs', 'Calculus', 'Accounting basics', 'Essays', 'Research', 'Practical research'],
-    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET practice', 'Check my LET reviewer'],
-    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET practice', 'Check my LET reviewer'],
+    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET course: one lesson at a time', 'LET practice', 'Check my LET reviewer'],
+    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET course: one lesson at a time', 'LET practice', 'Check my LET reviewer'],
   };
   // onboarding: the little ones first
   {

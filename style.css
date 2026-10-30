@@ -3081,7 +3081,7 @@ svg.ic-soft { animation: ic-soft .15s ease-out both; }
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
    them all solid at once. Tappable ones lift on hover or press (app.js adds gl-up and gl-down). */
 .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row,
-.wk-card, .hub-chat.ex-new, .dk-col .empty-state, .ht-tile, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .labs .labs-tabs button:not([aria-selected="true"]) {
+.wk-card, .hub-chat.ex-new, .hub-chat.dk-letc, .dk-col .empty-state, .ht-tile, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .labs .labs-tabs button:not([aria-selected="true"]) {
   background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-card) padding-box, var(--lg-rim) border-box;
   -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
   border: 1px solid transparent;
@@ -3151,3 +3151,36 @@ html.native:not(.lite) body { background:
   html ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 }
 .home-top .hub-tlab-info small { color: var(--text); } /* (over the glass, in both themes) */
+.md-choice { margin: .3em 0; padding-left: .2em; } /* (a quiz choice, one a line) */
+/* the LET course: a glass card over the page (a phone: the whole screen); tap choices, then the lessons in order */
+.letc { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
+.letc-card { width: min(640px, 100%); max-height: min(88vh, 900px); overflow-y: auto; overscroll-behavior: contain; padding: 18px 18px 22px; border-radius: 26px; border: 1px solid transparent; color: var(--text);
+  background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-thick) padding-box, var(--lg-rim) border-box;
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); }
+@media (max-width: 760px) { .letc { padding: 0; place-items: stretch; } .letc-card { width: 100%; max-height: none; height: 100%; border-radius: 0; padding: calc(14px + var(--safe-top, 0px)) 16px calc(24px + var(--safe-bottom, 0px)); } }
+.letc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.letc-head h2 { margin: 0; font-size: 1.3rem; }
+.letc-x { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font-size: 1.4rem; cursor: pointer; }
+.letc-q { margin: 6px 0 12px; font-size: 1.05rem; font-weight: 700; }
+.letc-note { margin: 10px 0; font-size: .86rem; line-height: 1.45; color: var(--text); }
+.letc-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.letc-pick { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--lg-line, var(--border)); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; text-align: left; }
+.letc-pick[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.letc-topics .letc-pick { font-size: .9rem; font-weight: 600; }
+.letc-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 6px; align-items: center; }
+.letc-go, .letc-line { min-height: 44px; padding: 0 20px; border-radius: 999px; font: inherit; font-weight: 700; cursor: pointer; }
+.letc-go { border: 0; background: var(--primary); color: var(--on-primary); }
+.letc-line { border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); }
+.letc-body > .letc-go { margin-top: 14px; }
+.letc-what { margin: 0 0 8px; font-weight: 650; }
+.letc-prog { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
+.letc-prog i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+.letc-count { margin: 6px 0 0; font-size: .9rem; font-weight: 650; }
+.letc-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.letc-lesson { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--lg-line, var(--border)); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.letc-lesson span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.letc-lesson b { font-size: .95rem; }
+.letc-lesson small { font-size: .78rem; color: var(--text); }
+.letc-lesson em { flex: none; font-style: normal; font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: var(--on-primary); }
+.letc-lesson.done em { background: transparent; color: var(--text); border: 1px solid var(--lg-line, var(--border)); }
+.dk-letc { margin: 0 0 14px; }

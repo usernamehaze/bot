@@ -79,19 +79,24 @@
   // the LET's areas (the PRC's Enhanced Table of Specifications, used since March 2023): General Education and
   // Professional Education for every examinee, and the major's own areas for Secondary. Short names (no commas: a
   // comma splits topics), each one session's topic; a major Cassie doesn't know gets the content, teaching it and practice.
-  const LET_PROFED = ['The Teaching Profession', 'Social Dimensions of Education', 'Principles of Teaching', 'Facilitating Learning',
-    'Child and Adolescent Development', 'Curriculum Development', 'Assessment of Student Learning', 'Educational Technology',
-    'Developmental Reading', 'Special and Inclusive Education', 'Field Study and Practice Teaching'];
-  const LET_GENED = ['English: grammar and writing', 'English: speech and literature', 'Filipino: komunikasyon at pagbasa',
-    'Filipino: panitikan at masining na pagpapahayag', 'Mathematics: algebra and geometry', 'Mathematics: statistics and probability',
-    'Science: biology and earth science', 'Philippine history and Rizal', 'Government and the Constitution', 'Economics and society',
-    'Philosophy and psychology', 'ICT and the arts'];
+  // Professional Education first: the anchor (60% of Elementary, 40% of Secondary)
+  const LET_PROFED = ['Code of Ethics for Professional Teachers', 'The Constitution on education', 'Magna Carta for Teachers and Education Act 1982',
+    'Philosophical and sociological foundations', 'Learning theories and motivation', 'Stages of development and learner diversity',
+    'Principles and strategies of teaching', 'Lesson planning and curriculum design', 'Educational technology in the classroom',
+    'Test construction and item analysis', 'Formative summative and portfolio assessment', 'Statistics in assessment',
+    'Teaching reading', 'Field study and practice teaching'];
+  const LET_GENED = ['English: study skills grammar and usage', 'English: reading comprehension and writing', 'English: speech and oral communication',
+    'English: Philippine and world literature', 'Filipino: Komunikasyon at Pagbasa at Pagsulat', 'Filipino: Masining na Pagpapahayag',
+    'Filipino: Wika at Panitikan', 'Math: operations algebra and geometry', 'Math: statistics probability and problem solving',
+    'Science: biology and living systems', 'Science: earth science chemistry and physics', 'Philippine history Rizal and other heroes',
+    'Government and the Constitution with human rights', 'Economics taxation and agrarian reform', 'Society and culture with family planning',
+    'Philosophy psychology arts and ICT'];
   const LET_MAJORS = [ // [what the student types, matched loosely, then that major's sessions]
     [/english/, ['English: linguistics and the structure of English', 'English: Philippine and Afro-Asian literature', 'English: world literature and mythology',
       'English: literary criticism and stylistics', 'English: teaching speaking listening and reading', 'English: teaching literature',
       'English: assessment and research', 'English: campus journalism and creative writing', 'English: speech and stage arts']],
-    [/filipino/, ['Filipino: panimulang linggwistika', 'Filipino: wika', 'Filipino: panitikan', 'Filipino: metodolohiya',
-      'Filipino: pagtataya at ebalwasyon', 'Filipino: kagamitang pampagtuturo']],
+    [/filipino/, ['Filipino: Sining ng Pakikipagtalastasan', 'Filipino: Panitikang Pilipino', 'Filipino: Linggwistikang Filipino',
+      'Filipino: Pagtuturo at Pagsasalin', 'Filipino: pagtataya at kagamitang pampagtuturo']],
     [/math/, ['Math: arithmetic number theory and business math', 'Math: algebra', 'Math: plane and solid geometry', 'Math: trigonometry',
       'Math: analytic geometry', 'Math: calculus', 'Math: probability and statistics', 'Math: modern geometry and abstract algebra',
       'Math: history of math and problem solving', 'Math: assessment in math']],
@@ -104,16 +109,23 @@
       'Chemistry: gases liquids solids and solutions', 'Chemistry: acids bases energy and rates', 'Chemistry: organic and nuclear',
       'Physics: mechanics and vectors', 'Physics: electricity magnetism and electronics', 'Physics: heat light and modern physics', 'Earth and space science']],
     [/social/, ['Social Studies: geography', 'Social Studies: sociology and anthropology', 'Social Studies: politics governance and law',
-      'Social Studies: world history and civilization', 'Social Studies: Asian studies', 'Social Studies: economics',
+      'Social Studies: world history and civilization', 'Social Studies: Asian history and world affairs', 'Social Studies: economics',
       'Social Studies: teaching approaches and materials', 'Social Studies: assessment and research']],
     [/values/, ['Values Ed: philosophical and ethical foundations', 'Values Ed: theories of values development', 'Values Ed: personhood development',
       'Values Ed: family life and Filipino values', 'Values Ed: human rights citizenship and gender', 'Values Ed: peace and global education',
-      'Values Ed: career and work values', 'Values Ed: teaching approaches and facilitation', 'Values Ed: research and assessment']],
+      'Values Ed: work ethics and community service', 'Values Ed: behavioral and transformative ed', 'Values Ed: research and assessment']],
+    [/science/, ['Science: integrated science', 'Science: chemistry', 'Science: physics', 'Science: earth science', 'Science: biological sciences',
+      'Science: teaching science']],
     [/\btle\b|technology and livelihood|livelihood/, ['TLE: drafting', 'TLE: business math and entrepreneurship', 'TLE: electricity and electronics',
       'TLE: plumbing carpentry and masonry', 'TLE: cosmetology', 'TLE: foods', 'TLE: teaching it']],
     [/agri|fish/, ['Agri-Fishery: breeds of farm animals and fish', 'Agri-Fishery: pests and diseases', 'Agri-Fishery: caring for farm and fishery products',
       'Agri-Fishery: marketing and entrepreneurship', 'Agri-Fishery: teaching it']],
   ];
+  // the three parts on their own (the app's LET course asks which to focus on)
+  function letParts(level, major) {
+    const m = clean(major, 30), known = m && LET_MAJORS.find(([re]) => re.test(m.toLowerCase()));
+    return { profed: [...LET_PROFED], gened: [...LET_GENED], major: level === 'secondary' ? (known ? [...known[1]] : m ? [`${m}: the content`, `${m}: teaching it`, `${m}: practice questions`] : []) : [] };
+  }
   function letTopics(level, major) {
     const m = clean(major, 30), known = m && LET_MAJORS.find(([re]) => re.test(m.toLowerCase()));
     const majors = level === 'secondary' ? (known ? known[1] : m ? [`${m}: the content`, `${m}: teaching it`, `${m}: practice questions`] : []) : [];
@@ -317,6 +329,6 @@
     });
   }
 
-  window.CassieRescue = { makePlan, topicsOf, letTopics, letName, planPicture };
+  window.CassieRescue = { makePlan, topicsOf, letTopics, letParts, letName, planPicture };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
