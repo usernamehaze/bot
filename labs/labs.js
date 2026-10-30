@@ -26,7 +26,7 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=205';
+import { MUSEUM } from './museum.js?v=206';
 import { GAMES } from './games.js';
 import { KIDS } from './kids.js';
 
