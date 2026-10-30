@@ -2297,6 +2297,21 @@ test('privacy.html explains every table Cassie’s server keeps (a new table fai
   expect(!/[—–]/.test(page), 'no dashes');
 });
 
+test('Google Play, October 2026: every price is the same for everyone (no student or age discount to qualify for), said the same way in the terms and on the pricing page; the app asks for no location, contacts, local network, all files or SMS access, and the Play guide says how to package it without them', async () => {
+  const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const LINE = 'Each price is the same for everyone. No plan is a student, age or other discount you have to qualify for, so there is nothing to check: no school email, ID or proof of age.';
+  for (const f of ['terms.html', 'index.html']) expect(read(f).includes(LINE), f + ' says every price is the same for everyone, with nothing to check');
+  expect(!/[–—]/.test(LINE), 'no dashes in it');
+  // no restricted permission anywhere in Cassie's own code (the Play app is this web app in Chrome)
+  const own = require('child_process').execSync('git ls-files "*.js" "*.html" "*.json"', { cwd: ROOT }).toString().split('\n').filter((f) => f && !/^(tests|vendor|_site)\//.test(f) && !/three\.module/.test(f));
+  const RESTRICTED = /navigator\.geolocation|navigator\.contacts|ContactsManager|showDirectoryPicker|requestFileSystem|OTPCredential|navigator\.(serial|usb|bluetooth|hid)\b/;
+  const hits = own.filter((f) => RESTRICTED.test(read(f)));
+  expect(!hits.length, 'no location, contacts, local network, all files or SMS access in the code: ' + hits.join(', '));
+  const guide = read('STORES.md'), audit = read('docs/play-policy-2026-10.md');
+  expect(/Location delegation: OFF/.test(guide) && /no extra Android permissions/.test(guide) && /Trader status/.test(guide) && /Japan payments authorization/.test(guide), 'STORES.md packages the Play app without location and lists the new Console steps');
+  for (const item of ['Local Network', 'Manage Contacts', 'AppFunctions', 'eligibility-based discounts', 'Location', 'All Files Access', 'Accessibility', 'Deceptive Behavior', 'Families', 'Cryptocurrency', 'SMS or Call Log', 'Payments', 'Play Age Signals', 'Japan', 'Trader status', 'Cars', 'Memory', 'Android XR']) expect(audit.includes(item), 'the audit has a row for ' + item);
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {
