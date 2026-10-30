@@ -7992,7 +7992,7 @@ test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a
   }
 });
 
-test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home boxes and cards, Today’s Lab, Learn rows, Lessons, Settings groups and sheet, the dashboard cards and the ask box are frosted glass with the lift shadow, words stay readable (AA) in light and dark, and Lite mode turns them solid', async (b) => {
+test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home boxes and cards, Today’s Lab, Learn rows, Lessons, Settings groups and sheet, the dashboard cards, the Study plan boxes and the ask box are frosted glass with the lift shadow, words stay readable (AA) in light and dark, and Lite mode turns them solid', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const glass = (page, sels) => page.evaluate((list) => list.map((s) => {
     const all = [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length);
@@ -8034,8 +8034,15 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     await page.evaluate(() => openSettings('profile')); await page.waitForSelector('#settings-panel:not([hidden]) .set-group');
     ok(await glass(page, ['#settings-panel .settings-card', '#settings-panel .set-group']), '1280x800 Settings');
     await readable(page, '#settings-panel', '1280x800 Settings');
+    // the Study plan: the boxes inside Today / Coming up / Done and the exam bar are glass, on columns that are a thinner glass
+    await page.evaluate(() => { document.getElementById('settings-x').click(); deskGo('plan'); });
+    await page.waitForSelector('.dk-col .empty-state'); await page.waitForTimeout(400);
+    ok(await glass(page, ['.dk-col .empty-state', '.hub-chat.ex-new']), '1280x800 Study plan');
+    const col = await page.$eval('.dk-col', (e) => { const c = getComputedStyle(e); return { blur: c.backdropFilter, img: c.backgroundImage }; });
+    expect(/blur/.test(col.blur) && /160deg, rgba\([^)]*, 0\.[0-3]\d*\), rgba\([^)]*, 0\.[0-3]\d*\)\)/.test(col.img), '1280x800: the Study plan columns are thin see-through glass: ' + JSON.stringify(col).slice(0, 300));
+    await readable(page, '.desk', '1280x800 Study plan');
     // a card lifts under the pointer
-    await page.evaluate(() => { document.getElementById('settings-x').click(); deskGo('home'); });
+    await page.evaluate(() => { deskGo('home'); });
     await page.waitForSelector('.dk-card');
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -8062,6 +8069,13 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'on', state: { tab: 'home' } });
     await page.waitForSelector('#home .hub-box');
     expect(await page.$eval('#home .hub-box', (e) => getComputedStyle(e).backdropFilter) === 'none', 'Lite mode: the boxes are solid');
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'on', state: { tab: 'home' } });
+    await page.evaluate(() => deskGo('plan')); await page.waitForSelector('.dk-col .empty-state');
+    const solid = await page.evaluate(() => ['.dk-col', '.dk-col .empty-state', '.hub-chat.ex-new'].map((s) => getComputedStyle(document.querySelector(s)).backdropFilter));
+    expect(solid.every((f) => f === 'none'), 'Lite mode: the Study plan columns, boxes and exam bar are solid: ' + solid);
     await ctx.close();
   }
 });
