@@ -871,3 +871,7 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .labs-sims, .labs-toolsf { margin-bottom: 22px; }
 .labs-sims .lf-h, .labs-toolsf .lf-h { color: var(--lx-text); }
 .lp-sims, .lp-toolsf { margin-bottom: 8px; }
+/* the student's own level (from the first questions): twice as wide as the other folders, the same shape */
+.lf-grid .lf-mine { grid-column: span 2; }
+.lf-grid .lf-mine .lf-txt b { font-size: 1.15rem; }
+.lf-grid .lf-mine .lf-txt small { font-size: .8rem; }

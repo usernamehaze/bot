@@ -404,7 +404,7 @@ test('a simpler start: a brand-new student sees their 4 most useful tools on Hom
     await page.evaluate(() => window.CassieNative && window.CassieNative.go('home'));
     await page.waitForSelector('#home .hub-box', { timeout: 8000 });
     const first = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
-    expect(first.length === 4 && first[0] === 'lab' && first.includes('games'), 'new: 4 boxes, labs first for a labs fan: ' + first);
+    expect(first.length === 4 && !first.some((h) => ['lab', 'games', 'today', 'lessons', 'cards', 'timer'].includes(h)) && await page.locator('#home .home-top .hub-tlab').count() === 1, 'new: 4 boxes (Learn and Games are in the tab bar; Lessons, the timer, Flashcards and Today’s Lab are up top): ' + first);
     const more = page.locator('#home .hub-more');
     const bb = await more.boundingBox();
     expect(/More tools/.test(await more.innerText()) && bb.height >= 44, 'More tools, 44px');
@@ -2351,6 +2351,71 @@ test('the LET, Cassie’s way: every major gets its own areas and all of Profess
   await L.page.goto(APP + (APP.includes('?') ? '&' : '?') + 'lesson=let:reviewer'); await L.page.waitForTimeout(1500);
   expect(/^These are questions from my LET reviewer/.test(await L.page.$eval('#prompt-input', (e) => e.value)), 'app.html?lesson=let:reviewer opens it ready');
   await L.ctx.close();
+});
+
+test('Home by level: every onboarding grade opens its own Lessons and Learn level; Home starts with Lessons, the timer and Flashcards, the note says which level (it follows the grade), then the exam plans, then Today’s Lab (no Learn, Games or Today’s lab box), on the phone and the computer; the timer’s minutes are edited right there and kept; the Home screen app stays put with no scrollbar; the student’s own Learn folder is twice as wide', async (b) => {
+  // every grade the first questions and the profile offer, and where it leads
+  const WANT = { Nursery: ['pre', 'pre'], Kindergarten: ['pre', 'pre'], Elementary: ['elem', 'elem'], 'Grade 1': ['elem', 'elem'], 'Grade 4': ['elem', 'elem'], 'Grade 6': ['elem', 'elem'], 'Junior High': ['jhs', 'hs'], 'Grade 7': ['jhs', 'hs'], 'Grade 10': ['jhs', 'hs'], 'Senior High': ['shs', 'hs'], 'Grade 11': ['shs', 'hs'], 'Grade 12': ['shs', 'hs'], College: ['college', 'college'], '1st year college': ['college', 'college'], '2nd year college': ['college', 'college'], '5th year college': ['college', 'college'], 'Graduate school': ['college', 'grad'], 'Board exam reviewee': ['college', 'grad'], 'Working professional': ['college', 'grad'] };
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home', groqKey: 'gsk_test', profile: { ...PROFILE, grade: '2nd year college', age: 20 }, chats: [{ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'y' }], updatedAt: Date.now() }] } });
+  const got = await page.evaluate((grades) => grades.map((g) => { state.profile.grade = g; state.profile.role = g === 'Working professional' ? 'pro' : 'student'; return [g, lessonLevel(), labLevel()]; }), Object.keys(WANT));
+  const wrong = got.filter(([g, l, lab]) => WANT[g][0] !== l || WANT[g][1] !== lab);
+  expect(!wrong.length, 'every grade leads to its own Lessons and Learn level: ' + JSON.stringify(wrong));
+  await page.evaluate(() => { state.profile.grade = '2nd year college'; state.profile.role = 'student'; renderHub(document.getElementById('home-hub')); });
+  // the phone's Home, top to bottom
+  const order = (scope) => page.evaluate((sc) => {
+    const r = document.querySelector(sc), y = (sel) => { const e = r.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top + scrollY) : -1; };
+    return { lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), note: (r.querySelector('.ht-note') || {}).textContent, exam: y('.hub-exam'), lab: y('.hub-tlab'),
+      gone: [...r.querySelectorAll('.hub-box, .hub-w')].map((x) => x.dataset.hub).filter((h) => ['lab', 'games', 'today', 'lessons', 'cards', 'timer'].includes(h)) };
+  }, scope);
+  await page.waitForSelector('#home .home-top .hub-tlab');
+  let o = await order('#home');
+  expect(o.lessons > 0 && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab > o.exam && !o.gone.length, 'phone: Lessons, the timer and Flashcards in a row, then the exam plans, then Today’s Lab, and no Learn, Games or Today’s lab box: ' + JSON.stringify(o));
+  expect(o.note === 'Organized for your level: 2nd year college, from your first questions. Change it in Settings, You.', 'the note says the level: ' + o.note);
+  await page.evaluate(() => { state.profile.grade = 'Grade 4'; save(); renderHub(document.getElementById('home-hub')); });
+  o = await order('#home');
+  expect(/your level: Grade 4,/.test(o.note), 'the note follows the grade: ' + o.note);
+  await page.click('#home .ht-lessons .ht-go'); await page.waitForSelector('.lessons-sheet .lesson');
+  expect(await page.$eval('.lessons-list', (e) => e.dataset.level) === 'elem', 'and Lessons opens that level’s list');
+  await page.click('.lessons-back');
+  // the timer's minutes, edited right on Home: kept after a reload, and the timer uses them
+  await page.click('#home .ht-edit'); await page.fill('#home .ht-set [name=focus]', '40'); await page.fill('#home .ht-set [name=brk]', '8'); await page.click('#home .ht-save'); await page.waitForTimeout(300);
+  await page.reload(); await page.waitForSelector('#home .hub-timer b');
+  const tm = await page.evaluate(() => ({ pomo: state.pomo, tile: document.querySelector('#home .hub-timer b').textContent, panel: document.getElementById('pomo-time').textContent }));
+  expect(tm.pomo.focus === 40 && tm.pomo.brk === 8 && tm.tile === '40:00' && tm.panel === '40:00', 'the edited minutes are kept and the timer uses them: ' + JSON.stringify(tm));
+  await page.click('#home .ht-edit'); await page.fill('#home .ht-set [name=focus]', '500'); await page.click('#home .ht-save'); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => state.pomo.focus === 40 && !document.querySelector('#home .ht-set [name=focus]').checkValidity()), 'more than 90 minutes is refused (the box says why) and nothing changes');
+  const taps = await page.$$eval('#home .home-top button', (bs) => bs.filter((x) => x.getClientRects().length && !x.closest('[hidden]')).map((x) => [x.className, Math.round(x.getBoundingClientRect().height)]).filter(([, h]) => h < 44));
+  expect(!taps.length, 'every button up top is at least 44px: ' + JSON.stringify(taps));
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#home .home-top'); expect(!bad.length, `phone Home (${scheme}) reads: ` + bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  // the Home screen app (display-mode standalone, phones): no sideways drag, no bounce or pull to refresh, no scrollbar
+  const rules = await page.evaluate(() => [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch (e) { return []; } }).filter((r) => r.media && /display-mode: standalone/.test(r.conditionText || r.media.mediaText) && /max-width: 760px/.test(r.conditionText || r.media.mediaText)).map((r) => [...r.cssRules].map((x) => x.cssText).join('\n')).join('\n'));
+  expect(/overscroll-behavior: none/.test(rules) && /overflow-x: hidden/.test(rules) && /scrollbar-width: none/.test(rules) && /::-webkit-scrollbar/.test(rules), 'the Home screen app stays put with no scrollbar: ' + rules);
+  const before = await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY);
+  expect(before !== 'none', 'a browser tab keeps its normal scrolling');
+  await page.addStyleTag({ content: rules });
+  const sa = await page.evaluate(() => ({ ob: getComputedStyle(document.body).overscrollBehaviorY, ox: getComputedStyle(document.body).overflowX, wide: document.documentElement.scrollWidth - innerWidth }));
+  expect(sa.ob === 'none' && sa.ox === 'hidden' && sa.wide <= 0, 'with those rules: no bounce and nothing sideways: ' + JSON.stringify(sa));
+  // Learn: the student's own level first and twice as wide
+  await page.evaluate(() => { state.profile.grade = '2nd year college'; save(); });
+  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-foryou .lf-mine');
+  const fw = await page.evaluate(() => { const f = [...document.querySelectorAll('.lp-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), level: f[0].dataset.level, mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
+  expect(fw.first && fw.level === 'college' && fw.mine / fw.other > 1.9, 'phone: the own level (College) first and about twice as wide: ' + JSON.stringify(fw));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the computer
+  const D = await open(b, { device: 'Desktop Chrome', viewport: { width: 1366, height: 768 }, server: false, lite: 'off', state: { tab: 'home', profile: { ...PROFILE, grade: '2nd year college', age: 20 } } });
+  await D.page.evaluate(() => deskGo('home')); await D.page.waitForSelector('.desk-home .home-top .hub-tlab');
+  o = await (async () => { const pg = D.page; return pg.evaluate(() => { const r = document.querySelector('.desk-home'), y = (sel) => { const e = r.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top) : -1; }; return { head: y('.dk-head'), lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), exam: y('.hub-exam'), lab: y('.hub-tlab'), stats: y('.dk-stats'), oldTimer: !!r.querySelector('.dk-card.dk-timer'), note: r.querySelector('.ht-note').textContent }; }); })();
+  expect(o.lessons > o.head && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab > o.exam && o.stats > o.lab && !o.oldTimer && /2nd year college/.test(o.note), 'computer: the same top, then the week in numbers: ' + JSON.stringify(o));
+  await D.page.click('.desk-home .ht-dtimer .dk-tgo');
+  await D.page.waitForFunction(() => /Pause/.test(document.querySelector('.desk-home .dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
+  await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
+  const dw = await D.page.evaluate(() => { const f = [...document.querySelectorAll('.labs-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
+  expect(dw.first && dw.mine / dw.other > 1.9, 'computer: the own level first and about twice as wide: ' + JSON.stringify(dw));
+  for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
+  expect(!D.errors.length, 'page errors: ' + D.errors.join('; '));
+  await D.ctx.close();
 });
 
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
@@ -4828,8 +4893,8 @@ test('Lessons follow the student’s level: Nursery or Kindergarten comes first 
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', server: false, lite: 'on', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Grade 3' } } });
     await page.evaluate(() => { try { sessionStorage.setItem('cassie.moreTools', '1'); } catch (e) { /* */ } refreshHub(); });
-    await page.waitForSelector('#home .hub-box[data-hub="lessons"]', { timeout: 8000 });
-    await page.click('#home .hub-box[data-hub="lessons"]');
+    await page.waitForSelector('#home .ht-lessons .ht-go', { timeout: 8000 });
+    await page.click('#home .ht-lessons .ht-go');
     await page.waitForSelector('.lessons-sheet .lesson');
     const got = await page.$$eval('.lessons-sheet .lesson b', (bs) => bs.map((x) => x.textContent));
     expect(JSON.stringify(got) === JSON.stringify(WANT['Grade 3']), 'phone, Grade 3: ' + JSON.stringify(got));
@@ -7992,6 +8057,7 @@ test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a
   });
   const box = (page, sel) => page.$eval(sel, (h) => { const r = h.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; });
   const check = async (page, sel, where, still = false) => {
+    await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); // (the dashboard is taller now: measure it where the pointer will be)
     await page.mouse.move(2, 2); await page.waitForTimeout(80);
     const before = await box(page, sel);
     await page.hover(sel); await page.waitForTimeout(90);
@@ -8032,7 +8098,7 @@ test('every icon moves (computer 1280x800 and phone 390x844): the pointer over a
   // a phone: a tap on a Home box
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
-    const sel = '#home .hub-box[data-hub="lessons"]';
+    const sel = '#home .ht-lessons .ht-go';
     await page.waitForSelector(sel); await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300); // (clear of the tab bar)
     const before = await box(page, sel);
     const r = await page.$eval(sel, (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; });
@@ -8063,7 +8129,7 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     await page.waitForSelector('#home .hub-box'); await page.waitForTimeout(400);
     ok(await glass(page, ['#home .hub-box', '#home .hub-tlab']), '390x844 Home');
     await readable(page, '#home', '390x844 Home');
-    await page.click('#home .hub-box[data-hub="lessons"]'); await page.waitForSelector('.lessons-sheet .lesson');
+    await page.click('#home .ht-lessons .ht-go'); await page.waitForSelector('.lessons-sheet .lesson');
     ok(await glass(page, ['.lessons-sheet .lesson']), '390x844 Lessons');
     await page.click('.lessons-back');
     await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-card'); await page.waitForTimeout(300);
@@ -10337,13 +10403,13 @@ test('phone Home: the hello and the bell with no row of lab previews above Today
       const tl = document.querySelector('#home .hub-tlab').getBoundingClientRect().top;
       const above = [...document.querySelectorAll('#home canvas[data-pv]')].filter((c) => !c.closest('.hub-tlab') && c.getBoundingClientRect().bottom <= tl + 1);
       return { hello: document.querySelector('#home .hub-me').textContent, above: above.length, hero: Math.round(document.querySelector('#home .hub-hero').getBoundingClientRect().height),
-        order: [at('.hub-hero'), at('.hub-tlab'), atH(/^Today$/), atH(/Continue/), at('.hub-boxes'), atH(/Quick actions/)],
+        order: [at('.hub-hero'), at('.home-top'), atH(/^Today$/), atH(/Continue/), at('.hub-boxes'), atH(/Quick actions/)],
         lab: document.querySelector('.hub-tlab b').textContent, want: (LAB_INFO[todayLab()] || [])[0], pv: document.querySelector('.hub-tlab-pv').dataset.preview, today: todayLab(),
         play: document.querySelector('.hub-tlab-go').getBoundingClientRect().width };
     });
     expect(/^(Morning|Afternoon|Evening), Test$/.test(h.hello), 'the hello: ' + h.hello);
     expect(h.above === 0 && h.hero < 120, 'no row of lab previews above Today’s Lab, and the header is just the hello and the bell: ' + JSON.stringify(h));
-    expect(h.order.every((x, i) => x >= 0 && (i === 0 || x > h.order[i - 1])), 'the header, Today’s Lab, Today, Continue, the boxes, Quick actions: ' + JSON.stringify(h.order));
+    expect(h.order.every((x, i) => x >= 0 && (i === 0 || x > h.order[i - 1])), 'the header, the top (Lessons, the timer, Flashcards, the exam plans, Today’s Lab), Today, Continue, the boxes, Quick actions: ' + JSON.stringify(h.order));
     expect(h.lab === h.want && h.pv === h.today && h.play >= 44, 'Today’s Lab is today’s lab with its live preview and a 44px play button: ' + JSON.stringify(h));
     // the previews keep drawing
     const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames);
@@ -10374,7 +10440,7 @@ test('phone Home: the hello and the bell with no row of lab previews above Today
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
     await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home');
-    const d = await page.evaluate(() => ({ strip: !!document.querySelector('#chat-log .hub-tlab, #chat-log canvas[data-pv]'), hello: document.querySelector('.dk-title').textContent }));
+    const d = await page.evaluate(() => ({ strip: [...document.querySelectorAll('#chat-log .hub-tlab, #chat-log canvas[data-pv]')].some((c) => !c.closest('.home-top')), hello: document.querySelector('.dk-title').textContent }));
     expect(!d.strip && d.hello === 'Hi, Test', 'a computer’s Home is the dashboard: ' + JSON.stringify(d));
     await ctx.close();
   }
@@ -10520,7 +10586,7 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-hero');
     expect((phone ? /(Morning|Afternoon|Evening), Test/ : /Hi, welcome back/).test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
     const today = await page.evaluate((h) => { const t = document.querySelector(h + ' .hub-today'), s = getComputedStyle(t); return { n: t.querySelectorAll('.hub-w').length, dir: s.display + ' ' + s.flexDirection, x: s.overflowX, top: [...t.querySelectorAll('.hub-w')].map((w) => Math.round(w.getBoundingClientRect().top)) }; }, hub);
-    expect(today.n === 3 && today.dir === 'flex row' && today.x === 'auto' && new Set(today.top).size === 1, `${size}: Today is one row of three chips that scrolls sideways: ` + JSON.stringify(today));
+    expect(today.n === 1 && today.dir === 'flex row' && await page.locator(hub + ' .home-top .ht-timer').count() === 1 && await page.locator(hub + ' .home-top .ht-cards').count() === 1, `${size}: Today keeps the streak; Flashcards and the timer are up top: ` + JSON.stringify(today));
     // the bell: today's reminders, each going where it says
     await page.click(hub + ' .hub-bell');
     await page.waitForTimeout(300);
@@ -10530,7 +10596,7 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     // every kind of Home button still does its job
     const jobs = [
       ['#home-ask', () => page.waitForFunction(() => document.activeElement === document.getElementById('prompt-input'), null, { timeout: 4000 }).then(() => true, () => false)],
-      ['.hub-w[data-hub="cards"]', () => page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
+      ['.ht-cards .ht-go', () => page.waitForSelector('.fc:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
       ['.hub-timer', () => page.evaluate(() => /pause/i.test(document.getElementById('pomo-toggle').textContent))],
       ['.hub-w[data-hub="streak"]', () => page.waitForSelector('#memory-panel:not([hidden])', { timeout: 4000 }).then(() => true, () => false)],
       ['.hub-chat[data-hub^="chat:"]', () => page.waitForFunction(() => /osmosis/i.test(document.getElementById('chat-log').innerText), null, { timeout: 4000 }).then(() => true, () => false)],

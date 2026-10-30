@@ -2036,15 +2036,11 @@ const LAB_INFO = { pendulum: ['Pendulum', 'Physics', 10], ph: ['pH mixer', 'Chem
   'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10],
   solids: ['3D shapes', 'Maths', 8], rocket: ['Rocket workshop', 'Physics', 10], solar: ['Planets today', 'Space', 8], atlas: ['World atlas', 'Geography', 10],
   'trace-letters': ['Trace letters', 'For little ones', 5], 'trace-numbers': ['Trace numbers', 'For little ones', 5], count: ['Count with me', 'For little ones', 5], shapes: ['Shapes and colours', 'For little ones', 5] };
+const LESSONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>';
+// Home's other tools (Lessons, the timer and Flashcards are in homeTop(); Learn and Games are in the tab bar and the sidebar)
 const HUB_BOXES = [
-  ['lessons', 'Lessons', 'Made for your level', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>'],
-  ['lab', 'Learn', 'Simulations to play with', HUB_ICON.lab],
-  ['games', 'Games', 'Puzzles and quick games', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4M15.5 11.5h.01M18 13.5h.01"/></svg>'],
-  ['today', 'Today’s lab', 'A new lab every day', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M10 14.5l1.5 1.5 3-3"/></svg>'],
-  ['cards', 'Flashcards', 'Review and make cards', HUB_ICON.cards],
   ['research', 'Research', 'Real papers for a thesis', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5M8 10.5h5M10.5 8v5"/></svg>'],
   ['quiz', 'Quiz me', 'A practice quiz on anything', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>'],
-  ['timer', 'Focus timer', 'Study in focused rounds', HUB_ICON.timer],
   ['room', 'Study room', 'Study with friends', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M14.5 14.3c3 .1 5.5 1.8 5.5 4.7"/></svg>'],
   ['board', 'Board', 'Draw, sketch or graph', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21l4-4 4 4M7 13l3-3 2.5 2.5L17 8"/></svg>'],
   ['talk', 'Talk', 'A voice chat with Cassie', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>'],
@@ -2119,7 +2115,7 @@ document.addEventListener('pointerdown', (e) => {
 // it touches) or keyboard focus. Only the icon moves, never the words; each motion fits what it draws, and
 // its lines draw themselves in. Done here, not with CSS :hover, so it works whatever the browser says.
 // Reduce Motion or Lite mode: a short fade only. (The tab bar has its own, in native.js.)
-const IC_HOST = '.hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
+const IC_HOST = '.ht-go, .hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
 const IC_MOTIONS = [['spin', /setting|gear|refresh|sync|memory|redo|again|light mode|dark mode/], ['nod', /\byou\b|profile|account|person|sign in|edit/], ['bounce', /home|bell|remind|notif|streak|today|timer|focus/],
   ['wiggle', /card|note|flash|plan|calendar|deck|board|draw|write|essay/], ['tilt', /lab|learn|game|quiz|simulat|\b3d\b|science|puzzle|test/], ['slide', /next|open|continue|arrow|›|research|search/],
   ['pop', /chat|ask|talk|message|new|add|help|\+/]];
@@ -2337,9 +2333,53 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=209').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=210').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
+}
+// Home's top, on the phone and the computer: Lessons for the student's level (the note says which, from the first
+// questions), the focus timer (its minutes edited right here) and Flashcards; then the exam plans, then Today's Lab
+const TIMER_LIMITS = { focus: [5, 90], brk: [1, 30] };
+function homeTop({ desk = false } = {}) {
+  const top = document.createElement('section');
+  top.className = 'home-top'; top.setAttribute('aria-label', 'Start here');
+  const due = window.CassieCards ? window.CassieCards.dueCount() : 0, all = window.CassieCards ? window.CassieCards.count() : 0;
+  // the computer's timer is the dashboard's (renderDeskTimer keeps it and the top bar's pill right), a phone's is Home's (renderHubTimer)
+  const timer = desk
+    ? `<div class="ht-go ht-show"><i>${HUB_ICON.timer}</i><b class="dk-time" aria-live="off">25:00</b><small class="dk-mode">Focus</small><span class="ht-tbtns"><button type="button" class="dk-tstop" data-dk="tstop" aria-label="Stop and reset the timer">${DESK_ICON.stop}</button><button type="button" class="dk-tgo" data-dk="tgo" aria-label="Start the focus timer">${DESK_ICON.play}</button></span></div>`
+    : `<button type="button" class="ht-go hub-timer" data-hub="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>`;
+  top.innerHTML = `<div class="ht-row">
+      <div class="ht-tile ht-lessons"><button type="button" class="ht-go" data-ht="lessons"><i>${LESSONS_ICON}</i><b>Lessons</b><small>Made for your level</small></button></div>
+      <div class="ht-tile ht-timer${desk ? ' ht-dtimer' : ''}">${timer}
+        <button type="button" class="ht-edit" aria-expanded="false" aria-controls="ht-set" aria-label="Edit the timer minutes">Edit</button></div>
+      <div class="ht-tile ht-cards"><button type="button" class="ht-go" data-ht="cards"><i>${HUB_ICON.cards}</i><b>Flashcards</b><small></small></button></div>
+    </div>
+    <form class="ht-set" id="ht-set" aria-label="Timer minutes" hidden>
+      <label>Focus <input type="number" name="focus" min="${TIMER_LIMITS.focus[0]}" max="${TIMER_LIMITS.focus[1]}" inputmode="numeric" required> min</label>
+      <label>Break <input type="number" name="brk" min="${TIMER_LIMITS.brk[0]}" max="${TIMER_LIMITS.brk[1]}" inputmode="numeric" required> min</label>
+      <button type="submit" class="ht-save">Save</button>
+    </form>
+    <p class="ht-note"></p>`;
+  const grade = (state.profile && state.profile.grade) || '';
+  top.querySelector('.ht-note').textContent = grade ? `Organized for your level: ${grade}, from your first questions. Change it in Settings, You.` : 'Pick your level in Settings, You, and your lessons follow it.';
+  top.querySelector('.ht-cards small').textContent = due ? `${due} ${due === 1 ? 'card' : 'cards'} due` : all ? 'All done for today' : 'Review and make cards';
+  // the minutes, edited right here: the same times the timer panel uses (state.pomo)
+  const edit = top.querySelector('.ht-edit'), form = top.querySelector('.ht-set');
+  edit.addEventListener('click', () => {
+    const open = form.hidden; form.hidden = !open; edit.setAttribute('aria-expanded', String(open));
+    if (open) { const now = Object.assign({ focus: 25, brk: 5 }, state.pomo || {}); form.focus.value = now.focus; form.brk.value = now.brk; form.focus.focus(); }
+  });
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const clamp = (k) => Math.min(TIMER_LIMITS[k][1], Math.max(TIMER_LIMITS[k][0], Math.round(+form[k].value || 0)));
+    if (window.CassiePomo) window.CassiePomo.set({ focus: clamp('focus'), brk: clamp('brk') });
+    form.hidden = true; edit.setAttribute('aria-expanded', 'false'); edit.focus();
+    renderHubTimer(); renderDeskTimer();
+  });
+  top.addEventListener('click', (e) => { const b = e.target.closest('[data-ht]'); if (!b) return; if (b.dataset.ht === 'lessons') openLessons(); else hubAct('cards'); });
+  top.append(examSection(), hubTodayLab());
+  requestAnimationFrame(() => hubPreviews(top));
+  return top;
 }
 function buildHub({ ideas = false, phone = false } = {}) {
   const p = state.profile || {};
@@ -2362,9 +2402,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
     const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
     el.innerHTML = `<button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
       <h2 class="hub-h">Today</h2>
-      <div class="hub-today">
-        <button type="button" class="hub-w" data-hub="cards"><i>${HUB_ICON.cards}</i><b>${due}</b><span>${due === 1 ? 'card due' : 'cards due'}</span><em>${due ? 'Review now' : cardsAll ? 'All done' : 'Make cards'}</em></button>
-        <button type="button" class="hub-w hub-timer" data-hub="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>
+      <div class="hub-today hub-today-one">
         <button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
       </div>
       <h2 class="hub-h">Continue</h2>
@@ -2372,7 +2410,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
       <h2 class="hub-h">Quick actions</h2>
       <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
     el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
-    el.querySelector('.hub-today').after(examSection(), weekCard()); // (the exam plans, then the week, under Today)
+    el.querySelector('.hub-today').after(weekCard()); // (the week, under Today; the exam plans are at the top)
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.hub = 'chat:' + c.id;
@@ -2404,16 +2442,15 @@ function buildHub({ ideas = false, phone = false } = {}) {
     boxes.insertAdjacentHTML('beforeend', allBoxes.slice(4).map(boxHtml).join(''));
     const next = boxes.querySelectorAll('.hub-box')[4]; if (next) next.focus({ preventScroll: true });
   });
-  if (phone) { // a phone: the header, Today's Lab, then (back again) Today, Continue, the boxes and Quick actions
-    el.prepend(hero, remind, hubTodayLab());
+  if (phone) { // a phone: the header, the top (Lessons, timer, Flashcards, exams, Today's Lab), then Today, Continue, the boxes and Quick actions
+    el.prepend(hero, remind, homeTop());
     const quick = [...el.querySelectorAll('.hub-h')].find((h2) => /Quick actions/.test(h2.textContent));
     if (quick) quick.before(boxes); else el.append(boxes);
-  } else el.prepend(hero, remind, boxes);
+  } else el.prepend(hero, remind, homeTop(), boxes);
   const bell = hero.querySelector('.hub-bell');
   bell.setAttribute('aria-expanded', String(hubRemindOpen));
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
-  if (phone) requestAnimationFrame(() => hubPreviews(el));
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
@@ -2628,8 +2665,8 @@ function deskHome() {
       <section class="dk-card dk-plans" aria-labelledby="dk-plans-h"><div class="dk-card-head"><h2 id="dk-plans-h">My exam plans</h2><button type="button" class="dk-pill" data-dk="newplan">${DESK_ICON.plus}New plan</button></div><ul class="dk-list"></ul></section>
       <section class="dk-card dk-chats" aria-labelledby="dk-chats-h"><div class="dk-card-head"><h2 id="dk-chats-h">Recent chats</h2>${chats.length ? '<button type="button" class="dk-pill" data-dk="chats">See all</button>' : ''}</div><ul class="dk-list"></ul></section>
       <section class="dk-card dk-ready" aria-labelledby="dk-ready-h"><h2 id="dk-ready-h">Exam readiness</h2></section>
-      <section class="dk-card dk-timer" aria-labelledby="dk-timer-h"><h2 id="dk-timer-h">Focus timer</h2><b class="dk-time" aria-live="off">25:00</b><small class="dk-mode">Focus</small><div class="dk-tbtns"><button type="button" class="dk-tgo" data-dk="tgo" aria-label="Start the focus timer">${DESK_ICON.play}</button><button type="button" class="dk-tstop" data-dk="tstop" aria-label="Stop and reset the timer">${DESK_ICON.stop}</button></div></section>
     </div>`;
+  el.querySelector('.dk-head').after(homeTop({ desk: true }));
   el.querySelector('.dk-title').textContent = name ? `Hi, ${name}` : 'Hi there';
   el.querySelector('.dk-ready-note').textContent = ex ? `${ex.name}, ${dayGap(phDay(), ex.date) === 0 ? 'today' : `in ${dayGap(phDay(), ex.date)} ${dayGap(phDay(), ex.date) === 1 ? 'day' : 'days'}`}` : 'Plan an exam to see it';
   // the chart: a rounded bar a day, today marked, days with nothing striped
@@ -2697,7 +2734,7 @@ function renderDeskTimer() {
   const time = (document.getElementById('pomo-time') || {}).textContent || '25:00', mode = (document.getElementById('pomo-mode') || {}).textContent || 'Focus';
   const on = /pause/i.test((document.getElementById('pomo-toggle') || {}).textContent || '');
   const put = (el, t) => { if (el && el.textContent !== t) el.textContent = t; }; // (only real changes: no needless redraws)
-  document.querySelectorAll('.dk-timer').forEach((c) => {
+  document.querySelectorAll('.dk-timer, .ht-dtimer').forEach((c) => {
     put(c.querySelector('.dk-time'), time);
     put(c.querySelector('.dk-mode'), mode);
     const go = c.querySelector('.dk-tgo'), label = on ? 'Pause the focus timer' : 'Start the focus timer';
@@ -6616,7 +6653,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=209');
+      exploreMod = await import('./explore/cell3d.js?v=210');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6666,7 +6703,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=209');
+      labsMod = await import('./labs/labs.js?v=210');
       islandRest();
     }
     labsMod.open({
@@ -7333,6 +7370,7 @@ if (memoryPanel) {
     fillInputs();
     render();
   }
+  window.CassiePomo = { set: applyTimes }; // (Home's timer tile edits the same minutes)
   function openSet(open) {
     setPanel.hidden = !open;
     editBtn.setAttribute('aria-expanded', String(open));
@@ -8506,10 +8544,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=209').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=210').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=209', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=210', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
