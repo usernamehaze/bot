@@ -10,6 +10,7 @@ html, :where(body, body *) { touch-action: manipulation; }
 }
 
 :root {
+  --ts-off: var(--surface-2); --ts-edge: var(--muted); --ts-edge-hover: var(--text); --ts-on: var(--text); --ts-knob: var(--surface); --ts-ink: var(--text); /* the Dark mode switch */
   /* Cassie's colours: Blush & Sage. Warm cream paper, Cassie's blush for actions, a calm sage for
      second actions. A boy's profile flips them (sage leads, blush second): html[data-pal="sage"].
      A colour picked in Appearance (--accent) still wins over both. Every text pair reaches 4.5:1. */
@@ -223,7 +224,20 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
   cursor: pointer;
 }
 .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
-.theme-flip { width: 44px; height: 44px; } .theme-flip svg { fill: none; } /* (the sun and moon: light or dark at a tap) */
+/* the Dark mode switch: a track with a knob that slides and shows a sun or a moon (app.js themeSwitch) */
+.theme-switch { display: inline-grid; place-items: center; min-width: 56px; min-height: 44px; padding: 0 2px; margin: 0; border: 0; border-radius: 999px; background: none; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; flex: none; }
+.ts-track { position: relative; display: block; width: 52px; height: 30px; border-radius: 999px; background: var(--ts-off); box-shadow: inset 0 0 0 1.5px var(--ts-edge); transition: background-color .25s ease, box-shadow .25s ease; }
+.ts-knob { position: absolute; top: 3px; left: 3px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ts-knob); color: var(--ts-ink); box-shadow: 0 1px 3px rgba(var(--shade-rgb), .3); transition: transform .32s cubic-bezier(.34, 1.4, .64, 1); }
+.ts-knob svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; }
+.theme-switch[aria-checked="true"] .ts-track { background: var(--ts-on); box-shadow: inset 0 0 0 1.5px var(--ts-on); }
+.theme-switch[aria-checked="true"] .ts-knob { transform: translateX(22px); }
+.theme-switch:hover .ts-track { box-shadow: inset 0 0 0 1.5px var(--ts-edge-hover); }
+.theme-switch[aria-checked="true"]:hover .ts-track { box-shadow: inset 0 0 0 1.5px var(--ts-on); }
+.theme-switch:focus { outline: none; }
+.theme-switch:focus-visible .ts-track { outline: 2px solid var(--focus); outline-offset: 2px; }
+.set-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.set-switch-l { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ts-knob, .ts-track { transition: none; } }
 .icon-btn:active { background: var(--border); }
 .icon-btn.primary { background: var(--primary); color: var(--on-primary); }
 .icon-btn.primary:active { background: var(--primary-dark); }
@@ -2892,8 +2906,8 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   .sidebar .side-search, #side-search-btn, #new-chat-btn, .sidebar .sidebar-section.rail-hide, #chat-list, .side-hl, .sidebar-foot { display: none !important; }
   #side-apps .side-tool, #side-general .side-tool { width: 100%; height: auto; min-height: 40px; justify-content: flex-start; border-radius: 10px; }
   #side-apps .side-tool svg, #side-general .side-tool svg { width: 18px; height: 18px; }
-  #side-apps #labs-btn svg, #side-general #memory-btn svg, #side-general #settings-btn svg { fill: currentColor; stroke: none; }
-  #side-apps #board-btn svg, #side-apps #games-btn svg { fill: none; stroke: currentColor; }
+  #side-general #settings-btn svg { fill: currentColor; stroke: none; }
+  #side-apps #board-btn svg, #side-apps #games-btn svg, #side-apps #labs-btn svg, #side-general #memory-btn svg { fill: none; stroke: currentColor; }
   .side-tool .app-label { overflow: hidden; text-overflow: ellipsis; }
   #side-general .memory-dot { position: static; margin-left: auto; }
   body:not(.side-open) #side-apps .side-tool, body:not(.side-open) #side-general .side-tool { justify-content: center; padding: 8px 0; }
@@ -3037,74 +3051,214 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   html.native .set-head { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: var(--border); }
 }
 
-/* every icon moves like the recording (app.js icGo sets data-ia and ia-go): one short move that fits what it
-   draws, then it rests exactly as drawn (no fill-mode). Only the svg or one part of it moves. */
-svg.ia-go { transform-origin: 50% 50%; animation: .45s cubic-bezier(.34, 1.56, .64, 1); }
-svg.ia-go[data-ia="ring"] { transform-origin: 50% 10%; animation: ia-ring .6s ease-in-out; }
-svg.ia-go[data-ia="close"], svg.ia-go[data-ia="plus"] { animation-name: ia-quarter; animation-duration: .5s; }
-svg.ia-go[data-ia="gear"] { animation-name: ia-tooth; animation-duration: .55s; } /* (one tooth of six: it rests as drawn) */
-svg.ia-go[data-ia="turn"] { animation: ia-turn .6s cubic-bezier(.3, 1.2, .6, 1); }
-svg.ia-go[data-ia="fly"] { animation: ia-fly .55s ease-in-out; }
-svg.ia-go[data-ia="nudge-l"] { animation-name: ia-nudge-l; }
-svg.ia-go[data-ia="nudge-r"] { animation-name: ia-nudge-r; }
-svg.ia-go[data-ia="nudge-ur"] { animation-name: ia-nudge-ur; }
-svg.ia-go[data-ia="hop-l"] { animation-name: ia-hop-l; }
-svg.ia-go[data-ia="hop-u"] { animation-name: ia-hop-u; }
-svg.ia-go[data-ia="moon"] { animation: ia-moon .5s ease-in-out; }
-svg.ia-go[data-ia="lens"] { animation-name: ia-lens; }
-svg.ia-go[data-ia="clip"] { animation: ia-clip .5s ease-in-out; }
-svg.ia-go[data-ia="search"] { transform-origin: 46% 46%; animation: ia-search .5s ease-in-out; }
-svg.ia-go[data-ia="home"] { transform-origin: 50% 100%; animation-name: ia-home; }
-svg.ia-go[data-ia="pulse"] { animation-name: ia-pulse; }
-svg.ia-go[data-ia="book"] { animation: ia-book .5s ease-in-out; }
-svg.ia-go[data-ia="draw"] { animation: ia-write .5s ease-in-out; }
-svg.ia-go[data-ia="swirl"] { transform-origin: 50% 90%; animation: ia-swirl .6s ease-in-out; }
-svg.ia-go[data-ia="wiggle"] { animation: ia-wiggle .5s ease-in-out; }
-svg.ia-go[data-ia="pop"] { animation-name: ia-pop; animation-duration: .4s; }
-svg.ia-go[data-ia="bubble"] { transform-origin: 30% 90%; animation-name: ia-bubble; }
-svg.ia-go[data-ia="nod"] { transform-origin: 50% 100%; animation: ia-nod .5s ease-in-out; }
-svg.ia-go[data-ia="mic"], svg.ia-go[data-ia="clock"], svg.ia-go[data-ia="cards"], svg.ia-go[data-ia="sun"], svg.ia-go[data-ia="menu"], svg.ia-go[data-ia="tune"] { animation: none; } /* (a part moves) */
-svg .ia-parts, svg.ia-go .ia-rest { display: none; } /* (at rest the icon is its own drawing; split into parts only while it moves) */
+/* every icon moves like the recording (docs/icon-motions.md; app.js icGo sets data-ia and ia-go). At rest the
+   icon is its own drawing (ia-rest); while it moves, the same lines split into parts (ia-p1, ia-p2…, plus any
+   extras ia-x1…) and only the parts that move in the recording move. Nothing has a fill-mode: it ends as drawn. */
+svg .ia-parts, svg.ia-go .ia-rest { display: none; }
 svg.ia-go .ia-parts { display: inline; }
-svg.ia-go[data-ia="draw"] [pathLength] { stroke-dasharray: 1; animation: ia-draw .5s ease-out; }
-svg.ia-go[data-ia="mic"] .ia-body { animation: ia-lift .45s cubic-bezier(.34, 1.56, .64, 1); }
-svg.ia-go[data-ia="clock"] .ia-hand { transform-box: view-box; transform-origin: 12px 13px; animation: ia-turn .65s cubic-bezier(.3, 1.1, .6, 1); }
-svg.ia-go[data-ia="cards"] .ia-back { transform-box: view-box; transform-origin: 14px 9px; animation: ia-back .5s ease-in-out; }
-svg.ia-go[data-ia="sun"] path { transform-box: view-box; transform-origin: 12px 12px; animation: ia-rays .55s cubic-bezier(.34, 1.4, .64, 1); }
-svg.ia-go[data-ia="sun"] circle { transform-box: fill-box; transform-origin: 50% 50%; animation: ia-pulse .55s cubic-bezier(.34, 1.56, .64, 1); }
-svg.ia-go[data-ia="menu"] rect { transform-box: fill-box; animation: ia-line .4s cubic-bezier(.34, 1.56, .64, 1); }
-svg.ia-go[data-ia="menu"] rect:nth-child(2) { animation-delay: 40ms; }
-svg.ia-go[data-ia="menu"] rect:nth-child(3) { animation-delay: 80ms; }
-svg.ia-go[data-ia="tune"] circle { animation: ia-nudge-l .5s ease-in-out; }
-svg.ia-go[data-ia="tune"] circle:last-child { animation-name: ia-nudge-r; }
-@keyframes ia-ring { 20% { transform: rotate(14deg); } 40% { transform: rotate(-10deg); } 60% { transform: rotate(6deg); } 80% { transform: rotate(-3deg); } }
-@keyframes ia-quarter { 70% { transform: rotate(100deg); } 100% { transform: rotate(90deg); } }
-@keyframes ia-tooth { 70% { transform: rotate(68deg); } 100% { transform: rotate(60deg); } }
-@keyframes ia-turn { to { transform: rotate(360deg); } }
-@keyframes ia-fly { 40% { transform: translate(9px, -9px); opacity: 0; } 41% { transform: translate(-9px, 9px); opacity: 0; } }
-@keyframes ia-nudge-l { 40% { transform: translateX(-3px); } }
-@keyframes ia-nudge-r { 40% { transform: translateX(3px); } }
-@keyframes ia-nudge-ur { 40% { transform: translate(3px, -3px); } }
-@keyframes ia-hop-l { 35% { transform: translateX(-2px); } 70% { transform: translateX(.5px); } }
-@keyframes ia-hop-u { 35% { transform: translateY(-2px); } 70% { transform: translateY(.5px); } }
-@keyframes ia-moon { 40% { transform: rotate(-15deg); } 75% { transform: rotate(4deg); } }
-@keyframes ia-lens { 30% { transform: scale(.9); } 65% { transform: scale(1.08); } }
-@keyframes ia-clip { 35% { transform: rotate(-12deg); } 70% { transform: rotate(4deg); } }
-@keyframes ia-search { 25% { transform: rotate(-10deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } }
-@keyframes ia-home { 35% { transform: translateY(-2px) scaleY(1.04); } 70% { transform: translateY(.5px) scaleY(.97); } }
-@keyframes ia-pulse { 40% { transform: scale(1.18); } }
-@keyframes ia-book { 40% { transform: translateX(2px) rotate(-6deg); } }
-@keyframes ia-write { 40% { transform: rotate(-6deg) translateY(-1px); } }
+svg.ia-go .ia-parts > * { transform-box: fill-box; transform-origin: 50% 50%; }
+svg .ia-x { opacity: 0; }
+svg .ia-dot { fill: currentColor; stroke: none; }
+svg.ic-line:not(#x) { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } /* (Cassie's line icons, whatever the button styles say) */
+svg.ia-go[data-ia="bell"] .ia-p1 { transform-box: view-box; transform-origin: 12px 4px; animation: ia-ring .9s ease-in-out; }
+svg.ia-go[data-ia="bell"] .ia-p2 { transform-box: view-box; transform-origin: 12px 4px; animation: ia-ring .9s ease-in-out 60ms, ia-clapper .9s ease-in-out; }
+svg.ia-go[data-ia="chat"] .ia-x1 { animation: ia-dot .9s ease-in-out; }
+svg.ia-go[data-ia="chat"] .ia-x2 { animation: ia-dot .9s ease-in-out 90ms; }
+svg.ia-go[data-ia="chat"] .ia-x3 { animation: ia-dot .9s ease-in-out 180ms; }
+svg.ia-go[data-ia="ask"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .45s ease-out; }
+svg.ia-go[data-ia="ask"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .25s backwards; }
+svg.ia-go[data-ia="checkbox"] .ia-p2 { stroke-dasharray: 1; animation: ia-redraw .8s ease-in-out; }
+svg.ia-go[data-ia="check"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="lessons"] .ia-p1 { transform-box: view-box; transform-origin: 11px 12px; animation: ia-fold .8s ease-in-out; }
+svg.ia-go[data-ia="lessons"] .ia-p2 { transform-box: view-box; transform-origin: 13px 12px; animation: ia-fold .8s ease-in-out 60ms; }
+svg.ia-go[data-ia="book"] .ia-p1 { transform-box: view-box; transform-origin: 5px 12px; animation: ia-cover .8s ease-in-out; }
+svg.ia-go[data-ia="book"] .ia-p3 { transform-box: view-box; transform-origin: 5px 12px; animation: ia-cover .8s ease-in-out; }
+svg.ia-go[data-ia="calendar"] .ia-p3 { --dy: -2px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="calendar"] .ia-p4 { --dy: -2px; animation: ia-move .6s ease-in-out 80ms; }
+svg.ia-go[data-ia="calendar"] .ia-p2 { --dy: 3px; animation: ia-move .7s ease-in-out 120ms; }
+svg.ia-go[data-ia="trend"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .7s ease-out; }
+svg.ia-go[data-ia="chev-d"] .ia-p1 { --dx: 0px; --dy: 7px; animation: ia-out .75s ease-in-out; }
+svg.ia-go[data-ia="chev-l"] .ia-p1 { --dx: -7px; --dy: 0px; animation: ia-out .75s ease-in-out; }
+svg.ia-go[data-ia="chev-r"] .ia-p1 { --dx: 7px; --dy: 0px; animation: ia-out .75s ease-in-out; }
+svg.ia-go[data-ia="arrow-ur"] .ia-p1, svg.ia-go[data-ia="arrow-ur"] .ia-p2 { --dx: 7px; --dy: -7px; animation: ia-out .75s ease-in-out; }
+svg.ia-go[data-ia="flask"] .ia-p3 { transform-box: view-box; transform-origin: 12px 14px; animation: ia-slosh .9s ease-in-out; }
+svg.ia-go[data-ia="flask"] .ia-p1 { --dy: -1.5px; animation: ia-move .5s ease-in-out .15s; }
+svg.ia-go[data-ia="games"] .ia-p2, svg.ia-go[data-ia="games"] .ia-p3 { animation: ia-press .45s ease-in-out; }
+svg.ia-go[data-ia="games"] .ia-p4 { animation: ia-blink .45s ease-in-out .2s; }
+svg.ia-go[data-ia="games"] .ia-p5 { animation: ia-blink .45s ease-in-out .32s; }
+svg.ia-go[data-ia="board"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .7s ease-out; }
+svg.ia-go[data-ia="gear"] { animation: ia-tooth .7s cubic-bezier(.34, 1.4, .64, 1); }
+svg.ia-go[data-ia="brain"] .ia-p1 { --dx: -1.5px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="brain"] .ia-p2 { --dx: 1.5px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="brain"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .5s ease-out .3s backwards; }
+svg.ia-go[data-ia="help"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="help"] .ia-p3 { animation: ia-popin .35s ease-out .5s backwards; }
+svg.ia-go[data-ia="mic"] .ia-p1 { fill: currentColor; animation: ia-fill .8s ease-in-out, ia-lift .8s ease-in-out; }
+svg.ia-go[data-ia="search"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .7s ease-out; }
+svg.ia-go[data-ia="research"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .7s ease-out; }
+svg.ia-go[data-ia="research"] .ia-p3, svg.ia-go[data-ia="research"] .ia-p4 { animation: ia-quarter .6s cubic-bezier(.34, 1.56, .64, 1) .2s; }
+svg.ia-go[data-ia="moon"] .ia-p1 { animation: ia-rock .8s ease-in-out; }
+svg.ia-go[data-ia="moon"] .ia-x1 { stroke-dasharray: 1; animation: ia-rays .8s ease-in-out; }
+svg.ia-go[data-ia="sun"] .ia-p1 { animation: ia-pulse .7s ease-in-out; }
+svg.ia-go[data-ia="sun"] .ia-p1 ~ * { transform-box: view-box; transform-origin: 12px 12px; animation: ia-rays45 .7s cubic-bezier(.34, 1.4, .64, 1); }
+svg.ia-go[data-ia="plus"] .ia-p1, svg.ia-go[data-ia="plus"] .ia-p2 { transform-box: view-box; transform-origin: 12px 12px; animation: ia-quarter .6s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="upload"] .ia-p1, svg.ia-go[data-ia="upload"] .ia-p2 { --dy: -3px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="upload"] .ia-p3 { --dy: 1px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="download"] .ia-p1, svg.ia-go[data-ia="download"] .ia-p2 { --dy: 3px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="download"] .ia-p3 { --dy: 1px; animation: ia-move .6s ease-in-out .1s; }
+svg.ia-go[data-ia="clock"] .ia-p2 { transform-box: view-box; transform-origin: 12px 13px; animation: ia-spin .9s ease-in-out; }
+svg.ia-go[data-ia="clock"] .ia-p3 { --dy: 1px; animation: ia-move .3s ease-in-out; }
+svg.ia-go[data-ia="cards"] .ia-p2 { --dx: -2px; --dy: 2px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="play"] .ia-p1 { animation: ia-morph-out .8s ease-in-out; }
+svg.ia-go[data-ia="play"] .ia-x1, svg.ia-go[data-ia="play"] .ia-x2 { animation: ia-morph-in .8s ease-in-out; }
+svg.ia-go[data-ia="pause"] .ia-p1, svg.ia-go[data-ia="pause"] .ia-p2 { animation: ia-morph-out .8s ease-in-out; }
+svg.ia-go[data-ia="pause"] .ia-x1 { animation: ia-morph-in .8s ease-in-out; }
+svg.ia-go[data-ia="stop"] .ia-p1 { animation: ia-quarter .6s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="person"] .ia-p1 { --dy: -1.5px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="person"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="cap"] .ia-p1 { transform-box: view-box; transform-origin: 12px 9px; animation: ia-toss .8s ease-in-out; }
+svg.ia-go[data-ia="cap"] .ia-p3 { transform-box: view-box; transform-origin: 22px 9px; animation: ia-tassel .8s ease-in-out .1s; }
+svg.ia-go[data-ia="bars"] .ia-p1 { animation: ia-grow .7s ease-in-out; }
+svg.ia-go[data-ia="bars"] .ia-p2 { animation: ia-grow .7s ease-in-out 70ms; }
+svg.ia-go[data-ia="bars"] .ia-p3 { animation: ia-grow .7s ease-in-out 140ms; }
+svg.ia-go[data-ia="bars"] .ia-p4 { animation: ia-grow .7s ease-in-out 210ms; }
+svg.ia-go[data-ia="bars"] .ia-p5 { animation: ia-grow .7s ease-in-out 280ms; }
+svg.ia-go[data-ia="lock"] .ia-p2 { --dy: -2.5px; animation: ia-hold .8s ease-in-out; }
+svg.ia-go[data-ia="star"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .7s ease-out, ia-pulse .7s ease-in-out; }
+svg.ia-go[data-ia="pointer"] { transform-origin: 25% 10%; animation: ia-point .7s ease-in-out; }
+svg.ia-go[data-ia="sparkle"] .ia-p1 { animation: ia-twinkle .7s ease-in-out; }
+svg.ia-go[data-ia="sparkle"] .ia-x1 { animation: ia-spark .7s ease-in-out .1s; }
+svg.ia-go[data-ia="sparkle"] .ia-x2 { animation: ia-spark .7s ease-in-out .25s; }
+svg.ia-go[data-ia="tune"] .ia-p5 { --dx: -5px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="tune"] .ia-p6 { --dx: 5px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="people"] .ia-p1 { --dy: -2px; animation: ia-move .55s ease-in-out; }
+svg.ia-go[data-ia="people"] .ia-p2 { --dy: -2px; animation: ia-move .55s ease-in-out .15s; }
+svg.ia-go[data-ia="home"] .ia-x1 { animation: ia-echo .7s ease-out; }
+svg.ia-go[data-ia="flame"] .ia-p1 { stroke-dasharray: 1; transform-origin: 50% 100%; animation: ia-draw .6s ease-out, ia-flicker .8s ease-in-out; }
+svg.ia-go[data-ia="heart"] { animation: ia-beat .9s ease-in-out; }
+svg.ia-go[data-ia="bulb"] .ia-p1 { fill: currentColor; animation: ia-fill .8s ease-in-out; }
+svg.ia-go[data-ia="bulb"] .ia-x1 { stroke-dasharray: 1; animation: ia-rays .8s ease-in-out; }
+svg.ia-go[data-ia="pencil"] .ia-p1, svg.ia-go[data-ia="pencil"] .ia-p2 { transform-box: view-box; transform-origin: 4px 20px; animation: ia-write .9s ease-in-out; }
+svg.ia-go[data-ia="pencil"] .ia-x1 { stroke-dasharray: 1; animation: ia-underline .9s ease-out; }
+svg.ia-go[data-ia="list"] .ia-p1 { --dx: 3px; animation: ia-move .5s ease-in-out; }
+svg.ia-go[data-ia="list"] .ia-p2 { --dx: 3px; animation: ia-move .5s ease-in-out 80ms; }
+svg.ia-go[data-ia="list"] .ia-p3 { --dx: 3px; animation: ia-move .5s ease-in-out 160ms; }
+svg.ia-go[data-ia="doc"] .ia-p3 { stroke-dasharray: 1; animation: ia-redraw .7s ease-in-out; }
+svg.ia-go[data-ia="doc"] .ia-p4 { stroke-dasharray: 1; animation: ia-redraw .7s ease-in-out .1s; }
+svg.ia-go[data-ia="cube"] .ia-p2 { --dy: -2px; animation: ia-move .6s ease-in-out; }
+svg.ia-go[data-ia="cube"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .6s ease-out .1s backwards; }
+svg.ia-go[data-ia="clipboard"] .ia-p1 { transform-origin: 50% 100%; animation: ia-squash .7s ease-in-out; }
+svg.ia-go[data-ia="clipboard"] .ia-p2 { --dy: -2px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="clipboard"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .2s backwards; }
+svg.ia-go[data-ia="clipboard"] .ia-p4 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .3s backwards; }
+svg.ia-go[data-ia="clipboard"] .ia-p5 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .4s backwards; }
+svg.ia-go[data-ia="clip"] .ia-p1 { stroke-dasharray: 1; animation: ia-redraw .9s ease-in-out; }
+svg.ia-go[data-ia="send"] { animation: ia-fly .7s ease-in-out; }
+svg.ia-go[data-ia="camera"] .ia-p2 { animation: ia-zoom .6s ease-in-out; }
+svg.ia-go[data-ia="camera"] .ia-x1 { animation: ia-flash .6s ease-in-out; }
+svg.ia-go[data-ia="headphones"] .ia-p1 { --dy: -1.5px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="headphones"] .ia-p2 { animation: ia-popin .35s ease-in-out; }
+svg.ia-go[data-ia="headphones"] .ia-p3 { animation: ia-popin .35s ease-in-out .35s; }
+svg.ia-go[data-ia="menu"] .ia-p1 { animation: ia-x-top .8s ease-in-out; }
+svg.ia-go[data-ia="menu"] .ia-p2 { animation: ia-x-mid .8s ease-in-out; }
+svg.ia-go[data-ia="menu"] .ia-p3 { animation: ia-x-bot .8s ease-in-out; }
+svg.ia-go[data-ia="close"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .4s ease-out; }
+svg.ia-go[data-ia="close"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .2s backwards; }
+svg.ia-go[data-ia="hand"] .ia-p1 { --dy: -1.5px; animation: ia-move .5s ease-in-out; }
+svg.ia-go[data-ia="hand"] .ia-p2 { --dy: -1.5px; animation: ia-move .5s ease-in-out .1s; }
+svg.ia-go[data-ia="hand"] .ia-p3 { --dy: -1px; animation: ia-move .5s ease-in-out .2s; }
+svg.ia-go[data-ia="pen"] .ia-p1, svg.ia-go[data-ia="pen"] .ia-p2 { transform-box: view-box; transform-origin: 4px 20px; animation: ia-write .9s ease-in-out; }
+svg.ia-go[data-ia="pen"] .ia-x1 { stroke-dasharray: 1; animation: ia-underline .9s ease-out; }
+svg.ia-go[data-ia="line"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="line"] .ia-p2 { animation: ia-popin .3s ease-out; }
+svg.ia-go[data-ia="line"] .ia-p3 { animation: ia-popin .3s ease-out .5s; }
+svg.ia-go[data-ia="text"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .3s ease-out; }
+svg.ia-go[data-ia="text"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .3s ease-out .15s backwards; }
+svg.ia-go[data-ia="text"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .3s ease-out .3s backwards; }
+svg.ia-go[data-ia="eraser"] .ia-p2, svg.ia-go[data-ia="eraser"] .ia-p3 { animation: ia-rub .7s ease-in-out; }
+svg.ia-go[data-ia="laser"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .45s ease-out; }
+svg.ia-go[data-ia="laser"] .ia-p3 { animation: ia-popin .3s ease-out .35s; }
+svg.ia-go[data-ia="laser"] .ia-p4 { animation: ia-popin .3s ease-out .45s; }
+svg.ia-go[data-ia="laser"] .ia-p5 { animation: ia-popin .3s ease-out .55s; }
+svg.ia-go[data-ia="note"] .ia-p2 { stroke-dasharray: 1; animation: ia-redraw .7s ease-in-out; }
+svg.ia-go[data-ia="shapes"] .ia-p1 { animation: ia-popin .35s ease-out; }
+svg.ia-go[data-ia="shapes"] .ia-p2 { animation: ia-popin .35s ease-out .12s; }
+svg.ia-go[data-ia="shapes"] .ia-p3 { animation: ia-popin .35s ease-out .24s; }
+svg.ia-go[data-ia="snap"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="snap"] .ia-p2 { animation: ia-popin .3s ease-out .2s; }
+svg.ia-go[data-ia="snap"] .ia-p3 { animation: ia-popin .3s ease-out .35s; }
+svg.ia-go[data-ia="snap"] .ia-p4 { animation: ia-popin .3s ease-out .5s; }
+svg.ia-go[data-ia="undo"] .ia-p2 { stroke-dasharray: 1; animation: ia-redraw .8s ease-in-out; }
+svg.ia-go[data-ia="undo"] .ia-p1 { --dx: -1.5px; animation: ia-move .8s ease-in-out; }
+svg.ia-go[data-ia="redo"] .ia-p2 { stroke-dasharray: 1; animation: ia-redraw .8s ease-in-out; }
+svg.ia-go[data-ia="redo"] .ia-p1 { --dx: 1.5px; animation: ia-move .8s ease-in-out; }
+svg.ia-go[data-ia="trash"] .ia-p1, svg.ia-go[data-ia="trash"] .ia-p2 { transform-box: view-box; transform-origin: 4px 7px; animation: ia-lid .7s ease-in-out; }
+svg.ia-go[data-ia="grid"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .4s ease-out; }
+svg.ia-go[data-ia="grid"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .4s ease-out 80ms backwards; }
+svg.ia-go[data-ia="grid"] .ia-p4 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .16s backwards; }
+svg.ia-go[data-ia="grid"] .ia-p5 { stroke-dasharray: 1; animation: ia-draw .4s ease-out .24s backwards; }
+svg.ia-go[data-ia="image"] .ia-p2 { --dx: 5px; --dy: -1px; animation: ia-move .8s ease-in-out; }
+svg.ia-go[data-ia="image"] .ia-p3 { stroke-dasharray: 1; animation: ia-redraw .8s ease-in-out; }
+svg.ia-go[data-ia="zoom"] .ia-p3, svg.ia-go[data-ia="zoom"] .ia-p4 { animation: ia-popin .45s ease-in-out; }
+svg.ia-go[data-ia="fit"] .ia-p1 { --dx: 2px; --dy: 2px; animation: ia-corner .7s ease-in-out; }
+svg.ia-go[data-ia="fit"] .ia-p2 { --dx: -2px; --dy: 2px; animation: ia-corner .7s ease-in-out; }
+svg.ia-go[data-ia="fit"] .ia-p3 { --dx: 2px; --dy: -2px; animation: ia-corner .7s ease-in-out; }
+svg.ia-go[data-ia="fit"] .ia-p4 { --dx: -2px; --dy: -2px; animation: ia-corner .7s ease-in-out; }
+svg.ia-go[data-ia="dots"] .ia-p1 { --dy: -2.5px; animation: ia-move .4s ease-in-out; }
+svg.ia-go[data-ia="dots"] .ia-p2 { --dy: -2.5px; animation: ia-move .4s ease-in-out .1s; }
+svg.ia-go[data-ia="dots"] .ia-p3 { --dy: -2.5px; animation: ia-move .4s ease-in-out .2s; }
+svg.ia-go[data-ia="side"] .ia-p2 { --dx: -4px; animation: ia-move .7s ease-in-out; }
+svg.ia-go[data-ia="draw"] .ia-p1 { stroke-dasharray: 1; animation: ia-draw .6s ease-out; }
+svg.ia-go[data-ia="draw"] .ia-p2 { stroke-dasharray: 1; animation: ia-draw .6s ease-out 80ms backwards; }
+svg.ia-go[data-ia="draw"] .ia-p3 { stroke-dasharray: 1; animation: ia-draw .6s ease-out .16s backwards; }
+svg.ia-go[data-ia="draw"] .ia-p4 { stroke-dasharray: 1; animation: ia-draw .6s ease-out .24s backwards; }
+svg.ia-go[data-ia="draw"] .ia-p4 ~ * { stroke-dasharray: 1; animation: ia-draw .6s ease-out .32s backwards; }
 @keyframes ia-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-@keyframes ia-swirl { 25% { transform: rotate(-14deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } }
-@keyframes ia-wiggle { 25% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(-4deg); } }
-@keyframes ia-pop { 45% { transform: scale(1.15); } }
-@keyframes ia-bubble { 40% { transform: rotate(-8deg) scale(1.1); } }
-@keyframes ia-nod { 35% { transform: rotate(-8deg); } 70% { transform: rotate(6deg); } }
-@keyframes ia-lift { 40% { transform: translateY(-2px); } }
-@keyframes ia-back { 40% { transform: translate(2px, -2px) rotate(6deg); } }
-@keyframes ia-rays { to { transform: rotate(45deg); } }
-@keyframes ia-line { 40% { transform: translateX(3px); } }
+@keyframes ia-redraw { 0%, 100% { stroke-dashoffset: 0; } 45% { stroke-dashoffset: 1; } }
+@keyframes ia-move { 40% { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
+@keyframes ia-hold { 30%, 65% { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
+@keyframes ia-out { 40% { transform: translate(var(--dx), var(--dy)); opacity: 0; } 41% { transform: translate(calc(var(--dx) * -1), calc(var(--dy) * -1)); opacity: 0; } }
+@keyframes ia-corner { 35% { transform: translate(var(--dx), var(--dy)); } 70% { transform: translate(calc(var(--dx) * -.5), calc(var(--dy) * -.5)); } }
+@keyframes ia-ring { 15% { transform: rotate(15deg); } 30% { transform: rotate(-13deg); } 45% { transform: rotate(9deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(3deg); } }
+@keyframes ia-clapper { 20% { translate: -2px 0; } 38% { translate: 2px 0; } 55% { translate: -1.2px 0; } 72% { translate: .6px 0; } }
+@keyframes ia-dot { 0% { opacity: 0; transform: scale(0); } 20% { opacity: 1; transform: none; } 35% { transform: translateY(-1.5px); } 50% { transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes ia-fold { 45% { transform: scaleX(.15); } }
+@keyframes ia-cover { 45% { transform: scaleX(-.55); } }
+@keyframes ia-slosh { 20% { transform: rotate(-14deg); } 45% { transform: rotate(10deg); } 70% { transform: rotate(-5deg); } }
+@keyframes ia-press { 40% { transform: scale(.6); } }
+@keyframes ia-blink { 40% { transform: scale(2.2); } }
+@keyframes ia-popin { 40% { transform: scale(1.4); } }
+@keyframes ia-pulse { 40% { transform: scale(1.18); } }
+@keyframes ia-tooth { 70% { transform: rotate(68deg); } 100% { transform: rotate(60deg); } }
+@keyframes ia-quarter { 50% { transform: rotate(45deg) scale(.6); } 100% { transform: rotate(90deg); } }
+@keyframes ia-spin { to { transform: rotate(360deg); } }
+@keyframes ia-fill { 0%, 100% { fill-opacity: 0; } 35%, 65% { fill-opacity: 1; } }
+@keyframes ia-lift { 40% { translate: 0 -1.5px; } }
+@keyframes ia-rock { 40% { transform: rotate(-15deg); } 75% { transform: rotate(4deg); } }
+@keyframes ia-rays { 0% { stroke-dashoffset: 1; opacity: 1; } 45% { stroke-dashoffset: 0; } 80% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes ia-rays45 { to { transform: rotate(45deg); } }
+@keyframes ia-morph-out { 30%, 70% { opacity: 0; transform: scale(.4); } }
+@keyframes ia-morph-in { 0%, 100% { opacity: 0; transform: scale(.4); } 30%, 70% { opacity: 1; transform: none; } }
+@keyframes ia-toss { 35% { transform: translateY(-3px) rotate(-8deg); } 70% { transform: translateY(.5px); } }
+@keyframes ia-tassel { 30% { transform: rotate(20deg); } 60% { transform: rotate(-12deg); } 85% { transform: rotate(5deg); } }
+@keyframes ia-grow { 35% { transform: scaleY(.2); } 70% { transform: scaleY(1.1); } }
+@keyframes ia-point { 30% { transform: rotate(-20deg); } 65% { transform: rotate(8deg); } }
+@keyframes ia-twinkle { 45% { transform: rotate(45deg) scale(.7); } 100% { transform: rotate(90deg); } }
+@keyframes ia-spark { 0%, 100% { opacity: 0; transform: scale(0); } 45% { opacity: 1; transform: none; } }
+@keyframes ia-echo { 0% { opacity: .9; transform: none; } 100% { opacity: 0; transform: translate(2.5px, -2.5px); } }
+@keyframes ia-flicker { 20% { transform: scaleY(1.1) skewX(-4deg); } 40% { transform: scaleY(.95) skewX(3deg); } 60% { transform: scaleY(1.06) skewX(-2deg); } 80% { transform: scaleY(.98); } }
+@keyframes ia-beat { 15% { transform: scale(.85); } 30% { transform: scale(1.15); } 45% { transform: scale(.9); } 60% { transform: scale(1.1); } }
+@keyframes ia-write { 25% { transform: rotate(-18deg) translate(-1px, 1px); } 50% { transform: rotate(-10deg) translate(3px, 1px); } 75% { transform: rotate(-16deg) translate(5px, 1px); } }
+@keyframes ia-underline { 0% { stroke-dashoffset: 1; opacity: 1; } 75% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes ia-squash { 40% { transform: scaleY(.88); } }
+@keyframes ia-fly { 40% { transform: translate(9px, -9px); opacity: 0; } 41% { transform: translate(-9px, 9px); opacity: 0; } }
+@keyframes ia-zoom { 30% { transform: scale(.75); } 65% { transform: scale(1.15); } }
+@keyframes ia-flash { 0%, 100% { opacity: 0; } 30%, 50% { opacity: 1; } }
+@keyframes ia-x-top { 35%, 65% { transform: translateY(6px) rotate(45deg); } }
+@keyframes ia-x-mid { 35%, 65% { opacity: 0; transform: scaleX(0); } }
+@keyframes ia-x-bot { 35%, 65% { transform: translateY(-6px) rotate(-45deg); } }
+@keyframes ia-rub { 20% { transform: translateX(-2px); } 40% { transform: translateX(2px); } 60% { transform: translateX(-1.5px); } 80% { transform: translateX(1px); } }
+@keyframes ia-lid { 40% { transform: translateY(-2.5px) rotate(-12deg); } }
 @media (prefers-reduced-motion: reduce) { svg.ia-go, svg.ia-go * { animation: none !important; } }
 
 /* liquid glass everywhere (like the reference: frosted panes with a bright rim over soft colour).
@@ -3241,7 +3395,7 @@ html.lgm .lgp { isolation: isolate; }
 html.lgm .lgp-rel { position: relative; }
 html.lgm .lgp-b::before, html.lgm .lgp-a::after {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
-  background: var(--lg-still, none) center / 100% 100% no-repeat, rgba(var(--hi-rgb), .001); filter: var(--lg-light, none); }
+  background: var(--lg-still, none) center / 100% 100% no-repeat, rgba(var(--hi-rgb), .001); filter: var(--lg-light, none);  clip-path: inset(0 round var(--lg-r, 0px));}
 /* where the glass really bends (Chromium), the floating bars are clear glass like the reference: a thin fill, so
    the bending shows; their words and icons stay AA (tests) */
 html.lg-refract.native .tabbar, html.lg-refract.native .topbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), linear-gradient(180deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .38)); }

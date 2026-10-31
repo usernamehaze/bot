@@ -26,7 +26,7 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=215';
+import { MUSEUM } from './museum.js?v=216';
 import { GAMES } from './games.js';
 import { KIDS } from './kids.js';
 
@@ -95,7 +95,7 @@ function createView() {
       <header class="labs-head">
         <button type="button" class="labs-x" aria-label="Close">×</button>
         <div class="labs-title"><h2>${CURSOR}Learn</h2><p>Play with it, then ask Cassie why it works.</p></div>
-        <button type="button" class="icon-btn theme-flip labs-theme" aria-label="Switch to dark mode"></button>
+        <button type="button" class="theme-switch labs-theme" role="switch" aria-checked="false" aria-label="Dark mode"><span class="ts-track"><span class="ts-knob"></span></span></button>
       </header>
       <div class="lp" hidden>
         <header class="lp-head"><h2>Learn</h2><button type="button" class="lp-find" aria-label="Search labs" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button></header>

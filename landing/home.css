@@ -63,10 +63,15 @@ footer .brand { color: var(--ink); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 999px; font: 600 15.5px/1 var(--sans); text-decoration: none; cursor: pointer; border: 1px solid transparent; white-space: nowrap; transition: transform .15s, background .2s, border-color .2s; }
 .btn:active { transform: translateY(1px); }
 .btn.solid { background: var(--night-ink); color: var(--night); }
-.btn.solid:hover { background: var(--page-2); }
+.btn.solid:hover { background: color-mix(in srgb, var(--night-ink) 88%, var(--night)); }
+.btn.solid:active, .btn.solid.opening { transform: scale(.97); background: color-mix(in srgb, var(--night-ink) 78%, var(--night)); } /* (pressed: a darker fill, the words stay clear) */
 .nav.light .btn.solid { background: var(--ink); color: var(--page); }
+.nav.light .btn.solid:hover { background: color-mix(in srgb, var(--ink) 88%, var(--page)); }
+.nav.light .btn.solid:active, .nav.light .btn.solid.opening { background: color-mix(in srgb, var(--ink) 80%, var(--page)); }
 .btn.quiet { background: transparent; color: inherit; border-color: var(--night-line); }
 .nav.light .btn.quiet { border-color: var(--line); }
+.btn.opening::before { content: ""; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: open-spin .7s linear infinite; }
+@keyframes open-spin { to { transform: rotate(360deg); } }
 .btn.big { min-height: 52px; padding: 0 26px; font-size: 17px; }
 .btn.ink { background: var(--ink); color: var(--page); }
 .btn.line { background: transparent; color: var(--ink); border-color: var(--line); }

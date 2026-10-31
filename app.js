@@ -316,8 +316,17 @@ const deviceDark = () => !!(window.matchMedia && matchMedia('(prefers-color-sche
 function isDark() { return state.theme === 'dark' || (state.theme !== 'light' && deviceDark()); }
 const THEME_ICON = { sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
   moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>' };
-// (the sun and moon button shows where a tap takes you)
-function themeButtons() { const dark = isDark(); document.querySelectorAll('.theme-flip').forEach((b) => { b.innerHTML = dark ? THEME_ICON.sun : THEME_ICON.moon; b.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode'); }); }
+// the Dark mode switch (top bar, Learn, phone Home, Settings > Appearance): a track with a knob that slides and
+// shows a sun or a moon; every switch shows the same state.theme
+const themeSwitch = (cls = '') => `<button type="button" class="theme-switch${cls ? ' ' + cls : ''}" role="switch" aria-checked="${isDark()}" aria-label="Dark mode"><span class="ts-track"><span class="ts-knob">${isDark() ? THEME_ICON.moon : THEME_ICON.sun}</span></span></button>`;
+function themeButtons() {
+  const dark = isDark();
+  document.querySelectorAll('.theme-switch').forEach((b) => {
+    if (b.getAttribute('aria-checked') === String(dark) && b.querySelector('.ts-knob svg')) return;
+    b.setAttribute('aria-checked', String(dark));
+    b.querySelector('.ts-knob').innerHTML = dark ? THEME_ICON.moon : THEME_ICON.sun;
+  });
+}
 window.cassieThemeButtons = themeButtons;
 function applyTheme() {
   const root = document.documentElement, t = state.theme === 'light' || state.theme === 'dark' ? state.theme : 'auto';
@@ -330,7 +339,7 @@ function applyTheme() {
   try { if (window.CassieGlass && window.CassieGlass.redress) window.CassieGlass.redress(); } catch (e) { /* the glass catches up on the next look */ }
 }
 function setTheme(t) { state.theme = t; save(); applyTheme(); }
-document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.theme-flip'); if (b) { track('feature', 'theme'); setTheme(isDark() ? 'light' : 'dark'); } });
+document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.theme-switch'); if (b) { track('feature', 'theme'); setTheme(isDark() ? 'light' : 'dark'); icGo(b); } }); // (the new sun or moon plays its move)
 // One source of truth: a picked colour becomes --primary (buttons, send, the timer, the open tab,
 // your bubbles, switches, focus), with words on it in white or near-black, whichever reads better,
 // and --primary-ink: the same colour, darker or lighter until it reads as words on the page.
@@ -1914,17 +1923,17 @@ function renderTyping() {
 // Example prompts shown on the empty home screen. `send: true` asks it
 // straight away; otherwise it fills the box so the student can paste/edit.
 const HOME_EXAMPLES = [
-  { label: 'Explain a topic', icon: 'M12 2a6 6 0 0 0-3.8 10.65c.52.42.8 1.03.8 1.68V15h6v-.67c0-.65.28-1.26.8-1.68A6 6 0 0 0 12 2zM9 16.5h6v.5a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-.5zm1 3h4v.25a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75V19.5z', text: 'Explain this topic simply: ', send: false, hint: 'e.g. photosynthesis' },
-  { label: 'Quiz me', icon: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z', text: 'Quiz me on: ', send: false, hint: 'e.g. the water cycle' },
-  { label: 'Solve step by step', icon: 'M3 5h2v2H3zM7 5h14v2H7zM3 11h2v2H3zM7 11h14v2H7zM3 17h2v2H3zM7 17h14v2H7z', text: 'Solve this step by step: ', send: false, hint: 'e.g. 3x + 7 = 22' },
-  { label: 'Make study notes', icon: 'M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V8h4.5zM8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h5v1.5H8z', text: 'Summarize this into clean study notes:\n\n', send: false },
-  { label: 'Research a topic', icon: 'M12 3 1 8l11 5 9-4.09V16h2V8L12 3zM5 13.18v3.5L12 20l7-3.32v-3.5L12 16l-7-2.82z', text: 'Research this topic with real sources: ', send: false, hint: 'e.g. effects of social media on students' },
-  { label: 'Explore in 3D (in Learn)', icon: 'M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 8 12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.3V9.7zm8 10v-6.6l6-3.4v6.7l-6 3.3z', run: () => openLabs(null, { subject: '3d' }) },
-  { label: 'Learn: try a simulation', icon: 'M9 2h6v2h-1v5.2l5.6 9.4A2.3 2.3 0 0 1 17.6 22H6.4a2.3 2.3 0 0 1-2-3.4L10 9.2V4H9V2zm3 8.6L8.2 17h7.6L12 10.6z', run: () => openLabs() },
-  { label: 'Study together (study room)', icon: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', run: () => openRoomChooser() },
-  { label: 'Flashcards', icon: 'M4 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm16-2v12h-1.5V5.5H7V4h11a2 2 0 0 1 2 2zM6 11h8v1.5H6zm0 3h5v1.5H6z', run: () => window.CassieCards && window.CassieCards.open() },
-  { label: 'Podcast my notes', icon: 'M12 3a7 7 0 0 0-7 7v5.5A2.5 2.5 0 0 0 7.5 18H9v-6H7v-2a5 5 0 0 1 10 0v2h-2v6h1.5a2.5 2.5 0 0 0 2.5-2.5V10a7 7 0 0 0-7-7zm-1 16h2v2h-2z', run: () => podcastFromFile() },
-  { label: 'Teach Cassie out loud', icon: 'M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z', run: () => openVoice('teach') },
+  { label: 'Explain a topic', ia: 'bulb', icon: '<path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5.9 1.1.9 1.8V16h5.4v-.4c0-.7.3-1.3.9-1.8A6 6 0 0 0 12 3z"/><path d="M9.5 19h5M10.5 21.5h3"/>', text: 'Explain this topic simply: ', send: false, hint: 'e.g. photosynthesis' },
+  { label: 'Quiz me', ia: 'pencil', icon: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>', text: 'Quiz me on: ', send: false, hint: 'e.g. the water cycle' },
+  { label: 'Solve step by step', ia: 'list', icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>', text: 'Solve this step by step: ', send: false, hint: 'e.g. 3x + 7 = 22' },
+  { label: 'Make study notes', ia: 'doc', icon: '<path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h7"/>', text: 'Summarize this into clean study notes:\n\n', send: false },
+  { label: 'Research a topic', ia: 'cap', icon: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 9v5"/>', text: 'Research this topic with real sources: ', send: false, hint: 'e.g. effects of social media on students' },
+  { label: 'Explore in 3D (in Learn)', ia: 'cube', icon: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12v9"/>', run: () => openLabs(null, { subject: '3d' }) },
+  { label: 'Learn: try a simulation', ia: 'flask', icon: '<path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/>', run: () => openLabs() },
+  { label: 'Study together (study room)', ia: 'people', icon: '<circle cx="8.5" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M14.5 14.3c3 .1 5.5 1.8 5.5 4.7"/>', run: () => openRoomChooser() },
+  { label: 'Flashcards', ia: 'cards', icon: '<path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/>', run: () => window.CassieCards && window.CassieCards.open() },
+  { label: 'Podcast my notes', ia: 'headphones', icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>', run: () => podcastFromFile() },
+  { label: 'Teach Cassie out loud', ia: 'bars', icon: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>', run: () => openVoice('teach') },
 ];
 
 /* ---------- Study tools in the sidebar ----------
@@ -1968,7 +1977,7 @@ function sendBox() {
 HOME_EXAMPLES.forEach((ex) => {
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'side-tool'; b.dataset.tip = ex.label;
-  b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span>`;
+  b.innerHTML = `<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="${ex.ia}">${ex.icon}</svg><span></span>`;
   b.querySelector('span').textContent = ex.label;
   b.addEventListener('click', () => runTool(ex));
   sideTools.appendChild(b);
@@ -2074,9 +2083,9 @@ function showTools() {
    Quick actions (the study tools). */
 const HUB_ICON = {
   ask: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/><path d="M9 9h6M9 12h4"/></svg>',
-  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ia-rest" d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/><g class="ia-parts"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><g class="ia-back"><path d="M8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></g></g></svg>',
+  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg>',
   lab: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg>',
-  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><g class="ia-rest"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></g><g class="ia-parts"><circle cx="12" cy="13" r="8"/><g class="ia-hand"><path d="M12 9v4l2.5 2.5"/></g><path d="M9 2h6"/></g></svg>',
+  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
   streak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1.2-3.6 2.4-4.8.3 1.6 1 2.6 2.1 3.1C11 9 11.2 6 12 3z"/></svg>',
   chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg>',
   go: '<svg class="hub-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
@@ -2174,35 +2183,67 @@ document.addEventListener('pointerdown', (e) => {
   const el = e.target.closest && e.target.closest(LG_TAP);
   if (el && e.button <= 0) lgPress(el, e);
 }, true);
-// every icon moves like the recording (style.css: ia-go and data-ia): the pointer over it (a mouse or a pen), a
-// press or tap, or keyboard focus plays one short motion that fits what it draws (a bell swings, a gear turns,
-// a check draws itself), then it rests exactly as drawn. Only the icon moves, never its words or its button (the
-// Liquid Glass press still scales the button). Reduce Motion: none. Parts that move alone are wrapped in the
-// markup (ia-body, ia-hand, ia-back); without the part, the whole icon does the nearest move.
-const IC_HOST = '.tab, .chip, .set-back, .side-toggle, .side-menu-label, .cmic, .dk-btn, .dk-up, .hub-tlab-go, .home-ideas, .new-chat-btn, .pomo-edit, .ht-go, .hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
-const IC_MAP = [['ring', /bell|remind|notif|alarm/], ['close', /close|dismiss|remove|clear/], ['fly', /\bsend\b/], ['gear', /setting|gear/],
-  ['turn', /refresh|sync|redo|again|retry|reload|undo/], ['sun', /light mode/], ['moon', /dark mode/], ['menu', /\bmenu\b/],
-  ['nudge-l', /\bback\b|sign ?out|log out|previous/], ['hop-l', /sidebar|collapse/], ['plus', /new chat|^new\b|\badd\b/], ['pop', /privacy|lock|\bplans\b|paste/],
-  ['mic', /\bmic|voice|dictat|say it/], ['lens', /camera|photo|snap/], ['clip', /attach|upload|paperclip/], ['search', /search|find|research|web\b|look up/],
-  ['tune', /study and break|adjust/], ['clock', /timer|focus|pomodoro|clock/], ['home', /(^|\s)home(\s|$)/], ['pulse', /streak|heart|talk|together|memory|hint|idea|favourite/],
-  ['cards', /card|flash|deck/], ['book', /book|lesson|read|calendar|note/], ['draw', /plan|check|done|edit|pencil|quiz|write|essay|draw|board|progress/],
-  ['swirl', /\blabs?\b|learn|science|simulat|experiment/], ['wiggle', /game|puzzle/], ['pop', /play|pause|stop|start/],
-  ['bubble', /chat|ask|message|conversation|help|question|support/], ['nod', /\byou\b|profile|account|person|sign in/], ['nudge-r', /next|continue|open|go to/]];
-const IC_CLASS = [['nudge-ur', '.dk-up'], ['hop-l', '.side-toggle'], ['search', '.top-search']]; // (drawn as an arrow, whatever it says)
-const IC_PART = { mic: ['.ia-body', 'hop-u'], clock: ['.ia-hand', 'pop'], cards: ['.ia-back', 'book'], sun: ['circle', 'gear'], menu: ['rect', 'pop'], tune: ['circle', 'nudge-r'] };
-function icMotion(host, svg) {
-  const named = host.getAttribute('aria-label') || host.title || '';
-  const words = [named, host.dataset.tab, host.dataset.page, host.dataset.hub, host.dataset.ht, host.dataset.dk, host.dataset.open, host.id, named ? '' : host.textContent.slice(0, 60)].join(' ').toLowerCase();
-  let m = ((IC_CLASS.find(([, sel]) => host.matches(sel))) || IC_MAP.find(([, re]) => re.test(words)) || ['pop'])[0];
-  if (IC_PART[m] && !svg.querySelector(IC_PART[m][0])) m = IC_PART[m][1];
-  if (m === 'draw') svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((p) => p.setAttribute('pathLength', '1')); // (so the stroke can draw itself in)
-  return m;
+// every icon moves like the recording (docs/icon-motions.md; style.css ia-go and data-ia): the pointer over it (a
+// mouse or a pen), a press or tap, or keyboard focus plays the move its icon makes in the recording (a bell swings
+// with its clapper behind, a tick redraws, a chevron slides out and back in, menu lines turn into an x), or its own
+// move in the same style; then it rests exactly as drawn. Only the parts that move in the recording move: the icon's
+// lines are split into parts (ia-p1, ia-p2…) shown only while it moves. Its button never moves (the Liquid Glass
+// press still scales it). Reduce Motion: none.
+const IC_HOST = '.theme-switch, .tab, .chip, .set-back, .side-toggle, .side-menu-label, .cmic, .dk-btn, .dk-up, .hub-tlab-go, .home-ideas, .new-chat-btn, .pomo-edit, .csk-btn, .ht-go, .hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
+// which move an icon makes, from what it draws (icons drawn with a data-ia say so themselves); anything else: its lines draw on
+const IA_SIG = [['bell', 'M6 16V11a6 6 0 0 1 12 0v5'], ['ask', 'M9 9h6M9 12h4'], ['chat', 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13'], ['checkbox', 'M8 12l3 3 5-6'],
+  ['lessons', 'M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15'], ['book', 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19'], ['calendar', 'M4 10h16M8.5 3.5v4'], ['trend', 'M4 19h16M7 15l4-4'],
+  ['chev-d', 'M6 9l6 6 6-6'], ['chev-l', 'M15 5l-7 7 7 7'], ['chev-l', 'M15 6l-6 6 6 6'], ['chev-r', 'M9 6l6 6-6 6'], ['flask', 'M9 3h6M10 3v6.2'],
+  ['games', 'M7 8h10a4 4 0 0 1 4 4v1.5'], ['board', 'M8 21l4-4 4 4'], ['help', 'M9.6 9.4a2.5'], ['help', 'M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3'],
+  ['mic', 'width="6" height="11" rx="3"'], ['research', 'M15 15l5.5 5.5M8 10.5h5'], ['search', 'M16 16l4.5 4.5'], ['moon', 'M20 14.5A8 8 0 1 1 9.5 4'],
+  ['sun', 'M12 2.5v2M12 19.5v2'], ['sun', 'M12 2v3M12 19v3M2 12h3'], ['plus', 'M12 5v14M5 12h14'], ['upload', 'M12 15V4M7.5 8.5L12 4'], ['clock', 'M12 9v4l2.5 2.5'],
+  ['cards', 'M6 8h10a2 2 0 0 1 2 2v9'], ['cards', 'x="3" y="8" width="14" height="11"'], ['play', 'M8 5.5v13l11-6.5z'], ['play', 'M8 5v14l11-7z'],
+  ['pause', 'M8 5h3v14H8zM13 5h3v14h-3z'], ['stop', 'x="6.5" y="6.5" width="11" height="11"'], ['arrow-ur', 'M8 16L16 8M9 8h7v7'],
+  ['person', 'M4 21c1.5-4 4.5-6 8-6'], ['person', 'M12 12a4 4 0 1 0 0-8'], ['cap', 'M2 9l10-5 10 5-10 5z'], ['bars', 'M4 10v4M8 7v10M12 4v16'],
+  ['lock', 'M8 10V7a4 4 0 0 1 8 0v3'], ['star', 'M12 3l2.6 5.6'], ['pointer', 'M6 2 L20 11'], ['pointer', 'M6 3l12 9-5.5 1L10 19z'], ['sparkle', 'M12 2l1.9 5.6'],
+  ['tune', 'M4 7h10M18 7h2'], ['people', 'cx="16.5" cy="9.5" r="2.5"'], ['home', 'M3.5 10.5 12 4l8.5 6.5'], ['home', 'M4 11.2 12 4l8 7.2'], ['flame', 'M12 3c1 3.5 5 5.5'],
+  ['check', 'M5 12.5l4.5 4.5L19 7.5'], ['download', 'M12 4v11'], ['close', 'M6 6l12 12M18 6L6 18'], ['hand', 'M8 13V6.5a1.5'], ['pen', 'M4 20l4-1 11-11-3-3L5 16z'],
+  ['pen', 'M9 15l-4 5h6l2-3'], ['line', 'M5 19L19 5'], ['text', 'M5 6V4h14v2'], ['eraser', 'M4 15l9-10 7 7-8 8H8z'], ['laser', 'M9.5 14.5L19 5'], ['note', 'M5 4h14v10l-5 6H5z'],
+  ['shapes', 'M13.5 20l4-7 4 7z'], ['snap', 'M4.5 19L12 5.5 19.5 19z'], ['undo', 'M9 14L4 9l5-5'], ['redo', 'M15 14l5-5-5-5'], ['trash', 'M9 7V4h6v3'],
+  ['grid', 'M4 10h16M4 15h16'], ['image', 'M21 16l-5-5-8 8'], ['zoom', 'M7.5 10.5h6'], ['fit', 'M4 9V4h5M20 9V4h-5'], ['dots', 'cx="5" cy="12" r="1.4"'], ['side', 'M14 4v16']];
+// the extra lines a move draws for a moment (typing dots, the pause bars a play sign turns into, a pencil's line)
+const IA_EXTRA = { chat: '<circle class="ia-dot" cx="8.5" cy="10" r="1.1"/><circle class="ia-dot" cx="12" cy="10" r="1.1"/><circle class="ia-dot" cx="15.5" cy="10" r="1.1"/>',
+  play: '<rect x="7.5" y="6" width="3.2" height="12" rx="1"/><rect x="13.3" y="6" width="3.2" height="12" rx="1"/>', pause: '<path d="M8 5.5v13l11-6.5z"/>',
+  pencil: '<path d="M4 22.5h9"/>', pen: '<path d="M4 22.5h9"/>', bulb: '<path d="M12 .5v1.2M3.5 4l1 .9M20.5 4l-1 .9M1.5 10h1.3M21.2 10h1.3"/>',
+  sparkle: '<path d="M19.5 2.5v3M18 4h3"/><path d="M5 17.5v3M3.5 19h3"/>', camera: '<circle class="ia-dot" cx="18" cy="10" r=".9"/>',
+  moon: '<path d="M12 .8v1.4M3.5 3.5l1 1M.8 12h1.4M3.5 20.5l1-1"/>', home: 'clone' };
+const IA_WHOLE = new Set(['send', 'gear', 'heart', 'pointer']); // (they move whole in the recording too: navigation, aperture, heart, navigation-2)
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function icPrep(svg) {
+  if (svg._ia) return;
+  svg._ia = true;
+  const html = svg.innerHTML;
+  if (!svg.dataset.ia) svg.dataset.ia = (IA_SIG.find(([, sig]) => html.includes(sig)) || ['draw'])[0];
+  if (IA_WHOLE.has(svg.dataset.ia)) return;
+  const rest = document.createElementNS(SVG_NS, 'g'), parts = document.createElementNS(SVG_NS, 'g');
+  rest.setAttribute('class', 'ia-rest'); parts.setAttribute('class', 'ia-parts');
+  let n = 0;
+  const part = (el) => { el.classList.add('ia-p' + (++n)); el.setAttribute('pathLength', '1'); parts.appendChild(el); };
+  [...svg.children].forEach((k) => {
+    const d = k.tagName === 'path' && k.getAttribute('d');
+    const subs = d && /^\s*M/.test(d) ? d.match(/M[^M]*/g) : null; // (each line of a path that starts afresh with M is its own part)
+    if (subs && subs.length > 1) subs.forEach((sd) => { const c = k.cloneNode(false); c.setAttribute('d', sd.trim()); part(c); });
+    else part(k.cloneNode(true));
+    rest.appendChild(k);
+  });
+  const extra = IA_EXTRA[svg.dataset.ia];
+  if (extra === 'clone') { const c = rest.firstElementChild.cloneNode(true); c.setAttribute('class', 'ia-x ia-x1'); parts.appendChild(c); }
+  else if (extra) {
+    const t = document.createElementNS(SVG_NS, 'g'); t.innerHTML = extra;
+    [...t.children].forEach((c, i) => { c.classList.add('ia-x', 'ia-x' + (i + 1)); c.setAttribute('pathLength', '1'); parts.appendChild(c); });
+  }
+  svg.append(rest, parts);
 }
 function icGo(host) {
   if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const svg = host.querySelector('svg:not(.hub-chev):not(.labs-cur):not(.brand-mark)');
   if (!svg) return;
-  if (!svg.dataset.ia) svg.dataset.ia = icMotion(host, svg);
+  icPrep(svg);
   const run = svg.classList.contains('ia-go') && svg.getAnimations({ subtree: true });
   if (run && run.length) run.forEach((a) => { a.currentTime = 0; }); // (again from the start)
   else { if (run) { svg.classList.remove('ia-go'); svg.getBoundingClientRect(); } svg.classList.add('ia-go'); } // (a move that never ended, off screen)
@@ -2312,7 +2353,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=215'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=216'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2477,7 +2518,7 @@ function hubHero(name, returning, due, phone) {
   if (phone) { // a phone: the hello and the bell
     const hr = new Date().getHours(), part = hr < 12 ? 'Morning' : hr < 18 ? 'Afternoon' : 'Evening';
     hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><h1 class="hub-me"></h1></span>
-    <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
+    ${themeSwitch('hub-theme')}<button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
     hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
     hero.querySelector('.hub-me').textContent = `${part}${name ? ', ' + name : ''}`;
     return hero;
@@ -2524,7 +2565,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=215').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=216').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2604,7 +2645,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
       <h2 class="hub-h">Continue</h2>
       <div class="hub-recent"></div>
       <h2 class="hub-h">Quick actions</h2>
-      <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`)).join('')}</div>`;
+      <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="${ex.ia}">${ex.icon}</svg><span></span></button>`)).join('')}</div>`;
     el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
     el.querySelector('.hub-today').after(weekCard()); // (the week, under Today; the exam plans are at the top)
     const list = el.querySelector('.hub-recent');
@@ -3054,7 +3095,7 @@ function deskChatStart() {
   el.className = 'desk desk-chat';
   const p = state.profile || {}, name = (p.name || '').trim().split(/\s+/)[0];
   el.innerHTML = `<div class="dk-chat-hi"><h1 class="dk-title"></h1><p class="dk-sub">Ask anything you’re studying. Cassie explains it step by step.</p>
-    <div class="dk-ideas-row">${HOME_EXAMPLES.slice(0, 6).map((ex, i) => `<button type="button" class="dk-chip dk-idea" data-i="${i}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ex.icon}"/></svg><span></span></button>`).join('')}</div></div>`;
+    <div class="dk-ideas-row">${HOME_EXAMPLES.slice(0, 6).map((ex, i) => `<button type="button" class="dk-chip dk-idea" data-i="${i}"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="${ex.ia}">${ex.icon}</svg><span></span></button>`).join('')}</div></div>`;
   el.querySelector('.dk-title').textContent = name ? `What are we studying, ${name}?` : 'What are we studying today?';
   el.querySelectorAll('.dk-idea').forEach((b) => { b.querySelector('span').textContent = HOME_EXAMPLES[+b.dataset.i].label; b.addEventListener('click', () => runTool(HOME_EXAMPLES[+b.dataset.i])); });
   return el;
@@ -6857,7 +6898,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=215');
+      exploreMod = await import('./explore/cell3d.js?v=216');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6907,7 +6948,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=215');
+      labsMod = await import('./labs/labs.js?v=216');
       islandRest();
     }
     labsMod.open({
@@ -8748,10 +8789,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=215').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=216').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=215', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=216', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9921,50 +9962,57 @@ const LG_WORDY = '.set-group, .sidebar, .settings-card, .dk-card, .dk-stat';
 const LG_REFRACT = '.topbar, html.native .tabbar, .composer, #quick-actions .chip, .settings-card, .letc-card, .hub-hero';
 const LG_SHAPE = { bevel: 16, rim: 1.75, bend: 14, zoom: 1.08 };
 // the shared images for one pane size: the height field (alpha), its rim (red) and bevel (green), and the refraction map
+// (every value at the edge is weighed by how much of the pixel the rounded shape covers, and the still picture is
+// baked at the screen's own sharpness, up to 2x: no hard 1px steps along the rim and corners on a 2x or 3x screen.
+// The moving light's maps stay at 1x: they are lit again every frame, and 2x cost the drag its frame budget; its
+// edge is cut smooth by the pane's own rounded clip instead, style.css --lg-r)
+const LG_RES = () => Math.min(2, Math.max(1, Math.ceil(window.devicePixelRatio || 1)));
 function glassMaps(w, h, r) {
-  const { bevel: B, rim: RIM, bend: BEND, zoom: ZOOM } = LG_SHAPE;
+  const { bevel: B, rim: RIM, bend: BEND, zoom: ZOOM } = LG_SHAPE, k = 1, W = Math.round(w * k), Hh = Math.round(h * k);
   const hc = document.createElement('canvas'), dc = document.createElement('canvas');
-  hc.width = dc.width = w; hc.height = dc.height = h;
-  const H = hc.getContext('2d').createImageData(w, h), D = dc.getContext('2d').createImageData(w, h);
+  hc.width = dc.width = W; hc.height = dc.height = Hh;
+  const H = hc.getContext('2d').createImageData(W, Hh), D = dc.getContext('2d').createImageData(W, Hh);
   const rr = Math.min(r, w / 2, h / 2), S = 2 * (BEND + Math.max(w, h) / 2 * (1 - 1 / ZOOM)) + 2;
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const px = x + .5 - w / 2, py = y + .5 - h / 2, i = (y * w + x) * 4;
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const px = (x + .5) / k - w / 2, py = (y + .5) / k - h / 2, i = (y * W + x) * 4;
     const qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
     const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr);
+    const cov = Math.min(1, Math.max(0, inside * k + .5)), on = Math.max(inside, 0); // (how much of this pixel the shape covers)
     let nx, ny; // (the outward normal: the distance field's gradient)
     if (qx > 0 && qy > 0) { const L = Math.hypot(qx, qy) || 1; nx = (qx / L) * Math.sign(px); ny = (qy / L) * Math.sign(py); }
     else if (qx > qy) { nx = Math.sign(px); ny = 0; } else { nx = 0; ny = Math.sign(py); }
-    const slope = inside <= 0 ? 1 : Math.min(1, Math.max(0, 1 - inside / B));
-    const height = inside <= 0 ? 0 : Math.sqrt(Math.max(0, 1 - slope * slope)); // (round: flat, then curving down)
-    const rim = inside <= 0 ? 0 : smooth(RIM, 0, inside);
-    H.data[i] = rim * 255; H.data[i + 1] = (inside <= 0 ? 0 : slope) * 255; H.data[i + 3] = height * 255;
-    const k = BEND * Math.pow(slope, 1.35);
-    D.data[i] = 128 + ((-px * (1 - 1 / ZOOM) + nx * k) / S) * 255; D.data[i + 1] = 128 + ((-py * (1 - 1 / ZOOM) + ny * k) / S) * 255; D.data[i + 2] = 128; D.data[i + 3] = 255;
+    const slope = Math.min(1, Math.max(0, 1 - on / B));
+    const height = Math.sqrt(Math.max(0, 1 - slope * slope)); // (round: flat, then curving down)
+    const rim = smooth(RIM, 0, on);
+    H.data[i] = rim * cov * 255; H.data[i + 1] = slope * cov * 255; H.data[i + 3] = height * cov * 255;
+    const kk = BEND * Math.pow(slope, 1.35);
+    D.data[i] = 128 + ((-px * (1 - 1 / ZOOM) + nx * kk) / S) * 255; D.data[i + 1] = 128 + ((-py * (1 - 1 / ZOOM) + ny * kk) / S) * 255; D.data[i + 2] = 128; D.data[i + 3] = 255;
   }
   hc.getContext('2d').putImageData(H, 0, 0); dc.getContext('2d').putImageData(D, 0, 0);
   return { height: hc.toDataURL(), disp: dc.toDataURL(), S };
 }
 // the same light, worked out once as a picture (for panes whose light keeps still: no filter to redraw while scrolling)
 function glassStill(w, h, r, dark) {
-  const { bevel: B, rim: RIM } = LG_SHAPE, c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'), im = g.createImageData(w, h), d = im.data, rr = Math.min(r, w / 2, h / 2);
+  const { bevel: B, rim: RIM } = LG_SHAPE, k = LG_RES(), W = Math.round(w * k), Hh = Math.round(h * k), c = document.createElement('canvas'); c.width = W; c.height = Hh;
+  const g = c.getContext('2d'), im = g.createImageData(W, Hh), d = im.data, rr = Math.min(r, w / 2, h / 2);
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-  const hf = new Float32Array(w * h), slopeA = new Float32Array(w * h), rimA = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const px = x + .5 - w / 2, py = y + .5 - h / 2, qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
-    const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr), j = y * w + x;
-    const slope = inside <= 0 ? 1 : Math.min(1, Math.max(0, 1 - inside / B));
-    hf[j] = inside <= 0 ? 0 : Math.sqrt(Math.max(0, 1 - slope * slope)); slopeA[j] = inside <= 0 ? 0 : slope; rimA[j] = inside <= 0 ? 0 : smooth(RIM, 0, inside);
+  const hf = new Float32Array(W * Hh).fill(1), slopeA = new Float32Array(W * Hh), rimA = new Float32Array(W * Hh), covA = new Float32Array(W * Hh);
+  for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+    const px = (x + .5) / k - w / 2, py = (y + .5) / k - h / 2, qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
+    const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr), j = y * W + x, on = Math.max(inside, 0);
+    if (inside > B + 2 && x < W - 1 - x) { x = W - 2 - x; continue; } // (the flat middle of the row is clear glass: on to its far edge)
+    const slope = Math.min(1, Math.max(0, 1 - on / B));
+    hf[j] = Math.sqrt(Math.max(0, 1 - slope * slope)); slopeA[j] = slope; rimA[j] = smooth(RIM, 0, on); covA[j] = Math.min(1, Math.max(0, inside * k + .5));
   }
   const L = [-.55, -.55, .63], Ll = Math.hypot(...L); L[0] /= Ll; L[1] /= Ll; L[2] /= Ll; // (from the top-left, 30 degrees up)
   const Hv = [L[0], L[1], L[2] + 1], Hl = Math.hypot(...Hv); Hv[0] /= Hl; Hv[1] /= Hl; Hv[2] /= Hl;
   const A = dark ? { rim: .9, shade: .14, shadow: .5 } : { rim: 1.5, shade: .3, shadow: .35 }, SC = 9;
-  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
-    const j = y * w + x, bev = slopeA[j]; if (!bev && !rimA[j]) continue;
-    let nx = -(hf[j + 1] - hf[j - 1]) * SC / 2, ny = -(hf[j + w] - hf[j - w]) * SC / 2, nz = 1; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+  for (let y = 1; y < Hh - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const j = y * W + x, cov = covA[j], bev = slopeA[j] * cov; if (!bev && !rimA[j]) { if (slopeA[j] === 0 && hf[j] === 1 && x < W - 1 - x) x = W - 2 - x; continue; } // (clear middle: on to the far edge)
+    let nx = -(hf[j + 1] - hf[j - 1]) * SC * k / 2, ny = -(hf[j + W] - hf[j - W]) * SC * k / 2, nz = 1; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
     const dif = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]), spec = Math.pow(Math.max(0, nx * Hv[0] + ny * Hv[1] + nz * Hv[2]), 120) * bev;
-    const white = Math.min(1, rimA[j] * dif * A.rim + bev * dif * A.shade + spec * 1.6), black = bev * (1 - dif) * A.shadow;
+    const white = Math.min(1, rimA[j] * cov * dif * A.rim + bev * dif * A.shade + spec * 1.6), black = bev * (1 - dif) * A.shadow;
     const a = white + black * (1 - white), i = j * 4; if (a <= 0) continue;
     const v = (255 * white) / a; d[i] = d[i + 1] = d[i + 2] = Math.round(v); d[i + 3] = Math.round(a * 255);
   }
@@ -10002,6 +10050,7 @@ const liquidGlass = (() => {
       return;
     }
     const m = mapsFor(w, h, r), old = st.get(el);
+    el.style.setProperty('--lg-r', r + 'px'); // (the light is cut to the pane's own smooth rounded edge: style.css)
     if (old && old.w === w && old.h === h && old.r === r) return;
     const id = old ? old.id : 'lgl-' + (++n);
     document.getElementById(id)?.remove();
