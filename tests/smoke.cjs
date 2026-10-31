@@ -73,8 +73,8 @@ async function googleTap(page, ctx, who) {
 }
 // an ID token signed with the fake server's test keys (like Google's or Apple's)
 const idToken = async (o) => (await fetch(SERVER + '/__idtoken', { method: 'POST', body: JSON.stringify(o) })).text();
-async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup } = {}) {
-  const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(touch ? { hasTouch: true } : {}), ...(scale ? { deviceScaleFactor: scale } : {}), acceptDownloads: true });
+async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on', device = 'Pixel 7', viewport, touch, scale, setup, noOffline } = {}) {
+  const ctx = await browser.newContext({ ...devices[device], ...(viewport ? { viewport } : {}), ...(touch ? { hasTouch: true } : {}), ...(scale ? { deviceScaleFactor: scale } : {}), ...(noOffline ? { serviceWorkers: 'block' } : {}), acceptDownloads: true }); // (noOffline: no offline cache, which fetches files on its own)
   const seed = state && { profile: PROFILE, seenVersion: APP_VERSION, analytics: { usage: true, topics: false }, lite, tab: 'chat', plan: { plan: 'pro', until: 0 }, ...state }; // (Pro, so the Plus extras are there; a test passes plan: null for Free)
   await ctx.addInitScript(([srv, seedJson]) => {
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
@@ -3266,14 +3266,18 @@ test('Cursor Cassie on the page (like Clicky): her cursor follows the mouse when
     expect(/^data:image\/jpeg/.test(await first.locator('img').getAttribute('src')) && await first.locator('img').evaluate((i) => i.naturalWidth === 480), 'it has the picture');
     for (const b of await panel.locator('.lessons button, .lessons summary').all()) { const bb = await b.boundingBox(); if (bb) expect(bb.height >= 44, 'lesson buttons are 44px: ' + await b.innerText()); }
     expect(!/[—–]/.test(await panel.locator('.lessons').innerText()), 'no dashes in Your lessons');
+    // the app tab reloads once while it opens, before the app has taken the lesson (an update, a flaky line):
+    // the lesson must still reach it
+    await ctx.addInitScript(() => { if (!/askcassie/.test(location.host)) return; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'import-file' && !sessionStorage.getItem('reloadedOnce')) { sessionStorage.setItem('reloadedOnce', '1'); e.stopImmediatePropagation(); location.reload(); } }, true); });
     const appOpened = ctx.waitForEvent('page', { timeout: 15000 });
     await first.locator('[data-open]').click();
     const app = await appOpened;
     await app.waitForLoadState().catch(() => {});
-    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto(app.url().startsWith('chrome-error') ? 'https://askcassie.pages.dev/app.html' : app.url()); // (the test's stand-in for the site is set up a moment after a new tab's first load)
+    if (!/askcassie\.pages\.dev/.test(await app.evaluate(() => location.host).catch(() => ''))) await app.goto(app.url().startsWith('chrome-error') ? 'https://askcassie.pages.dev/app.html' : app.url()).catch((e) => { if (!/interrupted by another navigation/.test(e.message)) throw e; }); // (the test's stand-in for the site is set up a moment after a new tab's first load; the tab's own reload below may cut in)
+    await app.waitForLoadState().catch(() => {});
     await app.waitForFunction(() => typeof state === 'object' && state.chats.some((c) => (c.messages || []).some((m) => /lesson you taught me on a page called “Photosynthesis notes”/.test(m.content || m.text || ''))), null, { timeout: 20000 });
     const att = await app.evaluate(() => JSON.stringify(state.chats.flatMap((c) => c.messages || []).filter((m) => /lesson you taught me/.test(m.content || m.text || ''))).slice(0, 800));
-    expect(/Cassie lesson\.txt|The table shows the two stages/.test(att), 'the lesson reached the app chat with its words: ' + att);
+    expect(/Cassie lesson\.txt|The table shows the two stages/.test(att) && await app.evaluate(() => sessionStorage.getItem('reloadedOnce')) === '1', 'the lesson reached the app chat with its words, even after the tab reloaded while opening: ' + att);
     await app.close();
     await first.locator('[data-del]').click();
     await panel.waitForFunction(() => document.querySelectorAll('.lessons .lesson').length === 1);
@@ -4949,6 +4953,7 @@ test('onboarding: Step 2’s levels sit two across and Next shows without scroll
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, server: false, state: null });
     await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
     await page.waitForSelector('.fr-ob');
+    await page.waitForFunction(() => { const e = document.querySelector('.fr-skipall'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 3000 }).catch(() => {}); // (the screen slides in: measure it once it has)
     const skip = await page.locator('.fr-skipall').boundingBox();
     expect(skip && skip.height >= 44 && /Skip setup/.test(await page.locator('.fr-skipall').innerText()), viewport.width + ': Skip setup under the name, 44px');
     await page.fill('.fr-ob input[name=name]', 'Mara'); await page.click('.fr-go');
@@ -5172,6 +5177,8 @@ test('Liquid Glass tap: a tab icon, an icon button and a board tool press to 0.9
   const press = async (page, sel) => {
     const box = await page.locator(sel).first().boundingBox();
     await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4); await page.mouse.down(); await page.waitForTimeout(200);
+    // (held down: wait for the press to settle, however slow this machine draws it; with Reduce Motion there is nothing to settle)
+    await page.waitForFunction((s) => { const t = getComputedStyle(document.querySelector(s)).transform, k = +((t.match(/^matrix\(([\d.]+)/) || [])[1] || 1); return k <= 0.945 || matchMedia('(prefers-reduced-motion: reduce)').matches; }, sel, { timeout: 1500 }).catch(() => {});
     const r = await page.evaluate((s) => { const e = document.querySelector(s), a = getComputedStyle(e, '::after'); return { t: getComputedStyle(e).transform, glow: +a.opacity || 0, bg: a.backgroundImage, x: e.style.getPropertyValue('--x'), tint: getComputedStyle(e).boxShadow }; }, sel);
     await page.mouse.up(); await page.waitForTimeout(80);
     r.spring = await page.evaluate((s) => document.querySelector(s).classList.contains('lg-up'), sel);
@@ -5422,7 +5429,7 @@ test('one Cassie from the first paint: with 3D, no flat Cassie or old drawing is
   }
   // 2. Reduce Motion, Lite mode, and three.js failing: the flat Cassie, never a 3D one
   for (const [why, o] of [['Reduce Motion', { lite: 'off', motion: 'reduce' }], ['Lite mode', { lite: 'on' }], ['three.js failing', { lite: 'off', fail: true }]]) {
-    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, scale: 1, lite: o.lite, server: false, state: { groqKey: 'gsk_test', tab: 'chat' },
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, scale: 1, lite: o.lite, server: false, state: { groqKey: 'gsk_test', tab: 'chat' }, noOffline: !!o.fail, // (the offline cache would fetch three.js itself)
       setup: o.fail ? (c) => c.route(/explore\/three\.module\.min\.js/, (r) => r.abort()) : null });
     if (o.motion) await page.emulateMedia({ reducedMotion: o.motion });
     await ctx.addInitScript(WATCH_CASSIE);
@@ -7995,9 +8002,14 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   }
   // each tab's own icon moves when tapped
   const moving = (t) => page.evaluate((tab) => { const b = document.querySelector(`.tab[data-tab="${tab}"]`), s = b.querySelector('svg'); return { cls: s.classList.contains('ia-go'), n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running' && /^ia-/.test(a.animationName || '')).length }; }, t);
+  // (the page notes the move as it starts: a short move can be over before a slow machine's next look)
+  const watch = (t) => page.evaluate((tab) => { const s = document.querySelector(`.tab[data-tab="${tab}"] svg`); window.__mv = null;
+    new MutationObserver((ms, ob) => { if (!s.classList.contains('ia-go')) return; ob.disconnect(); requestAnimationFrame(() => { window.__mv = { cls: true, n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running' && /^ia-/.test(a.animationName || '')).length }; }); }).observe(s, { attributes: true, attributeFilter: ['class'] }); }, t);
   for (const t of ['home', 'chat', 'labs', 'games', 'cards', 'you']) {
+    await watch(t);
     await page.click(`.tab[data-tab="${t}"]`);
-    const m = await moving(t);
+    await page.waitForFunction(() => window.__mv, null, { timeout: 2000 }).catch(() => {});
+    const m = await page.evaluate(() => window.__mv) || await moving(t);
     expect(m.cls && m.n >= 1, `the ${t} icon moves when tapped: ` + JSON.stringify(m));
   }
   // Reduce Motion: no movement, just the colour
@@ -8142,8 +8154,18 @@ test('Learn’s level folders move like the recording on a computer (1280x800): 
   const rise = (rest.top - lean.top) / rest.h;
   expect(rise >= 0.2 && lean.turn >= 15, 'the pointer over a folder: papers rise ≥20% and the pocket tips ≥15deg: ' + JSON.stringify({ rise, turn: lean.turn }));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-lean.png', clip: { x: 0, y: 150, width: 1280, height: 330 } });
-  await page.click(F); await page.waitForTimeout(300); // (the fan takes 380ms, then the level opens)
-  const fanned = await look();
+  // (the fan takes 380ms, then the level opens: the page itself notes the folder 250ms into the fan, so a slow
+  // machine's round trips can't land after the level has opened)
+  await page.evaluate((sel) => {
+    const f = document.querySelector(sel); window.__fan = null;
+    new MutationObserver((ms, ob) => { if (!f.classList.contains('lf-open')) return; ob.disconnect(); setTimeout(() => {
+      const fr = f.getBoundingClientRect(), mid = f.querySelectorAll('.lf-paper')[1].getBoundingClientRect();
+      window.__fan = { h: fr.height, top: mid.top, open: f.classList.contains('lf-open'), fan: getComputedStyle(f.querySelector('.lf-paper')).transform };
+    }, 250); }).observe(f, { attributes: true, attributeFilter: ['class'] });
+  }, F);
+  await page.click(F);
+  await page.waitForFunction(() => window.__fan, null, { timeout: 3000 });
+  const fanned = await page.evaluate(() => window.__fan);
   expect(fanned.open && (rest.top - fanned.top) / rest.h > rise, 'a click: the papers fly up and fan out first: ' + JSON.stringify(fanned));
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/folders-open.png', clip: { x: 0, y: 100, width: 1280, height: 380 } });
   await page.waitForSelector('.labs-foryou .lf-back-btn', { timeout: 3000 });
@@ -8245,7 +8267,7 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
   const look = (page, sel) => page.$eval(sel, (h, SV) => {
     const svg = h.querySelector(SV), r = h.getBoundingClientRect();
     const anims = svg.getAnimations({ subtree: true }).filter((a) => /^ia-/.test(a.animationName || ''));
-    return { ia: svg.dataset.ia, go: svg.classList.contains('ia-go'), anims: anims.map((a) => [a.animationName, a.effect.target === svg ? 'svg' : [...a.effect.target.classList].filter((c) => /^ia-[px]\d/.test(c)).join(' ')]), box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] };
+    return { ia: svg.dataset.ia, go: svg.classList.contains('ia-go'), anims: anims.map((a) => [a.animationName, a.effect.target === svg ? 'svg' : [...a.effect.target.classList].filter((c) => /^ia-[px]\d/.test(c)).join(' ')]), box: [h.offsetLeft, h.offsetTop, h.offsetWidth, h.offsetHeight, getComputedStyle(h).transform] }; // (where the button sits in its card, and whether it moved itself: a Home card lifting on hover carries it, v217)
   }, SVG);
   // at rest: what shows is the icon as drawn (the parts hidden), nothing moved or dashed
   const rest = (page, sel) => page.$eval(sel, (h, SV) => { const svg = h.querySelector(SV); const shown = [svg, ...svg.querySelectorAll('*')].filter((e) => !e.closest('.ia-parts') && !e.matches('.ia-rest'));
@@ -8270,7 +8292,7 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
     expect(A.n > 20 && !A.bad.length, '1280x800 Home: every icon moves its own parts like the recording: ' + A.bad.join(' | '));
     const hover = async (sel, ia, name, part) => {
       await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.mouse.move(640, 790); await page.waitForTimeout(700);
-      const before = await rest(page, sel), b0 = await page.$eval(sel, (h) => { const r = h.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; });
+      const before = await rest(page, sel), b0 = await page.$eval(sel, (h) => [h.offsetLeft, h.offsetTop, h.offsetWidth, h.offsetHeight, getComputedStyle(h).transform]);
       await page.hover(sel); await page.waitForTimeout(60);
       const m = await look(page, sel);
       plays(m, ia, name, part, '1280x800 hover ' + sel);

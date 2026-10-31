@@ -886,11 +886,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // The bridge script on the Cassie app asks for the file meant for its tab.
   if (msg?.type === 'CASSIE_BRIDGE_READY') {
     const id = sender.tab && sender.tab.id;
-    const payload = pendingImports.get(id) || null;
-    if (payload) pendingImports.delete(id);
-    sendResponse(payload);
+    sendResponse(pendingImports.get(id) || null); // (kept until the app says it has it: a reload while it opens still gets it)
     return false;
   }
+  if (msg?.type === 'CASSIE_BRIDGE_TAKEN') { if (sender.tab) pendingImports.delete(sender.tab.id); return false; }
   return false;
 });
 
