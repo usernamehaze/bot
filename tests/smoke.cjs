@@ -8347,6 +8347,122 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
   }
 });
 
+test('every Home box opens from anywhere on it, lifts on hover and keeps its light (computer 1280x800 and phone 390x844): a click or tap on a box’s padding, empty space or title opens what its button or arrow opens; the timer’s Stop, Start and Edit still do their own job; a mouse lifts it 3px (a finger never), a press sinks it to .98, one tab stop and Enter opens it; the light still follows the pointer; Reduce Motion: no lift', async (b) => {
+  // which main control each box clicked, without letting it open anything (so every box can be tried in turn)
+  // (the test's own list of Home's boxes and what each one's main button is: as a student sees them)
+  const define = (page) => page.evaluate(() => {
+    window.__BOX = '.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab';
+    window.__main = (box) => { const b = box.querySelector('.ht-go:is(button), .dk-tgo, .dk-up, .hub-tlab-go, [data-dk="nexttask"]'); if (b) return b; const m = { 'dk-chart': 'progress', 'dk-ready': 'plan', 'dk-plans': 'plan', 'dk-chats': 'chats', 'dk-next': 'plan' }; const k = Object.keys(m).find((c) => box.classList.contains(c)); return k ? m[k] : null; };
+  });
+  const spy = (page) => page.evaluate(() => {
+    window.__opened = [];
+    window.addEventListener('click', (e) => { const box = e.target.closest && e.target.closest(window.__BOX); if (box && e.target === window.__main(box)) { window.__opened.push(e.target.className.split(' ')[0] + ':' + (e.target.dataset.ht || e.target.dataset.dk || e.target.dataset.hub || '')); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    window.deskAct = (a) => window.__opened.push('deskAct:' + a);
+  });
+  // a point inside the box that is the box itself (no control there): its padding or empty space
+  const spots = (page) => page.evaluate(() => [...document.querySelectorAll(window.__BOX)].filter((x) => x.getClientRects().length && x.getBoundingClientRect().top >= 0 && x.getBoundingClientRect().bottom <= innerHeight).map((box, i) => {
+    box.dataset.tb = i; const r = box.getBoundingClientRect(), main = window.__main(box);
+    const pts = [[r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6], [r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + r.width / 2, r.bottom - 6]];
+    const own = 'button, a, input, select, textarea, label, summary, form, [role="button"], [role="switch"], [role="link"], [data-dk], [data-hub], [contenteditable]';
+    const p = pts.find(([x, y]) => { const t = document.elementFromPoint(x, y); return t && box.contains(t) && !t.closest(own); });
+    const title = box.querySelector('h2, b'); const tr = title && title.getBoundingClientRect(); const tt = tr && document.elementFromPoint(tr.left + 3, tr.top + tr.height / 2);
+    return { i, cls: box.className.split(' ').slice(0, 2).join(' '), p, title: tt && box.contains(tt) && !tt.closest(own) ? [tr.left + 3, tr.top + tr.height / 2] : null, button: !!(main && typeof main !== 'string' && box.contains(main) && main !== box), main: main ? (typeof main === 'string' ? 'deskAct:' + main : main.className.split(' ')[0] + ':' + (main.dataset.ht || main.dataset.dk || main.dataset.hub || '')) : null };
+  }));
+  const tryAll = async (page, where) => {
+    const list = (await spots(page)).filter((s) => s.main);
+    let n = 0;
+    for (const s of list) {
+      for (const [kind, pt] of [['empty space', s.p], ['title', s.title]]) {
+        if (!pt) continue;
+        await page.evaluate(() => { window.__opened = []; });
+        await page.mouse.click(pt[0], pt[1]); await page.waitForTimeout(60);
+        const got = await page.evaluate(() => window.__opened);
+        expect(got.length === 1 && got[0] === s.main, `${where}: a click on the ${kind} of ${s.cls} opens what its button opens (${s.main}): ` + JSON.stringify(got));
+        n++;
+      }
+    }
+    return n;
+  };
+  const tf = (page, sel) => page.$eval(sel, (e) => getComputedStyle(e).transform);
+  // a computer
+  {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .dk-stat'); await page.waitForTimeout(800);
+    await define(page); await spy(page);
+    const n1 = await tryAll(page, '1280x800 top');
+    await page.evaluate(() => { const s = document.querySelector('.desk-home .dk-card'); s.scrollIntoView({ block: 'center' }); }); await page.waitForTimeout(400);
+    const n2 = await tryAll(page, '1280x800 cards');
+    expect(n1 + n2 >= 12, '1280x800: tried the Home boxes (tiles, stats and cards): ' + (n1 + n2));
+    // the timer tile’s own controls still do their own job
+    await page.evaluate(() => document.querySelector('.ht-dtimer').scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+    for (const [sel, want] of [['.ht-dtimer .dk-tstop', 'deskAct:tstop'], ['.ht-dtimer .dk-tgo', 'deskAct:tgo']]) {
+      await page.evaluate(() => { window.__opened = []; }); await page.click(sel); await page.waitForTimeout(60);
+      const got = await page.evaluate(() => window.__opened);
+      expect(JSON.stringify(got) === JSON.stringify([want]), `1280x800: ${sel} does its own job only: ` + JSON.stringify(got));
+    }
+    await page.evaluate(() => { window.__opened = []; }); await page.click('.ht-dtimer .ht-edit'); await page.waitForTimeout(100);
+    const ed = await page.evaluate(() => ({ opened: window.__opened, exp: document.querySelector('.ht-dtimer .ht-edit').getAttribute('aria-expanded') }));
+    expect(ed.exp === 'true' && ed.opened.length === 0, '1280x800: Edit opens the minutes, nothing else: ' + JSON.stringify(ed));
+    await page.click('.ht-dtimer .ht-edit'); await page.waitForTimeout(100);
+    // a mouse lifts a box 3px and it settles; a press sinks it to .98
+    const box = '.desk-home .dk-stat:nth-child(2)';
+    await page.$eval(box, (e) => e.scrollIntoView({ block: 'center' })); await page.mouse.move(5, 790); await page.waitForTimeout(300);
+    const bb = await page.locator(box).boundingBox();
+    await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2 + 10); await page.waitForTimeout(600);
+    const up = await tf(page, box), m = up.match(/matrix\(1, 0, 0, 1, 0, (-?[\d.]+)\)/);
+    expect(m && Math.abs(+m[1] + 3) < 0.1, '1280x800: the box lifts 3px under the mouse: ' + up);
+    await page.mouse.down(); await page.waitForTimeout(450);
+    const down = await tf(page, box), sc = down === 'none' ? 1 : +down.slice(7).split(',')[0];
+    expect(Math.abs(sc - 0.98) < 0.01, '1280x800: a press sinks it to .98: ' + down);
+    await page.mouse.up(); await page.mouse.move(5, 790);
+    const settled = await page.waitForFunction((s) => getComputedStyle(document.querySelector(s)).transform === 'none', box, { timeout: 2000 }).then(() => true, () => false);
+    expect(settled, '1280x800: it settles when the mouse leaves: ' + await tf(page, box) + ' ' + await page.$eval(box, (e) => e.className));
+    // one tab stop per box (its main button), Enter opens it, the box shows the ring
+    const one = await page.evaluate(() => ['.ht-lessons', '.ht-cards', '.desk-home .dk-stat'].map((s) => document.querySelector(s).querySelectorAll('button, a[href], input, [tabindex]:not([tabindex="-1"])').length));
+    expect(one.every((x) => x === 1), '1280x800: one tab stop per box: ' + one);
+    await page.keyboard.press('Tab'); await page.focus('.ht-lessons .ht-go');
+    await page.evaluate(() => { window.__opened = []; }); await page.keyboard.press('Enter'); await page.waitForTimeout(60);
+    const kb = await page.evaluate(() => ({ opened: window.__opened, ring: getComputedStyle(document.querySelector('.ht-lessons')).outlineStyle }));
+    expect(kb.opened.length === 1 && /lessons/.test(kb.opened[0]) && kb.ring === 'solid', '1280x800: Enter opens it, the box shows the ring: ' + JSON.stringify(kb));
+    // the light still follows the pointer on the tiles
+    const tile = await page.locator('.ht-lessons').boundingBox();
+    await page.mouse.move(tile.x + 10, tile.y + tile.height / 2); await page.waitForTimeout(150);
+    const l1 = await page.$eval('.ht-lessons', (e) => e.dataset.lgLight);
+    await page.mouse.move(tile.x + tile.width - 10, tile.y + tile.height / 2); await page.waitForTimeout(150);
+    const l2 = await page.$eval('.ht-lessons', (e) => e.dataset.lgLight);
+    expect(l1 && l2 && l1 !== l2, '1280x800: the light follows the pointer across a tile: ' + [l1, l2]);
+    // Reduce Motion: no lift
+    await page.emulateMedia({ reducedMotion: 'reduce' }); await page.mouse.move(5, 790); await page.waitForTimeout(300);
+    await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2 + 10); await page.waitForTimeout(300);
+    expect(await tf(page, box) === 'none', '1280x800: Reduce Motion: no lift');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // a phone: taps
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.waitForSelector('#home .ht-tile'); await page.waitForTimeout(800);
+    await define(page); await spy(page);
+    let n = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      const list = (await spots(page)).filter((s) => s.main && s.p);
+      for (const s of list) {
+        await page.evaluate(() => { window.__opened = []; });
+        await page.touchscreen.tap(s.p[0], s.p[1]); await page.waitForTimeout(80);
+        const got = await page.evaluate(() => window.__opened);
+        const lift = await page.$eval(`[data-tb="${s.i}"]`, (e) => e.classList.contains('gl-up'));
+        expect(got.length === 1 && got[0] === s.main, `390x844: a tap on the empty part of ${s.cls} opens what its button opens (${s.main}): ` + JSON.stringify(got));
+        expect(!lift, `390x844: a finger never lifts ${s.cls}`);
+        n++;
+      }
+      await page.evaluate(() => document.getElementById('home').scrollBy(0, 500)); await page.waitForTimeout(400);
+    }
+    expect(n >= 4, '390x844: tried the Home boxes: ' + n);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('glass edges are smooth (iPhone, 3x screen): the rounded corners of a chip, the ask box, the tab bar and a Home card have no stair steps, and the still light is baked at the screen’s sharpness with a soft edge', async (b) => {
   // the boundary of a corner, row by row, from the screen’s own pixels: on a smooth curve it only ever moves one
   // way; the old 1px steps on a 3x screen made it zigzag (teeth)
