@@ -3284,8 +3284,17 @@ html.lite .set-group, html.lite .composer, html.lite .dk-card, html.lite .dk-sta
 @media (min-width: 761px) { .settings-card { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .75), var(--lg-lift); } }
 .gl-up { transform: translateY(-2px); box-shadow: var(--lg-edge), inset 0 1px 0 rgba(var(--hi-rgb), .85), var(--lg-lift-up) !important; }
 .gl-down { transform: scale(.98); }
-@media (prefers-reduced-motion: reduce) { .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row { transition: box-shadow .15s ease; } .gl-up, .gl-down { transform: none; } }
-html.lite .gl-up, html.lite .gl-down { transform: none; }
+/* Home's boxes: the whole box opens (app.js HOME_BOX), so it says so: a hand, a 3px lift that settles with a small
+   spring, a press to .98, and a ring round the box when its main button has keyboard focus */
+:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab) { cursor: pointer; transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), box-shadow .22s ease; }
+:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab).gl-up { transform: translateY(-3px); }
+:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub-chat.ex-new, .hub-tlab).gl-down { transform: scale(.98); transition-duration: .1s; } /* (Home's boxes and cards keep their own .96 press: app.js PRESS) */
+@media (prefers-reduced-motion: no-preference) { :is(.hub .hub-box, .hub-card):active { transform: scale(.96); transition: transform .12s ease; } } /* (pressed, lifted or not: their own quick press wins) */
+:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub-tlab):has(:is(.ht-go, .dk-up, .dk-tgo, .hub-tlab-go):focus-visible) { outline: 2px solid var(--focus); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row, .ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub-chat.ex-new { transition: box-shadow .15s ease; } .gl-up, .gl-down { transform: none !important; }
+  /* (no move: a soft tint says it's under the pointer or pressed) */
+  .gl-up, .gl-down { box-shadow: var(--lg-edge), inset 0 0 0 999px rgba(var(--hi-rgb), .12), var(--lg-lift-up) !important; } }
+html.lite .gl-up:not(:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab)), html.lite .gl-down:not(:is(.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab)) { transform: none; } /* (Lite: Home's boxes still lift; there is no glass light to move) */
 /* a phone has no moving backdrop (it saves the battery), so a still glow of the picked colours shows through the glass */
 html.native:not(.lite) body { background:
   radial-gradient(62% 38% at 12% 8%, var(--amb-1), transparent 72%),

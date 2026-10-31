@@ -2256,9 +2256,27 @@ document.addEventListener('pointerover', (e) => {
   if (h && !(e.relatedTarget && h.contains(e.relatedTarget))) icGo(h);
 }, true);
 document.addEventListener('pointerdown', (e) => { const h = e.target.closest && e.target.closest(IC_HOST); if (h) icGo(h); }, true);
-// glass that lifts: a tappable card rises 2px under the pointer and presses in a little (style.css gl-up, gl-down)
-const GL_LIFT = '.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row, .hub-chat.ex-new';
-document.addEventListener('pointerover', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget)) && e.pointerType === 'mouse') c.classList.add('gl-up'); }, true);
+// every Home box opens from anywhere on it (its padding, its empty space, its title, its numbers): a click there
+// clicks the box's main button, the same one a tap on it uses; a control inside the box (the timer's Stop, Start
+// and Edit, a list's rows) still does its own job, and selecting its words opens nothing. One tab stop per box: its
+// main button (style.css rings the box when that button has keyboard focus).
+const HOME_BOX = '.ht-tile, .desk-home .dk-stat, .desk-home .dk-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab';
+const BOX_OWN = 'button, a, input, select, textarea, label, summary, form, [role="button"], [role="switch"], [role="link"], [data-dk], [data-hub], [contenteditable]';
+const BOX_DK = { 'dk-chart': 'progress', 'dk-ready': 'plan', 'dk-plans': 'plan', 'dk-chats': 'chats', 'dk-next': 'plan' }; // (the dashboard cards with no button of their own)
+function boxMain(box) {
+  const b = box.querySelector('.ht-go:is(button), .dk-tgo, .dk-up, .hub-tlab-go, [data-dk="nexttask"]'); if (b) return b;
+  const k = Object.keys(BOX_DK).find((c) => box.classList.contains(c)); return k ? BOX_DK[k] : null;
+}
+document.addEventListener('click', (e) => {
+  const box = e.target.closest && e.target.closest(HOME_BOX);
+  if (!box || e.defaultPrevented || e.button > 0 || e.target.closest(BOX_OWN)) return;
+  const sel = window.getSelection && getSelection(); if (sel && !sel.isCollapsed && box.contains(sel.anchorNode)) return; // (selecting its words)
+  const main = boxMain(box); if (!main) return;
+  if (typeof main === 'string') deskAct(main); else main.click();
+});
+// glass that lifts: a tappable card rises under a mouse or pen (Home's boxes 3px, with a small spring) and presses in a little (style.css gl-up, gl-down)
+const GL_LIFT = HOME_BOX + ', .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row';
+document.addEventListener('pointerover', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget)) && (e.pointerType === 'mouse' || e.pointerType === 'pen')) c.classList.add('gl-up'); }, true);
 document.addEventListener('pointerout', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget))) c.classList.remove('gl-up', 'gl-down'); }, true);
 document.addEventListener('pointerdown', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c) c.classList.add('gl-down'); }, true);
 ['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, () => document.querySelectorAll('.gl-down').forEach((c) => c.classList.remove('gl-down')), true));
@@ -2353,7 +2371,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=216'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=217'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2565,7 +2583,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=216').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=217').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6898,7 +6916,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=216');
+      exploreMod = await import('./explore/cell3d.js?v=217');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6948,7 +6966,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=216');
+      labsMod = await import('./labs/labs.js?v=217');
       islandRest();
     }
     labsMod.open({
@@ -8789,10 +8807,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=216').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=217').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=216', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=217', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
