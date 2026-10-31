@@ -2274,6 +2274,175 @@ document.addEventListener('click', (e) => {
   const main = boxMain(box); if (!main) return;
   if (typeof main === 'string') deskAct(main); else main.click();
 });
+// Home's widgets: every Home box is a widget (data-w in its markup). "Edit Home" lets the student move them (a
+// mouse on the handle, a finger after a long press, or the arrow keys), size them (Small, Medium, Large), take
+// them off and add them back; the layout is kept in state.homeLayout, one for a phone and one for a computer.
+// Outside edit mode Home works as before (whole-box clicks, the lift, the light).
+const HW_NAME = { lessons: 'Lessons', timer: 'Focus timer', cards: 'Flashcards', exam: 'Exam coming up', tlab: 'Today’s Lab', asked: 'Questions this week',
+  learned: 'Cards learned', streak: 'Day streak', readiness: 'Exam readiness', week: 'Study this week', next: 'Next up', plans: 'My exam plans', chats: 'Recent chats',
+  ready: 'Readiness gauge', continue: 'Continue', tools: 'Study tools', quick: 'Quick actions' };
+const HW_ABOUT = { lessons: 'What your level studies', timer: 'Start a focus session', cards: 'Review and make cards', exam: 'A day by day plan for an exam', tlab: 'A lab picked for today',
+  asked: 'How many questions this week', learned: 'Cards you know well', streak: 'Days in a row', readiness: 'How ready you are for your exam', week: 'A bar for each day',
+  next: 'The next task of your plan', plans: 'Your exam plans', chats: 'Your last chats', ready: 'Your exam readiness, as a gauge', continue: 'Pick up a chat', tools: 'Research, quiz, board and more',
+  quick: 'One tap to start' };
+const HW_DEFAULT = {
+  desk: [['lessons', 's'], ['timer', 'm'], ['cards', 's'], ['exam', 'm'], ['tlab', 'm'], ['asked', 's'], ['learned', 's'], ['streak', 's'], ['readiness', 's'],
+    ['week', 'm'], ['next', 'm'], ['plans', 'm'], ['chats', 'm'], ['ready', 'm']],
+  phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['tlab', 'm'], ['streak', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
+const HW_SIZES = ['s', 'm', 'l'], HW_SIZE_NAME = { s: 'Small', m: 'Medium', l: 'Large' };
+let homeEditing = false;
+const hwStill = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const hwLayout = (kind) => { const s = state.homeLayout && state.homeLayout[kind]; return Array.isArray(s) ? s : HW_DEFAULT[kind].map(([id, size]) => ({ id, size })); };
+function hwSave(grid) {
+  state.homeLayout = { ...(state.homeLayout || {}), [grid.dataset.kind]: [...grid.querySelectorAll(':scope > .hw')].map((w) => ({ id: w.dataset.w, size: w.dataset.size })) };
+  save();
+}
+const hwSay = (grid, text) => { const l = grid.parentElement && grid.parentElement.querySelector('.hw-live'); if (l) { l.textContent = ''; requestAnimationFrame(() => { l.textContent = text; }); } };
+const hwWhere = (w) => { const all = [...w.parentElement.querySelectorAll(':scope > .hw')]; return `${HW_NAME[w.dataset.w] || 'Widget'}, moved to position ${all.indexOf(w) + 1} of ${all.length}`; };
+function hwSize(w, size) {
+  w.dataset.size = size; HW_SIZES.forEach((z) => w.classList.toggle('ws-' + z, z === size));
+  const b = w.querySelector(':scope > .hw-ctl .hw-size'); if (b) { b.textContent = size.toUpperCase(); b.setAttribute('aria-label', `Size of ${HW_NAME[w.dataset.w]}: ${HW_SIZE_NAME[size]}. Change it`); }
+}
+// the others slide to their new places (and nothing slides with Reduce Motion)
+function hwFlip(grid, change) {
+  const items = [...grid.querySelectorAll(':scope > .hw:not(.hw-dragging), :scope > .hw-ph')], before = new Map(items.map((e) => [e, e.getBoundingClientRect()]));
+  change();
+  if (hwStill()) return;
+  items.forEach((e) => { const a = before.get(e), b = e.getBoundingClientRect(); const dx = a.left - b.left, dy = a.top - b.top; if (!dx && !dy) return;
+    e.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.2, .8, .2, 1)' }); });
+}
+function hwControls(w) {
+  if (w.querySelector(':scope > .hw-ctl')) return;
+  const name = HW_NAME[w.dataset.w] || 'Widget', c = document.createElement('div');
+  c.className = 'hw-ctl'; c.hidden = !homeEditing;
+  c.innerHTML = `<button type="button" class="hw-handle" aria-label="Move ${name}" aria-describedby="hw-keys"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></button>`
+    + `<button type="button" class="hw-size"></button><button type="button" class="hw-x" aria-label="Remove ${name}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+  w.prepend(c); hwSize(w, w.dataset.size || 'm');
+}
+function homeWidgets(root, kind) {
+  const found = new Map([...root.querySelectorAll('[data-w]')].map((e) => [e.dataset.w, e]));
+  if (!found.size) return;
+  const grid = document.createElement('div');
+  grid.className = 'hw-grid hw-' + kind; grid.dataset.kind = kind;
+  const wrap = document.createElement('section');
+  wrap.className = 'hw-wrap'; wrap.setAttribute('aria-label', 'Your Home');
+  wrap.innerHTML = `<div class="hw-bar"><button type="button" class="hw-edit" aria-pressed="false">Edit Home</button><span class="hw-tools" hidden><button type="button" class="hw-add">Add widget</button><button type="button" class="hw-reset">Reset Home</button></span></div>
+    <p class="hw-hint" id="hw-keys" hidden>Drag a widget by its handle (a long press on a phone), or focus its handle and use the arrow keys to move it and plus or minus to size it.</p><p class="hw-live sr-only" aria-live="polite"></p>`;
+  // where the widgets go: under the top of Home (the header, the level note, the ask box)
+  const top = root.querySelector('.home-top'), anchor = root.querySelector('.home-ideas:not(.dk-ideas)') || root.querySelector('#home-ask.hub-ask') || root.querySelector('.hub-go') || top; // (a new student's first cards stay together)
+  if (anchor && anchor.parentElement && root.contains(anchor)) anchor.after(wrap); else root.prepend(wrap);
+  wrap.append(grid);
+  const lay = hwLayout(kind).filter((w) => found.has(w.id));
+  lay.forEach(({ id, size }) => { const e = found.get(id); e.classList.add('hw'); hwSize(e, HW_SIZES.includes(size) ? size : 'm'); hwControls(e); grid.append(e); found.delete(id); });
+  grid._spare = found; found.forEach((e) => { e.classList.add('hw'); e.remove(); }); // (off Home: kept for "Add widget")
+  root.querySelectorAll('.ht-row, .dk-stats, .dk-grid').forEach((c) => { if (!c.querySelector('[data-w], *:not(:empty)')) c.remove(); });
+  if (homeEditing) hwEdit(wrap, true);
+}
+function hwEdit(wrap, on) {
+  homeEditing = on;
+  document.documentElement.classList.toggle('home-edit', on);
+  const b = wrap.querySelector('.hw-edit'); b.textContent = on ? 'Done' : 'Edit Home'; b.setAttribute('aria-pressed', String(on));
+  wrap.querySelector('.hw-tools').hidden = !on; wrap.querySelector('.hw-hint').hidden = !on;
+  wrap.querySelectorAll('.hw-ctl').forEach((c) => { c.hidden = !on; });
+}
+function hwAddSheet(wrap) {
+  const grid = wrap.querySelector('.hw-grid'), spare = grid._spare;
+  const d = document.createElement('div');
+  d.className = 'hw-sheet'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'hw-sheet-h');
+  const items = [...spare.keys()];
+  d.innerHTML = `<div class="hw-sheet-card"><h2 id="hw-sheet-h">Add a widget</h2>${items.length ? '<ul class="hw-list"></ul>' : '<p class="hw-none">Every widget is on your Home.</p>'}<button type="button" class="hw-close">Close</button></div>`;
+  const ul = d.querySelector('.hw-list');
+  items.forEach((id) => { const li = document.createElement('li'); li.innerHTML = '<span><b></b><small></small></span><button type="button" class="hw-put">Add</button>';
+    li.querySelector('b').textContent = HW_NAME[id] || id; li.querySelector('small').textContent = HW_ABOUT[id] || ''; li.querySelector('.hw-put').dataset.id = id;
+    li.querySelector('.hw-put').setAttribute('aria-label', 'Add ' + (HW_NAME[id] || id)); ul.appendChild(li); });
+  const close = () => { d.remove(); wrap.querySelector('.hw-add').focus(); };
+  d.addEventListener('click', (e) => {
+    if (e.target === d || e.target.closest('.hw-close')) { close(); return; }
+    const put = e.target.closest('.hw-put'); if (!put) return;
+    const w = spare.get(put.dataset.id); spare.delete(put.dataset.id);
+    hwSize(w, (HW_DEFAULT[grid.dataset.kind].find(([k]) => k === w.dataset.w) || [0, 'm'])[1]); hwControls(w); w.querySelector('.hw-ctl').hidden = false;
+    hwFlip(grid, () => grid.append(w)); hwSave(grid); hwSay(grid, `${HW_NAME[w.dataset.w]} added`); close();
+  });
+  d.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.body.appendChild(d); (d.querySelector('.hw-put') || d.querySelector('.hw-close')).focus();
+}
+// a drag: the widget follows the pointer, the others make room, it drops into the gap
+function hwDrag(w, e) {
+  const grid = w.parentElement, r = w.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+  const ph = document.createElement('div'); ph.className = 'hw-ph ws-' + w.dataset.size; ph.style.height = r.height + 'px';
+  w.before(ph);
+  Object.assign(w.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', zIndex: 60 });
+  w.classList.add('hw-dragging');
+  const scroller = (() => { let p = grid.parentElement; while (p && !(p.scrollHeight > p.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(p).overflowY))) p = p.parentElement; return p; })();
+  let last = e, raf = 0;
+  const place = () => {
+    raf = 0; const x = last.clientX, y = last.clientY;
+    w.style.left = (x - dx) + 'px'; w.style.top = (y - dy) + 'px';
+    if (scroller) { const b = scroller.getBoundingClientRect(); if (y < b.top + 60) scroller.scrollTop -= 12; else if (y > b.bottom - 60) scroller.scrollTop += 12; }
+    // (where things sit in the layout, not where a sliding one is drawn this frame; over the gap itself, nothing changes)
+    const g = grid.getBoundingClientRect(), at = (el) => ({ left: g.left + el.offsetLeft, top: g.top + el.offsetTop, width: el.offsetWidth, height: el.offsetHeight, right: g.left + el.offsetLeft + el.offsetWidth, bottom: g.top + el.offsetTop + el.offsetHeight });
+    const pr = at(ph); if (x >= pr.left && x <= pr.right && y >= pr.top && y <= pr.bottom) return;
+    let best = null, bd = 1e9;
+    grid.querySelectorAll(':scope > .hw:not(.hw-dragging)').forEach((o) => { const q = at(o), d = Math.hypot(x - (q.left + q.width / 2), y - (q.top + q.height / 2)); if (d < bd) { bd = d; best = o; } });
+    if (!best) return;
+    const q = at(best), after = y > q.bottom - q.height * .25 || (y >= q.top && x > q.left + q.width / 2);
+    const ref = after ? best.nextElementSibling : best;
+    if (ref !== ph && ref !== ph.nextElementSibling) hwFlip(grid, () => grid.insertBefore(ph, ref));
+    else if (after && best.nextElementSibling !== ph && !ref) hwFlip(grid, () => grid.append(ph));
+  };
+  const move = (ev) => { if (ev.pointerId !== e.pointerId) return; last = ev; if (!raf) raf = requestAnimationFrame(place); };
+  const noScroll = (ev) => ev.preventDefault();
+  const end = (ev) => {
+    if (ev.pointerId !== e.pointerId) return;
+    window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerup', end, true); window.removeEventListener('pointercancel', end, true);
+    document.removeEventListener('touchmove', noScroll, { capture: true });
+    if (raf) { cancelAnimationFrame(raf); last = ev; place(); } // (where it was let go is where it lands)
+    const from = w.getBoundingClientRect();
+    ph.replaceWith(w); w.classList.remove('hw-dragging'); ['position', 'left', 'top', 'width', 'height', 'zIndex'].forEach((k) => { w.style[k] = ''; });
+    if (!hwStill()) { const to = w.getBoundingClientRect(); w.animate([{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` }, { transform: 'none' }], { duration: 180, easing: 'ease-out' }); }
+    hwSave(grid); hwSay(grid, hwWhere(w));
+  };
+  window.addEventListener('pointermove', move, true); window.addEventListener('pointerup', end, true); window.addEventListener('pointercancel', end, true);
+  document.addEventListener('touchmove', noScroll, { capture: true, passive: false }); // (while dragging, a finger moves the widget, not the page)
+}
+// what Edit Home does: its buttons, a mouse on a handle, a finger's long press, and the keys
+document.addEventListener('click', (e) => {
+  const wrap = e.target.closest && e.target.closest('.hw-wrap'); if (!wrap) return;
+  if (e.target.closest('.hw-edit')) { hwEdit(wrap, !homeEditing); return; }
+  if (e.target.closest('.hw-add')) { hwAddSheet(wrap); return; }
+  if (e.target.closest('.hw-reset')) { if (state.homeLayout) delete state.homeLayout[wrap.querySelector('.hw-grid').dataset.kind]; save(); renderHomeAgain(); return; }
+  const w = e.target.closest('.hw'); if (!w || !homeEditing) return;
+  const grid = w.parentElement;
+  if (e.target.closest('.hw-size')) { const n = HW_SIZES[(HW_SIZES.indexOf(w.dataset.size) + 1) % 3]; hwFlip(grid, () => hwSize(w, n)); hwSave(grid); hwSay(grid, `${HW_NAME[w.dataset.w]}, ${HW_SIZE_NAME[n]}`); return; }
+  if (e.target.closest('.hw-x')) { hwFlip(grid, () => w.remove()); grid._spare.set(w.dataset.w, w); hwSave(grid); hwSay(grid, `${HW_NAME[w.dataset.w]} removed. Add it back with Add widget`); const nx = grid.querySelector('.hw-handle'); if (nx) nx.focus(); return; }
+}, true);
+// in edit mode a widget is something to arrange: a tap on it opens nothing
+document.addEventListener('click', (e) => { if (homeEditing && e.target.closest && e.target.closest('.hw') && !e.target.closest('.hw-ctl')) { e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener('pointerdown', (e) => {
+  if (!homeEditing || !e.target.closest) return;
+  const w = e.target.closest('.hw'); if (!w || e.button > 0) return;
+  if (e.target.closest('.hw-handle') && e.pointerType !== 'touch') { e.preventDefault(); hwDrag(w, e); return; }
+  if (e.pointerType !== 'touch' || e.target.closest('.hw-size, .hw-x')) return;
+  // a finger: a long press (400ms) picks it up; moving first is a scroll
+  const x0 = e.clientX, y0 = e.clientY;
+  let t = setTimeout(() => { t = 0; off(); try { navigator.vibrate(10); } catch (er) { /* no buzz */ } hwDrag(w, e); }, 400);
+  const mv = (ev) => { if (ev.pointerId === e.pointerId && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 8) cancel(); };
+  const cancel = () => { if (t) clearTimeout(t); t = 0; off(); };
+  const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', cancel, true); window.removeEventListener('pointercancel', cancel, true); };
+  window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', cancel, true); window.addEventListener('pointercancel', cancel, true);
+}, true);
+document.addEventListener('keydown', (e) => {
+  const h = e.target.closest && e.target.closest('.hw-handle'); if (!h || !homeEditing) return;
+  const w = h.closest('.hw'), grid = w.parentElement, all = [...grid.querySelectorAll(':scope > .hw')], i = all.indexOf(w);
+  if (['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(e.key)) {
+    e.preventDefault(); const j = /Left|Up/.test(e.key) ? i - 1 : i + 1; if (j < 0 || j >= all.length) return;
+    hwFlip(grid, () => (j < i ? all[j].before(w) : all[j].after(w))); h.focus(); hwSave(grid); hwSay(grid, hwWhere(w));
+  } else if (['+', '=', '-', '_'].includes(e.key)) {
+    e.preventDefault(); const k = HW_SIZES.indexOf(w.dataset.size) + (/[+=]/.test(e.key) ? 1 : -1); if (k < 0 || k > 2) return;
+    hwFlip(grid, () => hwSize(w, HW_SIZES[k])); hwSave(grid); hwSay(grid, `${HW_NAME[w.dataset.w]}, ${HW_SIZE_NAME[HW_SIZES[k]]}`);
+  }
+});
+function renderHomeAgain() { if (sideWide.matches) { if (typeof deskGo === 'function') deskGo('home'); } else { const h = document.getElementById('home'); if (h && typeof renderHub === 'function') renderHub(h); else renderHistory(); } }
 // glass that lifts: a tappable card rises under a mouse or pen (Home's boxes 3px, with a small spring) and presses in a little (style.css gl-up, gl-down)
 const GL_LIFT = HOME_BOX + ', .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row';
 document.addEventListener('pointerover', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget)) && (e.pointerType === 'mouse' || e.pointerType === 'pen')) c.classList.add('gl-up'); }, true);
@@ -2371,7 +2540,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=218'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=219'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2568,7 +2737,7 @@ function hubReminders(due, streak) {
 function hubTodayLab() {
   const id = todayLab(), [nm, subj, min] = LAB_INFO[id] || [id, 'Science', 10];
   const card = document.createElement('section');
-  card.className = 'hub-tlab';
+  card.className = 'hub-tlab'; card.dataset.w = 'tlab';
   card.setAttribute('aria-label', 'Today’s Lab');
   card.innerHTML = `<canvas class="hub-tlab-pv" data-pv="${id}" aria-hidden="true"></canvas>
     <div class="hub-tlab-info"><span class="hub-tlab-tag">Today’s Lab</span><b></b><small></small></div>
@@ -2583,7 +2752,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=218').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=219').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2599,10 +2768,10 @@ function homeTop({ desk = false } = {}) {
     ? `<div class="ht-go ht-show"><i>${HUB_ICON.timer}</i><b class="dk-time" aria-live="off">25:00</b><small class="dk-mode">Focus</small><span class="ht-tbtns"><button type="button" class="dk-tstop" data-dk="tstop" aria-label="Stop and reset the timer">${DESK_ICON.stop}</button><button type="button" class="dk-tgo" data-dk="tgo" aria-label="Start the focus timer">${DESK_ICON.play}</button></span></div>`
     : `<button type="button" class="ht-go hub-timer" data-hub="timer"><i>${HUB_ICON.timer}</i><b>25:00</b><span>Focus</span><em>Start</em></button>`;
   top.innerHTML = `<div class="ht-row">
-      <div class="ht-tile ht-lessons"><button type="button" class="ht-go" data-ht="lessons"><i>${LESSONS_ICON}</i><b>Lessons</b><small>Made for your level</small></button></div>
-      <div class="ht-tile ht-timer${desk ? ' ht-dtimer' : ''}">${timer}
+      <div class="ht-tile ht-lessons" data-w="lessons"><button type="button" class="ht-go" data-ht="lessons"><i>${LESSONS_ICON}</i><b>Lessons</b><small>Made for your level</small></button></div>
+      <div class="ht-tile ht-timer${desk ? ' ht-dtimer' : ''}" data-w="timer">${timer}
         <button type="button" class="ht-edit" aria-expanded="false" aria-controls="ht-set" aria-label="Edit the timer minutes">Edit</button></div>
-      <div class="ht-tile ht-cards"><button type="button" class="ht-go" data-ht="cards"><i>${HUB_ICON.cards}</i><b>Flashcards</b><small></small></button></div>
+      <div class="ht-tile ht-cards" data-w="cards"><button type="button" class="ht-go" data-ht="cards"><i>${HUB_ICON.cards}</i><b>Flashcards</b><small></small></button></div>
     </div>
     <form class="ht-set" id="ht-set" aria-label="Timer minutes" hidden>
       <label>Focus <input type="number" name="focus" min="${TIMER_LIMITS.focus[0]}" max="${TIMER_LIMITS.focus[1]}" inputmode="numeric" required> min</label>
@@ -2631,9 +2800,10 @@ function homeTop({ desk = false } = {}) {
     form.hidden = true; edit.setAttribute('aria-expanded', 'false'); edit.focus();
     renderHubTimer(); renderDeskTimer();
   });
-  top.addEventListener('click', (e) => { const b = e.target.closest('[data-ht]'); if (!b) return; if (b.dataset.ht === 'lessons') openLessons(); else if (b.dataset.ht === 'letcourse') openLetCourse(); else hubAct('cards'); });
+  // (on each tile, not on this section: the tiles may move into Home's widget grid)
+  top.querySelectorAll('[data-ht]').forEach((t) => t.addEventListener('click', () => { if (t.dataset.ht === 'lessons') openLessons(); else if (t.dataset.ht === 'letcourse') openLetCourse(); else hubAct('cards'); }));
   top.append(examSection(), hubTodayLab());
-  requestAnimationFrame(() => hubPreviews(top));
+  requestAnimationFrame(() => hubPreviews(top.closest('.hub, .desk') || top)); // (Today's Lab may sit among Home's widgets by now)
   return top;
 }
 function buildHub({ ideas = false, phone = false } = {}) {
@@ -2656,16 +2826,16 @@ function buildHub({ ideas = false, phone = false } = {}) {
   } else {
     const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
     el.innerHTML = `<button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
-      <h2 class="hub-h">Today</h2>
+      <section class="hub-sec" data-w="streak"><h2 class="hub-h">Today</h2>
       <div class="hub-today hub-today-one">
         <button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
-      </div>
-      <h2 class="hub-h">Continue</h2>
-      <div class="hub-recent"></div>
-      <h2 class="hub-h">Quick actions</h2>
-      <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="${ex.ia}">${ex.icon}</svg><span></span></button>`)).join('')}</div>`;
+      </div></section>
+      <section class="hub-sec" data-w="continue"><h2 class="hub-h">Continue</h2>
+      <div class="hub-recent"></div></section>
+      <section class="hub-sec" data-w="quick"><h2 class="hub-h">Quick actions</h2>
+      <div class="hub-quick">${goalFirst(HOME_EXAMPLES.map((ex, i) => [ex, i]), (x) => x[0].label).map(([ex, i]) => (HUB_BOXED.test(ex.label) ? '' : `<button type="button" class="hub-q" data-hub="tool:${i}"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="${ex.ia}">${ex.icon}</svg><span></span></button>`)).join('')}</div></section>`;
     el.querySelectorAll('.hub-q').forEach((q) => { q.querySelector('span').textContent = HOME_EXAMPLES[+q.dataset.hub.slice(5)].label; });
-    el.querySelector('.hub-today').after(weekCard()); // (the week, under Today; the exam plans are at the top)
+    const wk = weekCard(); wk.dataset.w = 'week'; el.querySelector('[data-w="streak"]').after(wk); // (the week, under Today; the exam plans are at the top)
     const list = el.querySelector('.hub-recent');
     chats.slice(0, 3).forEach((c) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'hub-chat'; b.dataset.hub = 'chat:' + c.id;
@@ -2681,7 +2851,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const streakNow = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
   const hero = hubHero(name, returning, due, phone), remind = hubReminders(due, streakNow);
   const boxes = document.createElement('div');
-  boxes.className = 'hub-boxes';
+  boxes.className = 'hub-boxes'; boxes.dataset.w = 'tools';
   // a brand-new student sees their 4 most useful tools (what they came for first); the rest are one tap away
   const allBoxes = goalFirst(HUB_BOXES, (x) => x[0]), boxHtml = ([a, t, line, icon]) => `<button type="button" class="hub-box" data-hub="${a}"><i>${icon}</i><b>${t}</b><small>${line}</small></button>`;
   const goals = (state.helpWith || []).some((g) => GOAL_TOOLS[g]);
@@ -2699,7 +2869,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   });
   if (phone) { // a phone: the header, the top (Lessons, timer, Flashcards, exams, Today's Lab), then Today, Continue, the boxes and Quick actions
     el.prepend(hero, remind, homeTop());
-    const quick = [...el.querySelectorAll('.hub-h')].find((h2) => /Quick actions/.test(h2.textContent));
+    const quick = el.querySelector('[data-w="quick"]');
     if (quick) quick.before(boxes); else el.append(boxes);
   } else el.prepend(hero, remind, homeTop(), boxes);
   const bell = hero.querySelector('.hub-bell');
@@ -2709,6 +2879,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
+  homeWidgets(el, 'phone');
   setTimeout(renderHubTimer, 0);
   return el;
 }
@@ -2909,17 +3080,17 @@ function deskHome() {
       <div class="dk-acts"><button type="button" class="dk-btn dk-solid hub-lead" data-dk="ask">${DESK_ICON.plus}Ask Cassie</button><button type="button" class="dk-btn dk-line" data-dk="notes">${DESK_ICON.file}Add my notes</button></div>
     </header>
     <section class="dk-stats" aria-label="This week in numbers">
-      <article class="dk-stat dk-stat-main"><h2>Questions this week</h2><b>${asked}</b><small>${asked ? 'Asked in your chats' : 'Ask Cassie anything to start'}</small><button type="button" class="dk-up" data-dk="chats" aria-label="Open your chats">${DESK_ICON.up}</button></article>
-      <article class="dk-stat"><h2>Cards learned</h2><b>${cardsLearned}</b><small>${due ? `${due} ${due === 1 ? 'card' : 'cards'} to review today` : (state.cards || []).length ? 'Nothing to review today' : 'Make flashcards from any answer'}</small><button type="button" class="dk-up" data-dk="cards" aria-label="Open flashcards">${DESK_ICON.up}</button></article>
-      <article class="dk-stat"><h2>Day streak</h2><b>${streak}</b><small>${w.now.days ? `${w.now.days} ${w.now.days === 1 ? 'day' : 'days'} studied this week, last week ${w.last.days}` : 'Study today to start one'}</small><button type="button" class="dk-up" data-dk="progress" aria-label="See your progress">${DESK_ICON.up}</button></article>
-      <article class="dk-stat"><h2>Exam readiness</h2><b>${ready && ready.tried ? ready.pct + '%' : ex ? '0%' : 'None'}</b><small class="dk-ready-note"></small><button type="button" class="dk-up" data-dk="plan" aria-label="See your study plan">${DESK_ICON.up}</button></article>
+      <article class="dk-stat dk-stat-main" data-w="asked"><h2>Questions this week</h2><b>${asked}</b><small>${asked ? 'Asked in your chats' : 'Ask Cassie anything to start'}</small><button type="button" class="dk-up" data-dk="chats" aria-label="Open your chats">${DESK_ICON.up}</button></article>
+      <article class="dk-stat" data-w="learned"><h2>Cards learned</h2><b>${cardsLearned}</b><small>${due ? `${due} ${due === 1 ? 'card' : 'cards'} to review today` : (state.cards || []).length ? 'Nothing to review today' : 'Make flashcards from any answer'}</small><button type="button" class="dk-up" data-dk="cards" aria-label="Open flashcards">${DESK_ICON.up}</button></article>
+      <article class="dk-stat" data-w="streak"><h2>Day streak</h2><b>${streak}</b><small>${w.now.days ? `${w.now.days} ${w.now.days === 1 ? 'day' : 'days'} studied this week, last week ${w.last.days}` : 'Study today to start one'}</small><button type="button" class="dk-up" data-dk="progress" aria-label="See your progress">${DESK_ICON.up}</button></article>
+      <article class="dk-stat" data-w="readiness"><h2>Exam readiness</h2><b>${ready && ready.tried ? ready.pct + '%' : ex ? '0%' : 'None'}</b><small class="dk-ready-note"></small><button type="button" class="dk-up" data-dk="plan" aria-label="See your study plan">${DESK_ICON.up}</button></article>
     </section>
     <div class="dk-grid">
-      <section class="dk-card dk-chart" aria-labelledby="dk-chart-h"><h2 id="dk-chart-h">Study this week</h2><p class="dk-note">Quiz answers, cards moved up, mistakes fixed and plan tasks done, each day.</p><div class="dk-bars" role="list"></div></section>
-      <section class="dk-card dk-next" aria-labelledby="dk-next-h"><h2 id="dk-next-h">Next up</h2></section>
-      <section class="dk-card dk-plans" aria-labelledby="dk-plans-h"><div class="dk-card-head"><h2 id="dk-plans-h">My exam plans</h2><button type="button" class="dk-pill" data-dk="newplan">${DESK_ICON.plus}New plan</button></div><ul class="dk-list"></ul></section>
-      <section class="dk-card dk-chats" aria-labelledby="dk-chats-h"><div class="dk-card-head"><h2 id="dk-chats-h">Recent chats</h2>${chats.length ? '<button type="button" class="dk-pill" data-dk="chats">See all</button>' : ''}</div><ul class="dk-list"></ul></section>
-      <section class="dk-card dk-ready" aria-labelledby="dk-ready-h"><h2 id="dk-ready-h">Exam readiness</h2></section>
+      <section class="dk-card dk-chart" data-w="week" aria-labelledby="dk-chart-h"><h2 id="dk-chart-h">Study this week</h2><p class="dk-note">Quiz answers, cards moved up, mistakes fixed and plan tasks done, each day.</p><div class="dk-bars" role="list"></div></section>
+      <section class="dk-card dk-next" data-w="next" aria-labelledby="dk-next-h"><h2 id="dk-next-h">Next up</h2></section>
+      <section class="dk-card dk-plans" data-w="plans" aria-labelledby="dk-plans-h"><div class="dk-card-head"><h2 id="dk-plans-h">My exam plans</h2><button type="button" class="dk-pill" data-dk="newplan">${DESK_ICON.plus}New plan</button></div><ul class="dk-list"></ul></section>
+      <section class="dk-card dk-chats" data-w="chats" aria-labelledby="dk-chats-h"><div class="dk-card-head"><h2 id="dk-chats-h">Recent chats</h2>${chats.length ? '<button type="button" class="dk-pill" data-dk="chats">See all</button>' : ''}</div><ul class="dk-list"></ul></section>
+      <section class="dk-card dk-ready" data-w="ready" aria-labelledby="dk-ready-h"><h2 id="dk-ready-h">Exam readiness</h2></section>
     </div>`;
   el.querySelector('.dk-head').after(homeTop({ desk: true }));
   el.querySelector('.dk-title').textContent = name ? `Hi, ${name}` : 'Hi there';
@@ -2969,6 +3140,7 @@ function deskHome() {
   } else rd.append(CassieErrors.empty({ title: 'Nothing to measure yet', text: 'Plan an exam, then practise its topics. Cassie shows how ready you are here.' }));
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-dk]'); if (b) deskAct(b.dataset.dk); });
   el.querySelector('.dk-ideas').addEventListener('click', () => showTools()); // (where every study tool lives: the sidebar)
+  homeWidgets(el, 'desk');
   setTimeout(renderDeskTimer, 0);
   return el;
 }
@@ -3583,7 +3755,7 @@ function openExamTask(t, e) {
 function examSection() {
   tidyExams();
   const wrap = document.createElement('section');
-  wrap.className = 'hub-exam';
+  wrap.className = 'hub-exam'; wrap.dataset.w = 'exam';
   wrap.setAttribute('aria-label', 'Exam plans');
   const list = examsNow(), today = phDay();
   if (list.length) wrap.innerHTML = '<h2 class="hub-h">Today’s plan</h2>';
@@ -6917,7 +7089,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=218');
+      exploreMod = await import('./explore/cell3d.js?v=219');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6967,7 +7139,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=218');
+      labsMod = await import('./labs/labs.js?v=219');
       islandRest();
     }
     labsMod.open({
@@ -8808,10 +8980,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=218').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=219').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=218', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=219', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10151,7 +10323,7 @@ const liquidGlass = (() => {
     el.classList.add('lgp', cls);
     if (getComputedStyle(el).position === 'static') el.classList.add('lgp-rel');
     if (io) io.observe(el); else dress(el);
-    if (sized) sized.observe(el);
+    if (sized) sized.observe(el, { box: 'border-box' }); // (its whole box: padding changes its size too)
     if (refract && el.matches(LG_REFRACT)) bend(el);
   }
   let scanQ = null;
