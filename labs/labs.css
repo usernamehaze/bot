@@ -322,6 +322,7 @@ html.lite .labs-shelf { background: var(--bg); }
 .lab-3d { display: block; cursor: grab; }
 .lab-3d:active { cursor: grabbing; }
 .lab3d-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.lab3d-labels .lab3d-label { touch-action: none; } /* (two fingers on a tag pinch the 3D, never the page: three-kit.js) */
 .lab3d-label { position: absolute; left: 0; top: 0; padding: 3px 9px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 11, 16, .62); color: #f2f2f4; font: 600 .74rem/1.2 inherit; white-space: nowrap; pointer-events: auto; cursor: pointer; backdrop-filter: blur(4px); }
 .lab3d-label.small { font-size: .66rem; padding: 2px 7px; }
 .lab3d-label.faint { background: none; border: 0; color: rgba(200, 215, 255, .55); font-weight: 500; letter-spacing: .04em; pointer-events: none; }

@@ -25,6 +25,21 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
   const labels = document.createElement('div');
   labels.className = 'lab3d-labels';
   stage.appendChild(labels);
+  // a pinch that starts on a name tag still zooms: when a second finger comes down, every finger resting on a tag is
+  // handed to the 3D controls (a tag still opens with one finger's tap)
+  const onTags = new Map(); // pointerId → where that finger is, for fingers that landed on a tag
+  let fingers = 0;
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    fingers++;
+    if (e.target !== canvas && labels.contains(e.target)) onTags.set(e.pointerId, e);
+    if (fingers < 2) return;
+    onTags.forEach((f, id) => { onTags.delete(id); canvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', isPrimary: f.isPrimary, clientX: f.clientX, clientY: f.clientY, screenX: f.screenX, screenY: f.screenY, button: 0, buttons: 1, bubbles: true, cancelable: true })); });
+    if (labels.contains(e.target) && e.target !== canvas) e.preventDefault(); // (no click on the tag: this was a pinch)
+  }, true);
+  stage.addEventListener('pointermove', (e) => { const f = onTags.get(e.pointerId); if (f) onTags.set(e.pointerId, e); }, true);
+  const lift = (e) => { if (e.pointerType !== 'touch') return; fingers = Math.max(0, fingers - 1); onTags.delete(e.pointerId); };
+  window.addEventListener('pointerup', lift, true); window.addEventListener('pointercancel', lift, true);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(fov, 1, near, far);
   const controls = new OrbitControls(camera, canvas);
@@ -143,7 +158,7 @@ export async function stage3d(stage, { background = 0x05060a, fov = 50, near = 0
       const t1 = target.clone(), d = (dir || camera.position.clone().sub(controls.target)).normalize();
       fly = { t: 0, dur: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.01 : dur, p0: camera.position.clone(), t0: controls.target.clone(), p1: t1.clone().add(d.multiplyScalar(dist)), t1, done };
     },
-    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* ignore */ } scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); }); canvas.remove(); labels.remove(); },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener('pointerup', lift, true); window.removeEventListener('pointercancel', lift, true); controls.dispose(); renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) { /* ignore */ } scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); }); canvas.remove(); labels.remove(); },
   };
 }
 

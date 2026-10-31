@@ -15,6 +15,10 @@
       window.postMessage({ source: 'cassie-ext', type: 'import-file', name: payload.name, mime: payload.mime, base64: payload.base64, prompt: payload.prompt, groqKey: payload.groqKey }, location.origin);
     })();
   }).catch(() => { /* extension reloaded — nothing to hand over */ });
+  // the extension keeps the file until the app says it has it (a tab that reloads while it opens still gets it)
+  window.addEventListener('message', (e) => {
+    if (e.source === window && e.data && e.data.source === 'cassie-app' && e.data.type === 'import-taken') chrome.runtime.sendMessage({ type: 'CASSIE_BRIDGE_TAKEN' }).catch(() => {});
+  });
 
   // Everything asked in the extension (highlights, snips, pastes, page questions)
   // goes into the app's chats. The app skips the ones it already has.
