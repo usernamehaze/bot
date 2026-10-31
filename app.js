@@ -2074,9 +2074,9 @@ function showTools() {
    Quick actions (the study tools). */
 const HUB_ICON = {
   ask: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/><path d="M9 9h6M9 12h4"/></svg>',
-  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg>',
+  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="ia-rest" d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/><g class="ia-parts"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><g class="ia-back"><path d="M8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></g></g></svg>',
   lab: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg>',
-  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
+  timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><g class="ia-rest"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></g><g class="ia-parts"><circle cx="12" cy="13" r="8"/><g class="ia-hand"><path d="M12 9v4l2.5 2.5"/></g><path d="M9 2h6"/></g></svg>',
   streak: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1.2-3.6 2.4-4.8.3 1.6 1 2.6 2.1 3.1C11 9 11.2 6 12 3z"/></svg>',
   chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg>',
   go: '<svg class="hub-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
@@ -2174,34 +2174,47 @@ document.addEventListener('pointerdown', (e) => {
   const el = e.target.closest && e.target.closest(LG_TAP);
   if (el && e.button <= 0) lgPress(el, e);
 }, true);
-// every icon moves (style.css: ic-go and ic-<motion>): the pointer over it (a mouse, a pen, or a finger as
-// it touches) or keyboard focus. Only the icon moves, never the words; each motion fits what it draws, and
-// its lines draw themselves in. Done here, not with CSS :hover, so it works whatever the browser says.
-// Reduce Motion or Lite mode: a short fade only. (The tab bar has its own, in native.js.)
-const IC_HOST = '.ht-go, .hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
-const IC_MOTIONS = [['spin', /setting|gear|refresh|sync|memory|redo|again|light mode|dark mode/], ['nod', /\byou\b|profile|account|person|sign in|edit/], ['bounce', /home|bell|remind|notif|streak|today|timer|focus/],
-  ['wiggle', /card|note|flash|plan|calendar|deck|board|draw|write|essay/], ['tilt', /lab|learn|game|quiz|simulat|\b3d\b|science|puzzle|test/], ['slide', /next|open|continue|arrow|›|research|search/],
-  ['pop', /chat|ask|talk|message|new|add|help|\+/]];
-const IC_ALL = ['ic-go', 'ic-soft', ...IC_MOTIONS.map((m) => 'ic-' + m[0])];
-function icGo(host) {
-  const svg = host.querySelector('svg:not(.hub-chev):not(.labs-cur)');
-  if (!svg || svg.closest('.tab')) return;
-  if (!svg.dataset.ic) {
-    const words = [host.getAttribute('aria-label'), host.dataset.hub, host.dataset.dk, host.dataset.open, host.id, host.textContent.slice(0, 60)].join(' ').toLowerCase();
-    svg.dataset.ic = (IC_MOTIONS.find(([, re]) => re.test(words)) || ['pop'])[0];
-    svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((p) => p.setAttribute('pathLength', '1'));
-  }
-  const still = document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const cls = still ? 'ic-soft' : 'ic-' + svg.dataset.ic;
-  svg.classList.remove(...IC_ALL); // (again from the start, on the next frame: no layout forced in the middle of a tap)
-  clearTimeout(svg._ic);
-  requestAnimationFrame(() => { svg.classList.add('ic-go', cls); svg._ic = setTimeout(() => svg.classList.remove(...IC_ALL), 480); });
+// every icon moves like the recording (style.css: ia-go and data-ia): the pointer over it (a mouse or a pen), a
+// press or tap, or keyboard focus plays one short motion that fits what it draws (a bell swings, a gear turns,
+// a check draws itself), then it rests exactly as drawn. Only the icon moves, never its words or its button (the
+// Liquid Glass press still scales the button). Reduce Motion: none. Parts that move alone are wrapped in the
+// markup (ia-body, ia-hand, ia-back); without the part, the whole icon does the nearest move.
+const IC_HOST = '.tab, .chip, .set-back, .side-toggle, .side-menu-label, .cmic, .dk-btn, .dk-up, .hub-tlab-go, .home-ideas, .new-chat-btn, .pomo-edit, .ht-go, .hub .hub-box, .hub-card, .hub-q, .side-tool, .side-nav button, .icon-btn, .top-search, .hub-bell, .set-link, .dk-chip, .dk-pill, .lp-row, .labs-card, .labs-feature';
+const IC_MAP = [['ring', /bell|remind|notif|alarm/], ['close', /close|dismiss|remove|clear/], ['fly', /\bsend\b/], ['gear', /setting|gear/],
+  ['turn', /refresh|sync|redo|again|retry|reload|undo/], ['sun', /light mode/], ['moon', /dark mode/], ['menu', /\bmenu\b/],
+  ['nudge-l', /\bback\b|sign ?out|log out|previous/], ['hop-l', /sidebar|collapse/], ['plus', /new chat|^new\b|\badd\b/], ['pop', /privacy|lock|\bplans\b|paste/],
+  ['mic', /\bmic|voice|dictat|say it/], ['lens', /camera|photo|snap/], ['clip', /attach|upload|paperclip/], ['search', /search|find|research|web\b|look up/],
+  ['tune', /study and break|adjust/], ['clock', /timer|focus|pomodoro|clock/], ['home', /(^|\s)home(\s|$)/], ['pulse', /streak|heart|talk|together|memory|hint|idea|favourite/],
+  ['cards', /card|flash|deck/], ['book', /book|lesson|read|calendar|note/], ['draw', /plan|check|done|edit|pencil|quiz|write|essay|draw|board|progress/],
+  ['swirl', /\blabs?\b|learn|science|simulat|experiment/], ['wiggle', /game|puzzle/], ['pop', /play|pause|stop|start/],
+  ['bubble', /chat|ask|message|conversation|help|question|support/], ['nod', /\byou\b|profile|account|person|sign in/], ['nudge-r', /next|continue|open|go to/]];
+const IC_CLASS = [['nudge-ur', '.dk-up'], ['hop-l', '.side-toggle'], ['search', '.top-search']]; // (drawn as an arrow, whatever it says)
+const IC_PART = { mic: ['.ia-body', 'hop-u'], clock: ['.ia-hand', 'pop'], cards: ['.ia-back', 'book'], sun: ['circle', 'gear'], menu: ['rect', 'pop'], tune: ['circle', 'nudge-r'] };
+function icMotion(host, svg) {
+  const named = host.getAttribute('aria-label') || host.title || '';
+  const words = [named, host.dataset.tab, host.dataset.page, host.dataset.hub, host.dataset.ht, host.dataset.dk, host.dataset.open, host.id, named ? '' : host.textContent.slice(0, 60)].join(' ').toLowerCase();
+  let m = ((IC_CLASS.find(([, sel]) => host.matches(sel))) || IC_MAP.find(([, re]) => re.test(words)) || ['pop'])[0];
+  if (IC_PART[m] && !svg.querySelector(IC_PART[m][0])) m = IC_PART[m][1];
+  if (m === 'draw') svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((p) => p.setAttribute('pathLength', '1')); // (so the stroke can draw itself in)
+  return m;
 }
+function icGo(host) {
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const svg = host.querySelector('svg:not(.hub-chev):not(.labs-cur):not(.brand-mark)');
+  if (!svg) return;
+  if (!svg.dataset.ia) svg.dataset.ia = icMotion(host, svg);
+  const run = svg.classList.contains('ia-go') && svg.getAnimations({ subtree: true });
+  if (run && run.length) run.forEach((a) => { a.currentTime = 0; }); // (again from the start)
+  else { if (run) { svg.classList.remove('ia-go'); svg.getBoundingClientRect(); } svg.classList.add('ia-go'); } // (a move that never ended, off screen)
+}
+const icEnd = (e) => { const svg = e.target.closest && e.target.closest('svg.ia-go'); if (svg && !svg.getAnimations({ subtree: true }).some((a) => a.playState === 'running')) svg.classList.remove('ia-go'); };
+document.addEventListener('animationend', icEnd, true); document.addEventListener('animationcancel', icEnd, true);
 document.addEventListener('pointerover', (e) => {
+  if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return; // (hover is for fine pointers; a finger plays it on pointerdown)
   const h = e.target.closest && e.target.closest(IC_HOST);
   if (h && !(e.relatedTarget && h.contains(e.relatedTarget))) icGo(h);
 }, true);
-document.addEventListener('pointerdown', (e) => { const h = e.pointerType !== 'mouse' && e.target.closest && e.target.closest(IC_HOST); if (h) icGo(h); }, true); // (a tap, even where no pointerover comes first)
+document.addEventListener('pointerdown', (e) => { const h = e.target.closest && e.target.closest(IC_HOST); if (h) icGo(h); }, true);
 // glass that lifts: a tappable card rises 2px under the pointer and presses in a little (style.css gl-up, gl-down)
 const GL_LIFT = '.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-task, .lesson, .fc-decks li, .labs .lp-row, .hub-chat.ex-new';
 document.addEventListener('pointerover', (e) => { const c = e.target.closest && e.target.closest(GL_LIFT); if (c && !(e.relatedTarget && c.contains(e.relatedTarget)) && e.pointerType === 'mouse') c.classList.add('gl-up'); }, true);
@@ -2299,7 +2312,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=214'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=215'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2511,7 +2524,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=214').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=215').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6844,7 +6857,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=214');
+      exploreMod = await import('./explore/cell3d.js?v=215');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6894,7 +6907,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=214');
+      labsMod = await import('./labs/labs.js?v=215');
       islandRest();
     }
     labsMod.open({
@@ -8735,10 +8748,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=214').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=215').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=214', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=215', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

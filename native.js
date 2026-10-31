@@ -42,16 +42,8 @@
     else if (t === 'you') { closeOthers('you'); if (settings.hidden) openSettings('profile'); } // (You: the profile first)
     sync();
   }
-  // the tapped tab's own icon moves (style.css: tab-anim, tab-anim-home…); Reduce Motion or Lite mode: only its colour changes
-  bar.querySelectorAll('.tab svg path').forEach((p) => p.setAttribute('pathLength', '1')); // (so the stroke can draw itself in)
-  function wiggle(b) {
-    if (document.documentElement.classList.contains('lite') || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const cls = 'tab-anim-' + b.dataset.tab;
-    b.classList.remove('tab-anim', cls); void b.offsetWidth; // (again from the start on a second tap)
-    b.classList.add('tab-anim', cls);
-    clearTimeout(b._anim); b._anim = setTimeout(() => b.classList.remove('tab-anim', cls), 520);
-  }
-  bar.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { wiggle(b); go(b.dataset.tab); } });
+  // (the tapped tab's icon moves with every other icon: app.js icGo)
+  bar.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
 
   let queued = false;
   function sync() {

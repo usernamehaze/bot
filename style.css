@@ -3037,45 +3037,75 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   html.native .set-head { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: var(--border); }
 }
 
-/* the tapped tab's own icon moves for a moment (native.js adds tab-anim and tab-anim-<tab>) */
-.tab.tab-anim svg { transform-origin: 50% 60%; animation: .42s cubic-bezier(.3, 1.4, .5, 1) both; }
-.tab.tab-anim svg path { stroke-dasharray: 1; animation: tab-draw .42s ease-out both; }
-.tab-anim-home svg { animation-name: tab-home !important; }
-.tab-anim-chat svg { animation-name: tab-chat !important; }
-.tab-anim-labs svg { transform-origin: 50% 90% !important; animation-name: tab-labs !important; }
-.tab-anim-games svg { animation-name: tab-games !important; }
-.tab-anim-cards svg { animation-name: tab-cards !important; }
-.tab-anim-you svg { transform-origin: 50% 100% !important; animation-name: tab-you !important; }
-@keyframes tab-draw { from { stroke-dashoffset: .6; } to { stroke-dashoffset: 0; } }
-@keyframes tab-home { 0% { transform: none; } 35% { transform: translateY(-4px) scaleY(1.06); } 65% { transform: translateY(1px) scaleY(.94); } 100% { transform: none; } }
-@keyframes tab-chat { 0% { transform: scale(.8); } 45% { transform: scale(1.15) rotate(-8deg); } 70% { transform: scale(1) rotate(6deg); } 100% { transform: none; } }
-@keyframes tab-labs { 0% { transform: none; } 25% { transform: rotate(-14deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } 100% { transform: none; } }
-@keyframes tab-games { 0% { transform: none; } 30% { transform: rotate(-12deg) scale(1.08); } 65% { transform: rotate(8deg); } 100% { transform: none; } }
-@keyframes tab-cards { 0% { transform: none; } 40% { transform: translate(3px, -3px) rotate(6deg); } 100% { transform: none; } }
-@keyframes tab-you { 0% { transform: none; } 30% { transform: rotate(-8deg) translateY(1px); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
-@media (prefers-reduced-motion: reduce) { .tab.tab-anim svg, .tab.tab-anim svg path { animation: none !important; } }
-html.lite .tab.tab-anim svg, html.lite .tab.tab-anim svg path { animation: none !important; }
-
-/* every icon moves (app.js icGo): only the svg, never the words; its lines draw themselves in */
-svg.ic-go { transform-box: fill-box; transform-origin: 50% 50%; animation: .45s cubic-bezier(.34, 1.5, .64, 1) both; }
-svg.ic-go:not(.ic-soft) [pathLength] { stroke-dasharray: 1; animation: ic-draw .45s ease-out both; }
-svg.ic-pop { animation-name: ic-pop; }
-svg.ic-bounce { animation-name: ic-bounce; transform-origin: 50% 100%; }
-svg.ic-wiggle { animation-name: ic-wiggle; }
-svg.ic-spin { animation-name: ic-spin; animation-timing-function: cubic-bezier(.3, 1.3, .6, 1); }
-svg.ic-tilt { animation-name: ic-tilt; transform-origin: 50% 90%; }
-svg.ic-nod { animation-name: ic-nod; transform-origin: 50% 100%; }
-svg.ic-slide { animation-name: ic-slide; }
-svg.ic-soft { animation: ic-soft .15s ease-out both; }
-@keyframes ic-draw { from { stroke-dashoffset: .6; } to { stroke-dashoffset: 0; } }
-@keyframes ic-pop { 0% { transform: scale(.82); } 55% { transform: scale(1.14); } 100% { transform: none; } }
-@keyframes ic-bounce { 0%, 100% { transform: none; } 35% { transform: translateY(-22%) scaleY(1.06); } 65% { transform: translateY(4%) scaleY(.94); } }
-@keyframes ic-wiggle { 0%, 100% { transform: none; } 25% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(-4deg); } }
-@keyframes ic-spin { from { transform: rotate(0); } to { transform: rotate(90deg); } }
-@keyframes ic-tilt { 0%, 100% { transform: none; } 30% { transform: rotate(-14deg); } 65% { transform: rotate(9deg); } }
-@keyframes ic-nod { 0%, 100% { transform: none; } 35% { transform: rotate(-9deg) translateY(4%); } 70% { transform: rotate(6deg); } }
-@keyframes ic-slide { 0% { transform: none; } 40% { transform: translateX(22%); opacity: .6; } 41% { transform: translateX(-22%); } 100% { transform: none; opacity: 1; } }
-@keyframes ic-soft { from { opacity: .45; } to { opacity: 1; } }
+/* every icon moves like the recording (app.js icGo sets data-ia and ia-go): one short move that fits what it
+   draws, then it rests exactly as drawn (no fill-mode). Only the svg or one part of it moves. */
+svg.ia-go { transform-origin: 50% 50%; animation: .45s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="ring"] { transform-origin: 50% 10%; animation: ia-ring .6s ease-in-out; }
+svg.ia-go[data-ia="close"], svg.ia-go[data-ia="plus"] { animation-name: ia-quarter; animation-duration: .5s; }
+svg.ia-go[data-ia="gear"] { animation-name: ia-tooth; animation-duration: .55s; } /* (one tooth of six: it rests as drawn) */
+svg.ia-go[data-ia="turn"] { animation: ia-turn .6s cubic-bezier(.3, 1.2, .6, 1); }
+svg.ia-go[data-ia="fly"] { animation: ia-fly .55s ease-in-out; }
+svg.ia-go[data-ia="nudge-l"] { animation-name: ia-nudge-l; }
+svg.ia-go[data-ia="nudge-r"] { animation-name: ia-nudge-r; }
+svg.ia-go[data-ia="nudge-ur"] { animation-name: ia-nudge-ur; }
+svg.ia-go[data-ia="hop-l"] { animation-name: ia-hop-l; }
+svg.ia-go[data-ia="hop-u"] { animation-name: ia-hop-u; }
+svg.ia-go[data-ia="moon"] { animation: ia-moon .5s ease-in-out; }
+svg.ia-go[data-ia="lens"] { animation-name: ia-lens; }
+svg.ia-go[data-ia="clip"] { animation: ia-clip .5s ease-in-out; }
+svg.ia-go[data-ia="search"] { transform-origin: 46% 46%; animation: ia-search .5s ease-in-out; }
+svg.ia-go[data-ia="home"] { transform-origin: 50% 100%; animation-name: ia-home; }
+svg.ia-go[data-ia="pulse"] { animation-name: ia-pulse; }
+svg.ia-go[data-ia="book"] { animation: ia-book .5s ease-in-out; }
+svg.ia-go[data-ia="draw"] { animation: ia-write .5s ease-in-out; }
+svg.ia-go[data-ia="swirl"] { transform-origin: 50% 90%; animation: ia-swirl .6s ease-in-out; }
+svg.ia-go[data-ia="wiggle"] { animation: ia-wiggle .5s ease-in-out; }
+svg.ia-go[data-ia="pop"] { animation-name: ia-pop; animation-duration: .4s; }
+svg.ia-go[data-ia="bubble"] { transform-origin: 30% 90%; animation-name: ia-bubble; }
+svg.ia-go[data-ia="nod"] { transform-origin: 50% 100%; animation: ia-nod .5s ease-in-out; }
+svg.ia-go[data-ia="mic"], svg.ia-go[data-ia="clock"], svg.ia-go[data-ia="cards"], svg.ia-go[data-ia="sun"], svg.ia-go[data-ia="menu"], svg.ia-go[data-ia="tune"] { animation: none; } /* (a part moves) */
+svg .ia-parts, svg.ia-go .ia-rest { display: none; } /* (at rest the icon is its own drawing; split into parts only while it moves) */
+svg.ia-go .ia-parts { display: inline; }
+svg.ia-go[data-ia="draw"] [pathLength] { stroke-dasharray: 1; animation: ia-draw .5s ease-out; }
+svg.ia-go[data-ia="mic"] .ia-body { animation: ia-lift .45s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="clock"] .ia-hand { transform-box: view-box; transform-origin: 12px 13px; animation: ia-turn .65s cubic-bezier(.3, 1.1, .6, 1); }
+svg.ia-go[data-ia="cards"] .ia-back { transform-box: view-box; transform-origin: 14px 9px; animation: ia-back .5s ease-in-out; }
+svg.ia-go[data-ia="sun"] path { transform-box: view-box; transform-origin: 12px 12px; animation: ia-rays .55s cubic-bezier(.34, 1.4, .64, 1); }
+svg.ia-go[data-ia="sun"] circle { transform-box: fill-box; transform-origin: 50% 50%; animation: ia-pulse .55s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="menu"] rect { transform-box: fill-box; animation: ia-line .4s cubic-bezier(.34, 1.56, .64, 1); }
+svg.ia-go[data-ia="menu"] rect:nth-child(2) { animation-delay: 40ms; }
+svg.ia-go[data-ia="menu"] rect:nth-child(3) { animation-delay: 80ms; }
+svg.ia-go[data-ia="tune"] circle { animation: ia-nudge-l .5s ease-in-out; }
+svg.ia-go[data-ia="tune"] circle:last-child { animation-name: ia-nudge-r; }
+@keyframes ia-ring { 20% { transform: rotate(14deg); } 40% { transform: rotate(-10deg); } 60% { transform: rotate(6deg); } 80% { transform: rotate(-3deg); } }
+@keyframes ia-quarter { 70% { transform: rotate(100deg); } 100% { transform: rotate(90deg); } }
+@keyframes ia-tooth { 70% { transform: rotate(68deg); } 100% { transform: rotate(60deg); } }
+@keyframes ia-turn { to { transform: rotate(360deg); } }
+@keyframes ia-fly { 40% { transform: translate(9px, -9px); opacity: 0; } 41% { transform: translate(-9px, 9px); opacity: 0; } }
+@keyframes ia-nudge-l { 40% { transform: translateX(-3px); } }
+@keyframes ia-nudge-r { 40% { transform: translateX(3px); } }
+@keyframes ia-nudge-ur { 40% { transform: translate(3px, -3px); } }
+@keyframes ia-hop-l { 35% { transform: translateX(-2px); } 70% { transform: translateX(.5px); } }
+@keyframes ia-hop-u { 35% { transform: translateY(-2px); } 70% { transform: translateY(.5px); } }
+@keyframes ia-moon { 40% { transform: rotate(-15deg); } 75% { transform: rotate(4deg); } }
+@keyframes ia-lens { 30% { transform: scale(.9); } 65% { transform: scale(1.08); } }
+@keyframes ia-clip { 35% { transform: rotate(-12deg); } 70% { transform: rotate(4deg); } }
+@keyframes ia-search { 25% { transform: rotate(-10deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } }
+@keyframes ia-home { 35% { transform: translateY(-2px) scaleY(1.04); } 70% { transform: translateY(.5px) scaleY(.97); } }
+@keyframes ia-pulse { 40% { transform: scale(1.18); } }
+@keyframes ia-book { 40% { transform: translateX(2px) rotate(-6deg); } }
+@keyframes ia-write { 40% { transform: rotate(-6deg) translateY(-1px); } }
+@keyframes ia-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes ia-swirl { 25% { transform: rotate(-14deg); } 55% { transform: rotate(10deg); } 80% { transform: rotate(-4deg); } }
+@keyframes ia-wiggle { 25% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(-4deg); } }
+@keyframes ia-pop { 45% { transform: scale(1.15); } }
+@keyframes ia-bubble { 40% { transform: rotate(-8deg) scale(1.1); } }
+@keyframes ia-nod { 35% { transform: rotate(-8deg); } 70% { transform: rotate(6deg); } }
+@keyframes ia-lift { 40% { transform: translateY(-2px); } }
+@keyframes ia-back { 40% { transform: translate(2px, -2px) rotate(6deg); } }
+@keyframes ia-rays { to { transform: rotate(45deg); } }
+@keyframes ia-line { 40% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { svg.ia-go, svg.ia-go * { animation: none !important; } }
 
 /* liquid glass everywhere (like the reference: frosted panes with a bright rim over soft colour).
    Every card, box, sheet and panel takes the glass tokens, so Lite mode and Reduce Transparency turn
