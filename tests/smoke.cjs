@@ -2509,6 +2509,88 @@ test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie ask
   await L.ctx.close();
 });
 
+test('the phone app’s chat is liquid glass: Cassie’s bubbles, the chips, the top bar and the ask box are see-through and frosted over the colours (in dark too, Monochrome included), words stay AA, and Lite mode turns them solid', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  for (const accent of ['mono', '#15803d']) for (const theme of ['dark', 'light']) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'chat', accent, theme, chats: [{ id: 'c1', title: 'P', messages: [{ role: 'user', content: 'Quiz me' }, { role: 'assistant', content: 'Which stage?\n\nA. One\nB. Two\nC. Three\nD. Four' }], updatedAt: Date.now() }] } });
+    await page.evaluate(() => { selectChat('c1'); CassieNative.go('chat'); }); await page.waitForSelector('#chat-log .bubble-assistant'); await page.waitForTimeout(500);
+    const g = await page.evaluate(() => [['.bubble-assistant', '--lg-fill-card'], ['.quick-actions .chip:not(.active)', '--lg-fill-card'], ['.topbar', null], ['.composer', '--lg-fill-card']].map(([sel, v]) => { const e = document.querySelector(sel), c = getComputedStyle(e), fill = v ? c.getPropertyValue(v) : c.backgroundImage.replace(/rgba\(\d+, \d+, \d+, 0\.0\d*\)|rgba\(0, 0, 0, 0\)/g, ''); const a = [...fill.matchAll(/,\s*(\.?[\d.]+)\)/g)].map((m) => +m[1]); return { sel, blur: /blur/.test(c.backdropFilter), see: a.length > 0 && Math.max(...a) < 0.85 && [...c.backgroundImage.matchAll(/rgba\([^)]*,\s*([\d.]+)\)/g)].some((m) => Math.abs(+m[1] - Math.max(...a)) < 0.005), fill: fill.trim().slice(0, 80) }; }));
+    expect(g.every((x) => x.blur && x.see), `${accent} ${theme}: the chat is see-through frosted glass: ` + JSON.stringify(g));
+    const amb = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--amb-1'));
+    if (accent === 'mono' && theme === 'dark') expect(/(^|[^\d])\.4\d/.test(amb), 'Monochrome dark has shapes strong enough to show through: ' + amb);
+    const { bad } = await contrastIssues(page, '#chat-log, .quick-actions, .composer, .topbar');
+    expect(!bad.length, `${accent} ${theme}: words stay AA: ` + bad.join(' | '));
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'on', state: { tab: 'chat', chats: [{ id: 'c1', title: 'P', messages: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hello' }], updatedAt: Date.now() }] } });
+  await page.evaluate(() => { selectChat('c1'); CassieNative.go('chat'); }); await page.waitForSelector('#chat-log .bubble-assistant');
+  expect(await page.$eval('#chat-log .bubble-assistant', (e) => getComputedStyle(e).backdropFilter) === 'none', 'Lite mode: the bubbles are solid');
+  await ctx.close();
+});
+
+test('liquid glass that bends: in Chromium the floating bars, the ask box and the chips refract what’s behind (an SVG lens: a little magnified in the middle, bent along the edge); without it (Safari, iPhone) a look-alike edge band and lifted centre and no url() filter; every glass pane has the rim and a glint that slides on scroll and under the pointer, and keeps still with Reduce Motion; Lite mode stays solid; words stay AA', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const chats = [{ id: 'c1', title: 'P', messages: [{ role: 'user', content: 'Quiz me' }, { role: 'assistant', content: 'Which stage?\n\nA. One\nB. Two\nC. Three\nD. Four' }], updatedAt: Date.now() }];
+  const seed = { tab: 'home', accent: '#15803d', profile: { ...PROFILE, grade: '2nd year college', age: 20 }, chats };
+  // Chromium: it bends
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed });
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(800);
+    const r = await page.evaluate(() => ({ cls: document.documentElement.className, lenses: document.querySelectorAll('#lg-lenses filter feDisplacementMap').length,
+      bars: ['.tabbar', '#home .hub-hero'].map((s) => getComputedStyle(document.querySelector(s)).backdropFilter) }));
+    expect(/\blgm\b/.test(r.cls) && /\blg-refract\b/.test(r.cls) && r.lenses > 0 && r.bars.every((f) => /url\("?#lgr-/.test(f)), 'Chromium: the bars bend what’s behind through an SVG lens: ' + JSON.stringify(r));
+    const tileBent = await page.$eval('#home .ht-tile', (e) => getComputedStyle(e).backdropFilter);
+    expect(!/url\(/.test(tileBent), 'cards keep plain frost (bending them all costs frames): ' + tileBent);
+    // every glass pane: the rim and the glint layers
+    const panes = await page.evaluate(() => [...document.querySelectorAll(LG_PANES)].filter((e) => e.getClientRects().length).map((e) => ({ c: e.className.toString().slice(0, 40), lgp: e.classList.contains('lgp'), glint: e.classList.contains('lgp-b') ? getComputedStyle(e, '::before').backgroundImage : '', rim: e.classList.contains('lgp-a') ? getComputedStyle(e, '::after').backgroundImage : '' })));
+    const missing = panes.filter((x) => !x.lgp || !/linear-gradient/.test(x.glint + x.rim));
+    expect(panes.length > 10 && !missing.length, 'every glass pane has its glint: ' + JSON.stringify(missing).slice(0, 300));
+    expect(panes.filter((x) => x.rim).length > 10, 'and most have the sliding rim line');
+    // the glint moves: on scroll, and under the pointer
+    const gx = () => page.$eval('#home .ht-tile', (e) => getComputedStyle(e).getPropertyValue('--lg-gx').trim());
+    await page.waitForTimeout(1500);
+    const g0 = await gx();
+    await page.evaluate(() => { const h = document.querySelector('#home'); h.scrollTop = 200; h.dispatchEvent(new Event('scroll')); }); await page.waitForTimeout(300);
+    const g1 = await gx();
+    expect(g1 !== g0, 'the glint slides when the page scrolls: ' + g0 + ' → ' + g1);
+    await page.evaluate(() => { document.querySelector('#home').scrollTop = 0; }); await page.waitForTimeout(200);
+    const box = await page.locator('#home .ht-tile').first().boundingBox();
+    await page.mouse.move(box.x + box.width * .8, box.y + box.height * .6); await page.waitForTimeout(150);
+    expect(await gx() === '80%', 'it follows the pointer: ' + await gx());
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad } = await contrastIssues(page, '#home, .tabbar'); expect(!bad.length, `Home (${scheme}) reads: ` + bad.join(' | ')); }
+    expect(!errors.length, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // without url() backdrop filters (Safari, iPhone): the look-alike
+  {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed, setup: (c) => c.addInitScript(() => { const o = CSS.supports.bind(CSS); CSS.supports = (p, v) => (/url\(/.test(String(v)) ? false : /-webkit-backdrop-filter/.test(String(p)) ? true : o(p, v)); }) });
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(600);
+    const r = await page.evaluate(() => ({ cls: document.documentElement.className, urls: [...document.querySelectorAll('*')].filter((e) => /url\(/.test(getComputedStyle(e).backdropFilter)).length, edge: getComputedStyle(document.documentElement).getPropertyValue('--lg-edge'), lift: getComputedStyle(document.querySelector('#home .ht-tile'), '::before').backgroundImage }));
+    expect(/\blgm\b/.test(r.cls) && !/lg-refract/.test(r.cls) && r.urls === 0 && /16px 3px/.test(r.edge) && /radial-gradient/.test(r.lift), 'Safari: no bending filter, a thick curved edge and a lifted centre instead: ' + JSON.stringify(r).slice(0, 300));
+    await ctx.close();
+  }
+  // Reduce Motion: the glint keeps still
+  {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed, setup: (c) => c.addInitScript(() => { const mm = window.matchMedia.bind(window); window.matchMedia = (q) => (/reduced-motion/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q)); }) });
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(800);
+    const g = () => page.$eval('#home .ht-tile', (e) => getComputedStyle(e).getPropertyValue('--lg-gx').trim());
+    const a = await g();
+    await page.evaluate(() => { const h = document.querySelector('#home'); h.scrollTop = 200; h.dispatchEvent(new Event('scroll')); });
+    const box = await page.locator('#home .ht-tile').first().boundingBox(); await page.mouse.move(box.x + 10, box.y + 10); await page.waitForTimeout(300);
+    expect(a === '30%' && await g() === '30%', 'Reduce Motion: the glint stays still: ' + a);
+    await ctx.close();
+  }
+  // Lite mode: solid, no glint, no bending
+  {
+    const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'on', state: seed });
+    await page.waitForSelector('#home .ht-tile'); await page.waitForTimeout(500);
+    const r = await page.evaluate(() => ({ cls: document.documentElement.className, lgp: document.querySelectorAll('.lgp').length, bf: getComputedStyle(document.querySelector('.tabbar')).backdropFilter }));
+    expect(!/lgm|lg-refract/.test(r.cls) && !r.lgp && !/url\(/.test(r.bf), 'Lite mode: solid panes, no glint, no bending: ' + JSON.stringify(r));
+    await ctx.close();
+  }
+});
+
 test('privacy.html names every outside service the code calls (a new one fails until the page says what it gets)', async () => {
   // every web address in Cassie's own code (not the bundled libraries): a service it calls, or one of these
   const NOT_A_SERVICE = {

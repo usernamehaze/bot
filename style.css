@@ -3184,3 +3184,64 @@ html.native:not(.lite) body { background:
 .letc-lesson em { flex: none; font-style: normal; font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--primary); color: var(--on-primary); }
 .letc-lesson.done em { background: transparent; color: var(--text); border: 1px solid var(--lg-line, var(--border)); }
 .dk-letc { margin: 0 0 14px; }
+/* the phone app's chat is liquid glass too: Cassie's bubbles, the chips, the top bar and the ask box, over shapes
+   strong enough to show through in dark (Monochrome's were nearly black). Lite mode turns them solid (the tokens). */
+html.native:not(.lite) .bubble-assistant { border: 1px solid transparent; -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card);
+  background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-card) padding-box, var(--lg-rim) border-box; }
+html.native:not(.lite) #quick-actions .chip:not(.active) { border-color: var(--lg-line); background: linear-gradient(var(--lg-tint), var(--lg-tint)), var(--lg-fill-card); -webkit-backdrop-filter: var(--lg-blur-card); backdrop-filter: var(--lg-blur-card); }
+html.native:not(.lite) .topbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), var(--lg-fill-side); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+html.native:not(.lite) .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .8), rgba(var(--glass-rgb), .68)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"])[data-tint="mono"].native { --amb-1: rgba(150, 158, 186, .44); --amb-2: rgba(96, 104, 128, .52); --amb-3: rgba(210, 214, 228, .18); } }
+:root[data-theme="dark"][data-tint="mono"].native { --amb-1: rgba(150, 158, 186, .44); --amb-2: rgba(96, 104, 128, .52); --amb-3: rgba(210, 214, 228, .18); }
+/* (in dark the phone's chat glass is thinner, so the shapes behind really show; white words stay AA over it) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]).native:not(.lite) :is(.bubble-assistant, .quick-actions .chip) { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .58), rgba(var(--glass-rgb), .44)); }
+  :root:not([data-theme="light"]).native:not(.lite) .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .7), rgba(var(--glass-rgb), .58)); } }
+:root[data-theme="dark"].native:not(.lite) :is(.bubble-assistant, .quick-actions .chip) { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .58), rgba(var(--glass-rgb), .44)); }
+:root[data-theme="dark"].native:not(.lite) .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .7), rgba(var(--glass-rgb), .58)); }
+html.native:not(.lite) .bubble-assistant .bubble-tools :is(button, .save-label) { color: var(--text); } /* (the small links under an answer, over the glass on any colour) */
+/* ---------- liquid glass: refraction, a rim and a glint (app.js: liquidGlass) ----------
+   html.lgm: the material is on (never in Lite mode or with Reduce Transparency, which keep the panes solid).
+   html.lg-refract: the browser can bend what's behind (an SVG lens as the backdrop filter, Chromium); without it
+   (Safari, iPhone) a look-alike: a thick curved edge (bright line, then a darker band) and a lifted centre.
+   Every pane gets a faint inner second line under its rim, and a glint (the .lgp layer, under the pane's words)
+   that slides with the pointer, the scroll and when the pane appears. */
+@property --lg-gx { syntax: '<percentage>'; inherits: false; initial-value: -40%; }
+@property --lg-ga { syntax: '<angle>'; inherits: false; initial-value: 115deg; }
+html.lgm { --lg-gi: .2; --lg-gr: .9; --lg-cl: .1;
+  --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .9), inset 0 -1px 0 rgba(var(--hi-rgb), .35), inset 0 0 0 .5px rgba(var(--hi-rgb), .55), inset 0 0 0 1.5px rgba(var(--hi-rgb), .16); }
+html.lgm:not(.lg-refract) { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .9), inset 0 -1px 0 rgba(var(--hi-rgb), .35), inset 0 0 0 .5px rgba(var(--hi-rgb), .55), inset 0 0 0 1.5px rgba(var(--hi-rgb), .16), inset 0 0 0 2px rgba(var(--hi-rgb), .22), inset 0 0 16px 3px rgba(var(--shade-rgb), .08); }
+@media (prefers-color-scheme: dark) {
+  html.lgm:not([data-theme="light"]) { --lg-gi: .07; --lg-gr: .55; --lg-cl: .05;
+    --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05); }
+  html.lgm:not(.lg-refract):not([data-theme="light"]) { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05), inset 0 0 0 2px rgba(var(--hi-rgb), .08), inset 0 0 16px 3px rgba(var(--shade-rgb), .3); }
+}
+html.lgm[data-theme="dark"] { --lg-gi: .07; --lg-gr: .55; --lg-cl: .05;
+  --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05); }
+html.lgm:not(.lg-refract)[data-theme="dark"] { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05), inset 0 0 0 2px rgba(var(--hi-rgb), .08), inset 0 0 16px 3px rgba(var(--shade-rgb), .3); }
+/* the glint layer: under the pane's words (the pane is its own stacking context), over its glass */
+html.lgm .lgp { isolation: isolate; }
+html.lgm .lgp-rel { position: relative; }
+html.lgm .lgp-b::before, html.lgm .lgp-a::after {
+  content: ""; position: absolute; inset: -1px; z-index: -1; pointer-events: none; border: 1px solid transparent; border-radius: inherit;
+  --lg-gx: inherit; --lg-ga: inherit; }
+html.lgm .lgp-b::before { /* across the glass: a soft band */
+  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 14%), rgba(var(--hi-rgb), var(--lg-gi)) var(--lg-gx), transparent calc(var(--lg-gx) + 14%)) padding-box; }
+html.lgm:not(.lg-refract) .lgp-b::before { /* (the look-alike's lifted centre too) */
+  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 14%), rgba(var(--hi-rgb), var(--lg-gi)) var(--lg-gx), transparent calc(var(--lg-gx) + 14%)) padding-box,
+    radial-gradient(70% 60% at 50% 45%, rgba(var(--hi-rgb), var(--lg-cl)), transparent 72%) padding-box; }
+html.lgm .lgp-a::after { /* along the rim only: a bright line that slides round the edge */
+  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 8%), rgba(var(--hi-rgb), var(--lg-gr)) var(--lg-gx), transparent calc(var(--lg-gx) + 8%)) border-box;
+  -webkit-mask: linear-gradient(var(--black) 0 0) padding-box, linear-gradient(var(--black) 0 0) border-box; -webkit-mask-composite: xor;
+  mask: linear-gradient(var(--black) 0 0) padding-box exclude, linear-gradient(var(--black) 0 0) border-box; }
+/* where the glass really bends (Chromium), the floating bars are clear glass like the reference: a thin fill, so
+   the bending shows; their words and icons stay AA (tests) */
+html.lg-refract.native .tabbar, html.lg-refract.native .topbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), linear-gradient(180deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .38)); }
+/* (small grey words over the moving glint: the full text colour, so they stay AA wherever the light is) */
+html.lgm .hub-chat small, html.lgm .composer textarea::placeholder, html.lgm #prompt-input::placeholder { color: var(--text); }
+/* Reduce Transparency (even switched on while Cassie is open): every pane solid, nothing bends, no glint */
+@media (prefers-reduced-transparency: reduce) {
+  [data-lg-base] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  html.native .composer, html.native .bubble-assistant, html.native #quick-actions .chip { --lg-fill-card: linear-gradient(var(--surface), var(--surface)) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  html.lg-refract.native .tabbar, html.lg-refract.native .topbar { background: var(--surface) !important; }
+  html.lgm .lgp-b::before, html.lgm .lgp-a::after { display: none; }
+}
