@@ -2559,9 +2559,9 @@ html.native .hub-hero-phone .hub-top { padding: calc(12px + var(--safe-top)) 20p
 .hub-tlab-tag { position: absolute; top: 12px; left: 12px; align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: .72rem; font-weight: 700; }
 .hub-tlab-info b { font-size: 1.08rem; line-height: 1.2; }
 .hub-tlab-info small { color: var(--muted); font-size: .82rem; }
-.hub .hub-tlab-go, .home-top .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
+.hub .hub-tlab-go, :is(.home-top, .hw-grid) .hub-tlab-go { position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; border: 0; padding: 0;
   background: var(--primary); color: var(--on-primary); box-shadow: var(--lg-lift); }
-.hub .hub-tlab-go svg, .home-top .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
+.hub .hub-tlab-go svg, :is(.home-top, .hw-grid) .hub-tlab-go svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
 
 /* ---------- Labs on a phone: the Labs tab ----------
    (labs/labs.js, only under 760px: a computer keeps the Labs shelf) Today's Lab, then For you
@@ -3319,20 +3319,20 @@ html.native:not(.lite) body { background:
 .ht-go b { font-size: 1rem; font-weight: 750; line-height: 1.2; }
 .ht-timer .ht-go b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 .ht-go small, .ht-go span { font-size: .78rem; line-height: 1.3; color: var(--text); }
-.home-top .ht-go em { margin-top: 4px; padding: 3px 10px; border-radius: 999px; font-style: normal; font-size: .76rem; font-weight: 700; background: var(--primary); color: var(--on-primary); }
+:is(.home-top, .hw-grid) .ht-go em { margin-top: 4px; padding: 3px 10px; border-radius: 999px; font-style: normal; font-size: .76rem; font-weight: 700; background: var(--primary); color: var(--on-primary); }
 .ht-edit { min-height: 44px; padding: 0 6px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; }
 .ht-set { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 14px; border-radius: 18px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line, var(--border)); }
 .ht-set[hidden] { display: none; }
 .ht-set label { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--text); }
 .ht-set input { width: 64px; min-height: 44px; box-sizing: border-box; padding: 0 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .95rem; }
-.home-top .ht-save { min-height: 44px; padding: 0 22px; margin-left: auto; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 700; cursor: pointer; }
+:is(.home-top, .hw-grid) .ht-save { min-height: 44px; padding: 0 22px; margin-left: auto; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 700; cursor: pointer; }
 .ht-note { margin: -2px 2px 0; font-size: .82rem; line-height: 1.4; color: var(--text); }
 .ht-show { cursor: default; }
-.desk .home-top .ht-tbtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
-.desk .home-top .dk-tgo, .desk .home-top .dk-tstop { width: 44px; height: 44px; }
-.desk .home-top .dk-tgo { background: var(--primary); color: var(--on-primary); }
-.desk .home-top .dk-tstop { background: transparent; color: var(--text); border: 1px solid var(--lg-line, var(--border)); }
-.desk .home-top .dk-tgo svg, .desk .home-top .dk-tstop svg { width: 20px; height: 20px; }
+.desk :is(.home-top, .hw-grid) .ht-tbtns { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
+.desk :is(.home-top, .hw-grid) .dk-tgo, .desk :is(.home-top, .hw-grid) .dk-tstop { width: 44px; height: 44px; }
+.desk :is(.home-top, .hw-grid) .dk-tgo { background: var(--primary); color: var(--on-primary); }
+.desk :is(.home-top, .hw-grid) .dk-tstop { background: transparent; color: var(--text); border: 1px solid var(--lg-line, var(--border)); }
+.desk :is(.home-top, .hw-grid) .dk-tgo svg, .desk :is(.home-top, .hw-grid) .dk-tstop svg { width: 20px; height: 20px; }
 .desk .home-top { margin: 0 0 18px; }
 .hub-today-one .hub-w { flex: 1 1 auto; } /* (Today keeps the streak; Flashcards and the timer moved to the top) */
 @media (max-width: 400px) { .ht-tile { padding: 10px; } .ht-go small, .ht-go span { font-size: .74rem; } }
@@ -3343,7 +3343,7 @@ html.native:not(.lite) body { background:
   html, body, html * { scrollbar-width: none; }
   html ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 }
-.home-top .hub-tlab-info small { color: var(--text); } /* (over the glass, in both themes) */
+:is(.home-top, .hw-grid) .hub-tlab-info small { color: var(--text); } /* (over the glass, in both themes) */
 .md-choice { margin: .3em 0; padding-left: .2em; } /* (a quiz choice, one a line) */
 /* the LET course: a glass card over the page (a phone: the whole screen); tap choices, then the lessons in order */
 .letc { position: fixed; inset: 0; z-index: 320; display: grid; place-items: center; padding: 16px; background: rgba(var(--shade-rgb), .45); }
@@ -3417,3 +3417,53 @@ html.lgm .hub-chat small, html.lgm .composer textarea::placeholder, html.lgm #pr
   html.lg-refract.native .tabbar, html.lg-refract.native .topbar { background: var(--surface) !important; }
   html.lgm .lgp-b::before, html.lgm .lgp-a::after { display: none; }
 }
+
+/* Home's widgets (app.js homeWidgets): a grid of the Home boxes, each Small, Medium or Large; "Edit Home" shows
+   a handle, a size button and a remove button on each, and a tap on a widget opens nothing while editing */
+.hw-wrap { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hw-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.hw-tools { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.hw-tools[hidden] { display: none; }
+.hw-bar button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 600 14px/1 inherit; cursor: pointer; }
+.hw-bar .hw-edit[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.hw-bar button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hw-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.hw-hint[hidden] { display: none; }
+.hw-grid { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; min-width: 0; }
+.hw-grid.hw-phone { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hw-grid > .hw { position: relative; grid-area: auto !important; grid-column: span 1 !important; min-width: 0; margin: 0 !important; max-width: none; }
+.hw-grid > .hw.ws-m { grid-column: span 2 !important; }
+.hw-grid > .hw.ws-l { grid-column: 1 / -1 !important; min-height: 260px; }
+.hw-grid.hw-phone > .hw.ws-l { min-height: 220px; }
+.hw-grid > .hw-ph { border-radius: 20px; border: 2px dashed color-mix(in srgb, var(--text) 35%, transparent); grid-column: span 1; }
+.hw-grid > .hw-ph.ws-m { grid-column: span 2; } .hw-grid > .hw-ph.ws-l { grid-column: 1 / -1; }
+/* Small: only what matters (the icon, the title, the number); long lines end with an ellipsis */
+.hw.ws-s :is(.dk-note, .hub-none, .ht-note) { display: none; }
+.hw.ws-s :is(h2, b, small, .dk-list li) { overflow: hidden; text-overflow: ellipsis; }
+.hw.ws-s .dk-list li { white-space: nowrap; }
+.hw.ws-s :is(.hub-recent, .hub-chat) { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.hw.ws-s .hub-chat > span { flex: 1 1 auto; min-width: 0; }
+.hw.ws-s .hub-chat > span > :is(b, small) { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-ctl { position: absolute; z-index: 3; top: 6px; left: 6px; right: 6px; display: flex; justify-content: space-between; gap: 6px; pointer-events: none; }
+.hw-ctl[hidden] { display: none; }
+.hw-ctl button { pointer-events: auto; display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 700 14px/1 inherit; box-shadow: 0 2px 8px rgba(var(--shade-rgb), .18); cursor: pointer; }
+.hw-ctl .hw-size { margin-left: auto; }
+.hw-ctl svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.hw-ctl .hw-handle { cursor: grab; touch-action: none; }
+.hw-ctl button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+html.home-edit .hw > :not(.hw-ctl) { pointer-events: none; }
+html.home-edit .hw { padding-top: 58px !important; outline: 2px dashed color-mix(in srgb, var(--text) 30%, transparent); outline-offset: 3px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+html.home-edit .hw.gl-up, html.home-edit .hw.gl-down { transform: none; }
+.hw.hw-dragging { box-shadow: 0 18px 40px rgba(var(--shade-rgb), .28) !important; transform: scale(1.02); cursor: grabbing; opacity: .96; }
+.hw-sheet { position: fixed; inset: 0; z-index: 90; display: grid; place-items: end center; background: rgba(var(--shade-rgb), .38); padding: 16px; }
+@media (min-width: 761px) { .hw-sheet { place-items: center; } }
+.hw-sheet-card { width: min(460px, 100%); max-height: 80vh; overflow: auto; padding: 18px; border-radius: 22px; background: var(--surface); color: var(--text); box-shadow: 0 20px 50px rgba(var(--shade-rgb), .3); }
+.hw-sheet-card h2 { margin: 0 0 10px; font-size: 18px; }
+.hw-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.hw-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
+.hw-list span { display: grid; min-width: 0; } .hw-list small { color: var(--muted); }
+.hw-sheet button { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 600 14px/1 inherit; cursor: pointer; }
+.hw-sheet .hw-put { background: var(--text); color: var(--surface); border-color: var(--text); }
+.hw-sheet button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hw-none { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .hw.hw-dragging { transform: none; } }

@@ -404,7 +404,7 @@ test('a simpler start: a brand-new student sees their 4 most useful tools on Hom
     await page.evaluate(() => window.CassieNative && window.CassieNative.go('home'));
     await page.waitForSelector('#home .hub-box', { timeout: 8000 });
     const first = await page.$$eval('#home .hub-box', (bs) => bs.map((x) => x.dataset.hub));
-    expect(first.length === 4 && !first.some((h) => ['lab', 'games', 'today', 'lessons', 'cards', 'timer'].includes(h)) && await page.locator('#home .home-top .hub-tlab').count() === 1, 'new: 4 boxes (Learn and Games are in the tab bar; Lessons, the timer, Flashcards and Today’s Lab are up top): ' + first);
+    expect(first.length === 4 && !first.some((h) => ['lab', 'games', 'today', 'lessons', 'cards', 'timer'].includes(h)) && await page.locator('#home .hub-tlab').count() === 1, 'new: 4 boxes (Learn and Games are in the tab bar; Lessons, the timer, Flashcards and Today’s Lab are up top): ' + first);
     const more = page.locator('#home .hub-more');
     const bb = await more.boundingBox();
     expect(/More tools/.test(await more.innerText()) && bb.height >= 44, 'More tools, 44px');
@@ -2367,9 +2367,9 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
     return { lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), note: (r.querySelector('.ht-note') || {}).textContent, exam: y('.hub-exam'), lab: y('.hub-tlab'),
       gone: [...r.querySelectorAll('.hub-box, .hub-w')].map((x) => x.dataset.hub).filter((h) => ['lab', 'games', 'today', 'lessons', 'cards', 'timer'].includes(h)) };
   }, scope);
-  await page.waitForSelector('#home .home-top .hub-tlab');
+  await page.waitForSelector('#home .hub-tlab');
   let o = await order('#home');
-  expect(o.lessons > 0 && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab > o.exam && !o.gone.length, 'phone: Lessons, the timer and Flashcards in a row, then the exam plans, then Today’s Lab, and no Learn, Games or Today’s lab box: ' + JSON.stringify(o));
+  expect(o.lessons > 0 && o.lessons === o.cards && o.timer > o.cards && o.exam > o.timer && o.lab > o.exam && !o.gone.length, 'phone: Lessons and Flashcards side by side (Small widgets are half wide, v219), the timer, then the exam plans, then Today’s Lab, and no Learn, Games or Today’s lab box: ' + JSON.stringify(o));
   expect(o.note === 'Organized for your level: 2nd year college, from your first questions. Change it in Settings, You.', 'the note says the level: ' + o.note);
   await page.evaluate(() => { state.profile.grade = 'Grade 4'; save(); renderHub(document.getElementById('home-hub')); });
   o = await order('#home');
@@ -2405,9 +2405,9 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   await ctx.close();
   // the computer
   const D = await open(b, { device: 'Desktop Chrome', viewport: { width: 1366, height: 768 }, server: false, lite: 'off', state: { tab: 'home', profile: { ...PROFILE, grade: '2nd year college', age: 20 } } });
-  await D.page.evaluate(() => deskGo('home')); await D.page.waitForSelector('.desk-home .home-top .hub-tlab');
-  o = await (async () => { const pg = D.page; return pg.evaluate(() => { const r = document.querySelector('.desk-home'), y = (sel) => { const e = r.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top) : -1; }; return { head: y('.dk-head'), lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), exam: y('.hub-exam'), lab: y('.hub-tlab'), stats: y('.dk-stats'), oldTimer: !!r.querySelector('.dk-card.dk-timer'), note: r.querySelector('.ht-note').textContent }; }); })();
-  expect(o.lessons > o.head && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab > o.exam && o.stats > o.lab && !o.oldTimer && /2nd year college/.test(o.note), 'computer: the same top, then the week in numbers: ' + JSON.stringify(o));
+  await D.page.evaluate(() => deskGo('home')); await D.page.waitForSelector('.desk-home .hub-tlab');
+  o = await (async () => { const pg = D.page; return pg.evaluate(() => { const r = document.querySelector('.desk-home'), y = (sel) => { const e = r.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top) : -1; }; return { head: y('.dk-head'), lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), exam: y('.hub-exam'), lab: y('.hub-tlab'), stats: y('.dk-stat'), oldTimer: !!r.querySelector('.dk-card.dk-timer'), note: r.querySelector('.ht-note').textContent }; }); })();
+  expect(o.lessons > o.head && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab >= o.exam && o.stats > o.lab && !o.oldTimer && /2nd year college/.test(o.note), 'computer: the same top, then the week in numbers: ' + JSON.stringify(o));
   await D.page.click('.desk-home .ht-dtimer .dk-tgo');
   await D.page.waitForFunction(() => /Pause/.test(document.querySelector('.desk-home .dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
   await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
@@ -8382,14 +8382,16 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
     window.deskAct = (a) => window.__opened.push('deskAct:' + a);
   });
   // a point inside the box that is the box itself (no control there): its padding or empty space
-  const spots = (page) => page.evaluate(() => [...document.querySelectorAll(window.__BOX)].filter((x) => x.getClientRects().length && x.getBoundingClientRect().top >= 0 && x.getBoundingClientRect().bottom <= innerHeight).map((box, i) => {
+  // (in view: not off the screen and not under the phone’s floating tab bar, where a finger meets the bar)
+  const spots = (page) => page.evaluate(() => { const bar = document.querySelector('.tabbar'), floor = bar && bar.getClientRects().length ? bar.getBoundingClientRect().top : innerHeight; return [...document.querySelectorAll(window.__BOX)].filter((x) => x.getClientRects().length && x.getBoundingClientRect().top >= 0 && x.getBoundingClientRect().bottom <= floor).map((box, i) => {
     box.dataset.tb = i; const r = box.getBoundingClientRect(), main = window.__main(box);
     const pts = [[r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6], [r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + r.width / 2, r.bottom - 6]];
     const own = 'button, a, input, select, textarea, label, summary, form, [role="button"], [role="switch"], [role="link"], [data-dk], [data-hub], [contenteditable]';
     const p = pts.find(([x, y]) => { const t = document.elementFromPoint(x, y); return t && box.contains(t) && !t.closest(own); });
     const title = box.querySelector('h2, b'); const tr = title && title.getBoundingClientRect(); const tt = tr && document.elementFromPoint(tr.left + 3, tr.top + tr.height / 2);
     return { i, cls: box.className.split(' ').slice(0, 2).join(' '), p, title: tt && box.contains(tt) && !tt.closest(own) ? [tr.left + 3, tr.top + tr.height / 2] : null, button: !!(main && typeof main !== 'string' && box.contains(main) && main !== box), main: main ? (typeof main === 'string' ? 'deskAct:' + main : main.className.split(' ')[0] + ':' + (main.dataset.ht || main.dataset.dk || main.dataset.hub || '')) : null };
-  }));
+  
+  }); });
   const tryAll = async (page, where) => {
     const list = (await spots(page)).filter((s) => s.main);
     let n = 0;
@@ -8427,7 +8429,7 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
     expect(ed.exp === 'true' && ed.opened.length === 0, '1280x800: Edit opens the minutes, nothing else: ' + JSON.stringify(ed));
     await page.click('.ht-dtimer .ht-edit'); await page.waitForTimeout(100);
     // a mouse lifts a box 3px and it settles; a press sinks it to .98
-    const box = '.desk-home .dk-stat:nth-child(2)';
+    const box = '.desk-home .dk-stat[data-w="learned"]';
     await page.$eval(box, (e) => e.scrollIntoView({ block: 'center' })); await page.mouse.move(5, 790); await page.waitForTimeout(300);
     const bb = await page.locator(box).boundingBox();
     await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2 + 10); await page.waitForTimeout(600);
@@ -8440,7 +8442,7 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
     const settled = await page.waitForFunction((s) => getComputedStyle(document.querySelector(s)).transform === 'none', box, { timeout: 2000 }).then(() => true, () => false);
     expect(settled, '1280x800: it settles when the mouse leaves: ' + await tf(page, box) + ' ' + await page.$eval(box, (e) => e.className));
     // one tab stop per box (its main button), Enter opens it, the box shows the ring
-    const one = await page.evaluate(() => ['.ht-lessons', '.ht-cards', '.desk-home .dk-stat'].map((s) => document.querySelector(s).querySelectorAll('button, a[href], input, [tabindex]:not([tabindex="-1"])').length));
+    const one = await page.evaluate(() => ['.ht-lessons', '.ht-cards', '.desk-home .dk-stat'].map((s) => [...document.querySelector(s).querySelectorAll('button, a[href], input, [tabindex]:not([tabindex="-1"])')].filter((x) => x.getClientRects().length).length));
     expect(one.every((x) => x === 1), '1280x800: one tab stop per box: ' + one);
     await page.keyboard.press('Tab'); await page.focus('.ht-lessons .ht-go');
     await page.evaluate(() => { window.__opened = []; }); await page.keyboard.press('Enter'); await page.waitForTimeout(60);
@@ -8480,6 +8482,124 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
       await page.evaluate(() => document.getElementById('home').scrollBy(0, 500)); await page.waitForTimeout(400);
     }
     expect(n >= 4, '390x844: tried the Home boxes: ' + n);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('Home widgets: add, remove, resize, drag, kept after reload (computer 1280x800 and phone 390x844): Edit Home shows a handle, a size and a remove button on every widget; a removed widget comes back from Add widget; Small, Medium and Large change its span; a mouse drag and a finger’s long press move it, a plain swipe scrolls; the arrow keys move it and plus and minus size it, said aloud; the layout survives a reload and Reset puts back the default; outside edit mode a box opens as before; nothing overlaps at Small; AA in light and dark', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const order = (page) => page.evaluate(() => [...document.querySelectorAll('.hw-grid > .hw')].map((w) => w.dataset.w));
+  const span = (page, id) => page.evaluate((id) => { const w = document.querySelector(`.hw-grid > .hw[data-w="${id}"]`), g = w.parentElement; return { r: w.getBoundingClientRect().width / g.getBoundingClientRect().width, h: w.getBoundingClientRect().height, size: w.dataset.size }; }, id);
+  const live = (page) => page.$eval('.hw-live', (e) => e.textContent);
+  // (what the page says aloud: it clears the line, then says it on the next frame)
+  const said = (page, re) => page.waitForFunction((src) => new RegExp(src).test(document.querySelector('.hw-live').textContent), re.source, { timeout: 1500 }).then(() => true, () => false);
+  const opened = (page) => page.evaluate(() => { window.__op = []; const go = document.querySelector('.ht-lessons .ht-go'); go.addEventListener('click', (e) => { window.__op.push('lessons'); e.stopImmediatePropagation(); e.preventDefault(); }, true); });
+  const overlaps = (page) => page.evaluate(() => {
+    const bad = [];
+    document.querySelectorAll('.hw-grid > .hw').forEach((w) => {
+      const wr = w.getBoundingClientRect(), els = [...w.querySelectorAll('h2, b, small, span, em, p, li')].filter((e) => e.children.length === 0 && e.textContent.trim() && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && !e.closest('.hw-ctl, .sr-only'));
+      const rs = els.map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.height > 0);
+      rs.forEach(([e, r]) => { if (r.left < wr.left - 1 || r.right > wr.right + 1) bad.push(`${w.dataset.w}: “${e.textContent.trim().slice(0, 20)}” leaves its widget`); });
+      for (let a = 0; a < rs.length; a++) for (let c = a + 1; c < rs.length; c++) { const [ea, ra] = rs[a], [ec, rc] = rs[c]; if (ea.contains(ec) || ec.contains(ea)) continue; const ix = Math.min(ra.right, rc.right) - Math.max(ra.left, rc.left), iy = Math.min(ra.bottom, rc.bottom) - Math.max(ra.top, rc.top); if (ix > 2 && iy > 2) bad.push(`${w.dataset.w}: “${ea.textContent.trim().slice(0, 16)}” over “${ec.textContent.trim().slice(0, 16)}”`); }
+    });
+    return bad;
+  });
+  for (const [kind, device, viewport] of [['desk', 'Desktop Chrome', { width: 1280, height: 800 }], ['phone', 'iPhone 13', { width: 390, height: 844 }]]) {
+    const where = viewport.width + 'x' + viewport.height;
+    const { ctx, page, errors } = await open(b, { device, viewport, server: false, lite: 'off', state: { tab: 'home', chats: [{ id: 'c1', title: 'Photosynthesis', messages: [{ role: 'user', content: 'Explain photosynthesis' }, { role: 'assistant', content: 'Plants make food.' }], updatedAt: Date.now() }] } });
+    if (kind === 'desk') { await page.evaluate(() => deskGo('home')); }
+    await page.waitForSelector('.hw-grid > .hw'); await page.waitForTimeout(600);
+    const start = await order(page);
+    expect(start.length >= (kind === 'desk' ? 12 : 8) && start[0] === 'lessons', `${where}: Home is a grid of widgets: ` + start);
+    // edit mode on and off
+    await page.click('.hw-edit');
+    const on = await page.evaluate(() => ({ ctl: [...document.querySelectorAll('.hw-grid > .hw > .hw-ctl')].filter((c) => !c.hidden).length, n: document.querySelectorAll('.hw-grid > .hw').length, tools: !document.querySelector('.hw-tools').hidden, pressed: document.querySelector('.hw-edit').getAttribute('aria-pressed') }));
+    expect(on.ctl === on.n && on.tools && on.pressed === 'true', `${where}: Edit Home shows the controls on every widget: ` + JSON.stringify(on));
+    const taps = await page.evaluate(() => [...document.querySelectorAll('.hw-ctl button, .hw-bar button')].filter((x) => x.getClientRects().length).map((x) => x.getBoundingClientRect()).filter((r) => r.width < 44 || r.height < 44).length);
+    expect(taps === 0, `${where}: every handle, size and remove button is 44px`);
+    // in edit mode a tap on a widget opens nothing
+    await opened(page);
+    const lb = await page.locator('.ht-lessons').boundingBox();
+    await page.mouse.click(lb.x + lb.width / 2, lb.y + lb.height - 8); await page.waitForTimeout(60);
+    expect((await page.evaluate(() => window.__op)).length === 0, `${where}: in edit mode a tap on a widget opens nothing`);
+    // remove, then add back from the sheet
+    await page.click('.hw[data-w="cards"] .hw-x');
+    expect(!(await order(page)).includes('cards'), `${where}: × removes Flashcards`);
+    expect(await said(page, /Flashcards removed/), `${where}: and says so: ` + await live(page));
+    await page.click('.hw-add'); await page.waitForSelector('.hw-sheet');
+    expect(await page.locator('.hw-sheet .hw-put[data-id="cards"]').count() === 1, `${where}: Add widget lists Flashcards`);
+    await page.click('.hw-sheet .hw-put[data-id="cards"]');
+    const back = await order(page);
+    expect(back[back.length - 1] === 'cards' && !(await page.locator('.hw-sheet').count()), `${where}: Flashcards is back, at the end: ` + back);
+    // sizes: Small, Medium, Large
+    const sizes = {};
+    for (let k = 0; k < 3; k++) { const s1 = await span(page, 'lessons'); sizes[s1.size] = s1; await page.click('.hw[data-w="lessons"] .hw-size'); }
+    const want = kind === 'desk' ? { s: 0.25, m: 0.5, l: 1 } : { s: 0.5, m: 1, l: 1 };
+    for (const z of ['s', 'm', 'l']) expect(sizes[z] && Math.abs(sizes[z].r - want[z]) < 0.06, `${where}: ${z} is ${want[z]} of the row: ` + JSON.stringify(sizes));
+    expect(sizes.l.h > sizes.m.h + 20, `${where}: Large is taller too: ` + JSON.stringify(sizes));
+    // a mouse drag by the handle (computer), a finger's long press (phone)
+    if (kind === 'desk') {
+      await page.$eval('.hw[data-w="lessons"]', (e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300);
+      const from = await page.locator('.hw[data-w="exam"] .hw-handle').boundingBox(), to = await page.locator('.hw[data-w="lessons"]').boundingBox();
+      await page.mouse.move(from.x + 22, from.y + 22); await page.mouse.down();
+      for (let k = 1; k <= 12; k++) { await page.mouse.move(from.x + 22 + (to.x + 20 - from.x - 22) * k / 12, from.y + 22 + (to.y + to.height / 2 - from.y - 22) * k / 12); await page.waitForTimeout(30); }
+      await page.mouse.up(); await page.waitForTimeout(300);
+      const o = await order(page);
+      expect(o.indexOf('exam') < o.indexOf('lessons'), `${where}: a mouse drag moves the exam card before Lessons: ` + o);
+      expect(await said(page, /Exam coming up, moved to position \d+ of \d+/), `${where}: and says where: ` + await live(page));
+    } else {
+      const cdp = await ctx.newCDPSession(page);
+      await page.$eval('.hw[data-w="week"]', (e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+      const from = await page.locator('.hw[data-w="week"]').boundingBox(), to = await page.locator('.hw[data-w="timer"]').boundingBox();
+      const fx = from.x + from.width / 2, fy = from.y + from.height / 2;
+      // a plain swipe scrolls Home and moves nothing
+      const before = await order(page), top0 = await page.$eval('#home', (h) => h.scrollTop);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fx, y: fy, id: 1 }] });
+      for (let k = 1; k <= 8; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: fx, y: fy - k * 20, id: 1 }] }); await page.waitForTimeout(16); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await page.waitForTimeout(500);
+      const top1 = await page.$eval('#home', (h) => h.scrollTop);
+      expect(JSON.stringify(await order(page)) === JSON.stringify(before) && top1 !== top0, `${where}: a plain swipe scrolls and moves nothing: ${top0} → ${top1}`);
+      // a long press, then the drag
+      await page.$eval('.hw[data-w="timer"]', (e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300);
+      const f2 = await page.locator('.hw[data-w="exam"]').boundingBox(), t2 = await page.locator('.hw[data-w="timer"]').boundingBox();
+      const sx = f2.x + f2.width / 2, sy = f2.y + f2.height - 20;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: sx, y: sy, id: 1 }] }); await page.waitForTimeout(550);
+      for (let k = 1; k <= 12; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: sx, y: sy + (t2.y + 20 - sy) * k / 12, id: 1 }] }); await page.waitForTimeout(30); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await page.waitForTimeout(400);
+      const o = await order(page);
+      expect(o.indexOf('exam') < o.indexOf('timer'), `${where}: a long press drags the exam card up before the timer: ` + o);
+    }
+    // the keys: arrows move, plus and minus size, said aloud
+    await page.focus('.hw[data-w="timer"] .hw-handle');
+    const i0 = (await order(page)).indexOf('timer');
+    await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(100);
+    expect((await order(page)).indexOf('timer') === i0 - 1 && await said(page, /Focus timer, moved to position \d+ of \d+/), `${where}: ArrowLeft moves it one place and says where: ` + await live(page));
+    const z0 = (await span(page, 'timer')).size;
+    await page.keyboard.press('Minus'); await page.waitForTimeout(100);
+    expect((await span(page, 'timer')).size !== z0 && await said(page, /Focus timer, (Small|Medium)/), `${where}: minus makes it smaller and says so`);
+    // nothing overlaps at Small; AA in light and dark (in edit mode)
+    await page.evaluate(() => document.querySelectorAll('.hw-grid > .hw').forEach((w) => { let n = 0; while (w.dataset.size !== 's' && n++ < 3) w.querySelector('.hw-size').click(); }));
+    await page.waitForTimeout(400);
+    const ov = await overlaps(page);
+    expect(!ov.length, `${where}: nothing overlaps or spills at Small: ` + ov.slice(0, 6).join(' | '));
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350); const r = await contrastIssues(page, '.hw-wrap'); expect(!r.bad.length, `${where} (${scheme}): edit mode reads (AA): ` + r.bad.slice(0, 4).join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // kept after a reload; Reset puts back the default
+    const saved = await order(page), savedSizes = await page.evaluate(() => [...document.querySelectorAll('.hw-grid > .hw')].map((w) => w.dataset.size).join());
+    await page.reload(); if (kind === 'desk') await page.evaluate(() => deskGo('home'));
+    await page.waitForSelector('.hw-grid > .hw'); await page.waitForTimeout(400);
+    expect(JSON.stringify(await order(page)) === JSON.stringify(saved) && await page.evaluate(() => [...document.querySelectorAll('.hw-grid > .hw')].map((w) => w.dataset.size).join()) === savedSizes, `${where}: the layout is kept after a reload`);
+    if (!(await page.evaluate(() => document.documentElement.classList.contains('home-edit')))) await page.click('.hw-edit');
+    await page.click('.hw-reset'); await page.waitForSelector('.hw-grid > .hw'); await page.waitForTimeout(300);
+    expect(JSON.stringify(await order(page)) === JSON.stringify(start), `${where}: Reset Home puts back the default: ` + await order(page));
+    // outside edit mode a box opens as before
+    if (await page.evaluate(() => document.documentElement.classList.contains('home-edit'))) await page.click('.hw-edit');
+    await page.$eval('.ht-lessons', (e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+    const lb2 = await page.locator('.ht-lessons').boundingBox();
+    await page.mouse.click(lb2.x + lb2.width / 2, lb2.y + lb2.height - 8);
+    const opens = await page.waitForSelector('.lessons-sheet .lesson, .desk-lessons .lesson', { timeout: 5000 }).then(() => true, () => false);
+    expect(opens, `${where}: outside edit mode a click on a widget really opens it (Lessons)`);
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
@@ -10898,7 +11018,8 @@ test('phone Home: the hello and the bell with no row of lab previews above Today
     await page.waitForTimeout(800);
     const h = await page.evaluate(() => {
       const hub = document.querySelector('#home .hub'), kids = [...hub.children];
-      const at = (sel) => kids.findIndex((k) => k.matches(sel)), atH = (re) => kids.findIndex((k) => k.matches('.hub-h') && re.test(k.textContent));
+      // (in page order, through Home's widgets too: v219 puts the boxes in a widget grid)
+      const all = [...hub.querySelectorAll('*')], at = (sel) => all.findIndex((k) => k.matches(sel)), atH = (re) => all.findIndex((k) => k.matches('.hub-h') && re.test(k.textContent));
       // every lab preview on Home, and how many sit above Today's Lab (there should be none)
       const tl = document.querySelector('#home .hub-tlab').getBoundingClientRect().top;
       const above = [...document.querySelectorAll('#home canvas[data-pv]')].filter((c) => !c.closest('.hub-tlab') && c.getBoundingClientRect().bottom <= tl + 1);
@@ -10913,6 +11034,7 @@ test('phone Home: the hello and the bell with no row of lab previews above Today
     expect(h.lab === h.want && h.pv === h.today && h.play >= 44, 'Today’s Lab is today’s lab with its live preview and a 44px play button: ' + JSON.stringify(h));
     // the previews keep drawing
     const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames);
+    await page.$eval('#home .hub-tlab', (e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400); // (it draws while it can be seen)
     const f0 = await fr(); await page.waitForTimeout(1500); // (some days’ labs draw slower here: software graphics)
     const f1 = await fr(); expect(f1 > f0 + 3, 'Today’s Lab preview is moving: ' + JSON.stringify([f0, f1]));
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#home .hub-hero, #home .hub-tlab'); expect(!bad.length, `header and Today’s Lab (${scheme}): ` + bad.join(' | ')); }
@@ -10940,7 +11062,7 @@ test('phone Home: the hello and the bell with no row of lab previews above Today
     const { ctx, page } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', server: false, state: { ...seed, chats: [], cards: [] } });
     await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('#chat-log .desk-home');
-    const d = await page.evaluate(() => ({ strip: [...document.querySelectorAll('#chat-log .hub-tlab, #chat-log canvas[data-pv]')].some((c) => !c.closest('.home-top')), hello: document.querySelector('.dk-title').textContent }));
+    const d = await page.evaluate(() => ({ strip: [...document.querySelectorAll('#chat-log .hub-tlab, #chat-log canvas[data-pv]')].some((c) => !c.closest('.home-top, [data-w="tlab"]')), hello: document.querySelector('.dk-title').textContent }));
     expect(!d.strip && d.hello === 'Hi, Test', 'a computer’s Home is the dashboard: ' + JSON.stringify(d));
     await ctx.close();
   }
@@ -10959,6 +11081,7 @@ test('phone Home previews: real-looking 3D scenes (like the labs) on Plus and Pr
     expect(want === '3d' ? asked.length > 0 : asked.length === 0, `${who}: the 3D scenes are ${want === '3d' ? '' : 'not '}loaded`);
     if (want === '3d') { // and they move
       const fr = () => page.evaluate(() => +document.querySelector('.hub-tlab-pv').dataset.frames || 0);
+      await page.$eval('#home .hub-tlab', (e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400); // (it draws while it can be seen)
       const f0 = await fr(); await page.waitForTimeout(1500); const f1 = await fr(); expect(f1 > f0, `${who}: the 3D preview moves: ${f0} then ${f1}`); // (3D is drawn in software here: slow, but moving)
       // exactly one 3D canvas for every preview (they share one renderer)
       expect(await page.evaluate(() => document.querySelectorAll('#home canvas.hub-scene-3d, #home canvas[data-engine="webgl"]').length) === 0, `${who}: no extra 3D canvases on the page`);
@@ -11086,7 +11209,7 @@ test('Home header: a glass bar with the hello and a bell; every Home button stil
     await page.waitForSelector(hub + ':not(.hub-empty) .hub-hero');
     expect((phone ? /(Morning|Afternoon|Evening), Test/ : /Hi, welcome back/).test(await page.locator(hub + ' .hub-hero').innerText()), `${size}: welcome back`);
     const today = await page.evaluate((h) => { const t = document.querySelector(h + ' .hub-today'), s = getComputedStyle(t); return { n: t.querySelectorAll('.hub-w').length, dir: s.display + ' ' + s.flexDirection, x: s.overflowX, top: [...t.querySelectorAll('.hub-w')].map((w) => Math.round(w.getBoundingClientRect().top)) }; }, hub);
-    expect(today.n === 1 && today.dir === 'flex row' && await page.locator(hub + ' .home-top .ht-timer').count() === 1 && await page.locator(hub + ' .home-top .ht-cards').count() === 1, `${size}: Today keeps the streak; Flashcards and the timer are up top: ` + JSON.stringify(today));
+    expect(today.n === 1 && today.dir === 'flex row' && await page.locator(hub + ' .ht-timer').count() === 1 && await page.locator(hub + ' .ht-cards').count() === 1, `${size}: Today keeps the streak; Flashcards and the timer are up top: ` + JSON.stringify(today));
     // the bell: today's reminders, each going where it says
     await page.click(hub + ' .hub-bell');
     await page.waitForTimeout(300);
