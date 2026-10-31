@@ -3199,40 +3199,19 @@ html.native:not(.lite) .composer { --lg-fill-card: linear-gradient(155deg, rgba(
 :root[data-theme="dark"].native:not(.lite) :is(.bubble-assistant, .quick-actions .chip) { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .58), rgba(var(--glass-rgb), .44)); }
 :root[data-theme="dark"].native:not(.lite) .composer { --lg-fill-card: linear-gradient(155deg, rgba(var(--glass-rgb), .7), rgba(var(--glass-rgb), .58)); }
 html.native:not(.lite) .bubble-assistant .bubble-tools :is(button, .save-label) { color: var(--text); } /* (the small links under an answer, over the glass on any colour) */
-/* ---------- liquid glass: refraction, a rim and a glint (app.js: liquidGlass) ----------
-   html.lgm: the material is on (never in Lite mode or with Reduce Transparency, which keep the panes solid).
-   html.lg-refract: the browser can bend what's behind (an SVG lens as the backdrop filter, Chromium); without it
-   (Safari, iPhone) a look-alike: a thick curved edge (bright line, then a darker band) and a lifted centre.
-   Every pane gets a faint inner second line under its rim, and a glint (the .lgp layer, under the pane's words)
-   that slides with the pointer, the scroll and when the pane appears. */
-@property --lg-gx { syntax: '<percentage>'; inherits: false; initial-value: -40%; }
-@property --lg-ga { syntax: '<angle>'; inherits: false; initial-value: 115deg; }
-html.lgm { --lg-gi: .2; --lg-gr: .9; --lg-cl: .1;
-  --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .9), inset 0 -1px 0 rgba(var(--hi-rgb), .35), inset 0 0 0 .5px rgba(var(--hi-rgb), .55), inset 0 0 0 1.5px rgba(var(--hi-rgb), .16); }
-html.lgm:not(.lg-refract) { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .9), inset 0 -1px 0 rgba(var(--hi-rgb), .35), inset 0 0 0 .5px rgba(var(--hi-rgb), .55), inset 0 0 0 1.5px rgba(var(--hi-rgb), .16), inset 0 0 0 2px rgba(var(--hi-rgb), .22), inset 0 0 16px 3px rgba(var(--shade-rgb), .08); }
-@media (prefers-color-scheme: dark) {
-  html.lgm:not([data-theme="light"]) { --lg-gi: .07; --lg-gr: .55; --lg-cl: .05;
-    --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05); }
-  html.lgm:not(.lg-refract):not([data-theme="light"]) { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05), inset 0 0 0 2px rgba(var(--hi-rgb), .08), inset 0 0 16px 3px rgba(var(--shade-rgb), .3); }
-}
-html.lgm[data-theme="dark"] { --lg-gi: .07; --lg-gr: .55; --lg-cl: .05;
-  --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05); }
-html.lgm:not(.lg-refract)[data-theme="dark"] { --lg-edge: inset 0 1px 0 rgba(var(--hi-rgb), .16), inset 0 -1px 0 rgba(var(--hi-rgb), .04), inset 0 0 0 .5px rgba(var(--hi-rgb), .1), inset 0 0 0 1.5px rgba(var(--hi-rgb), .05), inset 0 0 0 2px rgba(var(--hi-rgb), .08), inset 0 0 16px 3px rgba(var(--shade-rgb), .3); }
-/* the glint layer: under the pane's words (the pane is its own stacking context), over its glass */
+/* ---------- liquid glass: a real, curved piece of glass (app.js: liquidGlass) ----------
+   html.lgm: on (never in Lite mode or with Reduce Transparency, which keep the panes solid). Each pane's light layer
+   (.lgp: its ::before, else ::after, under the pane's words) runs the pane's own SVG light filter: a thin rim lit
+   where the light hits, soft shading and a faint shadow on the bevel, and a tight specular glint (app.js moves the
+   light). html.lg-refract: the floating chrome also bends what's behind (Chromium). Strengths are tokens. */
+html.lgm { --lg-rim-a: 1.5; --lg-shade-a: .3; --lg-shadow-a: .35; }
+@media (prefers-color-scheme: dark) { html.lgm:not([data-theme="light"]) { --lg-rim-a: .9; --lg-shade-a: .14; --lg-shadow-a: .5; } }
+html.lgm[data-theme="dark"] { --lg-rim-a: .9; --lg-shade-a: .14; --lg-shadow-a: .5; }
 html.lgm .lgp { isolation: isolate; }
 html.lgm .lgp-rel { position: relative; }
 html.lgm .lgp-b::before, html.lgm .lgp-a::after {
-  content: ""; position: absolute; inset: -1px; z-index: -1; pointer-events: none; border: 1px solid transparent; border-radius: inherit;
-  --lg-gx: inherit; --lg-ga: inherit; }
-html.lgm .lgp-b::before { /* across the glass: a soft band */
-  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 14%), rgba(var(--hi-rgb), var(--lg-gi)) var(--lg-gx), transparent calc(var(--lg-gx) + 14%)) padding-box; }
-html.lgm:not(.lg-refract) .lgp-b::before { /* (the look-alike's lifted centre too) */
-  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 14%), rgba(var(--hi-rgb), var(--lg-gi)) var(--lg-gx), transparent calc(var(--lg-gx) + 14%)) padding-box,
-    radial-gradient(70% 60% at 50% 45%, rgba(var(--hi-rgb), var(--lg-cl)), transparent 72%) padding-box; }
-html.lgm .lgp-a::after { /* along the rim only: a bright line that slides round the edge */
-  background: linear-gradient(var(--lg-ga), transparent calc(var(--lg-gx) - 8%), rgba(var(--hi-rgb), var(--lg-gr)) var(--lg-gx), transparent calc(var(--lg-gx) + 8%)) border-box;
-  -webkit-mask: linear-gradient(var(--black) 0 0) padding-box, linear-gradient(var(--black) 0 0) border-box; -webkit-mask-composite: xor;
-  mask: linear-gradient(var(--black) 0 0) padding-box exclude, linear-gradient(var(--black) 0 0) border-box; }
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background: var(--lg-still, none) center / 100% 100% no-repeat, rgba(var(--hi-rgb), .001); filter: var(--lg-light, none); }
 /* where the glass really bends (Chromium), the floating bars are clear glass like the reference: a thin fill, so
    the bending shows; their words and icons stay AA (tests) */
 html.lg-refract.native .tabbar, html.lg-refract.native .topbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), linear-gradient(180deg, rgba(var(--glass-rgb), .5), rgba(var(--glass-rgb), .38)); }

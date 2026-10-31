@@ -327,6 +327,7 @@ function applyTheme() {
   themeButtons();
   const sel = document.getElementById('theme-select'); if (sel) sel.value = t;
   applyAccent();
+  try { if (window.CassieGlass && window.CassieGlass.redress) window.CassieGlass.redress(); } catch (e) { /* the glass catches up on the next look */ }
 }
 function setTheme(t) { state.theme = t; save(); applyTheme(); }
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.theme-flip'); if (b) { track('feature', 'theme'); setTheme(isDark() ? 'light' : 'dark'); } });
@@ -2298,7 +2299,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=213'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=214'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2510,7 +2511,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=213').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=214').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6843,7 +6844,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=213');
+      exploreMod = await import('./explore/cell3d.js?v=214');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -6893,7 +6894,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=213');
+      labsMod = await import('./labs/labs.js?v=214');
       islandRest();
     }
     labsMod.open({
@@ -8734,10 +8735,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=213').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=214').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=213', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=214', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9890,17 +9891,75 @@ buildAccentSwatches();
 applyReading();
 applyTheme();
 
-/* ---------- liquid glass: refraction where the browser can, a rim, and a glint that slides (style.css: html.lgm) ----------
-   Refraction is an SVG lens used as the backdrop filter: what's behind is magnified a little in the middle and bends
-   inward along a 12px band that follows the pane's corners. Only Chromium bends a backdrop through an SVG filter, so
-   it is turned on by what the browser supports (never by its name): url() backdrop filters, and none of WebKit's
-   prefixed or Gecko's own properties. Without it (Safari, iPhone) the look-alike in style.css shows instead.
-   It is used on the floating chrome only (the bars, the ask box, the chips and the sheets): bending many cards at
-   once costs frames. The glint is on every glass pane. */
+/* ---------- liquid glass: a real, curved piece of glass (style.css: html.lgm) ----------
+   Each pane is a height field: flat in the middle, curving down to its edge over a 16px bevel that follows its
+   corners. From it:
+   - refraction: off = n * bend * pow(slope, 1.35), plus a little magnification in the middle (n: the edge's outward
+     normal, slope: 0 in the middle to 1 at the edge). Only Chromium bends a backdrop through an SVG filter, so it is
+     turned on by what the browser supports (never by its name), and only on the floating chrome (bending every card
+     costs frames).
+   - light, on every pane and in every browser (an element filter, under the pane's words): a thin rim,
+     smoothstep(rimW, 0, inside), brightest where the light hits; soft shading on the bevel and a faint shadow on the
+     side away from the light; and a tight specular glint, pow(N.H, 120), from a light that moves with the pointer,
+     the scroll and once when the pane appears (still with Reduce Motion). */
 const LG_PANES = '.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row, .wk-card, .hub-chat.ex-new, .hub-chat.dk-letc, .dk-col, .dk-col .empty-state, .ht-tile, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .lf-front, .sidebar, .topbar, html.native .tabbar, #quick-actions .chip, .settings-card, .letc-card, .hub-hero, html.native .bubble-assistant';
-// (panes that are mostly small words: the rim glint only, so nothing ever dims them)
+// (panes that are mostly small words: the light keeps still there, so nothing moves under the words)
 const LG_WORDY = '.set-group, .sidebar, .settings-card, .dk-card, .dk-stat';
 const LG_REFRACT = '.topbar, html.native .tabbar, .composer, #quick-actions .chip, .settings-card, .letc-card, .hub-hero';
+const LG_SHAPE = { bevel: 16, rim: 1.75, bend: 14, zoom: 1.08 };
+// the shared images for one pane size: the height field (alpha), its rim (red) and bevel (green), and the refraction map
+function glassMaps(w, h, r) {
+  const { bevel: B, rim: RIM, bend: BEND, zoom: ZOOM } = LG_SHAPE;
+  const hc = document.createElement('canvas'), dc = document.createElement('canvas');
+  hc.width = dc.width = w; hc.height = dc.height = h;
+  const H = hc.getContext('2d').createImageData(w, h), D = dc.getContext('2d').createImageData(w, h);
+  const rr = Math.min(r, w / 2, h / 2), S = 2 * (BEND + Math.max(w, h) / 2 * (1 - 1 / ZOOM)) + 2;
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const px = x + .5 - w / 2, py = y + .5 - h / 2, i = (y * w + x) * 4;
+    const qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
+    const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr);
+    let nx, ny; // (the outward normal: the distance field's gradient)
+    if (qx > 0 && qy > 0) { const L = Math.hypot(qx, qy) || 1; nx = (qx / L) * Math.sign(px); ny = (qy / L) * Math.sign(py); }
+    else if (qx > qy) { nx = Math.sign(px); ny = 0; } else { nx = 0; ny = Math.sign(py); }
+    const slope = inside <= 0 ? 1 : Math.min(1, Math.max(0, 1 - inside / B));
+    const height = inside <= 0 ? 0 : Math.sqrt(Math.max(0, 1 - slope * slope)); // (round: flat, then curving down)
+    const rim = inside <= 0 ? 0 : smooth(RIM, 0, inside);
+    H.data[i] = rim * 255; H.data[i + 1] = (inside <= 0 ? 0 : slope) * 255; H.data[i + 3] = height * 255;
+    const k = BEND * Math.pow(slope, 1.35);
+    D.data[i] = 128 + ((-px * (1 - 1 / ZOOM) + nx * k) / S) * 255; D.data[i + 1] = 128 + ((-py * (1 - 1 / ZOOM) + ny * k) / S) * 255; D.data[i + 2] = 128; D.data[i + 3] = 255;
+  }
+  hc.getContext('2d').putImageData(H, 0, 0); dc.getContext('2d').putImageData(D, 0, 0);
+  return { height: hc.toDataURL(), disp: dc.toDataURL(), S };
+}
+// the same light, worked out once as a picture (for panes whose light keeps still: no filter to redraw while scrolling)
+function glassStill(w, h, r, dark) {
+  const { bevel: B, rim: RIM } = LG_SHAPE, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), im = g.createImageData(w, h), d = im.data, rr = Math.min(r, w / 2, h / 2);
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  const hf = new Float32Array(w * h), slopeA = new Float32Array(w * h), rimA = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const px = x + .5 - w / 2, py = y + .5 - h / 2, qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
+    const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr), j = y * w + x;
+    const slope = inside <= 0 ? 1 : Math.min(1, Math.max(0, 1 - inside / B));
+    hf[j] = inside <= 0 ? 0 : Math.sqrt(Math.max(0, 1 - slope * slope)); slopeA[j] = inside <= 0 ? 0 : slope; rimA[j] = inside <= 0 ? 0 : smooth(RIM, 0, inside);
+  }
+  const L = [-.55, -.55, .63], Ll = Math.hypot(...L); L[0] /= Ll; L[1] /= Ll; L[2] /= Ll; // (from the top-left, 30 degrees up)
+  const Hv = [L[0], L[1], L[2] + 1], Hl = Math.hypot(...Hv); Hv[0] /= Hl; Hv[1] /= Hl; Hv[2] /= Hl;
+  const A = dark ? { rim: .9, shade: .14, shadow: .5 } : { rim: 1.5, shade: .3, shadow: .35 }, SC = 9;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const j = y * w + x, bev = slopeA[j]; if (!bev && !rimA[j]) continue;
+    let nx = -(hf[j + 1] - hf[j - 1]) * SC / 2, ny = -(hf[j + w] - hf[j - w]) * SC / 2, nz = 1; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const dif = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]), spec = Math.pow(Math.max(0, nx * Hv[0] + ny * Hv[1] + nz * Hv[2]), 120) * bev;
+    const white = Math.min(1, rimA[j] * dif * A.rim + bev * dif * A.shade + spec * 1.6), black = bev * (1 - dif) * A.shadow;
+    const a = white + black * (1 - white), i = j * 4; if (a <= 0) continue;
+    const v = (255 * white) / a; d[i] = d[i + 1] = d[i + 2] = Math.round(v); d[i + 3] = Math.round(a * 255);
+  }
+  g.putImageData(im, 0, 0);
+  return c.toDataURL();
+}
+// (the panes whose light moves: the floating chrome and Home's top tiles; the rest keep a still light)
+const LG_LIVE = '.topbar, html.native .tabbar, .composer, #quick-actions .chip, .hub-hero, .ht-tile';
 const liquidGlass = (() => {
   const root = document.documentElement;
   const plain = () => root.classList.contains('lite') || window.CASSIE_LITE || (window.matchMedia && matchMedia('(prefers-reduced-transparency: reduce)').matches);
@@ -9911,93 +9970,116 @@ const liquidGlass = (() => {
   root.classList.add('lgm');
   const refract = canBend();
   root.classList.toggle('lg-refract', refract);
-  // the lenses: one SVG filter per pane size and corner (cached), its displacement map drawn once
-  const NS = 'http://www.w3.org/2000/svg', lenses = new Map();
-  let defs = null;
-  function lens(w, h, r) {
-    const key = `${w}x${h}r${r}`;
-    if (lenses.has(key)) return lenses.get(key);
-    if (!defs) { const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.style.position = 'absolute'; svg.id = 'lg-lenses'; defs = svg; document.body.appendChild(svg); }
-    const BAND = 12, ZOOM = 1.07, BEND = 7, S = 2 * (BEND + Math.max(w, h) / 2 * (1 - 1 / ZOOM)) + 2;
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const g = c.getContext('2d'), im = g.createImageData(w, h), d = im.data;
-    const rr = Math.min(r, w / 2, h / 2);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const px = x + .5 - w / 2, py = y + .5 - h / 2;
-      let dx = -px * (1 - 1 / ZOOM), dy = -py * (1 - 1 / ZOOM); // (the middle: a little magnified)
-      const qx = Math.abs(px) - (w / 2 - rr), qy = Math.abs(py) - (h / 2 - rr);
-      const inside = -(Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - rr); // (how far in from the edge)
-      if (inside >= 0 && inside < BAND) { // (the edge band: bends inward, more the nearer the edge)
-        const k = (1 - inside / BAND) ** 2 * BEND;
-        const nx = qx > 0 || qy > 0 ? Math.max(qx, 0) * Math.sign(px) : (qx > qy ? Math.sign(px) : 0);
-        const ny = qx > 0 || qy > 0 ? Math.max(qy, 0) * Math.sign(py) : (qy >= qx ? Math.sign(py) : 0);
-        const L = Math.hypot(nx, ny) || 1;
-        dx -= (nx / L) * k; dy -= (ny / L) * k;
-      }
-      const i = (y * w + x) * 4;
-      d[i] = 128 + (dx / S) * 255; d[i + 1] = 128 + (dy / S) * 255; d[i + 2] = 128; d[i + 3] = 255;
+  const NS = 'http://www.w3.org/2000/svg', images = new Map();
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.style.position = 'absolute'; svg.id = 'lg-lenses';
+  document.body.appendChild(svg);
+  const mapsFor = (w, h, r) => { const key = `${w}x${h}r${r}`; if (!images.has(key)) { images.set(key, glassMaps(w, h, r)); if (images.size > 60) images.delete(images.keys().next().value); } return images.get(key); };
+  const sizeOf = (el) => { const b = el.getBoundingClientRect(); return [Math.round(b.width / 2) * 2, Math.round(b.height / 2) * 2, Math.round(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0)]; };
+  let n = 0;
+  const st = new WeakMap(); // pane → { id, light, sun, w, h }
+  // the light filter for one pane (its own filter, so its glint moves on its own; the images are shared by size)
+  const stills = new Map();
+  function dress(el) {
+    const [w, h, r] = sizeOf(el); if (w < 8 || h < 8) return;
+    if (!el.matches(LG_LIVE) || still()) { // (a still light: a picture, no filter)
+      const dk = isDark(), key = `${w}x${h}r${r}${dk ? 'd' : 'l'}`;
+      if (!stills.has(key)) { stills.set(key, glassStill(w, h, r, dk)); if (stills.size > 80) stills.delete(stills.keys().next().value); }
+      el.style.setProperty('--lg-still', `url(${stills.get(key)})`); el.style.removeProperty('--lg-light'); st.delete(el);
+      return;
     }
-    g.putImageData(im, 0, 0);
-    const id = 'lgr-' + key, f = document.createElementNS(NS, 'filter');
-    f.id = id; f.setAttribute('x', '0'); f.setAttribute('y', '0'); f.setAttribute('width', '100%'); f.setAttribute('height', '100%'); f.setAttribute('color-interpolation-filters', 'sRGB');
-    const fi = document.createElementNS(NS, 'feImage'); fi.setAttribute('href', c.toDataURL()); fi.setAttribute('x', '0'); fi.setAttribute('y', '0'); fi.setAttribute('width', String(w)); fi.setAttribute('height', String(h)); fi.setAttribute('preserveAspectRatio', 'none'); fi.setAttribute('result', 'map');
-    const fd = document.createElementNS(NS, 'feDisplacementMap'); fd.setAttribute('in', 'SourceGraphic'); fd.setAttribute('in2', 'map'); fd.setAttribute('scale', String(S)); fd.setAttribute('xChannelSelector', 'R'); fd.setAttribute('yChannelSelector', 'G');
-    f.append(fi, fd); defs.appendChild(f);
-    lenses.set(key, id);
-    if (lenses.size > 80) { const [k0, id0] = lenses.entries().next().value; lenses.delete(k0); document.getElementById(id0)?.remove(); }
-    return id;
+    const m = mapsFor(w, h, r), old = st.get(el);
+    if (old && old.w === w && old.h === h && old.r === r) return;
+    const id = old ? old.id : 'lgl-' + (++n);
+    document.getElementById(id)?.remove();
+    const f = document.createElementNS(NS, 'filter');
+    f.id = id; ['x', 'y'].forEach((a) => f.setAttribute(a, '0')); f.setAttribute('width', '100%'); f.setAttribute('height', '100%'); f.setAttribute('color-interpolation-filters', 'sRGB');
+    f.innerHTML = `<feImage href="${m.height}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="H"/>
+      <feColorMatrix in="H" result="rim" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1 0 0 0 0"/>
+      <feColorMatrix in="H" result="bevel" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 1 0 0 0"/>
+      <feSpecularLighting in="H" surfaceScale="9" specularConstant="1.8" specularExponent="120" lighting-color="#fff" result="S"><fePointLight x="${w * .2}" y="${-h * .3}" z="44"/></feSpecularLighting>
+      <feComposite in="S" in2="bevel" operator="in" result="spec"/>
+      <feDiffuseLighting in="H" surfaceScale="9" diffuseConstant="1" lighting-color="#fff" result="D"><feDistantLight azimuth="225" elevation="30"/></feDiffuseLighting>
+      <feColorMatrix in="D" result="Dw" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 .33 .33 .33 0 0"/>
+      <feColorMatrix in="D" result="Dk" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.33 -.33 -.33 0 1"/>
+      <feComposite in="Dw" in2="rim" operator="in" result="r1"/><feComponentTransfer in="r1" result="rimlit"><feFuncA type="linear" slope="var"/></feComponentTransfer>
+      <feComposite in="Dw" in2="bevel" operator="in" result="s1"/><feComponentTransfer in="s1" result="shade"><feFuncA type="linear" slope="var"/></feComponentTransfer>
+      <feComposite in="Dk" in2="bevel" operator="in" result="s2"/><feComponentTransfer in="s2" result="shadow"><feFuncA type="linear" slope="var"/></feComponentTransfer>
+      <feMerge><feMergeNode in="shadow"/><feMergeNode in="shade"/><feMergeNode in="rimlit"/><feMergeNode in="spec"/></feMerge>`;
+    // (how strong each part is: the theme's tokens, read once per pane)
+    const cs = getComputedStyle(el), num = (v, d) => parseFloat(cs.getPropertyValue(v)) || d;
+    const funcs = f.querySelectorAll('feFuncA');
+    funcs[0].setAttribute('slope', String(num('--lg-rim-a', 1.4))); funcs[1].setAttribute('slope', String(num('--lg-shade-a', .3))); funcs[2].setAttribute('slope', String(num('--lg-shadow-a', .4)));
+    svg.appendChild(f);
+    el.style.setProperty('--lg-light', `url(#${id})`);
+    st.set(el, { id, w, h, r, light: f.querySelector('fePointLight'), sun: f.querySelector('feDistantLight') });
   }
   function bend(el) {
-    const b = el.getBoundingClientRect(); if (b.width < 8 || b.height < 8) return;
-    if (el.dataset.lgBase === undefined) { el.style.removeProperty('backdrop-filter'); el.dataset.lgBase = getComputedStyle(el).backdropFilter; }
-    const base = 'blur(4px) saturate(1.7)'; // (clear glass, like the reference: a light frost, so the bending shows)
-    const w = Math.round(b.width / 2) * 2, h = Math.round(b.height / 2) * 2, r = Math.round(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0);
-    el.style.backdropFilter = `url(#${lens(w, h, r)}) ${base}`.trim();
+    const [w, h, r] = sizeOf(el); if (w < 8 || h < 8) return;
+    const m = mapsFor(w, h, r), id = 'lgr-' + w + 'x' + h + 'r' + r;
+    if (!document.getElementById(id)) {
+      const f = document.createElementNS(NS, 'filter');
+      f.id = id; ['x', 'y'].forEach((a) => f.setAttribute(a, '0')); f.setAttribute('width', '100%'); f.setAttribute('height', '100%'); f.setAttribute('color-interpolation-filters', 'sRGB');
+      f.innerHTML = `<feImage href="${m.disp}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="${m.S}" xChannelSelector="R" yChannelSelector="G"/>`;
+      svg.appendChild(f);
+    }
+    if (el.dataset.lgBase === undefined) el.dataset.lgBase = getComputedStyle(el).backdropFilter;
+    el.style.backdropFilter = `url(#${id}) blur(3px) saturate(1.7)`; // (clear glass: a light frost, so the bending shows)
   }
-  const sized = refract && window.ResizeObserver ? new ResizeObserver((es) => es.forEach((e) => bend(e.target))) : null;
-  // the glint: a soft highlight that slides with the pointer, the scroll, and once when a pane appears
+  // the light: where the glint sits (x, y in the pane's own pixels)
+  const put = (el, fx, fy, tilt) => { const s = st.get(el); if (!s) return; s.light.setAttribute('x', String(Math.round(fx * s.w))); s.light.setAttribute('y', String(Math.round(fy * s.h))); s.sun.setAttribute('azimuth', String(Math.round(225 + (tilt || 0)))); el.dataset.lgLight = Math.round(fx * 100); };
   const shown = new Set(), seen = new WeakSet();
+  const fixed = (el) => still() || el.matches(LG_WORDY) || !el.matches(LG_LIVE);
   const io = window.IntersectionObserver ? new IntersectionObserver((es) => es.forEach((e) => {
-    if (e.isIntersecting) { shown.add(e.target); if (!seen.has(e.target)) { seen.add(e.target); sweep(e.target); } } else shown.delete(e.target);
+    if (!e.isIntersecting) { shown.delete(e.target); return; }
+    shown.add(e.target); if (!seen.has(e.target)) { seen.add(e.target); dress(e.target); appear(e.target); }
   })) : null;
-  const restAt = (el) => { const b = el.getBoundingClientRect(); return Math.round(15 + Math.min(1, Math.max(0, (b.top + b.height / 2) / innerHeight)) * 70); };
-  // (a very big pane, like the board, keeps its glint still: moving it repaints the whole pane while you draw)
-  const big = (el) => { const b = el.getBoundingClientRect(); return b.width * b.height > 250000; };
-  function sweep(el) {
-    if (still() || big(el)) { el.style.setProperty('--lg-gx', '30%'); return; }
-    const to = restAt(el) + '%';
-    try { el.animate([{ '--lg-gx': '-40%' }, { '--lg-gx': '140%' }, { '--lg-gx': to }], { duration: 1300, easing: 'cubic-bezier(.3,.6,.3,1)' }); } catch (e) { /* the rest still works */ }
-    el.style.setProperty('--lg-gx', to);
+  const restAt = (el) => { const b = el.getBoundingClientRect(); return .1 + Math.min(1, Math.max(0, (b.top + b.height / 2) / innerHeight)) * .8; };
+  let sweeping = 0;
+  function appear(el) { // (once: the glint sweeps across, then rests where the scroll puts it; the bars, always there, just rest)
+    if (fixed(el) || el.matches(LG_REFRACT) || sweeping >= 3) { put(el, .2, -.3); return; }
+    sweeping++;
+    const t0 = performance.now(), to = restAt(el);
+    const step = (now) => { const k = Math.min(1, (now - t0) / 1200), e = 1 - (1 - k) ** 3; put(el, -.2 + 1.4 * e, -.3, 0); if (k < 1 && el.isConnected) requestAnimationFrame(step); else { sweeping--; put(el, to, -.1); } };
+    requestAnimationFrame(step);
   }
-  let scrollQueued = false;
+  let queued = false;
   addEventListener('scroll', () => {
-    if (still() || scrollQueued) return;
-    scrollQueued = true;
-    requestAnimationFrame(() => { scrollQueued = false; shown.forEach((el) => { if (el.isConnected && !el.matches(':hover') && !big(el)) el.style.setProperty('--lg-gx', restAt(el) + '%'); }); });
+    if (queued || still()) return; queued = true;
+    requestAnimationFrame(() => { queued = false; shown.forEach((el) => {
+      if (!el.isConnected || fixed(el) || el === hovered) return;
+      const top = Math.round(el.getBoundingClientRect().top), s1 = st.get(el); if (!s1 || s1.top === top) return; // (a pane that didn't move keeps its light: nothing to redraw)
+      s1.top = top; put(el, restAt(el), -.1);
+    }); });
   }, { capture: true, passive: true });
+  let hovered = null;
   addEventListener('pointermove', (e) => {
     if (still()) return;
-    const el = e.target.closest && e.target.closest('.lgp'); if (!el || big(el)) return;
+    const el = e.target.closest && e.target.closest('.lgp'); hovered = el;
+    if (!el || fixed(el) || !st.get(el)) return;
     const b = el.getBoundingClientRect(), fx = (e.clientX - b.left) / b.width, fy = (e.clientY - b.top) / b.height;
-    el.style.setProperty('--lg-gx', Math.round(fx * 100) + '%');
-    el.style.setProperty('--lg-ga', Math.round(90 + Math.atan2(fy - .5, fx - .5) * 20) + 'deg'); // (the light leans toward the pointer)
+    put(el, fx, Math.min(fy, .5) - .35, (fx - .5) * 40); // (the light just above where the pointer is: its glint on the near edge)
   }, { passive: true });
-  // every glass pane gets the glint: across the glass on ::before, along the rim on ::after (each where it's free)
+  const sized = window.ResizeObserver ? new ResizeObserver((es) => es.forEach((e) => { const el = e.target; if (!el.isConnected) return; if (seen.has(el)) dress(el); if (refract && el.matches(LG_REFRACT)) bend(el); })) : null;
+  // every glass pane gets the light layer (a free ::before, else ::after)
   function tag(el) {
     if (el.classList.contains('lgp')) return;
-    const cs = getComputedStyle(el), bf = getComputedStyle(el, '::before').content, af = getComputedStyle(el, '::after').content;
-    const freeB = !bf || bf === 'none' || bf === 'normal', freeA = !af || af === 'none' || af === 'normal';
-    if (!freeB && !freeA) return;
-    el.classList.add('lgp'); if (freeB && !el.matches(LG_WORDY)) el.classList.add('lgp-b'); if (freeA) el.classList.add('lgp-a');
-    if (cs.position === 'static') el.classList.add('lgp-rel');
-    if (io) io.observe(el);
-    if (sized && el.matches(LG_REFRACT)) { bend(el); sized.observe(el); }
+    const free = (p) => { const c = getComputedStyle(el, p).content; return !c || c === 'none' || c === 'normal'; };
+    const cls = free('::before') ? 'lgp-b' : free('::after') ? 'lgp-a' : '';
+    if (!cls) return;
+    el.classList.add('lgp', cls);
+    if (getComputedStyle(el).position === 'static') el.classList.add('lgp-rel');
+    if (io) io.observe(el); else dress(el);
+    if (sized) sized.observe(el);
+    if (refract && el.matches(LG_REFRACT)) bend(el);
   }
-  let queued = null;
-  const scan = () => { queued = null; document.querySelectorAll(LG_PANES).forEach(tag); };
-  new MutationObserver(() => { if (!queued) queued = setTimeout(scan, 120); }).observe(document.body, { childList: true, subtree: true });
+  let scanQ = null;
+  const scan = () => { scanQ = null; document.querySelectorAll(LG_PANES).forEach(tag); svg.querySelectorAll('filter[id^="lgl-"]').forEach((f) => { if (!document.querySelector(`[style*="#${f.id})"]`)) f.remove(); }); };
+  new MutationObserver(() => { if (!scanQ) scanQ = setTimeout(scan, 120); }).observe(document.body, { childList: true, subtree: true });
   scan();
-  return { on: true, refract, scan, lenses };
+  // (light or dark changed: the still pictures are drawn again in the new theme)
+  const redress = () => document.querySelectorAll('.lgp').forEach((el) => { if (!el.matches(LG_LIVE) || still()) dress(el); });
+  return { on: true, refract, scan, put, redress, maps: glassMaps, still: glassStill };
 })();
 window.CassieGlass = liquidGlass;
 renderHistory();

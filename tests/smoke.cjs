@@ -2529,64 +2529,68 @@ test('the phone app’s chat is liquid glass: Cassie’s bubbles, the chips, the
   await ctx.close();
 });
 
-test('liquid glass that bends: in Chromium the floating bars, the ask box and the chips refract what’s behind (an SVG lens: a little magnified in the middle, bent along the edge); without it (Safari, iPhone) a look-alike edge band and lifted centre and no url() filter; every glass pane has the rim and a glint that slides on scroll and under the pointer, and keeps still with Reduce Motion; Lite mode stays solid; words stay AA', async (b) => {
+test('liquid glass that is a real curved piece of glass: the refraction map follows off = n * bend * pow(slope, 1.35) with the middle magnified; every pane is lit from its height field (a rim under 2px, shading and a specular glint of exponent 120); the light moves with the pointer and the scroll and keeps still with Reduce Motion; without bending (Safari) the light still shows; Lite and Reduce Transparency stay solid; words stay AA', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const chats = [{ id: 'c1', title: 'P', messages: [{ role: 'user', content: 'Quiz me' }, { role: 'assistant', content: 'Which stage?\n\nA. One\nB. Two\nC. Three\nD. Four' }], updatedAt: Date.now() }];
   const seed = { tab: 'home', accent: '#15803d', profile: { ...PROFILE, grade: '2nd year college', age: 20 }, chats };
-  // Chromium: it bends
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed });
-    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(800);
-    const r = await page.evaluate(() => ({ cls: document.documentElement.className, lenses: document.querySelectorAll('#lg-lenses filter feDisplacementMap').length,
-      bars: ['.tabbar', '#home .hub-hero'].map((s) => getComputedStyle(document.querySelector(s)).backdropFilter) }));
-    expect(/\blgm\b/.test(r.cls) && /\blg-refract\b/.test(r.cls) && r.lenses > 0 && r.bars.every((f) => /url\("?#lgr-/.test(f)), 'Chromium: the bars bend what’s behind through an SVG lens: ' + JSON.stringify(r));
-    const tileBent = await page.$eval('#home .ht-tile', (e) => getComputedStyle(e).backdropFilter);
-    expect(!/url\(/.test(tileBent), 'cards keep plain frost (bending them all costs frames): ' + tileBent);
-    // every glass pane: the rim and the glint layers
-    const panes = await page.evaluate(() => [...document.querySelectorAll(LG_PANES)].filter((e) => e.getClientRects().length).map((e) => ({ c: e.className.toString().slice(0, 40), lgp: e.classList.contains('lgp'), glint: e.classList.contains('lgp-b') ? getComputedStyle(e, '::before').backgroundImage : '', rim: e.classList.contains('lgp-a') ? getComputedStyle(e, '::after').backgroundImage : '' })));
-    const missing = panes.filter((x) => !x.lgp || !/linear-gradient/.test(x.glint + x.rim));
-    expect(panes.length > 10 && !missing.length, 'every glass pane has its glint: ' + JSON.stringify(missing).slice(0, 300));
-    expect(panes.filter((x) => x.rim).length > 10, 'and most have the sliding rim line');
-    // the glint moves: on scroll, and under the pointer
-    const gx = () => page.$eval('#home .ht-tile', (e) => getComputedStyle(e).getPropertyValue('--lg-gx').trim());
-    await page.waitForTimeout(1500);
-    const g0 = await gx();
-    await page.evaluate(() => { const h = document.querySelector('#home'); h.scrollTop = 200; h.dispatchEvent(new Event('scroll')); }); await page.waitForTimeout(300);
-    const g1 = await gx();
-    expect(g1 !== g0, 'the glint slides when the page scrolls: ' + g0 + ' → ' + g1);
-    await page.evaluate(() => { document.querySelector('#home').scrollTop = 0; }); await page.waitForTimeout(200);
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(1500);
+    // the refraction map: three depths into the bevel along the left edge, the bend rising as pow(slope, 1.35)
+    const M = await page.evaluate(async () => {
+      const w = 200, h = 120, r = 30, m = window.CassieGlass.maps(w, h, r), { bevel: B, bend: BEND, zoom: Z } = LG_SHAPE;
+      const img = new Image(); img.src = m.disp; await img.decode();
+      const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const y = 60, out = [];
+      for (const x of [1, 5, 10]) { const px = x + .5 - w / 2, d = g.getImageData(x, y, 1, 1).data[0]; const dx = ((d - 128) / 255) * m.S, edge = dx + px * (1 - 1 / Z); const slope = 1 - (x + .5) / B; out.push({ x, edge: -edge, want: BEND * Math.pow(slope, 1.35) }); }
+      const mid = g.getImageData(w / 2 + 40, y, 1, 1).data[0];
+      return { out, midMag: ((mid - 128) / 255) * m.S, expectMid: -(40.5) * (1 - 1 / Z) };
+    });
+    expect(M.out.every((o) => Math.abs(o.edge - o.want) < 0.6) && M.out[0].edge > M.out[1].edge && M.out[1].edge > M.out[2].edge, 'the edge bends as n * bend * pow(slope, 1.35): ' + JSON.stringify(M.out));
+    expect(Math.abs(M.midMag - M.expectMid) < 0.6, 'the middle is a little magnified: ' + JSON.stringify(M));
+    // the light: a specular glint of exponent 120, a rim under 2px, on a live pane; a still picture on the rest
+    const L = await page.evaluate(() => {
+      const tile = document.querySelector('#home .ht-tile'), id = (getComputedStyle(tile).getPropertyValue('--lg-light').match(/#([\w-]+)/) || [])[1], f = id && document.getElementById(id);
+      const card = document.querySelector('#home .hub-chat.ex-new');
+      return { spec: f ? f.querySelector('feSpecularLighting').getAttribute('specularExponent') : '', rim: LG_SHAPE.rim, pseudo: getComputedStyle(tile, '::before').filter, still: getComputedStyle(card).getPropertyValue('--lg-still').slice(0, 30), cls: document.documentElement.className, tab: getComputedStyle(document.querySelector('.tabbar')).backdropFilter };
+    });
+    expect(L.spec === '120' && L.rim < 2 && /url\(/.test(L.pseudo) && /data:image\/png/.test(L.still) && /lg-refract/.test(L.cls) && /url\("?#lgr-/.test(L.tab), 'lit glass (exponent 120, a rim under 2px), a still light on the rest, the bars bend: ' + JSON.stringify(L).slice(0, 300));
+    // the light moves: with the pointer, and with the scroll
+    const lx = () => page.$eval('#home .ht-tile', (e) => e.dataset.lgLight);
     const box = await page.locator('#home .ht-tile').first().boundingBox();
     await page.mouse.move(box.x + box.width * .8, box.y + box.height * .6); await page.waitForTimeout(150);
-    expect(await gx() === '80%', 'it follows the pointer: ' + await gx());
-    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad } = await contrastIssues(page, '#home, .tabbar'); expect(!bad.length, `Home (${scheme}) reads: ` + bad.join(' | ')); }
+    expect(await lx() === '80', 'the glint follows the pointer: ' + await lx());
+    await page.mouse.move(5, 830);
+    const before = await lx();
+    await page.evaluate(() => { const h = document.querySelector('#home'); h.scrollTop = 160; h.dispatchEvent(new Event('scroll')); }); await page.waitForTimeout(300);
+    expect(await lx() !== before, 'and slides as the page scrolls: ' + before + ' → ' + await lx());
+    for (const scheme of ['light', 'dark']) { await page.evaluate(() => { document.querySelector('#home').scrollTop = 0; }); await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(500); const { bad } = await contrastIssues(page, '#home, .tabbar'); expect(!bad.length, `Home (${scheme}) reads: ` + bad.join(' | ')); }
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
-  // without url() backdrop filters (Safari, iPhone): the look-alike
+  // without bending (Safari, iPhone): the light still shows, nothing bends
   {
     const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed, setup: (c) => c.addInitScript(() => { const o = CSS.supports.bind(CSS); CSS.supports = (p, v) => (/url\(/.test(String(v)) ? false : /-webkit-backdrop-filter/.test(String(p)) ? true : o(p, v)); }) });
-    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(600);
-    const r = await page.evaluate(() => ({ cls: document.documentElement.className, urls: [...document.querySelectorAll('*')].filter((e) => /url\(/.test(getComputedStyle(e).backdropFilter)).length, edge: getComputedStyle(document.documentElement).getPropertyValue('--lg-edge'), lift: getComputedStyle(document.querySelector('#home .ht-tile'), '::before').backgroundImage }));
-    expect(/\blgm\b/.test(r.cls) && !/lg-refract/.test(r.cls) && r.urls === 0 && /16px 3px/.test(r.edge) && /radial-gradient/.test(r.lift), 'Safari: no bending filter, a thick curved edge and a lifted centre instead: ' + JSON.stringify(r).slice(0, 300));
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(1200);
+    const r = await page.evaluate(() => ({ cls: document.documentElement.className, urls: [...document.querySelectorAll('*')].filter((e) => /url\(/.test(getComputedStyle(e).backdropFilter)).length, lit: /url\(/.test(getComputedStyle(document.querySelector('#home .ht-tile'), '::before').filter), still: /data:image/.test(getComputedStyle(document.querySelector('#home .hub-chat.ex-new')).getPropertyValue('--lg-still')) }));
+    expect(/\blgm\b/.test(r.cls) && !/lg-refract/.test(r.cls) && r.urls === 0 && r.lit && r.still, 'Safari: no bending, the rim, shading and glint still show: ' + JSON.stringify(r));
     await ctx.close();
   }
-  // Reduce Motion: the glint keeps still
+  // Reduce Motion: the light keeps still
   {
     const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: seed, setup: (c) => c.addInitScript(() => { const mm = window.matchMedia.bind(window); window.matchMedia = (q) => (/reduced-motion/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q)); }) });
-    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(800);
-    const g = () => page.$eval('#home .ht-tile', (e) => getComputedStyle(e).getPropertyValue('--lg-gx').trim());
-    const a = await g();
-    await page.evaluate(() => { const h = document.querySelector('#home'); h.scrollTop = 200; h.dispatchEvent(new Event('scroll')); });
-    const box = await page.locator('#home .ht-tile').first().boundingBox(); await page.mouse.move(box.x + 10, box.y + 10); await page.waitForTimeout(300);
-    expect(a === '30%' && await g() === '30%', 'Reduce Motion: the glint stays still: ' + a);
+    await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(1200);
+    const r = await page.evaluate(() => { const t = document.querySelector('#home .ht-tile'); return { still: /data:image/.test(getComputedStyle(t).getPropertyValue('--lg-still')), light: getComputedStyle(t).getPropertyValue('--lg-light').trim() }; });
+    const box = await page.locator('#home .ht-tile').first().boundingBox(); await page.mouse.move(box.x + 20, box.y + 20); await page.waitForTimeout(200);
+    expect(r.still && !r.light && !(await page.$eval('#home .ht-tile', (e) => e.dataset.lgLight)), 'Reduce Motion: a still light, nothing moves: ' + JSON.stringify(r));
     await ctx.close();
   }
-  // Lite mode: solid, no glint, no bending
+  // Lite mode: solid
   {
     const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'on', state: seed });
     await page.waitForSelector('#home .ht-tile'); await page.waitForTimeout(500);
     const r = await page.evaluate(() => ({ cls: document.documentElement.className, lgp: document.querySelectorAll('.lgp').length, bf: getComputedStyle(document.querySelector('.tabbar')).backdropFilter }));
-    expect(!/lgm|lg-refract/.test(r.cls) && !r.lgp && !/url\(/.test(r.bf), 'Lite mode: solid panes, no glint, no bending: ' + JSON.stringify(r));
+    expect(!/lgm|lg-refract/.test(r.cls) && !r.lgp && !/url\(/.test(r.bf), 'Lite mode: solid panes, no light, no bending: ' + JSON.stringify(r));
     await ctx.close();
   }
 });
