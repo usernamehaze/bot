@@ -8226,62 +8226,90 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
   }
 });
 
-test('icons move like the recording (computer 1280x800 and phone 390x844): each icon plays its own short move that fits what it draws (a bell swings, the gear turns a tooth, Send flies out and back, a mic lifts, the timer hand sweeps, the menu lines slide) on hover with a mouse, a tap or press, and keyboard focus; it ends exactly as drawn, its button stays put, the press still reaches 0.94, a finger never plays the hover, and Reduce Motion plays none', async (b) => {
-  const NAME = { ring: 'ia-ring', gear: 'ia-tooth', moon: 'ia-moon', sun: 'ia-rays', draw: 'ia-draw', swirl: 'ia-swirl', wiggle: 'ia-wiggle', search: 'ia-search', 'hop-l': 'ia-hop-l', 'nudge-ur': 'ia-nudge-ur', 'nudge-l': 'ia-nudge-l',
-    fly: 'ia-fly', clip: 'ia-clip', mic: 'ia-lift', cards: 'ia-back', home: 'ia-home', clock: 'ia-turn', menu: 'ia-line', lens: 'ia-lens', close: 'ia-quarter', pulse: 'ia-pulse', bubble: 'ia-bubble', nod: 'ia-nod', tune: 'ia-nudge-r' };
-  const PART = { mic: '.ia-body', cards: '.ia-back', clock: '.ia-hand', menu: 'rect', sun: 'path' };
-  const look = (page, sel) => page.$eval(sel, (h) => {
-    const svg = h.querySelector('svg:not(.hub-chev):not(.labs-cur):not(.brand-mark)'), r = h.getBoundingClientRect();
+test('icons move exactly like the recording (computer 1280x800 and phone 390x844): every icon has the recording’s move for what it draws (docs/icon-motions.md), or its own move in the same style; only its parts move (a bell swings with its clapper behind, a tick redraws, chevrons slide out and back, menu lines turn into an x, a timer hand sweeps), never a whole-icon bounce, wiggle, pop or tilt; hover, tap and keyboard focus play it, it ends exactly as drawn, the press still reaches 0.94, a finger never plays the hover, and Reduce Motion plays none', async (b) => {
+  const BANNED = ['pop', 'bounce', 'wiggle', 'tilt', 'nod', 'swirl', 'hop-l', 'hop-u', 'nudge-l', 'nudge-r', 'nudge-ur', 'pulse', 'bubble', 'clip-tilt'];
+  const WHOLE = ['send', 'gear', 'heart', 'pointer']; // (whole in the recording too: navigation, aperture, heart, navigation-2)
+  const SVG = 'svg:not(.hub-chev):not(.labs-cur):not(.brand-mark)';
+  // every icon on the screen: its move, and that its parts (not the whole icon) move
+  const all = (page) => page.evaluate(([B, W, SV]) => {
+    const out = [];
+    document.querySelectorAll(IC_HOST).forEach((h) => {
+      if (!h.getClientRects().length) return; const svg = h.querySelector(SV); if (!svg) return;
+      icGo(h); const a = svg.getAnimations({ subtree: true }), parts = a.filter((x) => x.effect.target !== svg).length;
+      const k = (h.getAttribute('aria-label') || h.dataset.page || h.dataset.tab || h.textContent.trim()).slice(0, 30);
+      if (!svg.dataset.ia || B.includes(svg.dataset.ia) || !a.length || (!parts && !W.includes(svg.dataset.ia))) out.push(`${k}: ${svg.dataset.ia} (${a.length} moves, ${parts} on parts)`);
+      a.forEach((x) => x.finish());
+    });
+    return { bad: out, n: document.querySelectorAll(IC_HOST).length };
+  }, [BANNED, WHOLE, SVG]);
+  const look = (page, sel) => page.$eval(sel, (h, SV) => {
+    const svg = h.querySelector(SV), r = h.getBoundingClientRect();
     const anims = svg.getAnimations({ subtree: true }).filter((a) => /^ia-/.test(a.animationName || ''));
-    return { ia: svg.dataset.ia, go: svg.classList.contains('ia-go'), anims: anims.map((a) => [a.animationName, a.effect.target === svg ? 'svg' : (a.effect.target.getAttribute('class') || a.effect.target.tagName)]), box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] };
-  });
-  const rest = (page, sel) => page.$eval(sel, (h) => { const svg = h.querySelector('svg:not(.hub-chev):not(.labs-cur):not(.brand-mark)'); return [svg, ...svg.querySelectorAll('*')].map((e) => getComputedStyle(e).transform + getComputedStyle(e).opacity + getComputedStyle(e).strokeDasharray).join('|'); });
-  const box = (page, sel) => page.$eval(sel, (h) => { const r = h.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; });
-  const moved = (m, motion, where) => {
-    expect(m.ia === motion, `${where}: the icon's move is ${motion}: ` + JSON.stringify(m));
-    const want = m.anims.filter(([n, t]) => n === NAME[motion] && (PART[motion] ? t !== 'svg' && (PART[motion][0] !== '.' || t.includes(PART[motion].slice(1)) ) : true));
-    expect(m.go && want.length, `${where}: ${motion} plays ${NAME[motion]}${PART[motion] ? ' on ' + PART[motion] : ''}: ` + JSON.stringify(m));
+    return { ia: svg.dataset.ia, go: svg.classList.contains('ia-go'), anims: anims.map((a) => [a.animationName, a.effect.target === svg ? 'svg' : [...a.effect.target.classList].filter((c) => /^ia-[px]\d/.test(c)).join(' ')]), box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] };
+  }, SVG);
+  // at rest: what shows is the icon as drawn (the parts hidden), nothing moved or dashed
+  const rest = (page, sel) => page.$eval(sel, (h, SV) => { const svg = h.querySelector(SV); const shown = [svg, ...svg.querySelectorAll('*')].filter((e) => !e.closest('.ia-parts') && !e.matches('.ia-rest'));
+    const parts = svg.querySelector('.ia-parts'); return (parts ? getComputedStyle(parts).display : 'none') + '|' + shown.map((e) => `${e.tagName}:${e.getAttribute('d') || ''}:${getComputedStyle(e).transform}:${getComputedStyle(e).opacity}:${getComputedStyle(e).strokeDasharray}`).join('|'); }, SVG);
+  const plays = (m, ia, name, part, where) => {
+    expect(m.ia === ia, `${where}: the icon’s move is ${ia}: ` + JSON.stringify(m));
+    expect(m.go && m.anims.some(([n, t]) => n === name && (part === 'svg' ? t === 'svg' : t.split(' ').includes(part))), `${where}: ${ia} plays ${name} on ${part}: ` + JSON.stringify(m));
   };
   const ends = async (page, sel, before, where) => {
-    await page.waitForFunction((s) => !document.querySelector(s).querySelector('svg.ia-go'), sel, { timeout: 2000 }).catch(() => {});
+    await page.waitForFunction(([s, SV]) => !document.querySelector(s).querySelector(SV).classList.contains('ia-go'), [sel, SVG], { timeout: 3000 }).catch(() => {});
     const m = await look(page, sel);
     expect(!m.go && m.anims.length === 0, `${where}: the move ends and its class goes: ` + JSON.stringify(m));
-    await page.mouse.move(640, 790); await page.waitForTimeout(300); // (away from it: its own hover style is over too)
-    expect(await rest(page, sel) === before, `${where}: it rests exactly as drawn`);
+    await page.mouse.move(640, 790); await page.waitForTimeout(300);
+    const after = await rest(page, sel);
+    expect(after === before.replace(/^none\|/, after.split('|')[0] + '|'), `${where}: it rests exactly as drawn: ${before.slice(0, 160)} → ${after.slice(0, 160)}`);
   };
-  // a computer: hover, focus and a press
+  // a computer
   {
     const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
-    await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-up');
-    const hover = async (sel, motion) => {
-      await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.mouse.move(640, 790); await page.waitForTimeout(60);
-      const before = await rest(page, sel), b0 = await box(page, sel);
+    await page.evaluate(() => deskGo('home')); await page.waitForSelector('.dk-up'); await page.waitForTimeout(400);
+    const A = await all(page);
+    expect(A.n > 20 && !A.bad.length, '1280x800 Home: every icon moves its own parts like the recording: ' + A.bad.join(' | '));
+    const hover = async (sel, ia, name, part) => {
+      await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.mouse.move(640, 790); await page.waitForTimeout(700);
+      const before = await rest(page, sel), b0 = await page.$eval(sel, (h) => { const r = h.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; });
       await page.hover(sel); await page.waitForTimeout(60);
       const m = await look(page, sel);
-      moved(m, motion, '1280x800 hover ' + sel);
+      plays(m, ia, name, part, '1280x800 hover ' + sel);
       expect(JSON.stringify(m.box) === JSON.stringify(b0), `1280x800: the button stays put (${sel}): ${b0} → ${m.box}`);
       await ends(page, sel, before, '1280x800 ' + sel);
     };
-    for (const [sel, motion] of [['#top-bell', 'ring'], ['#settings-btn', 'gear'], ['.theme-flip', 'moon'], ['.side-nav [data-page="plan"]', 'draw'], ['#labs-btn', 'swirl'], ['#games-btn', 'wiggle'], ['.top-search', 'search'], ['.side-toggle', 'hop-l'], ['.dk-up', 'nudge-ur']]) await hover(sel, motion);
+    for (const [sel, ia, name, part] of [['#top-bell', 'bell', 'ia-clapper', 'ia-p2'], ['.side-nav [data-page="plan"]', 'checkbox', 'ia-redraw', 'ia-p2'], ['#settings-btn', 'gear', 'ia-tooth', 'svg'],
+      ['#labs-btn', 'flask', 'ia-slosh', 'ia-p3'], ['#games-btn', 'games', 'ia-press', 'ia-p2'], ['.side-toggle', 'chev-l', 'ia-out', 'ia-p1'], ['.dk-up', 'arrow-ur', 'ia-out', 'ia-p1'],
+      ['#memory-btn', 'brain', 'ia-move', 'ia-p1'], ['.side-nav [data-page="calendar"]', 'calendar', 'ia-move', 'ia-p3'], ['.side-nav [data-page="lessons"]', 'lessons', 'ia-fold', 'ia-p1'], ['.side-nav [data-page="chats"]', 'chat', 'ia-dot', 'ia-x1']]) await hover(sel, ia, name, part);
     // keyboard focus
-    await page.mouse.move(640, 790); await page.keyboard.press('Tab');
-    await page.$eval('#settings-btn', (e) => e.focus()); await page.waitForTimeout(40);
-    moved(await look(page, '#settings-btn'), 'gear', '1280x800 focus');
-    await page.waitForTimeout(700);
-    // the ask box: Send, Attach and the mic
-    await page.evaluate(() => createNewChat()); await page.waitForSelector('#send-btn'); await page.waitForTimeout(400);
-    for (const [sel, motion] of [['#send-btn', 'fly'], ['#attach-btn', 'clip']]) await hover(sel, motion);
+    await page.mouse.move(640, 790); await page.waitForTimeout(700); await page.keyboard.press('Tab');
+    await page.$eval('#top-bell', (e) => e.focus()); await page.waitForTimeout(40);
+    plays(await look(page, '#top-bell'), 'bell', 'ia-ring', 'ia-p1', '1280x800 focus');
+    await page.waitForTimeout(1000);
+    // the ask box
+    await page.evaluate(() => createNewChat()); await page.waitForSelector('#send-btn'); await page.waitForTimeout(500);
+    await page.evaluate(() => { document.getElementById('mic-btn').hidden = false; });
+    const C = await all(page);
+    expect(!C.bad.length, '1280x800 chat: every icon moves its own parts like the recording: ' + C.bad.join(' | '));
+    for (const [sel, ia, name, part] of [['#send-btn', 'send', 'ia-fly', 'svg'], ['#attach-btn', 'clip', 'ia-redraw', 'ia-p1'], ['#mic-btn', 'mic', 'ia-fill', 'ia-p1'], ['#quiz-btn', 'pencil', 'ia-underline', 'ia-x1']]) await hover(sel, ia, name, part);
     // a press: the icon moves and the button still presses to 0.94
-    await page.mouse.move(640, 790); await page.waitForTimeout(700);
     const r = await page.$eval('#settings-btn', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; });
-    await page.mouse.move(r[0], r[1]); await page.waitForTimeout(700); // (the hover move is over)
+    await page.mouse.move(r[0], r[1]); await page.waitForTimeout(900);
     await page.mouse.down(); await page.waitForTimeout(40);
-    moved(await look(page, '#settings-btn'), 'gear', '1280x800 press');
+    plays(await look(page, '#settings-btn'), 'gear', 'ia-tooth', 'svg', '1280x800 press');
     await page.waitForTimeout(220);
     const sc = await page.$eval('#settings-btn', (h) => { const t = getComputedStyle(h).transform; return t === 'none' ? 1 : +t.slice(7).split(',')[0]; });
     expect(Math.abs(sc - 0.94) < 0.01, '1280x800: the press still reaches 0.94: ' + sc);
-    await page.mouse.up(); await page.waitForTimeout(700);
+    await page.mouse.up(); await page.waitForTimeout(900);
+    // Settings and the board
+    await page.evaluate(() => openSettings('profile')); await page.waitForTimeout(600);
+    const S = await all(page);
+    expect(!S.bad.length, '1280x800 Settings: every icon moves its own parts: ' + S.bad.join(' | '));
+    await page.evaluate(() => document.getElementById('settings-x').click()); await page.waitForTimeout(300);
+    await page.click('#board-btn'); await page.waitForSelector('.csk-btn'); await page.waitForTimeout(800);
+    const Bd = await all(page);
+    expect(Bd.n > 40 && !Bd.bad.length, '1280x800 board: every tool’s icon moves its own parts: ' + Bd.bad.join(' | '));
     // Reduce Motion: no move at all
+    await page.keyboard.press('Escape'); await page.evaluate(() => { const x = document.querySelector('.csk-btn[data-act="close"]'); if (x) x.click(); }); await page.waitForTimeout(400);
     await page.emulateMedia({ reducedMotion: 'reduce' }); await page.mouse.move(640, 790); await page.waitForTimeout(80);
     await page.hover('#settings-btn'); await page.waitForTimeout(80);
     const still = await look(page, '#settings-btn');
@@ -8292,33 +8320,158 @@ test('icons move like the recording (computer 1280x800 and phone 390x844): each 
   // a phone: taps
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
-    await page.waitForSelector('.hub-bell'); await page.waitForTimeout(400);
-    const tap = async (sel, motion) => {
+    await page.waitForSelector('.hub-bell'); await page.waitForTimeout(500);
+    const A = await all(page);
+    expect(A.n > 10 && !A.bad.length, '390x844 Home: every icon moves its own parts like the recording: ' + A.bad.join(' | '));
+    const tap = async (sel, ia, name, part) => {
       await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.waitForTimeout(250);
       const before = await rest(page, sel);
-      // (a finger's pointerover never plays the hover)
       await page.$eval(sel, (h) => h.dispatchEvent(new PointerEvent('pointerover', { pointerType: 'touch', bubbles: true })));
-      expect(!(await look(page, sel)).go, `390x844: a finger's pointerover plays nothing (${sel})`);
-      // (the tap may open another screen, so it is a pointerdown and pointerup on the spot, without the click)
+      expect(!(await look(page, sel)).go, `390x844: a finger’s pointerover plays nothing (${sel})`);
       await page.$eval(sel, (h) => { const q = h.getBoundingClientRect(), o = { pointerType: 'touch', bubbles: true, isPrimary: true, clientX: q.x + q.width / 2, clientY: q.y + q.height / 2 }; h.dispatchEvent(new PointerEvent('pointerdown', o)); h.dispatchEvent(new PointerEvent('pointerup', o)); });
       await page.waitForTimeout(40);
-      moved(await look(page, sel), motion, '390x844 tap ' + sel);
+      plays(await look(page, sel), ia, name, part, '390x844 tap ' + sel);
       await ends(page, sel, before, '390x844 ' + sel);
     };
-    for (const [sel, motion] of [['.hub-bell', 'ring'], ['.tab[data-tab="home"]', 'home'], ['.tab[data-tab="cards"]', 'cards'], ['.tab[data-tab="you"]', 'nod'], ['[data-ht="timer"], .hub-timer', 'clock']]) await tap(sel, motion);
-    // a real tap on a tab
-    await page.touchscreen.tap(...await page.$eval('.tab[data-tab="games"]', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }));
-    await page.waitForTimeout(40);
-    moved(await look(page, '.tab[data-tab="games"]'), 'wiggle', '390x844 a real tap');
+    for (const [sel, ia, name, part] of [['.hub-bell', 'bell', 'ia-ring', 'ia-p1'], ['.tab[data-tab="home"]', 'home', 'ia-echo', 'ia-x1'], ['.tab[data-tab="cards"]', 'cards', 'ia-move', 'ia-p2'],
+      ['.tab[data-tab="you"]', 'person', 'ia-move', 'ia-p1'], ['[data-ht="timer"], .hub-timer', 'clock', 'ia-spin', 'ia-p2'], ['.tab[data-tab="labs"]', 'flask', 'ia-slosh', 'ia-p3']]) await tap(sel, ia, name, part);
     await page.evaluate(() => { createNewChat(); CassieNative.go('chat'); }); await page.waitForSelector('#send-btn'); await page.waitForTimeout(600);
-    await page.evaluate(() => { document.getElementById('mic-btn').hidden = false; }); // (shown when speech works)
-    for (const [sel, motion] of [['#menu-btn', 'menu'], ['#send-btn', 'fly'], ['#camera-btn', 'lens'], ['#mic-btn', 'mic']]) await tap(sel, motion);
+    for (const [sel, ia, name, part] of [['#menu-btn', 'menu', 'ia-x-top', 'ia-p1'], ['#camera-btn', 'camera', 'ia-zoom', 'ia-p2'], ['#send-btn', 'send', 'ia-fly', 'svg']]) await tap(sel, ia, name, part);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.touchscreen.tap(...await page.$eval('.tab[data-tab="cards"]', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }));
     await page.waitForTimeout(40);
     const still = await look(page, '.tab[data-tab="cards"]');
     expect(!still.go && still.anims.length === 0, '390x844: Reduce Motion plays no move: ' + JSON.stringify(still));
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('glass edges are smooth (iPhone, 3x screen): the rounded corners of a chip, the ask box, the tab bar and a Home card have no stair steps, and the still light is baked at the screen’s sharpness with a soft edge', async (b) => {
+  // the boundary of a corner, row by row, from the screen’s own pixels: on a smooth curve it only ever moves one
+  // way; the old 1px steps on a 3x screen made it zigzag (teeth)
+  const teeth = async (page, sel, where) => {
+    await page.$eval(sel, (h) => h.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400);
+    const r = await page.$eval(sel, (e) => { const q = e.getBoundingClientRect(); return { x: q.x, y: q.y, w: q.width, h: q.height, rad: parseFloat(getComputedStyle(e).borderBottomRightRadius) || 0 }; });
+    const R = Math.max(8, Math.min(r.rad, r.w / 2, r.h / 2)), pad = 4;
+    const clip = { x: r.x + r.w - R - 2, y: r.y + r.h - R - 2, width: R + pad + 2, height: R + pad + 2 };
+    const png = await page.screenshot({ clip });
+    return page.evaluate(async ([b64, where]) => {
+      const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, H = c.height, at = (x, y) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+      const bg = at(W - 1, H - 1), diff = (p) => Math.abs(p[0] - bg[0]) + Math.abs(p[1] - bg[1]) + Math.abs(p[2] - bg[2]);
+      const edge = []; for (let y = 0; y < H - 6; y++) { let x = W - 1; while (x > 0 && diff(at(x, y)) < 24) x--; edge.push(x); }
+      // (a stair: a jump of 3 or more pixels from one row to the next where the curve is still steep; a smooth curve on a 3x screen moves a pixel or two)
+      let teeth = 0; for (let y = 3; y < edge.length - 3; y++) if (edge[y] >= 0 && edge[y - 1] >= 0 && Math.abs(edge[y] - edge[y - 1]) >= 3 && Math.abs(edge[y + 3] - edge[y - 3]) <= 6) teeth++;
+      return { where, teeth, rows: edge.length };
+    }, [png.toString('base64'), where]);
+  };
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
+  await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(1500);
+  const card = await teeth(page, '#home .ht-tile', 'a Home card'), bar = await teeth(page, '.tabbar', 'the tab bar');
+  await page.evaluate(() => { createNewChat(); CassieNative.go('chat'); }); await page.waitForSelector('.composer'); await page.waitForTimeout(1500);
+  const box = await teeth(page, '.composer', 'the ask box');
+  const chip = await teeth(page, '#quick-actions .chip', 'a chip');
+  for (const t of [card, bar, box, chip]) expect(t.rows > 6 && t.teeth === 0, `${t.where}: a smooth rounded corner, no stair steps: ` + JSON.stringify(t));
+  // the still light: baked at 2x on a 3x screen, with a soft (partly covered) outer edge, not a hard 0 to full step
+  const S = await page.evaluate(async () => {
+    const url = window.CassieGlass.still(120, 80, 20, false), img = new Image(); img.src = url; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, a = (x, y) => d[(y * W + x) * 4 + 3];
+    const row = []; for (let i = 4; i < 22; i++) row.push(a(i, i)); // (across the top-left corner’s curve, on the diagonal)
+    return { w: img.width, row, live: getComputedStyle(document.querySelector('.composer'), '::before').clipPath };
+  });
+  expect(S.w === 240, 'the still light is baked at 2x on a 3x screen: ' + S.w);
+  const first = S.row.find((v) => v > 0);
+  expect(first > 0 && first < 0.7 * Math.max(...S.row), 'its curved edge is soft (partly covered pixels), not a hard 0 to full step: ' + JSON.stringify(S.row));
+  expect(/inset\(0px round \d/.test(S.live), 'the moving light is cut to the pane’s own smooth rounded edge: ' + S.live);
+  expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('the Dark mode switch (computer top bar, phone Home, Settings > Appearance): a real switch with a sliding knob, 44px to tap; every switch shows the same state and the whole app flips at once (top bar, sidebar, glass panes, the still light); AA in both', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const lum = (c) => { const v = c.match(/[\d.]+/g).slice(0, 3).map(Number); return (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255; };
+  const state = (page) => page.evaluate(() => ({ sw: [...document.querySelectorAll('.theme-switch')].map((s) => s.getAttribute('aria-checked')), role: [...document.querySelectorAll('.theme-switch')].every((s) => s.getAttribute('role') === 'switch'),
+    cs: getComputedStyle(document.documentElement).colorScheme, body: getComputedStyle(document.body).backgroundColor }));
+  {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home', theme: 'light' } });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.evaluate(() => deskGo('home')); await page.waitForSelector('#top-theme .ts-knob svg'); await page.waitForTimeout(800);
+    const tb = await page.locator('#top-theme').boundingBox();
+    expect(tb.width >= 44 && tb.height >= 44, 'the switch is at least 44px to tap: ' + JSON.stringify(tb));
+    const s0 = await state(page);
+    expect(s0.role && s0.sw.every((x) => x === 'false') && s0.cs === 'light', 'light: every switch is off: ' + JSON.stringify(s0));
+    const knob0 = await page.$eval('#top-theme .ts-knob', (k) => k.getBoundingClientRect().x);
+    for (const sch of ['light']) { const r = await contrastIssues(page, '.topbar'); expect(!r.bad.length, `${sch}: the top bar reads (AA): ` + r.bad.join(' | ')); }
+    await page.click('#top-theme'); await page.waitForTimeout(700);
+    const s1 = await state(page);
+    const knob1 = await page.$eval('#top-theme .ts-knob', (k) => k.getBoundingClientRect().x);
+    expect(s1.sw.every((x) => x === 'true') && s1.cs === 'dark' && lum(s1.body) < 0.2, 'one tap: every switch on and the app dark: ' + JSON.stringify(s1));
+    expect(knob1 - knob0 > 15, 'the knob slides across: ' + [knob0, knob1]);
+    const panes = await page.evaluate(() => [...document.querySelectorAll('.topbar, .sidebar, .dk-card')].filter((e) => e.getClientRects().length).map((e) => { const c = getComputedStyle(e); return [e.className.split(' ')[0], c.backgroundColor, c.backgroundImage.slice(0, 60), c.getPropertyValue('--lg-still').length > 0]; }));
+    const lightLeft = panes.filter(([, bg]) => { const v = bg.match(/[\d.]+/g).map(Number); return v.length > 3 ? v[3] > .5 && (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255 > .6 : (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255 > .6; });
+    expect(panes.length > 3 && !lightLeft.length, 'nothing stays light: ' + JSON.stringify(lightLeft));
+    const r1 = await contrastIssues(page, '.topbar'); expect(!r1.bad.length, 'dark: the top bar reads (AA): ' + r1.bad.join(' | '));
+    // Settings > Appearance: the same switch, in step
+    await page.evaluate(() => openSettings('appearance')); await page.waitForTimeout(600);
+    const inSet = '#settings-panel .set-switch-row .theme-switch';
+    expect(await page.$eval(inSet, (s) => s.getAttribute('aria-checked')) === 'true', 'Settings > Appearance shows Dark mode on');
+    await page.click(inSet); await page.waitForTimeout(500);
+    const s2 = await state(page);
+    expect(s2.sw.every((x) => x === 'false') && s2.cs === 'light', 'switched off in Settings: every switch off and the app light: ' + JSON.stringify(s2));
+    // a keyboard: Space flips it
+    await page.focus(inSet); await page.keyboard.press('Space'); await page.waitForTimeout(400);
+    expect((await state(page)).sw.every((x) => x === 'true'), 'Space flips the switch');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home', theme: 'light' } });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.waitForSelector('.hub-theme .ts-knob svg'); await page.waitForTimeout(600);
+    const hb = await page.locator('.hub-theme').boundingBox();
+    expect(hb.width >= 44 && hb.height >= 44, 'phone Home: the switch is at least 44px: ' + JSON.stringify(hb));
+    await page.tap('.hub-theme'); await page.waitForTimeout(700);
+    const s = await state(page);
+    expect(s.sw.every((x) => x === 'true') && s.cs === 'dark' && lum(s.body) < 0.2, 'phone: one tap, every switch on and the app dark: ' + JSON.stringify(s));
+    const still = await page.evaluate(() => { const e = [...document.querySelectorAll('.lgp')].find((x) => getComputedStyle(x).getPropertyValue('--lg-still').length > 10); return e ? getComputedStyle(e).getPropertyValue('--lg-still').length : 0; });
+    expect(still > 10, 'the glass still light is baked again for dark');
+    const r = await contrastIssues(page, '.hub-hero'); expect(!r.bad.length, 'phone dark: Home’s top reads (AA): ' + r.bad.join(' | '));
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('“Open Cassie” on the website stays clearly visible when pressed (Home, Cassie bot, LET rescue; light and dark; mouse, touch and keyboard): it presses in to .97 with a darker fill and AA words, then says Opening… with a spinner until the app opens', async (b) => {
+  const toRgb = (page, c) => page.evaluate((col) => { const x = document.createElement('canvas').getContext('2d'); x.fillStyle = col; x.fillRect(0, 0, 1, 1); return [...x.getImageData(0, 0, 1, 1).data]; }, c);
+  const L = ([r, g, bl]) => { const f = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(bl); };
+  const ratio = (a, c) => (Math.max(L(a), L(c)) + .05) / (Math.min(L(a), L(c)) + .05);
+  for (const scheme of ['light', 'dark']) for (const pg of ['index.html', 'bot.html', 'rescue.html']) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: scheme, hasTouch: true });
+    const page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`http://localhost:${APP_PORT}/${pg}`); await page.waitForTimeout(500);
+    await page.evaluate(() => window.addEventListener('click', (e) => e.preventDefault())); // (stay on the page to look at it)
+    const sel = 'a[href="start.html"]:is(.btn, .rs-open)';
+    const bx = await page.locator(sel).first().boundingBox();
+    await page.mouse.move(bx.x + bx.width / 2, bx.y + bx.height / 2); await page.mouse.down(); await page.waitForTimeout(250);
+    const st = await page.$eval(sel, (a) => { const c = getComputedStyle(a); return { color: c.color, bg: c.backgroundColor, t: c.transform }; });
+    const cr = ratio(await toRgb(page, st.color), await toRgb(page, st.bg));
+    expect(cr >= 4.5 && /matrix\(0\.97/.test(st.t), `${pg} (${scheme}): pressed, it presses in and its words stay clear (AA): ${cr.toFixed(2)} ` + JSON.stringify(st));
+    await page.mouse.up(); await page.waitForTimeout(100);
+    const op = await page.$eval(sel, (a) => ({ text: a.textContent, busy: a.getAttribute('aria-busy'), spin: getComputedStyle(a, '::before').animationName, color: getComputedStyle(a).color, bg: getComputedStyle(a).backgroundColor }));
+    const cr2 = ratio(await toRgb(page, op.color), await toRgb(page, op.bg));
+    expect(op.text === 'Opening…' && op.busy === 'true' && /spin/.test(op.spin) && cr2 >= 4.5, `${pg} (${scheme}): it says it’s opening, with a spinner, clearly: ` + JSON.stringify(op) + ' ' + cr2.toFixed(2));
+    if (pg === 'index.html') { // (touch and a keyboard do the same)
+      await page.reload(); await page.waitForTimeout(400); await page.evaluate(() => window.addEventListener('click', (e) => e.preventDefault()));
+      await page.tap(sel); await page.waitForTimeout(100);
+      expect(await page.$eval(sel, (a) => a.textContent) === 'Opening…', `${pg} (${scheme}): a tap says Opening…`);
+      await page.reload(); await page.waitForTimeout(400); await page.evaluate(() => window.addEventListener('click', (e) => e.preventDefault()));
+      await page.focus(sel); await page.keyboard.press('Enter'); await page.waitForTimeout(100);
+      expect(await page.$eval(sel, (a) => a.textContent) === 'Opening…', `${pg} (${scheme}): Enter says Opening…`);
+    }
+    expect(errors.length === 0, `${pg}: page errors: ` + errors.join('; '));
     await ctx.close();
   }
 });
@@ -8411,20 +8564,20 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
   }
 });
 
-test('light or dark at a tap: the sun and moon button (top bar and Learn) and Appearance pick Light, Dark or Auto, kept after a reload; Learn, Games, the folders, Your week and the board follow it as glass over the picked colours, AA in both; Lite mode turns them solid', async (b) => {
+test('light or dark at a tap: the Dark mode switch (top bar and Learn) and Appearance pick Light, Dark or Auto, kept after a reload; Learn, Games, the folders, Your week and the board follow it as glass over the picked colours, AA in both; Lite mode turns them solid', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10); // (a quiz today, so Your week has its card)
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home', accent: '#15803d', progress: { [today]: { quizzes: 1 } } } });
   await page.emulateMedia({ colorScheme: 'light' });
   await page.evaluate(() => deskGo('home')); await page.waitForSelector('#top-theme svg');
-  const scheme = () => page.evaluate(() => ({ theme: document.documentElement.dataset.theme || 'auto', cs: getComputedStyle(document.documentElement).colorScheme, label: document.getElementById('top-theme').getAttribute('aria-label'), bg: getComputedStyle(document.body).getPropertyValue('--bg').trim() }));
+  const scheme = () => page.evaluate(() => ({ theme: document.documentElement.dataset.theme || 'auto', cs: getComputedStyle(document.documentElement).colorScheme, label: document.getElementById('top-theme').getAttribute('aria-checked'), bg: getComputedStyle(document.body).getPropertyValue('--bg').trim() }));
   const start = await scheme();
-  expect(start.theme === 'auto' && start.label === 'Switch to dark mode', 'starts on Auto (the device is light): ' + JSON.stringify(start));
+  expect(start.theme === 'auto' && start.label === 'false', 'starts on Auto (the device is light): ' + JSON.stringify(start));
   const tb = await page.locator('#top-theme').boundingBox();
-  expect(tb.width >= 44 && tb.height >= 44, 'the sun and moon button is at least 44px: ' + JSON.stringify(tb));
+  expect(tb.width >= 44 && tb.height >= 44, 'the Dark mode switch is at least 44px: ' + JSON.stringify(tb));
   await page.click('#top-theme'); await page.waitForTimeout(300);
   const dark = await scheme();
-  expect(dark.theme === 'dark' && dark.cs === 'dark' && dark.label === 'Switch to light mode' && dark.bg !== start.bg, 'one tap: dark, on a light device: ' + JSON.stringify(dark));
+  expect(dark.theme === 'dark' && dark.cs === 'dark' && dark.label === 'true' && dark.bg !== start.bg, 'one tap: dark, on a light device: ' + JSON.stringify(dark));
   await page.reload(); await page.waitForSelector('#top-theme svg');
   expect((await scheme()).theme === 'dark', 'dark is kept after a reload');
   await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#theme-select');
@@ -8445,12 +8598,12 @@ test('light or dark at a tap: the sun and moon button (top bar and Learn) and Ap
       const shelf = getComputedStyle(document.querySelector('.labs-shelf')), back = getComputedStyle(document.querySelector('.labs-foryou .lf:not(.lf-mine) .lf-back')), front = getComputedStyle(document.querySelector('.labs-foryou .lf:not(.lf-mine) .lf-front'));
       const feat = getComputedStyle(document.querySelector('.labs .labs-feature'));
       const glassRgb = getComputedStyle(document.querySelector('.lf')).getPropertyValue('--lf-glass').trim();
-      return { shelf: shelf.backgroundImage.slice(0, 200), back: back.backgroundImage, front: front.backdropFilter, feat: feat.backdropFilter, glassRgb, theme: document.querySelector('.labs-theme').getAttribute('aria-label') };
+      return { shelf: shelf.backgroundImage.slice(0, 200), back: back.backgroundImage, front: front.backdropFilter, feat: feat.backdropFilter, glassRgb, theme: document.querySelector('.labs-theme').getAttribute('aria-checked') };
     });
     expect(/radial-gradient/.test(L.shelf) && !/rgb\(35, 38, 47\)/.test(L.shelf), `${want}: Learn shows the picked colours behind it, not its own dark: ` + L.shelf);
     expect(/rgba\([^)]*, 0\.[0-9]+\)/.test(L.back) && /blur/.test(L.front) && /blur/.test(L.feat), `${want}: the folders and Today’s Lab are see-through glass: ` + JSON.stringify(L).slice(0, 400));
     expect(want === 'dark' ? lum(L.glassRgb) < 0.3 : lum(L.glassRgb) > 0.8, `${want}: the folders are ${want} glass: ` + L.glassRgb);
-    expect(L.theme === (want === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'), `${want}: Learn has the sun and moon button too: ` + L.theme);
+    expect(L.theme === (want === 'dark' ? 'true' : 'false'), `${want}: Learn has the Dark mode switch too: ` + L.theme);
     let r = await contrastIssues(page, '.labs-shelf');
     expect(r.checked > 10 && !r.bad.length, `${want}: Learn reads (AA): ` + r.bad.join(' | '));
     await page.evaluate(() => document.querySelector('.labs-x').click()); await page.waitForTimeout(400);

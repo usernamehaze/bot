@@ -15,7 +15,11 @@ main { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 40p
 .rs-top { width: min(720px, calc(100% - 32px)); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; padding: max(16px, env(safe-area-inset-top)) 0 8px; }
 .rs-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 19px; text-decoration: none; }
 .rs-brand img { border-radius: 8px; }
-.rs-open { font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; }
+.rs-open { font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; transition: transform .15s, background-color .15s; }
+.rs-open:hover { border-color: var(--ink); }
+.rs-open:active, .rs-open.opening { transform: scale(.97); background: var(--ink); color: var(--page); border-color: var(--ink); } /* (pressed: filled, the words stay clear) */
+.rs-open.opening::before { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: rs-spin .7s linear infinite; }
+@keyframes rs-spin { to { transform: rotate(360deg); } }
 .rs-hero { padding: 28px 0 8px; }
 .rs-kicker { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
 h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -.02em; }
