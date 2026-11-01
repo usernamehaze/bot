@@ -8027,6 +8027,85 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   await ctx.close();
 });
 
+test('Every box responds and moves the same way: Today’s Lab opens its simulation, every sidebar tool opens, and the boxes on Chats, Study plan, Calendar, Progress and Games lift, press and open like Home’s (1280x800 and 390x844)', async (b) => {
+  const STATE = { tab: 'home', chats: [{ id: 'c1', title: 'Cells and organelles', messages: [{ role: 'user', content: 'What is a cell?' }, { role: 'assistant', content: 'The smallest unit of life.' }], createdAt: Date.now(), updatedAt: Date.now() }] };
+  const tf = (page, el) => el.evaluate((e) => getComputedStyle(e).transform);
+  const shut = async (page) => { await page.evaluate(() => { const x = document.querySelector('.room-dlg .room-x'); if (x) x.click(); }); for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => { const l = document.querySelector('.labs'); if (l && !l.hidden) { const x = l.querySelector('.labs-x'); if (x) x.click(); } }); await page.waitForTimeout(300); };
+  // Today's Lab: a click (a tap) on its words opens its own lab
+  const todays = async (page, where, phone, when) => {
+    const t = page.locator('.hw-grid > [data-w="tlab"]'); await t.evaluate((e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400);
+    const id = await t.evaluate((e) => e.querySelector('[data-pv]').dataset.pv), bb = await page.locator('.hw-grid > [data-w="tlab"] .hub-tlab-info').boundingBox();
+    if (phone) await page.touchscreen.tap(bb.x + 12, bb.y + bb.height / 2); else await page.mouse.click(bb.x + 12, bb.y + bb.height / 2);
+    const got = await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"]`, { timeout: 8000 }).then(() => true, () => false);
+    expect(got, `${where}: Today’s Lab (${id}) opens its simulation ${when}`);
+    await shut(page);
+  };
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: STATE } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: STATE }); // (a computer: with Cassie's server, as for a student, so Study together opens its room)
+    if (!phone) await page.evaluate(() => deskGo('home'));
+    await page.waitForSelector('.hw-grid > [data-w="tlab"]', { timeout: 15000 }); await page.waitForTimeout(800);
+    // 1. Today's Lab, then again after a widget resize
+    await todays(page, where, phone, 'at first');
+    if (!phone) await page.evaluate(() => deskGo('home')); else await page.evaluate(() => window.CassieNative && window.CassieNative.go('home'));
+    await page.waitForSelector('.hw-grid > [data-w="tlab"]'); await page.waitForTimeout(500);
+    await page.click('.hw-edit'); await page.waitForTimeout(300);
+    await page.click('.hw-grid > [data-w="tlab"] .hw-size'); await page.waitForTimeout(300);
+    await page.click('.hw-edit'); await page.waitForTimeout(500);
+    await todays(page, where, phone, 'after a resize');
+    if (!phone) {
+      // 2. every sidebar tool opens what it says
+      const tool = async (name) => { await page.evaluate(() => deskGo('home')); await page.waitForTimeout(400); if (await page.$eval('#side-menu-toggle', (x) => x.getAttribute('aria-expanded')) !== 'true') await page.click('#side-menu-toggle'); const btn = page.locator('#side-tools button').filter({ hasText: name }).first(); await btn.scrollIntoViewIfNeeded(); await btn.click(); await page.waitForTimeout(1200); };
+      for (const [name, words] of [['Explain a topic', 'Explain this topic simply'], ['Quiz me', 'Quiz me on'], ['Solve step by step', 'Solve this step by step'], ['Make study notes', 'Summarize this into clean study notes'], ['Research a topic', 'Research this topic']]) {
+        await tool(name);
+        const box = await page.evaluate(() => { const t = document.getElementById('prompt-input'), r = t.getBoundingClientRect(); return { v: t.value, shown: r.width > 0 && r.top >= 0 && r.bottom <= innerHeight, focus: document.activeElement === t, home: !!document.querySelector('.desk-home') }; });
+        expect(box.v.startsWith(words) && box.shown && box.focus && !box.home, `${where}: ${name} opens the chat with its words in the box, ready to type: ` + JSON.stringify(box));
+      }
+      await tool('Explore in 3D');
+      expect(await page.evaluate(() => document.documentElement.classList.contains('labs-open') || document.documentElement.classList.contains('x3d-open')), `${where}: Explore in 3D opens Learn`); await shut(page);
+      await tool('Learn: try a simulation');
+      expect(await page.evaluate(() => document.documentElement.classList.contains('labs-open')), `${where}: Learn: try a simulation opens Learn`); await shut(page);
+      await tool('Study together');
+      expect(await page.evaluate(() => [...document.querySelectorAll('[role="dialog"]')].some((d) => d.getClientRects().length && /study room/i.test(d.getAttribute('aria-label') || ''))), `${where}: Study together opens the study room`); await shut(page);
+      // 3. the boxes on Chats, Study plan, Calendar, Progress and Games: a mouse lifts one 3px, a press sinks it to .98
+      const SCREENS = [['chats', '.desk-chats .dk-chat-card'], ['plan', '.desk-plan .hub-chat.ex-new'], ['calendar', '.desk-cal .dk-card'], ['progress', '.desk-progress .dk-card'], ['games', '.labs:not([hidden]) .labs-board ~ .labs-grid .labs-card, .labs:not([hidden]) .labs-card']];
+      for (const [pg, sel] of SCREENS) {
+        if (pg === 'games') await page.evaluate(() => openLabs(undefined, { section: 'games' })); else await page.evaluate((pg) => deskGo(pg), pg);
+        await page.waitForTimeout(1200); await page.mouse.move(640, 2); await page.waitForTimeout(200);
+        const box = page.locator(sel + ' >> visible=true').first(); await box.evaluate((e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400);
+        const bb = await box.boundingBox();
+        await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.waitForTimeout(500);
+        const up = await tf(page, box); await page.mouse.down(); await page.waitForTimeout(350); const down = await tf(page, box);
+        if (process.env.SHOTS) { await page.mouse.up(); await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/lift-${pg}.png` }); await page.mouse.down(); }
+        expect(up === 'matrix(1, 0, 0, 1, 0, -3)' && /^matrix\(0\.98, 0, 0, 0\.98/.test(down), `${where}: ${pg}: the box lifts 3px under the mouse and sinks to .98 when pressed: ` + up + ' / ' + down);
+        await page.mouse.up(); await page.waitForTimeout(600);
+        // its empty space opens what its button opens (a chat card: the chat; the new exam card: its sheet; a game: the game)
+        if (pg === 'chats') expect(await page.evaluate(() => !document.querySelector('.desk-chats') && state.currentId === 'c1'), `${where}: a click on a chat card's empty space opens the chat`);
+        if (pg === 'plan') expect(await page.evaluate(() => !!document.querySelector('.ex-sheet:not([hidden]), [role="dialog"].ex-sheet') || [...document.querySelectorAll('[role="dialog"]')].some((d) => d.getClientRects().length && /exam/i.test(d.getAttribute('aria-label') || d.textContent))), `${where}: the new exam card opens its sheet`);
+        if (pg === 'games') expect(await page.waitForSelector('.lab-view:not([hidden])', { timeout: 6000 }).then(() => true, () => false), `${where}: a game card opens the game`);
+        await shut(page);
+      }
+      // Reduce Motion: no lift
+      await page.emulateMedia({ reducedMotion: 'reduce' }); await page.evaluate(() => deskGo('calendar')); await page.waitForTimeout(1000); await page.mouse.move(640, 2);
+      const cal = page.locator('.desk-cal .dk-card >> visible=true').first(); const cb = await cal.boundingBox();
+      await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.waitForTimeout(500);
+      expect(await tf(page, cal) === 'none', `${where}: Reduce Motion: no lift`);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+    } else {
+      // a finger never lifts: a game card under a tap, and the tap opens the game
+      await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForTimeout(1500);
+      const g = page.locator('.labs:not([hidden]) .labs-card >> visible=true').first(); await g.evaluate((e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+      const gb = await g.boundingBox();
+      await page.touchscreen.tap(gb.x + gb.width / 2, gb.y + gb.height / 2); await page.waitForTimeout(80);
+      const lifted = await g.evaluate((e) => e.classList.contains('gl-up')).catch(() => false);
+      expect(!lifted, `${where}: a finger never lifts a game card`);
+      expect(await page.waitForSelector('.lab-view:not([hidden])', { timeout: 6000 }).then(() => true, () => false), `${where}: a tap on a game card opens the game`);
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Home widgets sit close together: each box is as tall as its content, the gap between boxes is one small token in edit mode and out of it, and the computer sidebar has no seam (1280x800, 1366x768 and 390x844)', async (b) => {
   // the gaps between neighbouring boxes, row by row (offsets inside the grid, so a lifted box doesn't count)
   const gaps = (page) => page.evaluate(() => {
