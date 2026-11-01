@@ -2286,7 +2286,7 @@ const HW_ABOUT = { lessons: 'What your level studies', timer: 'Start a focus ses
   next: 'The next task of your plan', plans: 'Your exam plans', chats: 'Your last chats', ready: 'Your exam readiness, as a gauge', continue: 'Pick up a chat', tools: 'Research, quiz, board and more',
   quick: 'One tap to start' };
 const HW_DEFAULT = {
-  desk: [['lessons', 's'], ['timer', 'm'], ['cards', 's'], ['exam', 'm'], ['tlab', 'm'], ['asked', 's'], ['learned', 's'], ['streak', 's'], ['readiness', 's'],
+  desk: [['lessons', 's'], ['timer', 'm'], ['cards', 's'], ['exam', 'l'], ['tlab', 'm'], ['asked', 's'], ['learned', 's'], ['streak', 's'], ['readiness', 's'],
     ['week', 'm'], ['next', 'm'], ['plans', 'm'], ['chats', 'm'], ['ready', 'm']],
   phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['tlab', 'm'], ['streak', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
 const HW_SIZES = ['s', 'm', 'l'], HW_SIZE_NAME = { s: 'Small', m: 'Medium', l: 'Large' };
@@ -2333,7 +2333,8 @@ function homeWidgets(root, kind) {
   if (anchor && anchor.parentElement && root.contains(anchor)) anchor.after(wrap); else root.prepend(wrap);
   wrap.append(grid);
   const lay = hwLayout(kind).filter((w) => found.has(w.id));
-  lay.forEach(({ id, size }) => { const e = found.get(id); e.classList.add('hw'); hwSize(e, HW_SIZES.includes(size) ? size : 'm'); hwControls(e); grid.append(e); found.delete(id); });
+  lay.forEach(({ id, size }) => { const e = found.get(id); e.classList.add('hw'); if (!e.matches(LG_PANES) && e.children.length === 1) e.classList.add('hw-box'); // (v222: a box with no glass of its own, like the exam section: its card fills it, so it is never an empty frame)
+    hwSize(e, HW_SIZES.includes(size) ? size : 'm'); hwControls(e); grid.append(e); found.delete(id); });
   grid._spare = found; found.forEach((e) => { e.classList.add('hw'); e.remove(); }); // (off Home: kept for "Add widget")
   root.querySelectorAll('.ht-row, .dk-stats, .dk-grid').forEach((c) => { if (!c.querySelector('[data-w], *:not(:empty)')) c.remove(); });
   if (homeEditing) hwEdit(wrap, true);
@@ -2540,7 +2541,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=221'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=222'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2752,7 +2753,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=221').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=222').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7089,7 +7090,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=221');
+      exploreMod = await import('./explore/cell3d.js?v=222');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7139,7 +7140,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=221');
+      labsMod = await import('./labs/labs.js?v=222');
       islandRest();
     }
     labsMod.open({
@@ -8980,10 +8981,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=221').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=222').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=221', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=222', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
