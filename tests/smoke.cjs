@@ -9240,7 +9240,7 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     return { s, n: all.length, bad: bad.length, ex: bad[0] ? (bad[0].className + ' / ' + getComputedStyle(bad[0]).boxShadow) : '' };
   }), sels);
   const ok = (r, where) => { const miss = r.filter((x) => !x.n || x.bad); expect(!miss.length, `${where}: glass on every surface: ` + JSON.stringify(miss)); };
-  const readable = async (page, scope, where) => { for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350); const { bad } = await contrastIssues(page, scope); expect(!bad.length, `${where} (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+  const readable = async (page, scope, where) => { for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(1000); /* (the glass fades to the new colours: measure once it has) */ const { bad } = await contrastIssues(page, scope); expect(!bad.length, `${where} (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
   // a phone
   {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home', chats: [{ id: 'c1', title: 'Osmosis', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving.' }], updatedAt: Date.now() }] } });
