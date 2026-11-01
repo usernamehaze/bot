@@ -106,8 +106,8 @@ const enzymeLab = {
     let kind = 'amylase', E = 2, S = 10, T = 25, pH = 6.8, cooked = false;
     const R = () => enzymeRate({ E, S, T, pH, kind, cooked });
     const cv = canvas(stage, (ctx, w, h) => {
-      const wide = w >= 640, n = 3, pw = wide ? (w - 40) / n - 16 : w - 60, ph = wide ? h * 0.5 : (h - 70) / n - 34;
-      const box = (i) => (wide ? [30 + i * (pw + 16 + 8), h * 0.25] : [40, 44 + i * (ph + 34)]);
+      const wide = w >= 640, n = 3, pw = wide ? (w - 40) / n - 16 : w - 60, ph = wide ? h * 0.5 : (h - 80) / n - 50;
+      const box = (i) => (wide ? [30 + i * (pw + 16 + 8), h * 0.25] : [40, 44 + i * (ph + 50)]);
       const [, bT, bP] = ENZYMES[kind], top = KCAT * E;
       const plot = (i, title, xs, f, xLab, cur, fmtX) => {
         const [x0, y0] = box(i), [a, b] = xs;
