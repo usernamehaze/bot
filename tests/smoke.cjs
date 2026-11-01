@@ -5092,7 +5092,7 @@ test('onboarding: Step 2’s levels sit two across and Next shows without scroll
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, server: false, state: null });
     await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
     await page.waitForSelector('.fr-ob');
-    await page.waitForFunction(() => { const e = document.querySelector('.fr-skipall'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 10000 }).catch(() => {}); // (the screen slides in: measure it once it has; a busy machine is slow)
+    await page.waitForFunction(() => { const e = document.querySelector('.fr-skipall'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 20000 }).catch(() => {}); // (the screen slides in: measure it once it has; a busy machine is slow)
     const skip = await page.locator('.fr-skipall').boundingBox();
     expect(skip && skip.height >= 44 && /Skip setup/.test(await page.locator('.fr-skipall').innerText()), viewport.width + ': Skip setup under the name, 44px');
     await page.fill('.fr-ob input[name=name]', 'Mara'); await page.click('.fr-go');
