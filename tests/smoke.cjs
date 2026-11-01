@@ -2411,7 +2411,7 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   const D = await open(b, { device: 'Desktop Chrome', viewport: { width: 1366, height: 768 }, server: false, lite: 'off', state: { tab: 'home', profile: { ...PROFILE, grade: '2nd year college', age: 20 } } });
   await D.page.evaluate(() => deskGo('home')); await D.page.waitForSelector('.desk-home .hub-tlab');
   o = await (async () => { const pg = D.page; return pg.evaluate(() => { const r = document.querySelector('.desk-home'), y = (sel) => { const e = r.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().top) : -1; }; return { head: y('.dk-head'), lessons: y('.ht-lessons'), timer: y('.ht-timer'), cards: y('.ht-cards'), exam: y('.hub-exam'), lab: y('.hub-tlab'), stats: y('.dk-stat'), oldTimer: !!r.querySelector('.dk-card.dk-timer'), note: r.querySelector('.ht-note').textContent }; }); })();
-  expect(o.lessons > o.head && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab >= o.exam && o.stats > o.lab && !o.oldTimer && /2nd year college/.test(o.note), 'computer: the same top, then the week in numbers: ' + JSON.stringify(o));
+  expect(o.lessons > o.head && o.lessons === o.timer && o.timer === o.cards && o.exam > o.cards && o.lab >= o.exam && o.stats >= o.lab && !o.oldTimer && /2nd year college/.test(o.note), 'computer: the same top, then the week in numbers: ' + JSON.stringify(o));
   await D.page.click('.desk-home .ht-dtimer .dk-tgo');
   await D.page.waitForFunction(() => /Pause/.test(document.querySelector('.desk-home .dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
   await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
@@ -8027,6 +8027,77 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   await ctx.close();
 });
 
+test('Home widgets sit close together: each box is as tall as its content, the gap between boxes is one small token in edit mode and out of it, and the computer sidebar has no seam (1280x800, 1366x768 and 390x844)', async (b) => {
+  // the gaps between neighbouring boxes, row by row (offsets inside the grid, so a lifted box doesn't count)
+  const gaps = (page) => page.evaluate(() => {
+    const g = document.querySelector('.hw-grid'), tok = parseFloat(getComputedStyle(g).getPropertyValue('--hw-gap'));
+    const boxes = [...g.children].filter((x) => x.classList.contains('hw') && x.offsetParent).map((x) => ({ id: x.dataset.w, l: x.offsetLeft, t: x.offsetTop, w: x.offsetWidth, h: x.offsetHeight }));
+    const rows = []; boxes.forEach((x) => { const r = rows.find((q) => Math.abs(q.t - x.t) < 2); if (r) r.items.push(x); else rows.push({ t: x.t, items: [x] }); });
+    rows.sort((a, c) => a.t - c.t); const bad = [];
+    rows.forEach((r, i) => {
+      r.items.sort((a, c) => a.l - c.l);
+      for (let k = 1; k < r.items.length; k++) { const gap = r.items[k].l - (r.items[k - 1].l + r.items[k - 1].w); if (Math.abs(gap - tok) > 1) bad.push(`${r.items[k - 1].id}|${r.items[k].id} across ${gap}`); }
+      if (i) { const prev = Math.max(...rows[i - 1].items.map((x) => x.t + x.h)), gap = r.t - prev; if (Math.abs(gap - tok) > 1) bad.push(`row of ${r.items[0].id} down ${gap}`); }
+    });
+    return { tok, bad, n: boxes.length };
+  });
+  // the exam box against what is in it: its height, its card's, and the card's own content plus padding
+  const exam = (page) => page.evaluate(() => {
+    const w = document.querySelector('.hw-grid > [data-w="exam"]'), card = w.querySelector(':scope > :not(.hw-ctl)'), cs = getComputedStyle(card);
+    const kids = [...card.children].filter((x) => x.getClientRects().length).map((x) => x.getBoundingClientRect());
+    const content = Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top)) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    return { size: w.dataset.size, h: w.offsetHeight, card: card.offsetHeight, content: Math.round(content) };
+  });
+  const edit = async (page, on) => { if ((await page.$eval('.hw-edit', (x) => x.getAttribute('aria-pressed'))) !== String(on)) { await page.click('.hw-edit'); await page.waitForTimeout(300); } };
+  const sizeTo = async (page, sz) => { await edit(page, true); for (let i = 0; i < 3 && await page.$eval('.hw-grid > [data-w="exam"]', (x) => x.dataset.size) !== sz; i++) { await page.click('.hw-grid > [data-w="exam"] .hw-size'); await page.waitForTimeout(250); } await edit(page, false); await page.waitForTimeout(300); };
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    if (!phone) await page.evaluate(() => deskGo('home'));
+    await page.waitForSelector('.hw-grid > [data-w="exam"]', { timeout: 15000 }); await page.waitForTimeout(800);
+    const out = await gaps(page);
+    expect(out.tok === (phone ? 10 : 12) && !out.bad.length && out.n >= 5, `${where}: one gap token (${phone ? 10 : 12}px) between every box: ` + JSON.stringify(out));
+    await edit(page, true);
+    const inEdit = await gaps(page);
+    expect(!inEdit.bad.length, `${where}: in edit mode the gaps stay the token: ` + JSON.stringify(inEdit));
+    await edit(page, false);
+    for (const sz of ['l', 'm', 's']) {
+      await sizeTo(page, sz);
+      const e = await exam(page), g = await gaps(page);
+      expect(e.size === sz && e.card >= e.h - 2, `${where}: at ${sz} the exam box is never an empty frame (its card fills it): ` + JSON.stringify(e));
+      if (sz === 'l' || phone) expect(Math.abs(e.h - e.content) <= 24, `${where}: at ${sz} the exam box is as tall as its content: ` + JSON.stringify(e));
+      expect(!g.bad.length, `${where}: at ${sz} the gaps stay the token: ` + JSON.stringify(g));
+    }
+    if (!phone) { const d = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).homeLayout); expect(d, '1280x800: the layout was kept'); }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+  // the computer sidebar: one surface from top to bottom, wherever it is scrolled (Study tools open: the long menu)
+  for (const [W, H] of [[1280, 800], [1366, 768]]) for (const scheme of ['light', 'dark']) {
+    const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: W, height: H }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.emulateMedia({ colorScheme: scheme });
+    if (await page.$eval('#side-menu-toggle', (x) => x.getAttribute('aria-expanded')) !== 'true') await page.click('#side-menu-toggle');
+    await page.waitForTimeout(800);
+    for (const where of ['top', 'middle', 'bottom']) {
+      const info = await page.evaluate((where) => {
+        const s = document.getElementById('sidebar'), max = s.scrollHeight - s.clientHeight; s.scrollTop = where === 'top' ? 0 : where === 'middle' ? max / 2 : max;
+        const r = s.getBoundingClientRect(), skip = [];
+        // (real things: a border is a line; a filled card or button, or the active item, may change all through)
+        s.querySelectorAll('*').forEach((e) => { const cs = getComputedStyle(e), q = e.getBoundingClientRect(); if (!q.height) return; const fill = !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) || cs.backgroundImage !== 'none' || e.matches('.active, [aria-current="page"]'), line = parseFloat(cs.borderTopWidth) || parseFloat(cs.borderBottomWidth); if (fill || line) skip.push([q.top - r.top, q.bottom - r.top, fill]); });
+        return { x: r.left, y: r.top, h: r.height, cw: s.clientWidth, max, skip };
+      }, where);
+      await page.waitForTimeout(400);
+      const buf = await page.screenshot({ clip: { x: info.x + info.cw - 22, y: info.y, width: 8, height: info.h } });
+      const rows = await page.evaluate(async (b64) => { const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data, out = []; for (let y = 0; y < c.height; y++) { let s = 0; for (let x = 0; x < c.width; x++) { const i = (y * c.width + x) * 4; s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; } out.push(s / c.width); } return out; }, buf.toString('base64'));
+      const k = rows.length / info.h; let worst = [0, 0];
+      for (let y = 1; y < rows.length; y++) { const cy = y / k; if (cy < 4 || cy > info.h - 4 || info.skip.some(([a, z, fill]) => (fill ? cy > a - 6 && cy < z + 6 : Math.abs(cy - a) < 6 || Math.abs(cy - z) < 6))) continue; const j = Math.abs(rows[y] - rows[y - 1]); if (j > worst[0]) worst = [Math.round(j), Math.round(cy)]; }
+      expect(info.max > 100 && worst[0] <= 12, `${W}x${H} ${scheme}, sidebar scrolled to the ${where}: no seam (biggest row-to-row jump ${worst[0]} at ${worst[1]}px)`);
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Biology: Photosynthesis and respiration, DNA to protein, Food web and Natural selection open from Visual Labs > Biology and their level folders, each goal ticks only when done, and the science checks hold (computer 1280x800 and phone 390x844)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const IDS = ['photo-resp', 'dna-protein', 'food-web', 'selection'];
@@ -8157,8 +8228,10 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad } = await contrastIssues(page, phone ? '.lp-home' : '.labs-scroll'); expect(!bad.length, `${where}: Learn’s words (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
     // open a folder by its key; back one step; what is open now
-    const opened = (key) => page.waitForFunction(([S, key, phone]) => phone ? document.querySelector('.lp').dataset.view === key : !!document.querySelector('.labs-foryou .lf-back-btn') && document.querySelector('.labs-foryou h3').textContent.length > 0, [S, key, phone], { timeout: 4000 });
-    const go = async (key) => { await page.$eval(`${S} .lf[data-group="${key}"]`, (f) => f.scrollIntoView({ block: 'center' })); await page.click(`${S} .lf[data-group="${key}"]`); await opened(key); await page.waitForTimeout(phone ? 150 : 150); };
+    // (opened: on a computer, the heading has changed to this folder's; the Back button alone was already there one level up)
+    const heading = () => page.evaluate(() => { const h = document.querySelector('.labs-foryou .lf-head h3'); return h ? h.textContent : ''; });
+    const opened = (key, was) => page.waitForFunction(([key, phone, was]) => phone ? document.querySelector('.lp').dataset.view === key : !!document.querySelector('.labs-foryou .lf-back-btn') && (document.querySelector('.labs-foryou .lf-head h3') || {}).textContent !== was, [key, phone, was], { timeout: 4000 });
+    const go = async (key) => { const was = await heading(); await page.$eval(`${S} .lf[data-group="${key}"]`, (f) => f.scrollIntoView({ block: 'center' })); await page.click(`${S} .lf[data-group="${key}"]`); await opened(key, was); await page.waitForTimeout(150); };
     const back = async () => { await page.click(phone ? '.lp-back' : '.lf-back-btn'); await page.waitForTimeout(200); };
     const folders = () => page.evaluate((S) => [...document.querySelectorAll(S + ' .lf')].filter((f) => f.getClientRects().length).map((f) => f.dataset.group), S);
     const labsShown = () => page.evaluate((phone) => [...document.querySelectorAll(phone ? '.lp-list .lp-row[data-lab]' : '.labs-grid:not([hidden]) .labs-card[data-lab]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.lab), phone);
@@ -8591,7 +8664,9 @@ test('every Home box opens from anywhere on it, lifts on hover and keeps its lig
   // (in view: not off the screen and not under the phone’s floating tab bar, where a finger meets the bar)
   const spots = (page) => page.evaluate(() => { const bar = document.querySelector('.tabbar'), floor = bar && bar.getClientRects().length ? bar.getBoundingClientRect().top : innerHeight; return [...document.querySelectorAll(window.__BOX)].filter((x) => x.getClientRects().length && x.getBoundingClientRect().top >= 0 && x.getBoundingClientRect().bottom <= floor).map((box, i) => {
     box.dataset.tb = i; const r = box.getBoundingClientRect(), main = window.__main(box);
-    const pts = [[r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6], [r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + r.width / 2, r.bottom - 6]];
+    // (clear of its rounded corners, and still on it once a mouse lifts it 3px: v222 boxes stretch to their row, so a corner can come into view)
+    const R = Math.max(6, parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0);
+    const pts = [[r.left + R, r.bottom - 10], [r.right - R, r.bottom - 10], [r.left + R, r.top + 8], [r.right - R, r.top + 8], [r.left + r.width / 2, r.bottom - 10]];
     const own = 'button, a, input, select, textarea, label, summary, form, [role="button"], [role="switch"], [role="link"], [data-dk], [data-hub], [contenteditable]';
     const p = pts.find(([x, y]) => { const t = document.elementFromPoint(x, y); return t && box.contains(t) && !t.closest(own); });
     const title = box.querySelector('h2, b'); const tr = title && title.getBoundingClientRect(); const tt = tr && document.elementFromPoint(tr.left + 3, tr.top + tr.height / 2);
@@ -8743,7 +8818,8 @@ test('Home widgets: add, remove, resize, drag, kept after reload (computer 1280x
     for (let k = 0; k < 3; k++) { const s1 = await span(page, 'lessons'); sizes[s1.size] = s1; await page.click('.hw[data-w="lessons"] .hw-size'); }
     const want = kind === 'desk' ? { s: 0.25, m: 0.5, l: 1 } : { s: 0.5, m: 1, l: 1 };
     for (const z of ['s', 'm', 'l']) expect(sizes[z] && Math.abs(sizes[z].r - want[z]) < 0.06, `${where}: ${z} is ${want[z]} of the row: ` + JSON.stringify(sizes));
-    expect(sizes.l.h > sizes.m.h + 20, `${where}: Large is taller too: ` + JSON.stringify(sizes));
+    // (v222: Large is the whole row and only as tall as what is in it, not forced taller)
+    expect(sizes.l.r > 0.97 && sizes.l.h <= sizes.m.h + 24, `${where}: Large takes the whole row, no taller than its content: ` + JSON.stringify(sizes));
     // a mouse drag by the handle (computer), a finger's long press (phone)
     if (kind === 'desk') {
       await page.$eval('.hw[data-w="lessons"]', (e) => e.scrollIntoView({ block: 'start' })); await page.waitForTimeout(300);

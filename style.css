@@ -3402,6 +3402,9 @@ html.lgm { --lg-rim-a: 1.5; --lg-shade-a: .3; --lg-shadow-a: .35; }
 html.lgm[data-theme="dark"] { --lg-rim-a: .9; --lg-shade-a: .14; --lg-shadow-a: .5; }
 html.lgm .lgp { isolation: isolate; }
 html.lgm .lgp-rel { position: relative; }
+/* (v222) the sidebar scrolls itself: a light layer inside it is one screen tall and scrolls away with the menu,
+   leaving a seam (below Make study notes). It keeps its glass fill and blur, without that layer. */
+html.lgm .sidebar.lgp-b::before, html.lgm .sidebar.lgp-a::after { display: none; }
 html.lgm .lgp-b::before, html.lgm .lgp-a::after {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
   background: var(--lg-still, none) center / 100% 100% no-repeat, rgba(var(--hi-rgb), .001); filter: var(--lg-light, none);  clip-path: inset(0 round var(--lg-r, 0px));}
@@ -3429,12 +3432,14 @@ html.lgm .hub-chat small, html.lgm .composer textarea::placeholder, html.lgm #pr
 .hw-bar button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .hw-hint { margin: 0; color: var(--muted); font-size: 13px; }
 .hw-hint[hidden] { display: none; }
-.hw-grid { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; min-width: 0; }
-.hw-grid.hw-phone { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+/* (v222) one small gap between every box, both ways; a row is as tall as its tallest box, and every box only as tall as its content otherwise */
+.hw-grid { --hw-gap: 12px; position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--hw-gap); align-items: stretch; min-width: 0; }
+.hw-grid.hw-phone { --hw-gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .hw-grid > .hw { position: relative; grid-area: auto !important; grid-column: span 1 !important; min-width: 0; margin: 0 !important; max-width: none; }
 .hw-grid > .hw.ws-m { grid-column: span 2 !important; }
-.hw-grid > .hw.ws-l { grid-column: 1 / -1 !important; min-height: 260px; }
-.hw-grid.hw-phone > .hw.ws-l { min-height: 220px; }
+.hw-grid > .hw.ws-l { grid-column: 1 / -1 !important; } /* (Large is the whole row; its height is its content's) */
+.hw-grid > .hw.hw-box { display: flex; flex-direction: column; }
+.hw-grid > .hw.hw-box > :last-child:not(.hw-ctl) { flex: 1 1 auto; }
 .hw-grid > .hw-ph { border-radius: 20px; border: 2px dashed color-mix(in srgb, var(--text) 35%, transparent); grid-column: span 1; }
 .hw-grid > .hw-ph.ws-m { grid-column: span 2; } .hw-grid > .hw-ph.ws-l { grid-column: 1 / -1; }
 /* Small: only what matters (the icon, the title, the number); long lines end with an ellipsis */
