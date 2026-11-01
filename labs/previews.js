@@ -296,6 +296,30 @@ P.museum = (g, w, h, t, c) => {
     else { g.beginPath(); g.ellipse(x, h * 0.46, w * 0.08, h * 0.17, 0, 0, TAU); fill(g, c.mid); dot(g, x, h * 0.38, h * 0.06, c.page); }
     line(g, x - w * 0.06, h * 0.86, x + w * 0.06, h * 0.86, c.mid, 2); }
 };
+// (v221) the four Biology labs
+P['photo-resp'] = (g, w, h, t, c) => {
+  const x0 = w * 0.12, y0 = h * 0.82, W = w * 0.78, H = h * 0.62, p = (Math.sin(t * 0.9) + 1) / 2;
+  line(g, x0, y0, x0 + W, y0, c.line, 2); line(g, x0, y0, x0, y0 - H, c.line, 2);
+  g.beginPath(); for (let k = 0; k <= 1.001; k += 0.04) { const x = x0 + W * k, y = y0 - H * (k / (k + 0.18)) * 0.95; k ? g.lineTo(x, y) : g.moveTo(x, y); } stroke(g, c.accent, 3);
+  const k = 0.1 + p * 0.85; dot(g, x0 + W * k, y0 - H * (k / (k + 0.18)) * 0.95, h * 0.06, c.ink);
+  for (let i = 0; i < 3; i++) { const q = (t * 0.5 + i / 3) % 1; dot(g, w * 0.82 + Math.sin(q * 9 + i) * 4, h * 0.7 - q * h * 0.55, h * 0.03, c.mid); }
+};
+P['dna-protein'] = (g, w, h, t, c) => {
+  const n = 9, cw = w * 0.8 / n, x0 = w * 0.1, k = Math.floor(t * 2) % (n + 4);
+  for (let i = 0; i < n; i++) { const x = x0 + cw * i + cw / 2; dot(g, x, h * 0.3, cw * 0.32, c.mid); if (i < k) { line(g, x, h * 0.3 + cw * 0.3, x, h * 0.52 - cw * 0.3, c.line, 1.5); dot(g, x, h * 0.52, cw * 0.32, c.accent); } }
+  const aa = Math.max(0, Math.floor((k - 1) / 3));
+  for (let i = 0; i < Math.min(3, aa); i++) dot(g, x0 + cw * 1.5 + i * cw * 3, h * 0.78, h * 0.08, i % 2 ? c.second : c.ink);
+};
+P['food-web'] = (g, w, h, t, c) => {
+  const x0 = w * 0.08, W = w * 0.84, y0 = h * 0.85, H = h * 0.7;
+  [[c.accent, 0], [c.mid, 1.6]].forEach(([col, ph]) => { g.beginPath(); for (let x = 0; x <= W; x += 3) { const y = y0 - H * (0.45 + 0.35 * Math.sin(x / W * 9 - t * 1.4 + ph)); x ? g.lineTo(x0 + x, y) : g.moveTo(x0 + x, y); } stroke(g, col, 3); });
+  line(g, x0, y0, x0 + W, y0, c.line, 2);
+};
+P.selection = (g, w, h, t, c) => {
+  g.beginPath(); g.rect(0, 0, w, h); fill(g, c.second);
+  for (let i = 0; i < 9; i++) { const x = ((i * 0.37) % 1) * w * 0.85 + w * 0.07, y = ((i * 0.61) % 1) * h * 0.75 + h * 0.12, d = (Math.sin(t * 0.8 + i) + 1) / 2;
+    g.beginPath(); g.ellipse(x - 5, y, 7, 4, -0.4, 0, TAU); g.ellipse(x + 5, y, 7, 4, 0.4, 0, TAU); fill(g, d > 0.5 ? c.ink : c.paper); }
+};
 const ease = (k) => k * k * (3 - 2 * k);
 
 // small drawing helpers

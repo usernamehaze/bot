@@ -8027,6 +8027,112 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   await ctx.close();
 });
 
+test('Biology: Photosynthesis and respiration, DNA to protein, Food web and Natural selection open from Visual Labs > Biology and their level folders, each goal ticks only when done, and the science checks hold (computer 1280x800 and phone 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const IDS = ['photo-resp', 'dna-protein', 'food-web', 'selection'];
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 10', age: 15 } } }
+      : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 10', age: 15 } } });
+    const learn = async () => { if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300); };
+    const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
+    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(550); };
+    const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
+    // 1. in Visual Labs > Biology, and in each one's level Simulations
+    await learn();
+    await go('visual:all'); await go('subject:biology');
+    const bio = await rows();
+    expect(IDS.every((id) => bio.includes(id)), `${where}: Biology holds the 4 new labs: ` + bio);
+    await home();
+    const lv = await page.evaluate(async (ids) => { const m = await import('./labs/labs.js'); return Object.fromEntries(ids.map((id) => [id, m.LABS.find((l) => l.id === id).levels])); }, IDS);
+    for (const [key, raw] of [['shs', 'hs'], ['jhs', 'hs'], ['elem', 'elem'], ['college', 'college']]) {
+      await go('level:' + key); await go('levelsims:' + key);
+      const r = await rows(), want = IDS.filter((id) => lv[id].includes(raw));
+      expect(want.length && want.every((id) => r.includes(id)), `${where}: ${key} Simulations holds ${want}: ` + r.filter((x) => IDS.includes(x)));
+      await home();
+    }
+    // open each from Biology
+    const openIt = async (id) => {
+      await home(); await go('visual:all'); await go('subject:biology');
+      await page.click(phone ? `.lp-row[data-lab="${id}"]` : `.labs-grid [data-lab="${id}"]`);
+      await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400);
+    };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate((k) => { const d = [...document.querySelectorAll('.lab-view .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, k);
+    const press = (text) => page.click(`.lab-view .lab-panel button:text-is("${text}") >> visible=true`);
+    const setR = (label, v) => page.evaluate(([label, v]) => { const i = document.querySelector(`.lab-view input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [label, v]);
+    const key = async (label, k) => { await page.focus(`.lab-view input[type=range][aria-label="${label}"]`); await page.keyboard.press(k); await page.waitForTimeout(80); };
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view .lab-panel').scrollIntoView({ block: 'start' }); }); await page.mouse.move(2, 2); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const back = async () => { await page.click('.lab-back'); await page.waitForSelector('.labs-shelf:not([hidden])'); };
+
+    // 2. Photosynthesis and respiration: oxygen rises with light, then levels off; the goals tick as they're done
+    await openIt('photo-resp');
+    expect(!(await done('photo-resp')).some(Boolean), `${where}: photo-resp: no goal ticked on opening`);
+    const before = await stat('Oxygen given off');
+    await key('Light', 'Home');
+    expect(+(await stat('Oxygen given off')) < 0 && (await done('photo-resp'))[2] && !(await done('photo-resp'))[0], `${where}: in the dark the leaf uses more oxygen than it makes (goal 3 only): ` + before + ' ' + JSON.stringify(await done('photo-resp')));
+    await key('Light', 'End');
+    expect((await done('photo-resp'))[0] && !(await done('photo-resp'))[1], `${where}: full light ticks goal 1 only`);
+    const low = +(await stat('Oxygen made')); await key('Carbon dioxide', 'End');
+    expect(+(await stat('Oxygen made')) > low && (await done('photo-resp'))[1], `${where}: more carbon dioxide raises the level-off and ticks goal 2`);
+    const made = {}; for (const L of [0, 20, 80, 100]) { await setR('Light', L); made[L] = +(await stat('Oxygen made')); }
+    expect(made[20] - made[0] > 3 * (made[100] - made[80]) && made[100] > made[80], `${where}: oxygen rises with light, then levels off: ` + JSON.stringify(made));
+    if (!phone) await aa('photo-resp');
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/bio-photo-${phone ? 'phone' : 'desk'}.png` });
+    await back();
+
+    // 3. DNA to protein: the mRNA pairs with the template; AUG...UAA reads Met then stops
+    const code = await page.evaluate(async () => { const m = await import('./labs/biology.js'); return ['AUG', 'UAA', 'UAG', 'UGA', 'UGG', 'UUU', 'GGC', 'GCU', 'AAA', 'CAU', 'GAA'].map((c) => m.codonOf(c)).join(''); });
+    expect(code === 'M***WFGAKHE', `${where}: the standard genetic code: ` + code);
+    await openIt('dna-protein');
+    const template = 'TACCGATTTACCATT', mrna = [...template].map((x) => ({ A: 'U', T: 'A', C: 'G', G: 'C' })[x]).join('');
+    expect(mrna === 'AUGGCUAAAUGGUAA', 'the test’s own mRNA');
+    await page.click('.lab-view [data-base="G"]'); // (wrong: the first template base is T, so A)
+    expect(await stat('Mistakes') === '1' && await stat('mRNA') === '(none yet)', `${where}: a wrong base is not added and counts as a mistake`);
+    for (const x of mrna.slice(0, -1)) await page.click(`.lab-view [data-base="${x}"]`);
+    expect(!(await done('dna-protein'))[0], `${where}: not copied yet: no tick`);
+    await page.click(`.lab-view [data-base="${mrna.slice(-1)}"]`);
+    expect(await stat('mRNA') === 'AUG GCU AAA UGG UAA' && (await done('dna-protein'))[0], `${where}: the mRNA for the template is AUG GCU AAA UGG UAA: ` + await stat('mRNA'));
+    await press('Read the next codon');
+    expect(await stat('Protein') === 'Met' && !(await done('dna-protein'))[1], `${where}: AUG reads Met: ` + await stat('Protein'));
+    await press('Read to the stop');
+    expect(await stat('Protein') === 'Met-Ala-Lys-Trp' && await stat('Codons read') === '5 of 5' && (await done('dna-protein'))[1], `${where}: it reads to UAA and stops: ` + await stat('Protein'));
+    await page.click('.lab-view .lab-seg button:text-is("Gene 3")');
+    for (const x of 'AUGAAAUAGGGGCCC') await page.click(`.lab-view [data-base="${x}"]`);
+    await press('Read to the stop');
+    expect(await stat('Protein') === 'Met-Lys' && await stat('Codons read') === '3 of 5' && (await done('dna-protein'))[2], `${where}: Gene 3 stops early at UAG: ` + await stat('Protein') + ' ' + await stat('Codons read'));
+    if (!phone) await aa('dna-protein');
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/bio-dna-${phone ? 'phone' : 'desk'}.png` });
+    await back();
+
+    // 4. Food web: without the foxes the rabbits boom, then crash
+    await openIt('food-web');
+    await page.click('.lab-view [data-sp="F"]');
+    const rab = [+(await stat('Rabbits'))];
+    for (let i = 1; i <= 30; i++) { await press('Run 1 season'); rab.push(+(await stat('Rabbits'))); if (i === 5) expect(!(await done('food-web'))[0], `${where}: 5 seasons is not yet 10: no tick`); }
+    const peak = Math.max(...rab), at = rab.indexOf(peak);
+    expect(peak >= 2 * rab[0] && Math.min(...rab.slice(at)) <= 0.6 * peak && (await done('food-web'))[0], `${where}: without foxes the rabbits grow, then crash: ` + rab.join(' '));
+    expect(await page.$eval('.lab-view [data-sp="F"]', (x) => x.getAttribute('aria-pressed') + ' ' + x.textContent) === 'false Foxes: out', `${where}: the Foxes button says it is out`);
+    if (!phone) await aa('food-web');
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/bio-foodweb-${phone ? 'phone' : 'desk'}.png` });
+    await back();
+
+    // 5. Natural selection: dark moths win on dark bark within 15 generations
+    await openIt('selection');
+    await page.click('.lab-view .lab-seg button:text-is("Dark (sooty air)")');
+    expect(!(await done('selection'))[0], `${where}: dark bark alone ticks nothing`);
+    let gen = 0, dark = 0;
+    while (gen < 15 && dark <= 50) { await press('Next generation'); gen++; dark = parseInt(await stat('Dark moths'), 10); }
+    expect(dark > 50 && (await done('selection'))[0], `${where}: dark moths win on dark bark within 15 generations: ${dark}% at generation ${gen}`);
+    if (!phone) await aa('selection');
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/bio-selection-${phone ? 'phone' : 'desk'}.png` });
+    await back();
+    if (phone) for (const id of IDS) { await openIt(id); await aa(id); await back(); }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons and Simulations, then Simulations: Visual Labs by subject, then Study Tools (computer 1280x800 and phone 390x844): the sections in that order, the student’s level first and about 1.5 times bigger with a Your level tag, each level opens into Lessons (coming soon) and Simulations, every subject folder opens into its labs, every tool folder opens, every lab reachable before is still reachable, Back goes one step at a time, AA in light and dark', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   for (const phone of [false, true]) {
