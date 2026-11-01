@@ -117,21 +117,25 @@ async function openCard(page, sel) {
   await page.click(sel);
   await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *, .x3d:not([hidden])', { timeout: 20000 });
 }
-// Learn is folders: open the folder a lab is in (its subject, its kind of study tool, or the little ones'
-// level) and return the selector of its row (phone) or card (computer)
+// Learn is folders: open the folder a lab is in (its subject inside Visual Labs, its kind of study tool, or the
+// little ones' level's Simulations) and return the selector of its row (phone) or card (computer)
 async function openFolderOf(page, id) {
   const g = await page.evaluate(async (x) => {
     const m = await import('./labs/labs.js'), l = m.LABS.find((y) => y.id === x);
-    if (!l) return x === 'body3d' || x === 'cells3d' ? 'subject:biology' : '';
-    if (l.subject === 'tools') return { cornell: 'tools:notes', cardmatrix: 'tools:cards', vocab: 'tools:cards', essay: 'tools:writing', thesis: 'tools:writing', timeline: 'tools:time' }[x] || '';
-    if (l.subject === 'kids') return 'level:pre';
-    return l.subject === 'puzzles' || l.subject === 'games' ? '' : 'subject:' + l.subject;
+    if (!l) return x === 'body3d' || x === 'cells3d' ? ['visual:all', 'subject:biology'] : '';
+    if (l.subject === 'tools') return [{ cornell: 'tools:notes', cardmatrix: 'tools:cards', vocab: 'tools:cards', essay: 'tools:writing', thesis: 'tools:writing', timeline: 'tools:time' }[x] || ''];
+    if (l.subject === 'kids') return ['level:pre', 'levelsims:pre'];
+    return l.subject === 'puzzles' || l.subject === 'games' ? '' : ['visual:all', 'subject:' + l.subject];
   }, id);
   if (!g) return '';
   const phone = await page.locator('.labs:not([hidden]) .lp:not([hidden])').count();
-  if (phone && await page.locator('.lp-list:not([hidden])').count()) { await page.click('.lp-back'); }
-  if (!phone && await page.locator('.labs-foryou .lf-back-btn').count()) { await page.click('.labs-foryou .lf-back-btn'); }
-  await page.click(`.labs:not([hidden]) .lf[data-group="${g}"] >> visible=true`);
+  // (back to Learn's start, one step at a time)
+  for (let i = 0; i < 4; i++) {
+    if (phone && await page.locator('.lp-list:not([hidden])').count()) { await page.click('.lp-back'); await page.waitForTimeout(60); continue; }
+    if (!phone && await page.locator('.labs-foryou .lf-back-btn').count()) { await page.click('.labs-foryou .lf-back-btn'); await page.waitForTimeout(60); continue; }
+    break;
+  }
+  for (const k of g) { await page.click(`.labs:not([hidden]) .lf[data-group="${k}"] >> visible=true`); if (k !== g[g.length - 1]) await page.waitForSelector(`.labs:not([hidden]) .lf[data-group="${g[g.indexOf(k) + 1]}"] >> visible=true`, { timeout: 4000 }); }
   const sel = phone ? `.lp-row[data-lab="${id}"]` : `.labs-grid [data-lab="${id}"]`;
   await page.waitForSelector(sel, { timeout: 4000 });
   return sel;
@@ -2353,7 +2357,7 @@ test('the LET, Cassie’s way: every major gets its own areas and all of Profess
   await L.ctx.close();
 });
 
-test('Home by level: every onboarding grade opens its own Lessons and Learn level; Home starts with Lessons, the timer and Flashcards, the note says which level (it follows the grade), then the exam plans, then Today’s Lab (no Learn, Games or Today’s lab box), on the phone and the computer; the timer’s minutes are edited right there and kept; the Home screen app stays put with no scrollbar; the student’s own Learn folder is twice as wide', async (b) => {
+test('Home by level: every onboarding grade opens its own Lessons and Learn level; Home starts with Lessons, the timer and Flashcards, the note says which level (it follows the grade), then the exam plans, then Today’s Lab (no Learn, Games or Today’s lab box), on the phone and the computer; the timer’s minutes are edited right there and kept; the Home screen app stays put with no scrollbar; the student’s own Learn folder is about 1.5 times as wide (v220)', async (b) => {
   // every grade the first questions and the profile offer, and where it leads
   const WANT = { Nursery: ['pre', 'pre'], Kindergarten: ['pre', 'pre'], Elementary: ['elem', 'elem'], 'Grade 1': ['elem', 'elem'], 'Grade 4': ['elem', 'elem'], 'Grade 6': ['elem', 'elem'], 'Junior High': ['jhs', 'hs'], 'Grade 7': ['jhs', 'hs'], 'Grade 10': ['jhs', 'hs'], 'Senior High': ['shs', 'hs'], 'Grade 11': ['shs', 'hs'], 'Grade 12': ['shs', 'hs'], College: ['college', 'college'], '1st year college': ['college', 'college'], '2nd year college': ['college', 'college'], '5th year college': ['college', 'college'], 'Graduate school': ['college', 'grad'], 'Board exam reviewee': ['college', 'grad'], 'Working professional': ['college', 'grad'] };
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home', groqKey: 'gsk_test', profile: { ...PROFILE, grade: '2nd year college', age: 20 }, chats: [{ id: 'c1', title: 'Cells', messages: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'y' }], updatedAt: Date.now() }] } });
@@ -2396,11 +2400,11 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   await page.addStyleTag({ content: rules });
   const sa = await page.evaluate(() => ({ ob: getComputedStyle(document.body).overscrollBehaviorY, ox: getComputedStyle(document.body).overflowX, wide: document.documentElement.scrollWidth - innerWidth }));
   expect(sa.ob === 'none' && sa.ox === 'hidden' && sa.wide <= 0, 'with those rules: no bounce and nothing sideways: ' + JSON.stringify(sa));
-  // Learn: the student's own level first and twice as wide
+  // Learn: the student's own level first and about 1.5 times as wide
   await page.evaluate(() => { state.profile.grade = '2nd year college'; save(); });
   await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-foryou .lf-mine');
   const fw = await page.evaluate(() => { const f = [...document.querySelectorAll('.lp-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), level: f[0].dataset.level, mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
-  expect(fw.first && fw.level === 'college' && fw.mine / fw.other > 1.9, 'phone: the own level (College) first and about twice as wide: ' + JSON.stringify(fw));
+  expect(fw.first && fw.level === 'college' && fw.mine / fw.other > 1.35 && fw.mine / fw.other < 1.65, 'phone: the own level (College) first and about 1.5 times as wide: ' + JSON.stringify(fw));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the computer
@@ -2412,7 +2416,7 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   await D.page.waitForFunction(() => /Pause/.test(document.querySelector('.desk-home .dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
   await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
   const dw = await D.page.evaluate(() => { const f = [...document.querySelectorAll('.labs-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
-  expect(dw.first && dw.mine / dw.other > 1.9, 'computer: the own level first and about twice as wide: ' + JSON.stringify(dw));
+  expect(dw.first && dw.mine / dw.other > 1.35 && dw.mine / dw.other < 1.65, 'computer: the own level first and about 1.5 times as wide: ' + JSON.stringify(dw));
   for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
   expect(!D.errors.length, 'page errors: ' + D.errors.join('; '));
   await D.ctx.close();
@@ -6947,7 +6951,7 @@ test.slow('Explore cells are their own view: own card on the Labs shelf and in 3
   await tapLabs(page);
   await page.waitForSelector(LABS_READY, { timeout: 20000 });
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the shelf has a cells card and a body card');
-  await page.click('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForSelector('.labs-foryou .lf-back-btn');
+  await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the Biology folder has both too');
   expect(/Cells 3D/.test(await page.locator('.labs-grid [data-lab="cells3d"]').innerText()), 'the cells card is named for the cells');
   // the cells card opens the cells straight away
@@ -7296,7 +7300,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   expect(await page.locator('.labs-feature').count() === 1, 'today’s lab is featured');
   await shot('labs-shelf');
   // a subject's folder and search
-  await page.click('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForSelector('.labs-foryou .lf-back-btn');
+  await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
   expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs: ' + (await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join());
   await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector('.labs-scroll .lf');
   await page.fill('.labs-search', 'pendul');
@@ -8023,14 +8027,96 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   await ctx.close();
 });
 
+test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons and Simulations, then Simulations: Visual Labs by subject, then Study Tools (computer 1280x800 and phone 390x844): the sections in that order, the student’s level first and about 1.5 times bigger with a Your level tag, each level opens into Lessons (coming soon) and Simulations, every subject folder opens into its labs, every tool folder opens, every lab reachable before is still reachable, Back goes one step at a time, AA in light and dark', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 8', age: 13 } } }
+      : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 8', age: 13 } } });
+    const S = phone ? '.lp' : '.labs-scroll';
+    if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+    await page.waitForSelector(`${S} .lf`, { timeout: 15000 }); await page.waitForTimeout(500);
+    // every lab and tool a student could reach in v219 (the level, subject and tool folders): all but the games
+    const all = await page.evaluate(async () => { const m = await import('./labs/labs.js'); return m.LABS.filter((l) => l.subject !== 'games' && l.subject !== 'puzzles').map((l) => l.id).concat(['body3d', 'cells3d']).sort(); });
+    // 1. the sections, top to bottom
+    const heads = await page.evaluate((S) => [...document.querySelectorAll(S + ' :is(.lp-h, .lf-h)')].filter((h) => h.getClientRects().length).map((h) => h.textContent.trim()), S);
+    expect(JSON.stringify(heads) === JSON.stringify(['Today’s Labs', 'Levels', 'Simulations: Visual Labs', 'Study Tools: Learn your way']), `${where}: the sections in order: ` + JSON.stringify(heads));
+    const order = await page.evaluate((S) => { const y = (sel) => { const e = document.querySelector(S + ' ' + sel); return e ? e.getBoundingClientRect().top : -1; }; return [y(':is(.lp-rec, .labs-feature)'), y('.lf-levels'), y('.lf-visual'), y('.lf-tools')]; }, S);
+    expect(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), `${where}: Today’s Labs, Levels, Visual Labs, Study Tools, top to bottom: ` + order);
+    // 2. the levels: the student's own (Junior High) first, about 1.5 times a folder, with Your level
+    const lv = await page.evaluate((S) => [...document.querySelectorAll(S + ' .lf-levels .lf')].map((f) => ({ k: f.dataset.level, mine: f.classList.contains('lf-mine'), w: f.getBoundingClientRect().width, tag: (f.querySelector('.lf-yours') || {}).textContent || '' })), S);
+    const ratio = lv[1] ? lv[0].w / lv[1].w : 0;
+    expect(JSON.stringify(lv.map((x) => x.k)) === JSON.stringify(['jhs', 'pre', 'elem', 'shs', 'college']) && lv[0].mine && lv[0].tag === 'Your level' && lv.slice(1).every((x) => !x.mine && !x.tag), `${where}: Junior High first and marked Your level, then the others: ` + JSON.stringify(lv));
+    expect(ratio > 1.35 && ratio < 1.65, `${where}: the student’s level is about 1.5 times bigger: ` + ratio.toFixed(2));
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad } = await contrastIssues(page, phone ? '.lp-home' : '.labs-scroll'); expect(!bad.length, `${where}: Learn’s words (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // open a folder by its key; back one step; what is open now
+    const opened = (key) => page.waitForFunction(([S, key, phone]) => phone ? document.querySelector('.lp').dataset.view === key : !!document.querySelector('.labs-foryou .lf-back-btn') && document.querySelector('.labs-foryou h3').textContent.length > 0, [S, key, phone], { timeout: 4000 });
+    const go = async (key) => { await page.$eval(`${S} .lf[data-group="${key}"]`, (f) => f.scrollIntoView({ block: 'center' })); await page.click(`${S} .lf[data-group="${key}"]`); await opened(key); await page.waitForTimeout(phone ? 150 : 150); };
+    const back = async () => { await page.click(phone ? '.lp-back' : '.lf-back-btn'); await page.waitForTimeout(200); };
+    const folders = () => page.evaluate((S) => [...document.querySelectorAll(S + ' .lf')].filter((f) => f.getClientRects().length).map((f) => f.dataset.group), S);
+    const labsShown = () => page.evaluate((phone) => [...document.querySelectorAll(phone ? '.lp-list .lp-row[data-lab]' : '.labs-grid:not([hidden]) .labs-card[data-lab]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.lab), phone);
+    const title = () => page.evaluate((phone) => document.querySelector(phone ? '.lp-list h3' : '.labs-foryou .lf-head h3').textContent, phone);
+    const seen = new Set();
+    // 3. each level: Lessons (coming soon) and Simulations; Back one step at a time
+    for (const { k } of lv) {
+      await go('level:' + k);
+      const inside = await folders();
+      expect(JSON.stringify(inside) === JSON.stringify(['lessons:' + k, 'levelsims:' + k]), `${where}: ${k} opens into Lessons and Simulations: ` + JSON.stringify(inside));
+      await go('lessons:' + k);
+      const soon = await page.evaluate(() => { const e = [...document.querySelectorAll('.lf-soon')].find((x) => x.getClientRects().length); return e ? e.textContent : ''; });
+      expect(/Lessons are coming soon/.test(soon), `${where}: ${k} Lessons: coming soon: ` + soon);
+      if (k === 'jhs') for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await contrastIssues(page, '.lf-soon'); expect(!bad.length, `${where}: coming soon (${scheme}): ` + bad.join(' | ')); }
+      await page.emulateMedia({ colorScheme: 'light' });
+      await back();
+      const again = await folders();
+      expect(JSON.stringify(again) === JSON.stringify(['lessons:' + k, 'levelsims:' + k]), `${where}: Back from Lessons goes to the level, not Learn: ` + JSON.stringify(again));
+      await go('levelsims:' + k);
+      const labs = await labsShown(); labs.forEach((id) => seen.add(id));
+      expect(labs.length > 0, `${where}: ${k} Simulations has its labs: ` + labs.length);
+      await back(); await back();
+      const home = await folders();
+      expect(home.includes('level:' + k) && home.includes('visual:all'), `${where}: two Backs: Learn again: ` + JSON.stringify(home));
+    }
+    // 4. Visual Labs: a folder per subject, each with its labs
+    await go('visual:all');
+    const subjects = await folders();
+    expect(subjects.length >= 6 && subjects.every((g) => g.startsWith('subject:')) && ['physics', 'chemistry', 'biology', 'math', 'space', 'geography'].every((x) => subjects.includes('subject:' + x)), `${where}: Visual Labs opens into the subjects: ` + JSON.stringify(subjects));
+    for (const g of subjects) {
+      await go(g);
+      const labs = await labsShown(); labs.forEach((id) => seen.add(id));
+      expect(labs.length > 0, `${where}: ${g} holds its labs: ` + labs.length);
+      await back();
+      expect(JSON.stringify(await folders()) === JSON.stringify(subjects), `${where}: Back from ${g}: the subjects again`);
+    }
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/learn-visual-${phone ? 'phone' : 'desk'}.png` });
+    await back();
+    // 5. every Study Tools folder opens
+    const tools = (await folders()).filter((g) => g.startsWith('tools:'));
+    expect(tools.length >= 4, `${where}: the tool folders: ` + tools);
+    for (const g of tools) { await go(g); const labs = await labsShown(); labs.forEach((id) => seen.add(id)); expect(labs.length > 0, `${where}: ${g} opens: ` + labs.length); await back(); }
+    // 6. nothing lost
+    const lost = all.filter((id) => !seen.has(id));
+    expect(!lost.length, `${where}: every lab and tool is still reachable: missing ` + lost.join(', '));
+    // search still finds a lab and a tool
+    if (phone) { await page.click('.lp-find'); await page.fill('.lp-q', 'cornell'); } else await page.fill('.labs-search', 'cornell');
+    await page.waitForTimeout(300);
+    expect((await labsShown()).includes('cornell'), `${where}: search finds a tool`);
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Learn (was Labs) follows the student’s level: For you is a glass folder per level, their own first in dark glass (Kindergarten: the 4 little ones’ labs; Grade 11: High school), hover leans it and a tap opens the level, Today’s Lab on Home comes from their level, changing the level in the profile changes both at once, and no screen says “Labs” any more (390x844, 1280x800)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const levelsOf = (page) => page.evaluate(async () => { const m = await import('./labs/labs.js'); return { levels: m.LEVELS.map((l) => l[0]), of: Object.fromEntries(m.LABS.map((l) => [l.id, l.levels || []])) }; });
   // the level folders: which level, the student's own (dark), papers, label, count and the round button
   const forYou = (page, scope = '.lp-foryou') => page.evaluate((sc) => [...document.querySelectorAll(sc + ' .lf')].map((f) => { const g = f.querySelector('.lf-go').getBoundingClientRect();
     return { k: f.dataset.level, mine: f.classList.contains('lf-mine'), papers: f.querySelectorAll('.lf-paper').length, label: f.querySelector('.lf-txt b').textContent, count: +f.querySelector('.lf-txt small').textContent.replace(/\D/g, ''), go: [Math.round(g.width), Math.round(g.height)] }; }), scope);
-  // a folder opened: the level's labs (phone list)
-  const openLevel = async (page, k) => { await page.click(`.lp-foryou .lf[data-level="${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'level:' + x, k, { timeout: 4000 }); return page.$$eval('.lp-list .lp-row', (r) => r.map((x) => x.dataset.lab)); };
+  // a folder opened: the level's labs (phone list; v220: inside the level's Simulations folder)
+  const openLevel = async (page, k) => { await page.click(`.lp-foryou .lf[data-level="${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'level:' + x, k, { timeout: 4000 });
+    await page.click(`.lp-list .lf[data-group="levelsims:${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'levelsims:' + x, k, { timeout: 4000 }); return page.$$eval('.lp-list .lp-row', (r) => r.map((x) => x.dataset.lab)); };
+  const backHome = async (page) => { for (let i = 0; i < 3 && await page.locator('.lp-list:not([hidden])').count(); i++) { await page.click('.lp-back'); await page.waitForTimeout(80); } await page.waitForSelector('.lp-home:not([hidden]) .lp-foryou .lf'); };
   const learnTab = async (page) => { await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.labs:not([hidden]) .lp-foryou .lf', { timeout: 15000 }); await page.waitForTimeout(400); };
   const SHOTS = process.env.SHOTS;
 
@@ -8041,17 +8127,16 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     const f = await forYou(page), L = await levelsOf(page);
     expect(f[0] && f[0].k === 'pre' && f[0].mine && f[0].label === 'Nursery and Kindergarten' && f.filter((x) => x.mine).length === 1, 'Kindergarten’s first folder is Nursery and Kindergarten, in dark glass: ' + JSON.stringify(f));
     expect(f.length === 5 && await page.locator('details.lp-other').count() === 0, 'five folders, no Other levels dropdown: ' + f.length);
-    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).includes(k)).length + (['elem', 'hs'].includes(k) ? 1 : 0) + (['hs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells)
+    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; const LV = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'] }; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).some((x) => LV[k].includes(x))).length + (['elem', 'jhs', 'shs'].includes(k) ? 1 : 0) + (['jhs', 'shs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells; v220: Junior and Senior High show the High school labs, College and board exams the College and LET ones)
     expect(f.every((x) => x.papers === 3 && x.label && x.count === want[x.k] && x.go[0] >= 44 && x.go[1] >= 44), 'every folder: 3 papers, a label, its lab count and a 44px button: ' + JSON.stringify([f, want]));
     const kids = await openLevel(page, 'pre');
-    expect(JSON.stringify(kids.slice().sort()) === JSON.stringify(['count', 'shapes', 'trace-letters', 'trace-numbers']) && await page.$eval('.lp-list h3', (h) => h.textContent) === 'Nursery and Kindergarten', 'the folder holds the 4 little ones’ labs: ' + kids);
+    expect(JSON.stringify(kids.slice().sort()) === JSON.stringify(['count', 'shapes', 'trace-letters', 'trace-numbers']) && await page.$eval('.lp-list h3', (h) => h.textContent) === 'Nursery and Kindergarten simulations', 'the folder holds the 4 little ones’ labs: ' + kids);
     if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-kinder-open.png' });
-    await page.click('.lp-back');
-    await page.waitForSelector('.lp-home:not([hidden]) .lp-foryou .lf');
-    expect(JSON.stringify(f.slice(1).map((x) => x.k)) === JSON.stringify(['elem', 'hs', 'college', 'grad']) && f.slice(1).every((x) => !x.mine), 'then the other levels in order, in frosted glass: ' + JSON.stringify(f.map((x) => x.k)));
+    await backHome(page);
+    expect(JSON.stringify(f.slice(1).map((x) => x.k)) === JSON.stringify(['elem', 'jhs', 'shs', 'college']) && f.slice(1).every((x) => !x.mine), 'then the other levels in order, in frosted glass: ' + JSON.stringify(f.map((x) => x.k)));
     const elem = await openLevel(page, 'elem');
     expect(elem.length === want.elem && elem.every((id) => !L.of[id] || L.of[id].includes('elem')), 'a folder holds only its level’s labs: ' + elem);
-    await page.click('.lp-back'); await page.waitForSelector('.lp-home:not([hidden]) .lp-foryou .lf');
+    await backHome(page);
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad: low } = await contrastIssues(page, '.lp-foryou'); expect(!low.length, `the folders’ words (${scheme}): ` + low.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
     expect(Object.keys(L.of).every((id) => L.of[id].length), 'every lab has its levels: ' + Object.keys(L.of).filter((id) => !L.of[id].length));
@@ -8073,7 +8158,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     expect(L.of[home1].includes('hs'), 'Grade 11: Home’s Today’s Lab is a High school lab: ' + home1);
     await learnTab(page);
     let f = await forYou(page);
-    expect(f[0].k === 'hs' && f[0].mine && f[0].count >= 10, 'Grade 11’s first folder is High school: ' + JSON.stringify(f[0]));
+    expect(f[0].k === 'shs' && f[0].mine && f[0].count >= 10, 'Grade 11’s first folder is Senior High: ' + JSON.stringify(f[0]));
     expect(L.of[await page.$eval('.lp-play', (x) => x.dataset.lab)].includes('hs'), 'Learn’s Today’s Lab is a High school one too');
     if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-grade11.png' });
     await page.evaluate(() => saveProfile({ ...state.profile, grade: '2nd year college' }, false, state.profile)); // (Edit profile's Save)
@@ -8095,15 +8180,17 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     document.querySelectorAll('[aria-label],[title],[placeholder]').forEach((e) => { const t = ['aria-label', 'title', 'placeholder'].map((a) => e.getAttribute(a) || '').join(' '); if (/\bLabs\b/.test(t) && (seen(e) || e.matches('[role=dialog]'))) out.push(t.slice(0, 60)); });
     return out;
   });
+  // (v220: Learn’s own section names, Today’s Labs and Simulations: Visual Labs, are the words the student asked for)
+  const OK_LABS = /^(Today’s Labs|Simulations: Visual Labs|Visual Labs(, \d+ subjects, \d+ labs)?)$/;
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const phone = size === '390x844';
     const { ctx, page, errors } = await open(b, { device, viewport, server: false, lite: 'off', state: { tab: 'home' } });
     const found = [];
-    const look = async (where) => { for (const t of await said(page)) found.push(`${where}: ${t}`); };
+    const look = async (where) => { for (const t of await said(page)) if (!OK_LABS.test(t.trim())) found.push(`${where}: ${t}`); };
     if (phone) {
       await page.waitForSelector('#home .hub-boxes'); await look('Home');
       await learnTab(page); await look('Learn');
-      await page.click('.lp-sims .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row'); await look('Learn list');
+      await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row'); await look('Learn list');
       await page.click('.lp-back');
       await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden])'); await look('You');
     } else {
@@ -8120,14 +8207,15 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
       expect(!['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(leaned), 'hover leans the pocket back: ' + leaned);
       if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-desk-hover.png' });
       await page.click('.labs-foryou .lf[data-level="elem"]');
-      await page.waitForSelector('.labs-foryou .lf-back-btn', { timeout: 4000 });
+      await page.waitForSelector('.labs-foryou .lf[data-group="levelsims:elem"]', { timeout: 4000 }); await page.click('.labs-foryou .lf[data-group="levelsims:elem"]');
+      await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
       const cards = await page.$$eval('.labs-grid [data-lab]', (c) => c.map((x) => x.dataset.lab));
       const L2 = await levelsOf(page);
-      expect(cards.length && cards.every((id) => !L2.of[id] || L2.of[id].includes('elem')) && await page.$eval('.lf-head h3', (h) => h.textContent) === 'Grade school', 'a click opens Grade school’s labs only: ' + cards);
-      await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector('.labs-foryou .lf');
+      expect(cards.length && cards.every((id) => !L2.of[id] || L2.of[id].includes('elem')) && await page.$eval('.lf-head h3', (h) => h.textContent) === 'Elementary simulations', 'a click opens Elementary’s labs only (in its Simulations): ' + cards);
+      await page.click('.labs-foryou .lf-back-btn'); await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector('.labs-foryou .lf-levels .lf');
       await page.emulateMedia({ reducedMotion: 'reduce' }); await page.mouse.move(5, 5);
-      await page.hover('.labs-foryou .lf[data-level="hs"]'); await page.waitForTimeout(400);
-      expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(await page.$eval('.labs-foryou .lf[data-level="hs"] .lf-front', (x) => getComputedStyle(x).transform)), 'Reduce Motion: no lean');
+      await page.hover('.labs-foryou .lf[data-level="shs"]'); await page.waitForTimeout(400);
+      expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(await page.$eval('.labs-foryou .lf[data-level="shs"] .lf-front', (x) => getComputedStyle(x).transform)), 'Reduce Motion: no lean');
       await page.emulateMedia({ reducedMotion: 'no-preference' });
       await page.evaluate(() => openLabs('pendulum')); await page.waitForSelector('.lab-view:not([hidden]) .lab-back'); await look('a lab');
     }
@@ -8203,7 +8291,7 @@ test('Learn’s levels are where the topic is really taught (docs/learn-levels.m
   }
 });
 
-test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Lab first, then For you (levels), Simulations (a folder per subject) and Study tools (a folder per use) in that order, no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
+test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Labs first, then Levels, Simulations: Visual Labs (one folder, a folder per subject inside) and Study Tools (a folder per use) in that order (v220), no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
   const SHOTS = process.env.SHOTS;
   for (const [size, device, viewport] of [['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }], ['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
@@ -8217,26 +8305,38 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
       if (ph) return { order: [...document.querySelectorAll('.lp-home > .lp-h')].filter(vis).map((h) => h.textContent), chips: document.querySelectorAll('.lp-chips button').length,
         n: ['.lp-foryou', '.lp-sims', '.lp-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length), today: vis(document.querySelector('.lp-rec .lp-card')) };
       const tops = ['.labs-today', '.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => { const e = document.querySelector(s); return vis(e) ? e.getBoundingClientRect().top : -1; });
-      return { order: ['Today’s Lab', 'For you', 'Simulations', 'Study tools'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
+      return { order: ['Today’s Labs', 'Levels', 'Simulations: Visual Labs', 'Study Tools: Learn your way'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
         cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
-    expect(parts.order.join('|') === 'Today’s Lab|For you|Simulations|Study tools', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
-    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[5,7,4]', `${size}: no chips, tabs or card grid; 5 level, 7 subject and 4 study tool folders: ` + JSON.stringify(parts));
+    expect(parts.order.join('|') === 'Today’s Labs|Levels|Simulations: Visual Labs|Study Tools: Learn your way', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
+    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[5,1,4]', `${size}: no chips, tabs or card grid; 5 level folders, the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
     if (SHOTS) {
       if (phone) { await page.evaluate(() => document.querySelector('.lp-home').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
       else { await page.evaluate(() => { document.querySelector('.labs-scroll').scrollTop = 0; }); await page.waitForTimeout(500); }
       await page.screenshot({ path: `${SHOTS}/learnC-${phone ? 'phone' : 'desk'}.png` });
     }
     // open every folder: its count is what it holds, and together they hold every lab
+    // (v220: a level holds its Lessons and Simulations folders, Visual Labs a folder per subject: a folder of labs is
+    // reached through them, and Back goes one step at a time)
     const seen = new Set(), keys = await page.$$eval(S.folders, (f) => f.map((x) => x.dataset.group));
+    const anyF = (key) => `.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`;
+    const paths = [];
     for (const key of keys) {
-      const count = await page.$eval(`${S.folders}[data-group="${key}"] .lf-txt small`, (x) => +x.textContent.replace(/\D/g, ''));
-      await page.click(`${S.folders}[data-group="${key}"]`);
+      if (key.startsWith('level:')) paths.push([key, 'levelsims:' + key.slice(6)]);
+      else if (key === 'visual:all') { await page.click(anyF(key)); await page.waitForSelector(anyF('subject:physics')); await page.waitForTimeout(100); const subs = await page.$$eval('.labs:not([hidden]) .lf', (f) => f.filter((x) => x.getClientRects().length).map((x) => x.dataset.group)); subs.forEach((g) => paths.push([key, g])); await page.click(S.back); await page.waitForSelector(S.folders); }
+      else paths.push([key]);
+    }
+    for (const path of paths) {
+      const key = path[path.length - 1];
+      for (const k of path.slice(0, -1)) { await page.click(anyF(k)); await page.waitForSelector(anyF(path[path.indexOf(k) + 1])); await page.waitForTimeout(100); }
+      const count = await page.$eval(`.labs:not([hidden]) .lf[data-group="${key}"] .lf-txt small`, (x) => +x.textContent.replace(/\D/g, ''));
+      await page.click(anyF(key));
       await page.waitForSelector(S.open, { timeout: 4000 });
       const ids = await page.$$eval(S.open, (r) => r.map((x) => x.dataset.lab));
       expect(ids.length === count, `${size}: ${key} says ${count} and holds ${ids.length}`);
       ids.forEach((id) => seen.add(id));
-      await page.click(S.back); await page.waitForSelector(S.folders);
+      for (let i = 0; i < path.length; i++) { await page.click(S.back); await page.waitForTimeout(120); }
+      await page.waitForSelector(S.folders);
     }
     const lost = all.filter((id) => !seen.has(id));
     expect(!lost.length, `${size}: every lab is in a folder: ` + lost);
@@ -8755,7 +8855,7 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-card'); await page.waitForTimeout(300);
     ok(await glass(page, ['.lp-card']), '390x844 Learn');
     await readable(page, '.lp', '390x844 Learn');
-    await page.click('.lp-sims .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+    await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
     ok(await glass(page, ['.lp-list .lp-row']), '390x844 Learn rows');
     await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden]) .set-group');
     ok(await glass(page, ['#settings-panel .set-group']), '390x844 You');
@@ -10753,12 +10853,12 @@ test('museum: a gallery wall where the paintings stand in a ring that turns (aft
     await page.evaluate(() => openLabs());
     await page.waitForSelector('.labs:not([hidden])');
     if (await page.locator('.lp:not([hidden])').count()) { // a phone: the History folder lists it; the Study tools folders don't
-      await page.click('.lf[data-group="subject:history"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+      await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:history"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
       expect(await page.locator('.lp-row[data-lab="museum"]').count() === 1, `${size}: History lists the Museum`);
       await page.click('.lp-back');
       expect(await page.evaluate(() => [...document.querySelectorAll('.lp-toolsf .lf')].some((f) => /Museum/.test(f.textContent))) === false, `${size}: Study tools doesn't`);
     } else {
-      await page.click('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForSelector('.labs-foryou .lf-back-btn');
+      await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
       expect(await page.locator('.labs-grid [data-lab="museum"]').count() === 1, `${size}: Learn > History shows the Museum`);
     }
     await page.evaluate(() => openLabs('museum'));
@@ -11120,7 +11220,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(!top.chips.length, 'no filter chips (the folders replace them): ' + top.chips.join());
   expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
-  expect(top.forYou.join() === 'pre,elem,hs,college,grad' && top.forPv >= 10, 'For you (no level saved): the 5 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
+  expect(top.forYou.join() === 'pre,elem,jhs,shs,college' && top.forPv >= 10, 'For you (no level saved): the 5 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
   const f0 = await fr('.lp-big'); await page.waitForTimeout(900);
   expect(await fr('.lp-big') > f0 + 3, 'the Recommended preview is moving');
@@ -11133,17 +11233,18 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.click('.lab-back');
   await page.waitForSelector('.lp:not([hidden]) .lp-home:not([hidden])');
   // a level folder: its labs and 3D views, each row with its own preview; at most 3 moving at once
-  await page.click('.lp-foryou .lf[data-level="hs"]');
+  await page.click('.lp-foryou .lf[data-level="shs"]');
+  await page.waitForSelector('.lp-list .lf[data-group="levelsims:shs"]'); await page.click('.lp-list .lf[data-group="levelsims:shs"]'); // (v220: a level's Simulations folder)
   await page.waitForSelector('.lp-list:not([hidden]) .lp-row canvas[data-preview]');
   await page.waitForTimeout(600);
   const learn = await page.evaluate(() => ({ title: document.querySelector('.lp-list h3').textContent, rows: [...document.querySelectorAll('.lp-row')].map((r) => r.dataset.lab), withPv: document.querySelectorAll('.lp-row canvas[data-pv]').length }));
-  expect(learn.title === 'High school' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'waves', 'atom'].every((x) => learn.rows.includes(x)), 'High school: its labs and 3D views, each with a preview: ' + JSON.stringify(learn));
+  expect(learn.title === 'Senior High simulations' && learn.rows.length >= 25 && learn.withPv === learn.rows.length && ['body3d', 'cells3d', 'pendulum', 'waves', 'atom'].every((x) => learn.rows.includes(x)), 'High school: its labs and 3D views, each with a preview: ' + JSON.stringify(learn));
   for (let i = 0; i < 4; i++) { const moving = await page.evaluate(() => document.querySelectorAll('.lp canvas[data-moving="1"]').length); expect(moving <= 3, 'at most 3 previews move at once: ' + moving); await page.waitForTimeout(250); }
   await page.click('.lp-row[data-lab="pendulum"]');
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="pendulum"] .lab-controls > *', { timeout: 20000 });
   await page.click('.lab-back');
   await page.waitForSelector('.lp-list:not([hidden]) .lp-row[data-lab="pendulum"]');
-  await page.click('.lp-back');
+  await page.click('.lp-back'); await page.waitForTimeout(150); await page.click('.lp-back');
   await page.waitForSelector('.lp-home:not([hidden])');
   // Study tools: every tool with its preview, and a tool opens
   await page.evaluate(() => openLabs(undefined, { section: 'tools' })); // (every study tool, as the app's Study tools button opens it)
@@ -11154,7 +11255,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="cornell"]', { timeout: 20000 });
   await page.click('.lab-back');
   // a subject's folder, the 3D views and search
-  await page.click('.lp-back'); await page.click('.lp-sims .lf[data-group="subject:math"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+  await page.click('.lp-back'); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:math"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:math"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
   const maths = await page.$$eval('.lp-row', (r) => r.map((x) => x.dataset.lab));
   expect(maths.includes('fractions') && !maths.includes('pendulum'), 'Maths: the maths labs only: ' + maths.join());
   await page.evaluate(() => openLabs(undefined, { subject: '3d' })); await page.waitForSelector('.lp-list:not([hidden]) .lp-row[data-lab="body3d"]');
@@ -11183,7 +11284,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     await o.page.evaluate(() => openLabs());
     await o.page.waitForSelector('.labs:not([hidden]) .labs-scroll .lf');
     const d = await o.page.evaluate(() => { const vis = (s) => { const e = document.querySelector(s); return !!e && !!e.getClientRects().length; }; return { lp: vis('.lp'), on: document.querySelector('.labs').classList.contains('lp-on'), head: vis('.labs-head'), tabs: [...document.querySelectorAll('.labs-tabs [data-section]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.section), search: vis('.labs-search'), chips: document.querySelectorAll('.labs-chips button').length, cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter((x) => x.getClientRects().length).length, folders: document.querySelectorAll('.labs-scroll .lf').length, feature: vis('.labs-feature'), bg: getComputedStyle(document.querySelector('.labs')).backgroundImage.slice(0, 15) }; });
-    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 16 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf: ' + JSON.stringify(d));
+    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 10 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf (v220: 5 levels, Visual Labs, 4 study tools: 10 folders): ' + JSON.stringify(d));
     await o.ctx.close();
   }
 });
