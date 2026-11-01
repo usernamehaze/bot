@@ -8314,6 +8314,89 @@ test('Home widgets sit close together: each box is as tall as its content, the g
   }
 });
 
+test('Biology and Chemistry: Virtual garden, Enzyme reaction rates, Le Chatelier and equilibrium and Titration open from Visual Labs and their level folders, each goal ticks only when done, and the science holds (1280x800 and 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const IDS = ['garden', 'enzyme', 'equilibrium', 'titration'];
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+    await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
+    const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
+    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
+    for (const [subj, want] of [['biology', ['garden', 'enzyme']], ['chemistry', ['equilibrium', 'titration']]]) {
+      await go('visual:all'); await go('subject:' + subj);
+      const r = await rows(); expect(want.every((id) => r.includes(id)), `${where}: ${subj} holds ${want}: ` + r);
+      await home();
+    }
+    for (const [key, want] of [['elem', ['garden']], ['shs', ['enzyme', 'equilibrium', 'titration']], ['college', ['enzyme', 'equilibrium', 'titration']]]) {
+      await go('level:' + key); await go('levelsims:' + key);
+      const r = await rows(); expect(want.every((id) => r.includes(id)), `${where}: ${key} Simulations holds ${want}: ` + r.filter((x) => IDS.includes(x)));
+      await home();
+    }
+    const V = '.lab-view:not([hidden])';
+    const lab = async (id) => { await page.evaluate((id) => openLabs(id), id); await page.waitForSelector(`${V}[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400); };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate(([V, k]) => { const d = [...document.querySelectorAll(V + ' .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, [V, k]);
+    const setR = (label, v) => page.evaluate(([V, label, v]) => { const i = document.querySelector(`${V} input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [V, label, v]);
+    const press = async (t, n = 1) => { for (let i = 0; i < n; i++) await page.click(`${V} .lab-panel button:text-is("${t}") >> visible=true`); };
+    const segBtn = (t) => page.click(`${V} .lab-seg button:text-is("${t}") >> visible=true`);
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
+    const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v228-${n}-${phone ? 'phone' : 'desk'}.png` }); };
+    const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px`); await aa(id); };
+
+    // 1. Virtual garden: full sun and daily water flowers by day 10; a seed sprouts in the dark; a thirsty plant is saved with water
+    await lab('garden'); expect(!(await done('garden')).some(Boolean), `${where}: no garden goal before doing anything`);
+    await press('Next 5 days'); expect(await stat('Stage') !== 'Flower' && !(await done('garden'))[0], `${where}: not a flower after 5 days: ` + await stat('Stage'));
+    await press('Next 5 days'); expect(await stat('Stage') === 'Flower' && (await done('garden'))[0], `${where}: flowers by day 10: ` + await stat('Stage'));
+    await press('Plant a new seed'); await segBtn('Dark cupboard'); await press('Next 5 days');
+    expect(await stat('Stage') === 'Sprout' && (await done('garden'))[1], `${where}: sprouts in the dark and stops: ` + await stat('Stage'));
+    await press('Plant a new seed'); await segBtn('Full sun'); await segBtn('Never'); await press('Next day', 3);
+    expect(await stat('Soil') === 'Too dry' && !(await done('garden'))[2], `${where}: never watered, the soil dries: ` + await stat('Soil'));
+    await press('Water it now'); expect(await stat('Soil') === 'Just right' && (await done('garden'))[2], `${where}: watered, it is saved: ` + await stat('Soil'));
+    await check('garden');
+
+    // 2. Enzyme: fastest at 37 °C, cooked at 60 °C stays dead when cooled, pepsin best at pH 2, saturation, twice the enzyme twice the rate
+    await lab('enzyme'); const r = async () => { const t = await stat('Rate'), m = t.match(/^([\d.]+)(?: × 10\^(-?\d+))?/); return parseFloat(m[1]) * 10 ** (+(m[2] || 0)); };
+    const r25 = await r(); await setR('Temperature', 37); const r37 = await r();
+    expect(r37 > r25 && (await done('enzyme'))[0] && !(await done('enzyme'))[1], `${where}: faster at 37 °C than 25 °C: ${r25} ${r37}`);
+    await setR('Temperature', 50); expect(await r() < r37 / 2, `${where}: slower again at 50 °C`);
+    await setR('Temperature', 60); await setR('Temperature', 37);
+    expect(await r() === 0 && await stat('Enzyme shape') === 'Denatured' && (await done('enzyme'))[1], `${where}: cooked enzyme stays dead at 37 °C: ` + await stat('Rate'));
+    await press('Fresh enzyme'); expect(Math.abs(await r() / r37 - 1) < 0.01, `${where}: a fresh enzyme works again`);
+    await setR('Enzyme', 4); expect(Math.abs(await r() / (2 * r37) - 1) < 0.01, `${where}: twice the enzyme, twice the rate`);
+    await segBtn('Pepsin (stomach)'); const p7 = await r(); await setR('pH', 2);
+    expect(await r() > p7 * 10 && (await done('enzyme'))[2], `${where}: pepsin works best at pH 2`);
+    await setR('Substrate', 100); expect((await done('enzyme'))[3], `${where}: lots of substrate: near Vmax`);
+    await check('enzyme');
+
+    // 3. Le Chatelier: Kc = 0.0046 at 25 °C; heating shifts right, squeezing shifts left, adding NO2 shifts left, and Q = Kc after each
+    await lab('equilibrium');
+    expect(await stat('Kc at this temperature') === '0.0046' && await stat('Q now') === '0.0046', `${where}: at equilibrium Q = Kc: ` + await stat('Q now'));
+    await setR('Temperature', 50); expect(await stat('Last shift') === 'To the right' && (await done('equilibrium'))[0] && !(await done('equilibrium'))[1], `${where}: heating shifts right`);
+    expect(await stat('Q now') === await stat('Kc at this temperature'), `${where}: Q = Kc once it settles`);
+    await setR('Volume', 0.5); expect(await stat('Last shift') === 'To the left' && (await done('equilibrium'))[1], `${where}: squeezing shifts left`);
+    await press('Add NO₂'); expect(await stat('Last shift') === 'To the left' && (await done('equilibrium'))[2], `${where}: added NO₂ shifts left`);
+    await check('equilibrium');
+
+    // 4. Titration: strong acid pH 7.00 at 25.00 mL, first pink one drop later; weak acid pH 4.75 halfway and 8.72 at equivalence
+    await lab('titration'); expect(await stat('pH') === '1.00', `${where}: 0.100 M HCl starts at pH 1.00: ` + await stat('pH'));
+    await press('Add 5 mL', 4); await press('Add 1 mL', 4); await press('Add 0.1 mL', 9); await press('Add a drop', 2);
+    expect(await stat('NaOH added') === '25.00 mL' && await stat('pH') === '7.00' && !(await done('titration'))[0], `${where}: 25.00 mL, pH 7.00, not pink yet: ` + await stat('NaOH added') + ' ' + await stat('pH'));
+    await press('Add a drop'); expect(/pink/.test(await stat('Indicator')) && (await done('titration'))[0], `${where}: one more drop: pink, the end point: ` + await stat('Indicator'));
+    await segBtn('Weak (ethanoic acid)'); expect(await stat('NaOH added') === '0.00 mL', `${where}: a new acid starts again`);
+    await press('Add 5 mL', 2); await press('Add 1 mL', 2); await press('Add 0.1 mL', 5);
+    expect(await stat('pH') === '4.75' && (await done('titration'))[1], `${where}: halfway pH = pKa: ` + await stat('pH'));
+    await press('Add 5 mL', 2); await press('Add 1 mL', 2); await press('Add 0.1 mL', 5);
+    expect(await stat('pH') === '8.72' && (await done('titration'))[2], `${where}: weak acid equivalence above 7: ` + await stat('pH'));
+    await check('titration');
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('Physics: Push and pull, Seesaw and levers, Electromagnetic induction and Collisions open from Visual Labs > Physics and their level folders, each goal ticks only when done, and the physics holds (1280x800 and 390x844)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const IDS = ['friction', 'seesaw', 'induction', 'collisions'];
