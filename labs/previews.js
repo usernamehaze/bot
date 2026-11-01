@@ -370,6 +370,29 @@ P.titration = (g, w, h, t, c) => {
   line(g, x0, y0, x0 + pw, y0, c.line, 2); line(g, x0, y0, x0, y0 - ph, c.line, 2);
   g.beginPath(); for (let i = 0; i <= 60 * k; i++) { const v = i / 60, p = 1 / (1 + Math.exp(-(v - 0.5) * 30)); i ? g.lineTo(x0 + v * pw, y0 - (0.1 + 0.8 * p) * ph) : g.moveTo(x0, y0 - 0.1 * ph); } stroke(g, c.accent, 2.5);
 };
+// (v229) day and night, tectonics, unit circle, contours
+P.daynight = (g, w, h, t, c) => {
+  const cx = w * 0.62, cy = h / 2, R = h * 0.32, a = Math.PI + t * 0.6;
+  dot(g, w * 0.14, cy, h * 0.12, c.accent);
+  dot(g, cx, cy, R, c.line); g.beginPath(); g.arc(cx, cy, R, Math.PI / 2, (3 * Math.PI) / 2); fill(g, c.second);
+  dot(g, cx + Math.cos(a) * R, cy - Math.sin(a) * R, h * 0.05, c.ink);
+};
+P.tectonics = (g, w, h, t, c) => {
+  const k = (Math.sin(t * 0.8) + 1) / 2, d = w * 0.04 + k * w * 0.16, sea = h * 0.45;
+  g.beginPath(); g.rect(0, sea, w / 2 - d / 2, h * 0.2); fill(g, c.mid); g.beginPath(); g.rect(w / 2 + d / 2, sea, w / 2, h * 0.2); fill(g, c.mid);
+  g.beginPath(); g.rect(w / 2 - d / 2, sea, d, h * 0.2); fill(g, c.accent);
+  arrow(g, w * 0.3, h * 0.8, w * 0.1, h * 0.8, c.ink); arrow(g, w * 0.7, h * 0.8, w * 0.9, h * 0.8, c.ink);
+};
+P.unitcircle = (g, w, h, t, c) => {
+  const R = h * 0.32, cx = w * 0.26, cy = h / 2, a = t * 0.9, px = cx + Math.cos(a) * R, py = cy - Math.sin(a) * R;
+  g.beginPath(); g.arc(cx, cy, R, 0, TAU); stroke(g, c.line, 2); line(g, cx, cy, px, py, c.ink, 2); line(g, px, cy, px, py, c.accent, 3);
+  g.beginPath(); for (let i = 0; i <= 60; i++) { const x = w * 0.55 + (i / 60) * w * 0.4, y = cy - Math.sin(a - (1 - i / 60) * TAU) * R; i ? g.lineTo(x, y) : g.moveTo(x, y); } stroke(g, c.accent, 2.5);
+};
+P.contours = (g, w, h, t, c) => {
+  const cx = w / 2, cy = h / 2;
+  for (let i = 1; i <= 4; i++) { g.beginPath(); g.ellipse(cx, cy, w * 0.1 * i, h * 0.09 * i, 0.3, 0, TAU); stroke(g, i === 4 ? c.ink : c.mid, 2); }
+  const y = cy + Math.sin(t * 0.7) * h * 0.3; line(g, w * 0.05, y, w * 0.95, y, c.accent, 2.5);
+};
 const ease = (k) => k * k * (3 - 2 * k);
 
 // small drawing helpers
