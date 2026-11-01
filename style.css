@@ -3472,3 +3472,26 @@ html.home-edit .hw.gl-up, html.home-edit .hw.gl-down { transform: none; }
 .hw-sheet button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .hw-none { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .hw.hw-dragging { transform: none; } }
+/* (v224) Podcast my notes: two sources side by side, then the notes to pick, then what Jessica and Chris will use */
+.pod-src { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.pod-src-btn { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pod-src-btn b { font-size: .95rem; }
+.pod-src-btn small { color: var(--muted); font-size: .76rem; line-height: 1.3; }
+.pod-src-btn[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.pod-src-btn:focus-visible, .pod-item:focus-within, .pod-q:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pod-q { width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+.pod-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 240px; overflow: auto; display: grid; gap: 6px; }
+.pod-list li[hidden] { display: none; }
+.pod-item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--border); cursor: pointer; }
+.pod-item input { width: 20px; height: 20px; flex: none; accent-color: var(--text); }
+.pod-item span { display: grid; min-width: 0; }
+.pod-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9rem; }
+.pod-item small, .pod-none p, .pod-none-found { color: var(--muted); font-size: .8rem; }
+.pod-none { display: grid; gap: 6px; justify-items: start; padding: 4px 0; }
+.pod-none p { margin: 0; }
+.pod-none .plus-go { min-height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--text); color: var(--surface); font: inherit; font-weight: 700; cursor: pointer; }
+.pod-use { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); }
+.pod-use ul { margin: 6px 0; padding-left: 18px; font-size: .86rem; }
+.pod-use small { color: var(--muted); font-size: .78rem; }
+.pod-src-sheet .plus-actions button { min-height: 44px; }
+.pod-src-sheet [hidden] { display: none !important; } /* (Next and what will be used show only once there is something to use) */

@@ -1596,6 +1596,71 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   await d.ctx.close();
 });
 
+test('Podcast from my notes: upload a .txt or .md file, or pick notes made in Cassie, see what will be used, then make the podcast (faked); an unreadable file says why; no notes offers Make study notes (1280x800 and 390x844, AA in light and dark)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const LINES = [['Jessica', 'Welcome! Today: cells.'], ['Chris', 'What is inside a cell?'], ['Jessica', 'A nucleus, mitochondria and ribosomes.'], ['Chris', 'Recap: the parts of a cell.']];
+  const fakeGroq = (body) => ({ text: /podcast script/.test(JSON.stringify(body.messages)) ? JSON.stringify({ lines: LINES.map(([who, say]) => ({ who, say })) }) : 'ok' });
+  const NOTES = '## Cells\n- The nucleus holds the DNA.\n- Mitochondria release energy by respiration.\n- Ribosomes make proteins.';
+  const CHATS = [
+    { id: 'n1', title: 'Cells: study notes', createdAt: Date.now() - 86400e3, updatedAt: Date.now() - 86400e3, messages: [{ role: 'user', content: 'Summarize this into clean study notes:\n\nCells' }, { role: 'assistant', content: NOTES }] },
+    { id: 'c2', title: 'Photosynthesis', createdAt: Date.now(), updatedAt: Date.now(), messages: [{ role: 'user', content: 'What is photosynthesis?' }, { role: 'assistant', content: 'Plants use light, water and carbon dioxide to make glucose and oxygen.' }] },
+  ];
+  const start = (page) => page.evaluate(() => runTool(HOME_EXAMPLES.find((x) => x.label === 'Podcast my notes')));
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800', dev = phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 } };
+    const { ctx, page, errors } = await open(b, { ...dev, lite: 'off', state: { groqKey: 'gsk_test', chats: CHATS }, fakeGroq });
+    await start(page); await page.waitForSelector('.pod-src-sheet');
+    // two sources, side by side, 44px or taller
+    const src = await page.$$eval('.pod-src-btn', (bs) => bs.map((x) => { const r = x.getBoundingClientRect(); return { t: x.querySelector('b').textContent, top: Math.round(r.top), h: r.height, w: r.width }; }));
+    expect(src.length === 2 && src[0].t === 'Upload notes' && src[1].t === 'Pick from Cassie' && src[0].top === src[1].top && src.every((x) => x.h >= 44 && x.w >= 44), `${where}: Upload notes and Pick from Cassie, side by side: ` + JSON.stringify(src));
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await contrastIssues(page, '.pod-src-sheet'); expect(!bad.length, `${where}: the sheet’s words (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // 1. upload a .md file: what will be used shows its name and length
+    let [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('.pod-src-btn[data-src="upload"]')]);
+    await fc.setFiles({ name: 'biology.md', mimeType: 'text/markdown', buffer: Buffer.from(NOTES) });
+    await page.waitForSelector('.pod-use:not([hidden]) li');
+    const up = await page.$eval('.pod-use', (e) => e.innerText);
+    expect(/biology\.md \(\d+ words\)/.test(up) && await page.isVisible('.pod-next'), `${where}: an uploaded .md file shows what will be used: ` + up);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/pod-upload-${phone ? 'phone' : 'desk'}.png` });
+    // an unreadable file says why, naming its type
+    [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('.pod-src-btn[data-src="upload"]')]);
+    await fc.setFiles({ name: 'marks.xlsx', mimeType: 'application/vnd.ms-excel', buffer: Buffer.from('not really a sheet') });
+    await page.waitForFunction(() => /\.xlsx files/.test(document.querySelector('.pod-status').textContent), null, { timeout: 4000 });
+    expect(await page.isHidden('.pod-next') && /Try a PDF, Word, PowerPoint, text or Markdown file/.test(await page.textContent('.pod-status')), `${where}: an unreadable file says why and offers what works`);
+    // 2. pick from Cassie: the notes and chats, with title and date; search; one or more
+    await page.click('.pod-src-btn[data-src="pick"]');
+    const items = await page.$$eval('.pod-list li', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
+    expect(items.length === 2 && /Photosynthesis Chat ·/.test(items[0]) && /Cells: study notes Study notes ·/.test(items[1]) && items.every((x) => /\d{4}/.test(x)), `${where}: the notes and chats, newest first, with title and date: ` + JSON.stringify(items));
+    await page.fill('.pod-q', 'mitochondria');
+    expect(await page.$$eval('.pod-list li', (ls) => ls.filter((l) => !l.hidden).length) === 1, `${where}: search finds the notes by what is in them`);
+    await page.fill('.pod-q', '');
+    for (const li of await page.$$('.pod-list li .pod-item')) await li.click();
+    const use = await page.$eval('.pod-use', (e) => e.innerText);
+    expect(/Cells: study notes \(\d+ words\)/.test(use) && /Photosynthesis \(\d+ words\)/.test(use) && /words in all/.test(use), `${where}: what will be used, both picked: ` + use);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/pod-pick-${phone ? 'phone' : 'desk'}.png` });
+    for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await contrastIssues(page, '.pod-src-sheet'); expect(!bad.length, `${where}: the list’s words (${scheme}): ` + bad.join(' | ')); }
+    await page.emulateMedia({ colorScheme: 'light' });
+    const taps = await page.$$eval('.pod-src-sheet button, .pod-src-sheet .pod-item, .pod-src-sheet input[type="search"]', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
+    expect(!taps.length, `${where}: every tap target is 44px or taller: ` + taps);
+    // then the usual podcast step: Make my podcast (faked script)
+    await page.click('.pod-next'); await page.waitForSelector('.pod-sheet .pod-go');
+    expect(await page.textContent('#pod-h') === '2 of your notes', `${where}: the podcast sheet names what it is from`);
+    await page.click('.pod-go'); await page.waitForSelector('.pod-line', { timeout: 10000 });
+    expect(await page.$$eval('.pod-line', (l) => l.length) === 4, `${where}: Jessica and Chris talk it through`);
+    await page.click('.pod-x');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+    // no notes yet: one button to Make study notes
+    const e2 = await open(b, { ...dev, lite: 'off', state: { groqKey: 'gsk_test', chats: [] }, fakeGroq });
+    await start(e2.page); await e2.page.waitForSelector('.pod-src-sheet'); await e2.page.click('.pod-src-btn[data-src="pick"]');
+    expect(/No notes yet/.test(await e2.page.textContent('.pod-body')), `${where}: no notes yet`);
+    await e2.page.click('.pod-make-notes'); await e2.page.waitForTimeout(800);
+    expect(!(await e2.page.$('.pod-src-sheet')) && /^Summarize this into clean study notes/.test(await e2.page.$eval('#prompt-input', (t) => t.value)), `${where}: Make study notes starts it`);
+    expect(e2.errors.length === 0, 'page errors: ' + e2.errors.join('; '));
+    await e2.ctx.close();
+  }
+});
+
 test('podcast mode: under a long answer (and from a file in Study tools), the cost and the allowance first, then Jessica and Chris talk it through: a transcript, Back, Play, Skip, speed and an MP3 download; no daily or weekly rule (it comes out of the monthly voice); a resting voice says so and keeps the script', async (b) => {
   const LINES = [['Jessica', 'Welcome! Today we talk about photosynthesis.'], ['Chris', 'So how do plants make food?'], ['Jessica', 'They use light, water and carbon dioxide to make glucose.'], ['Chris', 'Recap: light, water, carbon dioxide make glucose and oxygen.']];
   const LONG = 'Photosynthesis is how plants make food. ' + 'Plants use light, water and carbon dioxide to make glucose and oxygen in their leaves. '.repeat(10);
