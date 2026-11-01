@@ -18,16 +18,20 @@ Sources:
 | Build a cell | biology | High school, LET and after graduation | Grade 7 Science, cells and cell division (MATATAG); LET General Education, Science |
 | Cells 3D: animal & plant | biology | High school, College | Grade 7 Science; SHS General Biology 1 (STEM); college biology |
 | DNA to protein | biology | High school, College | Grade 10 Science, DNA, RNA and protein synthesis (DepEd K to 12); SHS General Biology 2 (STEM); college biology and genetics [uncertain: the MATATAG grade] |
+| Enzyme reaction rates | biology | High school, College | SHS General Biology 1 (STEM), enzymes and factors affecting their activity; Grade 9 Science, biomolecules [uncertain: the MATATAG grade]; college biology and biochemistry, enzyme kinetics |
 | Food web and populations | biology | Grade school, High school | Grade 4 to 6 Science, food chains and food webs (MATATAG); Grade 7 Science, ecosystems and ecological relationships [uncertain: exact grade] |
 | Human body 3D | biology | Grade school, High school | Grade 5 and 6 Science, living things; Grade 8 Science, organ systems (MATATAG) |
 | Natural selection | biology | High school, College | Grade 10 Science, biodiversity and evolution (DepEd K to 12); SHS General Biology 2 (STEM), evolution and natural selection; college biology [uncertain: the MATATAG grade] |
 | Photosynthesis and respiration | biology | High school, College | Grade 9 Science, photosynthesis and cellular respiration (DepEd K to 12); SHS General Biology 1 (STEM), energy transformation; college biology [uncertain: the MATATAG grade] |
 | Punnett squares | biology | High school, LET and after graduation | Grade 8 Science, heredity and inheritance patterns (MATATAG); LET General Education, Science |
+| Virtual garden | biology | Grade school | Grade 3 to 4 Science, living things: parts of plants and what plants need to grow (MATATAG) [uncertain: exact grade] |
 | Build an atom | chemistry | High school, LET and after graduation | Grade 7 and 8 Science, atomic structure and the periodic table (MATATAG); LET General Education, Science |
 | Equation balancer | chemistry | High school, College | Grade 9 and 10 Science, balanced chemical equations (MATATAG); SHS General Chemistry 1; college chemistry |
 | Ice to steam | chemistry | Grade school, High school | Grade 3 to 6 Science, Materials; Grade 7 Science, particle theory and changes of state (MATATAG) |
+| Le Chatelier and equilibrium | chemistry | High school, College | SHS General Chemistry 2 (STEM), chemical equilibrium and Le Chatelier's principle; college general chemistry [uncertain: the MATATAG grade] |
 | Metals in water | chemistry | High school | Grade 10 Science, chemical reactions; SHS General Chemistry (reactivity of metals) |
 | pH mixer | chemistry | High school, LET and after graduation | Grade 7 and 9 Science, acids, bases and salts with indicators (MATATAG); LET General Education, Science |
+| Titration | chemistry | High school, College | SHS General Chemistry 2 (STEM), acids and bases and titration; college analytical chemistry [uncertain: the MATATAG grade] |
 | City Market | games | High school, College | SHS ABM and college economics (Games) |
 | Formula Cracker | games | High school, College | High school and college formulas (Games) |
 | Fraction Diner | games | Grade school | Grade 3 to 6 Math, fractions (Games) |

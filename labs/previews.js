@@ -345,6 +345,31 @@ P.collisions = (g, w, h, t, c) => {
   dot(g, w / 2 - h * 0.12 - (k < 1 ? d : 0), cy, h * 0.12, c.accent);
   dot(g, w / 2 + h * 0.12 + (k < 1 ? 0 : d), cy, h * 0.12, c.second);
 };
+// (v228) garden, enzymes, equilibrium, titration
+P.garden = (g, w, h, t, c) => {
+  const gy = h * 0.72, k = (Math.sin(t * 0.9) + 1) / 2, top = h * (0.18 + 0.3 * k);
+  g.beginPath(); g.rect(w * 0.3, gy, w * 0.4, h * 0.22); fill(g, c.mid);
+  line(g, w / 2, gy, w / 2, gy - top, c.second, 3);
+  g.beginPath(); g.ellipse(w / 2 - w * 0.06, gy - top * 0.5, w * 0.06, h * 0.04, -0.4, 0, TAU); fill(g, c.second);
+  g.beginPath(); g.ellipse(w / 2 + w * 0.06, gy - top * 0.7, w * 0.06, h * 0.04, 0.4, 0, TAU); fill(g, c.second);
+  if (k > 0.6) dot(g, w / 2, gy - top, h * 0.06 * (k - 0.4), c.accent);
+};
+P.enzyme = (g, w, h, t, c) => {
+  const x0 = w * 0.1, y0 = h * 0.85, pw = w * 0.8, ph = h * 0.65, m = 0.5 + 0.35 * Math.sin(t * 0.8);
+  line(g, x0, y0, x0 + pw, y0, c.line, 2); line(g, x0, y0, x0, y0 - ph, c.line, 2);
+  g.beginPath(); for (let i = 0; i <= 40; i++) { const x = i / 40, y = x <= 0.6 ? Math.pow(2, (x - 0.6) * 4) : Math.exp(-(((x - 0.6) / 0.15) ** 2)); i ? g.lineTo(x0 + x * pw, y0 - y * ph) : g.moveTo(x0 + x * pw, y0 - y * ph); } stroke(g, c.accent, 2.5);
+  const y = m <= 0.6 ? Math.pow(2, (m - 0.6) * 4) : Math.exp(-(((m - 0.6) / 0.15) ** 2)); dot(g, x0 + m * pw, y0 - y * ph, h * 0.05, c.second);
+};
+P.equilibrium = (g, w, h, t, c) => {
+  const k = (Math.sin(t * 0.7) + 1) / 2;
+  dot(g, w * 0.3, h * 0.5, h * 0.3, c.line); g.globalAlpha = 0.25 + 0.6 * k; dot(g, w * 0.3, h * 0.5, h * 0.28, c.accent); g.globalAlpha = 1;
+  arrow(g, w * 0.55, h * 0.42, w * 0.85, h * 0.42, c.ink); arrow(g, w * 0.85, h * 0.6, w * 0.55, h * 0.6, c.mid);
+};
+P.titration = (g, w, h, t, c) => {
+  const x0 = w * 0.12, y0 = h * 0.85, pw = w * 0.76, ph = h * 0.7, k = (t * 0.25) % 1;
+  line(g, x0, y0, x0 + pw, y0, c.line, 2); line(g, x0, y0, x0, y0 - ph, c.line, 2);
+  g.beginPath(); for (let i = 0; i <= 60 * k; i++) { const v = i / 60, p = 1 / (1 + Math.exp(-(v - 0.5) * 30)); i ? g.lineTo(x0 + v * pw, y0 - (0.1 + 0.8 * p) * ph) : g.moveTo(x0, y0 - 0.1 * ph); } stroke(g, c.accent, 2.5);
+};
 const ease = (k) => k * k * (3 - 2 * k);
 
 // small drawing helpers
