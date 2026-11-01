@@ -6,6 +6,7 @@ Sources:
 
 - DepEd MATATAG Science Curriculum Guide, Grades 3 to 10 (August 2023): https://www.deped.gov.ph/wp-content/uploads/MATATAG-Science-CG-Grade-4-and-7.pdf and the Grade 8 excerpt at https://hunterswoodsph.com/wp-content/uploads/2024/08/MATATAG-Curriculum-Grade-8-Science.pdf
 - DepEd MATATAG Mathematics Curriculum Guide, Grades 1 to 10 (August 2023): https://www.deped.gov.ph/wp-content/uploads/MATATAG-Mathematics-CG-Grades1-4-and-7.pdf
+- DepEd K to 12 Science Curriculum Guide (Grades 3 to 10; photosynthesis and respiration in Grade 9, DNA, protein synthesis and evolution in Grade 10): https://www.deped.gov.ph/wp-content/uploads/2019/01/Science-CG_with-tagged-sci-equipment_revised.pdf
 - DepEd Senior High School STEM specialized subjects (General Biology, Chemistry and Physics, Pre-Calculus, Basic Calculus): https://sites.google.com/deped.gov.ph/lauisnhs/curricular-offerings/senior-hs/stem
 - CHED Memorandum Order No. 20, s. 2013, General Education (Mathematics in the Modern World, Science Technology and Society, Readings in Philippine History, Art Appreciation, Purposive Communication): https://legacy.ched.gov.ph/ched-on-the-supreme-court-decision-on-the-removal-of-filipino-from-the-new-general-education-curriculum/
 - PRC LET Table of Specifications, General Education (Science and Technology, Mathematics): https://www.prc.gov.ph/sites/default/files/2022%20-11%20Annex%20A%20PTeacher.pdf
@@ -16,7 +17,11 @@ Sources:
 | --- | --- | --- | --- |
 | Build a cell | biology | High school, LET and after graduation | Grade 7 Science, cells and cell division (MATATAG); LET General Education, Science |
 | Cells 3D: animal & plant | biology | High school, College | Grade 7 Science; SHS General Biology 1 (STEM); college biology |
+| DNA to protein | biology | High school, College | Grade 10 Science, DNA, RNA and protein synthesis (DepEd K to 12); SHS General Biology 2 (STEM); college biology and genetics [uncertain: the MATATAG grade] |
+| Food web and populations | biology | Grade school, High school | Grade 4 to 6 Science, food chains and food webs (MATATAG); Grade 7 Science, ecosystems and ecological relationships [uncertain: exact grade] |
 | Human body 3D | biology | Grade school, High school | Grade 5 and 6 Science, living things; Grade 8 Science, organ systems (MATATAG) |
+| Natural selection | biology | High school, College | Grade 10 Science, biodiversity and evolution (DepEd K to 12); SHS General Biology 2 (STEM), evolution and natural selection; college biology [uncertain: the MATATAG grade] |
+| Photosynthesis and respiration | biology | High school, College | Grade 9 Science, photosynthesis and cellular respiration (DepEd K to 12); SHS General Biology 1 (STEM), energy transformation; college biology [uncertain: the MATATAG grade] |
 | Punnett squares | biology | High school, LET and after graduation | Grade 8 Science, heredity and inheritance patterns (MATATAG); LET General Education, Science |
 | Build an atom | chemistry | High school, LET and after graduation | Grade 7 and 8 Science, atomic structure and the periodic table (MATATAG); LET General Education, Science |
 | Equation balancer | chemistry | High school, College | Grade 9 and 10 Science, balanced chemical equations (MATATAG); SHS General Chemistry 1; college chemistry |

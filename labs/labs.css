@@ -10,6 +10,8 @@ html.labs-open, html.labs-open body { overflow: hidden; }
   font-family: inherit; -webkit-font-smoothing: antialiased;
 }
 .labs[hidden], .labs [hidden] { display: none !important; }
+/* (v221) a lab opened from the phone's Learn tab keeps the labs' own dark stage behind it (its panel and drawings are made for it) */
+.labs.lp-on:has(> .lab-view:not([hidden])) { background: radial-gradient(ellipse at 50% 30%, #23262f 0%, #14161c 55%, #0b0c10 100%); color: #f2f2f4; }
 /* the shelf (Learn and Games) follows light or dark and shows the picked colours behind its glass, like
    the rest of the app; one lab stays dark around the edges. Words take --lx-* (white in dark, ink in light). */
 .labs { --lx-rgb: 255, 255, 255; --lx-text: #f2f2f4; --lx-solid: #f2f2f4; --lx-on-solid: #111111; --lx-on-rgb: 0, 0, 0; }
@@ -127,7 +129,7 @@ html.lite .labs-shelf { background: var(--bg); }
 @media (prefers-reduced-motion: reduce) {
   .tl-card3d { transition: none; } .lab-tries li.just { animation: none; } }
 
-.lab-tries h4 small { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 6px; color: rgba(255, 255, 255, .4); }
+.lab-tries h4 small { text-transform: none; letter-spacing: 0; font-weight: 500; margin-left: 6px; color: rgba(255, 255, 255, .62); } /* (v221: AA on the panel) */
 .lab-try { display: flex; gap: 9px; align-items: flex-start; flex: 1; min-width: 0; padding: 6px 4px; margin: -6px -4px -6px 0; border: 0; background: none; text-align: left; font-size: .86rem; line-height: 1.35; cursor: pointer; border-radius: 8px; }
 .lab-try:hover { background: rgba(255, 255, 255, .05); }
 .lab-chev { margin-left: auto; color: rgba(255, 255, 255, .45); transition: transform .15s; }
