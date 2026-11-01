@@ -2108,7 +2108,7 @@ const todayLab = () => { const list = TODAY_BY_LEVEL[labLevel()] || TODAY_LABS; 
 const LAB_INFO = { pendulum: ['Pendulum', 'Physics', 10], ph: ['pH mixer', 'Chemistry', 10], fractions: ['Fraction pies', 'Maths', 8], punnett: ['Punnett squares', 'Biology', 12], projectile: ['Launch lab', 'Physics', 10],
   waves: ['Wave string', 'Physics', 8], atom: ['Build an atom', 'Chemistry', 12], function: ['Function lab', 'Maths', 15], refraction: ['Bending light', 'Physics', 8], balance: ['Equation balancer', 'Chemistry', 12],
   chance: ['Chance machine', 'Maths', 8], magnets: ['Magnetic field', 'Physics', 10], 'build-cell': ['Build a cell', 'Biology', 15], 'photo-resp': ['Photosynthesis and respiration', 'Biology', 12], 'dna-protein': ['DNA to protein', 'Biology', 12], 'food-web': ['Food web and populations', 'Biology', 10], selection: ['Natural selection', 'Biology', 10], optics: ['Lenses and mirrors', 'Physics', 12], units: ['Unit converter', 'Maths', 5],
-  'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], friction: ['Push and pull', 'Physics', 8], seesaw: ['Seesaw and levers', 'Physics', 8], induction: ['Electromagnetic induction', 'Physics', 10], collisions: ['Collisions', 'Physics', 10], garden: ['Virtual garden', 'Biology', 8], enzyme: ['Enzyme reaction rates', 'Biology', 12], equilibrium: ['Le Chatelier and equilibrium', 'Chemistry', 12], titration: ['Titration', 'Chemistry', 12], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10],
+  'ice-steam': ['Ice to steam', 'Chemistry', 10], vectors: ['Vectors', 'Maths', 12], colour: ['Colour mixer', 'Physics', 8], friction: ['Push and pull', 'Physics', 8], seesaw: ['Seesaw and levers', 'Physics', 8], induction: ['Electromagnetic induction', 'Physics', 10], collisions: ['Collisions', 'Physics', 10], garden: ['Virtual garden', 'Biology', 8], enzyme: ['Enzyme reaction rates', 'Biology', 12], equilibrium: ['Le Chatelier and equilibrium', 'Chemistry', 12], titration: ['Titration', 'Chemistry', 12], daynight: ['Day and night', 'Earth and Space', 8], tectonics: ['Tectonic plates and earthquake waves', 'Earth and Space', 12], unitcircle: ['Unit circle and sine waves', 'Maths', 10], contours: ['Contour maps', 'Geography', 10], metals: ['Metals in water', 'Chemistry', 8], interest: ['Money grows', 'Maths', 10],
   solids: ['3D shapes', 'Maths', 8], rocket: ['Rocket workshop', 'Physics', 10], solar: ['Planets today', 'Space', 8], atlas: ['World atlas', 'Geography', 10],
   'trace-letters': ['Trace letters', 'For little ones', 5], 'trace-numbers': ['Trace numbers', 'For little ones', 5], count: ['Count with me', 'For little ones', 5], shapes: ['Shapes and colours', 'For little ones', 5] };
 const LESSONS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>';
@@ -2551,7 +2551,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=228'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=229'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2764,7 +2764,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=228').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=229').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7376,7 +7376,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=228');
+      exploreMod = await import('./explore/cell3d.js?v=229');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7426,7 +7426,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=228');
+      labsMod = await import('./labs/labs.js?v=229');
       islandRest();
     }
     labsMod.open({
@@ -9268,10 +9268,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=228').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=229').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=228', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=229', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

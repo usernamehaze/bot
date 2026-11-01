@@ -8314,6 +8314,84 @@ test('Home widgets sit close together: each box is as tall as its content, the g
   }
 });
 
+test('Earth, Math and Geography: Day and night, Tectonic plates and earthquake waves, Unit circle and sine waves and Contour maps open from Visual Labs and their level folders, each goal ticks only when done, and the science holds (1280x800 and 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const IDS = ['daynight', 'tectonics', 'unitcircle', 'contours'];
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+    await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
+    const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
+    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
+    for (const [subj, want] of [['space', ['daynight', 'tectonics']], ['math', ['unitcircle']], ['geography', ['contours']]]) {
+      await go('visual:all'); await go('subject:' + subj);
+      const r = await rows(); expect(want.every((id) => r.includes(id)), `${where}: ${subj} holds ${want}: ` + r);
+      await home();
+    }
+    for (const [key, want] of [['elem', ['daynight']], ['shs', ['tectonics', 'unitcircle', 'contours']], ['college', ['tectonics', 'unitcircle', 'contours']]]) {
+      await go('level:' + key); await go('levelsims:' + key);
+      const r = await rows(); expect(want.every((id) => r.includes(id)), `${where}: ${key} Simulations holds ${want}: ` + r.filter((x) => IDS.includes(x)));
+      await home();
+    }
+    const V = '.lab-view:not([hidden])';
+    const lab = async (id) => { await page.evaluate((id) => openLabs(id), id); await page.waitForSelector(`${V}[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400); };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate(([V, k]) => { const d = [...document.querySelectorAll(V + ' .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, [V, k]);
+    const setR = (label, v) => page.evaluate(([V, label, v]) => { const i = document.querySelector(`${V} input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [V, label, v]);
+    const press = async (t, n = 1) => { for (let i = 0; i < n; i++) await page.click(`${V} .lab-panel button:text-is("${t}") >> visible=true`); };
+    const segBtn = (t) => page.click(`${V} .lab-seg button:text-is("${t}") >> visible=true`);
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
+    const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v229-${n}-${phone ? 'phone' : 'desk'}.png` }); };
+    const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px`); await aa(id); };
+
+    // 1. Day and night: 9 pm is night for you and day on the far side; 6 am is sunrise; a whole spin comes back to the same time
+    await lab('daynight'); expect(!(await done('daynight')).some(Boolean), `${where}: no day and night goal before doing anything`);
+    await setR('Time', 21); expect(await stat('For you') === 'Night' && await stat('For your friend') === 'Day' && (await done('daynight'))[0], `${where}: 9 pm: night for you, day for your friend`);
+    expect(!(await done('daynight'))[1], `${where}: not sunrise yet`);
+    await setR('Time', 6); expect(await stat('Part of the day') === 'Sunrise' && await stat('Time for you') === '6:00 am' && (await done('daynight'))[1], `${where}: 6 am is sunrise: ` + await stat('Part of the day'));
+    await press('Spin for a day'); await page.waitForFunction(() => { try { return !!(JSON.parse(localStorage.getItem('cassie.labs') || '{}').daynight || [])[2]; } catch (e) { return false; } }, null, { timeout: 20000 });
+    expect(await stat('Time for you') === '6:00 am', `${where}: a whole day's spin comes back to 6 am: ` + await stat('Time for you'));
+    await check('daynight');
+
+    // 2. Tectonics: 5 cm a year for 2 million years is 100 km; a transform fault slips once its stress fills; P and S shadow zones
+    await lab('tectonics');
+    await press('1 million years'); expect(await stat('Plates moved') === '50 km' && !(await done('tectonics'))[0], `${where}: 1 million years at 5 cm a year: 50 km: ` + await stat('Plates moved'));
+    await press('1 million years'); expect(await stat('Plates moved') === '100 km' && (await done('tectonics'))[0], `${where}: 100 km of new ocean floor`);
+    await segBtn('Convergent (together)'); expect(await stat('Plates moved') === '0 km', `${where}: a new boundary starts again`);
+    await press('1 million years', 2); expect((await done('tectonics'))[1], `${where}: a volcano after 100 km of subduction`);
+    await segBtn('Transform (sliding past)'); await press('100,000 years', 9);
+    expect(await stat('Stress on the fault') === '90%' && await stat('Earthquakes') === '0' && !(await done('tectonics'))[2], `${where}: stress builds: ` + await stat('Stress on the fault'));
+    await press('100,000 years'); expect(await stat('Earthquakes') === '1' && await stat('Stress on the fault') === '0%' && (await done('tectonics'))[2], `${where}: the fault slips`);
+    await segBtn('Earthquake waves');
+    await setR('Distance round the Earth', 60); expect(await stat('P waves') === 'Arrive' && await stat('S waves') === 'Arrive' && !(await done('tectonics'))[3], `${where}: 60°: both waves`);
+    await setR('Distance round the Earth', 120); expect(await stat('S waves') === 'None' && /None/.test(await stat('P waves')) && (await done('tectonics'))[3], `${where}: 120°: the shadow zone`);
+    await setR('Distance round the Earth', 150); expect(await stat('P waves') === 'Arrive' && await stat('S waves') === 'None' && (await done('tectonics'))[4], `${where}: 150°: P through the core, no S`);
+    await check('tectonics');
+
+    // 3. Unit circle: sin = cos at 45°, tan undefined at 90°, sin = −1 at 270°, 150° = 5π/6 in the second quadrant, round to 360°
+    await lab('unitcircle');
+    await setR('Angle θ', 45); expect(await stat('sin θ') === '0.7071' && await stat('cos θ') === '0.7071' && (await done('unitcircle'))[0], `${where}: 45°: sin = cos`);
+    await setR('Angle θ', 90); expect(await stat('tan θ') === 'Undefined', `${where}: tan 90° is undefined`);
+    await setR('Angle θ', 270); expect(await stat('sin θ') === '-1.0000' && (await done('unitcircle'))[1], `${where}: sin 270° = −1`);
+    await segBtn('Radians'); await setR('Angle θ', 150);
+    expect(await stat('Angle') === '150° = 5π/6 rad' && await stat('Quadrant') === 'Second' && await stat('sin θ') === '0.5000' && (await done('unitcircle'))[2] && !(await done('unitcircle'))[3], `${where}: 150° = 5π/6, sin 0.5: ` + await stat('Angle'));
+    await setR('Angle θ', 360); expect((await done('unitcircle'))[3], `${where}: once round the circle`);
+    await check('unitcircle');
+
+    // 4. Contour maps: a cut through the middle of the hill reaches its 500 m top; only the cliff is steeper than 45°; the saddle shows 2 hilltops
+    await lab('contours');
+    await setR('Cut line (km north)', 1); expect(await stat('Highest on the cut') === '500 m' && await stat('Highest point on the map') === '500 m' && (await done('contours'))[0] && !(await done('contours'))[1], `${where}: the cut crosses the hilltop, gentle slopes: ` + await stat('Steepest slope on the cut'));
+    await segBtn('A cliff'); await setR('Cut line (km north)', 1.2); expect(parseFloat(await stat('Steepest slope on the cut')) > 45 && (await done('contours'))[1], `${where}: the cliff is steeper than 45°: ` + await stat('Steepest slope on the cut'));
+    await segBtn('Two hills and a saddle'); await setR('Cut line (km north)', 1); expect(await stat('Hilltops on the cut') === '2' && (await done('contours'))[2], `${where}: the saddle cut shows 2 hilltops`);
+    await check('contours');
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('Biology and Chemistry: Virtual garden, Enzyme reaction rates, Le Chatelier and equilibrium and Titration open from Visual Labs and their level folders, each goal ticks only when done, and the science holds (1280x800 and 390x844)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const IDS = ['garden', 'enzyme', 'equilibrium', 'titration'];

@@ -37,6 +37,7 @@ Sources:
 | Fraction Diner | games | Grade school | Grade 3 to 6 Math, fractions (Games) |
 | Logic Circuit | games | High school, College | High school and college logic (Games) |
 | Pinning Blitz | games | High school, College | High school and college map, cell and body recall (Games) |
+| Contour maps | geography | High school, College | Grade 7 to 10 Araling Panlipunan and Science, reading maps and landforms (MATATAG) [uncertain: exact grade]; college physical geography and Earth science, topographic maps |
 | World atlas | geography | Grade school, High school | Grade 4 to 6 Araling Panlipunan (the Philippines and the world); Junior High Araling Panlipunan |
 | Museum of Famous Arts | history | High school, College | Junior High Arts; college Art Appreciation (CHED GE) |
 | Count with me | kids | Nursery and Kindergarten | Kindergarten, counting to 10 |
@@ -51,6 +52,7 @@ Sources:
 | Picture proofs | math | High school, LET and after graduation | Grade 8 and 9 Math, geometry and proofs (MATATAG); LET General Education, plane geometry |
 | Recursion | math | College | College discrete mathematics and computing |
 | Tower of Hanoi | math | College | College discrete mathematics and computing (recursion) |
+| Unit circle and sine waves | math | High school, College | SHS Pre-Calculus (STEM), circular functions and the unit circle; Grade 9 Mathematics, trigonometric ratios (DepEd K to 12); college trigonometry |
 | Unit converter | math | Grade school | Grade 3 to 6 Math, Measurement and Geometry (MATATAG) |
 | Vectors | math | High school, College | SHS General Physics 1 (STEM); college physics |
 | Bending light | physics | High school | Junior High Science, light [uncertain: exact grade] |
@@ -73,8 +75,10 @@ Sources:
 | Nonogram | puzzles | Grade school, High school | Grade school and High school logic puzzle (Games) |
 | Pipes | puzzles | Grade school, High school | Grade school and High school puzzle (Games) |
 | Sudoku | puzzles | Grade school, High school | Grade school and High school logic puzzle (Games) |
+| Day and night | space | Grade school | Grade 4 to 6 Science, Earth and space: the Earth's rotation, day and night (MATATAG) [uncertain: exact grade] |
 | Planets today, Moon & eclipses | space | Grade school, LET and after graduation | Grade 5 Science, Quarter 4: phases of the Moon and the solar system (MATATAG); LET General Education [uncertain for eclipses] |
 | Solar system & beyond (3D) | space | Grade school, LET and after graduation | Grade 5 Science, Quarter 4: the solar system (MATATAG); LET General Education, Earth and Space |
+| Tectonic plates and earthquake waves | space | High school, College | Grade 8 Science, earthquakes and faults; Grade 10 Science, plate tectonics (DepEd K to 12); SHS Earth Science, plate tectonics and earthquakes; college geology [uncertain: the MATATAG grade] |
 | Argument & Essay Deconstructor | tools | High school, College | SHS English for Academic and Professional Purposes; college Purposive Communication (CHED GE) |
 | Citation & Thesis Mapper | tools | College, LET and after graduation | College research and thesis; graduate school |
 | Cornell Notes | tools | High school, College | High school and college note taking |
