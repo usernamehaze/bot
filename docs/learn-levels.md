@@ -50,13 +50,17 @@ Sources:
 | Unit converter | math | Grade school | Grade 3 to 6 Math, Measurement and Geometry (MATATAG) |
 | Vectors | math | High school, College | SHS General Physics 1 (STEM); college physics |
 | Bending light | physics | High school | Junior High Science, light [uncertain: exact grade] |
+| Collisions | physics | High school, College | Grade 9 Science, momentum and impulse (DepEd K to 12); SHS General Physics 1 (STEM), momentum and collisions; college physics [uncertain: the MATATAG grade] |
 | Colour mixer | physics | Grade school, High school | Grade 4 Science, Quarter 3: light energy (MATATAG); Junior High Science, light and colour |
+| Electromagnetic induction | physics | High school, College | Grade 10 Science, electromagnetism (DepEd K to 12); SHS General Physics 2 (STEM), Faraday's and Lenz's laws; college physics [uncertain: the MATATAG grade] |
 | Launch lab | physics | High school, College | Junior High Force, Motion and Energy; SHS General Physics 1 (STEM); college physics [uncertain: grade within JHS] |
 | Lenses and mirrors | physics | High school, College | Junior High Science, lenses and mirrors; SHS General Physics 2; college physics [uncertain: exact grade] |
 | Logic gates | physics | College | College computing and engineering, digital logic |
 | Magnetic field | physics | Grade school, High school | Grade 4 Science, Quarter 3: magnets (MATATAG); Grade 10 Science, electromagnetism |
 | Pendulum | physics | High school, College | SHS General Physics 1, periodic motion (STEM); college physics |
+| Push and pull | physics | Grade school, High school | Grade 3 to 4 Science, force and motion: pushes, pulls and friction (MATATAG) [uncertain: exact grade]; Grade 8 Science, Newton's laws of motion (DepEd K to 12) |
 | Rocket workshop | physics | High school | Junior High Science, Newton's laws (Force, Motion and Energy) [uncertain: exact grade] |
+| Seesaw and levers | physics | Grade school, High school | Grade 5 to 6 Science, simple machines (levers) [uncertain: exact grade]; SHS General Physics 1 (STEM), torque and equilibrium |
 | Wave string | physics | High school | Junior High Science, Force, Motion and Energy (waves and sound) [uncertain: exact grade] |
 | Bridges | puzzles | High school, College | High school and college logic puzzle (Games) |
 | Geography | puzzles | Grade school, High school | Grade school and High school Araling Panlipunan (Games) |
