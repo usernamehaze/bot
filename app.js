@@ -1932,7 +1932,7 @@ const HOME_EXAMPLES = [
   { label: 'Learn: try a simulation', ia: 'flask', icon: '<path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/>', run: () => openLabs() },
   { label: 'Study together (study room)', ia: 'people', icon: '<circle cx="8.5" cy="8.5" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M14.5 14.3c3 .1 5.5 1.8 5.5 4.7"/>', run: () => openRoomChooser() },
   { label: 'Flashcards', ia: 'cards', icon: '<path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/>', run: () => window.CassieCards && window.CassieCards.open() },
-  { label: 'Podcast my notes', ia: 'headphones', icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>', run: () => podcastFromFile() },
+  { label: 'Podcast my notes', ia: 'headphones', icon: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>', run: () => openPodcastSources() },
   { label: 'Teach Cassie out loud', ia: 'bars', icon: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>', run: () => openVoice('teach') },
 ];
 
@@ -2545,7 +2545,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=223'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=224'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2757,7 +2757,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=223').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=224').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2912,16 +2912,108 @@ function parsePodcast(reply) {
   catch (e) { lines = s.split('\n').map((l) => /^\s*\**(Jessica|Chris)\**\s*:\s*(.+)/i.exec(l)).filter(Boolean).map((m) => ({ who: /chris/i.test(m[1]) ? 'Chris' : 'Jessica', say: m[2] })); }
   return lines.map((l) => ({ who: l.who, say: noDashes(l.say.replace(/\s+/g, ' ').trim()).slice(0, 650) })).filter((l) => l.say).slice(0, 40);
 }
-function podcastFromFile() {
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.pdf,.docx,.pptx,.txt,.md,application/pdf';
-  inp.addEventListener('change', async () => {
-    const f = inp.files && inp.files[0];
-    if (!f) return;
-    try { const doc = await readDocument(f); if (!doc.text) throw new Error('empty'); openPodcast(doc.text, f.name.replace(/\.[a-z0-9]+$/i, '')); }
-    catch (e) { mascotSay(CassieErrors.say('exam_file_failed'), 5000); }
-  });
-  inp.click();
+// Podcast my notes (v224): two sources first, side by side: Upload notes (the files Cassie already reads) or Pick from
+// Cassie (the student's own notes and chats, searchable, one or more); then what Jessica and Chris will use; then the
+// usual podcast sheet (openPodcast). Nothing new is sent anywhere until Make my podcast, as before.
+const POD_KIND_NAME = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', txt: 'text', md: 'Markdown' };
+const POD_TEXT_MAX = 24000; // (about 4,000 words: the script is 3 minutes, so more would not be used anyway)
+const podWords = (t) => (String(t).match(/\S+/g) || []).length;
+const podIsNotes = (c) => /^Summarize this into clean study notes/i.test(String(((c.messages || []).find((m) => m.role === 'user') || {}).content || ''));
+const podChatText = (c) => (c.messages || []).filter((m) => m.role === 'assistant').map((m) => String(m.content || '').trim()).filter(Boolean).join('\n\n');
+const podChats = () => (state.chats || []).filter((c) => podChatText(c)).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+function openPodcastSources() {
+  document.querySelector('.pod-sheet')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet pod-sheet pod-src-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-src-h');
+  w.innerHTML = `<div class="plus-card pod-card">
+    <span class="plus-kicker">Podcast</span>
+    <h3 id="pod-src-h">Podcast from my notes</h3>
+    <p class="plus-why">Pick what Jessica and Chris talk through.</p>
+    <div class="pod-src" role="group" aria-label="Where your notes come from">
+      <button type="button" class="pod-src-btn" data-src="upload" aria-pressed="false"><b>Upload notes</b><small>PDF, Word, PowerPoint, text or Markdown</small></button>
+      <button type="button" class="pod-src-btn" data-src="pick" aria-pressed="false"><b>Pick from Cassie</b><small>Your study notes and chats</small></button>
+    </div>
+    <div class="pod-body"></div>
+    <div class="pod-use" hidden></div>
+    <p class="pod-status" aria-live="polite"></p>
+    <div class="plus-actions"><button type="button" class="plus-go pod-next" hidden>Next</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
+  const body = w.querySelector('.pod-body'), use = w.querySelector('.pod-use'), status = w.querySelector('.pod-status'), next = w.querySelector('.pod-next');
+  let chosen = null; // { title, text, parts: [[title, words]] }
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.querySelector('.pod-x').addEventListener('click', close);
+  w.addEventListener('click', (e) => { if (e.target === w) close(); });
+  const pressed = (src) => w.querySelectorAll('.pod-src-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.src === src)));
+  // what will be used: each title with its length, and the total
+  function choose(c) {
+    chosen = c && c.text.trim() ? c : null;
+    use.hidden = !chosen; next.hidden = !chosen;
+    if (!chosen) { use.replaceChildren(); return; }
+    const total = chosen.parts.reduce((n, p) => n + p[1], 0);
+    use.innerHTML = '<b class="pod-use-h">Jessica and Chris will use</b><ul></ul><small class="pod-use-total"></small>';
+    chosen.parts.forEach(([t, n]) => { const li = document.createElement('li'); li.textContent = `${t} (${n.toLocaleString('en-PH')} words)`; use.querySelector('ul').appendChild(li); });
+    use.querySelector('.pod-use-total').textContent = total > podWords(chosen.text.slice(0, POD_TEXT_MAX)) ? `About ${podWords(chosen.text.slice(0, POD_TEXT_MAX)).toLocaleString('en-PH')} of ${total.toLocaleString('en-PH')} words: the first part, enough for a 3 minute podcast.` : `${total.toLocaleString('en-PH')} words in all.`;
+  }
+  // 1. Upload notes: the readers Cassie already has
+  function upload() {
+    pressed('upload'); body.replaceChildren(); choose(null); status.textContent = '';
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.pdf,.docx,.pptx,.txt,.md,application/pdf,text/plain,text/markdown'; inp.className = 'pod-file'; inp.hidden = true;
+    body.appendChild(inp);
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      const ext = (f.name.match(/\.([a-z0-9]+)$/i) || [])[1] || '', type = /^(jpe?g|png|gif|webp|heic|bmp)$/i.test(ext) ? 'photos of' : ext ? `.${ext.toLowerCase()}` : 'these';
+      status.textContent = `Reading ${f.name}…`;
+      try {
+        const doc = await readDocument(f); if (!doc.text || !doc.text.trim()) throw new Error('empty');
+        status.textContent = '';
+        choose({ title: f.name.replace(/\.[a-z0-9]+$/i, ''), text: doc.text, parts: [[f.name, podWords(doc.text)]] });
+      } catch (e) {
+        choose(null);
+        status.textContent = e && e.message === 'empty'
+          ? `Cassie couldn’t find any words in ${f.name}. If it’s a scan or a photo, try a PDF, Word, PowerPoint, text or Markdown file with the words in it.`
+          : `Cassie can’t read ${type} files for a podcast yet. Try a PDF, Word, PowerPoint, text or Markdown file.`;
+      }
+    });
+    inp.click();
+  }
+  // 2. Pick from Cassie: the student's notes and chats, newest first, searchable, one or more
+  function pick() {
+    pressed('pick'); choose(null); status.textContent = '';
+    const list = podChats();
+    if (!list.length) {
+      body.innerHTML = '<div class="pod-none"><b>No notes yet</b><p>Make study notes from a topic or a file, and they show up here.</p><button type="button" class="plus-go pod-make-notes">Make study notes</button></div>';
+      body.querySelector('.pod-make-notes').addEventListener('click', () => { close(); const ex = HOME_EXAMPLES.find((x) => x.label === 'Make study notes'); if (ex) runTool(ex); });
+      return;
+    }
+    body.innerHTML = '<input type="search" class="pod-q" placeholder="Search your notes and chats" aria-label="Search your notes and chats" autocomplete="off"><ul class="pod-list" role="list"></ul><p class="pod-none-found" hidden>Nothing matches that.</p>';
+    const ul = body.querySelector('.pod-list'), picked = new Set();
+    list.forEach((c) => {
+      const li = document.createElement('li');
+      const when = new Date(c.updatedAt || c.createdAt || Date.now()).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+      li.innerHTML = '<label class="pod-item"><input type="checkbox"><span><b></b><small></small></span></label>';
+      li.dataset.id = c.id; li.dataset.find = `${c.title || ''} ${podChatText(c).slice(0, 2000)}`.toLowerCase();
+      li.querySelector('b').textContent = c.title || deriveTitle(c.messages) || 'Chat';
+      li.querySelector('small').textContent = `${podIsNotes(c) ? 'Study notes' : 'Chat'} · ${when}`;
+      li.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) picked.add(c.id); else picked.delete(c.id);
+        const cs = list.filter((x) => picked.has(x.id));
+        choose(cs.length ? { title: cs.length === 1 ? (cs[0].title || 'Your notes') : `${cs.length} of your notes`, text: cs.map((x) => `${x.title || 'Notes'}\n\n${podChatText(x)}`).join('\n\n'), parts: cs.map((x) => [x.title || 'Chat', podWords(podChatText(x))]) } : null);
+      });
+      ul.appendChild(li);
+    });
+    body.querySelector('.pod-q').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase(); let n = 0;
+      ul.querySelectorAll('li').forEach((li) => { li.hidden = !!q && !li.dataset.find.includes(q); if (!li.hidden) n++; });
+      body.querySelector('.pod-none-found').hidden = n > 0;
+    });
+  }
+  w.querySelector('[data-src="upload"]').addEventListener('click', upload);
+  w.querySelector('[data-src="pick"]').addEventListener('click', pick);
+  next.addEventListener('click', () => { if (chosen) openPodcast(chosen.text.slice(0, POD_TEXT_MAX), chosen.title); });
+  document.body.appendChild(w);
+  w.querySelector('.pod-src-btn').focus({ preventScroll: true });
 }
 function openPodcast(text, title) {
   document.querySelector('.pod-sheet')?.remove();
@@ -7096,7 +7188,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=223');
+      exploreMod = await import('./explore/cell3d.js?v=224');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7146,7 +7238,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=223');
+      labsMod = await import('./labs/labs.js?v=224');
       islandRest();
     }
     labsMod.open({
@@ -8987,10 +9079,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=223').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=224').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=223', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=224', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
