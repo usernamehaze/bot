@@ -16,16 +16,44 @@ function gametes(geno) { // ["YyRr"] → ["YR", "Yr", "yR", "yr"]
   return out;
 }
 function child(g1, g2) { let s = ''; for (let i = 0; i < g1.length; i++) s += sortPair(g1[i], g2[i]); return s; }
+// Pedigree (v226): a three-generation family. The couple I-1 and I-2 have a son (II-1) and a daughter (II-2); the son and
+// his wife (II-3, who married in) have three children. Autosomal only: every genotype set is tried (3^8 of them).
+export const PEDIGREE = [
+  { id: 'I-1', sex: 'm', gen: 0, x: 0.35 }, { id: 'I-2', sex: 'f', gen: 0, x: 0.55 },
+  { id: 'II-1', sex: 'm', gen: 1, x: 0.3, mom: 'I-2', dad: 'I-1' }, { id: 'II-2', sex: 'f', gen: 1, x: 0.6, mom: 'I-2', dad: 'I-1' }, { id: 'II-3', sex: 'f', gen: 1, x: 0.12 },
+  { id: 'III-1', sex: 'm', gen: 2, x: 0.08, mom: 'II-3', dad: 'II-1' }, { id: 'III-2', sex: 'f', gen: 2, x: 0.24, mom: 'II-3', dad: 'II-1' }, { id: 'III-3', sex: 'm', gen: 2, x: 0.4, mom: 'II-3', dad: 'II-1' },
+];
+const GT = ['AA', 'Aa', 'aa'];
+const shows = (g, mode) => (mode === 'dominant' ? g !== 'aa' : g === 'aa'); // (does this genotype show the trait?)
+const canMake = (m, d, c) => [...m].some((x) => [...d].some((y) => sortPair(x, y) === c));
+// every way the family's genotypes can fit what is shaded: null if none can
+export function pedigreeFits(affected, mode) {
+  const n = PEDIGREE.length, idx = Object.fromEntries(PEDIGREE.map((p, i) => [p.id, i])), seen = PEDIGREE.map(() => new Set());
+  let any = false;
+  const pick = new Array(n);
+  (function go(i) {
+    if (i === n) { any = true; pick.forEach((g, k) => seen[k].add(g)); return; }
+    const p = PEDIGREE[i];
+    for (const g of GT) {
+      if (shows(g, mode) !== !!affected[p.id]) continue;
+      if (p.mom && !canMake(pick[idx[p.mom]], pick[idx[p.dad]], g)) continue;
+      pick[i] = g; go(i + 1);
+    }
+  })(0);
+  return any ? Object.fromEntries(PEDIGREE.map((p, i) => [p.id, [...seen[i]].sort((a, b) => GT.indexOf(a) - GT.indexOf(b))])) : null;
+}
 
 const punnettLab = {
   id: 'punnett', name: 'Punnett squares', subject: 'biology', levels: ['hs', 'grad'], topic: 'genetics: dominant and recessive alleles, genotypes, phenotypes and Punnett squares',
   blurb: 'Cross two pea plants, see every possible offspring, then grow a hundred for real.',
   words: 'genetics punnett square dominant recessive allele genotype phenotype mendel inheritance heredity',
   icon: '<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M24 8v32M8 24h32"/><circle cx="16" cy="16" r="3"/><circle cx="32" cy="16" r="3"/><circle cx="16" cy="32" r="3"/><circle cx="32" cy="32" r="2" />',
-  tries: ['Find a cross that gives 3 : 1', 'Find the cross that gives 9 : 3 : 3 : 1', 'Make every offspring look the same'],
-  hints: ['One gene: make both parents heterozygous (one capital and one small letter each).', 'Two genes: make both parents heterozygous for both genes.', 'Cross a parent with two capital letters with any other parent. Every child gets at least one dominant allele.'],
-  about: 'Follows Mendel’s laws. Each parent passes on one of its two alleles at random (segregation), and for two genes the alleles are inherited independently (true for genes on different chromosomes, like Mendel’s seed colour and seed shape in peas).\nCapital letters are dominant: Yy looks yellow. The square shows the probabilities; “Grow 100 offspring” picks each child at random, so real counts wobble around the prediction.\nMany human traits (like eye colour) depend on several genes, so they are not used here. Tap any box of the square to see which egg and pollen made it.',
-  mount({ stage, panel, api }) {
+  tries: ['Find a cross that gives 3 : 1', 'Find the cross that gives 9 : 3 : 3 : 1', 'Make every offspring look the same', 'Pedigree: shade a family that only a recessive trait can explain', 'Pedigree: shade a family that only a dominant trait can explain'],
+  hints: ['One gene: make both parents heterozygous (one capital and one small letter each).', 'Two genes: make both parents heterozygous for both genes.', 'Cross a parent with two capital letters with any other parent. Every child gets at least one dominant allele.', 'Choose Pedigree. Leave both parents in the second generation unshaded and shade one of their children.', 'Choose Pedigree. Shade both parents in the second generation and leave one of their children unshaded.'],
+  about: 'Follows Mendel’s laws. Each parent passes on one of its two alleles at random (segregation), and for two genes the alleles are inherited independently (true for genes on different chromosomes, like Mendel’s seed colour and seed shape in peas).\nCapital letters are dominant: Yy looks yellow. The square shows the probabilities; “Grow 100 offspring” picks each child at random, so real counts wobble around the prediction.\nMany human traits (like eye colour) depend on several genes, so they are not used here. Tap any box of the square to see which egg and pollen made it.\nPedigree: squares are males, circles are females, shaded means affected. Cassie tries every set of genotypes (AA, Aa, aa) for the family and keeps the ones where each child got one allele from each parent and everyone shaded shows the trait. Autosomal traits only: it does not model X-linked traits, new mutations or traits that skip people (incomplete penetrance).',
+  mount({ stage, panel: whole, api }) {
+    // (v226: two modes: the Punnett square, and a family pedigree)
+    const panel = el('div', 'lab-sq-panel'), pedPanel = el('div', 'lab-ped-panel');
     let two = false, gene = 'colour', p1 = 'Yy', p2 = 'Yy', p1b = 'Rr', p2b = 'Rr', field = null;
     const genes = () => (two ? ['colour', 'shape'] : [gene]);
     const g1 = () => (two ? p1 + p1b : p1), g2 = () => (two ? p2 + p2b : p2);
@@ -126,9 +154,53 @@ const punnettLab = {
     panel.appendChild(why);
     const st = stats(panel);
     report();
+    // ---- the pedigree ----
+    let showMode = 'square', pedMode = 'recessive';
+    const affected = {}, pedAt = [];
+    const pv = canvas(stage, (ctx, w, h) => {
+      pedAt.length = 0;
+      const fit = pedigreeFits(affected, pedMode), rows = [0.18, 0.5, 0.82].map((f) => h * f), s = Math.min(26, w / 22), X = (f) => 40 + f * (w - 80) / 0.7;
+      const pos = Object.fromEntries(PEDIGREE.map((p) => [p.id, [X(p.x), rows[p.gen]]]));
+      ctx.strokeStyle = DIM; ctx.lineWidth = 2;
+      const couple = (a, b, kids) => { const [ax, ay] = pos[a], [bx] = pos[b], my = ay; ctx.beginPath(); ctx.moveTo(Math.min(ax, bx) + s, my); ctx.lineTo(Math.max(ax, bx) - s, my); ctx.stroke(); const cx = (ax + bx) / 2, ky = rows[PEDIGREE.find((p) => p.id === kids[0]).gen] - s - 14; ctx.beginPath(); ctx.moveTo(cx, my); ctx.lineTo(cx, ky); ctx.stroke(); const xs = kids.map((k) => pos[k][0]); ctx.beginPath(); ctx.moveTo(Math.min(...xs, cx), ky); ctx.lineTo(Math.max(...xs, cx), ky); ctx.stroke(); xs.forEach((x) => { ctx.beginPath(); ctx.moveTo(x, ky); ctx.lineTo(x, ky + 14); ctx.stroke(); }); };
+      couple('I-1', 'I-2', ['II-1', 'II-2']); couple('II-1', 'II-3', ['III-1', 'III-2', 'III-3']);
+      PEDIGREE.forEach((p) => {
+        const [x, y] = pos[p.id];
+        ctx.fillStyle = affected[p.id] ? INK : 'rgba(255,255,255,.05)'; ctx.strokeStyle = INK; ctx.lineWidth = 2.5; ctx.beginPath();
+        if (p.sex === 'm') ctx.rect(x - s, y - s, 2 * s, 2 * s); else ctx.arc(x, y, s, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        text(ctx, p.id, x, y + s + 16, DIM, 'center');
+        if (fit) text(ctx, fit[p.id].join(' or '), x, y + s + 32, C.gold, 'center');
+        pedAt.push({ id: p.id, x, y, s });
+      });
+      text(ctx, fit ? `Possible for a ${pedMode} trait` : `Not possible for a ${pedMode} trait`, 16, 22, fit ? C.green : C.red);
+    });
+    pv.c.hidden = true; pv.c.style.cursor = 'pointer';
+    pv.c.addEventListener('click', (e) => {
+      const r0 = pv.c.getBoundingClientRect(), x = e.clientX - r0.left, y = e.clientY - r0.top, p = pedAt.find((q) => Math.abs(q.x - x) <= q.s + 6 && Math.abs(q.y - y) <= q.s + 6);
+      if (!p) return; affected[p.id] = !affected[p.id]; pedReport();
+    });
+    seg(group(pedPanel, 'The trait is'), { options: [['recessive', 'Recessive'], ['dominant', 'Dominant']], value: pedMode, onChange: (v) => { pedMode = v; pedReport(); } });
+    const gWho = group(pedPanel, 'Who has the trait (tap to shade)'), rWho = row(gWho, 'lab-row-btns lab-ped-people'), whoBtns = {};
+    PEDIGREE.forEach((p) => { const b = button(rWho, p.id, () => { affected[p.id] = !affected[p.id]; pedReport(); }); b.dataset.person = p.id; b.setAttribute('aria-label', `${p.id}, ${p.sex === 'm' ? 'male' : 'female'}`); whoBtns[p.id] = b; });
+    pedPanel.appendChild(el('p', 'lab-note', 'Squares are males, circles are females, shaded means the person has the trait. II-3 married into the family.'));
+    const pedSay = el('p', 'lab-note lab-ped-say'); pedSay.setAttribute('aria-live', 'polite'); pedPanel.appendChild(pedSay);
+    const pst = stats(pedPanel);
+    function pedReport() {
+      const fit = pedigreeFits(affected, pedMode), other = pedigreeFits(affected, pedMode === 'dominant' ? 'recessive' : 'dominant');
+      PEDIGREE.forEach((p) => whoBtns[p.id].setAttribute('aria-pressed', String(!!affected[p.id])));
+      pedSay.textContent = fit ? `This family fits a ${pedMode} trait.${other ? '' : ` It could not be ${pedMode === 'dominant' ? 'recessive' : 'dominant'}.`}` : `No set of genotypes fits a ${pedMode} trait here. ${pedMode === 'dominant' ? 'With a dominant trait, an affected child needs at least one affected parent.' : 'With a recessive trait, two affected parents can only have affected children.'}`;
+      pst.set([['Possible?', fit ? 'Yes' : 'No'], ['Shaded', PEDIGREE.filter((p) => affected[p.id]).map((p) => p.id).join(', ') || 'nobody'], ...(fit ? PEDIGREE.map((p) => [p.id, fit[p.id].join(' or ')]) : [])]);
+      const any = PEDIGREE.some((p) => affected[p.id]), rec = pedigreeFits(affected, 'recessive'), dom = pedigreeFits(affected, 'dominant');
+      if (any && rec && !dom) api.check(3);
+      if (any && dom && !rec) api.check(4);
+      pv.redraw();
+    }
+    seg(group(whole, 'Show'), { options: [['square', 'Punnett square'], ['pedigree', 'Pedigree']], value: showMode, onChange: (v) => { showMode = v; const ped = v === 'pedigree'; panel.hidden = ped; pedPanel.hidden = !ped; cv.c.hidden = ped; pv.c.hidden = !ped; if (ped) pedReport(); else cv.redraw(); } });
+    whole.append(panel, pedPanel); pedPanel.hidden = true;
     return {
-      state: () => { const X = cross(); return `crossing ${g1()} × ${g2()} (${genes().map((k) => `${GENES[k].letter} = ${GENES[k].dom}, ${GENES[k].letter.toLowerCase()} = ${GENES[k].rec}`).join('; ')}): the Punnett square gives ${Object.entries(X.pheno).map(([k, v]) => `${v}/${X.total} ${k}`).join(', ')}: ratio ${ratio(X.pheno)}${field ? `; growing 100 gave ${Object.entries(field.seen).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''}`; },
-      destroy: () => cv.destroy(),
+      state: () => { if (showMode === 'pedigree') { const fit = pedigreeFits(affected, pedMode); return `a family pedigree, ${pedMode} trait, shaded: ${PEDIGREE.filter((p) => affected[p.id]).map((p) => p.id).join(', ') || 'nobody'}; it is ${fit ? 'possible' : 'not possible'}${fit ? `; genotypes: ${PEDIGREE.map((p) => `${p.id} ${fit[p.id].join('/')}`).join(', ')}` : ''}`; } const X = cross(); return `crossing ${g1()} × ${g2()} (${genes().map((k) => `${GENES[k].letter} = ${GENES[k].dom}, ${GENES[k].letter.toLowerCase()} = ${GENES[k].rec}`).join('; ')}): the Punnett square gives ${Object.entries(X.pheno).map(([k, v]) => `${v}/${X.total} ${k}`).join(', ')}: ratio ${ratio(X.pheno)}${field ? `; growing 100 gave ${Object.entries(field.seen).map(([k, v]) => `${v} ${k}`).join(', ')}` : ''}`; },
+      destroy: () => { cv.destroy(); pv.destroy(); },
     };
   },
 };

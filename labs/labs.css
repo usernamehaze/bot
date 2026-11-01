@@ -893,3 +893,26 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-soon p { margin: 0; color: var(--lf-muted); line-height: 1.45; }
 .lf-soon-ico svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 .lf-lessons .lf-lesson { min-height: 44px; }
+/* (v226) pH mixer: the indicator paper round */
+.lab-paper { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lab-paper[hidden], .lab-paper-sort[hidden] { display: none; }
+.lab-paper-row { padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .14); }
+.lab-paper-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lab-paper-top b { flex: 1 1 auto; font-size: .86rem; }
+.lab-paper-strip { width: 18px; height: 36px; border-radius: 4px; background: #f3efe2; border: 1px solid rgba(255, 255, 255, .3); }
+.lab-paper-say { flex-basis: 100%; font-size: .8rem; color: rgba(255, 255, 255, .82); }
+.lab-paper-say:empty { display: none; }
+.lab-paper-row[data-sorted="right"] { border-color: rgba(127, 224, 168, .6); }
+.lab-paper-sort { margin-top: 6px; }
+/* (v226) Equation balancer: the limiting reactant step */
+.lab-limit { margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .16); }
+.lab-limit h4 { margin: 0 0 4px; }
+.lab-limit-in { display: grid; gap: 8px; margin: 8px 0; }
+.lab-limit-row, .lab-limit-prod { display: flex; align-items: center; gap: 10px; }
+.lab-limit-row span, .lab-limit-prod span { min-width: 70px; font-weight: 650; }
+.lab-limit input, .lab-limit select { min-height: 44px; width: 9em; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; }
+.lab-limit select option { color: #111; }
+.lab-limit-work { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: .86rem; line-height: 1.45; }
+/* (v226) Punnett squares: the pedigree's people, one button each */
+.lab-ped-people button[aria-pressed="true"] { background: var(--lab-accent, #f2f2f4); color: var(--lab-on-accent, #111); }
+.lab-sq-panel[hidden], .lab-ped-panel[hidden] { display: none; }

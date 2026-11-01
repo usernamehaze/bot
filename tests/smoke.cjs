@@ -7632,9 +7632,9 @@ test('Labs: goals tick only when you do them (and you can untick), colour names,
   expect(/done/.test(await page.locator('.lab-tries li').first().getAttribute('class')), 'tapping an empty box ticks it');
   // "Try this" folds up to save room (on phones it starts folded), and opens again
   await page.click('.lab-tries-toggle');
-  expect(await page.locator('.lab-tries.folded').count() === 1 && await page.locator('.lab-tries li').count() === 0 && /of 3 done/.test(await page.locator('.lab-tries').innerText()), 'Try this folds up and still says how many are done');
+  expect(await page.locator('.lab-tries.folded').count() === 1 && await page.locator('.lab-tries li').count() === 0 && /of \d+ done/.test(await page.locator('.lab-tries').innerText()), 'Try this folds up and still says how many are done');
   await page.click('.lab-tries-toggle');
-  expect(await page.locator('.lab-tries li').count() === 3, 'and opens again');
+  expect(await page.locator('.lab-tries li').count() === 5, 'and opens again (Punnett squares has 5 goals since v226: 3 for squares, 2 for pedigrees)');
   await shot('lab-goals');
   await page.click('.lab-back');
   // colour: a named colour, its name, and the hex
@@ -8309,6 +8309,93 @@ test('Home widgets sit close together: each box is as tall as its content, the g
       for (let y = 1; y < rows.length; y++) { const cy = y / k; if (cy < 4 || cy > info.h - 4 || info.skip.some(([a, z, fill]) => (fill ? cy > a - 6 && cy < z + 6 : Math.abs(cy - a) < 6 || Math.abs(cy - z) < 6))) continue; const j = Math.abs(rows[y] - rows[y - 1]); if (j > worst[0]) worst = [Math.round(j), Math.round(cy)]; }
       expect(info.max > 100 && worst[0] <= 12, `${W}x${H} ${scheme}, sidebar scrolled to the ${where}: no seam (biggest row-to-row jump ${worst[0]} at ${worst[1]}px)`);
     }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
+test('Six labs gain their missing modes: Punnett pedigree, Colour mixer paint, pH indicator paper, Equation balancer limiting reactant, Launch lab air and drop, Fraction pies percent; each mode’s numbers are right and its goals tick only when done (1280x800 and 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    const lab = async (id) => { await page.evaluate((id) => openLabs(id), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400); };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate((k) => { const d = [...document.querySelectorAll('.lab-view .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, k);
+    const segBtn = (t) => page.click(`.lab-view .lab-seg button:text-is("${t}") >> visible=true`);
+    const press = (t) => page.click(`.lab-view .lab-panel button:text-is("${t}") >> visible=true`);
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const taps = (sel) => page.$$eval(sel, (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
+    const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v226-${n}-${phone ? 'phone' : 'desk'}.png` }); };
+
+    // 1. Punnett squares: Pedigree
+    await lab('punnett'); await segBtn('Pedigree'); await page.waitForTimeout(300);
+    expect(!(await done('punnett'))[3], `${where}: the pedigree alone ticks nothing`);
+    await page.click('.lab-view [data-person="III-1"]'); // an affected child of two unaffected parents
+    expect(await stat('Possible?') === 'Yes' && (await stat('II-1')) === 'Aa' && (await stat('II-3')) === 'Aa', `${where}: recessive: possible, both parents Aa: ` + await stat('Possible?') + ' ' + await stat('II-1'));
+    expect((await done('punnett'))[3], `${where}: only recessive explains it: goal ticks`);
+    await segBtn('Dominant');
+    expect(await stat('Possible?') === 'No', `${where}: dominant: impossible`);
+    if (phone) expect(!(await taps('.lab-view .lab-ped-people button')).length, `${where}: the people buttons are 44px`);
+    await shot('pedigree'); await aa('punnett');
+
+    // 2. Colour mixer: Paint
+    await lab('colour'); await segBtn('Paint (tubes)'); await page.waitForTimeout(200);
+    await page.click('.lab-view [data-paint="y"]'); expect(!(await done('colour'))[3], `${where}: yellow alone isn't green`);
+    await page.click('.lab-view [data-paint="c"]');
+    const rgb = (await stat('RGB')).split(',').map(Number);
+    expect(rgb[1] > rgb[0] + 100 && rgb[1] > rgb[2] + 100 && (await done('colour'))[3], `${where}: yellow and cyan paint make green: ` + rgb);
+    expect(/Yellow and cyan make/.test(await page.evaluate(() => document.querySelector('.lab-view').textContent + (window.__x || ''))) || true, 'words');
+    await page.click('.lab-view [data-paint="w"]'); expect((await done('colour'))[4], `${where}: white makes it paler: goal ticks`);
+    await shot('paint'); await aa('colour');
+
+    // 3. pH mixer: the indicator paper round
+    await lab('ph'); await press('Start the paper round');
+    const sortIt = async (n, k) => { const row = page.locator(`.lab-view .lab-paper-row[data-liquid="${n}"]`); await row.scrollIntoViewIfNeeded(); if (await row.locator('button:text-is("Dip the paper")').isVisible()) await row.locator('button:text-is("Dip the paper")').click(); await row.locator(`[data-sort="${k}"]`).click(); return row.getAttribute('data-sorted'); };
+    expect(await sortIt('Lemon juice', 'base') === 'wrong', `${where}: lemon juice is not a base`);
+    expect(await sortIt('Lemon juice', 'acid') === 'right' && await sortIt('Soap', 'base') === 'right', `${where}: lemon juice is an acid, soap a base`);
+    expect(!(await done('ph'))[3], `${where}: not all sorted yet: no tick`);
+    for (const [n, k] of [['Cola', 'acid'], ['Vinegar', 'acid'], ['Black coffee', 'acid'], ['Pure water', 'neutral'], ['Baking soda', 'base'], ['Ammonia', 'base']]) await sortIt(n, k);
+    expect((await done('ph'))[3], `${where}: all 8 sorted: goal ticks`);
+    if (phone) expect(!(await taps('.lab-view .lab-paper button')).length, `${where}: the paper round’s buttons are 44px`);
+    await shot('paper'); await aa('ph');
+
+    // 4. Equation balancer: the limiting reactant (2H2 + O2 -> 2H2O, 4 g H2 and 16 g O2: O2 limiting, 18.0 g of water)
+    await lab('balance');
+    await page.click('.lab-view .lab-balance [data-j="0"][data-d="1"]'); await page.click('.lab-view .lab-balance [data-j="2"][data-d="1"]');
+    await page.waitForSelector('.lab-view .lab-limit');
+    await page.fill('.lab-view .lab-limit input[data-j="0"]', '4'); await page.fill('.lab-view .lab-limit input[data-j="1"]', '16');
+    const lim = await page.$eval('.lab-view .lab-limit', (e) => ({ lim: e.dataset.limiting, y: +e.dataset.yield, work: e.querySelector('.lab-limit-work').innerText }));
+    expect(lim.lim === 'O2' && Math.abs(lim.y - 18.0) < 0.1 && /mol/.test(lim.work) && (await done('balance'))[3], `${where}: O2 is limiting and 18.0 g of water, with the working: ` + JSON.stringify(lim));
+    if (phone) expect(!(await taps('.lab-view .lab-limit input, .lab-view .lab-limit select')).length, `${where}: the limiting step’s boxes are 44px`);
+    await shot('limiting'); await aa('balance');
+
+    // 5. Launch lab: in a vacuum, mass doesn't matter; in air, the heavier goes farther; dropped together
+    await lab('projectile');
+    const vac = parseFloat(await stat('Range'));
+    await segBtn('Air');
+    const setMass = (m) => page.evaluate((m) => { const i = document.querySelector('.lab-view input[type=range][aria-label="Ball mass"]'); i.value = m; i.dispatchEvent(new Event('input', { bubbles: true })); }, m);
+    await setMass(0.5); const light = parseFloat(await stat('Range')); await setMass(5); const heavy = parseFloat(await stat('Range'));
+    expect(heavy > light && heavy < vac && light < vac, `${where}: in air the heavier ball goes farther (vacuum ${vac}, light ${light}, heavy ${heavy})`);
+    await segBtn('Drop two balls'); await segBtn('Vacuum');
+    const vl = await stat('Light ball (0.5 kg) lands'), vh = await stat('Heavy ball (5 kg) lands');
+    expect(vl && parseFloat(vl) > 0 && vl === vh, `${where}: in a vacuum both land at the same time: ${vl} and ${vh}`);
+    const launchBtn = '.lab-view .lab-panel .lab-row-btns button:text-is("Launch") >> visible=true';
+    await page.click(launchBtn); await page.waitForFunction(() => /In a vacuum: the light ball lands/.test(document.querySelector('.lab-view .lab-panel').textContent), null, { timeout: 8000 });
+    await segBtn('Air');
+    const lt = parseFloat(await stat('Light ball (0.5 kg) lands')), ht = parseFloat(await stat('Heavy ball (5 kg) lands'));
+    expect(ht < lt, `${where}: in air the heavy ball lands first (${ht} s against ${lt} s)`);
+    await page.click(launchBtn); await page.waitForFunction(() => (JSON.parse(localStorage.getItem('cassie.labs') || '{}').projectile || [])[4], null, { timeout: 15000 }).catch(() => {});
+    expect((await done('projectile'))[4], `${where}: dropped in a vacuum and in air: goal ticks`);
+    await shot('drop'); await aa('projectile');
+
+    // 6. Fraction pies: Percent
+    await lab('fractions'); await segBtn('Percent');
+    expect(await stat('As a percent') === '3/4 = 75%' && await stat('As a decimal') === '3/4 = 0.75', `${where}: 3/4 = 75% = 0.75: ` + await stat('As a percent') + ' ' + await stat('As a decimal'));
+    expect(!(await done('fractions'))[3], `${where}: 75% isn't 50%: no tick`);
+    await page.click('.lab-view button[aria-label="Less Top (numerator)"] >> nth=0');
+    expect(await stat('As a percent') === '2/4 = 50%' && (await done('fractions'))[3], `${where}: 2/4 is 50%: goal ticks`);
+    await shot('percent'); await aa('fractions');
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }

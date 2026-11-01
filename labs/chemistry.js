@@ -86,16 +86,20 @@ const EXAMPLES = [
   ['Photosynthesis', 'CO2 + H2O -> C6H12O6 + O2'], ['Respiration', 'C6H12O6 + O2 -> CO2 + H2O'], ['Neutralising', 'NaOH + H2SO4 -> Na2SO4 + H2O'],
   ['Metal + acid', 'Al + HCl -> AlCl3 + H2'], ['Tricky one', 'KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2'],
 ];
+// standard atomic weights (IUPAC, conventional values, g/mol), for moles and yields
+const ATOMIC_MASS = { H: 1.008, He: 4.0026, Li: 6.94, C: 12.011, N: 14.007, O: 15.999, F: 18.998, Na: 22.990, Mg: 24.305, Al: 26.982, Si: 28.085, P: 30.974, S: 32.06, Cl: 35.45, K: 39.098, Ca: 40.078, Mn: 54.938, Fe: 55.845, Cu: 63.546, Zn: 65.38, Br: 79.904, Ag: 107.87, I: 126.90, Ba: 137.33, Pb: 207.2 };
+const molarMass = (atoms) => { let m = 0; for (const e in atoms) { if (!ATOMIC_MASS[e]) return null; m += ATOMIC_MASS[e] * atoms[e]; } return m; };
 const balanceLab = {
   id: 'balance', name: 'Equation balancer', subject: 'chemistry', levels: ['hs', 'college'], topic: 'balancing chemical equations and conservation of mass',
   blurb: 'Set the numbers in front yourself. Cassie counts every atom on both sides.',
   words: 'balance chemical equation coefficients reaction atoms conservation stoichiometry',
   icon: '<path d="M24 8v32M10 40h28"/><path d="M8 14h32"/><path d="M8 14l-4 12h8zM40 14l-4 12h8z"/><circle cx="24" cy="8" r="2"/>',
-  tries: ['Balance water (H₂ + O₂ → H₂O) yourself', 'Balance burning methane yourself', 'Balance photosynthesis yourself'],
-  hints: ['Count the O atoms: 2 on the left, 1 on the right. Make the right side 2 H₂O, then fix the H on the left.', 'Balance C first, then H, and leave O for last, O₂ is easy to adjust because it is on its own.', 'Glucose (C₆H₁₂O₆) has 6 carbons, so start with 6 CO₂. Then balance H with water, and O with O₂ last.'],
-  about: 'Atoms are never created or destroyed in a chemical reaction (the law of conservation of mass), so every element must appear the same number of times on both sides.\nYou may only change the coefficients, the big numbers in front. Changing the small subscripts would turn a substance into a different one (H₂O₂ is hydrogen peroxide, not water).\nCassie’s answer solves the atom counts as simultaneous equations and gives the smallest whole numbers.',
+  tries: ['Balance water (H₂ + O₂ → H₂O) yourself', 'Balance burning methane yourself', 'Balance photosynthesis yourself', 'Find the limiting reactant and the most product you can make'],
+  hints: ['Count the O atoms: 2 on the left, 1 on the right. Make the right side 2 H₂O, then fix the H on the left.', 'Balance C first, then H, and leave O for last, O₂ is easy to adjust because it is on its own.', 'Glucose (C₆H₁₂O₆) has 6 carbons, so start with 6 CO₂. Then balance H with water, and O with O₂ last.', 'Balance an equation first. Then type the grams of each reactant: the one that runs out first is the limiting reactant.'],
+  about: 'Atoms are never created or destroyed in a chemical reaction (the law of conservation of mass), so every element must appear the same number of times on both sides.\nYou may only change the coefficients, the big numbers in front. Changing the small subscripts would turn a substance into a different one (H₂O₂ is hydrogen peroxide, not water).\nCassie’s answer solves the atom counts as simultaneous equations and gives the smallest whole numbers.\nLimiting reactant: grams are turned into moles with standard atomic weights (H 1.008, C 12.011, O 15.999 g/mol and so on). Each reactant’s moles divided by its number in front says how many times the reaction could run; the smallest is the limiting reactant, and the theoretical yield is that many runs of the product. Real reactions usually make less than the theoretical yield.',
   mount({ stage, panel, api }) {
     let src = EXAMPLES[0][1], eq = null, coef = [], answer = null, peeked = false, err = '';
+    const grams = {}; let prodJ = -1;
     const box = el('div', 'lab-balance');
     stage.appendChild(box);
     function load(text) {
@@ -119,12 +123,40 @@ const balanceLab = {
         <p class="lab-verdict ${ok ? 'ok' : ''}">${ok ? (answer && coef.join() !== answer.join() && coef.every((c, j) => c % answer[j] === 0) ? 'Balanced, but you can make the numbers smaller.' : 'Balanced! Every atom on the left is on the right.') : 'Not balanced yet. Tap ▲ ▼ to change the numbers.'}</p>
         <table class="lab-atoms"><tr><th>Atom</th><th>Left</th><th>Right</th><th></th></tr>${elems.map((e) => `<tr class="${(L[e] || 0) === (R[e] || 0) ? 'ok' : 'off'}"><td>${e}</td><td>${L[e] || 0}</td><td>${R[e] || 0}</td><td>${(L[e] || 0) === (R[e] || 0) ? '✓' : '✗'}</td></tr>`).join('')}</table>`;
       st.set([['Cassie’s answer', peeked ? (answer ? eq.left.map((f, j) => `${answer[j] > 1 ? answer[j] : ''}${f}`).join(' + ') + ' → ' + eq.right.map((f, j) => `${answer[j + eq.left.length] > 1 ? answer[j + eq.left.length] : ''}${f}`).join(' + ') : 'This one can’t be balanced in just one way.') : 'hidden. Try it first']]);
+      if (ok) limitStep(); // (v226: once it balances, how much product)
       if (ok && !peeked) {
         const n = src.replace(/\s+/g, '');
         if (n === 'H2+O2->H2O') api.check(0);
         if (n === 'CH4+O2->CO2+H2O') api.check(1);
         if (n === 'CO2+H2O->C6H12O6+O2') api.check(2);
       }
+    }
+    // the limiting reactant: grams → moles → how many times the reaction can run → the most product
+    function limitStep() {
+      const nl = eq.left.length, sec = el('section', 'lab-limit');
+      if (prodJ < nl) prodJ = nl;
+      sec.innerHTML = `<h4>Limiting reactant</h4><p class="lab-note">Type the grams of each reactant you have.</p><div class="lab-limit-in"></div><label class="lab-limit-prod"><span>Product</span><select aria-label="Which product"></select></label><ol class="lab-limit-work" aria-live="polite"></ol>`;
+      const ins = sec.querySelector('.lab-limit-in');
+      eq.left.forEach((f, j) => { const l = el('label', 'lab-limit-row'); l.innerHTML = `<span>${sub2(f)}</span><input type="number" min="0" step="any" inputmode="decimal" aria-label="Grams of ${esc(f)}"><i>g</i>`; const inp = l.querySelector('input'); inp.dataset.j = String(j); if (grams[f] != null) inp.value = grams[f]; inp.addEventListener('input', () => { grams[f] = inp.value; work(); }); ins.appendChild(l); });
+      const sel = sec.querySelector('select');
+      eq.right.forEach((f, i) => { const o = document.createElement('option'); o.value = String(nl + i); o.textContent = f; if (nl + i === prodJ) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener('change', () => { prodJ = +sel.value; work(); });
+      box.appendChild(sec);
+      function work() {
+        const ol = sec.querySelector('.lab-limit-work'), lines = [];
+        const rows = eq.left.map((f, j) => ({ f, j, M: molarMass(eq.all[j]), g: parseFloat(grams[f]) }));
+        const Mp = molarMass(eq.all[prodJ]), pf = eq.all.length > prodJ ? (eq.left.concat(eq.right))[prodJ] : '';
+        if (rows.some((r) => r.M == null) || Mp == null) { ol.innerHTML = '<li>Cassie doesn’t know the atomic weight of an element here yet.</li>'; return; }
+        if (rows.some((r) => !(r.g > 0))) { ol.innerHTML = '<li>Type a mass above 0 for every reactant.</li>'; sec.dataset.limiting = ''; return; }
+        rows.forEach((r) => { r.mol = r.g / r.M; r.runs = r.mol / coef[r.j]; lines.push(`${esc(r.f)}: ${num(r.g)} g ÷ ${r.M.toFixed(3)} g/mol = ${num(r.mol)} mol; ÷ ${coef[r.j]} = ${num(r.runs)} runs`); });
+        const lim = rows.reduce((a, b) => (b.runs < a.runs ? b : a)), mol = lim.runs * coef[prodJ], g = mol * Mp;
+        lines.push(`Limiting reactant: <b>${esc(lim.f)}</b> (it allows the fewest runs)`);
+        lines.push(`${esc(pf)}: ${num(lim.runs)} runs × ${coef[prodJ]} = ${num(mol)} mol × ${Mp.toFixed(3)} g/mol = <b class="lab-yield">${g.toFixed(1)} g</b> (theoretical yield)`);
+        ol.innerHTML = lines.map((x) => `<li>${x}</li>`).join('');
+        sec.dataset.limiting = lim.f; sec.dataset.yield = g.toFixed(2);
+        if (!peeked) api.check(3);
+      }
+      work();
     }
     box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-j]');
@@ -170,9 +202,9 @@ const phLab = {
   blurb: 'Drip acid or base into water, watch the colour change and the pH move.',
   words: 'ph acid base alkali neutral neutralisation indicator titration litmus',
   icon: '<path d="M14 8h20M16 8v8l-8 22a3 3 0 0 0 3 4h26a3 3 0 0 0 3-4L32 16V8"/><path d="M12 30h24"/><circle cx="21" cy="35" r="1.5"/><circle cx="28" cy="33" r="1.5"/>',
-  tries: ['Make it exactly neutral: pH 7.0 (±0.1): using both acid and base', 'Turn phenolphthalein pink', 'Make it as acidic as lemon juice (pH 2)'],
-  hints: ['Add some acid, then the same amount of base. Equal volumes of the same strength cancel exactly. Near 7 the pH jumps fast, so use drops.', 'Choose Phenolphthalein as the indicator, then add base until the pH is above about 8.6.', 'Add acid a few mL at a time until the pH reads 2. Each step of 1 on the pH scale is 10 times more acidic.'],
-  about: 'Hydrochloric acid and sodium hydroxide are strong: they split up completely in water. Both are 0.1 mol/L.\nThe pH comes from pH = −log₁₀[H⁺], including water’s own ions (Kw = 1.0 × 10⁻¹⁴, true at 25 °C).\nIndicators: phenolphthalein is colourless below pH 8.2 and pink above it; litmus is red below about 4.5 and blue above about 8.3; universal-indicator colours vary a little between brands.\nThe everyday examples are typical values, real lemons, soaps and colas vary.',
+  tries: ['Make it exactly neutral: pH 7.0 (±0.1): using both acid and base', 'Turn phenolphthalein pink', 'Make it as acidic as lemon juice (pH 2)', 'Indicator paper: sort all 8 household liquids into acid, neutral and base'],
+  hints: ['Add some acid, then the same amount of base. Equal volumes of the same strength cancel exactly. Near 7 the pH jumps fast, so use drops.', 'Choose Phenolphthalein as the indicator, then add base until the pH is above about 8.6.', 'Add acid a few mL at a time until the pH reads 2. Each step of 1 on the pH scale is 10 times more acidic.', 'Open the Indicator paper round. Dip each liquid, look at the paper: red, orange and yellow are acids, green is neutral, blue and purple are bases.'],
+  about: 'Hydrochloric acid and sodium hydroxide are strong: they split up completely in water. Both are 0.1 mol/L.\nThe pH comes from pH = −log₁₀[H⁺], including water’s own ions (Kw = 1.0 × 10⁻¹⁴, true at 25 °C).\nIndicators: phenolphthalein is colourless below pH 8.2 and pink above it; litmus is red below about 4.5 and blue above about 8.3; universal-indicator colours vary a little between brands.\nThe everyday examples are typical values, real lemons, soaps and colas vary.\nIndicator paper: universal indicator paper takes the colour of the scale at the liquid’s pH (the same typical values as the scale: real samples vary). Below 7 is acidic, 7 is neutral, above 7 is basic. Liquids too close to 7 to call by eye, like milk, are left out.',
   mount({ stage, panel, api }) {
     const V0 = 50, M = 0.1;
     let Va = 0, Vb = 0, ind = 'universal', hist = [[0, 7]], drop = null;
@@ -281,6 +313,26 @@ const phLab = {
     const ov = overlay(stage, 'bl');
     button(ov, 'Drip acid', () => add(true, 0.05));
     button(ov, 'Drip base', () => add(false, 0.05));
+    // Indicator paper: dip it in 8 household liquids (the scale's own values), then sort each one
+    const PAPER = SCALE.filter(([, n]) => ['Lemon juice', 'Cola', 'Vinegar', 'Black coffee', 'Pure water', 'Baking soda', 'Soap', 'Ammonia'].includes(n));
+    const kindOf = (v) => (v < 7 ? 'acid' : v > 7 ? 'base' : 'neutral');
+    const sorted = new Map(), gp = group(panel, 'Indicator paper round');
+    const paperBtn = button(row(gp, 'lab-row-btns'), 'Start the paper round', () => { list.hidden = !list.hidden; paperBtn.textContent = list.hidden ? 'Start the paper round' : 'Hide the paper round'; });
+    const list = el('ul', 'lab-paper'); list.hidden = true; gp.appendChild(list);
+    PAPER.forEach(([v, n]) => {
+      const li = el('li', 'lab-paper-row');
+      li.innerHTML = `<div class="lab-paper-top"><b></b><span class="lab-paper-strip" aria-hidden="true"></span><span class="lab-paper-say" aria-live="polite"></span></div><div class="lab-row lab-row-btns lab-paper-sort" hidden></div>`;
+      li.querySelector('b').textContent = n; li.dataset.liquid = n;
+      const strip = li.querySelector('.lab-paper-strip'), say = li.querySelector('.lab-paper-say'), sortRow = li.querySelector('.lab-paper-sort');
+      const dip = button(li.querySelector('.lab-paper-top'), 'Dip the paper', () => { strip.style.background = universal(v); strip.classList.add('dipped'); say.textContent = `The paper turns ${v < 3.5 ? 'red' : v < 6 ? 'orange or yellow' : v < 7.5 ? 'green' : v < 10.5 ? 'blue' : 'purple'}. Acid, neutral or base?`; sortRow.hidden = false; dip.hidden = true; });
+      [['acid', 'Acid'], ['neutral', 'Neutral'], ['base', 'Base']].forEach(([k, t]) => { const b = button(sortRow, t, () => {
+        const ok = kindOf(v) === k; sorted.set(n, ok);
+        say.textContent = ok ? `Right: ${n} is ${k === 'acid' ? 'an acid' : k === 'base' ? 'a base' : 'neutral'} (pH about ${v}).` : `Not quite. Look at the colour: ${n} has a pH of about ${v}, so it is ${kindOf(v) === 'acid' ? 'an acid' : kindOf(v) === 'base' ? 'a base' : 'neutral'}.`;
+        li.dataset.sorted = ok ? 'right' : 'wrong';
+        if (PAPER.every(([, nn]) => sorted.get(nn))) api.check(3);
+      }); b.dataset.sort = k; });
+      list.appendChild(li);
+    });
     panel.appendChild(el('p', 'lab-note', 'The beaker starts with 50 mL of pure water. A drop is 0.05 mL. Tap a bottle for one drop, or drag it over the beaker to pour (hold it there to pour faster).'));
     const st = stats(panel);
     V = viewSwitch(panel, stage, cv, (B) => import('./chem3d.js').then((mod) => mod.ph3d(B)), { pitch: 9 });
