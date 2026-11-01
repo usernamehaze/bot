@@ -8314,6 +8314,77 @@ test('Home widgets sit close together: each box is as tall as its content, the g
   }
 });
 
+test('Physics: Push and pull, Seesaw and levers, Electromagnetic induction and Collisions open from Visual Labs > Physics and their level folders, each goal ticks only when done, and the physics holds (1280x800 and 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const IDS = ['friction', 'seesaw', 'induction', 'collisions'];
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    // in Visual Labs > Physics, and in each one's level Simulations
+    if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
+    await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
+    const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
+    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
+    await go('visual:all'); await go('subject:physics');
+    const phys = await rows();
+    expect(IDS.every((id) => phys.includes(id)), `${where}: Physics holds the 4 new labs: ` + phys);
+    await home();
+    for (const [key, want] of [['elem', ['friction', 'seesaw']], ['shs', IDS], ['college', ['induction', 'collisions']]]) {
+      await go('level:' + key); await go('levelsims:' + key);
+      const r = await rows(); expect(want.every((id) => r.includes(id)), `${where}: ${key} Simulations holds ${want}: ` + r.filter((x) => IDS.includes(x)));
+      await home();
+    }
+    const lab = async (id) => { await page.evaluate((id) => openLabs(id), id); await page.waitForSelector(`.lab-view:not([hidden])[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400); };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate((k) => { const d = [...document.querySelectorAll('.lab-view .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, k);
+    const setR = (label, v) => page.evaluate(([label, v]) => { const i = document.querySelector(`.lab-view input[type=range][aria-label="${label}"]`); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [label, v]);
+    const press = (t) => page.click(`.lab-view .lab-panel button:text-is("${t}") >> visible=true`);
+    const segBtn = (t) => page.click(`.lab-view .lab-seg button:text-is("${t}") >> visible=true`);
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const taps = () => page.$$eval('.lab-view .lab-panel button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h < 44));
+    const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v227-${n}-${phone ? 'phone' : 'desk'}.png` }); };
+
+    // 1. Push and pull: 10 kg on wood (μ 0.3): 20 N doesn't move it, 40 N does (friction holds up to 29.43 N)
+    await lab('friction'); await setR('Mass', 10); await press('Wood (μ 0.3)').catch(() => segBtn('Wood (μ 0.3)'));
+    await setR('Push', 20); expect(await stat('Moves?') === 'No' && await stat('Friction can hold up to') === '29.4 N', `${where}: 20 N doesn't move 10 kg on wood: ` + await stat('Moves?') + ' ' + await stat('Friction can hold up to'));
+    await setR('Push', 40); expect(await stat('Moves?') === 'Yes' && !(await done('friction'))[0], `${where}: 40 N does (and is not the smallest push)`);
+    await setR('Push', 31); expect((await done('friction'))[0], `${where}: 31 N, just over 29.43 N: goal ticks`);
+    await press('Push for 5 seconds'); await page.waitForTimeout(600); await shot('friction'); if (phone) expect(!(await taps()).length, `${where}: friction taps 44px`); await aa('friction');
+
+    // 2. Seesaw: 2 kg at 1.5 m balances 3 kg at 1.0 m
+    await lab('seesaw'); expect(await stat('Balanced?') === 'No', `${where}: one weight alone isn't balanced`);
+    await segBtn('3 kg'); await setR('Position (m from the middle)', 1); await press('Put it here');
+    expect(await stat('Balanced?') === 'Yes' && (await done('seesaw'))[0], `${where}: 2 kg at 1.5 m balances 3 kg at 1.0 m: ` + await stat('Left turning effect') + ' ' + await stat('Right turning effect'));
+    await shot('seesaw'); if (phone) expect(!(await taps()).length, `${where}: seesaw taps 44px`); await aa('seesaw');
+
+    // 3. Induction: 0 when still, the sign flips in and out, double the turns doubles the peak
+    await lab('induction'); await page.emulateMedia({ reducedMotion: 'reduce' }); // (a whole pass at once, the same 400 points each time)
+    await setR('Turns of wire', 50); await press('Push it through');
+    const in1 = parseFloat(await stat('Biggest going in')), out1 = parseFloat(await stat('Biggest coming out'));
+    expect(in1 < 0 && out1 > 0 && parseFloat(await stat('Voltage now')) === 0 && (await done('induction'))[0], `${where}: the sign flips going in and out, and 0 once it stops: ${in1} ${out1}`);
+    await setR('Turns of wire', 100); await press('Push it through');
+    const out2 = parseFloat(await stat('Biggest coming out'));
+    expect(Math.abs(out2 / out1 - 2) < 0.01 && (await done('induction'))[1], `${where}: double the turns, double the peak: ${out1} then ${out2}`);
+    await press('Put it in the middle'); await press('Stop the magnet');
+    expect(parseFloat(await stat('Voltage now')) === 0 && (await done('induction'))[2], `${where}: a still magnet in the coil makes 0 V`);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await shot('induction'); if (phone) expect(!(await taps()).length, `${where}: induction taps 44px`); await aa('induction');
+
+    // 4. Collisions: equal masses head-on and elastic swap velocities; momentum always kept, energy only when elastic
+    await lab('collisions'); expect(!(await done('collisions'))[0], `${where}: nothing ticks before a crash`);
+    await press('Crash');
+    expect(await stat('Gold after') === '0 m/s' && await stat('Blue after') === '2 m/s' && await stat('Momentum before') === await stat('Momentum after') && await stat('Kinetic energy before') === await stat('Kinetic energy after') && (await done('collisions'))[0], `${where}: elastic, equal masses: they swap; momentum and energy kept: ` + [await stat('Gold after'), await stat('Blue after'), await stat('Kinetic energy after')]);
+    await segBtn('Stick together'); await press('Crash');
+    expect(await stat('Momentum before') === await stat('Momentum after') && parseFloat(await stat('Kinetic energy after')) < parseFloat(await stat('Kinetic energy before')) && (await done('collisions'))[1] && (await done('collisions'))[2], `${where}: stuck together: momentum kept, energy lost: ` + [await stat('Momentum after'), await stat('Kinetic energy after')]);
+    await segBtn('2D (a table)'); await setR('Gold, up', 1); await setR('Hit angle', 30); await segBtn('Elastic'); await press('Crash');
+    expect(await stat('Momentum before') === await stat('Momentum after') && await stat('Kinetic energy before') === await stat('Kinetic energy after'), `${where}: 2D elastic: momentum (both parts) and energy kept: ` + [await stat('Momentum before'), await stat('Momentum after')]);
+    await shot('collisions'); if (phone) expect(!(await taps()).length, `${where}: collisions taps 44px`); await aa('collisions');
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Six labs gain their missing modes: Punnett pedigree, Colour mixer paint, pH indicator paper, Equation balancer limiting reactant, Launch lab air and drop, Fraction pies percent; each mode’s numbers are right and its goals tick only when done (1280x800 and 390x844)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   for (const phone of [false, true]) {

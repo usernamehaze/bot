@@ -320,6 +320,31 @@ P.selection = (g, w, h, t, c) => {
   for (let i = 0; i < 9; i++) { const x = ((i * 0.37) % 1) * w * 0.85 + w * 0.07, y = ((i * 0.61) % 1) * h * 0.75 + h * 0.12, d = (Math.sin(t * 0.8 + i) + 1) / 2;
     g.beginPath(); g.ellipse(x - 5, y, 7, 4, -0.4, 0, TAU); g.ellipse(x + 5, y, 7, 4, 0.4, 0, TAU); fill(g, d > 0.5 ? c.ink : c.paper); }
 };
+// (v227) the four Physics labs
+P.friction = (g, w, h, t, c) => {
+  const gy = h * 0.72, k = (t * 0.35) % 1, x = w * 0.15 + k * w * 0.55;
+  line(g, 0, gy, w, gy, c.line, 3);
+  g.beginPath(); g.rect(x, gy - h * 0.22, w * 0.22, h * 0.18); fill(g, c.accent);
+  dot(g, x + w * 0.05, gy - h * 0.03, h * 0.04, c.ink); dot(g, x + w * 0.17, gy - h * 0.03, h * 0.04, c.ink);
+  arrow(g, x - w * 0.16, gy - h * 0.13, x - w * 0.02, gy - h * 0.13, c.mid);
+};
+P.seesaw = (g, w, h, t, c) => {
+  const cx = w / 2, cy = h * 0.6, a = Math.sin(t * 1.2) * 0.18;
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx - w * 0.07, cy + h * 0.22); g.lineTo(cx + w * 0.07, cy + h * 0.22); g.closePath(); fill(g, c.mid);
+  g.save(); g.translate(cx, cy); g.rotate(a); g.beginPath(); g.rect(-w * 0.4, -h * 0.04, w * 0.8, h * 0.04); fill(g, c.ink);
+  g.beginPath(); g.rect(-w * 0.36, -h * 0.17, w * 0.1, h * 0.13); fill(g, c.accent); g.beginPath(); g.rect(w * 0.22, -h * 0.22, w * 0.13, h * 0.18); fill(g, c.second); g.restore();
+};
+P.induction = (g, w, h, t, c) => {
+  const cy = h * 0.4, x = w / 2 + Math.sin(t * 1.4) * w * 0.32;
+  for (let i = 0; i < 5; i++) { g.beginPath(); g.ellipse(w * 0.42 + i * w * 0.04, cy, w * 0.02, h * 0.2, 0, 0, TAU); stroke(g, c.accent, 2.5); }
+  g.beginPath(); g.rect(x - w * 0.09, cy - h * 0.06, w * 0.18, h * 0.12); fill(g, c.ink);
+  g.beginPath(); for (let k = 0; k <= w * 0.8; k += 3) { const tt = t - (w * 0.8 - k) / (w * 0.8) * 2, y = h * 0.82 - Math.cos(tt * 1.4) * Math.exp(-(Math.sin(tt * 1.4) ** 2) * 6) * h * 0.1; k ? g.lineTo(w * 0.1 + k, y) : g.moveTo(w * 0.1 + k, y); } stroke(g, c.mid, 2);
+};
+P.collisions = (g, w, h, t, c) => {
+  const k = (t * 0.5) % 2, cy = h / 2, d = k < 1 ? (1 - k) * w * 0.3 : (k - 1) * w * 0.3;
+  dot(g, w / 2 - h * 0.12 - (k < 1 ? d : 0), cy, h * 0.12, c.accent);
+  dot(g, w / 2 + h * 0.12 + (k < 1 ? 0 : d), cy, h * 0.12, c.second);
+};
 const ease = (k) => k * k * (3 - 2 * k);
 
 // small drawing helpers

@@ -18,6 +18,7 @@ import { MATH } from './math.js';
 import { MATH2 } from './math2.js';
 import { PHYSICS } from './physics.js';
 import { PHYSICS2 } from './physics2.js';
+import { PHYSICS3 } from './physics3.js';
 import { SPACE } from './space.js';
 import { CHEMISTRY } from './chemistry.js';
 import { CHEMISTRY2 } from './chemistry2.js';
@@ -26,10 +27,10 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=226';
+import { MUSEUM } from './museum.js?v=227';
 import { GAMES } from './games.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=226';
+import { LEVEL_LESSONS } from './level-lessons.js?v=227';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -53,7 +54,7 @@ const EXPLORE = [
   { id: 'cells3d', name: 'Cells 3D: animal & plant', subject: 'biology', levels: ['hs', 'college'], blurb: 'A cell cut open in 3D: pick Animal or Plant, tap an organelle to see what it does.', explore: 'cells',
     icon: '<ellipse cx="24" cy="24" rx="17" ry="14"/><circle cx="22" cy="23" r="6"/><circle cx="22" cy="23" r="2"/><path d="M33 17c2 1 3 3 2 5M12 30c2 2 5 3 7 2"/>' },
 ];
-export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...MATH, ...MATH2, ...PUZZLES, ...GAMES, ...TOOLS, ...MUSEUM, ...KIDS];
+export const LABS = [...BIOLOGY, ...CHEMISTRY, ...CHEMISTRY2, space3dLab, ...SPACE, atlasLab, ...PHYSICS, ...PHYSICS2, ...PHYSICS3, ...MATH, ...MATH2, ...PUZZLES, ...GAMES, ...TOOLS, ...MUSEUM, ...KIDS];
 // three shelves: Learn (simulations), Games (daily puzzles + games), Study tools
 const shelfOf = (l) => (l.subject === 'puzzles' || l.subject === 'games' ? 'games' : l.subject === 'tools' ? 'tools' : 'learn');
 const SIMS = LABS.filter((l) => shelfOf(l) === 'learn' && l.subject !== 'kids'); // (Today's Lab and For you: the little ones' labs open from Lessons)
