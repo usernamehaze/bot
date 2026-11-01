@@ -29,7 +29,7 @@ const dayNightLab = {
       // the Earth: lit on the Sun's side
       dot(ctx, cx, cy, R, '#2a3a63'); ctx.fillStyle = '#4f8de0'; ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI / 2, (3 * Math.PI) / 2); ctx.fill();
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
-      text(ctx, 'Day side', cx - R * 0.55, cy - R - 10, INK, 'center'); text(ctx, 'Night side', cx + R * 0.55, cy - R - 10, DIM, 'center');
+      text(ctx, 'Day side', cx - R * 0.5, cy - R * 0.35, '#0b1a33', 'center'); text(ctx, 'Night side', cx + R * 0.5, cy - R * 0.35, INK, 'center');
       dot(ctx, cx, cy, 4, INK); text(ctx, 'North Pole', cx, cy + 16, DIM, 'center');
       // you and a friend on the far side: angle (y up) = π + (h − 12)·π/12, anticlockwise as time passes
       const put = (hour, col, lab) => { const a = Math.PI + ((hour - 12) * Math.PI) / 12, x = cx + Math.cos(a) * R, y = cy - Math.sin(a) * R; dot(ctx, x, y, 8, col); const ox = Math.cos(a) * 26, oy = -Math.sin(a) * 26; text(ctx, lab, x + ox, y + oy + 4, col, ox < -4 ? 'right' : ox > 4 ? 'left' : 'center'); };
@@ -255,7 +255,7 @@ const contoursLab = {
       const P = profile(kind, cutY), N = 70, cell = S / N, H = [];
       for (let j = 0; j <= N; j++) { H.push([]); for (let i = 0; i <= N; i++) H[j].push(f((2 * i) / N, 2 - (2 * j) / N)); }
       // a light shade by height, then the contours (marching squares)
-      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const v = (H[j][i] - 100) / 450; ctx.fillStyle = `rgba(${Math.round(120 + 100 * v)},${Math.round(160 + 40 * v)},${Math.round(110 - 30 * v)},.35)`; ctx.fillRect(mx + i * cell, my + j * cell, cell + 0.5, cell + 0.5); }
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const v = (H[j][i] - 100) / 450; ctx.fillStyle = `rgb(${Math.round(52 + 45 * v)},${Math.round(70 + 25 * v)},${Math.round(52 - 8 * v)})`; ctx.fillRect(mx + i * cell, my + j * cell, cell + 0.5, cell + 0.5); }
       ctx.strokeRect(mx, my, S, S);
       for (let lev = step; lev < 1000; lev += step) {
         const major = lev % (step * 5) === 0; ctx.strokeStyle = major ? '#f0d9a8' : 'rgba(240,217,168,.7)'; ctx.lineWidth = major ? 2 : 1; ctx.beginPath();
@@ -276,7 +276,7 @@ const contoursLab = {
         for (const v of [0, 250, 500]) text(ctx, String(v), gx - 6, gy + gh - (v / 600) * gh + 4, DIM, 'right');
         ctx.fillStyle = 'rgba(160,190,120,.4)'; ctx.beginPath(); ctx.moveTo(gx, gy + gh); P.pts.forEach(([x, z]) => ctx.lineTo(gx + (x / 2) * gw, gy + gh - (z / 600) * gh)); ctx.lineTo(gx + gw, gy + gh); ctx.fill();
         line(ctx, P.pts.map(([x, z]) => [gx + (x / 2) * gw, gy + gh - (z / 600) * gh]), INK, 2);
-        text(ctx, 'Cross-section A to B (heights not to the same scale as the distance)', gx, gy + gh + 34, DIM);
+        text(ctx, 'Cross-section A to B (height stretched)', gx, gy + gh + 34, DIM);
       }
     });
     seg(group(panel, 'Landform'), { options: Object.entries(LANDFORMS).map(([k, [n]]) => [k, n]), value: kind, onChange: (v) => { kind = v; report(); } });
