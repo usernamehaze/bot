@@ -2264,11 +2264,11 @@ document.addEventListener('pointerdown', (e) => { const h = e.target.closest && 
 // and Edit, a list's rows) still does its own job, and selecting its words opens nothing. One tab stop per box: its
 // main button (style.css rings the box when that button has keyboard focus).
 // (v223: the same boxes on every page: the cards of Chats, Study plan, Calendar and Progress, a plan's tasks, and the games)
-const HOME_BOX = '.ht-tile, .desk-home .dk-stat, .desk .dk-card, .desk .dk-task, .labs .labs-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab';
+const HOME_BOX = '.ht-tile, .desk-home .dk-stat, .desk .dk-card, .desk .dk-task, .labs .labs-card, .hub .hub-box, .hub-card, .hub-chat.ex-new, .hub-tlab, .hub-cal';
 const BOX_OWN = 'button, a, input, select, textarea, label, summary, form, [role="button"], [role="switch"], [role="link"], [data-dk], [data-hub], [contenteditable]';
 const BOX_DK = { 'dk-chart': 'progress', 'dk-ready': 'plan', 'dk-plans': 'plan', 'dk-chats': 'chats', 'dk-next': 'plan' }; // (the dashboard cards with no button of their own)
 function boxMain(box) {
-  const b = box.querySelector('.ht-go:is(button), .dk-tgo, .dk-up, .hub-tlab-go, [data-dk="nexttask"], .dk-open'); if (b) return b;
+  const b = box.querySelector('.ht-go:is(button), .dk-tgo, .dk-up, .hub-tlab-go, [data-dk="nexttask"], .dk-open, .cal-open'); if (b) return b;
   const k = Object.keys(BOX_DK).find((c) => box.classList.contains(c)); return k ? BOX_DK[k] : null;
 }
 document.addEventListener('click', (e) => {
@@ -2284,19 +2284,25 @@ document.addEventListener('click', (e) => {
 // Outside edit mode Home works as before (whole-box clicks, the lift, the light).
 const HW_NAME = { lessons: 'Lessons', timer: 'Focus timer', cards: 'Flashcards', exam: 'Exam coming up', tlab: 'Today’s Lab', asked: 'Questions this week',
   learned: 'Cards learned', streak: 'Day streak', readiness: 'Exam readiness', week: 'Study this week', next: 'Next up', plans: 'My exam plans', chats: 'Recent chats',
-  ready: 'Readiness gauge', continue: 'Continue', tools: 'Study tools', quick: 'Quick actions' };
+  ready: 'Readiness gauge', continue: 'Continue', tools: 'Study tools', quick: 'Quick actions', cal: 'Calendar' };
 const HW_ABOUT = { lessons: 'What your level studies', timer: 'Start a focus session', cards: 'Review and make cards', exam: 'A day by day plan for an exam', tlab: 'A lab picked for today',
   asked: 'How many questions this week', learned: 'Cards you know well', streak: 'Days in a row', readiness: 'How ready you are for your exam', week: 'A bar for each day',
   next: 'The next task of your plan', plans: 'Your exam plans', chats: 'Your last chats', ready: 'Your exam readiness, as a gauge', continue: 'Pick up a chat', tools: 'Research, quiz, board and more',
-  quick: 'One tap to start' };
+  quick: 'One tap to start', cal: 'Today, this week or the month' };
 const HW_DEFAULT = {
   desk: [['lessons', 's'], ['timer', 'm'], ['cards', 's'], ['exam', 'l'], ['tlab', 'm'], ['asked', 's'], ['learned', 's'], ['streak', 's'], ['readiness', 's'],
     ['week', 'm'], ['next', 'm'], ['plans', 'm'], ['chats', 'm'], ['ready', 'm']],
-  phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['tlab', 'm'], ['streak', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
+  phone: [['lessons', 's'], ['cards', 's'], ['timer', 'm'], ['exam', 'm'], ['cal', 'm'], ['tlab', 'm'], ['streak', 'm'], ['week', 'm'], ['continue', 'm'], ['tools', 'm'], ['quick', 'm']] };
 const HW_SIZES = ['s', 'm', 'l'], HW_SIZE_NAME = { s: 'Small', m: 'Medium', l: 'Large' };
 let homeEditing = false;
 const hwStill = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-const hwLayout = (kind) => { const s = state.homeLayout && state.homeLayout[kind]; return Array.isArray(s) ? s : HW_DEFAULT[kind].map(([id, size]) => ({ id, size })); };
+const hwLayout = (kind) => {
+  const s = state.homeLayout && state.homeLayout[kind];
+  if (!Array.isArray(s)) return HW_DEFAULT[kind].map(([id, size]) => ({ id, size }));
+  // (v225) a phone layout saved before the Calendar widget: it is added once, after the exams (taken off later, it stays off)
+  if (kind === 'phone' && !state.hwCalAdded && !s.some((w) => w.id === 'cal')) { const i = s.findIndex((w) => w.id === 'exam'); s.splice(i < 0 ? s.length : i + 1, 0, { id: 'cal', size: 'm' }); state.hwCalAdded = true; }
+  return s;
+};
 function hwSave(grid) {
   state.homeLayout = { ...(state.homeLayout || {}), [grid.dataset.kind]: [...grid.querySelectorAll(':scope > .hw')].map((w) => ({ id: w.dataset.w, size: w.dataset.size })) };
   save();
@@ -2545,7 +2551,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=224'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=225'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2680,6 +2686,7 @@ function hubAct(act) {
   if (act === 'cards') { if (onPhoneHome()) nav('cards'); else if (window.CassieCards) window.CassieCards.open(); return; }
   if (act === 'lab') { if (onPhoneHome()) nav('labs'); else openLabs(); return; }
   if (act === 'today') { openLabs(todayLab()); return; }
+  if (act === 'calendar') { openCalFull(); return; }
   if (act === 'lessons') { openLessons(); return; }
   if (act === 'games') { openLabs(undefined, { section: 'games' }); return; }
   if (act === 'board') { nav('chat'); const bb = document.getElementById('board-btn'); if (bb) bb.click(); return; }
@@ -2757,7 +2764,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=224').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=225').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2884,6 +2891,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
   // Cassie, large, blinking now and then (she keeps still with Reduce Motion)
   try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'greeting', pokeable: true }); } catch (e) { /* the words still work */ }
+  if (phone) el.append(calWidget()); // (v225: the Calendar, as a widget)
   homeWidgets(el, 'phone');
   setTimeout(renderHubTimer, 0);
   return el;
@@ -3476,6 +3484,176 @@ function deskPlan() {
   return el;
 }
 /* Calendar: the month with exam days and tasks; Today and Coming up beside it */
+/* ---------- Calendar: a day's own notes and labels (v225) ----------
+   state.calItems: [{ id, day: 'YYYY-MM-DD', label, other, note, time, at, gone }]. A deleted item is kept as gone
+   (for 60 days) so another device's copy doesn't bring it back; synced in accountData like the exam plans. */
+const CAL_LABELS = [['quiz', 'Quiz'], ['exam', 'Exam'], ['assign', 'Assignment due'], ['project', 'Project'], ['reading', 'Reading'], ['other', 'Other']];
+const CAL_NOTE_MAX = 200;
+const calName = (it) => (it.label === 'other' ? (it.other || '').trim() || 'Other' : (CAL_LABELS.find((l) => l[0] === it.label) || [])[1] || 'Note');
+const calItems = () => (state.calItems || []).filter((x) => x && !x.gone && x.day);
+const calOn = (day) => calItems().filter((x) => x.day === day).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+const calChip = (it) => `<span class="cal-ev cal-l-${escapeHtml(it.label)}"><i aria-hidden="true"></i>${escapeHtml(calName(it))}</span>`;
+const calWhen = (day, o = { weekday: 'long', day: 'numeric', month: 'long' }) => { const d = new Date(day + 'T12:00:00Z'), f = (x) => d.toLocaleDateString('en-PH', { ...x, timeZone: 'UTC' }); return [o.weekday && f({ weekday: o.weekday }), o.day && f({ day: 'numeric' }), o.month && f({ month: o.month })].filter(Boolean).join(' '); };
+const calTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
+// everything on a day: the exam plans' exams and tasks (as before) and the student's own items
+function calDay(day) {
+  const out = [];
+  activeExams().forEach((e) => { if (e.date === day) out.push({ kind: 'exam', name: `${e.name} exam`, what: `${e.name} exam`, plan: true }); }); // (its name: "Gen Chem finals exam")
+  allExamTasks().forEach((x) => { if (x.day === day) out.push({ kind: x.t.kind, name: KIND_NAME[x.t.kind] || 'Task', what: taskLabel(x.t), plan: true, x }); });
+  calOn(day).forEach((it) => out.push({ kind: it.label, name: calName(it), what: it.note || calName(it), own: it }));
+  return out;
+}
+// what a screen reader hears: "Monday 3 November, 2 items: Quiz, Reading"
+const calSays = (day, list) => `${calWhen(day)}, ${list.length ? `${list.length} ${list.length === 1 ? 'item' : 'items'}: ${list.map((x) => x.name).join(', ')}` : 'nothing yet'}`;
+function calSave(item) {
+  item.at = Date.now();
+  const list = state.calItems = Array.isArray(state.calItems) ? state.calItems : [];
+  const i = list.findIndex((x) => x.id === item.id); if (i >= 0) list[i] = item; else list.push(item);
+  calTidy(); save(); calRefresh();
+}
+function calDelete(id) {
+  const it = (state.calItems || []).find((x) => x.id === id); if (!it) return;
+  Object.assign(it, { gone: true, at: Date.now(), note: '', other: '' }); calTidy(); save(); calRefresh();
+}
+function calTidy() { const old = Date.now() - 60 * 864e5; state.calItems = (state.calItems || []).filter((x) => x && x.id && !(x.gone && x.at < old)).slice(-600); }
+function calRefresh() {
+  if (document.body.classList.contains('desk-on') && deskPage === 'calendar') renderHistory();
+  refreshHub();
+  document.querySelectorAll('.cal-full').forEach((f) => f._draw && f._draw());
+  document.querySelectorAll('.cal-sheet').forEach((f) => f._draw && f._draw());
+}
+// a month's day cells: a button per day (44px or more), its items as small chips with their words, today ringed
+function calCells(month, { max = 2 } = {}) {
+  const today = phDay(), [y, m] = month.split('-').map(Number);
+  const startDow = new Date(`${month}-01T00:00:00Z`).getUTCDay(), daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate(), cells = [];
+  for (let i = 0; i < startDow; i++) cells.push('<div class="dk-day dk-day-out" aria-hidden="true"></div>');
+  for (let d = 1; d <= daysIn; d++) {
+    const day = `${month}-${String(d).padStart(2, '0')}`, list = calDay(day);
+    const chips = list.slice(0, max).map((it) => (it.own ? calChip(it.own) : `<span class="dk-ev dk-k-${it.kind}${it.x && it.x.t.done ? ' done' : ''}">${escapeHtml(it.kind === 'exam' ? it.what : it.name)}</span>`)).join('') + (list.length > max ? `<span class="cal-more">+${list.length - max}</span>` : '');
+    cells.push(`<button type="button" class="dk-day cal-cell${day === today ? ' dk-today' : ''}${list.some((it) => it.kind === 'exam' && it.plan) ? ' dk-examday' : ''}" data-cal-day="${day}" aria-label="${escapeHtml(calSays(day, list))}"${day === today ? ' aria-current="date"' : ''}><b>${d}</b>${chips}</button>`);
+  }
+  return cells.join('');
+}
+const CAL_LEGEND = () => `<p class="dk-legend dk-cal-legend">${[['exam', 'Exam day'], ...Object.entries(KIND_NAME)].map(([k, l]) => `<span class="dk-lg dk-k-${k}">${l}</span>`).join('')}${CAL_LABELS.map(([k, l]) => `<span class="cal-ev cal-l-${k}"><i aria-hidden="true"></i>${l}</span>`).join('')}</p>`;
+// a day: what's on it, and adding, editing or deleting the student's own items
+function openCalDay(day) {
+  document.querySelector('.cal-sheet')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet cal-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'cal-day-h');
+  w.innerHTML = `<div class="plus-card cal-card"><div class="cal-top"><h3 id="cal-day-h"></h3><button type="button" class="cal-x" aria-label="Close">×</button></div>
+    <ul class="cal-list" role="list"></ul><p class="cal-empty">Nothing on this day yet.</p>
+    <form class="cal-form" novalidate><h4 class="cal-form-h">Add to this day</h4>
+      <div class="cal-labels" role="group" aria-label="Label">${CAL_LABELS.map(([k, l]) => `<button type="button" class="cal-lb cal-l-${k}" data-label="${k}" aria-pressed="false"><i aria-hidden="true"></i>${l}</button>`).join('')}</div>
+      <label class="cal-other" hidden><span>Name it</span><input name="other" maxlength="30" autocomplete="off" placeholder="e.g. Club meeting"></label>
+      <label class="cal-note"><span>Note <small class="cal-count">0 / ${CAL_NOTE_MAX}</small></span><textarea name="note" maxlength="${CAL_NOTE_MAX}" rows="2" placeholder="e.g. Chapters 3 and 4"></textarea></label>
+      <label class="cal-time"><span>Time (optional)</span><input type="time" name="time"></label>
+      <p class="cal-err" role="alert" hidden></p>
+      <div class="plus-actions"><button type="submit" class="plus-go cal-save">Save</button><button type="button" class="plus-ok cal-cancel" hidden>Cancel</button></div>
+    </form></div>`;
+  w.querySelector('#cal-day-h').textContent = calWhen(day);
+  const form = w.querySelector('.cal-form'), err = w.querySelector('.cal-err'), other = w.querySelector('.cal-other'), note = form.note, count = w.querySelector('.cal-count');
+  let label = '', editing = null;
+  const setLabel = (k) => { label = k; w.querySelectorAll('.cal-lb').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.label === k))); other.hidden = k !== 'other'; };
+  const reset = () => { editing = null; setLabel(''); form.reset(); count.textContent = `0 / ${CAL_NOTE_MAX}`; err.hidden = true; w.querySelector('.cal-form-h').textContent = 'Add to this day'; w.querySelector('.cal-cancel').hidden = true; };
+  w.querySelectorAll('.cal-lb').forEach((b) => b.addEventListener('click', () => setLabel(label === b.dataset.label ? '' : b.dataset.label)));
+  note.addEventListener('input', () => { count.textContent = `${note.value.length} / ${CAL_NOTE_MAX}`; });
+  w.querySelector('.cal-cancel').addEventListener('click', reset);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = note.value.trim().slice(0, CAL_NOTE_MAX);
+    if (!label && !text) { err.hidden = false; err.textContent = 'Pick a label or write a note first.'; return; }
+    calSave({ ...(editing || { id: 'ci' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), day }), label: label || 'other', other: label === 'other' || !label ? (form.other.value.trim().slice(0, 30) || (label ? '' : 'Note')) : '', note: text, time: form.time.value || '' });
+    reset();
+  });
+  w._draw = () => {
+    const ul = w.querySelector('.cal-list'), list = calDay(day);
+    ul.replaceChildren(); w.querySelector('.cal-empty').hidden = list.length > 0;
+    list.forEach((it) => {
+      const li = document.createElement('li'); li.className = 'cal-item';
+      li.innerHTML = `<div class="cal-item-main">${it.own ? calChip(it.own) : `<span class="dk-ev dk-k-${escapeHtml(it.kind)}">${escapeHtml(it.name)}</span>`}<span class="cal-item-text"><b></b><small></small></span></div>`;
+      li.querySelector('b').textContent = it.own ? (it.own.note || calName(it.own)) : it.what;
+      li.querySelector('small').textContent = it.own ? [calTime(it.own.time), it.own.note ? '' : ''].filter(Boolean).join(' ') || 'Any time' : 'From your exam plan';
+      if (it.own) {
+        const acts = document.createElement('div'); acts.className = 'cal-item-acts';
+        acts.innerHTML = '<button type="button" class="cal-edit">Edit</button><button type="button" class="cal-del">Delete</button>';
+        acts.querySelector('.cal-edit').setAttribute('aria-label', `Edit ${calName(it.own)}${it.own.note ? ': ' + it.own.note : ''}`);
+        acts.querySelector('.cal-del').setAttribute('aria-label', `Delete ${calName(it.own)}${it.own.note ? ': ' + it.own.note : ''}`);
+        acts.querySelector('.cal-edit').addEventListener('click', () => {
+          editing = { ...it.own }; setLabel(it.own.label); form.other.value = it.own.other || ''; note.value = it.own.note || ''; form.time.value = it.own.time || '';
+          count.textContent = `${note.value.length} / ${CAL_NOTE_MAX}`; w.querySelector('.cal-form-h').textContent = 'Edit this item'; w.querySelector('.cal-cancel').hidden = false; note.focus();
+        });
+        acts.querySelector('.cal-del').addEventListener('click', () => { calDelete(it.own.id); if (editing && editing.id === it.own.id) reset(); });
+        li.appendChild(acts);
+      }
+      ul.appendChild(li);
+    });
+  };
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.querySelector('.cal-x').addEventListener('click', close);
+  w.addEventListener('click', (e) => { if (e.target === w) close(); });
+  w._draw();
+  document.body.appendChild(w);
+  w.querySelector('.cal-lb').focus({ preventScroll: true });
+}
+// the phone's full Calendar (the computer has its Calendar page): the month, arrows, Today, the key
+let calMonth = '';
+function openCalFull() {
+  if (document.body.classList.contains('desk-on')) { deskGo('calendar'); return; }
+  document.querySelector('.cal-full')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet cal-full'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'cal-full-h');
+  w._draw = () => {
+    const month = calMonth || phDay().slice(0, 7), [y, m] = month.split('-').map(Number);
+    const name = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    w.innerHTML = `<div class="plus-card cal-full-card"><div class="cal-top"><h3 id="cal-full-h">Calendar</h3><button type="button" class="cal-x" aria-label="Close">×</button></div>
+      <div class="cal-month-head"><button type="button" class="cal-ar" data-cal="prev" aria-label="Last month">‹</button><b class="cal-month-name"></b><button type="button" class="cal-ar" data-cal="next" aria-label="Next month">›</button><button type="button" class="cal-today" data-cal="today">Today</button></div>
+      <div class="dk-week-h" aria-hidden="true">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => `<span>${d}</span>`).join('')}</div>
+      <div class="dk-days cal-days" role="group">${calCells(month, { max: 1 })}</div>${CAL_LEGEND()}<p class="cal-hint">Tap a day to add a note or a label.</p></div>`;
+    w.querySelector('.cal-month-name').textContent = name; w.querySelector('.cal-days').setAttribute('aria-label', name);
+    w.querySelector('.cal-x').addEventListener('click', close);
+  };
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.cal-sheet')) { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => {
+    if (e.target === w) { close(); return; }
+    const c = e.target.closest('[data-cal]'); if (c) {
+      const [y, m] = (calMonth || phDay().slice(0, 7)).split('-').map(Number);
+      calMonth = c.dataset.cal === 'today' ? '' : new Date(Date.UTC(y, m - 1 + (c.dataset.cal === 'next' ? 1 : -1), 1)).toISOString().slice(0, 7);
+      w._draw(); return;
+    }
+    const d = e.target.closest('[data-cal-day]'); if (d) openCalDay(d.dataset.calDay);
+  });
+  w._draw(); document.body.appendChild(w);
+  w.querySelector('.cal-today').focus({ preventScroll: true });
+}
+// the phone's Calendar widget: Small, today and the next item; Medium, this week; Large, the month (tap: the full Calendar)
+function calWidget() {
+  const today = phDay(), el = document.createElement('section');
+  el.className = 'hub-cal'; el.dataset.w = 'cal'; el.setAttribute('aria-label', 'Calendar');
+  const next = Object.keys(Object.fromEntries(calItems().map((x) => [x.day, 1]))).filter((d) => d > today).sort()[0];
+  const nextIt = next ? calOn(next)[0] : null, todays = calDay(today);
+  const week = []; for (let i = 0; i < 7; i++) { const d = new Date(today + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + i); week.push(d.toISOString().slice(0, 10)); }
+  // (each mark is its label's letter on its colour, never colour alone: Q, E, A, P, R, O; T for an exam plan's task)
+  const CAL_LETTER = { quiz: 'Q', exam: 'E', assign: 'A', project: 'P', reading: 'R', other: 'O', plan: 'T' };
+  const dots = (day) => calDay(day).slice(0, 3).map((it) => { const k = it.own ? it.own.label : 'plan'; return `<i class="cal-tag cal-l-${escapeHtml(k)}">${CAL_LETTER[k] || 'O'}</i>`; }).join('');
+  const month = today.slice(0, 7), [y, m] = month.split('-').map(Number), startDow = new Date(`${month}-01T00:00:00Z`).getUTCDay(), daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let grid = ''; for (let i = 0; i < startDow; i++) grid += '<span></span>';
+  for (let d = 1; d <= daysIn; d++) { const day = `${month}-${String(d).padStart(2, '0')}`; grid += `<span class="${day === today ? 'on' : ''}${calDay(day).length ? ' has' : ''}">${d}</span>`; }
+  el.innerHTML = `<div class="cal-w-head"><b>Calendar</b><small></small></div>
+    <div class="cal-w-s"><p class="cal-w-today"></p><p class="cal-w-next"></p></div>
+    <ol class="cal-w-m" aria-hidden="true">${week.map((d) => `<li class="${d === today ? 'on' : ''}"><small>${escapeHtml(calWhen(d, { weekday: 'short' }))}</small><b>${+d.slice(8)}</b><span>${dots(d)}</span></li>`).join('')}</ol>
+    <div class="cal-w-l" aria-hidden="true"><b class="cal-w-mname"></b><div class="cal-w-grid">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((x) => `<em>${x}</em>`).join('')}${grid}</div></div>
+    <button type="button" class="cal-open" data-hub="calendar"></button>`;
+  el.querySelector('.cal-w-head small').textContent = calWhen(today, { weekday: 'short', day: 'numeric', month: 'short' });
+  el.querySelector('.cal-w-today').textContent = todays.length ? `Today: ${todays.map((x) => x.name).join(', ')}` : 'Nothing today';
+  el.querySelector('.cal-w-next').textContent = nextIt ? `Next: ${calName(nextIt)}${nextIt.note ? ', ' + nextIt.note : ''} · ${calWhen(next, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'Nothing coming up. Tap to add.';
+  el.querySelector('.cal-w-mname').textContent = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-PH', { month: 'long', timeZone: 'UTC' });
+  el.querySelector('.cal-open').setAttribute('aria-label', `Open the Calendar. ${todays.length ? `Today: ${todays.map((x) => x.name).join(', ')}.` : 'Nothing today.'}${nextIt ? ` Next: ${calName(nextIt)}, ${calWhen(next)}.` : ''}`);
+  return el;
+}
 let deskMonth = '';
 function deskCalendar() {
   const el = document.createElement('div');
@@ -3486,20 +3664,14 @@ function deskCalendar() {
   const put = (day, it) => { (items[day] = items[day] || []).push(it); };
   activeExams().forEach((e) => put(e.date, { kind: 'exam', label: `${e.name} exam`, e }));
   allExamTasks().forEach((x) => put(x.day, { kind: x.t.kind, label: taskLabel(x.t), x }));
+  calItems().forEach((it) => put(it.day, { kind: 'own', label: `${calName(it)}${it.note ? ': ' + it.note : ''}`, own: it })); // (v225: the day's own notes and labels)
   const monthName = new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  const cells = [];
-  for (let i = 0; i < startDow; i++) cells.push('<div class="dk-day dk-day-out" aria-hidden="true"></div>');
-  for (let d = 1; d <= daysIn; d++) {
-    const day = `${month}-${String(d).padStart(2, '0')}`, list = items[day] || [];
-    const chips = list.slice(0, 2).map((it) => `<span class="dk-ev dk-k-${it.kind}${it.x && it.x.t.done ? ' done' : ''}">${escapeHtml(it.kind === 'exam' ? it.label : KIND_NAME[it.kind] + (it.x.t.topic ? ': ' + it.x.t.topic : ''))}</span>`).join('') + (list.length > 2 ? `<span class="dk-more">+${list.length - 2} more</span>` : '');
-    const label = `${dayName(day, { weekday: 'long', day: 'numeric', month: 'long' })}${list.length ? ': ' + list.map((it) => it.label).join(', ') : ''}`;
-    cells.push(`<div class="dk-day${day === today ? ' dk-today' : ''}${list.some((it) => it.kind === 'exam') ? ' dk-examday' : ''}" role="gridcell" aria-label="${escapeHtml(label)}"><b>${d}</b>${chips}</div>`);
-  }
+  const cells = [calCells(month)]; // (v225: the day cells, shared with the phone's Calendar)
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   el.innerHTML = deskHeader('Calendar', 'Your exam days and study tasks, day by day.', '<button type="button" class="dk-btn dk-line" data-dk="today">Today</button>')
     + `<div class="dk-cal-wrap"><section class="dk-card dk-month" aria-label="${escapeHtml(monthName)}"><div class="dk-card-head"><h2>${escapeHtml(monthName)}</h2><div class="dk-arrows"><button type="button" class="dk-arrow" data-dk="prev" aria-label="Last month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" class="dk-arrow" data-dk="next" aria-label="Next month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div></div>
-      <div class="dk-week-h" aria-hidden="true">${WEEKDAYS.map((w) => `<span>${w}</span>`).join('')}</div><div class="dk-days" role="grid">${cells.join('')}</div>
-      <p class="dk-legend dk-cal-legend">${[['exam', 'Exam day'], ...Object.entries(KIND_NAME)].map(([k, l]) => `<span class="dk-lg dk-k-${k}">${l}</span>`).join('')}</p></section>
+      <div class="dk-week-h" aria-hidden="true">${WEEKDAYS.map((w) => `<span>${w}</span>`).join('')}</div><div class="dk-days" role="group" aria-label="${escapeHtml(monthName)}">${cells.join('')}</div>
+      ${CAL_LEGEND()}<p class="cal-hint">Click a day to add a note or a label.</p></section>
       <aside class="dk-side"><section class="dk-card dk-today-card" aria-labelledby="dk-today-h"><small class="dk-kicker">Today · ${escapeHtml(dayName(today, { weekday: 'long' }))}</small><h2 id="dk-today-h">${escapeHtml(dayName(today, { month: 'long', day: 'numeric' }))}</h2><ul class="dk-list dk-today-list"></ul></section>
       <section class="dk-card" aria-labelledby="dk-soon-h"><h2 id="dk-soon-h">Coming up</h2><ul class="dk-list dk-soon"></ul></section></aside></div>`;
   // today: the day's tasks (and an exam, if it's today)
@@ -3508,8 +3680,8 @@ function deskCalendar() {
     const li = document.createElement('li');
     li.innerHTML = `<button type="button" class="dk-row dk-ev-row dk-k-${it.kind}"><span><b></b><small></small></span></button>`;
     li.querySelector('b').textContent = it.label;
-    li.querySelector('small').textContent = it.kind === 'exam' ? 'Exam day. You’ve got this.' : `${it.x.e.name}${it.x.t.done ? ' · done' : ''}`;
-    li.querySelector('button').addEventListener('click', () => { if (it.x) openExamTask(it.x.t, it.x.e); });
+    li.querySelector('small').textContent = it.own ? (calTime(it.own.time) || 'Today') : it.kind === 'exam' ? 'Exam day. You’ve got this.' : `${it.x.e.name}${it.x.t.done ? ' · done' : ''}`;
+    li.querySelector('button').addEventListener('click', () => { if (it.x) openExamTask(it.x.t, it.x.e); else if (it.own) openCalDay(today); });
     tl.appendChild(li);
   });
   if (!tl.children.length) tl.replaceWith(CassieErrors.empty({ title: 'Nothing planned today', text: 'Rest, or review anything you like.' }));
@@ -3521,11 +3693,12 @@ function deskCalendar() {
     li.querySelector('.dk-date small').textContent = dayName(d, { month: 'short' });
     li.querySelector('.dk-date b').textContent = String(+d.slice(8));
     li.querySelector('.dk-soon-what').textContent = it.label;
-    li.querySelector('.dk-soon-when').textContent = `${left === 1 ? 'Tomorrow' : dayName(d, { weekday: 'long' })}${it.x ? ' · ' + it.x.e.name : ''}`;
+    li.querySelector('.dk-soon-when').textContent = `${left === 1 ? 'Tomorrow' : dayName(d, { weekday: 'long' })}${it.x ? ' · ' + it.x.e.name : it.own && it.own.time ? ' · ' + calTime(it.own.time) : ''}`;
     soon.appendChild(li);
   });
   if (!soon.children.length) soon.replaceWith(CassieErrors.empty({ title: 'Nothing coming up', text: activeExams().length ? 'Every planned task is done.' : 'Plan an exam and its days show up here.', action: activeExams().length ? '' : 'Plan an exam', onAction: () => openExamSheet() }));
   el.addEventListener('click', (e) => {
+    const cd = e.target.closest('[data-cal-day]'); if (cd) { openCalDay(cd.dataset.calDay); return; }
     const b = e.target.closest('[data-dk]'); if (!b) return;
     const shift = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); deskMonth = d.toISOString().slice(0, 7); renderHistory(); };
     if (b.dataset.dk === 'prev') shift(-1); else if (b.dataset.dk === 'next') shift(1); else if (b.dataset.dk === 'today') { deskMonth = ''; renderHistory(); }
@@ -3924,6 +4097,21 @@ function examSection() {
     });
     wrap.appendChild(card);
   });
+  // (v225) the Calendar's own Quiz and Exam labels, from today on: Coming up, with the date
+  const soon = calItems().filter((it) => (it.label === 'quiz' || it.label === 'exam') && it.day >= today).sort((a, b) => (a.day + (a.time || '')).localeCompare(b.day + (b.time || ''))).slice(0, 3);
+  if (soon.length) {
+    const box = document.createElement('div'); box.className = 'ex-soon';
+    box.innerHTML = '<h3 class="ex-soon-h">Coming up</h3><ul></ul>';
+    soon.forEach((it) => {
+      const li = document.createElement('li'), left = dayGap(today, it.day);
+      li.innerHTML = `<button type="button" class="ex-soon-row">${calChip(it)}<span><b></b><small></small></span></button>`;
+      li.querySelector('b').textContent = it.note || calName(it);
+      li.querySelector('small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : calWhen(it.day, { weekday: 'short', day: 'numeric', month: 'short' })}${it.time ? ', ' + calTime(it.time) : ''}`;
+      li.querySelector('button').addEventListener('click', () => openCalDay(it.day));
+      box.querySelector('ul').appendChild(li);
+    });
+    wrap.appendChild(box);
+  }
   const n = activeExams().length;
   if (n >= 5) { const p = document.createElement('p'); p.className = 'ex-full'; p.textContent = 'You have 5 exam plans, the most at once. Delete one to add another.'; wrap.appendChild(p); }
   else {
@@ -7188,7 +7376,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=224');
+      exploreMod = await import('./explore/cell3d.js?v=225');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7238,7 +7426,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=224');
+      labsMod = await import('./labs/labs.js?v=225');
       islandRest();
     }
     labsMod.open({
@@ -7609,6 +7797,7 @@ function setPage(page, { back = false } = {}) {
 function setBack() { const prev = setTrail.pop(); if (prev) setPage(prev, { back: true }); }
 settingsPanel.querySelector('.set-back').addEventListener('click', setBack);
 settingsPanel.addEventListener('click', (e) => { const l = e.target.closest('.set-link[data-open]'); if (l) setPage(l.dataset.open); });
+settingsPanel.addEventListener('click', (e) => { if (e.target.closest('.set-link[data-cal]')) openCalFull(); }); // (v225: the Calendar, from You)
 document.getElementById('set-edit-profile').addEventListener('click', () => openProfile(false));
 settingsPanel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); if (setTrail.length) setBack(); else closeSettings(); } });
 // Search: rows whose name (or section) matches; a section with none left hides
@@ -9079,10 +9268,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=224').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=225').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=224', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=225', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9381,7 +9570,7 @@ function mergeLabs(theirs) {
   try { localStorage.setItem('cassie.labs', JSON.stringify(mine)); } catch (e) { /* ignore */ }
 }
 function accountData() {
-  return { letCourse: state.letCourse || null, profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [], streak: window.CassieMemory ? window.CassieMemory.streakData() : null, labs: labsProgress() };
+  return { letCourse: state.letCourse || null, profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), calItems: (state.calItems || []).slice(-600), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [], streak: window.CassieMemory ? window.CassieMemory.streakData() : null, labs: labsProgress() };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -9413,6 +9602,11 @@ function applyAccountData(d) {
   if (Array.isArray(d.mistakes)) { // keep both devices' saved mistakes
     const have = new Set((state.mistakes || []).map((m) => (m.q || '').toLowerCase()));
     state.mistakes = [...(state.mistakes || []), ...d.mistakes.filter((m) => m && m.q && !have.has(m.q.toLowerCase()))].slice(0, 200);
+  }
+  if (Array.isArray(d.calItems)) { // the Calendar's own items from both devices (the newer edit, or delete, wins)
+    const mine = new Map((state.calItems || []).map((x) => [x.id, x]));
+    d.calItems.forEach((x) => { if (!x || !x.id || !/^\d{4}-\d{2}-\d{2}$/.test(x.day || '')) return; const m = mine.get(x.id); if (!m || (x.at || 0) > (m.at || 0)) mine.set(x.id, x); });
+    state.calItems = [...mine.values()]; calTidy();
   }
   if (Array.isArray(d.exams)) { // exam plans from both devices (the plan with more ticks wins)
     const ticks = (e) => (e.days || []).reduce((n, x) => n + (x.tasks || []).filter((t) => t.done).length, 0);

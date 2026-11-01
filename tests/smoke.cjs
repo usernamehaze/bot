@@ -1596,6 +1596,76 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   await d.ctx.close();
 });
 
+test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, Project, Reading, Other), edit and delete it, it stays after a reload, a Quiz shows on Home as Coming up, and the phone has the Calendar widget and the full Calendar (1280x800 and 390x844, AA in light and dark, 44px day cells)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const aa = async (page, sel, where) => { for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(350); const { bad } = await contrastIssues(page, sel); expect(!bad.length, `${where} (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    const today = await page.evaluate(() => phDay());
+    const openCal = async () => {
+      if (!phone) { await page.evaluate(() => deskGo('calendar')); await page.waitForSelector('.desk-cal [data-cal-day]'); return '.desk-cal'; }
+      await page.evaluate(() => window.CassieNative && window.CassieNative.go('home')); await page.waitForSelector('.hw-grid > [data-w="cal"]');
+      await page.$eval('.hw-grid > [data-w="cal"]', (e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(300);
+      const bb = await page.locator('.hw-grid > [data-w="cal"]').boundingBox(); await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height - 14);
+      await page.waitForSelector('.cal-full [data-cal-day]', { timeout: 4000 }); return '.cal-full';
+    };
+    const root = await openCal();
+    // every day cell is a button, 44px or more, and says what is on it
+    const cells = await page.$$eval(`${root} [data-cal-day]`, (cs) => cs.map((c) => { const r = c.getBoundingClientRect(); return [c.tagName, Math.round(r.width), Math.round(r.height)]; }));
+    expect(cells.length >= 28 && cells.every(([t, w, h]) => t === 'BUTTON' && w >= 44 && h >= 44), `${where}: every day is a button 44px or more: ` + JSON.stringify(cells.filter(([t, w, h]) => t !== 'BUTTON' || w < 44 || h < 44).slice(0, 3)));
+    expect(await page.$eval(`${root} [data-cal-day="${today}"]`, (c) => c.classList.contains('dk-today') && c.getAttribute('aria-current') === 'date'), `${where}: today is ringed`);
+    // tap today: its sheet, the six labels, a note and a time
+    await page.click(`${root} [data-cal-day="${today}"]`); await page.waitForSelector('.cal-sheet');
+    const labels = await page.$$eval('.cal-sheet .cal-lb', (bs) => bs.map((x) => x.textContent.trim()));
+    expect(JSON.stringify(labels) === JSON.stringify(['Quiz', 'Exam', 'Assignment due', 'Project', 'Reading', 'Other']), `${where}: the six labels: ` + labels);
+    expect(await page.$eval('.cal-sheet textarea', (t) => t.maxLength) === 200, `${where}: a note is up to 200 characters`);
+    await page.click('.cal-sheet .cal-save');
+    expect(/Pick a label or write a note first/.test(await page.textContent('.cal-sheet .cal-err')), `${where}: an empty item says what it needs`);
+    await page.click('.cal-sheet .cal-lb[data-label="quiz"]'); await page.fill('.cal-sheet textarea', 'Biology quiz'); await page.fill('.cal-sheet input[type="time"]', '09:00'); await page.click('.cal-sheet .cal-save');
+    await page.click('.cal-sheet .cal-lb[data-label="other"]'); await page.fill('.cal-sheet input[name="other"]', 'Club'); await page.fill('.cal-sheet textarea', 'Robotics'); await page.click('.cal-sheet .cal-save');
+    await page.click('.cal-sheet .cal-lb[data-label="reading"]'); await page.fill('.cal-sheet textarea', 'Chapter 4'); await page.click('.cal-sheet .cal-save');
+    let items = await page.$$eval('.cal-sheet .cal-item', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
+    expect(items.length === 3 && /Quiz Biology quiz 9:00 am/.test(items.join('|')) && /Club Robotics/.test(items.join('|')) && /Reading Chapter 4/.test(items.join('|')), `${where}: a day holds several items, each with its label, note and time: ` + JSON.stringify(items));
+    // edit the quiz, delete the club
+    const quizRow = page.locator('.cal-sheet .cal-item', { hasText: 'Biology quiz' });
+    await quizRow.locator('.cal-edit').click(); await page.fill('.cal-sheet textarea', 'Biology quiz, chapter 3'); await page.click('.cal-sheet .cal-save');
+    await page.locator('.cal-sheet .cal-item', { hasText: 'Robotics' }).locator('.cal-del').click();
+    items = await page.$$eval('.cal-sheet .cal-item', (ls) => ls.map((l) => l.innerText.replace(/\s+/g, ' ')));
+    expect(items.length === 2 && /Biology quiz, chapter 3/.test(items.join('|')) && !/Robotics/.test(items.join('|')), `${where}: edited and deleted: ` + JSON.stringify(items));
+    const taps = await page.$$eval('.cal-sheet button, .cal-sheet input, .cal-sheet textarea', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => [x.className || x.name, Math.round(x.getBoundingClientRect().height)]).filter(([, h]) => h < 44));
+    expect(!taps.length, `${where}: every tap in the day’s sheet is 44px or more: ` + JSON.stringify(taps));
+    await aa(page, '.cal-sheet', `${where}: the day’s words`);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/cal-day-${phone ? 'phone' : 'desk'}.png` });
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    // the month shows them, in words, and a screen reader hears the day
+    const cell = await page.$eval(`${root} [data-cal-day="${today}"]`, (c) => ({ text: c.innerText.replace(/\s+/g, ' '), says: c.getAttribute('aria-label') }));
+    expect(/Quiz/.test(cell.text) && /^\w+day \d{1,2} \w+, 2 items: (Quiz, Reading|Reading, Quiz)$/.test(cell.says), `${where}: the day shows its labels and says them: ` + JSON.stringify(cell));
+    await aa(page, root, `${where}: the month’s words`);
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/cal-month-${phone ? 'phone' : 'desk'}.png` });
+    if (phone) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    // it goes with the account, like the exam plans
+    expect(await page.evaluate(() => accountData().calItems.filter((x) => !x.gone).length) === 2, `${where}: the items sync with the account`);
+    // a reload keeps them; Home's exam section shows the quiz as Coming up
+    await page.reload(); await page.waitForTimeout(1500);
+    if (!phone) await page.evaluate(() => deskGo('home'));
+    await page.waitForSelector('.ex-soon', { timeout: 6000 });
+    const soon = await page.$eval('.ex-soon', (e) => e.innerText.replace(/\s+/g, ' '));
+    expect(/Coming up/.test(soon) && /Quiz/.test(soon) && /Biology quiz, chapter 3/.test(soon) && /Today, 9:00 am/.test(soon) && !/Chapter 4/.test(soon), `${where}: after a reload, the quiz is on Home as Coming up (the reading isn’t): ` + soon);
+    if (phone) {
+      // the widget: Small, Medium and Large show today, the week, the month; the You screen opens the Calendar too
+      const show = (sz) => page.evaluate((sz) => { const w = document.querySelector('.hw-grid > [data-w="cal"]'); hwSize(w, sz); const v = (s) => { const e = w.querySelector(s); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }; return { s: v('.cal-w-s'), m: v('.cal-w-m'), l: v('.cal-w-l'), next: w.querySelector('.cal-w-next').textContent }; }, sz);
+      const S = await show('s'), M = await show('m'), L = await show('l');
+      expect(S.s && !S.m && !S.l && M.m && !M.l && L.l && !L.m, `${where}: Small today, Medium the week, Large the month: ` + JSON.stringify([S, M, L]));
+      expect(await page.$$eval('.hw-grid > [data-w="cal"] .cal-w-m .cal-tag', (t) => t.length && t.every((x) => /^[QEAPROT]$/.test(x.textContent))), `${where}: the week marks each item with its label’s letter, never colour alone`);
+      await page.click('.tabbar [data-tab="you"]'); await page.waitForSelector('.set-link[data-cal]');
+      await page.click('.set-link[data-cal]'); expect(await page.waitForSelector('.cal-full', { timeout: 4000 }).then(() => true, () => false), `${where}: You > Calendar opens it`);
+    }
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('Podcast from my notes: upload a .txt or .md file, or pick notes made in Cassie, see what will be used, then make the podcast (faked); an unreadable file says why; no notes offers Make study notes (1280x800 and 390x844, AA in light and dark)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const LINES = [['Jessica', 'Welcome! Today: cells.'], ['Chris', 'What is inside a cell?'], ['Jessica', 'A nucleus, mitochondria and ribosomes.'], ['Chris', 'Recap: the parts of a cell.']];
@@ -2327,7 +2397,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
+  const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', calItems: 'Calendar notes', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
@@ -2482,7 +2552,7 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
   const dw = await D.page.evaluate(() => { const f = [...document.querySelectorAll('.labs-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
   expect(dw.first && dw.mine / dw.other > 1.35 && dw.mine / dw.other < 1.65, 'computer: the own level first and about 1.5 times as wide: ' + JSON.stringify(dw));
-  for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
+  for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(1000); /* (the page fades to the new colours: measure once it has) */ const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
   expect(!D.errors.length, 'page errors: ' + D.errors.join('; '));
   await D.ctx.close();
 });
@@ -5022,7 +5092,7 @@ test('onboarding: Step 2’s levels sit two across and Next shows without scroll
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, server: false, state: null });
     await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
     await page.waitForSelector('.fr-ob');
-    await page.waitForFunction(() => { const e = document.querySelector('.fr-skipall'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 3000 }).catch(() => {}); // (the screen slides in: measure it once it has)
+    await page.waitForFunction(() => { const e = document.querySelector('.fr-skipall'); return e && e.getBoundingClientRect().height >= 44; }, null, { timeout: 10000 }).catch(() => {}); // (the screen slides in: measure it once it has; a busy machine is slow)
     const skip = await page.locator('.fr-skipall').boundingBox();
     expect(skip && skip.height >= 44 && /Skip setup/.test(await page.locator('.fr-skipall').innerText()), viewport.width + ': Skip setup under the name, 44px');
     await page.fill('.fr-ob input[name=name]', 'Mara'); await page.click('.fr-go');
@@ -8139,8 +8209,10 @@ test('Every box responds and moves the same way: Today’s Lab opens its simulat
         await page.waitForTimeout(1200); await page.mouse.move(640, 2); await page.waitForTimeout(200);
         const box = page.locator(sel + ' >> visible=true').first(); await box.evaluate((e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(400);
         const bb = await box.boundingBox();
-        await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.waitForTimeout(500);
-        const up = await tf(page, box); await page.mouse.down(); await page.waitForTimeout(350); const down = await tf(page, box);
+        // (the lift and the press settle with a small spring: wait for them, so a busy machine reads the end, not the overshoot)
+        const settle = (re) => box.evaluate((e, src) => new Promise((ok) => { const t0 = performance.now(); const tick = () => { const v = getComputedStyle(e).transform; if (new RegExp(src).test(v) || performance.now() - t0 > 1500) ok(v); else requestAnimationFrame(tick); }; tick(); }), re.source);
+        await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+        const up = await settle(/^matrix\(1, 0, 0, 1, 0, -3\)$/); await page.mouse.down(); const down = await settle(/^matrix\(0\.98, 0, 0, 0\.98/);
         if (process.env.SHOTS) { await page.mouse.up(); await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/lift-${pg}.png` }); await page.mouse.down(); }
         expect(up === 'matrix(1, 0, 0, 1, 0, -3)' && /^matrix\(0\.98, 0, 0, 0\.98/.test(down), `${where}: ${pg}: the box lifts 3px under the mouse and sinks to .98 when pressed: ` + up + ' / ' + down);
         await page.mouse.up(); await page.waitForTimeout(600);
