@@ -157,15 +157,16 @@ const fracLab = {
   blurb: 'Two fractions as pies, bars and a number line. Compare them, add them, take one away.',
   words: 'fraction numerator denominator equivalent pie',
   icon: '<circle cx="18" cy="24" r="12"/><path d="M18 24V12M18 24l10 6"/><path d="M34 14h8M34 24h8M34 34h8"/><path d="M38 10v8M38 30v8" />',
-  tries: ['Find two different fractions that are equal (like 1/2 and 2/4)', 'Add two fractions to make exactly 1 whole', 'Make a fraction bigger than 1 (an improper fraction)'],
-  hints: ['Make B’s top and bottom both twice A’s (or three times). The pies will cover exactly the same amount.', 'Choose “Add A + B”. Try 1/2 + 1/2 first, then something like 1/3 + 2/3.', 'Make the top number bigger than the bottom number. Tip: tap the slices of a pie to fill them.'],
-  about: 'A fraction is the top number divided by the bottom number.\nTo compare, add or subtract, both fractions are rewritten over the lowest common denominator (the least common multiple of the two bottoms).\nAnswers are simplified by dividing the top and bottom by their greatest common factor, and shown as a mixed number when they are bigger than 1.\nTap a slice of a pie to fill the pie up to that slice.',
+  tries: ['Find two different fractions that are equal (like 1/2 and 2/4)', 'Add two fractions to make exactly 1 whole', 'Make a fraction bigger than 1 (an improper fraction)', 'Percent: make exactly 50%', 'Percent: make exactly 20%', 'Percent: make more than 100%'],
+  hints: ['Make B’s top and bottom both twice A’s (or three times). The pies will cover exactly the same amount.', 'Choose “Add A + B”. Try 1/2 + 1/2 first, then something like 1/3 + 2/3.', 'Make the top number bigger than the bottom number. Tip: tap the slices of a pie to fill them.', 'Choose Percent, then make A a half: 1/2, 2/4 or 5/10 are all 50%.', 'Choose Percent. 20% is one fifth: try 1/5 or 2/10.', 'Choose Percent and make the top bigger than the bottom, like 5/4. That is 125%.'],
+  about: 'A fraction is the top number divided by the bottom number.\nTo compare, add or subtract, both fractions are rewritten over the lowest common denominator (the least common multiple of the two bottoms).\nPercent: a fraction as a percent is top ÷ bottom × 100, and as a decimal top ÷ bottom (3/4 = 75% = 0.75). A percent can be more than 100% (5/4 = 125%). Long decimals are rounded to 3 places, so 1/3 shows as 33.3% and 0.333.\nAnswers are simplified by dividing the top and bottom by their greatest common factor, and shown as a mixed number when they are bigger than 1.\nTap a slice of a pie to fill the pie up to that slice.',
   mount({ stage, panel, api }) {
     let p = [3, 4], q = [2, 6], op = 'compare';
     const pieAt = []; // where the pies are drawn, to tap them
     const lcm = (x, y) => (x * y) / gcd(x, y);
+    const pct = ([n, d]) => +((n / d) * 100).toFixed(1), dec = ([n, d]) => +(n / d).toFixed(3);
     const result = () => {
-      if (op === 'compare') return null;
+      if (op === 'compare' || op === 'percent') return null;
       const L = lcm(p[1], q[1]), n = p[0] * (L / p[1]) + (op === 'add' ? 1 : -1) * q[0] * (L / q[1]);
       return [n, L];
     };
@@ -212,23 +213,28 @@ const fracLab = {
       line(ctx, [[28, ly], [28 + unit * 3, ly]], DIM, 1.5);
       for (let k = 0; k <= 3; k++) { line(ctx, [[28 + unit * k, ly - 8], [28 + unit * k, ly + 8]], INK, 1.5); text(ctx, String(k), 28 + unit * k, ly + 24, INK, 'center'); }
       const mark = (v, color, lab, up) => { if (v < 0 || v > 3) return; const x = 28 + unit * v; dot(ctx, x, ly, 6, color); text(ctx, lab, x, up ? ly - 14 : ly + 40, color, 'center'); };
-      mark(p[0] / p[1], C.gold, 'A', true);
-      mark(q[0] / q[1], C.blue, 'B', false);
+      mark(p[0] / p[1], C.gold, op === 'percent' ? `A = ${pct(p)}%` : 'A', true);
+      if (op !== 'percent') mark(q[0] / q[1], C.blue, 'B', false);
+      else { for (let k = 0; k <= 3; k++) text(ctx, `${k * 100}%`, 28 + unit * k, ly - 22, DIM, 'center'); }
       if (res) mark(res[0] / res[1], C.green, op === 'add' ? 'A+B' : 'A−B', true);
     });
     function report() {
       const res = result(), A = p[0] / p[1], B = q[0] / q[1];
       const L = lcm(p[1], q[1]);
       const list = [['A', `${fr(p)} = ${fr(simp(p))} = ${num(A)}`], ['B', `${fr(q)} = ${fr(simp(q))} = ${num(B)}`]];
-      if (op === 'compare') list.push(['Compare', `${fr(p)} ${Math.abs(A - B) < 1e-12 ? '=' : A > B ? '>' : '<'} ${fr(q)}`], ['Same bottom', `${p[0] * (L / p[1])}/${L} and ${q[0] * (L / q[1])}/${L}`]);
+      if (op === 'percent') list.splice(1, 1, ['As a percent', `${fr(p)} = ${pct(p)}%`], ['As a decimal', `${fr(p)} = ${dec(p)}`]);
+      else if (op === 'compare') list.push(['Compare', `${fr(p)} ${Math.abs(A - B) < 1e-12 ? '=' : A > B ? '>' : '<'} ${fr(q)}`], ['Same bottom', `${p[0] * (L / p[1])}/${L} and ${q[0] * (L / q[1])}/${L}`]);
       else list.push(['Same bottom', `${p[0] * (L / p[1])}/${L} ${op === 'add' ? '+' : '−'} ${q[0] * (L / q[1])}/${L}`], [op === 'add' ? 'A + B' : 'A − B', `${fr(res)} = ${mixed(res)} = ${num(res[0] / res[1])}`]);
       st.set(list);
       if (p[0] > 0 && p[0] * q[1] === p[1] * q[0] && (p[0] !== q[0] || p[1] !== q[1])) api.check(0);
       if (op === 'add' && res[0] === res[1]) api.check(1);
       if (p[0] > p[1] || q[0] > q[1]) api.check(2);
+      if (op === 'percent' && p[0] * 2 === p[1]) api.check(3);
+      if (op === 'percent' && p[0] * 5 === p[1]) api.check(4);
+      if (op === 'percent' && p[0] > p[1]) api.check(5);
       cv.redraw();
     }
-    seg(group(panel, 'Do'), { options: [['compare', 'Compare'], ['add', 'Add A + B'], ['subtract', 'A − B']], value: op, onChange: (v) => { op = v; report(); } });
+    seg(group(panel, 'Do'), { options: [['compare', 'Compare'], ['add', 'Add A + B'], ['subtract', 'A − B'], ['percent', 'Percent']], value: op, onChange: (v) => { op = v; report(); } });
     const mk = (title, fracArr) => {
       const g = group(panel, title);
       const top = stepper(g, { label: 'Top (numerator)', min: 0, max: fracArr[1] * 3, value: fracArr[0], onChange: (v) => { fracArr[0] = v; report(); } });
@@ -256,7 +262,7 @@ const fracLab = {
     const st = stats(panel);
     report();
     return {
-      state: () => { const res = result(); return `fraction A is ${fr(p)} and fraction B is ${fr(q)}; I'm ${op === 'compare' ? 'comparing them' : op === 'add' ? `adding them, which gives ${fr(res)} = ${mixed(res)}` : `taking B away from A, which gives ${fr(res)} = ${mixed(res)}`}`; },
+      state: () => { const res = result(); return `fraction A is ${fr(p)} and fraction B is ${fr(q)}; I'm ${op === 'percent' ? `looking at A as a percent: ${fr(p)} = ${pct(p)}% = ${dec(p)}` : op === 'compare' ? 'comparing them' : op === 'add' ? `adding them, which gives ${fr(res)} = ${mixed(res)}` : `taking B away from A, which gives ${fr(res)} = ${mixed(res)}`}`; },
       destroy: () => cv.destroy(),
     };
   },

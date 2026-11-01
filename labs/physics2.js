@@ -30,11 +30,16 @@ const colourLab = {
   blurb: 'Mix coloured light, mix inks, or pick from the wheel, and see the same colour in RGB, CMYK and HSV.',
   words: 'colour color rgb cmyk hsv light ink pigment additive subtractive hue screen printer',
   icon: '<circle cx="18" cy="18" r="10"/><circle cx="30" cy="18" r="10"/><circle cx="24" cy="29" r="10"/>',
-  tries: ['Make yellow using only red and green light', 'Make white light', 'Find the hue (in degrees) of pure blue'],
-  hints: ['Choose “Light (RGB)”. Turn red and green all the way up and blue all the way down.', 'In “Light (RGB)”, turn all three colours of light up fully.', 'Choose “Wheel (HSV)” and tap the blue part of the ring. Read the hue in degrees.'],
-  about: 'Screens make colours by adding red, green and blue light (additive mixing): all three at full strength make white.\nInks and paints work the other way (subtractive mixing): cyan, magenta and yellow each absorb some colours from white light. Printers add black (K) because mixing the three inks gives a muddy dark brown, not a true black.\nCMYK here uses the simple textbook formula K = 1 − max(R, G, B); real printers adjust colours with colour profiles, so printed results differ a little.\nHue is the angle round the colour wheel: red 0°, green 120°, blue 240°.',
+  tries: ['Make yellow using only red and green light', 'Make white light', 'Find the hue (in degrees) of pure blue', 'Paint: mix yellow and cyan to make green', 'Paint: make a colour lighter with white'],
+  hints: ['Choose “Light (RGB)”. Turn red and green all the way up and blue all the way down.', 'In “Light (RGB)”, turn all three colours of light up fully.', 'Choose “Wheel (HSV)” and tap the blue part of the ring. Read the hue in degrees.', 'Choose “Paint (tubes)”. Add a drop of yellow and a drop of cyan.', 'In Paint, mix a colour, then add a drop of white.'],
+  about: 'Screens make colours by adding red, green and blue light (additive mixing): all three at full strength make white.\nInks and paints work the other way (subtractive mixing): cyan, magenta and yellow each absorb some colours from white light. Printers add black (K) because mixing the three inks gives a muddy dark brown, not a true black.\nCMYK here uses the simple textbook formula K = 1 − max(R, G, B); real printers adjust colours with colour profiles, so printed results differ a little.\nHue is the angle round the colour wheel: red 0°, green 120°, blue 240°.\nPaint (tubes): each drop of cyan, magenta or yellow paint takes away (absorbs) one colour of light, so mixing paints makes darker colours: yellow and cyan make green, cyan and magenta make blue, magenta and yellow make red, and all three make a muddy dark grey. White paint makes the mix paler. Real paints are not perfectly pure, so real mixes look a little duller.',
   mount({ stage, panel, api }) {
     let mode = 'light', R = 255, G = 160, B = 40;
+    const drops = { c: 0, m: 0, y: 0, w: 0 }; // (Paint: drops in the beaker)
+    const PAINT = { c: ['cyan', '#00b7eb'], m: ['magenta', '#e0218a'], y: ['yellow', '#ffd700'], w: ['white', '#ffffff'] };
+    // subtractive: each pigment's share (doubled, up to all) absorbs its colour of light; white thins the mix
+    function paintRGB() { const t = drops.c + drops.m + drops.y + drops.w; if (!t) return [255, 255, 255]; const f = (n) => Math.min(1, (2 * n) / t); return [255 * (1 - f(drops.c)), 255 * (1 - f(drops.m)), 255 * (1 - f(drops.y))].map(Math.round); }
+    const paintWords = () => { const used = ['y', 'c', 'm', 'w'].filter((k) => drops[k]).map((k) => PAINT[k][0]); return used.length ? `${used.map((x, i) => (i ? x : x[0].toUpperCase() + x.slice(1))).join(' and ')} make${used.length === 1 ? 's' : ''} ${nameColour([R, G, B]).name.toLowerCase()}` : 'Add a drop of paint'; };
     let wheel = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const cx = w / 2, cy = h / 2, r = Math.min(w, h) * 0.2;
@@ -50,6 +55,20 @@ const colourLab = {
         text(ctx, 'green', cx + Math.cos(-Math.PI / 6) * r * 1.9, cy + Math.sin(-Math.PI / 6) * r * 1.9, DIM, 'center');
         text(ctx, 'blue', cx, cy + r * 1.95, DIM, 'center');
         text(ctx, 'Coloured spotlights on a dark wall: where they overlap, light adds up', w / 2, h - 12, DIM, 'center');
+      } else if (mode === 'paint') {
+        // four tubes of paint and a beaker with the mix
+        const tw = Math.min(46, w / 12), th = Math.min(150, h * 0.35), gap = tw * 0.8, x0 = cx - (4 * tw + 3 * gap) / 2, ty = h * 0.12;
+        ['c', 'm', 'y', 'w'].forEach((k, i) => {
+          const x = x0 + i * (tw + gap);
+          ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x, ty, tw, th, [4, 4, tw / 2, tw / 2]); ctx.stroke();
+          ctx.fillStyle = PAINT[k][1]; ctx.beginPath(); ctx.roundRect(x + 3, ty + th * 0.35, tw - 6, th * 0.65 - 3, [2, 2, tw / 2, tw / 2]); ctx.fill();
+          text(ctx, PAINT[k][0], x + tw / 2, ty + th + 18, DIM, 'center');
+          if (drops[k]) text(ctx, `${drops[k]} drop${drops[k] === 1 ? '' : 's'}`, x + tw / 2, ty + th + 34, INK, 'center');
+        });
+        const bw = Math.min(220, w * 0.4), bh = Math.min(140, h * 0.3), bx = cx - bw / 2, by = h - bh - 46;
+        ctx.fillStyle = `rgb(${R},${G},${B})`; ctx.fillRect(bx + 4, by + bh * 0.25, bw - 8, bh * 0.75 - 4);
+        ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by); ctx.stroke();
+        text(ctx, paintWords(), cx, h - 14, INK, 'center');
       } else if (mode === 'ink') {
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
         const [c, m, y, k] = rgb2cmyk(R, G, B);
@@ -94,11 +113,18 @@ const colourLab = {
     chips.innerHTML = QUICK.map((n) => { const h = COLOUR_NAMES.find(([x]) => x === n)[1]; return `<button type="button" data-hex="${h}" title="${n}" aria-label="${n}" style="background:${h}"></button>`; }).join('');
     chips.addEventListener('click', (e) => { const b = e.target.closest('[data-hex]'); if (!b) return; const h = b.dataset.hex; [R, G, B] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); sync(); });
     group(panel, 'Named colours').appendChild(chips);
-    seg(group(panel, 'Model'), { options: [['light', 'Light (RGB)'], ['ink', 'Ink (CMYK)'], ['wheel', 'Wheel (HSV)']], value: mode, onChange: (v) => { mode = v; build(); sync(); } });
+    seg(group(panel, 'Model'), { options: [['light', 'Light (RGB)'], ['ink', 'Ink (CMYK)'], ['paint', 'Paint (tubes)'], ['wheel', 'Wheel (HSV)']], value: mode, onChange: (v) => { mode = v; if (v === 'paint') [R, G, B] = paintRGB(); build(); sync(); } });
     const box = el('div'); panel.appendChild(box);
     let sliders = [];
     function build() {
       box.replaceChildren(); sliders = [];
+      if (mode === 'paint') {
+        const gp = group(box, 'Add a drop of paint'), r0 = row(gp, 'lab-row-btns');
+        ['c', 'm', 'y', 'w'].forEach((k) => { const b = button(r0, `+ ${PAINT[k][0]}`, () => { drops[k]++; [R, G, B] = paintRGB(); sync(); }); b.dataset.paint = k; });
+        button(row(gp, 'lab-row-btns'), 'Empty the beaker', () => { Object.keys(drops).forEach((k) => { drops[k] = 0; }); [R, G, B] = paintRGB(); sync(); });
+        gp.appendChild(el('p', 'lab-note', 'Paint takes colours away from the light, so mixing makes darker colours. White makes it paler.'));
+        return;
+      }
       const g = group(box, mode === 'light' ? 'Light' : mode === 'ink' ? 'Ink' : 'Hue, saturation, value');
       if (mode === 'light') [['Red', 0], ['Green', 1], ['Blue', 2]].forEach(([n, i]) => sliders.push(slider(g, { label: n, min: 0, max: 255, value: [R, G, B][i], onInput: (v) => { if (i === 0) R = v; else if (i === 1) G = v; else B = v; sync(true); } })));
       else if (mode === 'ink') {
@@ -111,7 +137,10 @@ const colourLab = {
     }
     function sync(fromSliders) {
       const [hh, ss, vv] = rgb2hsv(R, G, B), [c, m, y, k] = rgb2cmyk(R, G, B), hex = '#' + hex2(R) + hex2(G) + hex2(B);
-      const named = nameColour([R, G, B]), looks = describeColour([R, G, B]), ink = vv > 0.6 && ss < 0.6 ? '#111' : '#fff';
+      const named = nameColour([R, G, B]), looks = describeColour([R, G, B]);
+      // (the swatch's words: black or white, whichever has more contrast with the colour (WCAG relative luminance))
+      const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }, Lum = 0.2126 * lin(R) + 0.7152 * lin(G) + 0.0722 * lin(B);
+      const ink = (Lum + 0.05) / (0.0144 + 0.05) > 1.05 / (Lum + 0.05) ? '#111' : '#fff'; // (#111 has a luminance of about 0.0144)
       swatch.style.background = hex;
       swatch.innerHTML = `<b style="color:${ink}">${named.exact ? '' : named.close ? 'about ' : 'nearest: '}${esc(named.name)}</b><small style="color:${ink}">${esc(looks)} · ${hex.toUpperCase()}</small>`;
       if (!fromSliders) {
@@ -120,6 +149,11 @@ const colourLab = {
         else sliders.forEach((s, i) => s.set(Math.round([hh, ss * 100, vv * 100][i])));
       }
       st.set([['Name', named.exact ? named.name : `${named.close ? 'about' : 'nearest'} ${named.name} (${named.hex.toUpperCase()})`], ['Looks', looks], ['RGB', `${R}, ${G}, ${B}`], ['Hex', hex.toUpperCase()], ['CMYK', `${Math.round(c * 100)}%, ${Math.round(m * 100)}%, ${Math.round(y * 100)}%, ${Math.round(k * 100)}%`], ['HSV', `${Math.round(hh)}°, ${Math.round(ss * 100)}%, ${Math.round(vv * 100)}%`]]);
+      if (mode === 'paint') {
+        const hue = rgb2hsv(R, G, B)[0];
+        if (drops.y && drops.c && !drops.m && hue > 90 && hue < 150) api.check(3);
+        if (drops.w && (drops.c || drops.m || drops.y)) api.check(4);
+      }
       if (mode === 'light' && R > 240 && G > 240 && B < 15) api.check(0);
       if (mode === 'light' && R > 245 && G > 245 && B > 245) api.check(1);
       if (mode === 'wheel' && Math.abs(hh - 240) <= 2 && ss > 0.9 && vv > 0.9) api.check(2);

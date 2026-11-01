@@ -11,19 +11,35 @@ const projectileLab = {
   blurb: 'Pick an angle and a speed, launch, and see how gravity bends the path into an arc.',
   words: 'projectile motion trajectory gravity launch cannon ball parabola kinematics',
   icon: '<path d="M6 40h36"/><path d="M8 38c8-28 24-28 32 0" stroke-dasharray="3 4"/><circle cx="24" cy="17" r="3"/><path d="M8 38l6-8"/>',
-  tries: ['Find the angle that goes farthest (launching from the ground)', 'Hit the target', 'Launch on the Moon after Earth. How much farther?'],
-  hints: ['Keep the launch height at 0 m and try angles close to 45°. Compare 30°, 45° and 60°.', 'Watch where your ball lands compared with the red target, then change the speed a little at a time.', 'Launch on Earth first. Then switch “Where” to Moon and launch again with the same angle and speed.'],
-  about: 'No air resistance: in real air a ball goes less far, and the best angle is a little below 45°.\nGravity: Earth 9.81, Moon 1.62, Mars 3.71, Jupiter 24.79 m/s² (Jupiter has no solid surface. Imagine a platform at its cloud tops).\nTime in the air comes from h + v·sinθ·t − ½gt² = 0; range = v·cosθ × time; highest point = h + (v·sinθ)² ÷ 2g.',
+  tries: ['Find the angle that goes farthest (launching from the ground)', 'Hit the target', 'Launch on the Moon after Earth. How much farther?', 'In air, launch a light ball and a heavy ball. Which goes farther?', 'Drop two balls in a vacuum, then in air. When do they land?'],
+  hints: ['Keep the launch height at 0 m and try angles close to 45°. Compare 30°, 45° and 60°.', 'Watch where your ball lands compared with the red target, then change the speed a little at a time.', 'Launch on Earth first. Then switch “Where” to Moon and launch again with the same angle and speed.', 'Turn Air on. Launch with the mass at 0.5 kg, then at 5 kg, with the same angle and speed.', 'Choose Drop. Drop in a Vacuum first, then switch to Air and drop again.'],
+  about: 'Vacuum (the default): no air resistance. In real air a ball goes less far, and the best angle is a little below 45°.\nAir: a simplified drag that grows with speed (linear drag, F = b·v with b = 0.1 kg/s for this ball size). A light ball is slowed more than a heavy one, so in air the heavy ball goes farther and lands first when dropped; in a vacuum every mass falls the same. Real drag on a fast ball grows more like the square of the speed, so the numbers are illustrative.\nGravity: Earth 9.81, Moon 1.62, Mars 3.71, Jupiter 24.79 m/s² (Jupiter has no solid surface. Imagine a platform at its cloud tops).\nTime in the air comes from h + v·sinθ·t − ½gt² = 0; range = v·cosθ × time; highest point = h + (v·sinθ)² ÷ 2g.',
   mount({ stage, panel, api }) {
     let ang = 40, v = 22, h0 = 0, gk = 'earth', target = 30 + Math.round(Math.random() * 40);
+    let air = false, mass = 1, mode = 'launch', drop = null; const masses = new Set(); const dropped = new Set();
     let flight = null, aiming = false; const trails = [];
     const planets = new Set();
     const g = () => GRAVITY[gk][1];
-    function plan() {
-      const a = (ang * Math.PI) / 180, vx = v * Math.cos(a), vy = v * Math.sin(a), G = g();
-      const T = (vy + Math.sqrt(vy * vy + 2 * G * h0)) / G;
-      return { vx, vy, T, range: vx * T, top: h0 + (vy > 0 ? (vy * vy) / (2 * G) : 0), hit: Math.hypot(vx, vy - G * T) };
+    // (air: linear drag b·v, b = 0.1 kg/s; k = b/m. Exact: x = vx/k(1 - e^-kt), y = h0 + (vy + g/k)/k(1 - e^-kt) - g t/k)
+    const DRAG_B = 0.1;
+    function posAt(P, t) {
+      if (!P.k) return [P.vx * t, h0 + P.vy * t - (P.G * t * t) / 2];
+      const e = 1 - Math.exp(-P.k * t);
+      return [(P.vx / P.k) * e, h0 + ((P.vy + P.G / P.k) / P.k) * e - (P.G * t) / P.k];
     }
+    function plan(m = mass, angle = ang, speed = v) {
+      const a = (angle * Math.PI) / 180, vx = speed * Math.cos(a), vy = speed * Math.sin(a), G = g();
+      if (!air) { const T = (vy + Math.sqrt(vy * vy + 2 * G * h0)) / G; return { vx, vy, G, k: 0, T, range: vx * T, top: h0 + (vy > 0 ? (vy * vy) / (2 * G) : 0), hit: Math.hypot(vx, vy - G * T) }; }
+      const k = DRAG_B / m, P = { vx, vy, G, k };
+      let lo = 0, hi = 1; while (posAt(P, hi)[1] > 0 && hi < 1e4) hi *= 2; // (the landing time: bisection on y = 0)
+      for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (posAt(P, mid)[1] > 0) lo = mid; else hi = mid; }
+      const T = hi, tTop = vy > 0 ? Math.log((vy + G / k) / (G / k)) / k : 0;
+      return { ...P, T, range: posAt(P, T)[0], top: Math.max(h0, posAt(P, tTop)[1]), hit: Math.hypot(vx * Math.exp(-k * T), (vy + G / k) * Math.exp(-k * T) - G / k) };
+    }
+    // Drop: a light (0.5 kg) and a heavy (5 kg) ball let go together from the launch height (at least 20 m)
+    const DROP_M = [0.5, 5], dropH = () => Math.max(20, h0);
+    const dropY = (m, t) => { const G = g(), H = dropH(); if (!air) return H - (G * t * t) / 2; const k = DRAG_B / m; return H - (G / k) * (t - (1 - Math.exp(-k * t)) / k); };
+    function dropTime(m) { if (!air) return Math.sqrt((2 * dropH()) / g()); let lo = 0, hi = 1; while (dropY(m, hi) > 0) hi *= 2; for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (dropY(m, mid) > 0) lo = mid; else hi = mid; } return hi; }
     let view = null, V = null;
     const cv = canvas(stage, (ctx, w, h) => {
       const P = plan();
@@ -35,6 +51,19 @@ const projectileLab = {
         view = { w, h, s, spanX, X: (x) => 64 + x * s, Y: (y) => h - 40 - y * s };
       }
       const { s, X, Y, spanX } = view;
+      if (mode === 'drop') {
+        const H = dropH(), sc = (h - 90) / H, gy = h - 40, xs = [w * 0.38, w * 0.62];
+        line(ctx, [[0, gy], [w, gy]], DIM, 1.5);
+        for (let y = 0; y <= H; y += H > 50 ? 20 : 10) { line(ctx, [[30, gy - y * sc], [38, gy - y * sc]], DIM, 1); text(ctx, y + ' m', 42, gy - y * sc + 4, DIM); }
+        DROP_M.forEach((m, i) => {
+          const T = dropTime(m), t = drop ? Math.min(drop.t, T) : 0, y = Math.max(0, drop ? dropY(m, t) : H), r = i ? 11 : 7;
+          dot(ctx, xs[i], gy - y * sc - r, r, i ? C.gold : C.blue);
+          text(ctx, `${m} kg`, xs[i], gy + 22, INK, 'center');
+          if (drop && t >= T) text(ctx, `landed at ${num(T)} s`, xs[i], gy - 40, i ? C.gold : C.blue, 'center');
+        });
+        text(ctx, `${GRAVITY[gk][0]} · ${air ? 'in air' : 'in a vacuum'} · from ${H} m`, 12, 20, DIM);
+        return;
+      }
       if (V && V.scene && V.scene.update) {
         // in 3D: a cannon on a field (or the Moon, Mars…), a bullseye and distance posts
         V.scene.update({ X, Y, sp: s, spanX, ang, v, h0, target, gk, flight, trails, w, h });
@@ -97,13 +126,18 @@ const projectileLab = {
       if (!flight) return false;
       const P = flight.P, speed = Math.max(1, P.T / 2.4); // long flights play faster
       flight.t = Math.min(P.T, flight.t + dt * speed);
-      const t = flight.t;
-      flight.pts.push([P.vx * t, Math.max(0, h0 + P.vy * t - (g() * t * t) / 2)]);
+      const t = flight.t, [px, py] = posAt(P, t);
+      flight.pts.push([px, Math.max(0, py)]);
       cv.redraw();
       if (t >= P.T) { land(); return false; }
       return true;
     });
+    // (Drop: both balls fall at once; Reduce Motion or Lite mode: they land at once)
+    const calm = () => document.documentElement.classList.contains('lite') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dropTick = clock((dt) => { if (!drop) return false; const end = Math.max(...DROP_M.map(dropTime)); drop.t = Math.min(end, drop.t + dt * Math.max(1, end / 3)); cv.redraw(); if (drop.t >= end) { landDrop(); return false; } return true; });
+    function landDrop() { dropped.add(air ? 'air' : 'vacuum'); if (dropped.has('air') && dropped.has('vacuum')) api.check(4); msg.textContent = `In ${air ? 'air' : 'a vacuum'}: the light ball lands at ${num(dropTime(0.5))} s, the heavy one at ${num(dropTime(5))} s.`; report(); }
     function launch() {
+      if (mode === 'drop') { dropTick.stop(); drop = { t: 0 }; if (calm()) { drop.t = Math.max(...DROP_M.map(dropTime)); cv.redraw(); landDrop(); } else dropTick.start(); return; }
       if (flight) return;
       const P = plan();
       flight = { P, t: 0, pts: [[0, h0]] };
@@ -117,6 +151,7 @@ const projectileLab = {
       if (Math.abs(P.range - target) <= 2) { api.check(1); msg.textContent = `Hit! It landed ${num(P.range)} m away.`; }
       else msg.textContent = `Landed ${num(P.range)} m away: ${P.range < target ? 'short' : 'long'} by ${num(Math.abs(P.range - target))} m.`;
       planets.add(gk);
+      if (air) { masses.add(mass <= 0.5 ? 'light' : mass >= 5 ? 'heavy' : 'mid'); if (masses.has('light') && masses.has('heavy')) api.check(3); }
       if (gk === 'moon' && planets.has('earth')) api.check(2);
       flight = null;
       report();
@@ -125,7 +160,11 @@ const projectileLab = {
     const angS = slider(gg, { label: 'Angle', min: 0, max: 90, value: ang, fmt: (x) => x + '°', onInput: (x) => { ang = x; report(); } });
     const vS = slider(gg, { label: 'Speed', min: 5, max: 50, value: v, fmt: (x) => x + ' m/s', onInput: (x) => { v = x; report(); } });
     slider(gg, { label: 'Launch height', min: 0, max: 30, value: h0, fmt: (x) => x + ' m', onInput: (x) => { h0 = x; report(); } });
-    seg(group(panel, 'Where'), { options: Object.entries(GRAVITY).map(([k, [n]]) => [k, n]), value: gk, onChange: (k) => { gk = k; report(); } });
+    seg(group(panel, 'Where'), { options: Object.entries(GRAVITY).map(([k, [n]]) => [k, n]), value: gk, onChange: (k) => { gk = k; drop = null; report(); } });
+    const ga = group(panel, 'Air');
+    seg(ga, { options: [['launch', 'Launch'], ['drop', 'Drop two balls']], value: mode, onChange: (x) => { mode = x; drop = null; msg.textContent = ''; report(); } });
+    seg(ga, { options: [[false, 'Vacuum'], [true, 'Air']], value: air, onChange: (x) => { air = x; drop = null; report(); } });
+    const massS = slider(ga, { label: 'Ball mass', min: 0.1, max: 10, step: 0.1, value: mass, fmt: (x) => `${num(x)} kg`, onInput: (x) => { mass = x; report(); } });
     const r1 = row(panel, 'lab-row-btns');
     button(r1, 'Launch', launch, 'main');
     button(r1, 'New target', () => { target = 15 + Math.round(Math.random() * 90); msg.textContent = ''; cv.redraw(); });
@@ -134,14 +173,19 @@ const projectileLab = {
     const st = stats(panel);
     V = viewSwitch(panel, stage, cv, (B) => import('./phys3d.js').then((mod) => mod.projectile3d(B)), { look: 'field', pitch: 7 });
     function report() {
+      massS.el.hidden = !air || mode === 'drop';
+      if (mode === 'drop') {
+        st.set([['Light ball (0.5 kg) lands', `${num(dropTime(DROP_M[0]))} s`], ['Heavy ball (5 kg) lands', `${num(dropTime(DROP_M[1]))} s`], ['Drop height', `${dropH()} m`], ['Air', air ? 'Air' : 'Vacuum']]);
+        cv.redraw(); return;
+      }
       const P = plan();
-      st.set([['Range', `${num(P.range)} m`], ['Highest point', `${num(P.top)} m`], ['Time in the air', `${num(P.T)} s`], ['Target', `${target} m`]]);
+      st.set([['Range', `${num(P.range)} m`], ['Highest point', `${num(P.top)} m`], ['Time in the air', `${num(P.T)} s`], ['Target', `${target} m`], ...(air ? [['Ball mass', `${num(mass)} kg`]] : [])]);
       cv.redraw();
     }
     report();
     return {
-      state: () => { const P = plan(); return `launching at ${ang}° and ${v} m/s from ${h0} m high on ${GRAVITY[gk][0]} (g = ${g()} m/s²): it flies ${num(P.range)} m, rises to ${num(P.top)} m and is in the air for ${num(P.T)} s; the target is at ${target} m`; },
-      destroy: () => { tick.stop(); V.destroy(); cv.destroy(); },
+      state: () => { if (mode === 'drop') return `dropping a 0.5 kg and a 5 kg ball from ${dropH()} m ${air ? 'in air (linear drag)' : 'in a vacuum'} on ${GRAVITY[gk][0]}: the light one lands at ${num(dropTime(0.5))} s, the heavy one at ${num(dropTime(5))} s`; const P = plan(); return `launching${air ? ` a ${num(mass)} kg ball in air (linear drag)` : ''} at ${ang}° and ${v} m/s from ${h0} m high on ${GRAVITY[gk][0]} (g = ${g()} m/s²): it flies ${num(P.range)} m, rises to ${num(P.top)} m and is in the air for ${num(P.T)} s; the target is at ${target} m`; },
+      destroy: () => { tick.stop(); dropTick.stop(); V.destroy(); cv.destroy(); },
     };
   },
 };
