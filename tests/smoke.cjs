@@ -5618,6 +5618,75 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
+test('Cassie v231: her hello ring fades from white to soft pink (none with Reduce Motion), she writes your name and draws a card in the setup (finished at once with Reduce Motion), thinks while an answer comes then smiles, looks puzzled with a stronger blush on an error, and wears the grad cap and exam tassel by the season and the calendar (1280x800 and 390x844)', async (b) => {
+  const hex = (h) => { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const view = phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 } };
+    // 1. the setup: Cassie writes the name as it's typed, and draws a study card on the goals step
+    for (const calm of [false, true]) {
+      const { ctx, page, errors } = await open(b, { ...view, server: false, lite: 'off', state: null });
+      if (calm) await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.waitForSelector('.fr-start', { timeout: 10000 }); await page.click('.fr-start');
+      await page.waitForSelector('.fr-ob .fr-guide', { timeout: 10000 });
+      expect(await page.$eval('.fr-guide', (g) => g.dataset.anim) === (calm ? 'still' : 'run'), `${where}: the guide ${calm ? 'is still' : 'animates'}`);
+      await page.waitForSelector('.fr-guide-bot .cassie-bot', { state: 'attached', timeout: 5000 });
+      await page.type('.fr-ob input[name=name]', 'Mara', { delay: 40 });
+      await page.waitForTimeout(450);
+      const ink = await page.evaluate(() => { const g = document.querySelector('.fr-guide'), t = g.querySelector('.fr-ink-name'); return { text: t.textContent, go: g.classList.contains('fr-ink-go'), anim: getComputedStyle(t).animationName, typed: document.querySelector('.fr-ob input[name=name]').value, focus: document.activeElement && document.activeElement.name }; });
+      expect(ink.text === 'Mara' && ink.typed === 'Mara' && ink.focus === 'name', `${where}: she writes the name, and typing isn't blocked: ` + JSON.stringify(ink));
+      expect(calm ? !ink.go && ink.anim === 'none' : ink.go && ink.anim === 'frInk', `${where}: the writing ${calm ? 'is shown finished' : 'animates'}: ` + JSON.stringify(ink));
+      if (process.env.SHOTS && !calm) { await page.waitForTimeout(250); await page.screenshot({ path: `${process.env.SHOTS}/v231-name-${phone ? 'phone' : 'desk'}.png` }); }
+      await page.click('.fr-go'); await page.waitForSelector('.fr-ob [data-who]'); await page.click('.fr-ob [data-who] >> nth=2'); await page.click('.fr-go');
+      await page.waitForSelector('.fr-ob [data-goal]');
+      const card = await page.evaluate(() => { const g = document.querySelector('.fr-guide'); return g && { go: g.classList.contains('fr-draw-go'), anim: getComputedStyle(g.querySelector('.frc-edge')).animationName, lines: g.querySelectorAll('.frc-line').length }; });
+      expect(card && card.lines === 3 && (calm ? !card.go : card.go && card.anim === 'frDraw'), `${where}: she draws a study card on the goals step${calm ? ' (already drawn)' : ''}: ` + JSON.stringify(card));
+      const next = await page.$eval('.fr-go', (x) => { const r = x.getBoundingClientRect(); return !x.disabled && r.bottom <= innerHeight; });
+      expect(next, `${where}: Next stays reachable`);
+      if (process.env.SHOTS && !calm) { await page.waitForTimeout(700); await page.screenshot({ path: `${process.env.SHOTS}/v231-card-${phone ? 'phone' : 'desk'}.png` }); }
+      expect(!errors.length, `${where}: no page errors in the setup: ` + errors.join(' | '));
+      await ctx.close();
+    }
+    // 2. the app: the hello ring, thinking, puzzled, and the season
+    const { ctx, page, errors } = await open(b, { ...view, server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async (body) => { await new Promise((r) => setTimeout(r, 800)); return /FAILNOW/.test(JSON.stringify(body.messages.slice(-1))) ? { status: 400, message: 'bad request' } : { text: 'An answer.' }; } });
+    await page.waitForSelector('#mascot.has2d .cassie-bot', { state: 'attached', timeout: 5000 });
+    const ring = () => page.evaluate(() => { bot2d.setState('idle'); bot2d.setState('greeting'); return [...document.querySelectorAll('#mascot .cb-dust')].map((c) => [+c.dataset.k, c.getAttribute('fill'), +c.getAttribute('r')]); });
+    const dots = await ring();
+    const near = dots.filter((d) => d[0] < 0.15), far = dots.filter((d) => d[0] > 0.85);
+    expect(dots.length === 90 && near.length && far.length, `${where}: the hello ring has its 90 dots`);
+    expect(near.every((d) => hex(d[1]).every((v) => v >= 0xf0)) && far.every((d) => { const [r, g] = hex(d[1]); return r >= 0xf8 && g <= 0xd8; }), `${where}: white beside her, soft pink further out: ` + near[0][1] + ' ' + far[0][1]);
+    expect(Math.min(...near.map((d) => d[2])) > Math.max(...far.map((d) => d[2])), `${where}: further dots are smaller`);
+    if (process.env.SHOTS) for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/v231-ring-${phone ? 'phone' : 'desk'}-${scheme}.png` }); }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect((await ring()).length === 0, `${where}: no hello ring with Reduce Motion`);
+    await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.evaluate(() => bot2d.setState('idle'));
+    // thinking (eyes up and to the side) while the answer comes, then the smile, then idle
+    await page.fill('#prompt-input', 'What is a cell?'); await page.press('#prompt-input', 'Enter'); await page.waitForTimeout(250);
+    const th = await page.evaluate(() => ({ s: bot2d.state, look: bot2d.def.look }));
+    expect(th.s === 'thinking' && th.look[0] > 0 && th.look[1] < 0, `${where}: thinking, looking up and to the side: ` + JSON.stringify(th));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v231-thinking-${phone ? 'phone' : 'desk'}.png` });
+    await page.waitForSelector('text=An answer.', { timeout: 10000 });
+    expect(await page.waitForFunction(() => bot2d.state === 'proud' || bot2d.state === 'done', null, { timeout: 3000 }).then(() => true, () => false), `${where}: a smile when the answer is ready`);
+    expect(await page.waitForFunction(() => bot2d.state === 'idle', null, { timeout: 5000 }).then(() => true, () => false), `${where}: then back to idle (not stuck thinking): ` + await page.evaluate(() => bot2d.state));
+    // a failed answer: puzzled (wide eyes, more blush than surprised), the friendly words kept, then idle
+    await page.fill('#prompt-input', 'FAILNOW please'); await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('#chat-log .error', { timeout: 15000 });
+    const pz = await page.evaluate(() => ({ s: bot2d.state, eyes: bot2d.def.eyes, blush: bot2d.def.blush || 0, mood: document.getElementById('island').dataset.mood, words: document.querySelector('#chat-log .error').textContent.trim().length }));
+    expect(pz.s === 'puzzled' && pz.eyes === 'wide' && pz.blush > 0.5 && pz.mood === 'puzzled' && pz.words > 10, `${where}: puzzled on an error: ` + JSON.stringify(pz));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v231-puzzled-${phone ? 'phone' : 'desk'}.png` });
+    expect(await page.waitForFunction(() => bot2d.state === 'idle', null, { timeout: 5000 }).then(() => true, () => false), `${where}: puzzled for a moment, then idle`);
+    // the season: the end of the school year and exam season, and the student's own calendar
+    const season = await page.evaluate(() => { const S = (d, o) => window.CassieBot.seasonal(new Date(d + 'T04:00:00Z'), o); return [S('2027-03-30'), S('2027-04-12'), S('2027-05-25'), S('2027-06-05'), S('2027-12-05'), S('2027-05-10'), S('2027-08-10'), S('2027-08-10', { exam: true }), S('2027-08-10', { grad: true }), S('2027-12-25')]; });
+    expect(JSON.stringify(season) === JSON.stringify(['gradcap', 'gradcap', 'gradcap', 'gradcap', 'santa+tassel', 'tassel', null, 'tassel', 'gradcap', 'santa']), `${where}: the seasons: ` + JSON.stringify(season));
+    const tomorrow = await page.evaluate(() => new Date(Date.now() + 8 * 3600e3 + 864e5).toISOString().slice(0, 10));
+    const dressed = await page.evaluate((day) => { state.calItems = [{ id: 'q1', day, label: 'quiz', at: Date.now() }, { id: 'g1', day, label: 'other', other: 'Graduation', at: Date.now() }]; dressCassie(); const svg = bot2d.el, box = (s) => { const n = svg.querySelector(s); if (!n) throw new Error('missing ' + s + ' in ' + svg.outerHTML.slice(0, 120)); return n.getBoundingClientRect(); }; const eyes = [box('.cb-eye-l'), box('.cb-eye-r')], hit = (r) => eyes.some((e) => r.width && !(r.right <= e.left || r.left >= e.right || r.bottom <= e.top || r.top >= e.bottom)); const hol = window.CassieBot.holiday(); return { acc: bot2d.accessory, want: `${hol ? hol.acc : 'gradcap'}+tassel`, tail: !!svg.querySelector('.cb-acc-tail').firstChild, cover: hit(box('.cb-acc-top')) || hit(box('.cb-acc-tail')) }; }, tomorrow); // (a holiday's own accessory comes first: a quiet day keeps its candle)
+    expect(dressed.acc === dressed.want && dressed.tail && !dressed.cover, `${where}: a quiz and a graduation on the calendar: the grad cap and the tassel, clear of her eyes: ` + JSON.stringify(dressed));
+    if (process.env.SHOTS) for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/v231-season-${phone ? 'phone' : 'desk'}-${scheme}.png` }); }
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('Cassie Island: the top bar shows what she is doing, then says Done', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: async () => { await new Promise((r) => setTimeout(r, 900)); return { text: 'Island answer.' }; } });
   const island = page.locator('#island');
