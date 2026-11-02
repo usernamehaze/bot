@@ -138,6 +138,7 @@ How you work:
 - Do exactly what you're asked. Read the request carefully and follow every part of it: the task, the format, the length, the language and any limits ("only the answer", "in 3 bullets", "in Filipino", "graph it", "make it shorter"). Never swap their request for a different one, never skip a part, and never refuse something you can do. If they ask you to do something with a picture or a snip (graph it, solve it, explain it, check it), do that exact thing with what's in the picture. Ask a question back only when the request truly can't be done without the answer; otherwise make a sensible assumption, say it in one short line, and do it.
 - Language: answer in the language they write in. English gets English, Filipino gets Filipino, and Taglish (English and Filipino mixed) gets natural Taglish, mixed the way they mix it. Keep science, math and technical terms in English, the way they're taught in class. If they ask for a language, use that one.
 - Sound like a real person: warm, natural and a little playful, like a smart friend sitting next to them, not a robot or a textbook. Use plain words and contractions, and react to what they actually said. No canned openers ("Certainly!", "Great question!"), no repeating their question back, and no speeches about being an AI.
+- Exams: every practice question you write is your own, made from the exam's published topics. Never claim a question is a real, actual, leaked or "recalled" board or exam question, and never promise anyone will pass. If someone pastes what looks like a leaked or stolen exam paper or a whole question bank and asks you to copy, collect or rebuild it, kindly say you can't, then offer to teach the topics it covers with your own questions. Checking a student's own reviewer, one question at a time, is fine.
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing. Never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
 - Think it through before answering. For any non-trivial problem (math, logic, multi-step reasoning, tricky wording), work through it carefully and methodically, consider the relevant approach or formula, and DOUBLE-CHECK your result, re-do the key calculation or test it against the given facts before you commit. Watch for trick questions, hidden assumptions, and distractor details that don't actually matter. It's better to be slower and right than fast and wrong.
@@ -2508,7 +2509,7 @@ const LESSONS = {
     ['Accounting basics', 'Assets, liabilities and the accounting equation', 'ask:Teach me accounting basics for ABM step by step: start with the accounting equation (assets = liabilities + equity) with a simple example, then give me one to try.', 'ABM'],
     ['Essays', 'Plan and improve an essay', 'lab:essay', 'HUMSS'], ['Research', 'Real sources for a topic', 'research', 'HUMSS'],
     ['Practical research', 'From a research question to your methods', 'ask:Guide me through practical research for Senior High: help me write a clear research question first, then walk me through choosing a method, one step at a time.', 'Every strand']],
-  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['Board exam course: one lesson at a time', 'LET, CPALE, Civil Service, Nursing and more: pick your exam, then learn it topic by topic', 'let:course'], ['Board exam practice', 'Board-style questions for your exam, each one taught step by step', 'let:practice'], ['Check my board exam reviewer', 'Paste, attach or snap your reviewer: Cassie answers and teaches every question', 'let:reviewer']],
+  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['Board exam course: one lesson at a time', 'LET, CPALE, Civil Service, NCLEX-RN, IELTS and more: pick your exam, then learn it topic by topic', 'let:course'], ['Board exam practice', 'Board-style questions for your exam, each one taught step by step', 'let:practice'], ['Check my board exam reviewer', 'Paste, attach or snap your reviewer: Cassie answers and teaches every question', 'let:reviewer']],
 };
 function lessonLevel() {
   const g = (state.profile && state.profile.grade) || '';
@@ -2567,14 +2568,20 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=236'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=237'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
    Nursing, Civil Engineering, Psychometrician). A saved course with no exam is the LET's. Its level is the LET's
    Elementary or Secondary, the Civil Service Exam's Professional or Subprofessional, or else the exam itself. */
 const BOARD_NAMES = { let: ['LET', 'Licensure Examination for Teachers (LET)'], cpale: ['CPALE', 'CPA Licensure Examination (CPALE)'], cse: ['Civil Service Exam', 'Career Service Examination (Civil Service Exam)'],
-  cle: ['Criminology', 'Criminologist Licensure Examination'], nle: ['Nursing', 'Nurse Licensure Examination (NLE)'], cele: ['Civil Engineering', 'Civil Engineer Licensure Examination'], pmle: ['Psychometrician', 'Psychometrician Licensure Examination'] };
+  cle: ['Criminology', 'Criminologist Licensure Examination'], nle: ['Nursing', 'Nurse Licensure Examination (NLE)'], cele: ['Civil Engineering', 'Civil Engineer Licensure Examination'], pmle: ['Psychometrician', 'Psychometrician Licensure Examination'],
+  nclex: ['NCLEX-RN', 'NCLEX-RN (the US and Canada nurse licensing exam)'], ielts: ['IELTS', 'IELTS (International English Language Testing System)'], oet: ['OET Nursing', 'OET (Occupational English Test) for Nursing'] };
+const BOARD_INTL = new Set(['nclex', 'ielts', 'oet']);
+const BOARD_LEVELS = { professional: 'Professional', subprofessional: 'Subprofessional', academic: 'Academic', general: 'General Training' };
+// v237: what every course says under its notes (Philippine exams: the PRC and the CSC; abroad: the exam's owner, from rescue.js)
+const BOARD_PH_SAYS = 'Cassie is not affiliated with the PRC or the Civil Service Commission. Topics follow the published tables of specifications. Every practice question is Cassie’s own: she never uses real, leaked or recalled board questions.';
+const boardSays = (bx) => (bx && bx.intl ? `${bx.owner}. Cassie is not affiliated with or endorsed by them. Every practice question is Cassie’s own, written from the published test format. Check the latest official guide too.` : BOARD_PH_SAYS);
 const courseExam = (c = letCourse()) => (c && BOARD_NAMES[c.exam] ? c.exam : 'let');
 const courseTitle = (c = letCourse()) => (c ? `${BOARD_NAMES[courseExam(c)][0]} course` : 'Board exam course');
 // Pro has every lesson; Free and Plus get the first few of each exam's course, once paid plans are on (until then, all of it)
@@ -2583,7 +2590,7 @@ const boardLocked = (i) => !!serverPay && planName() !== 'pro' && i >= BOARD_TAS
 function boardPracticeTopic() {
   const c = letCourse(), ex = courseExam(c);
   if (ex === 'let') return 'the LET (Licensure Examination for Teachers): Professional Education and General Education';
-  return `the ${BOARD_NAMES[ex][1]}${c.level === 'professional' || c.level === 'subprofessional' ? `, ${c.level === 'professional' ? 'Professional' : 'Subprofessional'} level` : ''}: every area`;
+  return `the ${BOARD_NAMES[ex][1]}${BOARD_LEVELS[c.level] ? `, ${BOARD_LEVELS[c.level]}` : ''}: every part`;
 }
 const boardReviewerAsk = () => (courseExam() === 'let' ? LET_REVIEWER : LET_REVIEWER.replace('my LET reviewer', `my ${BOARD_NAMES[courseExam()][0]} reviewer`));
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2609,6 +2616,7 @@ function letCourseCount() { // [done, all] for Home and the Study plan (from wha
 const letShown = () => (state.profile && state.profile.grade === 'Board exam reviewee') || !!letCourse();
 function letLessonAsk(topic) {
   const ex = courseExam();
+  if (BOARD_INTL.has(ex)) return `Teach me "${topic}" for the ${BOARD_NAMES[ex][1]}${BOARD_LEVELS[letCourse().level] ? `, ${BOARD_LEVELS[letCourse().level]}` : ''}, as one lesson: step by step, the way the test asks about it, with a short real-life example. Then check me with 3 practice questions of your own in the test's style, one at a time.`;
   if (ex !== 'let') return `Teach me "${topic}" for the ${BOARD_NAMES[ex][1]} in the Philippines, as one lesson: step by step, the way the exam asks about it, with a short real-life example. Then check me with 3 exam-style questions of your own, one at a time.`;
   return `Teach me "${topic}" for the LET (Licensure Examination for Teachers), as one lesson: step by step, the way the board exam asks about it, with a short example from a Philippine classroom. Then check me with 3 board-style questions of your own, one at a time.`;
 }
@@ -2635,7 +2643,7 @@ function openLetCourse(step) {
       body.innerHTML = '';
       head.textContent = s1 === 'course' ? courseTitle() : draft.exam && s1 !== 'exam' ? `${BOARD_NAMES[draft.exam][0]} course` : 'Board exam course';
       if (s1 === 'exam') {
-        body.innerHTML = `<p class="letc-q">Which board exam are you taking?</p><div class="letc-picks">${Object.keys(BOARD_NAMES).map((k) => pick('letc-exam', BOARD_NAMES[k][0]).replace('class="letc-pick letc-exam"', `class="letc-pick letc-exam" data-exam="${k}"`)).join('')}</div><p class="letc-note">Topics follow each exam’s official areas. Check the latest table of specifications from the PRC or the Civil Service Commission too.</p>`;
+        body.innerHTML = `<p class="letc-q">Which board exam are you taking?</p><div class="letc-picks">${Object.keys(BOARD_NAMES).map((k) => pick('letc-exam', BOARD_NAMES[k][0]).replace('class="letc-pick letc-exam"', `class="letc-pick letc-exam" data-exam="${k}"`)).join('')}</div><p class="letc-note">Philippine board exams, and exams for working or studying abroad. Topics follow each exam’s published tables or test format. Cassie isn’t affiliated with any exam’s owner, and every practice question is her own.</p>`;
         body.querySelectorAll('.letc-exam').forEach((b) => b.addEventListener('click', () => {
           const k = b.dataset.exam, same = k === draft.exam && letCourse();
           draft.exam = k; if (!same) { draft.first = []; draft.major = ''; draft.level = ''; }
@@ -2647,7 +2655,7 @@ function openLetCourse(step) {
         }));
       } else if (s1 === 'cslevel') {
         const bx = boardOf();
-        body.innerHTML = `<p class="letc-q">Which level are you taking?</p><div class="letc-picks">${bx.levels.map(([k, l]) => pick('letc-lvl', l).replace('class="letc-pick letc-lvl"', `class="letc-pick letc-lvl" data-lvl="${k}"`)).join('')}</div><p class="letc-note"></p>`;
+        body.innerHTML = `<p class="letc-q">${escapeHtml(bx.levelQ || 'Which level are you taking?')}</p><div class="letc-picks">${bx.levels.map(([k, l]) => pick('letc-lvl', l).replace('class="letc-pick letc-lvl"', `class="letc-pick letc-lvl" data-lvl="${k}"`)).join('')}</div><p class="letc-note"></p>`;
         body.querySelector('.letc-note').textContent = bx.note;
         body.querySelectorAll('.letc-lvl').forEach((b) => b.addEventListener('click', () => { draft.level = b.dataset.lvl; ask('parts'); }));
       } else if (s1 === 'parts' && draft.exam !== 'let') {
@@ -2690,12 +2698,13 @@ function openLetCourse(step) {
         const n = lessons.filter((l) => c.done && c.done[l.topic]).length, next = lessons.find((l) => !(c.done && c.done[l.topic]));
         body.innerHTML = `<p class="letc-what"></p><div class="letc-prog" role="img" aria-label="${n} of ${lessons.length} lessons done"><i style="width:${lessons.length ? Math.round((n / lessons.length) * 100) : 0}%"></i></div><p class="letc-count">${n} of ${lessons.length} lessons</p>
           <div class="letc-row">${next ? '<button type="button" class="letc-go letc-next">Start next lesson</button>' : '<p class="letc-note">Every lesson done. Review any of them again, or practise with Board exam practice.</p>'}<button type="button" class="letc-line letc-change">Change my exam or coverage</button></div>
-          <p class="letc-note letc-weights"></p><p class="letc-note letc-taste" hidden></p><ol class="letc-list"></ol>`;
+          <p class="letc-note letc-weights"></p><p class="letc-note letc-says"></p><p class="letc-note letc-taste" hidden></p><ol class="letc-list"></ol>`;
         const ex = courseExam(c), bx = ex === 'let' ? null : R.boardExams().find((x) => x.key === ex);
         body.querySelector('.letc-what').textContent = ex === 'let'
           ? `LET ${c.level === 'secondary' ? 'Secondary' : 'Elementary'}${c.major ? `: ${c.major}` : ''} · ${c.parts.map((k) => LET_PART_NAMES[k]).join(', ')}`
-          : `${bx.full}${bx.levels ? `: ${c.level === 'subprofessional' ? 'Subprofessional' : 'Professional'}` : ''} · ${[...new Set(lessons.map((l) => l.partName))].join(', ')}`;
+          : `${bx.full}${bx.levels ? `: ${BOARD_LEVELS[c.level] || bx.levels[0][1]}` : ''} · ${[...new Set(lessons.map((l) => l.partName))].join(', ')}`;
         body.querySelector('.letc-weights').textContent = ex === 'let' ? LET_WEIGHTS : bx.note;
+        body.querySelector('.letc-says').textContent = boardSays(bx);
         if (lessons.some((l, i) => boardLocked(i))) { const t = body.querySelector('.letc-taste'); t.hidden = false; t.textContent = `The first ${BOARD_TASTE} lessons are yours on every plan. Pro opens all ${lessons.length}, with Cassie’s smartest model for the hard ones.`; }
         const ol = body.querySelector('.letc-list');
         lessons.forEach((l, i) => {
@@ -2721,7 +2730,7 @@ function openLetCourse(step) {
 function boardProAsk(close) {
   if (close) close();
   track('feature', 'board-pro-ask');
-  plusSheet('', `Free and Plus open the first ${BOARD_TASTE} lessons of each board exam course. Pro opens every lesson of the LET, CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering and Psychometrician courses.`, 'board', 'Every board exam lesson comes with Pro', 'pro');
+  plusSheet('', `Free and Plus open the first ${BOARD_TASTE} lessons of each board exam course. Pro opens every lesson of the LET, CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering, Psychometrician, NCLEX-RN, IELTS and OET Nursing courses.`, 'board', 'Every board exam lesson comes with Pro', 'pro');
 }
 // a lesson: Cassie teaches it in the chat, then checks with 3 of her own board-style questions; it counts as done
 function letOpenLesson(topic, close) {
@@ -2844,7 +2853,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=236').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=237').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3530,7 +3539,7 @@ function deskPlan() {
     b.type = 'button'; b.className = 'hub-chat dk-letc';
     b.innerHTML = `<i>${LESSONS_ICON}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
     b.querySelector('b').textContent = `${courseTitle()}: one lesson at a time`;
-    b.querySelector('small').textContent = cnt ? `${cnt[0]} of ${cnt[1]} lessons done` : 'LET, CPALE, Civil Service, Nursing and more: pick your exam, then learn it topic by topic';
+    b.querySelector('small').textContent = cnt ? `${cnt[0]} of ${cnt[1]} lessons done` : 'LET, CPALE, Civil Service, NCLEX-RN, IELTS and more: pick your exam, then learn it topic by topic';
     b.addEventListener('click', () => openLetCourse());
     el.querySelector('.dk-filters').before(b);
   }
@@ -7471,7 +7480,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=236');
+      exploreMod = await import('./explore/cell3d.js?v=237');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7521,7 +7530,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=236');
+      labsMod = await import('./labs/labs.js?v=237');
       islandRest();
     }
     labsMod.open({
@@ -9365,10 +9374,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=236').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=237').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=236', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=237', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9913,7 +9922,7 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
     <h3 id="plus-sheet-h">${escapeHtml(title || `${what} comes with Plus`)}</h3>
     ${why ? `<p class="plus-why">${escapeHtml(why)}</p>` : ''}
     <ul class="plus-list">${isPro ? `
-      <li>Every lesson of your board exam course: LET, CPALE, Civil Service and more</li>
+      <li>Every lesson of your exam course: LET, CPALE, Civil Service, NCLEX-RN, IELTS and more</li>
       <li>Cassie’s smartest model for the hard questions</li>
       <li>150 questions and 20 Gemini pictures a day</li>
       <li>Everything in Plus</li>` : `

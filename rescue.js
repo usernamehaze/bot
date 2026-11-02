@@ -171,13 +171,19 @@
         ['soc', 'Sociology of Crimes and Ethics', ['Sociology of crimes: theories of crime causation', 'Sociology of crimes: juvenile delinquency', 'Sociology of crimes: behavior and crisis', 'Sociology of crimes: police ethics and values']],
         ['ca', 'Correctional Administration', ['Corrections: institutional corrections', 'Corrections: probation and community-based', 'Corrections: parole and pardon']],
       ] },
-    nle: { name: 'Nursing', full: 'Nurse Licensure Examination (NLE)', note: 'Five Nursing Practice papers from the Board of Nursing.',
+    nle: { name: 'Nursing', full: 'Nurse Licensure Examination (NLE)', note: 'Five Nursing Practice papers of 100 items from the Board of Nursing, by its enhanced tables used from the November 2025 exam. In each, 80% is the paper’s own care and 20% is health education, research, laws and ethics, teamwork and records worked into the situations.',
       parts: [
-        ['np1', 'Nursing Practice I: Community Health Nursing', ['NP1: foundations of professional nursing', 'NP1: community health nursing', 'NP1: epidemiology and communicable diseases', 'NP1: health education and primary care']],
-        ['np2', 'Nursing Practice II: Mothers and Children', ['NP2: pregnancy and prenatal care', 'NP2: labor delivery and the newborn', 'NP2: postpartum and high-risk mothers', 'NP2: growth development and child health', 'NP2: sick children and IMCI']],
-        ['np3', 'Nursing Practice III: Physiologic and Psychosocial Alterations A', ['NP3: fluids electrolytes and acid-base', 'NP3: oxygenation and the respiratory system', 'NP3: the heart and circulation', 'NP3: perioperative nursing']],
-        ['np4', 'Nursing Practice IV: Physiologic and Psychosocial Alterations B', ['NP4: the endocrine system', 'NP4: the digestive system', 'NP4: the kidneys and urinary system', 'NP4: the nervous system', 'NP4: cancer and the immune system']],
-        ['np5', 'Nursing Practice V: Physiologic and Psychosocial Alterations C', ['NP5: psychiatric nursing and communication', 'NP5: anxiety mood and psychotic disorders', 'NP5: emergency and disaster nursing', 'NP5: nursing leadership management and research', 'NP5: nursing laws and ethics']],
+        ['np1', 'Nursing Practice I: Community Health Nursing', ['NP1: individuals with non-communicable diseases', 'NP1: clients with communicable diseases', 'NP1: families and families at risk', 'NP1: population groups and the community',
+          'NP1: Universal Health Care and health delivery', 'NP1: primary health care and community assessment', 'NP1: epidemiology and vital statistics', 'NP1: disaster school and occupational nursing',
+          'NP1: community organizing records and referral', 'NP1: health education and research']],
+        ['np2', 'Nursing Practice II: Mothers Children and Adolescents', ['NP2: normal pregnancy and prenatal care', 'NP2: labor and birth', 'NP2: the newborn and the mother after birth', 'NP2: family planning and reproductive health',
+          'NP2: high-risk pregnancy and complications', 'NP2: growth and development to adolescence', 'NP2: at-risk and sick children']],
+        ['np3', 'Nursing Practice III: Surgery Oxygenation Fluids Infection and Cancer', ['NP3: patients undergoing surgery', 'NP3: problems in oxygenation', 'NP3: fluids electrolytes and acid-base', 'NP3: infection inflammation and immunity',
+          'NP3: cellular aberrations and cancer', 'NP3: health education and quality improvement']],
+        ['np4', 'Nursing Practice IV: Nutrition Endocrine and the Nervous System', ['NP4: nutrition and gastrointestinal problems', 'NP4: metabolism and endocrine problems', 'NP4: perception and coordination',
+          'NP4: teamwork records and professional growth']],
+        ['np5', 'Nursing Practice V: Mental Health and High Acuity Care', ['NP5: mental health in the Philippines', 'NP5: the bases of behavior and stress', 'NP5: therapeutic models', 'NP5: psychopathology and the nursing process',
+          'NP5: therapeutic communication and records', 'NP5: life-threatening and multi-organ problems', 'NP5: high acuity and emergency care']],
       ] },
     cele: { name: 'Civil Engineering', full: 'Civil Engineer Licensure Examination', note: 'Three subjects from the Board of Civil Engineering.',
       parts: [
@@ -192,13 +198,46 @@
         ['io', 'Industrial and Organizational Psychology', ['I/O: job analysis and selection', 'I/O: training and performance appraisal', 'I/O: motivation and job satisfaction', 'I/O: leadership groups and organizations']],
         ['assess', 'Psychological Assessment', ['Assessment: statistics for testing', 'Assessment: reliability and validity', 'Assessment: test construction and norms', 'Assessment: intelligence and personality tests', 'Assessment: ethics in testing']],
       ] },
+    // international exams: their published test formats, in Cassie's own words (owner names are for the disclaimer)
+    nclex: { name: 'NCLEX-RN', full: 'NCLEX-RN', intl: true, owner: 'NCLEX® and NCLEX-RN® are registered trademarks of the National Council of State Boards of Nursing (NCSBN)',
+      note: 'By the 2026 test plan: 85 to 150 questions in up to 5 hours, adaptive, with 3 case studies on clinical judgment. Biggest parts: Management of Care (15 to 21%) and Pharmacological and Parenteral Therapies (13 to 19%).',
+      parts: [
+        ['moc', 'Management of Care', ['NCLEX: prioritizing and delegating care', 'NCLEX: advocacy consent and client rights', 'NCLEX: legal duties ethics and privacy', 'NCLEX: continuity of care and referrals']],
+        ['sipc', 'Safety and Infection Prevention and Control', ['NCLEX: preventing errors falls and injury', 'NCLEX: standard and transmission precautions', 'NCLEX: restraints and emergency response']],
+        ['hpm', 'Health Promotion and Maintenance', ['NCLEX: growth and development through life', 'NCLEX: pregnancy birth and newborn care', 'NCLEX: screening immunizations and health habits']],
+        ['psy', 'Psychosocial Integrity', ['NCLEX: therapeutic communication', 'NCLEX: mental health conditions', 'NCLEX: abuse crisis and coping', 'NCLEX: substance use grief and loss']],
+        ['bcc', 'Basic Care and Comfort', ['NCLEX: mobility hygiene and rest', 'NCLEX: nutrition and elimination', 'NCLEX: comfort without medicines']],
+        ['ppt', 'Pharmacological and Parenteral Therapies', ['NCLEX: dosage calculation', 'NCLEX: medication safety and side effects', 'NCLEX: IV therapy and blood transfusions', 'NCLEX: high-alert medicines by body system']],
+        ['rrp', 'Reduction of Risk Potential', ['NCLEX: vital signs and lab values', 'NCLEX: diagnostic tests and procedures', 'NCLEX: preventing complications']],
+        ['pa', 'Physiological Adaptation', ['NCLEX: fluids electrolytes and acid-base', 'NCLEX: heart lungs and circulation', 'NCLEX: medical emergencies', 'NCLEX: managing illness across body systems']],
+        ['cj', 'Clinical judgment case studies', ['NCLEX: recognize and analyze cues', 'NCLEX: prioritize hypotheses and take action', 'NCLEX: the newer question types']],
+      ] },
+    ielts: { name: 'IELTS', full: 'IELTS', intl: true, owner: 'IELTS is jointly owned by the British Council, IDP: IELTS Australia and Cambridge University Press and Assessment',
+      levels: [['academic', 'Academic'], ['general', 'General Training']], levelQ: 'Academic or General Training?',
+      note: 'Listening has 40 questions in about 30 minutes, Reading 40 in 60 minutes, Writing 2 tasks in 60 minutes (Task 2 counts double) and Speaking takes 11 to 14 minutes. Scored in bands from 0 to 9.',
+      parts: [
+        ['listen', 'Listening', ['IELTS Listening: everyday conversations', 'IELTS Listening: talks and lectures', 'IELTS Listening: question types and spelling']],
+        ['readac', 'Reading', ['IELTS Reading: skimming and scanning', 'IELTS Reading: true false or not given', 'IELTS Reading: matching headings', 'IELTS Reading: long academic passages'], 'academic'],
+        ['readgt', 'Reading', ['IELTS Reading: skimming and scanning', 'IELTS Reading: true false or not given', 'IELTS Reading: everyday and work texts', 'IELTS Reading: the longer general text'], 'general'],
+        ['writeac', 'Writing', ['IELTS Writing Task 1: charts and diagrams', 'IELTS Writing Task 2: the essay', 'IELTS Writing: grammar range and accuracy'], 'academic'],
+        ['writegt', 'Writing', ['IELTS Writing Task 1: the letter', 'IELTS Writing Task 2: the essay', 'IELTS Writing: grammar range and accuracy'], 'general'],
+        ['speak', 'Speaking', ['IELTS Speaking Part 1: about you', 'IELTS Speaking Part 2: the long turn', 'IELTS Speaking Part 3: the discussion', 'IELTS Speaking: fluency and pronunciation']],
+      ] },
+    oet: { name: 'OET Nursing', full: 'OET (Occupational English Test) for Nursing', intl: true, owner: 'OET is owned by Cambridge Boxhill Language Assessment',
+      note: 'Listening and Reading have 42 questions each (about 40 and 60 minutes) and are the same for every profession. Writing is one nursing letter in 45 minutes, and Speaking is nursing role-plays of about 20 minutes.',
+      parts: [
+        ['listen', 'Listening', ['OET Listening A: consultation notes', 'OET Listening B: short workplace extracts', 'OET Listening C: presentations and interviews']],
+        ['read', 'Reading', ['OET Reading A: fast reading of short texts', 'OET Reading B: workplace notices and guidelines', 'OET Reading C: long health articles']],
+        ['write', 'Writing', ['OET Writing: reading the case notes', 'OET Writing: the referral or discharge letter', 'OET Writing: tone layout and conciseness']],
+        ['speak', 'Speaking', ['OET Speaking: starting the role-play', 'OET Speaking: explaining and reassuring', 'OET Speaking: the clinical communication criteria']],
+      ] },
   };
   // an exam's areas, for its level (the Civil Service Exam's Professional or Subprofessional): [{ key, name, topics }]
   function boardParts(exam, level) {
     const b = BOARD[exam]; if (!b) return [];
     return b.parts.filter((p) => !p[3] || p[3] === level).map(([key, name, topics]) => ({ key, name, topics: [...topics] }));
   }
-  const boardExams = () => Object.keys(BOARD).map((k) => ({ key: k, name: BOARD[k].name, full: BOARD[k].full, note: BOARD[k].note, levels: BOARD[k].levels || null }));
+  const boardExams = () => Object.keys(BOARD).map((k) => ({ key: k, name: BOARD[k].name, full: BOARD[k].full, note: BOARD[k].note, levels: BOARD[k].levels || null, levelQ: BOARD[k].levelQ || '', intl: !!BOARD[k].intl, owner: BOARD[k].owner || '' }));
 
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
