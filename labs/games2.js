@@ -140,7 +140,7 @@ const jigsawLab = {
       const G = geo(w, h), out = {};
       for (const k of Object.keys(CONTINENTS)) {
         const p = new Path2D();
-        pieces[k].polys.forEach((poly) => poly.forEach((ring) => { ring.forEach(([lon, lat], i) => { const [x, y] = proj(G, lon, Math.max(LAT_BOT, lat)); if (i) p.lineTo(x, y); else p.moveTo(x, y); }); p.closePath(); }));
+        pieces[k].polys.forEach((poly) => poly.forEach((ring) => { let prev = null, shift = 0; ring.forEach(([lon, lat], i) => { if (prev !== null) { const d = lon + shift - prev; if (d > 180) shift -= 360; else if (d < -180) shift += 360; } prev = lon + shift; const [x, y] = proj(G, lon + shift, Math.max(LAT_BOT, lat)); if (i) p.lineTo(x, y); else p.moveTo(x, y); }); p.closePath(); })); // (rings that cross the 180° line are unwrapped, not drawn across the map)
         out[k] = p;
       }
       cache = { w, h, paths: out };
@@ -384,12 +384,12 @@ const sorterLab = {
 /* ---------------- History dress-up ---------------- */
 // photos: public domain or CC0, from Wikimedia Commons (credits in CREDITS.md and on each card)
 export const OUTFITS = [
-  ['ilocana', 'Ilocos, Philippines, 1820s', 'An Ilocana woman in a bádo (blouse) and pandiling (wrap skirt), painted by Damián Domingo, called the father of Philippine painting, for his series Tipos del País.', 'Damián Domingo, about 1820s. Public domain', 'Indio de Iloco – A Native Ilocana of Ilocos (Ilocano).jpg'],
-  ['moro', 'Mindanao and Sulu, Philippines, 1700s to 1800s', 'A Moro warrior’s helmet. Moro armour was made of brass plates, mail and sometimes carabao horn, worn in battles against Spanish forces.', 'The Metropolitan Museum of Art, CC0', 'Helmet MET 36.25.98 001mar2015.jpg'],
-  ['gusoku', 'Japan, 1700s (Edo period)', 'Samurai armour (gusoku): small lacquered plates laced together with silk cords, light enough to move and fight in.', 'The Metropolitan Museum of Art, CC0', 'Armor (Gusoku) MET DP299994.jpg'],
-  ['corinthian', 'Ancient Greece, early 500s BC', 'A bronze Corinthian helmet, beaten from one sheet of bronze. Greek foot soldiers (hoplites) wore it with a round shield.', 'The Metropolitan Museum of Art, CC0', 'Bronze helmet of Corinthian type MET DP105637.jpg'],
-  ['collar', 'Ancient Egypt, about 1850 to 1775 BC', 'The broad collar of Senebtisi: rows of faience beads strung into a wide necklace, worn by Egyptian women and men.', 'The Metropolitan Museum of Art, CC0', 'Broad collar of Senebtisi MET DP303025.jpg'],
-  ['clifford', 'England, 1586 (Tudor times)', 'Steel plate armour made for George Clifford, Earl of Cumberland, at Queen Elizabeth I’s royal workshop in Greenwich, etched and gilded.', 'The Metropolitan Museum of Art, CC0', 'Armor Garniture of George Clifford (1558–1605), Third Earl of Cumberland MET DP295743.jpg'],
+  ['ilocana', 'Ilocos, Philippines, 1820s', 'An Ilocana woman in a bádo (blouse) and pandiling (wrap skirt), painted by Damián Domingo, called the father of Philippine painting, for his series Tipos del País.', 'Damián Domingo, about 1820s. Public domain'],
+  ['moro', 'Mindanao and Sulu, Philippines, 1700s to 1800s', 'A Moro warrior’s helmet. Moro armour was made of brass plates, mail and sometimes carabao horn, worn in battles against Spanish forces.', 'The Metropolitan Museum of Art, CC0'],
+  ['gusoku', 'Japan, 1700s (Edo period)', 'Samurai armour (gusoku): small lacquered plates laced together with silk cords, light enough to move and fight in.', 'The Metropolitan Museum of Art, CC0'],
+  ['corinthian', 'Ancient Greece, early 500s BC', 'A bronze Corinthian helmet, beaten from one sheet of bronze. Greek foot soldiers (hoplites) wore it with a round shield.', 'The Metropolitan Museum of Art, CC0'],
+  ['collar', 'Ancient Egypt, about 1850 to 1775 BC', 'The broad collar of Senebtisi: rows of faience beads strung into a wide necklace, worn by Egyptian women and men.', 'The Metropolitan Museum of Art, CC0'],
+  ['clifford', 'England, 1586 (Tudor times)', 'Steel plate armour made for George Clifford, Earl of Cumberland, at Queen Elizabeth I’s royal workshop in Greenwich, etched and gilded.', 'The Metropolitan Museum of Art, CC0'],
 ];
 export const outfitPic = (id, small) => new URL(`./dressup/${id}${small ? '-s' : ''}.webp`, import.meta.url).href;
 const dressupLab = {
