@@ -406,7 +406,7 @@ const dressupLab = {
     const opts = el('div', 'du-opts'); opts.setAttribute('role', 'group'); opts.setAttribute('aria-label', 'Where and when');
     panel.appendChild(opts); panel.appendChild(msg);
     const r = row(panel, 'lab-row-btns');
-    const nextB = button(r, 'Next', () => { at++; show(); }, 'main');
+    const nextB = button(r, 'Next piece', () => { at++; show(); }, 'main');
     button(r, 'Start again', () => start());
     const st = stats(panel);
     function start() { order = shuffle(OUTFITS, rand); at = 0; right = 0; slips = 0; show(); }

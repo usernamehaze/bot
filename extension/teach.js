@@ -673,7 +673,7 @@
       sayEl.textContent = s.say;
       $('.ct-count').textContent = `${k + 1} of ${steps.length}`;
       $('.ct-back').disabled = k === 0;
-      $('.ct-next').textContent = k === steps.length - 1 ? 'Done' : 'Next';
+      $('.ct-next').textContent = k === steps.length - 1 ? 'Finish lesson' : 'Next';
       ans.hidden = true; asking++; // (an answer belongs to the step it was asked on)
       past = steps.slice(0, k).flatMap((x) => x.shown || x.draw); // (what she drew before stays, in grey)
       host.dataset.past = String(past.length);

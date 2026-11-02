@@ -3715,7 +3715,7 @@ test('Report a problem from Settings', async (b) => {
   await page.click('#report-btn');
   await page.fill('.profile-card textarea', 'The board did not open on my phone');
   await page.click('.profile-card .pf-go');
-  await page.waitForSelector('text=Thank you!');
+  await page.waitForSelector('text=Report sent');
   const d = await serverStats();
   expect(d.reports.some((r) => r.kind === 'report' && /board did not open/.test(r.text)), 'report missing');
   await ctx.close();
@@ -5618,6 +5618,73 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
+test('UI rules v232: buttons say what they do (no bare OK, Yes, Send, Go, Done or Submit), status badges use the ok, warn, danger and info colours (AA in light and dark), errors name the limit or the fix, a waiting button shows a busy state and sends once, and no filler words (1280x800 and 390x844)', async (b) => {
+  const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const view = phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 } };
+    let slow = 900;
+    const { ctx, page, errors, groqCalls } = await open(b, { ...view, server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home' }, fakeGroq: async (body) => { await new Promise((r) => setTimeout(r, slow)); return /FAILNOW/.test(JSON.stringify(body.messages.slice(-1))) ? { status: 400, message: 'bad request' } : { text: 'An answer.' }; } });
+    await page.waitForTimeout(1200);
+    const BARE = /^(ok|okay|yes|send|go|done|submit)$/i;
+    const bare = () => page.evaluate((re) => [...document.querySelectorAll('button, [role=button], input[type=submit]')].filter((x) => x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden').map((x) => (x.innerText || x.value || '').trim() || (x.getAttribute('aria-label') || '').trim()).filter((t) => new RegExp(re, 'i').test(t)), BARE.source);
+    const filler = () => page.evaluate(() => (document.body.innerText.match(/\b(successfully|has been|have been)\b[^.\n]{0,40}/gi) || []));
+    const views = [['Home', async () => {}], ['Settings', async () => { await page.evaluate(() => openSettings()); await page.waitForTimeout(500); }], ['Calendar', async () => { await page.evaluate(() => { closeSettings(); openCalFull(); }); await page.waitForTimeout(500); }],
+      ['Learn', async () => { await page.evaluate(() => { document.querySelectorAll('.cal-full').forEach((f) => f.remove()); openLabs(undefined, { section: 'learn' }); }); await page.waitForTimeout(900); }], ['Games', async () => { await page.evaluate(() => openLabs(undefined, { section: 'games' })); await page.waitForTimeout(900); }]];
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const [name, go] of views) {
+        await go();
+        const bad = await bare(), fill = await filler();
+        expect(!bad.length, `${where} ${scheme}: ${name}: buttons say what they do: ` + bad.join(' | '));
+        expect(!fill.length, `${where} ${scheme}: ${name}: no filler words: ` + fill.join(' | '));
+      }
+      await page.evaluate(() => { const x = document.querySelector('.labs:not([hidden]) .labs-x'); if (x) x.click(); });
+      // the status colours: each word colour on its own background passes AA (4.5:1), in this theme
+      const pairs = await page.evaluate(() => {
+        const lum = (c) => { const [r, g, bb] = c.match(/[\d.]+/g).slice(0, 3).map((v) => { v = +v / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * bb; };
+        return ['st-ok', 'st-warn', 'st-danger', 'st-info'].map((k) => { const e = document.createElement('span'); e.className = 'st-badge ' + k; e.textContent = 'Status'; document.body.appendChild(e); const cs = getComputedStyle(e), a = lum(cs.color), z = lum(cs.backgroundColor); e.remove(); return [k, +((Math.max(a, z) + 0.05) / (Math.min(a, z) + 0.05)).toFixed(2), cs.backgroundColor !== 'rgba(0, 0, 0, 0)']; });
+      });
+      expect(pairs.every(([, r, bg]) => r >= 4.5 && bg), `${where} ${scheme}: ok, warn, danger and info pass AA on their own backgrounds: ` + JSON.stringify(pairs));
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.evaluate(() => { document.querySelectorAll('.cal-full').forEach((f) => f.remove()); const x = document.querySelector('.labs:not([hidden]) .labs-x'); if (x) x.click(); });
+    await page.evaluate(() => { if (document.body.classList.contains('desk-on')) deskGo('chat'); else if (window.CassieNative && window.CassieNative.go) window.CassieNative.go('chat'); else document.querySelector('.tabbar [data-tab="chat"]')?.click(); });
+    await page.waitForSelector('#prompt-input', { state: 'visible', timeout: 10000 });
+    // errors name the fix: a kind of file Cassie can't read, and too many photos at once
+    await page.setInputFiles('#file-input', { name: 'notes.xyz', mimeType: 'application/octet-stream', buffer: Buffer.from('hello') });
+    await page.waitForFunction(() => /PDF, Word \(\.docx\), PowerPoint \(\.pptx\)/.test(document.body.innerText + (document.getElementById('island') ? document.getElementById('island').innerText : '')) || [...document.querySelectorAll('.att-error, [title]')].some((x) => /PDF, Word/.test(x.textContent + (x.title || ''))), null, { timeout: 5000 }).then(() => {}, () => {});
+    const kindMsg = await page.evaluate(() => typeof attachError !== 'undefined' ? attachError : '');
+    expect(/Files must be PDF, Word \(\.docx\), PowerPoint \(\.pptx\), text \(\.txt or \.md\) or a photo/.test(kindMsg), `${where}: the wrong kind of file names the kinds Cassie reads: ` + kindMsg);
+    await page.evaluate(() => { attachments.length = 0; renderAttachments(); });
+    await page.setInputFiles('#file-input', Array.from({ length: 16 }, (_, i) => ({ name: `p${i}.png`, mimeType: 'image/png', buffer: PNG1 })));
+    await page.waitForFunction(() => attachments.length === 16 && attachments.every((x) => x.status !== 'reading'), null, { timeout: 20000 }); // (one at a time, in order)
+    const many = await page.evaluate(() => attachError || attachments.filter((x) => x.status === 'error').map((x) => x.note).join(' | ') || JSON.stringify(attachments.map((x) => [x.kind, x.status, x.note])));
+    expect(/Up to 15 photos at a time/.test(many), `${where}: too many photos names the limit: ` + many);
+    await page.evaluate(() => { attachments.length = 0; attachError = ''; renderAttachments(); });
+    // a waiting Send: busy, disabled, aria-busy; one tap or two send one question; back to normal after the answer
+    await page.fill('#prompt-input', 'What is a cell?');
+    const before = groqCalls.filter((c) => c.messages).length;
+    await page.click('#send-btn'); await page.click('#send-btn', { force: true }).catch(() => {});
+    await page.waitForTimeout(250);
+    const busy = await page.$eval('#send-btn', (x) => ({ busy: x.getAttribute('aria-busy'), off: x.disabled, spin: !!x.querySelector('.busy-spin'), label: x.getAttribute('aria-label') }));
+    expect(busy.busy === 'true' && busy.off && busy.spin && busy.label === 'Send message', `${where}: Send is busy while Cassie answers: ` + JSON.stringify(busy));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v232-busy-${phone ? 'phone' : 'desk'}.png` });
+    await page.waitForSelector('text=An answer.', { timeout: 10000 });
+    expect(groqCalls.filter((c) => c.messages).length - before === 1, `${where}: a double tap sends one question: ` + (groqCalls.filter((c) => c.messages).length - before));
+    expect(await page.$eval('#send-btn', (x) => !x.hasAttribute('aria-busy') && !x.querySelector('.busy-spin')), `${where}: Send is back to normal after the answer`);
+    // an AI failure: the error bubble in the danger colours with a !, it says what to do, and Send comes back
+    await page.fill('#prompt-input', 'FAILNOW please'); await page.click('#send-btn');
+    await page.waitForSelector('#chat-log .bubble.error', { timeout: 20000 });
+    const err = await page.$eval('#chat-log .bubble.error', (x) => { const cs = getComputedStyle(x); return { text: x.innerText, bg: cs.backgroundColor, mark: getComputedStyle(x, '::before').content }; });
+    expect(err.bg !== 'rgba(0, 0, 0, 0)' && /!/.test(err.mark) && /try again|Settings|check|wait/i.test(err.text), `${where}: the error shows the fix, in the danger colours with a !: ` + JSON.stringify(err));
+    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v232-error-${phone ? 'phone' : 'desk'}.png` });
+    expect(await page.$eval('#send-btn', (x) => !x.hasAttribute('aria-busy')), `${where}: Send is back after an error`);
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('Cassie v231: her hello ring fades from white to soft pink (none with Reduce Motion), she writes your name and draws a card in the setup (finished at once with Reduce Motion), thinks while an answer comes then smiles, looks puzzled with a stronger blush on an error, and wears the grad cap and exam tassel by the season and the calendar (1280x800 and 390x844)', async (b) => {
   const hex = (h) => { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
   for (const phone of [false, true]) {
@@ -6094,7 +6161,7 @@ async function walkTour(page, where) {
       await page.click('.tour-card [data-t="next"]');
       await page.waitForFunction(() => /^Stop 2 of/.test(document.querySelector('.tour-count').textContent), null, { timeout: 5000 });
     }
-    const last = await page.evaluate(() => document.querySelector('.tour-card [data-t="next"]').textContent === 'Done');
+    const last = await page.evaluate(() => document.querySelector('.tour-card [data-t="next"]').textContent === 'Finish tour');
     await page.click('.tour-card [data-t="next"]');
     if (last) break;
   }

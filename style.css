@@ -3589,3 +3589,24 @@ button.dk-day.cal-cell:focus-visible { outline: 2px solid var(--focus); outline-
 .cal-full button.dk-day.cal-cell { position: relative; overflow: hidden; }
 .cal-full .cal-more { position: absolute; right: 5px; bottom: 5px; line-height: 1; } /* (clear of the date and today's ring) */
 .cal-full .cal-cell:has(.cal-more) .cal-ev { max-width: calc(100% - 18px); }
+
+/* (v232) status colours: ok, warn, danger and info, each a word colour on its own background (AA in both themes) */
+:root { --ok: #1f6b3f; --ok-bg: #e2f3e9; --warn: #7a4a00; --warn-bg: #fcefd4; --danger-ink: #a3241c; --danger-bg: #fde7e5; --info: #1e56a8; --info-bg: #e4edfb; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; } }
+:root[data-theme="dark"] { --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; }
+.st-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: .76rem; font-weight: 700; line-height: 1.5; white-space: nowrap; font-style: normal; }
+.st-ok { color: var(--ok); background: var(--ok-bg); } .st-warn { color: var(--warn); background: var(--warn-bg); }
+.st-danger { color: var(--danger-ink); background: var(--danger-bg); } .st-info { color: var(--info); background: var(--info-bg); }
+/* an error in the chat: the danger colours and a ! so it never relies on colour alone */
+.bubble.error { color: var(--danger-ink); background: var(--danger-bg); border-color: color-mix(in srgb, var(--danger-ink) 35%, transparent); }
+.bubble.error::before { content: "!"; display: inline-grid; place-items: center; width: 1.25em; height: 1.25em; margin-right: .45em; border-radius: 50%; background: var(--danger-ink); color: var(--danger-bg); font-weight: 800; font-size: .85em; vertical-align: .05em; }
+/* (v232) a button that waits: a small spinner and a short label; no spinning with Reduce Motion (a still "…") */
+.is-busy { cursor: progress; }
+.busy-spin { display: inline-block; width: 1em; height: 1em; margin-right: .45em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -.15em; animation: busySpin .8s linear infinite; }
+.icon-btn .busy-spin { margin: 0; } .icon-btn.is-busy svg { display: none; }
+button.is-busy:disabled { opacity: 1; }
+@keyframes busySpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .busy-spin { animation: none; border: 0; width: auto; height: auto; } .busy-spin::before { content: "…"; } }
+/* (the phone app's glass bubbles and the lesson list keep their status colours too) */
+html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.error { background: var(--danger-bg); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: color-mix(in srgb, var(--danger-ink) 35%, transparent); }
+.letc-lesson.done em.st-badge.st-ok { color: var(--ok); background: var(--ok-bg); border: 0; }

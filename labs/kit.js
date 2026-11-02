@@ -270,7 +270,7 @@ export function formula(src) {
       continue;
     }
     if ('+-*/^()|'.includes(ch)) { toks.push({ t: ch }); i++; continue; }
-    throw inputError(`I can't read “${ch}” in the formula.`);
+    throw inputError(`I can't read “${ch}” in the formula. Use numbers, x, + − × ÷ ^, brackets and functions like sin(x).`);
   }
   let k = 0;
   const peek = () => toks[k], take = (t) => (toks[k] && toks[k].t === t ? toks[k++] : null);
@@ -320,7 +320,7 @@ export function formula(src) {
     throw inputError(`Something is missing before “${tk.t}”.`);
   }
   const f = expr();
-  if (k < toks.length) throw inputError(`I can't read the part from “${toks[k].t === 'n' ? toks[k].v : toks[k].t}”.`);
+  if (k < toks.length) throw inputError(`I can't read the part from “${toks[k].t === 'n' ? toks[k].v : toks[k].t}”. Check for a missing sign or bracket, like 2*x or (x+1).`);
   return f;
 }
 
