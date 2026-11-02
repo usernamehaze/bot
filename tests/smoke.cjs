@@ -2593,19 +2593,59 @@ test('Quiz me, Explain a topic, Solve step by step and Research a topic wait for
   await ctx.close();
 });
 
+test('exam courses v237: Nursing follows the PRC’s 2025 tables; NCLEX-RN, IELTS (Academic or General Training) and OET Nursing are courses with their published formats; every course says who it isn’t affiliated with and that its questions are Cassie’s own; the terms, the website and Cassie’s own rules say no leaked questions', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  const D = await page.evaluate(() => letRescue().then((R) => ({ nle: R.boardParts('nle', 'nle'), nclex: R.boardParts('nclex', 'nclex').map((p) => p.key), gen: R.boardParts('ielts', 'general'), ac: R.boardParts('ielts', 'academic'), oet: R.boardParts('oet', 'oet').map((p) => p.name), ex: R.boardExams() })));
+  const nleT = D.nle.flatMap((p) => p.topics), nleN = D.nle.map((p) => p.name);
+  expect(/Surgery Oxygenation Fluids Infection and Cancer/.test(nleN[2]) && /Nutrition Endocrine and the Nervous System/.test(nleN[3]) && /Mental Health and High Acuity/.test(nleN[4]), 'Nursing Practice III to V as the 2025 tables group them: ' + nleN);
+  expect(nleT.includes('NP3: cellular aberrations and cancer') && nleT.includes('NP4: perception and coordination') && nleT.includes('NP5: high acuity and emergency care') && !nleT.some((t) => /kidneys|NP1: foundations/.test(t)), 'the 2025 topics, not the old ones: ' + nleT.slice(0, 6));
+  expect(/November 2025/.test(D.ex.find((x) => x.key === 'nle').note), 'it says which tables it follows');
+  expect(D.nclex.join() === 'moc,sipc,hpm,psy,bcc,ppt,rrp,pa,cj' && /85 to 150/.test(D.ex.find((x) => x.key === 'nclex').note), 'NCLEX-RN: the eight client needs and clinical judgment: ' + D.nclex);
+  const gw = D.gen.flatMap((p) => p.topics), aw = D.ac.flatMap((p) => p.topics);
+  expect(gw.includes('IELTS Writing Task 1: the letter') && !gw.some((t) => /charts/.test(t)) && aw.includes('IELTS Writing Task 1: charts and diagrams') && !aw.some((t) => /the letter/.test(t)), 'IELTS: General Training writes a letter, Academic describes a chart');
+  expect(D.oet.join() === 'Listening,Reading,Writing,Speaking', 'OET: the four sub-tests');
+  for (const k of ['nclex', 'ielts', 'oet']) expect(/owned|trademark/.test(D.ex.find((x) => x.key === k).owner), k + ': its owner is named');
+  // IELTS by taps
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
+  await page.click('.letc .letc-exam[data-exam="ielts"]');
+  expect(/Academic or General Training\?/.test(await page.locator('.letc').innerText()), 'IELTS asks which one');
+  await page.click('.letc .letc-lvl[data-lvl="general"]');
+  await page.click('.letc .letc-go'); await page.click('.letc .letc-skip');
+  const txt = await page.locator('.letc').innerText();
+  expect(/^IELTS course$/.test(await page.locator('#letc-h').innerText()) && /IELTS: General Training · Listening, Reading, Writing, Speaking/.test(txt), 'the IELTS course: ' + txt.slice(0, 160));
+  expect(/jointly owned by the British Council/.test(txt) && /not affiliated with or endorsed by them/.test(txt) && /Every practice question is Cassie’s own/.test(txt), 'it says who owns IELTS and that Cassie isn’t affiliated: ' + txt.slice(0, 600));
+  await page.click('.letc .letc-next'); await page.waitForTimeout(1200);
+  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
+  expect(/Teach me \\"IELTS Listening: everyday conversations\\" for the IELTS \(International English Language Testing System\), General Training/.test(ask) && !/Philippines/.test(ask), 'the lesson is for IELTS General Training: ' + ask.slice(0, 220));
+  // a Philippine course says the PRC line
+  await page.evaluate(() => { state.letCourse = { exam: 'nle', level: 'nle', parts: [], first: [], done: {}, at: Date.now() }; }); await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-count');
+  const nt = await page.locator('.letc').innerText();
+  expect(/not affiliated with the PRC or the Civil Service Commission/.test(nt) && /never uses real, leaked or recalled board questions/.test(nt) && /NP1: individuals with non-communicable diseases/.test(nt), 'Nursing: the PRC line and the new topics: ' + nt.slice(0, 300));
+  // Cassie's own rules
+  expect(await page.evaluate(() => /Never claim a question is a real, actual, leaked or "recalled"/.test(SYSTEM_PROMPT) && /can't, then offer to teach the topics/.test(SYSTEM_PROMPT)), 'Cassie won’t pass questions off as real or rebuild a leaked bank');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the terms and the website
+  const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8'), home = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), plans = fs.readFileSync(path.join(ROOT, 'app.html'), 'utf8');
+  expect(/id="exams"/.test(terms) && /leaked, "recalled" or stolen exam questions/.test(terms) && /registered trademarks of the National Council of State Boards of/.test(terms) && /Rights holders/.test(terms) && /no course promises that you'll pass/.test(terms), 'the terms: the reviewer rule, the owners, a takedown address, no pass promise');
+  expect(/class="foot-legal">Not affiliated with the PRC, the Civil Service Commission or any exam’s owner/.test(home) && /terms\.html#exams/.test(home), 'the website says it in the footer');
+  expect(/plus NCLEX-RN, IELTS and OET Nursing for working abroad/.test(plans) && /plus NCLEX-RN, IELTS &amp; OET Nursing/.test(home), 'Pro names the new courses');
+  for (const f of ['terms.html', 'index.html', 'rescue.js']) expect(!/[–—]/.test(fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '').replace(/replace\(\/\[–—\]\/g/g, '')), f + ': no long dashes');
+});
+
 test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil Service, Criminology, Nursing, Civil Engineering, Psychometrician), each with its official areas; CPALE and the Civil Service Exam (Professional or Subprofessional) by taps; lessons and practice are taught for that exam; once paid plans are on, Free and Plus open the first 3 lessons and Pro (₱349) opens every one', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 23 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
   // the map: every exam, its areas, short names with no commas or dashes
   const M = await page.evaluate(() => letRescue().then((R) => ({ ex: R.boardExams().map((x) => x.key), cpa: R.boardParts('cpale', 'cpale').map((p) => p.name), pro: R.boardParts('cse', 'professional').map((p) => p.key), sub: R.boardParts('cse', 'subprofessional').map((p) => p.key),
     all: R.boardExams().flatMap((x) => R.boardParts(x.key, x.levels ? x.levels[0][0] : x.key).concat(x.levels ? R.boardParts(x.key, x.levels[1][0]) : []).flatMap((p) => p.topics)) })));
-  expect(M.ex.join() === 'cpale,cse,cle,nle,cele,pmle', 'the exams: ' + M.ex);
+  expect(M.ex.join() === 'cpale,cse,cle,nle,cele,pmle,nclex,ielts,oet', 'the exams: ' + M.ex);
   expect(M.cpa.join('|') === 'Financial Accounting and Reporting|Advanced Financial Accounting and Reporting|Management Services|Auditing|Taxation|Regulatory Framework for Business Transactions', 'CPALE: the six subjects: ' + M.cpa);
   expect(M.pro.join() === 'verbal,numerical,analytical,geninfo' && M.sub.join() === 'verbal,numerical,clerical,geninfo', 'Civil Service: analytical for Professional, clerical for Subprofessional: ' + [M.pro, M.sub]);
   expect(M.all.length > 100 && M.all.every((t) => t.length <= 50 && !/[,–—]/.test(t)), 'short topic names, no commas or dashes: ' + M.all.filter((t) => t.length > 50 || /[,–—]/.test(t)));
   // CPALE by taps
   await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
   const picks = await page.$$eval('.letc .letc-exam', (bs) => bs.map((x) => x.textContent));
-  expect(picks.join() === 'LET,CPALE,Civil Service Exam,Criminology,Nursing,Civil Engineering,Psychometrician', 'the exams to pick: ' + picks);
+  expect(picks.join() === 'LET,CPALE,Civil Service Exam,Criminology,Nursing,Civil Engineering,Psychometrician,NCLEX-RN,IELTS,OET Nursing', 'the exams to pick: ' + picks);
   await page.click('.letc .letc-exam[data-exam="cpale"]');
   expect(/What should we focus on/.test(await page.locator('.letc').innerText()) && /Taxation/.test(await page.locator('.letc').innerText()), 'CPALE: straight to the subjects');
   await page.click('.letc .letc-part[data-part="far"]'); await page.click('.letc .letc-part[data-part="afar"]'); await page.click('.letc .letc-part[data-part="ms"]'); await page.click('.letc .letc-part[data-part="aud"]');
@@ -2651,7 +2691,7 @@ test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil
   const before = groqCalls.length;
   await page.click('.letc .letc-lesson.locked >> nth=0'); await page.waitForSelector('.plus-sheet');
   const sheet = (await page.locator('.plus-sheet').innerText()).replace(/\s+/g, ' ');
-  expect(/Every board exam lesson comes with Pro/.test(sheet) && /CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering and Psychometrician/.test(sheet) && /Get Pro: ₱349 for 30 days/.test(sheet) && /₱1,399/.test(sheet) && groqCalls.length === before, 'a locked lesson asks for Pro, at ₱349, and sends nothing: ' + sheet);
+  expect(/Every board exam lesson comes with Pro/.test(sheet) && /CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering, Psychometrician, NCLEX-RN, IELTS and OET Nursing/.test(sheet) && /Get Pro: ₱349 for 30 days/.test(sheet) && /₱1,399/.test(sheet) && groqCalls.length === before, 'a locked lesson asks for Pro, at ₱349, and sends nothing: ' + sheet);
   await page.evaluate(() => { document.querySelector('.plus-sheet')?.remove(); state.plan = { plan: 'pro', until: Date.now() + 864e5 }; });
   await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-lesson');
   const P = await page.$$eval('.letc .letc-lesson', (bs) => bs.map((x) => x.querySelector('em').textContent));
