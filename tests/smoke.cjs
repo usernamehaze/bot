@@ -2716,7 +2716,7 @@ test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie ask
   expect(await page.locator('.lesson[data-go="let:course"]').count() >= 1, 'Lessons has the LET course');
   // the questions, by taps
   await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-pick');
-  expect(/Which board exam are you taking\?/.test(await page.locator('.letc').innerText()), 'it asks the exam first (v235)');
+  expect(/Which exam are you taking\?/.test(await page.locator('.letc').innerText()), 'it asks the exam first (v235)');
   await page.click('.letc .letc-exam[data-exam="let"]');
   expect(/Which LET are you taking\?/.test(await page.locator('.letc').innerText()) && /60% Professional Education/.test(await page.locator('.letc').innerText()), 'it asks the level, with the weights');
   await page.click('.letc .letc-pick >> text=Secondary');
