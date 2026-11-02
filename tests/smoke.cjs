@@ -5736,9 +5736,10 @@ test('Cassie v231: her hello ring fades from white to soft pink (none with Reduc
     expect(await page.waitForFunction(() => bot2d.state === 'proud' || bot2d.state === 'done', null, { timeout: 3000 }).then(() => true, () => false), `${where}: a smile when the answer is ready`);
     expect(await page.waitForFunction(() => bot2d.state === 'idle', null, { timeout: 5000 }).then(() => true, () => false), `${where}: then back to idle (not stuck thinking): ` + await page.evaluate(() => bot2d.state));
     // a failed answer: puzzled (wide eyes, more blush than surprised), the friendly words kept, then idle
+    await page.evaluate(() => { window.__moods = []; window.__isle = []; const set = bot2d.setState; bot2d.setState = (n) => { const r = set(n); window.__moods.push([n, bot2d.def.eyes, bot2d.def.blush || 0]); return r; }; new MutationObserver(() => window.__isle.push(document.getElementById('island').dataset.mood)).observe(document.getElementById('island'), { attributes: true, attributeFilter: ['data-mood'] }); }); // (every mood she shows: a busy machine can be slow to look)
     await page.fill('#prompt-input', 'FAILNOW please'); await page.press('#prompt-input', 'Enter');
     await page.waitForSelector('#chat-log .error', { timeout: 15000 });
-    const pz = await page.evaluate(() => ({ s: bot2d.state, eyes: bot2d.def.eyes, blush: bot2d.def.blush || 0, mood: document.getElementById('island').dataset.mood, words: document.querySelector('#chat-log .error').textContent.trim().length }));
+    const pz = await page.evaluate(() => { const m = window.__moods.find((x) => x[0] === 'puzzled') || [bot2d.state, bot2d.def.eyes, bot2d.def.blush || 0]; return { s: m[0], eyes: m[1], blush: m[2], mood: window.__isle.includes('puzzled') ? 'puzzled' : document.getElementById('island').dataset.mood, words: document.querySelector('#chat-log .error').textContent.trim().length }; });
     expect(pz.s === 'puzzled' && pz.eyes === 'wide' && pz.blush > 0.5 && pz.mood === 'puzzled' && pz.words > 10, `${where}: puzzled on an error: ` + JSON.stringify(pz));
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v231-puzzled-${phone ? 'phone' : 'desk'}.png` });
     expect(await page.waitForFunction(() => bot2d.state === 'idle', null, { timeout: 5000 }).then(() => true, () => false), `${where}: puzzled for a moment, then idle`);
@@ -8540,11 +8541,11 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     await loaded(); const first = await current(); await page.click(`${V} .du-opt:not([data-id="${first}"]) >> nth=0`);
     expect(await stat('Wrong guesses') === '1' && !(await done('dressup'))[0], `${where}: a wrong guess`);
     await page.click(`${V} .du-opt[data-id="${first}"]`); expect(await stat('Right first time') === '0' && (await done('dressup'))[0], `${where}: right, but not first time`);
-    for (let i = 1; i < n; i++) { await press('Next'); await answer(); }
-    await press('Next'); expect(await page.$eval(`${V} .du-end b`, (x) => x.textContent) === `${n - 1} of ${n} right!` && (await done('dressup'))[1] && !(await done('dressup'))[2], `${where}: the end of the game`);
-    await press('Start again'); for (let i = 0; i < n; i++) { await answer(); if (i < n - 1) await press('Next'); }
+    for (let i = 1; i < n; i++) { await press('Next piece'); await answer(); }
+    await press('Next piece'); expect(await page.$eval(`${V} .du-end b`, (x) => x.textContent) === `${n - 1} of ${n} right!` && (await done('dressup'))[1] && !(await done('dressup'))[2], `${where}: the end of the game`);
+    await press('Start again'); for (let i = 0; i < n; i++) { await answer(); if (i < n - 1) await press('Next piece'); }
     await shot('dressup');
-    await press('Next'); expect((await done('dressup'))[2], `${where}: every piece right first time`);
+    await press('Next piece'); expect((await done('dressup'))[2], `${where}: every piece right first time`);
     await check('dressup');
     expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
     await ctx.close();
