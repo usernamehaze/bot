@@ -105,8 +105,8 @@
   /* ---------- pricing ---------- */
   const PRICES = {
     // sem = a Semester pass: one payment for 5 months (about 20% off)
-    php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } },
-    usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } },
+    php: { sym: '₱', free: 0, plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 349, sem: 1399, year: 3490 } },
+    usd: { sym: 'US$', free: 0, plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 8.99, sem: 35.99, year: 89.9 } },
   };
   const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone || '');
   const lang = (navigator.language || '').toLowerCase();

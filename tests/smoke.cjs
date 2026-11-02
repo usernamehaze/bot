@@ -2135,22 +2135,22 @@ test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance tab
   expect(await page.locator('.set-plans [data-bill="m"]').getAttribute('aria-pressed') === 'true', 'Monthly is picked at first');
   let plus = await text('.set-plans .plan-plus'), pro = await text('.set-plans .plan-pro');
   expect(/₱149 a month/.test(plus) && !/₱599 a semester/.test(plus) && !/Pasado Pass/.test(plus) && /One payment for 30 days\. Never renews\. 7 days to change your mind\. Or ₱599 once for the whole semester\./.test(plus), 'Plus, a month: ' + plus);
-  expect(/₱499 a month/.test(pro) && !/₱1,999 a semester/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Get Pro early/.test(pro), 'Pro, a month: ' + pro);
+  expect(/₱349 a month/.test(pro) && !/₱1,399 a semester/.test(pro) && /Every lesson of the board exam courses: LET, CPALE, Civil Service/.test(pro) && /150 questions a day/.test(pro) && /20 Gemini pictures a day/.test(pro) && /Get Pro early/.test(pro), 'Pro, a month: ' + pro);
   const priceRow = () => page.evaluate(() => [...document.querySelectorAll('.set-plans .plan-compare tbody tr:first-child td')].map((x) => x.innerText.trim()).join('|'));
-  expect(await priceRow() === '₱0|₱149 a month|₱499 a month', 'the table, a month: ' + await priceRow());
+  expect(await priceRow() === '₱0|₱149 a month|₱349 a month', 'the table, a month: ' + await priceRow());
   if (process.env.SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly.png' }); await page.locator('.set-plans .plan-plus').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await page.screenshot({ path: process.env.SHOTS + '/plans-monthly-plus.png' }); await page.locator('.set-plans .bill-seg').scrollIntoViewIfNeeded(); }
   // Semester: the one-payment prices and the Pasado Pass
   await page.click('.set-plans [data-bill="s"]');
   plus = await text('.set-plans .plan-plus'); pro = await text('.set-plans .plan-pro');
   expect(/₱599 a semester, about ₱4 a day/.test(plus) && /Pasado Pass/.test(plus) && !/₱149 a month Renews/.test(plus), 'Plus, a semester: ' + plus);
-  expect(/₱1,999 a semester, about ₱13 a day/.test(pro) && /Or ₱499 a month/.test(pro), 'Pro, a semester: ' + pro);
+  expect(/₱1,399 a semester, about ₱9 a day/.test(pro) && /Or ₱349 a month/.test(pro), 'Pro, a semester: ' + pro);
   expect(await page.locator('.set-plans [data-bill="s"]').getAttribute('aria-pressed') === 'true', 'Semester is shown as picked');
   expect(/Best for school/.test(await page.locator('.set-plans .plan-plus').innerText()) && !(await page.locator('.set-plans .plan-pro .plan-badge').count()), 'only Plus is Best for school');
   const T = await page.evaluate(() => {
     const t = document.querySelector('.set-plans .plan-compare'), box = document.querySelector('.set-plans');
     return t && { cols: [...t.querySelectorAll('thead th')].map((x) => x.textContent.trim()), w: t.getBoundingClientRect().width, right: t.getBoundingClientRect().right, inner: innerWidth, scroll: box.scrollWidth - box.clientWidth, price: [...t.querySelectorAll('tbody tr:first-child td')].map((x) => x.textContent) };
   });
-  expect(T && T.cols.slice(1).join() === 'Free,Plus,Pro' && T.price.join('|').replace(/₱149 a month|₱499 a month/g, '') === '₱0|₱599 a semester|₱1,999 a semester', 'the table compares all three: ' + JSON.stringify(T));
+  expect(T && T.cols.slice(1).join() === 'Free,Plus,Pro' && T.price.join('|').replace(/₱149 a month|₱349 a month/g, '') === '₱0|₱599 a semester|₱1,399 a semester', 'the table compares all three: ' + JSON.stringify(T));
   expect(T.right <= T.inner && T.scroll <= 1, 'it fits a phone, no sideways scrolling: ' + JSON.stringify(T));
   if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: process.env.SHOTS + '/plans-phone.png' }); await page.locator('.set-plans .plan-pro').scrollIntoViewIfNeeded(); await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOTS + '/plans-phone-pro.png' }); }
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -2223,7 +2223,7 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
   try {
     await page.route('https://checkout.paymongo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: '<title>PayMongo checkout</title><h1>PayMongo checkout</h1>' }));
     const cfg = await page.evaluate(async (srv) => (await fetch(srv + '/config')).json(), SERVER);
-    expect(cfg.pay === true && cfg.prices.php.plus.month.php === 149 && cfg.prices.usd.plus.month.shown === 'US$7.99' && cfg.prices.usd.plus.month.php === 499 && cfg.prices.php.pro.sem.php === 1999, 'the server says payments are on, with every price (US$7.99 is charged ₱499): ' + JSON.stringify(cfg.prices && cfg.prices.usd.plus));
+    expect(cfg.pay === true && cfg.prices.php.plus.month.php === 149 && cfg.prices.usd.plus.month.shown === 'US$7.99' && cfg.prices.usd.plus.month.php === 499 && cfg.prices.php.pro.sem.php === 1399 && cfg.prices.php.pro.month.php === 349 && cfg.prices.usd.pro.month.shown === 'US$8.99', 'the server says payments are on, with every price (US$7.99 is charged ₱499): ' + JSON.stringify(cfg.prices && cfg.prices.usd.plus));
     // signed out: Get Plus asks to sign in first, then goes on to PayMongo by itself
     await page.waitForFunction(() => serverPay === true, null, { timeout: 5000 });
     await page.evaluate(() => plusSheet('More questions today', 'You’ve used today’s free questions.', 'limit'));
@@ -2593,6 +2593,73 @@ test('Quiz me, Explain a topic, Solve step by step and Research a topic wait for
   await ctx.close();
 });
 
+test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil Service, Criminology, Nursing, Civil Engineering, Psychometrician), each with its official areas; CPALE and the Civil Service Exam (Professional or Subprofessional) by taps; lessons and practice are taught for that exam; once paid plans are on, Free and Plus open the first 3 lessons and Pro (₱349) opens every one', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 23 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  // the map: every exam, its areas, short names with no commas or dashes
+  const M = await page.evaluate(() => letRescue().then((R) => ({ ex: R.boardExams().map((x) => x.key), cpa: R.boardParts('cpale', 'cpale').map((p) => p.name), pro: R.boardParts('cse', 'professional').map((p) => p.key), sub: R.boardParts('cse', 'subprofessional').map((p) => p.key),
+    all: R.boardExams().flatMap((x) => R.boardParts(x.key, x.levels ? x.levels[0][0] : x.key).concat(x.levels ? R.boardParts(x.key, x.levels[1][0]) : []).flatMap((p) => p.topics)) })));
+  expect(M.ex.join() === 'cpale,cse,cle,nle,cele,pmle', 'the exams: ' + M.ex);
+  expect(M.cpa.join('|') === 'Financial Accounting and Reporting|Advanced Financial Accounting and Reporting|Management Services|Auditing|Taxation|Regulatory Framework for Business Transactions', 'CPALE: the six subjects: ' + M.cpa);
+  expect(M.pro.join() === 'verbal,numerical,analytical,geninfo' && M.sub.join() === 'verbal,numerical,clerical,geninfo', 'Civil Service: analytical for Professional, clerical for Subprofessional: ' + [M.pro, M.sub]);
+  expect(M.all.length > 100 && M.all.every((t) => t.length <= 50 && !/[,–—]/.test(t)), 'short topic names, no commas or dashes: ' + M.all.filter((t) => t.length > 50 || /[,–—]/.test(t)));
+  // CPALE by taps
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
+  const picks = await page.$$eval('.letc .letc-exam', (bs) => bs.map((x) => x.textContent));
+  expect(picks.join() === 'LET,CPALE,Civil Service Exam,Criminology,Nursing,Civil Engineering,Psychometrician', 'the exams to pick: ' + picks);
+  await page.click('.letc .letc-exam[data-exam="cpale"]');
+  expect(/What should we focus on/.test(await page.locator('.letc').innerText()) && /Taxation/.test(await page.locator('.letc').innerText()), 'CPALE: straight to the subjects');
+  await page.click('.letc .letc-part[data-part="far"]'); await page.click('.letc .letc-part[data-part="afar"]'); await page.click('.letc .letc-part[data-part="ms"]'); await page.click('.letc .letc-part[data-part="aud"]');
+  await page.click('.letc .letc-go'); await page.click('.letc .letc-topic >> text=TAX: estate tax'); await page.click('.letc .letc-go');
+  const c = await page.evaluate(() => state.letCourse);
+  expect(c.exam === 'cpale' && c.level === 'cpale' && JSON.stringify(c.parts) === '["tax","rfbt"]' && c.order[0] === 'TAX: estate tax' && c.order[1] === 'TAX: general principles and tax remedies' && c.order.every((t) => /^(TAX|RFBT):/.test(t)), 'saved: the picked topic first, then Taxation and RFBT: ' + JSON.stringify(c).slice(0, 300));
+  const txt = await page.locator('.letc').innerText();
+  expect(/^CPALE course$/.test(await page.locator('#letc-h').innerText()) && /CPA Licensure Examination · Taxation, Regulatory Framework/.test(txt) && /Board of Accountancy/.test(txt) && !/Pro/.test(await page.locator('.letc-list').innerText()), 'the course: its name, its subjects, every lesson open while paid plans are off: ' + txt.slice(0, 200));
+  const taps = await page.$$eval('.letc button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
+  expect(!taps.length, 'every button is at least 44px: ' + taps);
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.letc-card'); expect(!bad.length, `the course reads (${scheme}): ` + bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  // a lesson: taught for the CPALE
+  await page.click('.letc .letc-next'); await page.waitForTimeout(1200);
+  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
+  expect(/Teach me \\"TAX: estate tax\\" for the CPA Licensure Examination \(CPALE\)/.test(ask) && /3 exam-style questions/.test(ask), 'the lesson is for the CPALE: ' + ask.slice(0, 200));
+  // practice and the reviewer follow the exam
+  await page.evaluate(() => goLesson('let:practice')); await page.waitForTimeout(1200);
+  const pr = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
+  expect(/CPA Licensure Examination/.test(pr) && /the real exam/.test(pr) && !/PRC board exam/.test(pr), 'practice is CPALE questions: ' + pr.slice(0, 200));
+  await page.evaluate(() => goLesson('let:reviewer'));
+  expect(/my CPALE reviewer/.test(await page.inputValue('#prompt-input')), 'the reviewer is the CPALE reviewer');
+  await page.fill('#prompt-input', '');
+  // Home's tile names the course
+  await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
+  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'CPALE course', 'Home: the CPALE course');
+  // Civil Service: the level first
+  await page.evaluate(() => openLetCourse('exam')); await page.waitForSelector('.letc .letc-exam');
+  await page.click('.letc .letc-exam[data-exam="cse"]');
+  expect(/Which level are you taking\?/.test(await page.locator('.letc').innerText()) && /80% passes/.test(await page.locator('.letc').innerText()), 'Civil Service: Professional or Subprofessional');
+  await page.click('.letc .letc-lvl[data-lvl="subprofessional"]');
+  const parts = await page.$$eval('.letc .letc-part', (bs) => bs.map((x) => x.dataset.part));
+  expect(parts.join() === 'verbal,numerical,clerical,geninfo', 'Subprofessional: clerical, no analytical: ' + parts);
+  await page.click('.letc .letc-go'); await page.click('.letc .letc-skip');
+  const cs = await page.evaluate(() => state.letCourse);
+  expect(cs.exam === 'cse' && cs.level === 'subprofessional' && cs.order.some((t) => /^Clerical:/.test(t)) && !cs.order.some((t) => /^Analytical:/.test(t)), 'saved: Subprofessional: ' + cs.order.slice(0, 3));
+  // paid plans on: Free and Plus get the first 3 lessons, Pro all of them
+  await page.evaluate(() => { document.querySelector('.letc')?.remove(); serverPay = true; payPrices = { php: { pro: { month: { php: 349, shown: '₱349' }, sem: { php: 1399, shown: '₱1,399' } }, plus: { month: { php: 149, shown: '₱149' }, sem: { php: 599, shown: '₱599' } } } }; payPrices.usd = payPrices.php; state.letCourse.done = {}; state.plan = null; });
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-lesson');
+  const L = await page.$$eval('.letc .letc-lesson', (bs) => bs.map((x) => x.querySelector('em').textContent));
+  expect(L.slice(0, 3).every((x) => x === 'Start') && L.slice(3).length > 3 && L.slice(3).every((x) => x === 'Pro'), 'Free: 3 open, the rest Pro: ' + L);
+  expect(/The first 3 lessons are yours on every plan\. Pro opens all/.test(await page.locator('.letc').innerText()), 'it says so');
+  const before = groqCalls.length;
+  await page.click('.letc .letc-lesson.locked >> nth=0'); await page.waitForSelector('.plus-sheet');
+  const sheet = (await page.locator('.plus-sheet').innerText()).replace(/\s+/g, ' ');
+  expect(/Every board exam lesson comes with Pro/.test(sheet) && /CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering and Psychometrician/.test(sheet) && /Get Pro: ₱349 for 30 days/.test(sheet) && /₱1,399/.test(sheet) && groqCalls.length === before, 'a locked lesson asks for Pro, at ₱349, and sends nothing: ' + sheet);
+  await page.evaluate(() => { document.querySelector('.plus-sheet')?.remove(); state.plan = { plan: 'pro', until: Date.now() + 864e5 }; });
+  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-lesson');
+  const P = await page.$$eval('.letc .letc-lesson', (bs) => bs.map((x) => x.querySelector('em').textContent));
+  expect(P.every((x) => x === 'Start') && !(await page.locator('.letc-taste:visible').count()), 'Pro: every lesson open: ' + P);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie asks the student’s LET by taps (level, major, focus, topics to start with), saves it, puts Prof Ed first, teaches one lesson at a time with 3 board-style checks, keeps what’s done after a reload, and shows on Lessons, Home’s Lessons tile, the Study plan page and the LET page', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 22 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
   // the map
@@ -2603,12 +2670,14 @@ test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie ask
   expect([M.e, M.m, M.v, M.s, M.sc].every((p) => [...p.profed, ...p.gened, ...p.major].every((t) => t.length <= 50 && !/[,–—]/.test(t))), 'short names, no commas or dashes');
   // it shows where a reviewee looks: Home's Lessons tile, Lessons, the Study plan page
   await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
-  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'LET course', 'Home’s Lessons tile is the LET course for a reviewee');
+  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'Board exam course', 'Home’s Lessons tile is the board exam course for a reviewee');
   await page.evaluate(() => deskGo('plan')); await page.waitForSelector('.desk-plan .dk-letc');
   await page.evaluate(() => deskGo('lessons')); await page.waitForTimeout(400);
   expect(await page.locator('.lesson[data-go="let:course"]').count() >= 1, 'Lessons has the LET course');
   // the questions, by taps
   await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-pick');
+  expect(/Which board exam are you taking\?/.test(await page.locator('.letc').innerText()), 'it asks the exam first (v235)');
+  await page.click('.letc .letc-exam[data-exam="let"]');
   expect(/Which LET are you taking\?/.test(await page.locator('.letc').innerText()) && /60% Professional Education/.test(await page.locator('.letc').innerText()), 'it asks the level, with the weights');
   await page.click('.letc .letc-pick >> text=Secondary');
   await page.click('.letc .letc-pick >> text=Mathematics');
@@ -5178,8 +5247,8 @@ test('Lessons follow the student’s level: Nursery or Kindergarten comes first 
     'Grade 3': ['Read with Cassie', 'Phonics and spelling', 'Times tables', 'Fractions', 'Science labs for kids'],
     'Grade 8': ['Algebra', 'Science labs', 'Essay helper', 'Quiz me'],
     'Grade 11': ['Physics labs', 'Calculus', 'Accounting basics', 'Essays', 'Research', 'Practical research'],
-    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET course: one lesson at a time', 'LET practice', 'Check my LET reviewer'],
-    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'LET course: one lesson at a time', 'LET practice', 'Check my LET reviewer'],
+    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'Board exam course: one lesson at a time', 'Board exam practice', 'Check my board exam reviewer'],
+    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'Board exam course: one lesson at a time', 'Board exam practice', 'Check my board exam reviewer'],
   };
   // onboarding: the little ones first
   {

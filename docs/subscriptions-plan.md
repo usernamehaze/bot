@@ -4,7 +4,7 @@ Status: **plan only, decisions made.** No payment code, screens, server routes o
 
 What already exists and stays:
 
-- Plans are Free, Plus and Pro. Prices are the landing page's (`landing/landing.js`): Plus ₱149 a month, ₱599 a semester, ₱1,490 a year; Pro ₱499, ₱1,999, ₱4,990 (USD prices beside them).
+- Plans are Free, Plus and Pro. Prices are the landing page's (`landing/landing.js`): Plus ₱149 a month, ₱599 a semester, ₱1,490 a year; Pro ₱349, ₱1,399, ₱3,490 (USD prices beside them).
 - A plan belongs to an account, so it follows the student to every device. The server keeps it in the `plans` table (`account, plan, until, note, updated`), and `/auth/me` tells the app. The owner's `/admin/plan` stays as it is.
 - `terms.html` (Paid plans) promises what this plan delivers:
   - **Cancelling never takes more steps than subscribing.**

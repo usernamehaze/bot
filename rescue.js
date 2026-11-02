@@ -133,6 +133,73 @@
   }
   const letName = (level, major) => (level === 'secondary' ? `LET Secondary${clean(major, 30) ? `: ${clean(major, 30)}` : ''}` : 'LET Elementary');
 
+  // the other board exams, by their official areas: the PRC's subjects for each licensure exam, and the Civil Service
+  // Commission's parts for the Career Service Exam. Each area is a few sessions (short names, no commas, like the LET's).
+  const BOARD = {
+    cpale: { name: 'CPALE', full: 'CPA Licensure Examination', note: 'Six subjects from the Board of Accountancy, each its own exam paper. Pass them all to become a CPA.',
+      parts: [
+        ['far', 'Financial Accounting and Reporting', ['FAR: the conceptual framework and PFRS', 'FAR: cash and receivables', 'FAR: inventories', 'FAR: property plant and equipment', 'FAR: intangibles and investment property',
+          'FAR: financial assets and associates', 'FAR: liabilities provisions and bonds', 'FAR: leases', 'FAR: income taxes and employee benefits', 'FAR: shareholders equity',
+          'FAR: the statement of cash flows', 'FAR: accounting changes errors and EPS']],
+        ['afar', 'Advanced Financial Accounting and Reporting', ['AFAR: partnerships from formation to dissolution', 'AFAR: corporate liquidation', 'AFAR: joint arrangements', 'AFAR: business combinations',
+          'AFAR: consolidated financial statements', 'AFAR: foreign currency transactions', 'AFAR: long-term contracts and franchises', 'AFAR: home office and branch',
+          'AFAR: government accounting', 'AFAR: not-for-profit organizations']],
+        ['ms', 'Management Services', ['MS: cost accounting systems', 'MS: cost behavior and CVP analysis', 'MS: standard costing and variances', 'MS: budgeting', 'MS: relevant costing and decisions',
+          'MS: capital budgeting', 'MS: financial statement analysis', 'MS: working capital management', 'MS: responsibility accounting and performance', 'MS: economics for managers']],
+        ['aud', 'Auditing', ['AUD: standards and the CPA Code of Ethics', 'AUD: audit planning and risk assessment', 'AUD: internal control and IT', 'AUD: audit evidence and sampling',
+          'AUD: audit of cash and receivables', 'AUD: audit of inventories and PPE', 'AUD: audit of liabilities and equity', 'AUD: completing the audit and the auditor report', 'AUD: assurance and related services']],
+        ['tax', 'Taxation', ['TAX: general principles and tax remedies', 'TAX: income tax of individuals', 'TAX: income tax of corporations', 'TAX: fringe benefits and withholding taxes', 'TAX: estate tax',
+          'TAX: donor tax', 'TAX: VAT and percentage taxes', 'TAX: documentary stamp tax', 'TAX: local and real property taxes', 'TAX: tax incentives and the CREATE law']],
+        ['rfbt', 'Regulatory Framework for Business Transactions', ['RFBT: obligations and contracts', 'RFBT: sales', 'RFBT: partnership and agency', 'RFBT: the Revised Corporation Code', 'RFBT: negotiable instruments',
+          'RFBT: credit transactions', 'RFBT: insurance', 'RFBT: securities regulation and banking laws', 'RFBT: anti-money laundering and data privacy', 'RFBT: consumer and intellectual property laws']],
+      ] },
+    cse: { name: 'Civil Service Exam', full: 'Career Service Examination (Civil Service Exam)', levels: [['professional', 'Professional'], ['subprofessional', 'Subprofessional']],
+      note: 'From the Civil Service Commission. Professional has verbal, numerical and analytical ability with general information; Subprofessional has clerical ability in place of analytical. 80% passes.',
+      parts: [
+        ['verbal', 'Verbal ability', ['Verbal: vocabulary and word meaning', 'Verbal: grammar and correct usage', 'Verbal: reading comprehension', 'Verbal: paragraph organization', 'Verbal: analogy', 'Verbal: Filipino talasalitaan at gramatika']],
+        ['numerical', 'Numerical ability', ['Numerical: fractions decimals and percents', 'Numerical: ratio proportion and work problems', 'Numerical: number series', 'Numerical: word problems', 'Numerical: basic geometry and measurement']],
+        ['analytical', 'Analytical ability', ['Analytical: logic and syllogisms', 'Analytical: data interpretation', 'Analytical: assumptions and conclusions', 'Analytical: abstract reasoning'], 'professional'],
+        ['clerical', 'Clerical ability', ['Clerical: filing and alphabetizing', 'Clerical: spelling and checking', 'Clerical: clerical operations and forms'], 'subprofessional'],
+        ['geninfo', 'General information', ['General info: the 1987 Constitution', 'General info: RA 6713 the code of conduct', 'General info: peace and human rights', 'General info: caring for the environment']],
+      ] },
+    cle: { name: 'Criminology', full: 'Criminologist Licensure Examination', note: 'Six areas from the Board of Criminology.',
+      parts: [
+        ['jur', 'Criminal Jurisprudence Procedure and Evidence', ['Criminal law: the Revised Penal Code book one', 'Criminal law: the Revised Penal Code book two', 'Criminal procedure', 'Evidence', 'Special penal laws']],
+        ['lea', 'Law Enforcement Administration', ['LEA: police organization and administration', 'LEA: police patrol and operations', 'LEA: industrial security management', 'LEA: police planning and intelligence']],
+        ['cdi', 'Crime Detection and Investigation', ['CDI: fundamentals of criminal investigation', 'CDI: traffic management and accident investigation', 'CDI: special crime investigation', 'CDI: drug education and vice control', 'CDI: fire technology and arson investigation']],
+        ['crim', 'Criminalistics', ['Criminalistics: fingerprints and identification', 'Criminalistics: forensic photography', 'Criminalistics: forensic ballistics', 'Criminalistics: questioned documents', 'Criminalistics: polygraphy', 'Criminalistics: legal medicine and chemistry']],
+        ['soc', 'Sociology of Crimes and Ethics', ['Sociology of crimes: theories of crime causation', 'Sociology of crimes: juvenile delinquency', 'Sociology of crimes: behavior and crisis', 'Sociology of crimes: police ethics and values']],
+        ['ca', 'Correctional Administration', ['Corrections: institutional corrections', 'Corrections: probation and community-based', 'Corrections: parole and pardon']],
+      ] },
+    nle: { name: 'Nursing', full: 'Nurse Licensure Examination (NLE)', note: 'Five Nursing Practice papers from the Board of Nursing.',
+      parts: [
+        ['np1', 'Nursing Practice I: Community Health Nursing', ['NP1: foundations of professional nursing', 'NP1: community health nursing', 'NP1: epidemiology and communicable diseases', 'NP1: health education and primary care']],
+        ['np2', 'Nursing Practice II: Mothers and Children', ['NP2: pregnancy and prenatal care', 'NP2: labor delivery and the newborn', 'NP2: postpartum and high-risk mothers', 'NP2: growth development and child health', 'NP2: sick children and IMCI']],
+        ['np3', 'Nursing Practice III: Physiologic and Psychosocial Alterations A', ['NP3: fluids electrolytes and acid-base', 'NP3: oxygenation and the respiratory system', 'NP3: the heart and circulation', 'NP3: perioperative nursing']],
+        ['np4', 'Nursing Practice IV: Physiologic and Psychosocial Alterations B', ['NP4: the endocrine system', 'NP4: the digestive system', 'NP4: the kidneys and urinary system', 'NP4: the nervous system', 'NP4: cancer and the immune system']],
+        ['np5', 'Nursing Practice V: Physiologic and Psychosocial Alterations C', ['NP5: psychiatric nursing and communication', 'NP5: anxiety mood and psychotic disorders', 'NP5: emergency and disaster nursing', 'NP5: nursing leadership management and research', 'NP5: nursing laws and ethics']],
+      ] },
+    cele: { name: 'Civil Engineering', full: 'Civil Engineer Licensure Examination', note: 'Three subjects from the Board of Civil Engineering.',
+      parts: [
+        ['math', 'Mathematics Surveying and Transportation Engineering', ['CE: algebra and trigonometry', 'CE: analytic geometry and calculus', 'CE: differential equations and probability', 'CE: engineering economy', 'CE: surveying', 'CE: transportation and highway engineering']],
+        ['hgeo', 'Hydraulics and Geotechnical Engineering', ['CE: fluid properties and hydrostatics', 'CE: fluid flow and pipes', 'CE: open channels and hydrology', 'CE: soil properties and classification', 'CE: soil strength consolidation and foundations']],
+        ['struct', 'Structural Design and Construction', ['CE: engineering mechanics', 'CE: strength of materials', 'CE: theory of structures', 'CE: reinforced concrete design', 'CE: steel and timber design', 'CE: construction methods and management']],
+      ] },
+    pmle: { name: 'Psychometrician', full: 'Psychometrician Licensure Examination', note: 'Four subjects from the Professional Regulatory Board of Psychology.',
+      parts: [
+        ['pers', 'Theories of Personality', ['Personality: psychoanalytic and neo-Freudian', 'Personality: trait and biological theories', 'Personality: humanistic and existential theories', 'Personality: behavioral and social-cognitive']],
+        ['abn', 'Abnormal Psychology', ['Abnormal: models and the DSM', 'Abnormal: anxiety and mood disorders', 'Abnormal: psychotic and personality disorders', 'Abnormal: disorders of childhood and substance use']],
+        ['io', 'Industrial and Organizational Psychology', ['I/O: job analysis and selection', 'I/O: training and performance appraisal', 'I/O: motivation and job satisfaction', 'I/O: leadership groups and organizations']],
+        ['assess', 'Psychological Assessment', ['Assessment: statistics for testing', 'Assessment: reliability and validity', 'Assessment: test construction and norms', 'Assessment: intelligence and personality tests', 'Assessment: ethics in testing']],
+      ] },
+  };
+  // an exam's areas, for its level (the Civil Service Exam's Professional or Subprofessional): [{ key, name, topics }]
+  function boardParts(exam, level) {
+    const b = BOARD[exam]; if (!b) return [];
+    return b.parts.filter((p) => !p[3] || p[3] === level).map(([key, name, topics]) => ({ key, name, topics: [...topics] }));
+  }
+  const boardExams = () => Object.keys(BOARD).map((k) => ({ key: k, name: BOARD[k].name, full: BOARD[k].full, note: BOARD[k].note, levels: BOARD[k].levels || null }));
+
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -329,6 +396,6 @@
     });
   }
 
-  window.CassieRescue = { makePlan, topicsOf, letTopics, letParts, letName, planPicture };
+  window.CassieRescue = { makePlan, topicsOf, letTopics, letParts, letName, planPicture, boardParts, boardExams };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

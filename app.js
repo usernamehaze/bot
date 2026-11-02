@@ -2508,7 +2508,7 @@ const LESSONS = {
     ['Accounting basics', 'Assets, liabilities and the accounting equation', 'ask:Teach me accounting basics for ABM step by step: start with the accounting equation (assets = liabilities + equity) with a simple example, then give me one to try.', 'ABM'],
     ['Essays', 'Plan and improve an essay', 'lab:essay', 'HUMSS'], ['Research', 'Real sources for a topic', 'research', 'HUMSS'],
     ['Practical research', 'From a research question to your methods', 'ask:Guide me through practical research for Senior High: help me write a clear research question first, then walk me through choosing a method, one step at a time.', 'Every strand']],
-  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['LET course: one lesson at a time', 'Tell Cassie what your LET covers, then learn it topic by topic', 'let:course'], ['LET practice', 'Board-style questions for the Licensure Exam for Teachers, each one taught step by step', 'let:practice'], ['Check my LET reviewer', 'Paste, attach or snap your reviewer: Cassie answers and teaches every question', 'let:reviewer']],
+  college: [['Read my PDF', 'Cassie reads it and explains it', 'pdf'], ['Research with citations', 'Real papers, cited', 'research'], ['Exam plan', 'A study plan up to your exam', 'plan'], ['Board exam course: one lesson at a time', 'LET, CPALE, Civil Service, Nursing and more: pick your exam, then learn it topic by topic', 'let:course'], ['Board exam practice', 'Board-style questions for your exam, each one taught step by step', 'let:practice'], ['Check my board exam reviewer', 'Paste, attach or snap your reviewer: Cassie answers and teaches every question', 'let:reviewer']],
 };
 function lessonLevel() {
   const g = (state.profile && state.profile.grade) || '';
@@ -2554,9 +2554,9 @@ function goLesson(go) {
   else if (k === 'research') hubAct('research');
   else if (k === 'pdf') { toChat(); const f = document.getElementById('file-input'); if (f) f.click(); }
   else if (k === 'plan') openExamSheet();
-  else if (k === 'let' && arg === 'practice') { toChat(); startQuizOn('the LET (Licensure Examination for Teachers): Professional Education and General Education', LET_QUIZ); }
+  else if (k === 'let' && arg === 'practice') { toChat(); startQuizOn(boardPracticeTopic(), courseExam() === 'let' ? LET_QUIZ : LET_QUIZ.replace('the PRC board exam', 'the real exam')); }
   else if (k === 'let' && arg === 'course') openLetCourse();
-  else if (k === 'let' && arg === 'reviewer') { toChat(); promptInput.value = LET_REVIEWER + '\n'; autoGrow(); promptInput.focus(); promptInput.setSelectionRange(promptInput.value.length, promptInput.value.length); }
+  else if (k === 'let' && arg === 'reviewer') { toChat(); promptInput.value = boardReviewerAsk() + '\n'; autoGrow(); promptInput.focus(); promptInput.setSelectionRange(promptInput.value.length, promptInput.value.length); }
 }
 /* ---------- the LET course: what the student's LET covers (asked once, tap by tap), then one lesson at a time ----------
    Professional Education first (the anchor), then the major, then General Education. The topic names come from
@@ -2567,11 +2567,34 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=234'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=235'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
+/* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
+   Nursing, Civil Engineering, Psychometrician). A saved course with no exam is the LET's. Its level is the LET's
+   Elementary or Secondary, the Civil Service Exam's Professional or Subprofessional, or else the exam itself. */
+const BOARD_NAMES = { let: ['LET', 'Licensure Examination for Teachers (LET)'], cpale: ['CPALE', 'CPA Licensure Examination (CPALE)'], cse: ['Civil Service Exam', 'Career Service Examination (Civil Service Exam)'],
+  cle: ['Criminology', 'Criminologist Licensure Examination'], nle: ['Nursing', 'Nurse Licensure Examination (NLE)'], cele: ['Civil Engineering', 'Civil Engineer Licensure Examination'], pmle: ['Psychometrician', 'Psychometrician Licensure Examination'] };
+const courseExam = (c = letCourse()) => (c && BOARD_NAMES[c.exam] ? c.exam : 'let');
+const courseTitle = (c = letCourse()) => (c ? `${BOARD_NAMES[courseExam(c)][0]} course` : 'Board exam course');
+// Pro has every lesson; Free and Plus get the first few of each exam's course, once paid plans are on (until then, all of it)
+const BOARD_TASTE = 3;
+const boardLocked = (i) => !!serverPay && planName() !== 'pro' && i >= BOARD_TASTE;
+function boardPracticeTopic() {
+  const c = letCourse(), ex = courseExam(c);
+  if (ex === 'let') return 'the LET (Licensure Examination for Teachers): Professional Education and General Education';
+  return `the ${BOARD_NAMES[ex][1]}${c.level === 'professional' || c.level === 'subprofessional' ? `, ${c.level === 'professional' ? 'Professional' : 'Subprofessional'} level` : ''}: every area`;
+}
+const boardReviewerAsk = () => (courseExam() === 'let' ? LET_REVIEWER : LET_REVIEWER.replace('my LET reviewer', `my ${BOARD_NAMES[courseExam()][0]} reviewer`));
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
 function letLessons(R, c) {
+  if (courseExam(c) !== 'let') {
+    const ps = R.boardParts(courseExam(c), c.level), seen = new Set(), out = [];
+    const add = (t, p) => { if (t && p && !seen.has(t)) { seen.add(t); out.push({ topic: t, part: p.key, partName: p.name }); } };
+    (c.first || []).forEach((t) => add(t, ps.find((p) => p.topics.includes(t))));
+    ps.forEach((p) => { if (!c.parts || !c.parts.length || c.parts.includes(p.key)) p.topics.forEach((t) => add(t, p)); });
+    return out;
+  }
   const parts = R.letParts(c.level, c.major), seen = new Set(), out = [];
   const add = (t, part) => { if (t && !seen.has(t)) { seen.add(t); out.push({ topic: t, part }); } };
   const partOf = (t) => ['profed', 'major', 'gened'].find((k) => parts[k].includes(t)) || 'profed';
@@ -2585,27 +2608,57 @@ function letCourseCount() { // [done, all] for Home and the Study plan (from wha
 }
 const letShown = () => (state.profile && state.profile.grade === 'Board exam reviewee') || !!letCourse();
 function letLessonAsk(topic) {
+  const ex = courseExam();
+  if (ex !== 'let') return `Teach me "${topic}" for the ${BOARD_NAMES[ex][1]} in the Philippines, as one lesson: step by step, the way the exam asks about it, with a short real-life example. Then check me with 3 exam-style questions of your own, one at a time.`;
   return `Teach me "${topic}" for the LET (Licensure Examination for Teachers), as one lesson: step by step, the way the board exam asks about it, with a short example from a Philippine classroom. Then check me with 3 board-style questions of your own, one at a time.`;
 }
 function openLetCourse(step) {
   document.querySelector('.letc')?.remove();
   const w = document.createElement('div');
   w.className = 'letc'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'letc-h');
-  w.innerHTML = '<div class="letc-card"><div class="letc-head"><h2 id="letc-h">LET course</h2><button type="button" class="letc-x" aria-label="Close">×</button></div><div class="letc-body"><p class="letc-note">Getting your topics ready…</p></div></div>';
+  w.innerHTML = '<div class="letc-card"><div class="letc-head"><h2 id="letc-h"></h2><button type="button" class="letc-x" aria-label="Close">×</button></div><div class="letc-body"><p class="letc-note">Getting your topics ready…</p></div></div>';
   document.body.appendChild(w);
   const close = () => { w.remove(); document.removeEventListener('keydown', esc, true); };
   const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', esc, true);
   w.querySelector('.letc-x').addEventListener('click', close);
   w.addEventListener('click', (e) => { if (e.target === w) close(); });
-  const body = w.querySelector('.letc-body');
+  const body = w.querySelector('.letc-body'), head = w.querySelector('#letc-h');
+  head.textContent = courseTitle();
   letRescue().then((R) => {
-    const draft = Object.assign({ level: '', major: '', parts: ['profed', 'major', 'gened'], first: [] }, letCourse() || {});
+    const draft = Object.assign({ exam: 'let', level: '', major: '', parts: ['profed', 'major', 'gened'], first: [] }, letCourse() || {});
+    if (!BOARD_NAMES[draft.exam]) draft.exam = 'let';
+    const boardOf = () => R.boardExams().find((x) => x.key === draft.exam);
     const pick = (cls, label, on, aria) => `<button type="button" class="letc-pick ${cls}"${aria ? ` aria-pressed="${on}"` : ''}>${escapeHtml(label)}</button>`;
     const ask = (s0) => {
-      const s1 = s0 || (letCourse() ? 'course' : 'level');
+      const s1 = s0 || (letCourse() ? 'course' : 'exam');
       body.innerHTML = '';
-      if (s1 === 'level') {
+      head.textContent = s1 === 'course' ? courseTitle() : draft.exam && s1 !== 'exam' ? `${BOARD_NAMES[draft.exam][0]} course` : 'Board exam course';
+      if (s1 === 'exam') {
+        body.innerHTML = `<p class="letc-q">Which board exam are you taking?</p><div class="letc-picks">${Object.keys(BOARD_NAMES).map((k) => pick('letc-exam', BOARD_NAMES[k][0]).replace('class="letc-pick letc-exam"', `class="letc-pick letc-exam" data-exam="${k}"`)).join('')}</div><p class="letc-note">Topics follow each exam’s official areas. Check the latest table of specifications from the PRC or the Civil Service Commission too.</p>`;
+        body.querySelectorAll('.letc-exam').forEach((b) => b.addEventListener('click', () => {
+          const k = b.dataset.exam, same = k === draft.exam && letCourse();
+          draft.exam = k; if (!same) { draft.first = []; draft.major = ''; draft.level = ''; }
+          if (k === 'let') { if (!same) draft.parts = ['profed', 'major', 'gened']; ask('level'); return; }
+          const bx = boardOf();
+          if (!same) draft.parts = R.boardParts(k, (bx.levels && bx.levels[0][0]) || k).map((x) => x.key).concat(bx.levels ? R.boardParts(k, bx.levels[1][0]).map((x) => x.key) : []);
+          if (bx.levels) { ask('cslevel'); return; }
+          draft.level = k; ask('parts');
+        }));
+      } else if (s1 === 'cslevel') {
+        const bx = boardOf();
+        body.innerHTML = `<p class="letc-q">Which level are you taking?</p><div class="letc-picks">${bx.levels.map(([k, l]) => pick('letc-lvl', l).replace('class="letc-pick letc-lvl"', `class="letc-pick letc-lvl" data-lvl="${k}"`)).join('')}</div><p class="letc-note"></p>`;
+        body.querySelector('.letc-note').textContent = bx.note;
+        body.querySelectorAll('.letc-lvl').forEach((b) => b.addEventListener('click', () => { draft.level = b.dataset.lvl; ask('parts'); }));
+      } else if (s1 === 'parts' && draft.exam !== 'let') {
+        const ps = R.boardParts(draft.exam, draft.level), keys = ps.map((x) => x.key);
+        draft.parts = draft.parts.filter((k) => keys.includes(k)); if (!draft.parts.length) draft.parts = [...keys];
+        body.innerHTML = `<p class="letc-q">What should we focus on? Pick one or more.</p><div class="letc-picks">${pick('letc-all', 'All of it', keys.every((k) => draft.parts.includes(k)), true)}${ps.map((x) => pick('letc-part', x.name, draft.parts.includes(x.key), true).replace('class="letc-pick letc-part"', `class="letc-pick letc-part" data-part="${x.key}"`)).join('')}</div><button type="button" class="letc-go">Next</button>`;
+        const sync = () => { body.querySelectorAll('.letc-part').forEach((b) => b.setAttribute('aria-pressed', String(draft.parts.includes(b.dataset.part)))); body.querySelector('.letc-all').setAttribute('aria-pressed', String(keys.every((k) => draft.parts.includes(k)))); };
+        body.querySelector('.letc-all').addEventListener('click', () => { draft.parts = [...keys]; sync(); });
+        body.querySelectorAll('.letc-part').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.part; draft.parts = draft.parts.includes(k) ? draft.parts.filter((x) => x !== k) : [...draft.parts, k]; sync(); }));
+        body.querySelector('.letc-go').addEventListener('click', () => { draft.parts = draft.parts.filter((k) => keys.includes(k)); if (!draft.parts.length) { draft.parts = [...keys]; sync(); return; } ask('first'); });
+      } else if (s1 === 'level') {
         body.innerHTML = `<p class="letc-q">Which LET are you taking?</p><div class="letc-picks">${pick('', 'Elementary')}${pick('', 'Secondary')}</div><p class="letc-note">${LET_WEIGHTS}</p>`;
         body.querySelectorAll('.letc-pick').forEach((b) => b.addEventListener('click', () => { draft.level = b.textContent === 'Secondary' ? 'secondary' : 'elementary'; if (draft.level === 'elementary') { draft.major = ''; draft.parts = draft.parts.filter((x) => x !== 'major'); if (!draft.parts.length) draft.parts = ['profed', 'gened']; } ask(draft.level === 'secondary' ? 'major' : 'parts'); }));
       } else if (s1 === 'major') {
@@ -2624,7 +2677,7 @@ function openLetCourse(step) {
         body.querySelectorAll('.letc-topic').forEach((b) => b.addEventListener('click', () => { const t = b.textContent; draft.first = draft.first.includes(t) ? draft.first.filter((x) => x !== t) : [...draft.first, t]; b.setAttribute('aria-pressed', String(draft.first.includes(t))); }));
         const done = (keep) => {
           if (!keep) draft.first = [];
-          const old = letCourse(), c = { level: draft.level, major: draft.major, parts: draft.parts, first: draft.first, done: (old && old.done) || {}, at: Date.now() };
+          const old = letCourse(), c = { exam: draft.exam || 'let', level: draft.level, major: draft.major, parts: draft.parts, first: draft.first, done: (old && old.done) || {}, at: Date.now() };
           c.order = letLessons(R, c).map((l) => l.topic);
           state.letCourse = c; save(); track('feature', 'let-course'); refreshHub();
           ask('course');
@@ -2636,28 +2689,39 @@ function openLetCourse(step) {
         c.order = lessons.map((l) => l.topic);
         const n = lessons.filter((l) => c.done && c.done[l.topic]).length, next = lessons.find((l) => !(c.done && c.done[l.topic]));
         body.innerHTML = `<p class="letc-what"></p><div class="letc-prog" role="img" aria-label="${n} of ${lessons.length} lessons done"><i style="width:${lessons.length ? Math.round((n / lessons.length) * 100) : 0}%"></i></div><p class="letc-count">${n} of ${lessons.length} lessons</p>
-          <div class="letc-row">${next ? '<button type="button" class="letc-go letc-next">Start next lesson</button>' : '<p class="letc-note">Every lesson done. Review any of them again, or practise with LET practice.</p>'}<button type="button" class="letc-line letc-change">Change my coverage</button></div>
-          <p class="letc-note">${LET_WEIGHTS}</p><ol class="letc-list"></ol>`;
-        body.querySelector('.letc-what').textContent = `LET ${c.level === 'secondary' ? 'Secondary' : 'Elementary'}${c.major ? `: ${c.major}` : ''} · ${c.parts.map((k) => LET_PART_NAMES[k]).join(', ')}`;
+          <div class="letc-row">${next ? '<button type="button" class="letc-go letc-next">Start next lesson</button>' : '<p class="letc-note">Every lesson done. Review any of them again, or practise with Board exam practice.</p>'}<button type="button" class="letc-line letc-change">Change my exam or coverage</button></div>
+          <p class="letc-note letc-weights"></p><p class="letc-note letc-taste" hidden></p><ol class="letc-list"></ol>`;
+        const ex = courseExam(c), bx = ex === 'let' ? null : R.boardExams().find((x) => x.key === ex);
+        body.querySelector('.letc-what').textContent = ex === 'let'
+          ? `LET ${c.level === 'secondary' ? 'Secondary' : 'Elementary'}${c.major ? `: ${c.major}` : ''} · ${c.parts.map((k) => LET_PART_NAMES[k]).join(', ')}`
+          : `${bx.full}${bx.levels ? `: ${c.level === 'subprofessional' ? 'Subprofessional' : 'Professional'}` : ''} · ${[...new Set(lessons.map((l) => l.partName))].join(', ')}`;
+        body.querySelector('.letc-weights').textContent = ex === 'let' ? LET_WEIGHTS : bx.note;
+        if (lessons.some((l, i) => boardLocked(i))) { const t = body.querySelector('.letc-taste'); t.hidden = false; t.textContent = `The first ${BOARD_TASTE} lessons are yours on every plan. Pro opens all ${lessons.length}, with Cassie’s smartest model for the hard ones.`; }
         const ol = body.querySelector('.letc-list');
-        lessons.forEach((l) => {
-          const li = document.createElement('li'), b = document.createElement('button'), dn = !!(c.done && c.done[l.topic]);
-          b.type = 'button'; b.className = 'letc-lesson' + (dn ? ' done' : '');
+        lessons.forEach((l, i) => {
+          const li = document.createElement('li'), b = document.createElement('button'), dn = !!(c.done && c.done[l.topic]), lock = boardLocked(i) && !dn;
+          b.type = 'button'; b.className = 'letc-lesson' + (dn ? ' done' : '') + (lock ? ' locked' : '');
           b.innerHTML = '<span><b></b><small></small></span><em></em>';
           b.querySelector('b').textContent = l.topic;
-          b.querySelector('small').textContent = LET_PART_NAMES[l.part];
-          b.querySelector('em').textContent = dn ? 'Done' : 'Start'; if (dn) b.querySelector('em').className = 'st-badge st-ok'; // (v232: status in its own colour, with the word)
-          b.addEventListener('click', () => letOpenLesson(l.topic, close));
+          b.querySelector('small').textContent = l.partName || LET_PART_NAMES[l.part];
+          b.querySelector('em').textContent = dn ? 'Done' : lock ? 'Pro' : 'Start'; if (dn) b.querySelector('em').className = 'st-badge st-ok'; else if (lock) b.querySelector('em').className = 'st-badge st-info'; // (v232: status in its own colour, with the word)
+          b.addEventListener('click', () => (lock ? boardProAsk(close) : letOpenLesson(l.topic, close)));
           li.appendChild(b); ol.appendChild(li);
         });
-        body.querySelector('.letc-next')?.addEventListener('click', () => letOpenLesson(next.topic, close));
-        body.querySelector('.letc-change').addEventListener('click', () => ask('level'));
+        body.querySelector('.letc-next')?.addEventListener('click', () => (boardLocked(lessons.indexOf(next)) ? boardProAsk(close) : letOpenLesson(next.topic, close)));
+        body.querySelector('.letc-change').addEventListener('click', () => ask('exam'));
         save();
       }
       const first = body.querySelector('button'); if (first) first.focus({ preventScroll: true });
     };
     ask(step);
-  }).catch(() => { body.innerHTML = '<p class="letc-note">The LET topics couldn’t load. Check your connection, then open the course again.</p>'; });
+  }).catch(() => { body.innerHTML = '<p class="letc-note">The exam topics couldn’t load. Check your connection, then open the course again.</p>'; });
+}
+// a lesson past the free ones: what Pro is, and the way to get it
+function boardProAsk(close) {
+  if (close) close();
+  track('feature', 'board-pro-ask');
+  plusSheet('', `Free and Plus open the first ${BOARD_TASTE} lessons of each board exam course. Pro opens every lesson of the LET, CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering and Psychometrician courses.`, 'board', 'Every board exam lesson comes with Pro', 'pro');
 }
 // a lesson: Cassie teaches it in the chat, then checks with 3 of her own board-style questions; it counts as done
 function letOpenLesson(topic, close) {
@@ -2780,7 +2844,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=234').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=235').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2811,7 +2875,7 @@ function homeTop({ desk = false } = {}) {
   top.querySelector('.ht-note').textContent = grade ? `Organized for your level: ${grade}, from your first questions. Change it in Settings, You.` : 'Pick your level in Settings, You, and your lessons follow it.';
   if (letShown()) {
     const go = top.querySelector('.ht-lessons .ht-go'), cnt = letCourseCount();
-    go.dataset.ht = 'letcourse'; go.querySelector('b').textContent = 'LET course';
+    go.dataset.ht = 'letcourse'; go.querySelector('b').textContent = courseTitle();
     go.querySelector('small').textContent = cnt ? `${cnt[0]} of ${cnt[1]} lessons · Continue` : 'One lesson at a time';
   }
   top.querySelector('.ht-cards small').textContent = due ? `${due} ${due === 1 ? 'card' : 'cards'} due` : all ? 'All done for today' : 'Review and make cards';
@@ -3464,8 +3528,9 @@ function deskPlan() {
   if (letShown()) { // (a board exam reviewee: the LET course, one lesson at a time)
     const cnt = letCourseCount(), b = document.createElement('button');
     b.type = 'button'; b.className = 'hub-chat dk-letc';
-    b.innerHTML = `<i>${LESSONS_ICON}</i><span><b>LET course: one lesson at a time</b><small></small></span>${HUB_ICON.go}`;
-    b.querySelector('small').textContent = cnt ? `${cnt[0]} of ${cnt[1]} lessons done` : 'Tell Cassie what your LET covers, then learn it topic by topic';
+    b.innerHTML = `<i>${LESSONS_ICON}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
+    b.querySelector('b').textContent = `${courseTitle()}: one lesson at a time`;
+    b.querySelector('small').textContent = cnt ? `${cnt[0]} of ${cnt[1]} lessons done` : 'LET, CPALE, Civil Service, Nursing and more: pick your exam, then learn it topic by topic';
     b.addEventListener('click', () => openLetCourse());
     el.querySelector('.dk-filters').before(b);
   }
@@ -7406,7 +7471,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=234');
+      exploreMod = await import('./explore/cell3d.js?v=235');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7456,7 +7521,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=234');
+      labsMod = await import('./labs/labs.js?v=235');
       islandRest();
     }
     labsMod.open({
@@ -9300,10 +9365,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=234').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=235').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=234', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=235', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9836,20 +9901,25 @@ async function joinEarly(email, src) {
   track('feature', 'early-' + src);
   return r.email;
 }
-function plusSheet(what, why, src = 'plus', title) {
+function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'pro' asks for Pro, v235)
+  const isPro = plan === 'pro';
   track('feature', 'plus-ask');
   document.querySelector('.plus-sheet')?.remove();
   const signedOut = accountsOn() && !authToken();
   const w = document.createElement('div');
   w.className = 'plus-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'plus-sheet-h');
   w.innerHTML = `<div class="plus-card">
-    <span class="plus-kicker">Plus</span>
+    <span class="plus-kicker">${isPro ? 'Pro' : 'Plus'}</span>
     <h3 id="plus-sheet-h">${escapeHtml(title || `${what} comes with Plus`)}</h3>
     ${why ? `<p class="plus-why">${escapeHtml(why)}</p>` : ''}
-    <ul class="plus-list">
+    <ul class="plus-list">${isPro ? `
+      <li>Every lesson of your board exam course: LET, CPALE, Civil Service and more</li>
+      <li>Cassie’s smartest model for the hard questions</li>
+      <li>150 questions and 20 Gemini pictures a day</li>
+      <li>Everything in Plus</li>` : `
       <li>100 questions a day until your exam</li>
       <li>Your exams planned day by day, up to 5 at once, even from your notes</li>
-      <li>All the 3D any time, and save or print your notes and boards</li>
+      <li>All the 3D any time, and save or print your notes and boards</li>`}
     </ul>
     <p class="plus-foot">${serverPay ? 'One payment, and it never renews: 7 days to change your mind. Everything else in Cassie stays free.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
     <form class="plus-early" novalidate hidden>
@@ -9858,7 +9928,7 @@ function plusSheet(what, why, src = 'plus', title) {
       <p class="plus-err" role="alert" hidden></p>
     </form>
     <div class="plus-actions">
-      ${serverPay && payPrices ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">The Pasado Pass: ${escapeHtml(priceLine('plus', 'sem'))}</button>`
+      ${serverPay && payPrices ? (isPro ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Pro: ${escapeHtml(priceLine('pro', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">Pro for the semester: ${escapeHtml(priceLine('pro', 'sem'))}</button>` : `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">The Pasado Pass: ${escapeHtml(priceLine('plus', 'sem'))}</button>`)
         : earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : '<button type="button" class="plus-go plus-join">Get the Pasado Pass early</button>'}
       <a class="plus-see" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
       ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
@@ -9868,7 +9938,7 @@ function plusSheet(what, why, src = 'plus', title) {
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   // signed in: the plan may have just been given — check, and say so
-  if (!signedOut && authToken()) refreshPlan(true).then(() => { if (isSubscriber() && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-see, .plus-done').forEach((x) => x.remove()); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if ((isPro ? planName() === 'pro' : isSubscriber()) && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-see, .plus-done').forEach((x) => x.remove()); w.querySelector('.plus-ok').textContent = 'OK'; } });
   const form = w.querySelector('.plus-early'), mail = form.querySelector('input'), err = form.querySelector('.plus-err');
   const join = async () => {
     const btn = w.querySelector('.plus-join');
@@ -9895,7 +9965,7 @@ function plusSheet(what, why, src = 'plus', title) {
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
     else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
-    else if (e.target.closest('.plus-buy')) { close(); buyPlan('plus', e.target.closest('.plus-buy').dataset.bill); }
+    else if (e.target.closest('.plus-buy')) { close(); buyPlan(plan, e.target.closest('.plus-buy').dataset.bill); }
     else if (e.target.closest('.plus-join')) {
       // signed in: one tap, with the account's email; otherwise the email field first
       if (!authToken() && form.hidden) { form.hidden = false; e.target.closest('.plus-join').textContent = 'Keep my spot'; mail.focus(); return; }
