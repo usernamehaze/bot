@@ -55,7 +55,7 @@ footer .brand { color: var(--ink); }
 .nav .links a { text-decoration: none; opacity: .78; padding: 0 var(--sp-3, 12px); min-height: var(--tap, 48px); display: inline-flex; align-items: center; }
 .nav .links a:hover { opacity: 1; }
 .ext-get { position: relative; display: flex; }
-.ext-get small { position: absolute; left: 0; right: 0; top: calc(100% + 2px); text-align: center; font: 500 11px/1 var(--sans); opacity: .78; white-space: nowrap; }
+.ext-get small { position: absolute; left: 0; right: 0; top: 100%; /* (inside the top bar: past its edge it sits on the light page) */ text-align: center; font: 500 11px/1 var(--sans); opacity: .78; white-space: nowrap; }
 .ext-get + .btn { margin-left: calc(-1 * var(--sp-3, 12px)); }
 @media (max-width: 760px) { .nav .links, .ext-get { display: none; } .nav .btn { margin-left: auto; } }
 

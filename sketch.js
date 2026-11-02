@@ -161,6 +161,17 @@
     font: 600 16px/1.25 system-ui, sans-serif; overflow: auto; white-space: pre-wrap; }
   .csk-toast { position: absolute; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(27,27,29,.9); color: #fff; padding: var(--sp-2, 8px) var(--sp-4, 16px); border-radius: 99px;
     font-size: 13px; pointer-events: none; transition: opacity .3s; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+  /* (a mouse: compact 40px tools, like the other compact controls, so the toolbar keeps to its rows and the board keeps its room) */
+  @media (pointer: fine) {
+    .csk-tools { gap: var(--sp-1, 4px); }
+    .csk-inks, .csk-sizes { display: inline-flex; gap: 0 !important; } /* (the colour dots sit inside their own 40px, so they need no gap) */
+    .csk-btn { height: 40px; min-height: 40px; min-width: 40px; }
+    .csk-size { width: 40px; height: 40px; min-height: 40px; min-width: 40px; }
+    .csk-sw { width: 40px; height: 40px; min-height: 40px; min-width: 40px; padding: var(--sp-2, 8px); border: 0; background-clip: content-box; box-shadow: inset 0 0 0 6px #f6f5f2, inset 0 0 0 8px rgba(127,127,127,.35); }
+    .csk-dark .csk-sw { box-shadow: inset 0 0 0 6px #1d1d20, inset 0 0 0 8px rgba(127,127,127,.35); }
+    .csk-sw.on { outline: none; padding: var(--sp-2, 8px); box-shadow: inset 0 0 0 4px #f6f5f2, inset 0 0 0 6px currentColor; }
+    .csk-dark .csk-sw.on { box-shadow: inset 0 0 0 4px #1d1d20, inset 0 0 0 6px currentColor; }
+  }
   /* Touch screens: every tool is 44px to touch; colour and size dots sit inside 44px buttons. */
   @media (pointer: coarse) {
     .csk-tools, .csk-head, .csk-ask { gap: var(--sp-1, 4px) !important; }
