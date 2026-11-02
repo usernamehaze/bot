@@ -8314,6 +8314,107 @@ test('Home widgets sit close together: each box is as tall as its content, the g
   }
 });
 
+test('Games: Animal habitats, World jigsaw, Landform match, History in order, Shape sorter and History dress-up are on the Games shelf, play by tapping, tick their goals only when done, and give the right answers (1280x800 and 390x844)', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  const IDS = ['habitats', 'jigsaw', 'landforms', 'sequencer', 'sorter', 'dressup'];
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const { ctx, page, errors } = await open(b, phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
+    await page.evaluate(() => openLabs(undefined, { section: 'games' }));
+    await page.waitForSelector('.labs:not([hidden]) .labs-grid .labs-card[data-lab="jigsaw"]', { timeout: 15000 });
+    const shelf = await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab));
+    expect(IDS.every((id) => shelf.includes(id)), `${where}: the Games shelf holds the 6 new games: ` + shelf.filter((x) => IDS.includes(x)));
+    const V = '.lab-view:not([hidden])';
+    const lab = async (id) => { await page.evaluate((id) => openLabs(id), id); await page.waitForSelector(`${V}[data-lab="${id}"] .lab-controls > *`, { timeout: 20000 }); await page.waitForTimeout(400); };
+    const done = (id) => page.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('cassie.labs') || '{}')[id] || []).map(Boolean); } catch (e) { return []; } }, id);
+    const stat = (k) => page.evaluate(([V, k]) => { const d = [...document.querySelectorAll(V + ' .lab-stats div')].find((x) => x.querySelector('dt').textContent === k); return d ? d.querySelector('dd').textContent : null; }, [V, k]);
+    const press = async (t, n = 1) => { for (let i = 0; i < n; i++) await page.click(`${V} .lab-panel button:text-is("${t}") >> visible=true`); };
+    const segBtn = (t) => page.click(`${V} .lab-seg button:text-is("${t}") >> visible=true`);
+    const msg = () => page.$eval(`${V} .gm-msg`, (x) => x.textContent);
+    const tapItem = (id) => page.click(`${V} .mt-item[data-item="${id}"]`);
+    const tapBin = (id) => page.click(`${V} .mt-bin[data-place="${id}"]`);
+    const aa = async (id) => { await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); document.querySelector('.lab-view:not([hidden]) .lab-panel').scrollIntoView({ block: 'start' }); }); for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(900); const { bad } = await contrastIssues(page, '.lab-view:not([hidden]) .lab-panel'); expect(!bad.length, `${where}: ${id} panel words (${scheme}): ` + bad.join(' | ')); } await page.emulateMedia({ colorScheme: 'light' }); };
+    const taps = () => page.$$eval('.lab-view:not([hidden]) .lab-panel button, .lab-view:not([hidden]) .mt-board button', (xs) => xs.filter((x) => x.getClientRects().length).map((x) => Math.round(Math.min(x.getBoundingClientRect().height, x.getBoundingClientRect().width))).filter((h) => h < 44));
+    const shot = async (n) => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/v230-${n}-${phone ? 'phone' : 'desk'}.png` }); };
+    const check = async (id) => { await shot(id); if (phone) expect(!(await taps()).length, `${where}: ${id} taps 44px: ` + await taps()); await aa(id); };
+    const mod = await page.evaluate(async () => { const m = await import('./labs/games2.js'); return { animals: Object.fromEntries(m.ANIMALS.map((a) => [a[0], a[3]])), home: m.HOME_POINT, names: m.CONTINENTS, outfits: m.OUTFITS.map((o) => o[0]) }; });
+
+    // 1. Animal habitats: six animals, one per home; a wrong tap says so; a round with no wrong taps ticks the third goal
+    await lab('habitats');
+    const animals = () => page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
+    let list = await animals(); expect(list.length === 6 && new Set(list.map((a) => mod.animals[a])).size === 6, `${where}: six animals, one for each home: ` + list);
+    const wrongHome = Object.keys({ polar: 1, desert: 1, forest: 1, ocean: 1, grass: 1, wet: 1 }).find((h) => h !== mod.animals[list[0]]);
+    await tapItem(list[0]); await tapBin(wrongHome);
+    expect(await stat('Wrong taps this round') === '1' && /^Not the /.test(await msg()) && !(await done('habitats'))[0], `${where}: a wrong home: ` + await msg());
+    await tapBin(mod.animals[list[0]]); // (still picked after the wrong home)
+    for (const a of list.slice(1)) { await tapItem(a); await tapBin(mod.animals[a]); }
+    expect((await animals()).length === 0 && (await done('habitats'))[1] && !(await done('habitats'))[2], `${where}: every animal home, but not without a wrong tap`);
+    await press('New animals'); list = await animals(); for (const a of list) { await tapItem(a); await tapBin(mod.animals[a]); }
+    expect((await done('habitats'))[2] && /Not one wrong tap/.test(await msg()), `${where}: a round with no wrong taps: ` + await msg());
+    await check('habitats');
+
+    // 2. World jigsaw: a tap in the wrong place counts; tapping each continent's home puts it there; all six in under 2 minutes
+    await lab('jigsaw'); await page.waitForFunction(() => { const c = document.querySelector('.lab-view:not([hidden]) canvas'); return c && c.dataset.map; }, null, { timeout: 15000 });
+    const tapAt = async (lon, lat) => { const [x0, y0, mw, mh] = JSON.parse(await page.$eval(`${V} canvas`, (c) => c.dataset.map)); const r = await page.$eval(`${V} canvas`, (c) => { const b = c.getBoundingClientRect(); return [b.left, b.top]; }); await page.mouse.click(r[0] + x0 + ((lon + 180) / 360) * mw, r[1] + y0 + ((84 - lat) / 141) * mh); await page.waitForTimeout(80); };
+    expect(await stat('Placed') === '0 of 6', `${where}: the pieces start mixed up`);
+    await segBtn('Africa'); await tapAt(...mod.home.as);
+    expect(await stat('Wrong taps') === '1' && await stat('Placed') === '0 of 6' && !(await done('jigsaw'))[0], `${where}: Africa doesn't go in Asia`);
+    for (const k of ['af', 'as', 'eu', 'na', 'sa', 'oc']) { await segBtn(mod.names[k]); await tapAt(...mod.home[k]); }
+    expect(await stat('Placed') === '6 of 6' && (await done('jigsaw')).filter(Boolean).length === 3 && /The whole world in/.test(await msg()), `${where}: the whole world, quickly: ` + await stat('Placed') + ' ' + await msg());
+    await check('jigsaw');
+
+    // 3. Landform match: six pictures and six names; a wrong name explains itself
+    await lab('landforms');
+    const forms = await page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
+    const names = await page.$$eval(`${V} .mt-bin`, (xs) => xs.map((x) => x.dataset.place));
+    expect(forms.length === 6 && names.length === 6 && forms.every((f) => names.includes(f)), `${where}: six pictures, six names`);
+    await tapItem(forms[0]); await tapBin(names.find((n) => n !== forms[0]));
+    expect(/^Not quite\. A .* is /.test(await msg()) && await stat('Mistakes this round') === '1', `${where}: a wrong name: ` + await msg());
+    await tapBin(forms[0]); for (const f of forms.slice(1)) { await tapItem(f); await tapBin(f); }
+    expect((await done('landforms'))[1] && !(await done('landforms'))[2], `${where}: all six matched (with a mistake)`);
+    await check('landforms');
+
+    // 4. History in order: Check counts the ones in place; sorting by year finishes it; BC comes first; three sets tick the third goal
+    await lab('sequencer');
+    const years = () => page.$$eval(`${V} .sq-ev`, (xs) => xs.map((x) => +x.dataset.year));
+    const sortIt = async () => { for (let pass = 0; pass < 8; pass++) { const y = await years(); const i = y.findIndex((v, k) => k > 0 && y[k - 1] > v); if (i < 0) break; await page.click(`${V} .sq-ev:nth-child(${i + 1}) .sq-mv:first-of-type`); } for (let pass = 0; pass < 40; pass++) { const y = await years(); const i = y.findIndex((v, k) => k > 0 && y[k - 1] > v); if (i < 0) return; await page.click(`${V} .sq-ev:nth-child(${i + 1}) .sq-mv:first-of-type`); } };
+    await press('Check'); expect(/of 6 in the right place/.test(await msg()) && !(await done('sequencer'))[0], `${where}: mixed up is not in order: ` + await msg());
+    await sortIt(); await press('Check');
+    expect(/All in order in 2 tries/.test(await msg()) && (await done('sequencer'))[0] && !(await done('sequencer'))[1], `${where}: in order on the second check: ` + await msg());
+    await segBtn('World history'); await sortIt(); await press('Check');
+    const wy = await years(); expect(/first try/.test(await msg()) && (await done('sequencer'))[1] && wy.every((v, k) => !k || wy[k - 1] < v), `${where}: World history in order first time (BC first): ` + wy);
+    await segBtn('Science and inventions'); await sortIt(); await press('Check'); expect((await done('sequencer'))[2], `${where}: all three sets finished`);
+    await check('sequencer');
+
+    // 5. Shape sorter: each shape fits only its own hole
+    await lab('sorter');
+    const shapes = await page.$$eval(`${V} .mt-item`, (xs) => xs.map((x) => x.dataset.item));
+    expect(shapes.length === 4, `${where}: 4 shapes`);
+    await tapItem(shapes[0]); await tapBin(shapes[1]); expect(/doesn’t fit there/.test(await msg()) && !(await done('sorter'))[0], `${where}: a shape doesn't fit another hole`);
+    await tapBin(shapes[0]); for (const sh of shapes.slice(1)) { await tapItem(sh); await tapBin(sh); }
+    expect((await done('sorter'))[1] && /Every shape is in/.test(await msg()), `${where}: every hole filled`);
+    await check('sorter');
+
+    // 6. History dress-up: every photo loads; a wrong guess doesn't count as right first time; a perfect game ticks the third goal
+    await lab('dressup');
+    const n = mod.outfits.length;
+    const current = () => page.$eval(`${V} .du-fig img`, (i) => i.getAttribute('src').match(/dressup\/([a-z]+)\.webp/)[1]);
+    const loaded = () => page.waitForFunction(() => { const i = document.querySelector('.lab-view:not([hidden]) .du-fig img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 });
+    const answer = async () => { await loaded(); const id = await current(); await page.click(`${V} .du-opt[data-id="${id}"]`); };
+    await loaded(); const first = await current(); await page.click(`${V} .du-opt:not([data-id="${first}"]) >> nth=0`);
+    expect(await stat('Wrong guesses') === '1' && !(await done('dressup'))[0], `${where}: a wrong guess`);
+    await page.click(`${V} .du-opt[data-id="${first}"]`); expect(await stat('Right first time') === '0' && (await done('dressup'))[0], `${where}: right, but not first time`);
+    for (let i = 1; i < n; i++) { await press('Next'); await answer(); }
+    await press('Next'); expect(await page.$eval(`${V} .du-end b`, (x) => x.textContent) === `${n - 1} of ${n} right!` && (await done('dressup'))[1] && !(await done('dressup'))[2], `${where}: the end of the game`);
+    await press('Start again'); for (let i = 0; i < n; i++) { await answer(); if (i < n - 1) await press('Next'); }
+    await shot('dressup');
+    await press('Next'); expect((await done('dressup'))[2], `${where}: every piece right first time`);
+    await check('dressup');
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('Earth, Math and Geography: Day and night, Tectonic plates and earthquake waves, Unit circle and sine waves and Contour maps open from Visual Labs and their level folders, each goal ticks only when done, and the science holds (1280x800 and 390x844)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const IDS = ['daynight', 'tectonics', 'unitcircle', 'contours'];
