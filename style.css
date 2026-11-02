@@ -195,6 +195,7 @@ html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjus
 .new-chat-btn svg { width: 18px; height: 18px; fill: currentColor; }
 .new-chat-btn:active { background: var(--primary-dark); }
 .sidebar-section { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0 var(--sp-2, 8px) var(--sp-2, 8px); }
+button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is a 40px button on the 8-point grid) */
 .chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .chat-item {
   display: flex; align-items: center; gap: var(--sp-2, 8px);
@@ -1517,7 +1518,7 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .side-search-btn { display: none; }
 /* "Menu" folds the tool list away, so New chat, the timer and Recents sit near the top.
    It's a pill with an arrow, so it reads as a button with more inside */
-.side-menu-label { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--sp-2, 8px); min-height: 32px; margin: 0 0 var(--sp-2, 8px); padding: 0 var(--sp-3, 12px) 0 var(--sp-4, 16px); border: 1.5px solid color-mix(in srgb, var(--primary) 55%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.side-menu-label { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--sp-2, 8px); min-height: 40px; margin: 0 0 var(--sp-2, 8px); padding: 0 var(--sp-3, 12px) 0 var(--sp-4, 16px); border: 1.5px solid color-mix(in srgb, var(--primary) 55%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .side-menu-label:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); border-color: var(--primary); }
 .side-menu-label:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .side-menu-label svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
@@ -1574,7 +1575,7 @@ html.native .sidebar { padding-bottom: calc(88px + var(--safe-bottom)); }
   body:not(.side-open) .sidebar-head { justify-content: center; padding: 0; }
   body:not(.side-open) .side-search-btn { display: grid; place-items: center; width: 100%; height: 40px; margin: 0 0 var(--sp-3, 12px); border: 0; border-radius: 12px; background: var(--bg); color: var(--muted); cursor: pointer; }
   body:not(.side-open) .side-search-btn:hover { color: var(--text); }
-  body:not(.side-open) .side-menu-label { display: flex; justify-content: center; width: 100%; min-height: 24px; padding: 0 0 var(--sp-2, 8px); border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; letter-spacing: .02em; pointer-events: none; } /* (Apple's smallest on a computer: 10pt) */
+  body:not(.side-open) .side-menu-label { display: flex; justify-content: center; width: 100%; min-height: 40px; padding: 0 0 var(--sp-2, 8px); border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; letter-spacing: .02em; pointer-events: none; } /* (Apple's smallest on a computer: 10pt) */
   body:not(.side-open) .side-menu-label svg { display: none; }
   body:not(.side-open) .sidebar.tools-folded .side-tools { display: flex; } /* (the rail always shows every tool) */
   body:not(.side-open) .side-tool { justify-content: center; padding: var(--sp-2, 8px) 0; }
@@ -1947,12 +1948,12 @@ html.lite {
 /* flashcards out loud */
 .fc-progress { display: flex; align-items: center; justify-content: center; gap: var(--sp-3, 12px); flex-wrap: wrap; }
 .fc-say { display: inline-flex; gap: var(--sp-2, 8px); }
-.fc-mini { min-height: 32px; padding: 0 var(--sp-3, 12px); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .82rem/1 inherit; cursor: pointer; }
+.fc-mini { min-height: 40px; padding: 0 var(--sp-3, 12px); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .82rem/1 inherit; cursor: pointer; }
 .fc-mini[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
 .fc-listening { cursor: default; }
 /* Listen (listen.js): Cassie reads an answer or a part card aloud */
 .listen-row { margin-top: var(--sp-2, 8px); }
-.listen-btn { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 32px; padding: 0 var(--sp-3, 12px) 0 var(--sp-3, 12px); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .8rem/1 inherit; cursor: pointer; }
+.listen-btn { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 40px; padding: 0 var(--sp-3, 12px) 0 var(--sp-3, 12px); border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 .8rem/1 inherit; cursor: pointer; }
 .listen-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .listen-btn.on { background: var(--text); color: var(--surface); border-color: var(--text); }
 .x3d .listen-btn { background: rgba(var(--hi-rgb), .1); color: var(--white); border-color: rgba(var(--hi-rgb), .22); margin-left: auto; }
@@ -1988,7 +1989,7 @@ html.lite {
   --lh-tight: 1.2; --lh-body: 1.5;
   --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 40px; --sp-8: 48px; --sp-9: 56px; --sp-10: 64px; /* (v233: the 8-point grid; 4 and 12 are half-steps) */
-  --tap: 48px; --tap-desk: 40px; /* (touch targets 48px; a computer's smaller buttons 40px) */
+  --tap: 48px; --tap-desk: 48px; /* (every tap target 48px, with a mouse too: the 44px rule, on the 8-point grid) */
   --ease: cubic-bezier(.2, .8, .2, 1);
   --ring: 0 0 0 3px color-mix(in srgb, var(--text) 22%, transparent);
 }
@@ -2060,10 +2061,10 @@ html.lite {
   #prompt-input { min-height: var(--tap); padding-top: var(--sp-3, 12px); }
   .bubble-tools { gap: 0 var(--sp-2); margin-top: 0; }
   .bubble-tools button { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--sp-1); justify-content: center; }
-  .bubble-tools button.suggest { min-height: 36px; margin: var(--sp-1, 4px) 0; }
+  .bubble-tools button.suggest { min-height: 40px; margin: var(--sp-1, 4px) 0; }
   .listen-btn, .fc-mini, .model-pill { min-height: var(--tap); }
   .followups { gap: var(--sp-2); }
-  .fu-chip { min-height: 36px; }
+  .fu-chip { min-height: 40px; }
   .settings-card .btn, .settings-actions .btn { min-height: var(--tap); }
   .chip, .fu-chip, .auth-switch button, .auth-legal a, .key-link, .bubble-tools button.suggest { position: relative; }
   .chip::after, .fu-chip::after, .auth-switch button::after, .auth-legal a::after, .key-link::after, .bubble-tools button.suggest::after {
@@ -2532,12 +2533,12 @@ button.plan-go:not(.plan-go-line) { border: 0; }
   background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 45%, transparent); box-shadow: 0 1px 2px rgba(var(--shade-rgb), .04); }
 /* the hello and the bell */
 .hub-top { display: flex; align-items: center; gap: var(--sp-3, 12px); }
-.hub-av { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-weight: 750; font-size: 1.15rem;
+.hub-av { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-weight: 750; font-size: 1.15rem;
   border: 2px solid var(--surface); box-shadow: var(--lg-lift); }
 .hub-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; padding: 2px var(--sp-1, 4px); text-align: left; }
 .hub-who small { color: var(--text); font-size: .8rem; font-weight: 600; opacity: .85; }
 .hub-me { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.12rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.2; }
-.hub .hub-bell { position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; padding: 0; border: 1px solid var(--lg-line);
+.hub .hub-bell { position: relative; display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; padding: 0; border: 1px solid var(--lg-line);
   background: color-mix(in srgb, var(--surface) 92%, transparent); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge), var(--lg-lift); }
 .hub-bell svg { width: 22px; height: 22px; }
 .hub-dot { position: absolute; top: 9px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); }
@@ -2565,11 +2566,11 @@ button.plan-go:not(.plan-go-line) { border: 0; }
 /* ---------- Home on a phone: the hello and the bell, then Today's Lab ----------
    (computers keep their own Home: these only show in the phone's Home tab) */
 .hub-hero.hub-hero-phone { position: relative; padding: 0 0 var(--sp-4, 16px); }
-.hub-hero-phone .hub-top { position: relative; z-index: 1; padding: var(--sp-4, 16px) var(--sp-4, 16px) 0; }
+.hub-hero-phone .hub-top { position: relative; z-index: 1; padding: var(--sp-4, 16px) var(--sp-4, 16px) 0; gap: var(--sp-2, 8px); } /* (v233: the greeting keeps room for the name next to 48px buttons) */
 .hub-hero-phone .hub-who { padding: var(--sp-1, 4px) var(--sp-3, 12px); border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); }
 .hub-hero-phone .hub-me { font-size: 1.35rem; letter-spacing: -.03em; }
 html.native .hub-hero.hub-hero-phone { padding: 0 0 var(--sp-4, 16px); }
-html.native .hub-hero-phone .hub-top { padding: calc(var(--sp-3, 12px) + var(--safe-top)) var(--sp-5, 24px) 0; }
+html.native .hub-hero-phone .hub-top { padding: calc(var(--sp-3, 12px) + var(--safe-top)) var(--sp-4, 16px) 0; }
 .hub-tlab { position: relative; width: 100%; border-radius: 26px; overflow: hidden;
   background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); }
 .hub-tlab-pv { display: block; width: 100%; height: 150px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
@@ -2695,7 +2696,7 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
 .dk-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); margin: 0 0 var(--sp-2, 8px); }
 .dk-card-head h2 { min-width: 0; }
 .dk-pill { white-space: nowrap; flex: none; }
-.dk-pill { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); min-height: 36px; padding: 0 var(--sp-3, 12px); border-radius: 999px; border: 1.5px solid var(--text); background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.dk-pill { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); min-height: 40px; padding: 0 var(--sp-3, 12px); border-radius: 999px; border: 1.5px solid var(--text); background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
 .dk-pill svg { width: 15px; height: 15px; }
 .dk-chart { grid-area: chart; }
 .dk-next { grid-area: next; gap: var(--sp-1, 4px); }
@@ -2790,7 +2791,7 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
   .top-search:focus-visible, .top-me:focus-visible, .top-timer:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .topbar .island { margin: 0 auto; }
   .topbar-actions { margin-left: auto; gap: var(--sp-1, 4px); }
-  .top-timer { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 36px; margin-right: var(--sp-2, 8px); padding: 0 var(--sp-3, 12px); border-radius: 999px; border: 0; background: var(--dark-1); color: var(--on-dark); font: inherit; font-size: .82rem; cursor: pointer; }
+  .top-timer { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 40px; margin-right: var(--sp-2, 8px); padding: 0 var(--sp-3, 12px); border-radius: 999px; border: 0; background: var(--dark-1); color: var(--on-dark); font: inherit; font-size: .82rem; cursor: pointer; }
   .top-timer[hidden] { display: none; }
   .top-timer i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .top-timer b { font-variant-numeric: tabular-nums; }
@@ -2844,7 +2845,7 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 .desk-plan .dk-head, .desk-cal .dk-head { margin-bottom: var(--sp-4, 16px); }
 .dk-filters { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3, 12px); margin: 0 0 var(--sp-3, 12px); flex-wrap: wrap; }
 .dk-chips { display: flex; gap: var(--sp-2, 8px); flex-wrap: wrap; }
-.desk .dk-chip { min-height: 38px; padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .88rem; font-weight: 650; cursor: pointer; }
+.desk .dk-chip { min-height: 40px; padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .88rem; font-weight: 650; cursor: pointer; }
 .desk .dk-chip[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
 .dk-count { color: var(--muted); font-size: .85rem; }
 .dk-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4, 16px); margin: 0 0 var(--sp-5, 24px); align-items: start; }
@@ -3614,9 +3615,12 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
 
 /* (v233) component sizes on the 8-point grid: every button, field and tab is a 48px touch target on a touch
    screen, and at least 40px with a mouse. (Kid buttons stay bigger; checkboxes, sliders and colour wells keep their own.) */
-@media (pointer: coarse) { button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]) { min-height: var(--tap, 48px); } }
-@media (pointer: coarse) { button:not(.kid-thing):not(.kid-btn), .tab { min-width: var(--tap, 48px); } } /* (a round icon button stays round) */
-@media (pointer: fine) { button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]) { min-height: var(--tap-desk, 40px); } }
-@media (pointer: fine) { button:not(.kid-thing):not(.kid-btn), .tab { min-width: var(--tap-desk, 40px); } }
+@media (pointer: coarse) { :where(button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file])) { min-height: var(--tap, 48px); } }
+@media (pointer: coarse) { :where(button:not(.kid-thing):not(.kid-btn), .tab) { min-width: var(--tap, 48px); } } /* (a round icon button stays round) */
+@media (pointer: fine) { :where(button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file])) { min-height: var(--tap-desk, 40px); } }
+@media (pointer: fine) { :where(button:not(.kid-thing):not(.kid-btn), .tab) { min-width: var(--tap-desk, 40px); } }
 /* (the browser's own 1px by 6px button padding, on the grid: classes still set their own) */
-button { padding-block: 0; padding-inline: var(--sp-2, 8px); }
+:where(button) { padding-block: 0; padding-inline: var(--sp-2, 8px); }
+
+/* (v233) the compact pills (Listen, follow-ups, suggestions, filters, the top timer) are 40px with a mouse and 48px to touch */
+@media (pointer: coarse) { .side-menu-label, .fc-mini, .listen-btn, .bubble-tools button.suggest, .fu-chip, .dk-pill, .top-timer { min-height: var(--tap, 48px); } }

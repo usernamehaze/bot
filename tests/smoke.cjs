@@ -8473,7 +8473,7 @@ test('Home widgets sit close together: each box is as tall as its content, the g
     if (!phone) await page.evaluate(() => deskGo('home'));
     await page.waitForSelector('.hw-grid > [data-w="exam"]', { timeout: 15000 }); await page.waitForTimeout(800);
     const out = await gaps(page);
-    expect(out.tok === (phone ? 10 : 12) && !out.bad.length && out.n >= 5, `${where}: one gap token (${phone ? 10 : 12}px) between every box: ` + JSON.stringify(out));
+    expect(out.tok === 12 && !out.bad.length && out.n >= 5, `${where}: one gap token (12px, the 8-point grid) between every box: ` + JSON.stringify(out));
     await edit(page, true);
     const inEdit = await gaps(page);
     expect(!inEdit.bad.length, `${where}: in edit mode the gaps stay the token: ` + JSON.stringify(inEdit));

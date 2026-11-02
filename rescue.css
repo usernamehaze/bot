@@ -71,9 +71,9 @@ h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 0 0 var(--sp-3
 
 /* (v233) component sizes on the 8-point grid: every button, field and tab is a 48px touch target on a touch
    screen, and at least 40px with a mouse. (Kid buttons stay bigger; checkboxes, sliders and colour wells keep their own.) */
-@media (pointer: coarse) { button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]) { min-height: var(--tap, 48px); } }
-@media (pointer: coarse) { button:not(.kid-thing):not(.kid-btn), .tab { min-width: var(--tap, 48px); } } /* (a round icon button stays round) */
-@media (pointer: fine) { button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file]) { min-height: var(--tap-desk, 40px); } }
-@media (pointer: fine) { button:not(.kid-thing):not(.kid-btn), .tab { min-width: var(--tap-desk, 40px); } }
+@media (pointer: coarse) { :where(button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file])) { min-height: var(--tap, 48px); } }
+@media (pointer: coarse) { :where(button:not(.kid-thing):not(.kid-btn), .tab) { min-width: var(--tap, 48px); } } /* (a round icon button stays round) */
+@media (pointer: fine) { :where(button:not(.kid-thing):not(.kid-btn), .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file])) { min-height: var(--tap-desk, 48px); } }
+@media (pointer: fine) { :where(button:not(.kid-thing):not(.kid-btn), .tab) { min-width: var(--tap-desk, 48px); } }
 /* (the browser's own 1px by 6px button padding, on the grid: classes still set their own) */
-button { padding-block: 0; padding-inline: var(--sp-2, 8px); }
+:where(button) { padding-block: 0; padding-inline: var(--sp-2, 8px); }
