@@ -47,10 +47,10 @@
   .csk-wrap.csk-float { background: none; pointer-events: none; }
   .csk-wrap.csk-float .csk-panel { position: fixed; max-width: none; max-height: none; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
   .csk-wrap.csk-float .csk-head { cursor: move; touch-action: none; }
-  .csk-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(127,127,127,.25); }
+  .csk-head { display: flex; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-3, 12px); border-bottom: 1px solid rgba(127,127,127,.25); }
   .csk-title { font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .csk-btn { appearance: none; border: 1px solid rgba(127,127,127,.35); background: transparent; color: inherit; border-radius: 10px;
-    height: 34px; min-width: 34px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    height: 34px; min-width: 34px; padding: 0 var(--sp-2, 8px); display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1, 4px);
     cursor: pointer; font: 600 12.5px/1 inherit; font-family: inherit; }
   .csk-btn:hover { background: rgba(127,127,127,.12); }
   .csk-btn.on { background: #1b1b1d; color: #fff; border-color: #1b1b1d; }
@@ -72,63 +72,63 @@
   @keyframes cskSpring { 0% { transform: scale(.94); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
   .csk-btn.lg-tint { box-shadow: inset 0 0 0 999px rgba(0,0,0,.12); transition: box-shadow .12s; }
   .csk-dark .csk-btn.lg-tint { box-shadow: inset 0 0 0 999px rgba(255,255,255,.14); }
-  .csk-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid rgba(127,127,127,.2); }
+  .csk-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-bottom: 1px solid rgba(127,127,127,.2); }
   .csk-sep { width: 1px; height: 22px; background: rgba(127,127,127,.3); margin: 0 2px; }
   .csk-sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(127,127,127,.35); cursor: pointer; padding: 0; }
   .csk-sw.on { outline: 2px solid currentColor; outline-offset: 2px; }
   .csk-size { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(127,127,127,.3); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: inherit; }
   .csk-size i { display: block; border-radius: 50%; background: currentColor; }
   .csk-size.on { background: rgba(127,127,127,.18); }
-  .csk-room { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.2); font-size: 13px; }
+  .csk-room { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-4, 16px); border-bottom: 1px solid rgba(127,127,127,.2); font-size: 13px; }
   .csk-room[hidden] { display: none; }
   .csk-room b { font-size: 15px; letter-spacing: .12em; }
-  .csk-room .csk-btn { padding: 5px 10px; }
-  .csk-room .csk-who { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
-  .csk-room .csk-who span { padding: 3px 9px; border-radius: 99px; background: rgba(127,127,127,.14); font-size: 12px; }
-  .csk-note { padding: 8px 14px; border-bottom: 1px solid rgba(127,127,127,.2); max-height: 26%; overflow: auto; font-size: 13px; }
-  .csk-note b { display: block; margin-bottom: 4px; }
-  .csk-note ol { margin: 0; padding-left: 20px; }
-  .csk-note .csk-reply p { margin: 0 0 6px; }
-  .csk-note .csk-reply ul, .csk-note .csk-reply ol { margin: 0 0 6px; padding-left: 20px; }
+  .csk-room .csk-btn { padding: var(--sp-1, 4px) var(--sp-3, 12px); }
+  .csk-room .csk-who { display: flex; flex-wrap: wrap; gap: var(--sp-1, 4px); margin-left: auto; }
+  .csk-room .csk-who span { padding: var(--sp-1, 4px) var(--sp-2, 8px); border-radius: 99px; background: rgba(127,127,127,.14); font-size: 12px; }
+  .csk-note { padding: var(--sp-2, 8px) var(--sp-4, 16px); border-bottom: 1px solid rgba(127,127,127,.2); max-height: 26%; overflow: auto; font-size: 13px; }
+  .csk-note b { display: block; margin-bottom: var(--sp-1, 4px); }
+  .csk-note ol { margin: 0; padding-left: var(--sp-5, 24px); }
+  .csk-note .csk-reply p { margin: 0 0 var(--sp-2, 8px); }
+  .csk-note .csk-reply ul, .csk-note .csk-reply ol { margin: 0 0 var(--sp-2, 8px); padding-left: var(--sp-5, 24px); }
   .csk-note .csk-reply li { margin: 2px 0; }
-  .csk-note .csk-copied-h { display: block; margin: 6px 0 2px; font-size: 13px; opacity: .75; }
-  .csk-note .csk-copied { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: rgba(127, 127, 127, .14); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; overflow-x: auto; }
+  .csk-note .csk-copied-h { display: block; margin: var(--sp-2, 8px) 0 2px; font-size: 13px; opacity: .75; }
+  .csk-note .csk-copied { margin: 0 0 var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 8px; background: rgba(127, 127, 127, .14); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; overflow-x: auto; }
   .csk-note strong { font-weight: 700; }
   .csk-note code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   .csk-note[hidden] { display: none; }
   .csk-panel > :not(.csk-stage) { flex-shrink: 0; } /* (the bars above keep their size; only the drawing area gives way when the board is short) */
-  .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px; touch-action: none; }
+  .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--sp-3, 12px); touch-action: none; }
   .csk-board { position: relative; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
   .csk-board canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .csk-board canvas.csk-live { cursor: crosshair; touch-action: none; }
   .csk-text { position: absolute; z-index: 3; min-width: 60px; border: 1px dashed rgba(127,127,127,.7); background: rgba(255,255,255,.85);
-    padding: 2px 4px; font-family: system-ui, sans-serif; outline: none; }
-  .csk-ask { display: flex; gap: 6px; padding: 7px 12px; border-bottom: 1px solid rgba(127,127,127,.2); }
-  .csk-ask .csk-mic { min-width: 44px; height: 44px; align-self: center; gap: 6px; }
+    padding: 2px var(--sp-1, 4px); font-family: system-ui, sans-serif; outline: none; }
+  .csk-ask { display: flex; gap: var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-bottom: 1px solid rgba(127,127,127,.2); }
+  .csk-ask .csk-mic { min-width: 44px; height: 44px; align-self: center; gap: var(--sp-2, 8px); }
   .csk-ask .csk-mic svg { width: 20px; height: 20px; }
-  .csk-ask input { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: 0 11px; font: 13px system-ui, sans-serif; }
-  .csk-hint { font-size: 11.5px; opacity: .65; padding: 0 12px 8px; }
+  .csk-ask input { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: 0 var(--sp-3, 12px); font: 13px system-ui, sans-serif; }
+  .csk-hint { font-size: 11.5px; opacity: .65; padding: 0 var(--sp-3, 12px) var(--sp-2, 8px); }
   .csk-hidden { display: none !important; }
   .csk-panel { position: relative; }
   .csk-board canvas.csk-fx { pointer-events: none; }
   .csk-board canvas.csk-live.grab { cursor: grab; }
   .csk-board canvas.csk-live.place { cursor: copy; }
   /* the view: zoom out, zoom in, fit everything (bottom right of the board) */
-  .csk-zoom { position: absolute; z-index: 5; right: 18px; bottom: 18px; display: flex; gap: 4px; padding: 4px; border-radius: 14px;
+  .csk-zoom { position: absolute; z-index: 5; right: 18px; bottom: 18px; display: flex; gap: var(--sp-1, 4px); padding: var(--sp-1, 4px); border-radius: 14px;
     background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 2px 10px rgba(0,0,0,.18); }
   .csk-zoom .csk-btn { min-width: 44px; height: 44px; border-color: transparent; font-size: 13px; }
   .csk-zoom .csk-btn svg { width: 19px; height: 19px; }
   /* a picture's menu (Move tool): lock it as the background, send it to the back, delete it */
-  .csk-picmenu { position: absolute; z-index: 6; display: flex; gap: 4px; padding: 4px; border-radius: 14px; white-space: nowrap;
+  .csk-picmenu { position: absolute; z-index: 6; display: flex; gap: var(--sp-1, 4px); padding: var(--sp-1, 4px); border-radius: 14px; white-space: nowrap;
     background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 6px 22px rgba(0,0,0,.22); }
   .csk-picmenu[hidden], .csk-picmenu [hidden] { display: none; }
   /* phones: Save, Dock and Close wait in a More menu; the Ask bar tucks away while you draw */
   .csk-more-btn { display: none !important; }
-  .csk-more { position: absolute; z-index: 8; right: 10px; top: 56px; min-width: 210px; display: grid; gap: 2px; padding: 6px; border-radius: 14px;
+  .csk-more { position: absolute; z-index: 8; right: 10px; top: 56px; min-width: 210px; display: grid; gap: 2px; padding: var(--sp-2, 8px); border-radius: 14px;
     background: var(--csk-ctl-bg); color: var(--csk-ctl-ink); border: 1px solid var(--csk-ctl-line); box-shadow: 0 12px 36px rgba(0,0,0,.25); }
   .csk-more[hidden] { display: none; }
-  .csk-more button { appearance: none; border: 0; background: transparent; color: inherit; min-height: 44px; padding: 0 12px; border-radius: 10px;
-    display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .csk-more button { appearance: none; border: 0; background: transparent; color: inherit; min-height: 44px; padding: 0 var(--sp-3, 12px); border-radius: 10px;
+    display: flex; align-items: center; gap: var(--sp-3, 12px); text-align: left; cursor: pointer; font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .csk-more button:hover, .csk-more button:focus-visible { background: rgba(127,127,127,.16); }
   .csk-more button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .csk-ask.csk-tucked { height: 0; min-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; overflow: hidden; }
@@ -138,36 +138,36 @@
     .csk-head .csk-more-btn { display: inline-flex !important; min-width: 44px !important; height: 44px !important; }
     .csk-tools [data-act="undo"], .csk-tools [data-act="redo"] { display: none !important; } /* (they float at the bottom right) */
   }
-  .csk-picmenu .csk-btn { min-height: 44px; height: 44px; padding: 0 12px; border-color: transparent; }
+  .csk-picmenu .csk-btn { min-height: 44px; height: 44px; padding: 0 var(--sp-3, 12px); border-color: transparent; }
   .csk-pop { position: absolute; z-index: 6; left: 12px; right: 12px; margin: 0 auto; max-width: 380px; max-height: 70%; overflow: auto; box-sizing: border-box;
-    background: #fbfaf8; color: #1b1b1d; border: 1px solid rgba(127,127,127,.3); border-radius: 14px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+    background: #fbfaf8; color: #1b1b1d; border: 1px solid rgba(127,127,127,.3); border-radius: 14px; padding: var(--sp-3, 12px); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
   .csk-dark .csk-pop { background: #26262a; color: #ececec; }
-  .csk-pop h4 { margin: 0 0 8px; font-size: 14px; }
-  .csk-pop p { margin: 6px 0; font-size: 12.5px; opacity: .75; }
-  .csk-pop textarea, .csk-pop input { width: 100%; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: 8px 10px; font: 13px system-ui, sans-serif; }
+  .csk-pop h4 { margin: 0 0 var(--sp-2, 8px); font-size: 14px; }
+  .csk-pop p { margin: var(--sp-2, 8px) 0; font-size: 12.5px; opacity: .75; }
+  .csk-pop textarea, .csk-pop input { width: 100%; box-sizing: border-box; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: transparent; color: inherit; padding: var(--sp-2, 8px) var(--sp-3, 12px); font: 13px system-ui, sans-serif; }
   .csk-pop textarea { min-height: 96px; resize: vertical; }
-  .csk-pop .csk-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+  .csk-pop .csk-row { display: flex; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); flex-wrap: wrap; align-items: center; }
   .csk-pop .csk-row input { flex: 1; min-width: 120px; height: 34px; }
-  .csk-pop .csk-list { display: grid; gap: 6px; margin-top: 8px; }
-  .csk-pop .csk-list .csk-btn { justify-content: flex-start; height: auto; min-height: 36px; padding: 7px 10px; text-align: left; }
-  .csk-pop .csk-or { text-align: center; font-size: 12px; opacity: .55; margin: 10px 0 2px; }
+  .csk-pop .csk-list { display: grid; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+  .csk-pop .csk-list .csk-btn { justify-content: flex-start; height: auto; min-height: 36px; padding: var(--sp-2, 8px) var(--sp-3, 12px); text-align: left; }
+  .csk-pop .csk-or { text-align: center; font-size: 12px; opacity: .55; margin: var(--sp-3, 12px) 0 2px; }
   .csk-nc { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(0,0,0,.18); cursor: pointer; padding: 0; }
   .csk-nc.on { outline: 2px solid currentColor; outline-offset: 2px; }
   .csk-cur { position: absolute; z-index: 4; left: 0; top: 0; pointer-events: none; transition: left .09s linear, top .09s linear; }
   .csk-cur svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
-  .csk-cur span { position: absolute; left: 14px; top: 15px; white-space: nowrap; color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 99px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .csk-cur span { position: absolute; left: 14px; top: 15px; white-space: nowrap; color: #fff; font: 600 11.5px/1 system-ui, sans-serif; padding: var(--sp-1, 4px) var(--sp-2, 8px); border-radius: 99px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
   .csk-cur[hidden] { display: none; }
-  .csk-notebox { position: absolute; z-index: 5; box-sizing: border-box; padding: 10px; outline: 2px solid rgba(27,27,29,.6); border-radius: 4px; color: #2a2414;
+  .csk-notebox { position: absolute; z-index: 5; box-sizing: border-box; padding: var(--sp-3, 12px); outline: 2px solid rgba(27,27,29,.6); border-radius: 4px; color: #2a2414;
     font: 600 16px/1.25 system-ui, sans-serif; overflow: auto; white-space: pre-wrap; }
-  .csk-toast { position: absolute; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(27,27,29,.9); color: #fff; padding: 8px 14px; border-radius: 99px;
+  .csk-toast { position: absolute; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); background: rgba(27,27,29,.9); color: #fff; padding: var(--sp-2, 8px) var(--sp-4, 16px); border-radius: 99px;
     font-size: 13px; pointer-events: none; transition: opacity .3s; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
   /* Touch screens: every tool is 44px to touch; colour and size dots sit inside 44px buttons. */
   @media (pointer: coarse) {
-    .csk-tools, .csk-head, .csk-ask { gap: 4px !important; }
+    .csk-tools, .csk-head, .csk-ask { gap: var(--sp-1, 4px) !important; }
     .csk-btn { height: 44px !important; min-width: 44px !important; }
-    .csk-sw { width: 44px; height: 44px; padding: 11px; border: 0; background-clip: content-box; box-shadow: inset 0 0 0 9px #f6f5f2, inset 0 0 0 11px rgba(127,127,127,.35); }
+    .csk-sw { width: 44px; height: 44px; padding: var(--sp-3, 12px); border: 0; background-clip: content-box; box-shadow: inset 0 0 0 9px #f6f5f2, inset 0 0 0 11px rgba(127,127,127,.35); }
     .csk-dark .csk-sw { box-shadow: inset 0 0 0 9px #1d1d20, inset 0 0 0 11px rgba(127,127,127,.35); }
-    .csk-sw.on { outline: none; box-shadow: inset 0 0 0 7px #f6f5f2, inset 0 0 0 9px currentColor; padding: 9px; }
+    .csk-sw.on { outline: none; box-shadow: inset 0 0 0 7px #f6f5f2, inset 0 0 0 9px currentColor; padding: var(--sp-2, 8px); }
     .csk-dark .csk-sw.on { box-shadow: inset 0 0 0 7px #1d1d20, inset 0 0 0 9px currentColor; }
     .csk-size { width: 44px; height: 44px; }
     .csk-ask input { min-height: 44px; }
@@ -178,7 +178,7 @@
   @media (max-width: 700px), (max-height: 500px) {
     .csk-head { padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px)); padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
     .csk-stage { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
-    .csk-tools { gap: 5px; padding: 6px 10px; }
+    .csk-tools { gap: var(--sp-1, 4px); padding: var(--sp-2, 8px) var(--sp-3, 12px); }
     .csk-btn { height: 36px; min-width: 36px; }
     .csk-title { font-size: 15px; }
   }

@@ -824,7 +824,7 @@ const cornellLab = {
       if (!doc) return;
       const w = window.open('', '_blank');
       if (!w) { download('cornell-notes.txt', asText()); return; }
-      w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(doc.title || 'Cornell notes')}</title><style>body{font:14px/1.45 system-ui,sans-serif;margin:28px;color:#111}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:12px}td{vertical-align:top;border-top:1px solid #999;padding:8px}td:first-child{width:30%;border-right:1px solid #999;font-weight:600}.s{border-top:2px solid #111;margin-top:14px;padding-top:8px}</style>
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(doc.title || 'Cornell notes')}</title><style>body{font:14px/1.45 system-ui,sans-serif;margin:var(--sp-6, 32px);color:#111}h1{font-size:20px;margin:0 0 var(--sp-1, 4px)}table{width:100%;border-collapse:collapse;margin-top:var(--sp-3, 12px)}td{vertical-align:top;border-top:1px solid #999;padding:var(--sp-2, 8px)}td:first-child{width:30%;border-right:1px solid #999;font-weight:600}.s{border-top:2px solid #111;margin-top:var(--sp-4, 16px);padding-top:var(--sp-2, 8px)}</style>
         <h1>${esc(doc.title || 'Notes')}</h1><small>${esc(doc.date || '')}</small><table>${doc.rows.map((x) => `<tr><td>${esc(x.cue)}</td><td><ul>${x.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></td></tr>`).join('')}</table><div class="s"><b>Summary</b><p>${esc(doc.summary || '')}</p></div>`);
       w.document.close(); w.focus(); setTimeout(() => { try { w.print(); } catch (e) { /* ignore */ } }, 200);
     }

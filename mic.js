@@ -89,9 +89,9 @@
 
   const ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   const STOP = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg><span>Stop</span>';
-  const LOOK = { boxSizing: 'border-box', width: 'auto', minWidth: '44px', height: '44px', minHeight: '44px', padding: '0 10px', flex: '0 0 auto', alignSelf: 'flex-start', justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+  const LOOK = { boxSizing: 'border-box', width: 'auto', minWidth: '48px', height: '48px', minHeight: '48px', padding: '0 var(--sp-3, 12px)', flex: '0 0 auto', alignSelf: 'flex-start', justifySelf: 'start', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-2, 8px)',
     border: '1px solid rgba(127,127,127,.45)', borderRadius: '99px', background: 'transparent', color: 'inherit', font: 'inherit', fontWeight: '600', cursor: 'pointer', margin: '0' };
-  const LINE = { margin: '6px 0 0', fontSize: '.85em', lineHeight: '1.35', opacity: '.85', flexBasis: '100%' };
+  const LINE = { margin: 'var(--sp-2, 8px) 0 0', fontSize: '.85em', lineHeight: '1.35', opacity: '.85', flexBasis: '100%' };
 
   function attach(box, opts = {}) {
     if (!box || box.__cassieMic) return box && box.__cassieMic;
