@@ -28,10 +28,10 @@ Pick: freemium + flat subscription, with soft caps on the 3 costly things (top m
 
 | | Free | Plus | Pro |
 |---|---|---|---|
-| Month | ₱0 | ₱149 | ₱499 |
-| Semester (5 months) | | ₱599 (20% off) | ₱1,999 (20% off) |
-| Year | | ₱1,490 (2 months free, 17% off) | ₱4,990 (17% off) |
-| USD month | $0 | $7.99 | $14.99 |
+| Month | ₱0 | ₱149 | ₱349 (was ₱499 until November 2026) |
+| Semester (5 months) | | ₱599 (20% off) | ₱1,399 (was ₱1,999) |
+| Year | | ₱1,490 (2 months free, 17% off) | ₱3,490 (was ₱4,990) |
+| USD month | $0 | $7.99 | $8.99 (was $14.99) |
 | Brain | Groq, 20 questions a day | Haiku 5.5 / Groq, fair use 100 a day | Sonnet 5.5 for 15 a day, then Haiku; Opus "Deep think" 3 a day |
 | File reviewers (PDF, slides, Word) | 3 a month | 30 a month | Fair use 10 a day, whole books |
 | Pictures | 10 a month | 100 a month | Fair use 30 a day |

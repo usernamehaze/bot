@@ -658,8 +658,8 @@ async function adminEarly(request, env) {
    pesos, so a US$ plan is charged its fixed peso price (US$ × USD_PHP_RATE, rounded up to …9).
    Cloudflare Secrets: PAYMONGO_SECRET_KEY, PAYMONGO_WEBHOOK_SECRET; optional PAYMONGO_METHODS. */
 const PAY_DAYS = { month: 30, sem: 152, year: 365 };
-const PAY_PHP = { plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 499, sem: 1999, year: 4990 } };
-const PAY_USD = { plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 14.99, sem: 59.99, year: 149.9 } };
+const PAY_PHP = { plus: { month: 149, sem: 599, year: 1490 }, pro: { month: 349, sem: 1399, year: 3490 } };
+const PAY_USD = { plus: { month: 7.99, sem: 31.99, year: 79.9 }, pro: { month: 8.99, sem: 35.99, year: 89.9 } };
 const PAY_LONG = { month: '30 days', sem: 'the semester (5 months)', year: '12 months' };
 // a live key: everyone can buy. A test key (sk_test_…): only the emails in PAY_TESTERS, from the app with
 // ?paytest=1, so nobody gets a plan with PayMongo's test cards while the owner is trying it out
