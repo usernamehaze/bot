@@ -151,7 +151,7 @@
     card.querySelector('.tour-count').textContent = `Stop ${k + 1} of ${run.stops.length}`;
     card.querySelector('.tour-say').textContent = stop.say();
     card.querySelector('[data-t="back"]').disabled = k === 0;
-    card.querySelector('[data-t="next"]').textContent = k === run.stops.length - 1 ? 'Done' : 'Next';
+    card.querySelector('[data-t="next"]').textContent = k === run.stops.length - 1 ? 'Finish tour' : 'Next';
     card.dataset.stop = stop.id;
     place();
     if (el) detourToElement(el, { resumeAfter: 1e9 }); // (Cassie's cursor glides there; with Reduce Motion it just appears)

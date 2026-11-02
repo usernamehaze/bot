@@ -707,7 +707,7 @@ const matrixLab = {
       if (ed) {
         const i = +ed.dataset.edit, c = cards[i], box = page.querySelector(`.tl-card[data-i="${i}"]`);
         box.classList.add('tl-editing');
-        box.innerHTML = `<label>Front<textarea rows="2">${esc(c.f)}</textarea></label><label>Back<textarea rows="3">${esc(c.b)}</textarea></label><button type="button" class="lab-btn main" data-save="${i}">Save</button>`;
+        box.innerHTML = `<label>Front<textarea rows="2">${esc(c.f)}</textarea></label><label>Back<textarea rows="3">${esc(c.b)}</textarea></label><button type="button" class="lab-btn main" data-save="${i}">Save card</button>`;
         box.querySelector('textarea').focus();
         return;
       }
@@ -990,7 +990,7 @@ const thesisLab = {
         ${f('container', 'Journal / publisher / website', 'e.g. Philippine Journal of Science', true)}
         ${f('volume', 'Volume')}${f('issue', 'Issue')}${f('pages', 'Pages', '12 to 19')}
         ${f('url', 'Link (DOI or URL)', 'https://…', true)}
-        <div class="tl-formbtns"><button type="button" class="lab-btn main" data-savee>Save</button><button type="button" class="lab-btn" data-cancel>Cancel</button></div></div>`;
+        <div class="tl-formbtns"><button type="button" class="lab-btn main" data-savee>Save event</button><button type="button" class="lab-btn" data-cancel>Cancel edit</button></div></div>`;
     }
     // a mic on the thesis, each reason, the counter-argument and a quote (the map redraws, so as they appear)
     if (window.CassieMic) window.CassieMic.watch(page, 'textarea[data-f], .tl-form textarea[data-k="quote"]');

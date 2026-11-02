@@ -2368,7 +2368,7 @@ function homeWidgets(root, kind) {
 function hwEdit(wrap, on) {
   homeEditing = on;
   document.documentElement.classList.toggle('home-edit', on);
-  const b = wrap.querySelector('.hw-edit'); b.textContent = on ? 'Done' : 'Edit Home'; b.setAttribute('aria-pressed', String(on));
+  const b = wrap.querySelector('.hw-edit'); b.textContent = on ? 'Save layout' : 'Edit Home'; b.setAttribute('aria-pressed', String(on));
   wrap.querySelector('.hw-tools').hidden = !on; wrap.querySelector('.hw-hint').hidden = !on;
   wrap.querySelectorAll('.hw-ctl').forEach((c) => { c.hidden = !on; });
 }
@@ -2567,7 +2567,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=231'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=232'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2636,7 +2636,7 @@ function openLetCourse(step) {
         c.order = lessons.map((l) => l.topic);
         const n = lessons.filter((l) => c.done && c.done[l.topic]).length, next = lessons.find((l) => !(c.done && c.done[l.topic]));
         body.innerHTML = `<p class="letc-what"></p><div class="letc-prog" role="img" aria-label="${n} of ${lessons.length} lessons done"><i style="width:${lessons.length ? Math.round((n / lessons.length) * 100) : 0}%"></i></div><p class="letc-count">${n} of ${lessons.length} lessons</p>
-          <div class="letc-row">${next ? '<button type="button" class="letc-go letc-next">Continue</button>' : '<p class="letc-note">Every lesson done. Review any of them again, or practise with LET practice.</p>'}<button type="button" class="letc-line letc-change">Change my coverage</button></div>
+          <div class="letc-row">${next ? '<button type="button" class="letc-go letc-next">Start next lesson</button>' : '<p class="letc-note">Every lesson done. Review any of them again, or practise with LET practice.</p>'}<button type="button" class="letc-line letc-change">Change my coverage</button></div>
           <p class="letc-note">${LET_WEIGHTS}</p><ol class="letc-list"></ol>`;
         body.querySelector('.letc-what').textContent = `LET ${c.level === 'secondary' ? 'Secondary' : 'Elementary'}${c.major ? `: ${c.major}` : ''} · ${c.parts.map((k) => LET_PART_NAMES[k]).join(', ')}`;
         const ol = body.querySelector('.letc-list');
@@ -2646,7 +2646,7 @@ function openLetCourse(step) {
           b.innerHTML = '<span><b></b><small></small></span><em></em>';
           b.querySelector('b').textContent = l.topic;
           b.querySelector('small').textContent = LET_PART_NAMES[l.part];
-          b.querySelector('em').textContent = dn ? 'Done' : 'Start';
+          b.querySelector('em').textContent = dn ? 'Done' : 'Start'; if (dn) b.querySelector('em').className = 'st-badge st-ok'; // (v232: status in its own colour, with the word)
           b.addEventListener('click', () => letOpenLesson(l.topic, close));
           li.appendChild(b); ol.appendChild(li);
         });
@@ -2780,7 +2780,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=231').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=232').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2804,7 +2804,7 @@ function homeTop({ desk = false } = {}) {
     <form class="ht-set" id="ht-set" aria-label="Timer minutes" hidden>
       <label>Focus <input type="number" name="focus" min="${TIMER_LIMITS.focus[0]}" max="${TIMER_LIMITS.focus[1]}" inputmode="numeric" required> min</label>
       <label>Break <input type="number" name="brk" min="${TIMER_LIMITS.brk[0]}" max="${TIMER_LIMITS.brk[1]}" inputmode="numeric" required> min</label>
-      <button type="submit" class="ht-save">Save</button>
+      <button type="submit" class="ht-save">Save times</button>
     </form>
     <p class="ht-note"></p>`;
   const grade = (state.profile && state.profile.grade) || '';
@@ -3070,7 +3070,7 @@ function openPodcast(text, title) {
   go.addEventListener('click', async () => {
     if (guest) { close(); openAuth({ mode: 'signup' }); return; }
     if (!canChat()) { close(); openSettings(); return; }
-    go.disabled = true; status.textContent = 'Cassie is writing the script…';
+    const goDone = busyButton(go, 'Writing the script…'); status.textContent = '';
     try {
       const lines = parsePodcast(await askCassie([{ role: 'user', content: podPrompt(text) }]));
       if (lines.length < 2) throw new Error('no script');
@@ -3078,7 +3078,7 @@ function openPodcast(text, title) {
       w.querySelector('.pod-facts').remove(); go.remove(); w.querySelector('.plus-why').remove(); status.textContent = '';
       w.querySelector('.pod-x').textContent = 'Close';
       player = podPlayer(w.querySelector('.pod-card'), lines, title, voiceOk);
-    } catch (e) { go.disabled = false; status.textContent = 'Cassie couldn’t write the podcast just now. Check your connection, then try again.'; }
+    } catch (e) { goDone(); status.textContent = 'Cassie couldn’t write the podcast. Check your connection, then try again.'; }
   });
   document.body.appendChild(w);
   go.focus({ preventScroll: true });
@@ -3564,7 +3564,7 @@ function openCalDay(day) {
       <label class="cal-note"><span>Note <small class="cal-count">0 / ${CAL_NOTE_MAX}</small></span><textarea name="note" maxlength="${CAL_NOTE_MAX}" rows="2" placeholder="e.g. Chapters 3 and 4"></textarea></label>
       <label class="cal-time"><span>Time (optional)</span><input type="time" name="time"></label>
       <p class="cal-err" role="alert" hidden></p>
-      <div class="plus-actions"><button type="submit" class="plus-go cal-save">Save</button><button type="button" class="plus-ok cal-cancel" hidden>Cancel</button></div>
+      <div class="plus-actions"><button type="submit" class="plus-go cal-save">Save note</button><button type="button" class="plus-ok cal-cancel" hidden>Cancel edit</button></div>
     </form></div>`;
   w.querySelector('#cal-day-h').textContent = calWhen(day);
   const form = w.querySelector('.cal-form'), err = w.querySelector('.cal-err'), other = w.querySelector('.cal-other'), note = form.note, count = w.querySelector('.cal-count');
@@ -4064,12 +4064,15 @@ function examSection() {
       return;
     }
     const left = dayGap(today, e.date), todays = (e.days.find((d) => d.date === today) || { tasks: [] }).tasks;
-    card.innerHTML = `<div class="ex-head"><b>Your Exam Plan</b><p class="ex-what"><span class="ex-subj"><em>Subject:</em> </span><span class="ex-tops"><em>Topics:</em> </span></p><small></small></div><ul class="ex-tasks"></ul>
+    card.innerHTML = `<div class="ex-head"><b>Your Exam Plan</b><p class="ex-what"><span class="ex-subj"><em>Subject:</em> </span><span class="ex-tops"><em>Topics:</em> </span></p><span class="st-badge ex-when"></span> <small></small></div><ul class="ex-tasks"></ul>
       <div class="ex-actions"><button type="button" class="ex-all" aria-expanded="false">See the whole plan</button><button type="button" class="ex-del">Delete</button></div><ol class="ex-days" hidden></ol>`;
     card.querySelector('.ex-subj').append(e.name);
     const tops = (e.topics || '').trim() || planTopics(e).join(', ');
     if (tops) card.querySelector('.ex-tops').append(tops); else card.querySelector('.ex-tops').remove();
-    card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${done} of ${all.length} tasks done`;
+    // (v232) when it is, as a status badge: today in danger colours, the next 3 days in warning, later as info
+    const when = card.querySelector('.ex-when');
+    when.textContent = left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`; when.className = `st-badge ex-when ${left === 0 ? 'st-danger' : left <= 3 ? 'st-warn' : 'st-info'}`;
+    card.querySelector('.ex-head small').textContent = `${dayName(e.date)} · ${done} of ${all.length} tasks done`;
     // how ready: from your practice quizzes on the plan's topics (shown once you've practised one)
     const ready = examReadiness(e);
     if (ready && ready.tried) {
@@ -4093,7 +4096,7 @@ function examSection() {
       box.checked = !!t.done; box.setAttribute('aria-label', `Done: ${taskLabel(t)}`);
       go.textContent = taskLabel(t);
       li.classList.toggle('done', !!t.done);
-      box.addEventListener('change', () => { t.done = box.checked; li.classList.toggle('done', t.done); progressAdd({ tasks: t.done ? 1 : -1 }); card.querySelector('.ex-head small').textContent = `${left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : `In ${left} days`} · ${dayName(e.date)} · ${all.filter((x) => x.done).length} of ${all.length} tasks done`; });
+      box.addEventListener('change', () => { t.done = box.checked; li.classList.toggle('done', t.done); progressAdd({ tasks: t.done ? 1 : -1 }); card.querySelector('.ex-head small').textContent = `${dayName(e.date)} · ${all.filter((x) => x.done).length} of ${all.length} tasks done`; });
       go.addEventListener('click', () => openExamTask(t, e));
       ul.appendChild(li);
     });
@@ -4605,7 +4608,7 @@ async function askGroq(msgs, opts = {}) {
     try {
       let text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true, noWait: !!state.geminiKey, q: opts.q });
       if (!text) text = await groqChat(messages, { model, onWait: opts.onWait, rotate: true }); // blank once? ask again
-      if (!text) throw friendlyError('I went blank on that one. Please ask again, maybe in different words.');
+      if (!text) throw friendlyError('I went blank on that one. Ask again, maybe in different words.');
       return text;
     } catch (e) {
       if (e.groqLimited) {
@@ -5785,15 +5788,15 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
     fcBtn.addEventListener('click', async () => {
       if (fcBtn.disabled) return;
       if (fcBtn.dataset.deck) { window.CassieCards.open(fcBtn.dataset.deck); return; }
-      fcBtn.disabled = true; fcBtn.textContent = 'Making cards…';
+      const fcDone = busyButton(fcBtn, 'Making cards…');
       try {
         const chat = curChat();
         const deck = (title || (chat && chat.title) || 'My cards').replace(/^(New chat|Chat)$/i, 'My cards').slice(0, 60);
         const r = await window.CassieCards.fromText(text, deck);
-        fcBtn.dataset.deck = r.deck;
+        fcBtn.dataset.deck = r.deck; fcDone({ keep: true });
         fcBtn.textContent = r.added ? `✓ ${r.added} cards: Study` : '✓ Already cards: Study';
       } catch (e) {
-        fcBtn.textContent = 'Try again'; mascotSay(CassieErrors.say('cards_failed'), 5000);
+        fcDone({ keep: true }); fcBtn.textContent = 'Try again'; mascotSay(CassieErrors.say('cards_failed'), 5000);
         setTimeout(() => { fcBtn.textContent = '＋ Flashcards'; }, 2600);
       } finally { fcBtn.disabled = false; }
     });
@@ -5833,14 +5836,13 @@ function addTextDownload(bubble, text, { title = '', want = '' } = {}) {
     btn.addEventListener('click', async () => {
       if (btn.disabled) return;
       track('feature', 'save:' + f.key);
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
+      const saveDone = busyButton(btn, 'Saving…');
       try {
         const blob = await f.make(text, docTitle);
         downloadBlob(`${window.CassieExport.fileBase(docTitle)}.${f.ext}`, blob);
-        btn.textContent = 'Saved ✓';
+        saveDone({ keep: true }); btn.textContent = 'Saved ✓';
       } catch (e) {
-        btn.textContent = 'Try again';
+        saveDone({ keep: true }); btn.textContent = 'Try again';
         alert(CassieErrors.say('file_failed', { label: f.label }));
       } finally {
         setTimeout(() => { btn.textContent = f.label; btn.disabled = false; }, 1600);
@@ -6051,6 +6053,17 @@ function reviewMistakes(all = false) {
   handleSend(`Let's review the quiz questions I got wrong before. Ask them one at a time (you may reword them slightly), wait for my answer, then grade it:\n${qs}`);
 }
 
+// (v232) a button that waits on the internet, the AI or a file: disabled against repeat taps, a small spinner
+// and a short label ("Signing in…"), aria-busy while it waits. Returns done(); call it when the wait ends.
+function busyButton(btn, label) {
+  if (!btn || btn.classList.contains('is-busy')) return () => {};
+  const html = btn.innerHTML, was = btn.disabled;
+  btn.classList.add('is-busy'); btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+  if (btn.classList.contains('btn')) { btn.classList.add('is-loading'); return () => { btn.classList.remove('is-busy', 'is-loading'); btn.removeAttribute('aria-busy'); btn.disabled = was; }; } // (the design system's own spinner)
+  if (label) btn.innerHTML = `<span class="busy-spin" aria-hidden="true"></span><span>${escapeHtml(label)}</span>`;
+  else btn.insertAdjacentHTML('afterbegin', '<span class="busy-spin" aria-hidden="true"></span>');
+  return ({ keep } = {}) => { if (!btn.isConnected) return; btn.classList.remove('is-busy'); btn.removeAttribute('aria-busy'); if (!keep) { btn.innerHTML = html; btn.disabled = was; } else btn.querySelector('.busy-spin')?.remove(); };
+}
 async function handleSend(text, opts = {}) {
   // photos and files still being read: Send waits for them, so nothing is left behind
   const stillReading = attachments.filter((a) => a.status === 'reading').map((a) => a.done);
@@ -6155,7 +6168,7 @@ async function handleSend(text, opts = {}) {
   setCursorMode('thinking');
   if (doc || many || image) botMood('reading');
   const typingBubble = renderTyping();
-  sendBtn.disabled = true;
+  const sendDone = busyButton(sendBtn); // (a spinner on Send while Cassie answers)
   const onWait = (secs) => { setTypingStatus(typingBubble, `Groq's free per-minute limit: continuing in ${secs}s…`); botMood('busy'); };
 
   try {
@@ -6168,7 +6181,7 @@ async function handleSend(text, opts = {}) {
       ? await answerAboutDocument(doc, sendText, history, (msg) => setTypingStatus(typingBubble, msg))
       : await askCassie(state.messages, image, { tutor: true, mode: opts.mode, onWait, onDelta: opts.onDelta });
     reply = captureQuizMarks(reply); // saves missed quiz questions for "Review my mistakes"
-    if (!reply) throw friendlyError('I went blank on that one. Please ask again.');
+    if (!reply) throw friendlyError('I went blank on that one. Ask again.');
     // the AI's own judgement: it saw a student at risk that the word list didn't
     const careAI = window.CassieCare && window.CassieCare.fromAI(reply);
     if (careAI) { wordQ.length = 0; typingBubble.remove(); giveCare(window.CassieCare.langOf(sendText), careAI.aiWords); return; } // (and no topic words go out)
@@ -6226,7 +6239,7 @@ async function handleSend(text, opts = {}) {
     renderError(err, again);
     setCursorMode('idle');
   } finally {
-    sendBtn.disabled = false;
+    sendDone(); sendBtn.disabled = false;
   }
 }
 
@@ -6922,15 +6935,16 @@ function openRoomChooser(prefill = '') {
   el.querySelector('.room-x').addEventListener('click', () => el.remove());
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
   el.querySelector('[data-room="new"]').addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    try { const d = await roomCall('/room/create', { title: `${roomName()}’s study room` }); el.remove(); track('feature', 'room:create'); startRoom(d.code, d.title); } catch (x) { fail(x); }
+    const done = busyButton(e.currentTarget, 'Making the room…');
+    try { const d = await roomCall('/room/create', { title: `${roomName()}’s study room` }); el.remove(); track('feature', 'room:create'); startRoom(d.code, d.title); } catch (x) { done(); fail(x); }
   });
   el.querySelector('.room-join').addEventListener('submit', async (e) => {
     e.preventDefault();
     const code = String(new FormData(e.target).get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     err.hidden = true;
     if (!check.check()) return;
-    try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { fail(x); }
+    const done = busyButton(e.target.querySelector('button[type=submit], button:not([type])'), 'Joining…');
+    try { const d = await roomCall('/room/join', { code }); el.remove(); track('feature', 'room:join'); startRoom(d.code, d.title); } catch (x) { done(); fail(x); }
   });
   setTimeout(() => el.querySelector(prefill ? '.room-join input' : '[data-room="new"]').focus(), 30);
 }
@@ -7392,7 +7406,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=231');
+      exploreMod = await import('./explore/cell3d.js?v=232');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7442,7 +7456,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=231');
+      labsMod = await import('./labs/labs.js?v=232');
       islandRest();
     }
     labsMod.open({
@@ -7620,7 +7634,7 @@ async function setRemind(change) {
     renderRemind();
   } catch (e) {
     state.remind = { ...p, on: false }; save(); renderRemind();
-    note.textContent = e.why === 'blocked' ? 'Notifications are blocked for Cassie. Allow them in your browser’s site settings, then try again.' : e.why === 'server' ? 'Reminders aren’t switched on yet. Please try again later.' : 'Cassie couldn’t turn reminders on just now. Check your connection, then try again.';
+    note.textContent = e.why === 'blocked' ? 'Notifications are blocked for Cassie. Allow them in your browser’s site settings, then try again.' : e.why === 'server' ? 'Reminders aren’t on yet. Try again later.' : 'Cassie couldn’t turn reminders on just now. Check your connection, then try again.';
   }
 }
 function renderRemindKeep() { const s = (id, v) => { document.getElementById(id).value = String(v); }; const p = remindPrefs(); s('remind-hour', p.hour); s('quiet-from', p.quietFrom); s('quiet-to', p.quietTo); }
@@ -7943,7 +7957,7 @@ function renderMemory() {
 
       <div class="settings-actions">
         <button class="btn secondary" id="mem-clear">Clear all memory</button>
-        <button class="btn" id="mem-done">Done</button>
+        <button class="btn" id="mem-done">Close memory</button>
       </div>
     </div>`;
   const memSlot = memoryPanel.querySelector('.mem-empty-slot');
@@ -9186,7 +9200,7 @@ function openProfile(first) {
     <label class="pf-field"><span>Age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
     <label class="pf-field"><span>Level</span><select name="grade"><option value="">Choose your level…</option>${GRADE_GROUPS.map(([g, , list]) => `<optgroup label="${g}">${list.map((x) => `<option>${x}</option>`).join('')}</optgroup>`).join('')}</select></label>
     <div class="pf-field"><span>Gender</span><div class="pf-seg pf-seg3"><button type="button" data-gender="female">Female</button><button type="button" data-gender="male">Male</button><button type="button" data-gender="none">Prefer not to say</button></div><input type="hidden" name="gender"></div>
-    <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save'}</button>
+    <button type="submit" class="pf-go">${first ? 'Start studying' : 'Save profile'}</button>
   </form>`;
   document.body.appendChild(wrap);
   const f = wrap.querySelector('form');
@@ -9284,10 +9298,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=231').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=232').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=231', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=232', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9761,7 +9775,7 @@ function paySheet(title, text) {
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('.plus-ok')) close(); });
-  const set = (t, x, actions = '<button type="button" class="plus-ok">OK</button>') => {
+  const set = (t, x, actions = '<button type="button" class="plus-ok">Close</button>') => {
     w.querySelector('h3').textContent = t; w.querySelector('.plus-why').textContent = x;
     w.querySelector('.plus-actions').innerHTML = actions;
     (w.querySelector('.plus-actions button') || w).focus?.();
@@ -9866,7 +9880,7 @@ function plusSheet(what, why, src = 'plus', title) {
       const done = document.createElement('p'); done.className = 'plus-done'; done.setAttribute('role', 'status');
       done.textContent = `You’re on the early list. Cassie will email ${email} the day it opens.`;
       btn.replaceWith(done);
-      w.querySelector('.plus-ok').textContent = 'OK';
+      w.querySelector('.plus-ok').textContent = 'Close';
       w.querySelector('.plus-ok').focus();
     } catch (e2) {
       btn.disabled = false;
@@ -10157,10 +10171,10 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     const l = linking;
     if (!l) return;
     showErr('');
-    go.disabled = true; go.setAttribute('aria-busy', 'true');
+    const goDone = busyButton(go, 'Signing in…');
     try { done(await authCall('/auth/' + l.provider, { credential: l.credential, nonce: l.nonce, name: l.name, ...how }, 'POST', { timeout: SIGNIN_CALL_LIMIT })); }
     catch (e) {
-      go.disabled = false; go.removeAttribute('aria-busy');
+      goDone();
       if (FIELD_OF[e.code] === 'password' && !how.forget) check.show('password', e.code);
       else showErr(CassieErrors.explain(e, l.provider + '_failed'), () => linkWith(how));
     }
@@ -10171,14 +10185,14 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     showErr('');
     if (!check.check()) return;
     if (linking) { linkWith({ password }); return; }
-    go.disabled = true; go.setAttribute('aria-busy', 'true');
+    const goDone = busyButton(go, signup() ? 'Making your account…' : 'Signing in…');
     try {
       const res = await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password });
       if (signup() && first) frSave({ step: 'ob', at: 0, answers: { ...((frLoad() || {}).answers || {}), age: String(age) } }); // (the questions won't ask the age again)
       done(res);
     }
     catch (e2) {
-      go.disabled = false; go.removeAttribute('aria-busy');
+      goDone();
       const field = FIELD_OF[e2.code];
       if (field) check.show(field, e2.code, { n: Math.max(1, 8 - password.length) });
       else showErr(CassieErrors.explain(e2));
@@ -10273,7 +10287,7 @@ function openReport() {
     <p class="pf-sub">What happened? What did you expect? Please don’t include personal info like your full name, phone number, or passwords.</p>
     <label class="pf-field"><span>What went wrong</span><textarea name="text" rows="5" maxlength="1200" placeholder="e.g. The graph didn't show when I asked for y = x^2"></textarea></label>
     <p class="pf-err" role="alert" hidden></p>
-    <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Cancel</button><button type="submit" class="pf-go">Send</button></div>
+    <div class="pf-row"><button type="button" class="new-chat-btn pf-cancel">Cancel</button><button type="submit" class="pf-go">Send report</button></div>
   </form>`;
   document.body.appendChild(wrap);
   const f = wrap.querySelector('form');
@@ -10290,10 +10304,10 @@ function openReport() {
     err.hidden = true;
     if (!check.check()) return;
     const send = f.querySelector('.pf-go');
-    send.disabled = true; send.setAttribute('aria-busy', 'true');
+    const sendDone = busyButton(send, 'Sending…');
     const ok = await sendFeedback('report', 'report', text);
-    if (!ok) { err.textContent = CassieErrors.say(navigator.onLine === false ? 'offline' : 'report_failed'); err.hidden = false; send.disabled = false; send.removeAttribute('aria-busy'); return; }
-    f.innerHTML = '<h2>Thank you!</h2><p class="pf-sub">Your report was sent. It helps make Cassie better for everyone.</p><button type="button" class="pf-go">Close</button>';
+    if (!ok) { err.textContent = CassieErrors.say(navigator.onLine === false ? 'offline' : 'report_failed'); err.hidden = false; sendDone(); return; }
+    f.innerHTML = '<h2>Report sent</h2><p class="pf-sub">Thank you. It helps make Cassie better.</p><button type="button" class="pf-go">Close report</button>';
     f.querySelector('.pf-go').addEventListener('click', close);
   });
 }

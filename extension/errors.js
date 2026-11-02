@@ -81,7 +81,7 @@
     file_too_big: '{name} is too big for Cassie to read in one go right now. Wait a minute and try again, ask about one part (like “make a reviewer of pages 1 to 10”), or add your free Gemini key in Settings so she can read all of it.',
     nothing_readable: 'Cassie couldn’t find anything to read in {name}. It may be empty or only pictures. Try another file, or a photo of the page.',
     spreadsheet: 'Cassie can’t read spreadsheets yet. Save it as a PDF, then attach that.',
-    file_kind: 'Cassie can’t open {name} because she doesn’t know that kind of file. She reads PDFs, PowerPoint, Word, text files and photos.',
+    file_kind: 'Cassie can’t open {name}. Files must be PDF, Word (.docx), PowerPoint (.pptx), text (.txt or .md) or a photo (JPG, PNG, WebP or HEIC).',
     heic: 'That’s an iPhone HEIC photo, which this browser can’t open. Send a screenshot of it instead, or set iPhone Camera, Formats, Most Compatible.',
     photo_unreadable: 'Cassie couldn’t open {name} as a picture. The file may be damaged. Take a screenshot of it and attach that instead.',
     tab_file: 'Cassie couldn’t open the file from your browser tab because the browser blocked it. Download it, then attach it with the paperclip.',

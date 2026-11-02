@@ -86,7 +86,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     <button type="button" class="tut-pill" aria-label="Show Cassie’s card again">${CURSOR}<span class="tut-pill-text">Cassie is teaching</span></button>
     <p class="tut-say" aria-live="polite"></p>
     <button type="button" class="tut-btn tut-hear" hidden aria-label="Hear this step again">Hear it again</button>
-    <div class="tut-resume" hidden><button type="button" class="tut-btn tut-go tut-continue">Continue</button><button type="button" class="tut-btn tut-restart">Start over</button></div>
+    <div class="tut-resume" hidden><button type="button" class="tut-btn tut-go tut-continue">Continue lesson</button><button type="button" class="tut-btn tut-restart">Start over</button></div>
     <div class="tut-nav" hidden><button type="button" class="tut-btn tut-prev" aria-label="Back a step">‹ Back</button><span class="tut-step"></span><button type="button" class="tut-btn tut-next">Next ›</button></div>
     <form class="tut-ask"><input type="text" placeholder="Ask anything: “how do I use this?”" aria-label="Ask Cassie how to do something here" enterkeyhint="send">
       ${hear ? '<button type="button" class="tut-btn tut-mic" aria-label="Say it out loud" title="Say it out loud">🎤</button>' : ''}<button type="submit" class="tut-btn tut-go">Ask</button></form>`;

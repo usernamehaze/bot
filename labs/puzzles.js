@@ -762,7 +762,7 @@ const geographyLab = {
       const q = step === 0 ? 'Which country is highlighted?' : step === 1 ? `What is the capital of ${esc(C0[1])}?` : `Tap the map where ${esc(C0[2])} is.`;
       qbox.innerHTML = `<p class="geo-n">Round ${k + 1} of ${rounds.length} · ${points} points</p><p class="geo-text">${q}</p>`
         + (step < 2 ? `<div class="geo-opts">${options.map((o) => `<button type="button" data-o="${esc(o)}" class="${answered ? (o === (step ? C0[2] : C0[1]) ? 'right' : o === answered ? 'wrong' : '') : ''}" ${answered ? 'disabled' : ''}>${esc(o)}</button>`).join('')}</div>` : '')
-        + (answered || pin ? '<button type="button" class="lab-btn main geo-next">Next</button>' : '');
+        + (answered || pin ? '<button type="button" class="lab-btn main geo-next">Next country</button>' : '');
       cv.redraw();
     }
     qbox.addEventListener('click', (e) => {
