@@ -2251,7 +2251,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-big:focus, .fr-big:focus-visible { outline: none; border-bottom-color: var(--primary); }
 .fr-big::placeholder { color: var(--muted); font-weight: 700; }
 /* (v231) Cassie guides the setup: she writes your name, and draws your first study card (decoration only) */
-.fr-guide { --fr-ink: var(--primary-ink); display: flex; align-items: center; justify-content: center; gap: 10px; height: 64px; pointer-events: none; }
+.fr-guide { --fr-ink: var(--primary-ink); flex: none; display: flex; align-items: center; justify-content: center; gap: 10px; height: 64px; pointer-events: none; }
 .fr-guide-bot { width: 56px; height: 56px; flex: none; }
 .fr-guide-bot .cassie-bot, .fr-guide-bot .cassie-3d { width: 100%; height: 100%; display: block; }
 .fr-ink { width: min(240px, 60vw); height: 56px; overflow: visible; }
@@ -2266,6 +2266,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 @keyframes frDraw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .fr-ink-go .fr-ink-name, .fr-draw-go .frc-edge, .fr-draw-go .frc-line { animation: none; stroke-dashoffset: 0; fill-opacity: 1; } }
 @media (max-height: 700px) { .fr-guide { height: 48px; } .fr-guide-bot { width: 44px; height: 44px; } }
+.fr-mid > .fr-skipall { flex: none; } /* (the guide never squeezes Skip setup below 44px) */
 .fr-select { font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 14px; padding: 13px 14px; min-height: 52px; background: var(--surface); color: var(--text); text-align: left; }
 .fr-select:focus { border-color: var(--primary); }
 .fr-q2 { display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: .9rem; font-weight: 650; color: var(--muted); margin-top: 6px; }

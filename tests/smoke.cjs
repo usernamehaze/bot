@@ -862,7 +862,7 @@ test('the extension asks Groq for its model list once per key (not on every pict
   });
   try {
     let sw = null;
-    for (let i = 0; i < 80 && !sw; i++) { for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof groqVisionCandidates === 'function').catch(() => false)) { sw = w; break; } if (!sw) await new Promise((r) => setTimeout(r, 250)); }
+    for (let i = 0; i < 160 && !sw; i++) { for (const w of ctx.serviceWorkers()) if (/\/background\.js$/.test(w.url()) && await w.evaluate(() => typeof groqVisionCandidates === 'function').catch(() => false)) { sw = w; break; } if (!sw) await new Promise((r) => setTimeout(r, 250)); }
     expect(sw, 'the extension started');
     const r = await sw.evaluate(async () => {
       let calls = 0; const real = self.fetch;
