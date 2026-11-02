@@ -89,8 +89,11 @@ function tryIt() {
   // as the popup grows (an answer, a quiz), keep all of it on the screen
   if ('ResizeObserver' in window) new ResizeObserver(() => {
     if (pop.hidden) return;
-    const r = pop.getBoundingClientRect();
-    if (r.bottom > innerHeight - 8 || r.top < 80) pop.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    // (scrolled by hand, not scrollIntoView: the page's 80px scroll padding left a tall quiz 2px short of the bottom)
+    const r = pop.getBoundingClientRect(), bar = document.querySelector('.nav'), top = (bar ? bar.getBoundingClientRect().bottom : 72) + 4;
+    const behavior = reduce ? 'auto' : 'smooth';
+    if (r.bottom > innerHeight - 8) scrollBy({ top: Math.max(0, Math.min(r.bottom - (innerHeight - 8), r.top - top)), behavior });
+    else if (r.top < top) scrollBy({ top: r.top - top, behavior });
   }).observe(pop);
   function open(text, rect) {
     chosen = text.trim().replace(/\s+/g, ' ').slice(0, 80);
