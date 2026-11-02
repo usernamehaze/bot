@@ -3624,3 +3624,21 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
 
 /* (v233) the compact pills (Listen, follow-ups, suggestions, filters, the top timer) are 40px with a mouse and 48px to touch */
 @media (pointer: coarse) { .side-menu-label, .fc-mini, .listen-btn, .bubble-tools button.suggest, .fu-chip, .dk-pill, .top-timer { min-height: var(--tap, 48px); } }
+
+/* (v233) a phone's ask box: every button keeps its 48px tap area, its circle is drawn 40px inside it, 4px apart (the
+   half-step for a tight icon group), and the model picker shows its short name so it never squeezes to a dot */
+@media (max-width: 430px) {
+  .composer-row { gap: var(--sp-1, 4px); }
+  .composer-row .composer-spacer { display: none; }
+  .composer-row .model-pill { margin-right: auto; min-width: 0; flex: 0 1 auto; padding-inline: var(--sp-2, 8px); }
+  .composer-row .model-pill #model-pill-model { display: none; }
+  .composer-row .model-pill[data-short]::before { content: attr(data-short); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .composer-row .icon-btn.round { padding: var(--sp-1, 4px); border-color: transparent; background-clip: content-box; outline: 1px solid var(--border); outline-offset: -5px; }
+  .composer-row .icon-btn.round.primary { outline-color: var(--primary); }
+  .composer-row .icon-btn.round:focus-visible { outline: 3px solid var(--lab-accent, currentColor); outline-offset: 0; }
+}
+@media (max-width: 370px) {
+  .composer-row .icon-btn.round { width: 44px; min-width: 44px; }
+  /* the round buttons draw their ring 5px inside the tap area, so the rings stay 10px apart with no gap */
+  .composer-row { gap: 0; }
+} /* (the narrowest phones: 44 by 48, still the 44px tap rule) */
