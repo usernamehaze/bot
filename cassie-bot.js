@@ -18,6 +18,9 @@
   const SRC = (document.currentScript && document.currentScript.src) || location.href; // (where the 3D Cassie is: next to this file)
   const NS = 'http://www.w3.org/2000/svg';
   const INK = '#16131c', PAPER = '#fbfaf7';
+  // (v231) the hello ring's dots: white beside her, a soft blush pink further out
+  const DUST_NEAR = '#ffffff', DUST_FAR = '#ffc9d8', DUST_EDGE = '#f2a5bb';
+  const TASSEL = '#e8b84a', TASSEL_DARK = '#b8862a';
   const CARET_BLINK = 530; // ms — the classic text-cursor blink
 
   /* ---------------- construction: the pointer, softened ----------------
@@ -35,6 +38,8 @@
     [114, 376, 48],  // 6 heel
   ];
   const TAIL = [3, 4], TAIL_PIVOT = [262, 296];
+  const TAIL_TIP = [312, 392]; // (where the tassel hangs: the tail's end, between its two corners)
+  const accList = (name) => String(name || '').split('+').filter((n, i, a) => ACC[n] && a.indexOf(n) === i);
   const EYES = { l: [178, 232], r: [254, 232] }; // on the widest part of the arrowhead
   const BLUSH = { l: [160, 284], r: [270, 284] };
   const HAT = { x: 150, y: 116, angle: -28, scale: 1.25 }; // on the pointer's tip — the top of her head
@@ -106,6 +111,8 @@
 
   /* ---------------- accessories (sit on the slanted top edge, tip → wing) ---------------- */
   const ACC = {
+    // (v231) exam season: a graduation tassel hanging from the tip of her tail (its own layer, so a hat can be worn too)
+    tassel: { layer: 'tail', svg: `<path d="M0 0 V20" fill="none" stroke="${TASSEL}" stroke-width="4" stroke-linecap="round"/><circle cx="0" cy="20" r="6" fill="${TASSEL}" stroke="${INK}" stroke-width="3"/><path d="M-8 25 H8 L12 52 H-12 Z" fill="${TASSEL}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><path d="M-5 32 V49 M0 32 V49 M5 32 V49" fill="none" stroke="${TASSEL_DARK}" stroke-width="2"/>` },
     gradcap: { layer: 'top', svg: `<path d="M-62 -6 L0 -30 L62 -6 L0 18 Z" fill="${INK}"/><path d="M-30 6 V26 Q0 40 30 26 V6 L0 18 Z" fill="${INK}"/><path d="M48 -2 V30" stroke="#e8b84a" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="33" r="5" fill="#e8b84a"/>` },
     glasses: { layer: 'face', svg: `<g fill="none" stroke="${INK}" stroke-width="5.5"><rect x="-58" y="-19" width="44" height="38" rx="14"/><rect x="14" y="-19" width="44" height="38" rx="14"/><path d="M-14 -4 Q0 -12 14 -4"/></g>` },
     sunglasses: { layer: 'face', svg: `<g fill="${INK}"><path d="M-62 -16 H-10 Q-8 18 -36 18 Q-62 16 -62 -16Z"/><path d="M62 -16 H10 Q8 18 36 18 Q62 16 62 -16Z"/><rect x="-12" y="-16" width="24" height="6" rx="3"/></g><path d="M-52 -10 L-40 -10" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".55"/>` },
@@ -145,7 +152,7 @@
     snipping:    { eyes: 'short',  mouth: 'flat',   motion: 'still', effect: 'snip', color: '#b7bcc8' },
     drawing:     { eyes: 'caret',  mouth: 'smile',  motion: 'type', effect: 'scribble', badge: 'pencil', look: [0.6, 0.55], color: '#ff9f6b' },
     upload:      { eyes: 'wide',   mouth: 'o',      motion: 'gulp', effect: 'drop', color: '#3fd6c4' },
-    done:        { eyes: 'happy',  mouth: 'smile',  motion: 'click', badge: 'check', blush: 0.6, color: '#4cd497', effect: 'sparkle' },
+    done:        { eyes: 'happy',  mouth: 'smile',  motion: 'click', badge: 'check', blush: 0.6, color: '#4cd497', effect: 'sparkle', look: [0, 0] }, // (a centred smile when an answer is ready)
     proud:       { eyes: 'star',   mouth: 'grin',   motion: 'hop', badge: 'star', effect: 'sparkle', blush: 0.8, color: '#ffcf5a' },
     encourage:   { eyes: 'happy',  mouth: 'smile',  motion: 'nod', badge: 'heart', blush: 0.5, color: '#ff9fb6' },
     oops:        { eyes: 'x',      mouth: 'wobble', motion: 'shake', badge: 'ban', color: '#ff5a5f' },
@@ -153,6 +160,7 @@
     sleeping:    { eyes: 'closed', mouth: 'none',   motion: 'sleep', badge: 'z', dim: 0.12, color: '#7d8bbd' },
     love:        { eyes: 'heart',  mouth: 'smile',  motion: 'float', badge: 'heart', blush: 1, color: '#ff7aa8', effect: 'hearts' },
     surprised:   { eyes: 'wide',   mouth: 'o',      motion: 'jump', color: '#ffd166' },
+    puzzled:     { eyes: 'wide',   mouth: 'o',      motion: 'tilt', blush: 0.9, look: [0.3, -0.3], color: '#ffb8c8' }, // (v231) she couldn't find the answer: wide eyes, a stronger blush, no ⊘
     wink:        { eyes: 'wink',   mouth: 'smile',  motion: 'tilt', blush: 0.5, color: '#ffb48a' },
     dizzy:       { eyes: 'spiral', mouth: 'wobble', motion: 'wobble', color: '#ff8ad8' },
     sad:         { eyes: 'sad',    mouth: 'flat',   motion: 'droop', color: '#8fa3c8' },
@@ -207,6 +215,7 @@
             <g class="cb-mouth" transform="translate(216 276)"></g>
           </g>
           <g class="cb-acc-face" transform="translate(216 236) scale(1.25)"></g>
+          <g class="cb-acc-tail"></g>
           <g class="cb-acc-top" transform="translate(${HAT.x} ${HAT.y}) rotate(${HAT.angle}) scale(${HAT.scale})"></g>
           <g class="cb-badge" transform="translate(372 196)" opacity="0">
             <circle r="24" fill="#fff" stroke="${INK}" stroke-width="5"/>
@@ -222,7 +231,7 @@
       eyeL: q('.cb-eye-l'), eyeR: q('.cb-eye-r'), eyeLin: q('.cb-eye-l .cb-eye-in'), eyeRin: q('.cb-eye-r .cb-eye-in'),
       mouth: q('.cb-mouth'), blush: q('.cb-blush'), hl: q('.cb-hl'), badge: q('.cb-badge'), badgeIn: q('.cb-badge-in'),
       glow: q('.cb-glow'), stops: [q('.cb-s0'), q('.cb-s1'), q('.cb-s2')], glowStops: [q('.cb-g0'), q('.cb-g1')],
-      accTop: q('.cb-acc-top'), accFace: q('.cb-acc-face'), accNeck: q('.cb-acc-neck'), fxBack: q('.cb-fx-back'), fxFront: q('.cb-fx-front'), ground: q('.cb-ground'),
+      accTop: q('.cb-acc-top'), accFace: q('.cb-acc-face'), accNeck: q('.cb-acc-neck'), accTail: q('.cb-acc-tail'), fxBack: q('.cb-fx-back'), fxFront: q('.cb-fx-front'), ground: q('.cb-ground'),
     };
     parts.accNeck.setAttribute('transform', 'translate(214 330) rotate(-6)');
 
@@ -270,21 +279,24 @@
       if (kind === 'scribble') parts.fxBack.innerHTML = `<path class="cb-scrib" d="M330 410 C350 380 372 430 392 400 S430 380 446 404" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>`;
       if (kind === 'sparkle') parts.fxFront.innerHTML = [[96, 70, 1], [420, 150, 0.8], [436, 330, 0.7], [70, 300, 0.9], [300, 40, 0.6]].map(([x, y, s], i) => `<path class="cb-sp" data-i="${i}" transform="translate(${x} ${y}) scale(${s})" d="M0 -16 C2 -4 4 -2 16 0 C4 2 2 4 0 16 C-2 4 -4 2 -16 0 C-4 -2 -2 -4 0 -16Z" fill="${st.color || accent}"/>`).join('');
       if (kind === 'highlight') parts.hl.setAttribute('opacity', '.38');
-      if (kind === 'dust') {
+      if (kind === 'dust' && !(reduced() || window.CASSIE_LITE)) { // (the hello ring: not with Reduce Motion or in Lite mode)
         let dots = '';
-        for (let i = 0; i < 90; i++) { const a = (i / 90) * Math.PI * 2 + Math.random() * 0.2, r = 190 + Math.random() * 46; dots += `<circle class="cb-dust" cx="${(236 + Math.cos(a) * r).toFixed(1)}" cy="${(246 + Math.sin(a) * r * 0.86).toFixed(1)}" r="${(1.2 + Math.random() * 2.4).toFixed(1)}" fill="${st.color || INK}" data-p="${Math.random().toFixed(2)}"/>`; }
+        for (let i = 0; i < 90; i++) {
+          const a = (i / 90) * Math.PI * 2 + Math.random() * 0.2, k = Math.random(), r = 190 + k * 46; // k: 0 beside her, 1 at the outside
+          dots += `<circle class="cb-dust" cx="${(236 + Math.cos(a) * r).toFixed(1)}" cy="${(246 + Math.sin(a) * r * 0.86).toFixed(1)}" r="${(3.4 - k * 2).toFixed(1)}" fill="${mix(DUST_NEAR, DUST_FAR, k)}" stroke="${DUST_EDGE}" stroke-width="${(0.9 - k * 0.5).toFixed(2)}" stroke-opacity=".7" data-p="${Math.random().toFixed(2)}" data-k="${k.toFixed(2)}"/>`;
+        }
         parts.fxBack.innerHTML = `<g class="cb-dustring">${dots}</g>`;
       }
       if (kind === 'hearts') parts.fxFront.innerHTML = [0, 1, 2, 3].map((i) => `<path class="cb-float" data-i="${i}" d="M0 9 C-14 0 -9 -13 0 -6 C9 -13 14 0 0 9Z" fill="${st.color}" stroke="${INK}" stroke-width="3"/>`).join('');
       if (kind === 'notes') parts.fxFront.innerHTML = [0, 1, 2].map((i) => `<g class="cb-float" data-i="${i}"><path d="M4 -16 V8 M4 -16 L16 -20 V2" fill="none" stroke="${st.color || INK}" stroke-width="5" stroke-linecap="round"/><ellipse cx="-1" cy="9" rx="7" ry="5.5" fill="${st.color || INK}"/><ellipse cx="11" cy="3" rx="7" ry="5.5" fill="${st.color || INK}"/></g>`).join('');
       if (kind === 'drop') parts.fxFront.innerHTML = `<g class="cb-doc"><path d="M-22 -28 H10 L22 -16 V28 H-22 Z" fill="#fff" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M10 -28 V-16 H22" fill="none" stroke="${INK}" stroke-width="4"/><rect x="-14" y="-6" width="28" height="10" rx="3" fill="#d8343c"/><rect x="-14" y="9" width="20" height="5" rx="2.5" fill="${INK}" opacity=".5"/></g>`;
     }
+    // one accessory, or two joined with + (a hat and the exam tassel: 'santa+tassel')
     function setAccessoryNow(name) {
-      accessory = ACC[name] ? name : null; stale = true;
-      parts.accTop.innerHTML = ''; parts.accFace.innerHTML = ''; parts.accNeck.innerHTML = '';
-      if (!accessory) return;
-      const a = ACC[accessory];
-      (a.layer === 'face' ? parts.accFace : a.layer === 'neck' ? parts.accNeck : parts.accTop).innerHTML = a.svg;
+      const list = accList(name);
+      accessory = list.length ? list.join('+') : null; stale = true;
+      parts.accTop.innerHTML = ''; parts.accFace.innerHTML = ''; parts.accNeck.innerHTML = ''; parts.accTail.innerHTML = '';
+      list.forEach((n) => { const a = ACC[n]; (a.layer === 'face' ? parts.accFace : a.layer === 'neck' ? parts.accNeck : a.layer === 'tail' ? parts.accTail : parts.accTop).innerHTML = a.svg; });
     }
 
     function setState(name) {
@@ -361,6 +373,7 @@
       if (deep && deep.live) return; // (the 3D Cassie draws her: the flat one only keeps time)
       const d = bodyPath(tail);
       parts.fill.setAttribute('d', d); parts.line.setAttribute('d', d); parts.inner.setAttribute('d', d); parts.clip.setAttribute('d', d);
+      if (parts.accTail.firstChild) parts.accTail.setAttribute('transform', `rotate(${tail} ${TAIL_PIVOT[0]} ${TAIL_PIVOT[1]}) translate(${TAIL_TIP[0]} ${TAIL_TIP[1]})`);
       parts.all.setAttribute('transform', `translate(${dx} ${bob}) rotate(${rot} 240 400) translate(240 400) scale(${sx} ${sy}) translate(-240 -400)`);
       parts.all.style.opacity = st.dim ? String(1 - st.dim) : '1';
       parts.ground.setAttribute('rx', String(120 * (1 + bob / 160)));
@@ -373,7 +386,7 @@
       if (st.effect === 'search') { const l = svg.querySelector('.cb-lens'); if (l) l.setAttribute('transform', `translate(${226 + Math.sin(t * 2.6) * 70} ${236 + Math.cos(t * 5.2) * 10})`); }
       if (st.effect === 'scribble') { const s = svg.querySelector('.cb-scrib'); if (s) s.setAttribute('stroke-dashoffset', String(100 - ((t * 45) % 130))); }
       if (st.effect === 'sparkle') svg.querySelectorAll('.cb-sp').forEach((s) => { const i = +s.dataset.i; const k = Math.max(0, Math.sin(t * 4 + i * 1.3)); s.style.opacity = String(k); });
-      if (st.effect === 'dust') { const g = svg.querySelector('.cb-dustring'); if (g) g.setAttribute('transform', `rotate(${(t * 9) % 360} 236 246)`); svg.querySelectorAll('.cb-dust').forEach((c) => c.setAttribute('opacity', String(0.25 + 0.75 * Math.abs(Math.sin(t * 2 + c.dataset.p * 9))))); }
+      if (st.effect === 'dust') { const g = svg.querySelector('.cb-dustring'); if (g) g.setAttribute('transform', `rotate(${(t * 9) % 360} 236 246)`); svg.querySelectorAll('.cb-dust').forEach((c) => c.setAttribute('opacity', String((1 - 0.75 * c.dataset.k) * (0.3 + 0.7 * Math.abs(Math.sin(t * 2 + c.dataset.p * 9)))))); } // (further out: fainter, fading away)
       if (st.effect === 'hearts' || st.effect === 'notes') svg.querySelectorAll('.cb-float').forEach((n) => { const i = +n.dataset.i; const p = ((t * 0.45) + i / (st.effect === 'notes' ? 3 : 4)) % 1; n.setAttribute('transform', `translate(${(st.effect === 'notes' ? 380 : 330) + Math.sin(p * 6 + i) * 24 - i * 18} ${200 - p * 190}) scale(${(st.effect === 'notes' ? 1.4 : 1.2) * (1 - p * 0.3)})`); n.style.opacity = String(Math.min(1, (1 - p) * 2.2)); });
       if (st.effect === 'drop') { const d = svg.querySelector('.cb-doc'); if (d) { const ph = (ts % 2.2); const p = Math.min(1, ph / 0.95); const y = -30 + p * p * 190; const sc = ph < 0.95 ? 1.4 : Math.max(0, 1.4 - (ph - 0.95) * 4); d.setAttribute('transform', `translate(232 ${y}) rotate(${(1 - p) * -14}) scale(${sc})`); d.style.opacity = ph < 1.3 ? '1' : '0'; } }
       if (parts.glow) { const c = st.color; parts.glow.setAttribute('opacity', c ? String(0.75 + 0.25 * Math.sin(t * 2.4)) : '0.25'); }
@@ -495,20 +508,31 @@
 
   // Seasonal outfits for the Philippines: a holiday's own accessory on its days, the long
   // "ber months" Christmas season, Halloween week, and the New Year.
-  function seasonal(d = new Date()) {
-    const h = holiday(d);
-    if (h) return h.acc;
-    const { m, day } = phDate(d);
-    if (m === 10 && day >= 25) return 'witch';
-    if (m === 12 || (m === 11 && day >= 15)) return 'santa';
-    if (m === 1 && day <= 2) return 'party';
-    return null;
+  // (v231) the school calendar in the Philippines [uncertain]: DepEd's school year ends with recognition and
+  // graduation rites from late March to mid April; college graduations run late May to early June; first
+  // semester finals are in early December and second semester finals in early May. [month, first day, last day]
+  const SEM_END = [[3, 20, 31], [4, 1, 15], [5, 20, 31], [6, 1, 10]]; // [uncertain] grad cap
+  const EXAM_SEASON = [[12, 1, 19], [5, 1, 19]]; // [uncertain] the tassel on her tail
+  const inRanges = (list, m, day) => list.some(([mm, a, b]) => m === mm && day >= a && day <= b);
+  // Seasonal outfits for the Philippines: a holiday's own accessory on its days, the end of the school year
+  // (or a graduation on the student's calendar) gets the grad cap, the long "ber months" Christmas season,
+  // Halloween week and the New Year; exam season (or a quiz or exam coming up) adds the tassel to her tail.
+  // own: { exam: true, grad: true } from the student's own calendar.
+  function seasonal(d = new Date(), own = {}) {
+    const h = holiday(d), { m, day } = phDate(d);
+    let top = h ? h.acc : null;
+    if (!top && (own.grad || inRanges(SEM_END, m, day))) top = 'gradcap';
+    if (!top && m === 10 && day >= 25) top = 'witch';
+    if (!top && (m === 12 || (m === 11 && day >= 15))) top = 'santa';
+    if (!top && m === 1 && day <= 2) top = 'party';
+    const tail = own.exam || inRanges(EXAM_SEASON, m, day) ? 'tassel' : null;
+    return [top, tail].filter(Boolean).join('+') || null;
   }
 
   window.CassieBot = {
-    create, seasonal, holiday, failed3d,
+    create, seasonal, holiday, failed3d, SEM_END, EXAM_SEASON,
     STATES: Object.keys(STATES), COLORS: Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color || null])), ACCESSORIES: Object.keys(ACC),
-    construction: { POINTER, TAIL_PIVOT, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
-    defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK }, // (the 3D Cassie draws her face from these)
+    construction: { POINTER, TAIL_PIVOT, TAIL_TIP, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
+    defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK, DUST: { near: DUST_NEAR, far: DUST_FAR } }, // (the 3D Cassie draws her face from these)
   };
 })();

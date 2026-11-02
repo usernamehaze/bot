@@ -478,7 +478,7 @@ function set3D(name) {
    Cassie's only look. Her moods (set3D takes the older mood names), plus her own: reading,
    searching, highlighting, drawing, busy (hourglass), oops (⊘). */
 let bot2d = null, bot2dTimer = null;
-const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
+const LOOK_3D_TO_2D = { neutral: 'idle', thinking: 'thinking', happy: 'greeting', encouraging: 'encourage', celebratory: 'proud', curious: 'surprised', sleep: 'sleeping', walk: 'idle', peek: 'wink', angry: 'oops', puzzled: 'puzzled', dizzy: 'dizzy', typing: 'writing', sad: 'sad' };
 const EMOTE_TO_2D = { 'emote-happy': 'greeting', 'emote-love': 'love', 'emote-star': 'proud', 'emote-surprised': 'surprised', 'emote-wink': 'wink', 'emote-sleepy': 'sleeping', 'emote-focused': 'thinking', 'emote-cool': 'wink', 'emote-sad': 'sad', 'emote-dizzy': 'dizzy' };
 const OUTFIT_TO_2D = { classic: null, professor: 'glasses', graduate: 'gradcap', coder: 'pencil', heart: 'bow' };
 // Cursor Cassie is everyone's Cassie. (The 3D felt Cassie was removed from Settings; an old
@@ -488,17 +488,20 @@ function wantsCursorCassie() {
   return true;
 }
 // Set Cursor Cassie's mood; with ms, she goes back to idle (or thinking) afterwards.
+// (v231) a mood set for a while (an error's puzzled face, an answer's smile) isn't undone by going idle in the same moment
+let botHoldUntil = 0;
 function botMood(name, ms) {
   if (name && islandBusy && ['reading', 'searching', 'drawing', 'busy', 'highlighting'].includes(name)) islandShow(name);
   if (!bot2d || !name) return;
   clearTimeout(bot2dTimer);
+  botHoldUntil = ms ? Date.now() + ms : 0;
   bot2d.setState(name);
   if (ms) bot2dTimer = setTimeout(() => bot2d && bot2d.setState(mascot && mascot.classList.contains('thinking') ? 'thinking' : 'idle'), ms);
 }
 (function startCursorCassie() {
   const root = document.getElementById('cassie-2d-root');
   if (!root || !window.CassieBot || !wantsCursorCassie()) return;
-  bot2d = window.CassieBot.create(root, { accent: accentHex() || '#d8343c', accessory: window.CassieBot.seasonal() });
+  bot2d = window.CassieBot.create(root, { accent: accentHex() || '#d8343c', accessory: cassieSeasonal() });
   if (mascot) mascot.classList.add('has2d');
   // her eyes follow your finger / mouse
   const follow = (x, y) => {
@@ -689,7 +692,7 @@ function makeIsleCard(doc, opts = {}) {
       }
       body.scrollTop = 0;
       const failed = bubble && bubble.classList.contains('bubble-error');
-      api.go('ans', failed ? 'That didn’t work' : 'Here you go', failed ? 'oops' : 'proud');
+      api.go('ans', failed ? 'That didn’t work' : 'Here you go', failed ? 'puzzled' : 'proud');
     },
     error(msg) { $('.isle-msg').textContent = msg; api.go('err', 'Hmm, I can’t open that'); },
     close() {
@@ -837,10 +840,22 @@ if (isleMain) islandEl.after(isleMain.el);
 //   Student (default) → her classic fluffy felt · a working professional → the suit & beret
 //   Research / Web → cap & gown · Quiz me → thick glasses · Talk → the felt heart
 let taskOutfit = null; // 'graduate' while a Research / Web answer is up; the next plain message clears it
+// (v231) her seasonal outfit, from the date and the student's own calendar: a quiz or exam in the next
+// 3 days (calendar or exam plan) adds the tassel to her tail; a graduation on it (yesterday to 3 days
+// ahead) is the grad cap. (Read straight from state: this runs before the calendar's helpers exist.)
+function cassieSeasonal() {
+  if (!window.CassieBot) return null;
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), add = (n) => new Date(Date.parse(today + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const soon = (day, from, to) => !!day && day >= add(from) && day <= add(to);
+  const items = (Array.isArray(state.calItems) ? state.calItems : []).filter((x) => x && !x.gone && x.day);
+  const exam = items.some((x) => (x.label === 'quiz' || x.label === 'exam') && soon(x.day, 0, 3)) || (Array.isArray(state.exams) ? state.exams : []).some((e) => e && !e.closed && soon(e.date, 0, 3));
+  const grad = items.some((x) => /graduat/i.test(`${x.other || ''} ${x.note || ''}`) && soon(x.day, -1, 3));
+  try { return window.CassieBot.seasonal(new Date(), { exam, grad }); } catch (e) { return null; }
+}
 function dressCassie() {
   const base = workMode() ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
-  if (bot2d) bot2d.setAccessory(outfit === 'classic' ? window.CassieBot.seasonal() : OUTFIT_TO_2D[outfit]);
+  if (bot2d) bot2d.setAccessory(outfit === 'classic' ? cassieSeasonal() : OUTFIT_TO_2D[outfit]);
 }
 
 function syncAudience() { state.audience = workMode() ? 'pro' : 'student'; } // (the old switch's choice, undone)
@@ -850,7 +865,8 @@ function setCursorMode(mode) {
   cursorState = mode;
   cursorEl.classList.toggle('thinking', mode === 'thinking');
   if (mascot) mascot.classList.toggle('thinking', mode === 'thinking');
-  set3D(mode === 'thinking' ? 'thinking' : 'neutral');
+  if (mode === 'thinking') { botHoldUntil = 0; set3D('thinking'); }
+  else if (Date.now() >= botHoldUntil) set3D('neutral'); // (keeps the puzzled face or the smile that was just set)
   if (mode === 'thinking') { islandBusy = true; islandShow('thinking'); }
   else if (islandBusy) { islandBusy = false; if (Date.now() > islandErrUntil) islandShow('done', 'Done', 1600); }
 }
@@ -2551,7 +2567,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=230'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=231'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 // the course's lessons, in order: the topics they picked to start with, then Prof Ed, the major, Gen Ed
@@ -2764,7 +2780,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=230').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=231').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3509,7 +3525,7 @@ function calSave(item) {
   item.at = Date.now();
   const list = state.calItems = Array.isArray(state.calItems) ? state.calItems : [];
   const i = list.findIndex((x) => x.id === item.id); if (i >= 0) list[i] = item; else list.push(item);
-  calTidy(); save(); calRefresh();
+  calTidy(); save(); calRefresh(); dressCassie(); // (a quiz or a graduation on the calendar can change her outfit)
 }
 function calDelete(id) {
   const it = (state.calItems || []).find((x) => x.id === id); if (!it) return;
@@ -5949,9 +5965,9 @@ function reportAuto(where, message) {
 function renderError(err, retry, prefix) {
   reportAuto('chat', String((err && err.message) || err || '').slice(0, 300));
   const busyErr = /limit|busy|wait/i.test(errorText(err, prefix));
-  botMood(busyErr ? 'busy' : 'oops', 3000);
+  botMood(busyErr ? 'busy' : 'puzzled', 3000); // (v231) a puzzled face, not a ⊘: a human moment, not a technical failure
   islandErrUntil = Date.now() + 3000;
-  islandShow(busyErr ? 'busy' : 'oops', busyErr ? 'Very busy. Try again soon' : 'That didn’t work', 3000);
+  islandShow(busyErr ? 'busy' : 'puzzled', busyErr ? 'Very busy. Try again soon' : 'That didn’t work', 3000);
   const b = renderMessage('assistant', errorText(err, prefix));
   b.classList.add('error');
   // out of today's free questions: the way to carry on, right here
@@ -6592,7 +6608,7 @@ async function runResearch(topic) {
   } catch (e) {
     typing.remove();
     renderMessage('assistant', CassieErrors.say('research_unreachable')).classList.add('error');
-    setCursorMode('idle');
+    botMood('puzzled', 3000); setCursorMode('idle');
     return;
   }
   typing.remove();
@@ -6601,7 +6617,7 @@ async function runResearch(topic) {
     state.messages.push({ role: 'assistant', content: msg });
     save();
     renderMessage('assistant', msg);
-    setCursorMode('idle');
+    botMood('puzzled', 3000); setCursorMode('idle'); // (she couldn't find any)
     return;
   }
 
@@ -6645,7 +6661,7 @@ async function runResearch(topic) {
     save();
     const bubble = renderMessage('assistant', reply);
     addTextDownload(bubble, reply);
-    setCursorMode('idle');
+    botMood('done', 1600); setCursorMode('idle'); // (the answer is ready: a centred smile, then idle)
   } catch (err) {
     typing.remove();
     renderError(err);
@@ -6740,7 +6756,7 @@ async function runWebCheck(text) {
     save();
     const bubble = renderMessage('assistant', out);
     addTextDownload(bubble, out);
-    setCursorMode('idle');
+    botMood('done', 1600); setCursorMode('idle'); // (the answer is ready: a centred smile, then idle)
   } catch (err) {
     typing.remove();
     renderError(err);
@@ -7376,7 +7392,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=230');
+      exploreMod = await import('./explore/cell3d.js?v=231');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7426,7 +7442,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=230');
+      labsMod = await import('./labs/labs.js?v=231');
       islandRest();
     }
     labsMod.open({
@@ -9268,10 +9284,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=230').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=231').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=230', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=231', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9411,6 +9427,8 @@ function frOnboard(at = 0) {
       <button type="button" class="fr-skip">Skip for now</button>
     </div>
     <div class="fr-mid">
+      ${at === 0 ? `<div class="fr-guide" aria-hidden="true"><div class="fr-guide-bot"></div><svg class="fr-ink" viewBox="0 0 300 64" preserveAspectRatio="xMinYMid meet"><text class="fr-ink-name" x="6" y="46"></text></svg></div>` : ''}
+      ${at === 2 ? `<div class="fr-guide" aria-hidden="true"><div class="fr-guide-bot"></div><svg class="fr-card-draw" viewBox="0 0 124 80"><rect class="frc-edge" x="4" y="4" width="116" height="72" rx="10" pathLength="100"/><path class="frc-line frc-l1" d="M20 28 H100" pathLength="100"/><path class="frc-line frc-l2" d="M20 42 H88" pathLength="100"/><path class="frc-line frc-l3" d="M20 56 H66" pathLength="100"/></svg></div>` : ''}
       <h1 class="fr-h">${Q.h}</h1>
       ${Q.sub ? `<p class="fr-sub">${Q.sub}</p>` : ''}
       ${Q.body}
@@ -9430,7 +9448,26 @@ function frOnboard(at = 0) {
   };
   mark();
   const typed = () => { if (f.name) a.name = f.name.value.trim(); if (f.age) a.age = f.age.value; };
-  f.addEventListener('input', () => { typed(); say(''); keep(); });
+  // (v231) Cassie guides the setup: she writes your name as you type it, and draws your first study card.
+  // Only decoration: it never blocks typing or Next; with Reduce Motion or in Lite mode the finished drawing just shows.
+  const guide = el.querySelector('.fr-guide'), still = reduceMotion() || !!window.CASSIE_LITE;
+  if (guide) {
+    guide.dataset.anim = still ? 'still' : 'run';
+    try { window.CassieBot.create(guide.querySelector('.fr-guide-bot'), { state: at === 0 ? 'writing' : 'drawing', flat: true }); } catch (e) { /* the drawing still works */ } // (the small flat Cassie: at once, no 3D to load here)
+    if (at === 2 && !still) guide.classList.add('fr-draw-go');
+  }
+  const ink = el.querySelector('.fr-ink-name');
+  let inkTimer = 0;
+  const writeName = (now) => {
+    if (!ink) return;
+    const n = (f.name && f.name.value.trim()) || '';
+    ink.textContent = n;
+    clearTimeout(inkTimer);
+    if (still || !n) { guide.classList.remove('fr-ink-go'); return; }
+    inkTimer = setTimeout(() => { guide.classList.remove('fr-ink-go'); void guide.getBoundingClientRect(); guide.classList.add('fr-ink-go'); }, now ? 0 : 280); // (she writes it once you pause)
+  };
+  writeName(true);
+  f.addEventListener('input', () => { typed(); say(''); keep(); writeName(); });
   f.addEventListener('click', (e) => {
     const w = e.target.closest('[data-who]'), g = e.target.closest('[data-goal]'), s = e.target.closest('[data-style]');
     if (w) a.who = w.dataset.who;
@@ -10008,7 +10045,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
       <div class="auth-hero"></div>
     </div>`;
   document.body.appendChild(page);
-  try { window.CassieBot.create(page.querySelector('.auth-hero'), { state: 'greeting', glow: true, pokeable: true, accessory: window.CassieBot.seasonal() }); } catch (e) { /* no Cassie drawing: the words still work */ }
+  try { window.CassieBot.create(page.querySelector('.auth-hero'), { state: 'greeting', glow: true, pokeable: true, accessory: cassieSeasonal() }); } catch (e) { /* no Cassie drawing: the words still work */ }
   const f = page.querySelector('form');
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');

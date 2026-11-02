@@ -2250,6 +2250,22 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-big { width: 100%; border: 0; border-bottom: 2px solid var(--border); background: transparent; color: var(--primary-ink); font: inherit; font-size: 2rem; font-weight: 800; text-align: center; padding: 8px 4px; border-radius: 0; }
 .fr-big:focus, .fr-big:focus-visible { outline: none; border-bottom-color: var(--primary); }
 .fr-big::placeholder { color: var(--muted); font-weight: 700; }
+/* (v231) Cassie guides the setup: she writes your name, and draws your first study card (decoration only) */
+.fr-guide { --fr-ink: var(--primary-ink); display: flex; align-items: center; justify-content: center; gap: 10px; height: 64px; pointer-events: none; }
+.fr-guide-bot { width: 56px; height: 56px; flex: none; }
+.fr-guide-bot .cassie-bot, .fr-guide-bot .cassie-3d { width: 100%; height: 100%; display: block; }
+.fr-ink { width: min(240px, 60vw); height: 56px; overflow: visible; }
+.fr-ink-name { font: 600 40px/1 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive; fill: var(--fr-ink); stroke: var(--fr-ink); stroke-width: .8; }
+.fr-ink-go .fr-ink-name { stroke-dasharray: 600; stroke-dashoffset: 600; fill-opacity: 0; animation: frInk 1.4s ease-out forwards; }
+@keyframes frInk { 70% { stroke-dashoffset: 0; fill-opacity: 0; } 100% { stroke-dashoffset: 0; fill-opacity: 1; } }
+.fr-card-draw { width: 96px; height: 62px; overflow: visible; }
+.fr-card-draw .frc-edge, .fr-card-draw .frc-line { fill: none; stroke: var(--fr-ink); stroke-linecap: round; stroke-linejoin: round; }
+.fr-card-draw .frc-edge { stroke-width: 3; } .fr-card-draw .frc-line { stroke-width: 4; opacity: .7; }
+.fr-draw-go .frc-edge, .fr-draw-go .frc-line { stroke-dasharray: 100; stroke-dashoffset: 100; animation: frDraw .8s ease-out forwards; }
+.fr-draw-go .frc-l1 { animation-delay: .8s; } .fr-draw-go .frc-l2 { animation-delay: 1.05s; } .fr-draw-go .frc-l3 { animation-delay: 1.3s; }
+@keyframes frDraw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .fr-ink-go .fr-ink-name, .fr-draw-go .frc-edge, .fr-draw-go .frc-line { animation: none; stroke-dashoffset: 0; fill-opacity: 1; } }
+@media (max-height: 700px) { .fr-guide { height: 48px; } .fr-guide-bot { width: 44px; height: 44px; } }
 .fr-select { font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 14px; padding: 13px 14px; min-height: 52px; background: var(--surface); color: var(--text); text-align: left; }
 .fr-select:focus { border-color: var(--primary); }
 .fr-q2 { display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: .9rem; font-weight: 650; color: var(--muted); margin-top: 6px; }

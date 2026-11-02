@@ -176,9 +176,11 @@ function matrixOf(tf, m) {
   }
   return m;
 }
-const ACC_TF = { top: () => new DOMMatrix().translateSelf(K.HAT.x, K.HAT.y).rotateSelf(K.HAT.angle).scaleSelf(K.HAT.scale), face: () => new DOMMatrix().translateSelf(216, 236).scaleSelf(1.25), neck: () => new DOMMatrix().translateSelf(214, 330).rotateSelf(-6) };
+const ACC_TF = { top: () => new DOMMatrix().translateSelf(K.HAT.x, K.HAT.y).rotateSelf(K.HAT.angle).scaleSelf(K.HAT.scale), face: () => new DOMMatrix().translateSelf(216, 236).scaleSelf(1.25), neck: () => new DOMMatrix().translateSelf(214, 330).rotateSelf(-6), tail: () => new DOMMatrix().translateSelf(...K.TAIL_TIP) }; // (tail: the exam tassel at the end of her tail)
 const accCache = new Map();
 function accessory(name) {
+  // two at once ('santa+tassel'): each one built on its own, worn together
+  if (String(name).includes('+')) { const parts = String(name).split('+').map(accessory).filter(Boolean); if (!parts.length) return null; const both = new THREE.Group(); parts.forEach((x) => both.add(x)); return both; }
   const a = D.ACC[name];
   if (!a) return null;
   if (!accCache.has(name)) {
@@ -227,7 +229,8 @@ function effect(kind, color, accent) {
   g.userData.kind = kind;
   const col = new THREE.Color(color || '#ffffff'), ink = M(INK), add = (m) => { g.add(m); return m; };
   const heart = () => { const s = new THREE.Shape(); s.moveTo(0, -0.09); s.bezierCurveTo(-0.2, 0.03, -0.12, 0.17, 0, 0.07); s.bezierCurveTo(0.12, 0.17, 0.2, 0.03, 0, -0.09); return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 }); };
-  if (kind === 'dust') for (let i = 0; i < 46; i++) { const a = i / 46 * Math.PI * 2, r = (190 + (i * 37 % 46)) / U, d = add(new THREE.Mesh(ball, M(col.clone().lerp(new THREE.Color(1, 1, 1), 0.3)))); d.position.set(Math.cos(a) * r, Math.sin(a) * r, -0.3); d.scale.setScalar(0.012 + (i % 3) * 0.006); }
+  // (v231) the hello ring: white beside her, soft blush pink and smaller further out
+  if (kind === 'dust') { const near = new THREE.Color(D.DUST.near), far = new THREE.Color(D.DUST.far); for (let i = 0; i < 46; i++) { const k = (i * 37 % 46) / 46, a = i / 46 * Math.PI * 2, r = (190 + k * 46) / U, d = add(new THREE.Mesh(ball, M(near.clone().lerp(far, k), { emissive: near.clone().lerp(far, k), emissiveIntensity: 0.25 }))); d.position.set(Math.cos(a) * r, Math.sin(a) * r, -0.3 - k * 0.15); d.scale.setScalar(0.022 - k * 0.012); } }
   if (kind === 'lines') for (let i = 0; i < 3; i++) { const l = add(new THREE.Mesh(box, M(0x8a8f9c))); l.userData.i = i; l.position.set(X(352), Y(336 + i * 24), 0.1); }
   if (kind === 'scan') { const pg = new THREE.Group(); pg.position.set(X(373), Y(354), 0.05); pg.rotation.z = -0.14; g.add(pg); const edge = new THREE.Mesh(box, M(0x9a9488)); edge.scale.set(0.53, 0.67, 0.015); edge.position.z = -0.006; pg.add(edge); const paper = new THREE.Mesh(box, M(0xffffff)); paper.scale.set(0.5, 0.64, 0.02); pg.add(paper); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(box, M(0x9a9488)); l.scale.set(0.34, 0.025, 0.01); l.position.set(-0.03, 0.2 - i * 0.1, 0.015); pg.add(l); } const bar = new THREE.Mesh(box, M(color || 0x4fd1b5, { emissive: new THREE.Color(color || 0x4fd1b5), emissiveIntensity: 0.4 })); bar.scale.set(0.46, 0.03, 0.02); bar.position.z = 0.02; bar.userData.bar = true; pg.add(bar); }
   if (kind === 'search') { const lens = new THREE.Group(); lens.userData.lens = true; const ring = new THREE.Mesh(torus, ink); ring.scale.set(0.2, 0.2, 0.25); lens.add(ring); const glass = new THREE.Mesh(new THREE.CircleGeometry(0.19, 32), M(0xffffff, { transparent: true, opacity: 0.3 })); lens.add(glass); const h = new THREE.Mesh(cyl, ink); h.scale.set(0.035, 0.24, 0.035); h.position.set(0.2, -0.2, 0); h.rotation.z = Math.PI / 4; lens.add(h); lens.position.z = R.FRONT + 0.15; add(lens); }
