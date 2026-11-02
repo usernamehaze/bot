@@ -97,7 +97,7 @@
   .csk-note code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em; }
   .csk-note[hidden] { display: none; }
   .csk-panel > :not(.csk-stage) { flex-shrink: 0; } /* (the bars above keep their size; only the drawing area gives way when the board is short) */
-  .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--sp-3, 12px); touch-action: none; }
+  .csk-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px; /* grid: the board measures its canvas against this frame */ touch-action: none; }
   .csk-board { position: relative; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
   .csk-board canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .csk-board canvas.csk-live { cursor: crosshair; touch-action: none; }
