@@ -231,6 +231,43 @@
         ['write', 'Writing', ['OET Writing: reading the case notes', 'OET Writing: the referral or discharge letter', 'OET Writing: tone layout and conciseness']],
         ['speak', 'Speaking', ['OET Speaking: starting the role-play', 'OET Speaking: explaining and reassuring', 'OET Speaking: the clinical communication criteria']],
       ] },
+    toefl: { name: 'TOEFL iBT', full: 'TOEFL iBT', intl: true, owner: 'TOEFL® and TOEFL iBT® are registered trademarks of ETS',
+      note: 'Since January 2026: Reading about 50 items in 30 minutes, Listening about 47 in 29, Writing 12 in 23 and Speaking 11 in 8. It adapts as you go, and each part is scored from 1 to 6.',
+      parts: [
+        ['read', 'Reading', ['TOEFL Reading: complete the words', 'TOEFL Reading: read in daily life', 'TOEFL Reading: read an academic passage']],
+        ['listen', 'Listening', ['TOEFL Listening: choose a response', 'TOEFL Listening: conversations and announcements', 'TOEFL Listening: academic talks']],
+        ['write', 'Writing', ['TOEFL Writing: build a sentence', 'TOEFL Writing: write an email', 'TOEFL Writing: the academic discussion']],
+        ['speak', 'Speaking', ['TOEFL Speaking: listen and repeat', 'TOEFL Speaking: take an interview']],
+      ] },
+    sat: { name: 'SAT', full: 'SAT', intl: true, owner: 'SAT® is a registered trademark of the College Board',
+      note: 'Reading and Writing has 54 questions in 64 minutes and Math has 44 in 70 minutes, each in two modules that adapt to you. Scored from 400 to 1600.',
+      parts: [
+        ['info', 'Information and Ideas', ['SAT: central ideas and details', 'SAT: evidence from texts and graphs', 'SAT: inferences']],
+        ['craft', 'Craft and Structure', ['SAT: words in context', 'SAT: text structure and purpose', 'SAT: connecting two texts']],
+        ['expr', 'Expression of Ideas', ['SAT: rhetorical synthesis', 'SAT: transitions']],
+        ['conv', 'Standard English Conventions', ['SAT: sentence boundaries', 'SAT: form structure and sense']],
+        ['alg', 'Algebra', ['SAT Math: linear equations and inequalities', 'SAT Math: systems of linear equations', 'SAT Math: linear functions and graphs']],
+        ['adv', 'Advanced Math', ['SAT Math: quadratics and polynomials', 'SAT Math: exponential functions', 'SAT Math: equivalent expressions']],
+        ['psda', 'Problem-Solving and Data Analysis', ['SAT Math: ratios rates and percentages', 'SAT Math: statistics and probability', 'SAT Math: data in tables and graphs']],
+        ['geo', 'Geometry and Trigonometry', ['SAT Math: area volume lines and angles', 'SAT Math: triangles and trigonometry', 'SAT Math: circles']],
+      ] },
+    jlpt: { name: 'JLPT', full: 'Japanese-Language Proficiency Test (JLPT)', intl: true, owner: 'The JLPT is run by the Japan Foundation and Japan Educational Exchanges and Services (JEES)',
+      levels: [['n5', 'N5'], ['n4', 'N4'], ['n3', 'N3'], ['n2', 'N2'], ['n1', 'N1']], levelQ: 'Which level are you taking? N5 is the easiest.',
+      note: 'Five levels, from N5 (the easiest) to N1. Every level tests language knowledge (vocabulary and grammar), reading and listening. N1, for example, is 110 minutes of knowledge and reading, then 55 of listening.',
+      parts: [
+        ['vocab', 'Vocabulary and kanji', ['JLPT: kanji readings and writing', 'JLPT: word meanings in context', 'JLPT: paraphrases and word usage']],
+        ['grammar', 'Grammar', ['JLPT: grammar forms', 'JLPT: building sentences', 'JLPT: grammar in a passage']],
+        ['read', 'Reading', ['JLPT Reading: short passages', 'JLPT Reading: longer passages', 'JLPT Reading: finding information']],
+        ['listen', 'Listening', ['JLPT Listening: task-based', 'JLPT Listening: key points', 'JLPT Listening: quick responses']],
+      ] },
+    eps: { name: 'EPS-TOPIK', full: 'EPS-TOPIK (Korean for the Employment Permit System)', intl: true, owner: 'EPS-TOPIK is run by HRD Korea (the Human Resources Development Service of Korea)',
+      note: 'For work in Korea under the Employment Permit System: reading and listening, all multiple choice, about 50 questions in all. Check HRD Korea’s latest notice for your country before the test.',
+      parts: [
+        ['basics', 'Korean basics', ['EPS-TOPIK: Hangeul and pronunciation', 'EPS-TOPIK: numbers time and money', 'EPS-TOPIK: greetings and daily expressions']],
+        ['read', 'Reading', ['EPS-TOPIK Reading: signs and pictures', 'EPS-TOPIK Reading: notices and short texts', 'EPS-TOPIK Reading: vocabulary and grammar']],
+        ['listen', 'Listening', ['EPS-TOPIK Listening: words and pictures', 'EPS-TOPIK Listening: short dialogues', 'EPS-TOPIK Listening: instructions at work']],
+        ['work', 'Life and work in Korea', ['EPS-TOPIK: workplace safety', 'EPS-TOPIK: tools and work instructions', 'EPS-TOPIK: Korean culture and manners']],
+      ] },
   };
   // an exam's areas, for its level (the Civil Service Exam's Professional or Subprofessional): [{ key, name, topics }]
   function boardParts(exam, level) {
