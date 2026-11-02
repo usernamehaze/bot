@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=232';
+import { MUSEUM } from './museum.js?v=233';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=232';
+import { LEVEL_LESSONS } from './level-lessons.js?v=233';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -93,7 +93,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=17', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=18', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }

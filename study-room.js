@@ -20,54 +20,54 @@
   @media (max-width: 700px) { .sr { top: auto; height: min(72%, calc(100% - 240px)); width: 100%; border-left: 0; border-top: 1px solid rgba(18,17,23,.08); border-radius: 20px 20px 0 0; } }
   /* wide screens: the board makes room for the panel, so its own buttons (Send to Cassie, Close, the colours) stay reachable */
   @media (min-width: 701px) { .csk-panel:has(> .sr:not([hidden])) { padding-right: min(380px, 100%); } }
-  .sr-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px 16px; }
+  .sr-head { display: flex; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-3, 12px) var(--sp-2, 8px) var(--sp-4, 16px); }
   .sr-head h3 { margin: 0; font-size: 17px; flex: 1; }
-  .sr-x, .sr-tm { min-height: 36px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; border-radius: 999px; padding: 0 12px; font: 600 13px/1 inherit; cursor: pointer; }
+  .sr-x, .sr-tm { min-height: 36px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; border-radius: 999px; padding: 0 var(--sp-3, 12px); font: 600 13px/1 inherit; cursor: pointer; }
   .sr-x { width: 36px; padding: 0; font-size: 18px; }
   .sr-tm.on { background: #1b1b1d; color: #fff; border-color: #1b1b1d; }
   .csk-dark .sr-tm.on { background: #fff; color: #111; }
-  .sr-tabs { display: flex; gap: 4px; padding: 0 12px 8px; overflow-x: auto; }
-  .sr-tabs button { flex: 1; min-height: 36px; border: 0; border-radius: 999px; background: rgba(127,127,127,.12); color: inherit; font: 600 13px/1 inherit; cursor: pointer; white-space: nowrap; padding: 0 10px; }
+  .sr-tabs { display: flex; gap: var(--sp-1, 4px); padding: 0 var(--sp-3, 12px) var(--sp-2, 8px); overflow-x: auto; }
+  .sr-tabs button { flex: 1; min-height: 36px; border: 0; border-radius: 999px; background: rgba(127,127,127,.12); color: inherit; font: 600 13px/1 inherit; cursor: pointer; white-space: nowrap; padding: 0 var(--sp-3, 12px); }
   .sr-tabs button[aria-selected="true"] { background: #1b1b1d; color: #fff; }
   .csk-dark .sr-tabs button[aria-selected="true"] { background: #fff; color: #111; }
-  .sr-tabs b { font-weight: 700; margin-left: 4px; font-size: 11px; opacity: .8; }
-  .sr-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 14px 14px; }
-  .sr-foot { padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid rgba(127,127,127,.18); display: flex; gap: 8px; }
-  .sr-foot input, .sr-foot textarea { flex: 1; min-width: 0; min-height: 40px; border: 1px solid rgba(127,127,127,.3); border-radius: 12px; padding: 9px 12px; background: rgba(255,255,255,.7); color: inherit; font: inherit; resize: none; }
+  .sr-tabs b { font-weight: 700; margin-left: var(--sp-1, 4px); font-size: 11px; opacity: .8; }
+  .sr-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-1, 4px) var(--sp-4, 16px) var(--sp-4, 16px); }
+  .sr-foot { padding: var(--sp-3, 12px) var(--sp-3, 12px) calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid rgba(127,127,127,.18); display: flex; gap: var(--sp-2, 8px); }
+  .sr-foot input, .sr-foot textarea { flex: 1; min-width: 0; min-height: 40px; border: 1px solid rgba(127,127,127,.3); border-radius: 12px; padding: var(--sp-2, 8px) var(--sp-3, 12px); background: rgba(255,255,255,.7); color: inherit; font: inherit; resize: none; }
   .csk-dark .sr-foot input, .csk-dark .sr-foot textarea { background: rgba(0,0,0,.25); }
-  .sr-btn { min-height: 40px; border: 0; border-radius: 12px; padding: 0 14px; background: #1b1b1d; color: #fff; font: 600 14px/1 inherit; cursor: pointer; white-space: nowrap; }
+  .sr-btn { min-height: 40px; border: 0; border-radius: 12px; padding: 0 var(--sp-4, 16px); background: #1b1b1d; color: #fff; font: 600 14px/1 inherit; cursor: pointer; white-space: nowrap; }
   .sr-btn.soft { background: rgba(127,127,127,.15); color: inherit; }
   .sr-btn:disabled { opacity: .5; cursor: default; }
   .csk-dark .sr-btn { background: #fff; color: #111; } .csk-dark .sr-btn.soft { background: rgba(255,255,255,.12); color: inherit; }
-  .sr-msg { margin: 8px 0; line-height: 1.4; } .sr-msg b { font-weight: 700; margin-right: 6px; }
+  .sr-msg { margin: var(--sp-2, 8px) 0; line-height: 1.4; } .sr-msg b { font-weight: 700; margin-right: var(--sp-2, 8px); }
   .sr-msg.me { text-align: right; } .sr-msg.me span { background: #1b1b1d; color: #fff; }
-  .sr-msg span { display: inline-block; max-width: 85%; padding: 8px 12px; border-radius: 16px; background: rgba(127,127,127,.13); text-align: left; white-space: pre-wrap; word-wrap: break-word; }
-  .sr-share { margin: 10px 0; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.75); border: 1px solid rgba(127,127,127,.2); }
+  .sr-msg span { display: inline-block; max-width: 85%; padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 16px; background: rgba(127,127,127,.13); text-align: left; white-space: pre-wrap; word-wrap: break-word; }
+  .sr-share { margin: var(--sp-3, 12px) 0; padding: var(--sp-3, 12px); border-radius: 16px; background: rgba(255,255,255,.75); border: 1px solid rgba(127,127,127,.2); }
   .csk-dark .sr-share { background: rgba(255,255,255,.06); }
-  .sr-share small { display: block; opacity: .65; font-size: 12px; margin-bottom: 4px; }
-  .sr-share p { margin: 6px 0 0; white-space: pre-wrap; line-height: 1.45; }
-  .sr-mini { min-height: 30px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; border-radius: 999px; padding: 0 10px; font: 600 12px/1 inherit; cursor: pointer; margin-top: 8px; }
-  .sr-empty { opacity: .7; line-height: 1.45; margin: 14px 2px; }
-  .sr-card { display: block; width: 100%; min-height: 150px; margin: 8px 0 10px; padding: 18px; border: 1px solid rgba(127,127,127,.25); border-radius: 18px; background: rgba(255,255,255,.85); color: inherit; font: inherit; text-align: center; cursor: pointer; }
+  .sr-share small { display: block; opacity: .65; font-size: 12px; margin-bottom: var(--sp-1, 4px); }
+  .sr-share p { margin: var(--sp-2, 8px) 0 0; white-space: pre-wrap; line-height: 1.45; }
+  .sr-mini { min-height: 30px; border: 1px solid rgba(127,127,127,.3); background: transparent; color: inherit; border-radius: 999px; padding: 0 var(--sp-3, 12px); font: 600 12px/1 inherit; cursor: pointer; margin-top: var(--sp-2, 8px); }
+  .sr-empty { opacity: .7; line-height: 1.45; margin: var(--sp-4, 16px) 2px; }
+  .sr-card { display: block; width: 100%; min-height: 150px; margin: var(--sp-2, 8px) 0 var(--sp-3, 12px); padding: var(--sp-4, 16px); border: 1px solid rgba(127,127,127,.25); border-radius: 18px; background: rgba(255,255,255,.85); color: inherit; font: inherit; text-align: center; cursor: pointer; }
   .csk-dark .sr-card { background: rgba(255,255,255,.07); }
-  .sr-card small { display: block; opacity: .6; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .sr-card small { display: block; opacity: .6; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: var(--sp-2, 8px); }
   .sr-card big { display: block; font-size: 19px; line-height: 1.35; }
-  .sr-card .sr-ans { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(127,127,127,.4); font-size: 16px; }
-  .sr-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; } .sr-row .sr-btn { flex: 1; }
-  .sr-tally { margin: 8px 0; font-size: 13px; opacity: .8; }
-  .sr-deck { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid rgba(127,127,127,.15); } .sr-deck span { flex: 1; } .sr-deck small { opacity: .6; }
-  .sr-q { margin: 12px 0 16px; } .sr-q p { margin: 0 0 8px; font-weight: 600; line-height: 1.4; }
-  .sr-q button.sr-opt { display: block; width: 100%; text-align: left; min-height: 42px; margin: 6px 0; padding: 8px 12px; border: 1px solid rgba(127,127,127,.3); border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .sr-card .sr-ans { display: block; margin-top: var(--sp-3, 12px); padding-top: var(--sp-3, 12px); border-top: 1px dashed rgba(127,127,127,.4); font-size: 16px; }
+  .sr-row { display: flex; gap: var(--sp-2, 8px); flex-wrap: wrap; align-items: center; } .sr-row .sr-btn { flex: 1; }
+  .sr-tally { margin: var(--sp-2, 8px) 0; font-size: 13px; opacity: .8; }
+  .sr-deck { display: flex; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px) 0; border-bottom: 1px solid rgba(127,127,127,.15); } .sr-deck span { flex: 1; } .sr-deck small { opacity: .6; }
+  .sr-q { margin: var(--sp-3, 12px) 0 var(--sp-4, 16px); } .sr-q p { margin: 0 0 var(--sp-2, 8px); font-weight: 600; line-height: 1.4; }
+  .sr-q button.sr-opt { display: block; width: 100%; text-align: left; min-height: 42px; margin: var(--sp-2, 8px) 0; padding: var(--sp-2, 8px) var(--sp-3, 12px); border: 1px solid rgba(127,127,127,.3); border-radius: 12px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
   .sr-q button.sr-opt.pick { border-color: currentColor; border-width: 2px; }
   .sr-q button.sr-opt.right { background: rgba(46,160,67,.16); border-color: rgba(46,160,67,.7); }
   .sr-q button.sr-opt.wrong { background: rgba(207,34,46,.12); border-color: rgba(207,34,46,.6); }
-  .sr-q .sr-why { font-size: 13px; opacity: .8; margin-top: 4px; }
-  .sr-board { padding: 10px 12px; border-radius: 14px; background: rgba(127,127,127,.1); margin: 6px 0 12px; font-size: 14px; }
+  .sr-q .sr-why { font-size: 13px; opacity: .8; margin-top: var(--sp-1, 4px); }
+  .sr-board { padding: var(--sp-3, 12px) var(--sp-3, 12px); border-radius: 14px; background: rgba(127,127,127,.1); margin: var(--sp-2, 8px) 0 var(--sp-3, 12px); font-size: 14px; }
   .sr-board div { display: flex; justify-content: space-between; padding: 2px 0; }
-  .sr-note { position: relative; margin: 8px 0; padding: 12px 34px 12px 12px; border-radius: 14px; background: #fff6c9; color: #2a2414; line-height: 1.45; white-space: pre-wrap; }
-  .sr-note small { display: block; opacity: .6; font-size: 12px; margin-top: 6px; }
+  .sr-note { position: relative; margin: var(--sp-2, 8px) 0; padding: var(--sp-3, 12px) var(--sp-6, 32px) var(--sp-3, 12px) var(--sp-3, 12px); border-radius: 14px; background: #fff6c9; color: #2a2414; line-height: 1.45; white-space: pre-wrap; }
+  .sr-note small { display: block; opacity: .6; font-size: 12px; margin-top: var(--sp-2, 8px); }
   .sr-note button { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(0,0,0,.08); cursor: pointer; }
-  .sr-warn { margin: 8px 14px 0; padding: 10px 12px; border-radius: 12px; background: rgba(207,34,46,.1); font-size: 13px; line-height: 1.4; }
+  .sr-warn { margin: var(--sp-2, 8px) var(--sp-4, 16px) 0; padding: var(--sp-3, 12px) var(--sp-3, 12px); border-radius: 12px; background: rgba(207,34,46,.1); font-size: 13px; line-height: 1.4; }
   .sr-warn[hidden] { display: none; }
   
   /* touch screens: 44px to touch */
@@ -159,13 +159,13 @@
         html += `<p class="sr-tally">${esc(d.title)} · card ${S.card.i + 1} of ${d.cards.length} · shared by ${esc(d.by)}</p>
           <button type="button" class="sr-card" data-act="flip"><small>${S.card.flip ? 'Answer' : 'Question: think, then tap'}</small><big>${esc(c.f)}</big>${S.card.flip ? `<span class="sr-ans">${esc(c.b)}</span>` : ''}</button>
           <div class="sr-row"><button type="button" class="sr-btn soft" data-act="prev" ${S.card.i ? '' : 'disabled'}>‹ Back</button><button type="button" class="sr-btn soft" data-act="say">🔊 Listen</button><button type="button" class="sr-btn" data-act="next" ${S.card.i < d.cards.length - 1 ? '' : 'disabled'}>Next ›</button></div>
-          ${S.card.flip ? `<div class="sr-row" style="margin-top:8px"><button type="button" class="sr-btn soft" data-act="got" ${myGrade && myGrade.ok ? 'disabled' : ''}>✓ Got it</button><button type="button" class="sr-btn soft" data-act="miss" ${myGrade && !myGrade.ok ? 'disabled' : ''}>✗ Not yet</button></div>` : ''}
+          ${S.card.flip ? `<div class="sr-row" style="margin-top:var(--sp-2, 8px)"><button type="button" class="sr-btn soft" data-act="got" ${myGrade && myGrade.ok ? 'disabled' : ''}>✓ Got it</button><button type="button" class="sr-btn soft" data-act="miss" ${myGrade && !myGrade.ok ? 'disabled' : ''}>✗ Not yet</button></div>` : ''}
           ${g.size ? `<p class="sr-tally">${[...g.values()].map((x) => `${esc(x.name)} ${x.ok ? '✓' : '✗'}`).join(' · ')}</p>` : ''}`;
         // keep it: the room ends after a day, the cards stay in your own flashcards
-        if (o.keepDeck) html += `<div class="sr-row" style="margin-top:8px"><button type="button" class="sr-btn soft" data-act="keepdeck">Save this deck to my flashcards</button></div>`;
+        if (o.keepDeck) html += `<div class="sr-row" style="margin-top:var(--sp-2, 8px)"><button type="button" class="sr-btn soft" data-act="keepdeck">Save this deck to my flashcards</button></div>`;
         if (shared.length > 1) html += `<p class="sr-tally">Other decks: ${shared.filter((x) => x.id !== d.id).map((x) => `<button type="button" class="sr-mini" data-deck="${esc(x.id)}">${esc(x.title)}</button>`).join(' ')}</p>`;
       } else html += '<p class="sr-empty">Share one of your flashcard decks and the whole room studies it together: everyone sees the same card, flips it at the same time, and marks if they got it.</p>';
-      html += mine.length ? `<h4 style="margin:18px 0 4px">Share a deck</h4>${mine.map((m, i) => `<div class="sr-deck"><span>${esc(m.name)} <small>${m.cards.length} cards</small></span><button type="button" class="sr-mini" data-share-deck="${i}">Share</button></div>`).join('')}`
+      html += mine.length ? `<h4 style="margin:var(--sp-4, 16px) 0 var(--sp-1, 4px)">Share a deck</h4>${mine.map((m, i) => `<div class="sr-deck"><span>${esc(m.name)} <small>${m.cards.length} cards</small></span><button type="button" class="sr-mini" data-share-deck="${i}">Share</button></div>`).join('')}`
         : '<p class="sr-empty">You have no flashcards yet. Make some with ＋ Flashcards under any of Cassie’s answers.</p>';
       body.innerHTML = html; foot.innerHTML = ''; foot.hidden = true;
     }
@@ -193,7 +193,7 @@
       body.innerHTML = list.length ? list.map(([id, n]) => `<div class="sr-note">${esc(n.text)}<small>${esc(nameOf(n.uid, n.name))}</small>${n.uid === o.me ? `<button type="button" data-unnote="${esc(id)}" aria-label="Remove this note">×</button>` : ''}</div>`).join('')
         : '<p class="sr-empty">Pin what the group finds while researching, a definition, a source, a formula, who does which part.</p>';
       // keep them: the room ends after a day, the notes stay in a chat of your own
-      if (list.length && o.keepNotes) body.insertAdjacentHTML('beforeend', '<div class="sr-row" style="margin-top:10px"><button type="button" class="sr-btn soft" data-act="keepnotes">Save the notes to my chats</button></div>');
+      if (list.length && o.keepNotes) body.insertAdjacentHTML('beforeend', '<div class="sr-row" style="margin-top:var(--sp-3, 12px)"><button type="button" class="sr-btn soft" data-act="keepnotes">Save the notes to my chats</button></div>');
       foot.hidden = false;
       if (foot.dataset.view !== 'notes') { foot.dataset.view = 'notes'; foot.innerHTML = '<textarea class="sr-in" rows="2" maxlength="600" placeholder="A note for everyone…"></textarea><button type="button" class="sr-btn" data-act="note">Pin</button>'; if (window.CassieMic) window.CassieMic.attach(foot.querySelector('.sr-in')); }
     }

@@ -5618,6 +5618,70 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
+test('8-point grid v233: every padding, margin and gap in the stylesheets is on the scale (4, 8, 12, 16, 24, 32, 40, 48, 56, 64, then multiples of 8; 1 to 2px hairlines; notes for the rest), styled elements on the website and in the app compute to it, and every button, field and tab is 48px on a phone and 40px or more on a computer (1280x800 and 390x844)', async (b) => {
+  // 1. the stylesheets
+  const PROPS = /(?<![\w-])(padding|margin|gap|row-gap|column-gap|padding-[a-z-]+|margin-[a-z-]+)\s*:\s*([^;}"`]+)/g;
+  const OK = (x) => x === 0 || x === 1 || x === 2 || [4, 8, 12, 16].includes(x) || (x >= 24 && x % 8 === 0);
+  const files = ['style.css', 'labs/labs.css', 'rescue.css', 'landing/home.css', 'bot.html', 'start.html', 'index.html', 'app.html', 'let.html', 'rescue.html'];
+  const off = [];
+  for (const f of files) {
+    let t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    if (f.endsWith('.html')) t = [...t.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
+    for (const m of t.matchAll(PROPS)) {
+      if (/\/\* grid/.test(t.slice(m.index + m[0].length, m.index + m[0].length + 60))) continue;
+      for (const n of m[2].matchAll(/(-?\d*\.?\d+)px/g)) if (!OK(Math.abs(+n[1]))) off.push(`${f}: ${m[0].slice(0, 60)}`);
+    }
+  }
+  expect(!off.length, `${off.length} off-grid spacing values in the stylesheets: ` + off.slice(0, 12).join(' | '));
+  for (const f of ['style.css', 'labs/labs.css', 'rescue.css', 'landing/home.css']) { const t = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''); let d = 0, low = 0; for (const c of t) { if (c === '{') d++; if (c === '}') d--; low = Math.min(low, d); } expect(d === 0 && low === 0, `${f}: every { has its } (a missing one drops every rule after it): ${d}`); }
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  expect(/--sp-7: 40px; --sp-8: 48px; --sp-9: 56px; --sp-10: 64px;/.test(css) && /--tap: 48px;/.test(css), 'the spacing tokens go to 64px and the touch target is 48px');
+  // 2. on screen: styled elements' padding and gaps, and the sizes of what you tap
+  for (const phone of [false, true]) {
+    const where = phone ? '390x844' : '1280x800';
+    const view = phone ? { device: 'iPhone 13', viewport: { width: 390, height: 844 } } : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 } };
+    const measure = (page) => page.evaluate((phone) => {
+      const OKv = (x) => { x = Math.round(Math.abs(x) * 100) / 100; return x === 0 || x === 1 || x === 2 || [4, 8, 12, 16].includes(x) || (x >= 24 && x % 8 === 0); };
+      const seen = (e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden], [aria-hidden="true"], svg, canvas');
+      const pad = [], small = [];
+      for (const e of document.querySelectorAll('[class]')) {
+        if (!seen(e) || (e.getAnimations && e.getAnimations().some((x) => x.playState === 'running'))) continue; // (not mid-transition)
+        const cs = getComputedStyle(e);
+        for (const k of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'rowGap', 'columnGap']) { const v = parseFloat(cs[k]); if (Number.isFinite(v) && !OKv(v) && !/%|vw|vh|clamp|max|min/.test(e.style[k] || '')) pad.push(`${e.className.toString().split(' ')[0]} ${k} ${v}`); }
+      }
+      for (const e of document.querySelectorAll('button, .btn, select, .tab, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=hidden]):not([type=file])')) {
+        if (!seen(e) || e.closest('.kid-stage, .lab-canvas')) continue;
+        const h = e.offsetHeight; // (its own size, not scaled down inside a preview)
+        if (h < (phone ? 48 : 40)) small.push(`${(e.className || e.tagName).toString().split(' ')[0]} ${h}`);
+      }
+      return { pad, small, wide: document.documentElement.scrollWidth > innerWidth + 1 };
+    }, phone);
+    // the website
+    const site = await b.newContext({ ...(phone ? devices['iPhone 13'] : devices['Desktop Chrome']), viewport: view.viewport, serviceWorkers: 'block' });
+    await site.route(/workers\.dev|fonts\.g/, (r) => r.abort());
+    const sp = await site.newPage(); const sErr = []; sp.on('pageerror', (e) => sErr.push(e.message));
+    await sp.goto(`http://localhost:${APP_PORT}/index.html`); await sp.waitForTimeout(1200);
+    const sm = await measure(sp);
+    expect(!sm.pad.length && !sm.small.length && !sm.wide && !sErr.length, `${where}: the website is on the grid: ` + JSON.stringify({ pad: sm.pad.slice(0, 8), small: sm.small.slice(0, 8), wide: sm.wide, errors: sErr }));
+    if (process.env.SHOTS) await sp.screenshot({ path: `${process.env.SHOTS}/v233-site-${phone ? 'phone' : 'desk'}.png` });
+    await site.close();
+    // the app: Home, chat with an answer, Settings, Calendar, Learn, Games
+    const { ctx, page, errors } = await open(b, { ...view, server: false, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home' }, fakeGroq: () => ({ text: 'An answer.\n\n- one\n- two' }) });
+    await page.waitForTimeout(1200);
+    const check = async (name) => { await page.waitForTimeout(600); const m = await measure(page); expect(!m.pad.length && !m.small.length && !m.wide, `${where}: ${name} is on the grid: ` + JSON.stringify({ pad: m.pad.slice(0, 8), small: m.small.slice(0, 8), wide: m.wide })); };
+    await check('Home');
+    await page.evaluate(() => { if (document.body.classList.contains('desk-on')) deskGo('chat'); else document.querySelector('.tabbar [data-tab="chat"]')?.click(); });
+    await page.waitForSelector('#prompt-input', { state: 'visible' }); await page.fill('#prompt-input', 'What is a cell?'); await page.press('#prompt-input', 'Enter');
+    await page.waitForSelector('text=An answer.', { timeout: 10000 }); await check('the chat');
+    await page.evaluate(() => openSettings()); await check('Settings'); await page.evaluate(() => closeSettings());
+    await page.evaluate(() => openCalFull()); await check('the Calendar'); await page.evaluate(() => document.querySelectorAll('.cal-full').forEach((f) => f.remove()));
+    await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await check('Learn');
+    await page.evaluate(() => openLabs(undefined, { section: 'games' })); await check('Games');
+    expect(!errors.length, `${where}: no page errors: ` + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('UI rules v232: buttons say what they do (no bare OK, Yes, Send, Go, Done or Submit), status badges use the ok, warn, danger and info colours (AA in light and dark), errors name the limit or the fix, a waiting button shows a busy state and sends once, and no filler words (1280x800 and 390x844)', async (b) => {
   const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   for (const phone of [false, true]) {
@@ -12771,7 +12835,7 @@ test('Liquid Glass turns solid in Lite mode and with Reduce Transparency; Reduce
     [sm, md, lg, off, busy, glassB].forEach((e) => e.remove());
     return out;
   });
-  expect(btns.sm === 44 && btns.md === 48 && btns.lg === 56, 'three button sizes (44, 48, 56): ' + JSON.stringify(btns));
+  expect([40, 48].includes(btns.sm) && btns.md === 48 && btns.lg === 56, 'three button sizes on the 8-point grid (40 with a mouse or 48 to touch, 48, 56): ' + JSON.stringify(btns));
   expect(+btns.offOpacity < .6 && btns.offCursor === 'not-allowed', 'a disabled button looks disabled: ' + JSON.stringify(btns));
   expect(/rgba\(0, 0, 0, 0\)|transparent/.test(btns.busyText) && btns.busySpinner === '""' && btns.busyClicks === 'none', 'a loading button shows a spinner and can’t be tapped twice: ' + JSON.stringify(btns));
   expect(/blur/.test(btns.glassBlur), 'a glass button is frosted: ' + JSON.stringify(btns));
