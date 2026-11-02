@@ -5618,6 +5618,26 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
+test('the model picker on a phone (360 and 390 wide): it shows the whole short model name (OSS 120B), not cut off, and every button in the ask box row is 44px or more to tap, in one row', async (b) => {
+  for (const w of [360, 390]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: w, height: 844 }, server: false, lite: 'off', state: { tab: 'chat', groqKey: 'gsk_test', groqModel: 'openai/gpt-oss-120b' } });
+    await page.waitForSelector('.composer-row #model-pill'); await page.waitForTimeout(800);
+    const r = await page.evaluate(() => {
+      const pill = document.getElementById('model-pill'), row = document.querySelector('.composer-row'), cs = getComputedStyle(pill, '::before');
+      const kids = [...row.children].filter((c) => c.getClientRects().length && c.matches('button')).map((c) => c.getBoundingClientRect());
+      // (the label's own width, measured at its font, against the room inside the pill)
+      const m = document.createElement('canvas').getContext('2d'); m.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const pc = getComputedStyle(pill), room = pill.getBoundingClientRect().width - parseFloat(pc.paddingLeft) - parseFloat(pc.paddingRight) - parseFloat(pc.borderLeftWidth) - parseFloat(pc.borderRightWidth);
+      return { label: pill.dataset.short, shown: cs.content, need: +m.measureText(pill.dataset.short || '').width.toFixed(1), room: +room.toFixed(1), small: kids.filter((k) => k.width < 44 || k.height < 44).length, rows: new Set(kids.map((k) => Math.round(k.top))).size, right: Math.max(...kids.map((k) => k.right)), vw: innerWidth };
+    });
+    expect(r.label === 'OSS 120B' && /OSS 120B/.test(r.shown), `${w}: the pill says OSS 120B: ` + JSON.stringify(r));
+    expect(r.need <= r.room + 0.5, `${w}: the whole name fits, nothing cut off: ` + JSON.stringify(r));
+    expect(r.small === 0 && r.rows === 1 && r.right <= r.vw, `${w}: every button 44px or more, one row, on screen: ` + JSON.stringify(r));
+    expect(errors.length === 0, 'page errors: ' + errors.join('; '));
+    await ctx.close();
+  }
+});
+
 test('8-point grid v233: every padding, margin and gap in the stylesheets is on the scale (4, 8, 12, 16, 24, 32, 40, 48, 56, 64, then multiples of 8; 1 to 2px hairlines; notes for the rest), styled elements on the website and in the app compute to it, and every button, field and tab is 48px on a phone and 40px or more on a computer (1280x800 and 390x844)', async (b) => {
   // 1. the stylesheets
   const PROPS = /(?<![\w-])(padding|margin|gap|row-gap|column-gap|padding-[a-z-]+|margin-[a-z-]+)\s*:\s*([^;}"`]+)/g;
@@ -9733,16 +9753,19 @@ test('glass edges are smooth (iPhone, 3x screen): the rounded corners of a chip,
     const R = Math.max(8, Math.min(r.rad, r.w / 2, r.h / 2)), pad = 4;
     const clip = { x: r.x + r.w - R - 2, y: r.y + r.h - R - 2, width: R + pad + 2, height: R + pad + 2 };
     const png = await page.screenshot({ clip });
-    return page.evaluate(async ([b64, where]) => {
+    return page.evaluate(async ([b64, where, inside]) => {
       const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
       const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0);
       const d = g.getImageData(0, 0, c.width, c.height).data, W = c.width, H = c.height, at = (x, y) => { const i = (y * W + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
       const bg = at(W - 1, H - 1), diff = (p) => Math.abs(p[0] - bg[0]) + Math.abs(p[1] - bg[1]) + Math.abs(p[2] - bg[2]);
-      const edge = []; for (let y = 0; y < H - 6; y++) { let x = W - 1; while (x > 0 && diff(at(x, y)) < 24) x--; edge.push(x); }
+      // (the scan starts one pixel past the element's own box, so a neighbour in the small margin, like the next chip
+      // in the row of 48px pills, is not read as part of its curve)
+      const x0 = Math.min(W - 1, Math.round(inside * W));
+      const edge = []; for (let y = 0; y < H - 6; y++) { let x = x0; while (x > 0 && diff(at(x, y)) < 24) x--; edge.push(x); }
       // (a stair: a jump of 3 or more pixels from one row to the next where the curve is still steep; a smooth curve on a 3x screen moves a pixel or two)
       let teeth = 0; for (let y = 3; y < edge.length - 3; y++) if (edge[y] >= 0 && edge[y - 1] >= 0 && Math.abs(edge[y] - edge[y - 1]) >= 3 && Math.abs(edge[y + 3] - edge[y - 3]) <= 6) teeth++;
       return { where, teeth, rows: edge.length };
-    }, [png.toString('base64'), where]);
+    }, [png.toString('base64'), where, (R + 3) / clip.width]);
   };
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
   await page.waitForSelector('#home .ht-tile.lgp'); await page.waitForTimeout(1500);
