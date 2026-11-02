@@ -32,11 +32,17 @@ Sources:
 | Metals in water | chemistry | High school | Grade 10 Science, chemical reactions; SHS General Chemistry (reactivity of metals) |
 | pH mixer | chemistry | High school, LET and after graduation | Grade 7 and 9 Science, acids, bases and salts with indicators (MATATAG); LET General Education, Science |
 | Titration | chemistry | High school, College | SHS General Chemistry 2 (STEM), acids and bases and titration; college analytical chemistry [uncertain: the MATATAG grade] |
+| Animal habitats | games | Nursery and Kindergarten, Grade school | Kindergarten and Grade 3 to 4 Science, animals and where they live (MATATAG) [uncertain: exact grade] (Games) |
 | City Market | games | High school, College | SHS ABM and college economics (Games) |
 | Formula Cracker | games | High school, College | High school and college formulas (Games) |
 | Fraction Diner | games | Grade school | Grade 3 to 6 Math, fractions (Games) |
+| History dress-up | games | Grade school, High school | Grade 5 to 6 and Grade 7 to 8 Araling Panlipunan, Philippine and world history and cultures (MATATAG) [uncertain: exact grade] (Games) |
+| History in order | games | Grade school, High school | Grade 5 to 6 Araling Panlipunan, Philippine history; Grade 8 Araling Panlipunan, world history (MATATAG) [uncertain: exact grade] (Games) |
+| Landform match | games | Grade school, High school | Grade 3 to 4 Araling Panlipunan and Science, landforms and bodies of water (MATATAG) [uncertain: exact grade]; Grade 7 Araling Panlipunan, Asian geography (Games) |
 | Logic Circuit | games | High school, College | High school and college logic (Games) |
 | Pinning Blitz | games | High school, College | High school and college map, cell and body recall (Games) |
+| Shape sorter | games | Nursery and Kindergarten, Grade school | Kindergarten and Grade 1 Mathematics, shapes (MATATAG) (Games) |
+| World jigsaw | games | Grade school, High school | Grade 4 Araling Panlipunan and Grade 7 to 8 Araling Panlipunan, maps and the continents (MATATAG) [uncertain: exact grade] (Games) |
 | Contour maps | geography | High school, College | Grade 7 to 10 Araling Panlipunan and Science, reading maps and landforms (MATATAG) [uncertain: exact grade]; college physical geography and Earth science, topographic maps |
 | World atlas | geography | Grade school, High school | Grade 4 to 6 Araling Panlipunan (the Philippines and the world); Junior High Araling Panlipunan |
 | Museum of Famous Arts | history | High school, College | Junior High Arts; college Art Appreciation (CHED GE) |
