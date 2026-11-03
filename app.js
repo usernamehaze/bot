@@ -2534,10 +2534,10 @@ function lessonsList() {
     return box;
   }
   let group = null;
-  // v240: college students see two folders: Board and licensure exams (its own screen), then their College lessons
+  // v240: college students see two folders: Board and Licensure exams (its own screen), then their College lessons
   if (lv === 'college') {
     const head = (txt) => { const h3 = document.createElement('h3'); h3.className = 'lessons-strand'; h3.textContent = txt; box.appendChild(h3); };
-    head('Board and licensure exams');
+    head('Board and Licensure exams');
     const fb = document.createElement('button');
     fb.type = 'button'; fb.className = 'lesson lesson-folder'; fb.dataset.go = 'board';
     fb.innerHTML = '<b>Board exams: lessons and simulations</b><small>LET, CPALE, Civil Service, Nursing, NCLEX-RN, IELTS and more. Read each topic, quiz yourself, then try a timed mock exam.</small>';
@@ -2581,7 +2581,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=242'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=243'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2598,12 +2598,12 @@ const BOARD_PH_SAYS = 'Cassie is not affiliated with the PRC or the Civil Servic
 const boardSays = (bx) => (bx && bx.intl ? `${bx.owner}. Cassie is not affiliated with or endorsed by them. Every practice question is Cassie’s own, written from the published test format. Check the latest official guide too.` : BOARD_PH_SAYS);
 // Pro has every lesson; Free and Plus get the first few of each exam's course, once paid plans are on (until then, all of it)
 const BOARD_TASTE = 3;
-/* v240: Board and licensure exams (boardprep.js, loaded when first opened): Lessons (every exam, its topics, Read the
+/* v240: Board and Licensure exams (boardprep.js, loaded when first opened): Lessons (every exam, its topics, Read the
    lesson or Quiz me) and Simulations (timed mock exams). It replaces the one-exam course of v235 to v239, whose exam,
    level and opened lessons carry over. */
 let prepLoad = null;
-function boardPrepReady() { // (also Learn's Board and licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=242'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=243'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2729,7 +2729,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=242').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=243').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7282,7 +7282,7 @@ const IN_LAB = {
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
 function labsCss() {
-  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=20'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=21'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
 }
 // the panel for one 3D view (made when first needed, gone when the view closes)
 let help3d = null;
@@ -7356,7 +7356,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=242');
+      exploreMod = await import('./explore/cell3d.js?v=243');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7406,7 +7406,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=242');
+      labsMod = await import('./labs/labs.js?v=243');
       islandRest();
     }
     labsMod.open({
@@ -9262,10 +9262,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=242').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=243').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=242', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=243', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

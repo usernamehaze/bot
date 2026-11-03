@@ -2601,13 +2601,13 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
-test('v241: Learn has College and Board and licensure exams as separate levels; Board opens into Lessons (a folder per exam: My notes and reviewers, then every topic opening its reviewer or quiz) and Simulations (a folder per exam opening its mock); notes are saved and Cassie quizzes on them on the spot; a scrolled page goes back so sheets are never cut off; no emoji anywhere', async (b) => {
+test('v241: Learn has College and Board and Licensure exams as separate levels; Board opens into Lessons (a folder per exam: My notes and reviewers, then every topic opening its reviewer or quiz) and Simulations (a folder per exam opening its mock); notes are saved and Cassie quizzes on them on the spot; a scrolled page goes back so sheets are never cut off; no emoji anywhere', async (b) => {
   const fake = (body) => { const m = JSON.stringify(body.messages || []); if (/using ONLY these notes/.test(m)) return { text: JSON.stringify(Array.from({ length: 5 }, (_, i) => ({ t: 'notes', q: `From my notes ${i + 1}?`, o: ['a', 'b', 'c', 'd'], a: 1, why: 'Your notes say b.' }))) }; return prepFake(body); };
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: fake });
   const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
   await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
   const lv = await page.$$eval('.lp .lf-levels .lf', (x) => x.map((f) => [f.dataset.level, f.querySelector('b').textContent, f.classList.contains('lf-mine')]));
-  expect(lv[0][0] === 'board' && lv[0][2] && lv[0][1] === 'Board and licensure exams' && lv.some(([k, n]) => k === 'college' && n === 'College'), 'Learn: Board and licensure exams (their level, first) and College, separate: ' + JSON.stringify(lv));
+  expect(lv[0][0] === 'board' && lv[0][2] && lv[0][1] === 'Board and Licensure exams' && lv.some(([k, n]) => k === 'college' && n === 'College'), 'Learn: Board and Licensure exams (their level, first) and College, separate: ' + JSON.stringify(lv));
   await shot('l0-levels');
   const tap = async (key) => { await page.$eval(`.lp .lf[data-group="${key}"]`, (f) => f.scrollIntoView({ block: 'center' })); await page.click(`.lp .lf[data-group="${key}"]`); await page.waitForFunction((k) => document.querySelector('.lp').dataset.view === k, key); await page.waitForTimeout(250); };
   await tap('level:board');
@@ -2671,13 +2671,13 @@ test('v241: Learn has College and Board and licensure exams as separate levels; 
   expect(!bad.length && !app.length, 'no emoji: ' + bad.join(', ') + ' ' + app.map((l) => l.trim().slice(0, 80)).join(' | '));
 });
 
-test('Board exams v240: Lessons splits College from Board and licensure exams; the Board exams screen has Lessons (exam, then topic: Read the lesson, written once and kept, or Quiz me, 5 questions you can stop and pick up again with the lesson one tap away) and Simulations (a timed mini mock, scored by part, weakest topics linked to their lessons); the old course carries over; Pro opens every topic and the full mock once paid plans are on', async (b) => {
+test('Board exams v240: Lessons splits College from Board and Licensure exams; the Board exams screen has Lessons (exam, then topic: Read the lesson, written once and kept, or Quiz me, 5 questions you can stop and pick up again with the lesson one tap away) and Simulations (a timed mini mock, scored by part, weakest topics linked to their lessons); the old course carries over; Pro opens every topic and the full mock once paid plans are on', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, letCourse: { exam: 'cpale', level: 'cpale', major: '', parts: [], first: [], done: { 'TAX: estate tax': 1 }, at: 1 } }, fakeGroq: prepFake });
   const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
   // Lessons: two folders for a college student
   await page.evaluate(() => openLessons()); await page.waitForSelector('.lessons-sheet .lesson-folder');
   const L = await page.$$eval('.lessons-sheet .lessons-strand, .lessons-sheet .lesson', (xs) => xs.map((x) => x.textContent.trim().slice(0, 40)));
-  expect(/^Board and licensure exams/.test(L[0]) && /^Board exams: lessons and simulations/.test(L[1]) && /^College/.test(L[2]) && !L.some((x) => /Board exam course|Check my board exam reviewer/.test(x)), 'Lessons: Board and licensure exams, then College: ' + L.join(' | '));
+  expect(/^Board and Licensure exams/.test(L[0]) && /^Board exams: lessons and simulations/.test(L[1]) && /^College/.test(L[2]) && !L.some((x) => /Board exam course|Check my board exam reviewer/.test(x)), 'Lessons: Board and Licensure exams, then College: ' + L.join(' | '));
   await shot('bp-0-lessons');
   await page.click('.lessons-sheet .lesson-folder'); await page.waitForSelector('.bp .bp-folder');
   expect((await page.$$eval('.bp .bp-folder b', (x) => x.map((e) => e.textContent))).join() === 'Lessons,Simulations', 'the Board exams screen: two folders');
@@ -9441,7 +9441,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     await learnTab(page);
     const f = await forYou(page), L = await levelsOf(page);
     expect(f[0] && f[0].k === 'pre' && f[0].mine && f[0].label === 'Nursery and Kindergarten' && f.filter((x) => x.mine).length === 1, 'Kindergarten’s first folder is Nursery and Kindergarten, in dark glass: ' + JSON.stringify(f));
-    expect(f.length === 6 && await page.locator('details.lp-other').count() === 0, 'six folders (v241: Board and licensure exams too), no Other levels dropdown: ' + f.length);
+    expect(f.length === 6 && await page.locator('details.lp-other').count() === 0, 'six folders (v241: Board and Licensure exams too), no Other levels dropdown: ' + f.length);
     const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; const LV = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'], board: [] }; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).some((x) => (LV[k] || []).includes(x))).length + (['elem', 'jhs', 'shs'].includes(k) ? 1 : 0) + (['jhs', 'shs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells; v220: Junior and Senior High show the High school labs, College and board exams the College and LET ones)
     expect(f.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.label && x.count === want[x.k] && x.go[0] >= 44 && x.go[1] >= 44), 'every folder: 3 papers, a label, its lab count and a 44px button: ' + JSON.stringify([f, want]));
     const kids = await openLevel(page, 'pre');
@@ -9514,7 +9514,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
       // the level folders on a computer: hover leans the pocket back, a click opens the level, Back returns
       await page.waitForSelector('.labs-foryou .lf');
       const df = await forYou(page, '.labs-foryou');
-      expect(df.length === 6 && df.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 6 folders (v241: Board and licensure exams too): ' + JSON.stringify(df));
+      expect(df.length === 6 && df.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 6 folders (v241: Board and Licensure exams too): ' + JSON.stringify(df));
       const front = () => page.$eval('.labs-foryou .lf[data-level="elem"] .lf-front', (x) => getComputedStyle(x).transform);
       expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(await front()), 'at rest the pocket stands straight');
       await page.hover('.labs-foryou .lf[data-level="elem"]'); await page.waitForTimeout(400);
@@ -9624,7 +9624,7 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
         cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
     expect(parts.order.join('|') === 'Today’s Labs|Levels|Simulations: Visual Labs|Study Tools: Learn your way', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
-    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[6,1,4]', `${size}: no chips, tabs or card grid; 6 level folders (v241: Board and licensure exams too), the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
+    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[6,1,4]', `${size}: no chips, tabs or card grid; 6 level folders (v241: Board and Licensure exams too), the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
     if (SHOTS) {
       if (phone) { await page.evaluate(() => document.querySelector('.lp-home').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
       else { await page.evaluate(() => { document.querySelector('.labs-scroll').scrollTop = 0; }); await page.waitForTimeout(500); }

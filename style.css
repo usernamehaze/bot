@@ -3643,7 +3643,7 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
   .composer-row { gap: 0; }
 } /* (the narrowest phones: 44 by 48, still the 44px tap rule) */
 
-/* v240: Board and licensure exams (boardprep.js): two folders, Lessons (exam → topic → read or quiz) and Simulations */
+/* v240: Board and Licensure exams (boardprep.js): two folders, Lessons (exam → topic → read or quiz) and Simulations */
 .bp-card { width: min(760px, 100%); }
 .bp-head h2 { flex: 1; text-align: center; }
 .bp-back[hidden] { display: inline-block !important; visibility: hidden; }

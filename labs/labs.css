@@ -959,7 +959,7 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .du-opts { display: grid; gap: var(--sp-2, 8px); margin: var(--sp-2, 8px) 0; }
 .du-opt { min-height: var(--tap, 48px); text-align: left; white-space: normal; }
 .du-opt.du-yes { border-color: var(--mt-yes); } .du-opt.du-no { border-color: var(--mt-no); text-decoration: line-through; }
-/* v241: Board and licensure exams in Learn (a level of its own), and icon buttons that were emoji */
+/* v241: Board and Licensure exams in Learn (a level of its own), and icon buttons that were emoji */
 .lf-sub { margin: var(--sp-4, 16px) 0 var(--sp-2, 8px); font-size: .95rem; font-weight: 750; color: var(--lx-text, inherit); }
 .lf-board .lf-grid { margin-bottom: var(--sp-2, 8px); }
 .lf-board .lf-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2, 8px); }
