@@ -2603,6 +2603,36 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v248: your picks: the model picker in the ask box is a small icon (its name in its label) so every button is 8px apart; the chat top bar keeps Board only, as an icon; Memory moves to the phone side menu with its name; the tab bar and the ask box icons stay as they are; a computer keeps Memory under General', async (b) => {
+  const { uxRuleIssues } = require('./ui-checks.cjs');
+  const chat = { id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents.' }], updatedAt: Date.now() };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'chat', chats: [chat], currentChatId: 'c1' } });
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  await page.evaluate(() => selectChat('c1')); await page.focus('#prompt-input'); await page.waitForTimeout(600);
+  const ask = await page.evaluate(() => { const m = document.getElementById('model-pill'), r = m.getBoundingClientRect(), row = [...document.querySelector('.composer-row').children].filter((c) => c.getClientRects().length).map((c) => c.getBoundingClientRect()); return { w: r.width, h: r.height, icon: !!m.querySelector('.mp-ic') && getComputedStyle(m.querySelector('.mp-ic')).display !== 'none', words: [...m.querySelectorAll('span')].some((x) => x.getClientRects().length), label: m.getAttribute('aria-label'), gaps: row.slice(1).map((x, i) => Math.round(x.left - row[i].right)) }; });
+  expect(ask.w === 48 && ask.h === 48 && ask.icon && !ask.words && /^Model: .+Change it in Settings$/.test(ask.label) && ask.gaps.every((g) => g >= 8), '1. the model picker is a 48px icon with its name in its label, and the ask box buttons are 8px apart or more: ' + JSON.stringify(ask));
+  const typingGaps = (await uxRuleIssues(page)).gaps; expect(!typingGaps.length, '1. no taps closer than 8px while typing: ' + typingGaps.join(' | '));
+  await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
+  const top = await page.evaluate(() => { const vis = (e) => !!e && !!e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden'; const t = document.querySelector('.topbar-actions'); return { board: vis(t.querySelector('#board-btn')), boardWords: vis(t.querySelector('#board-btn .app-label')), mem: !!t.querySelector('#memory-btn'), tabs: [...document.querySelectorAll('.tabbar .tab')].filter((x) => x.querySelector('span') && x.querySelector('span').getClientRects().length).length }; });
+  expect(top.board && !top.boardWords && !top.mem, '3. the top bar keeps Board only, as an icon: ' + JSON.stringify(top));
+  expect(top.tabs === 1, '2. the tab bar is unchanged: only the open tab shows its name');
+  const icons = await page.evaluate(() => ['camera-btn', 'attach-btn', 'voice-btn', 'mic-btn'].filter((id) => { const e = document.getElementById(id); return e && e.textContent.trim(); }));
+  expect(!icons.length, '4. the ask box icons stay icons only');
+  await page.click('#menu-btn'); await page.waitForTimeout(400);
+  const mem = await page.evaluate(() => { const m = document.getElementById('memory-btn'), r = m.getBoundingClientRect(); return { after: m.previousElementSibling && m.previousElementSibling.id, inSide: !!m.closest('#sidebar, .sidebar'), h: r.height, w: r.width, words: m.querySelector('.app-label').getClientRects().length > 0 && m.querySelector('.app-label').textContent }; });
+  expect(mem.after === 'new-chat-btn' && mem.inSide && mem.h >= 48 && mem.w > 200 && mem.words === 'Memory', '3. Memory sits in the side menu under New chat, 48px, with its name: ' + JSON.stringify(mem));
+  await page.click('#memory-btn'); await page.waitForTimeout(500);
+  const opened = await page.evaluate(() => ({ panel: !document.getElementById('memory-panel').hidden, side: document.querySelector('.sidebar').classList.contains('open') }));
+  expect(opened.panel && !opened.side, '3. a tap opens Memory and closes the menu: ' + JSON.stringify(opened));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  const o = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
+  await o.page.waitForSelector('#side-general #memory-btn');
+  const desk = await o.page.evaluate(() => ({ cls: document.getElementById('memory-btn').classList.contains('side-mem'), pill: getComputedStyle(document.querySelector('#model-pill .mp-ic')).display, words: document.getElementById('model-pill-model').getClientRects().length > 0 }));
+  expect(!desk.cls && desk.pill === 'none' && desk.words, 'a computer: Memory stays under General, and the model picker keeps its name: ' + JSON.stringify(desk));
+  await o.ctx.close();
+});
+
 test('v247: the 8 button rules: labels say what happens, one filled button per sheet, 48px taps 8px apart, AA in every state, every state designed, destructive actions named and red, icon-only buttons listed, and a wait shows a spinner and blocks repeat taps', async (b) => {
   const { uxRuleIssues, contrastIssues } = require('./ui-checks.cjs');
   const dialogs = [];
@@ -2641,7 +2671,7 @@ test('v247: the 8 button rules: labels say what happens, one filled button per s
   expect(!fcMany.length, '2. Flashcards with the card form open: only Add card is filled: ' + fcMany.join(' | '));
   await page.evaluate(() => { document.querySelector('.fc-x')?.click(); });
   // 3. 48px taps 8px apart (the ask box's typing row is on the decision list)
-  const gaps = Object.entries(scans).map(([k, v]) => [k, v.gaps.filter((g) => !/model-pill|camera-btn|attach-btn|voice-btn/.test(g))]).filter(([, g]) => g.length).map(([k, g]) => k + ': ' + g.join(', '));
+  const gaps = Object.entries(scans).map(([k, v]) => [k, v.gaps]).filter(([, g]) => g.length).map(([k, g]) => k + ': ' + g.join(', '));
   expect(!gaps.length, '3. neighbouring taps are 8px apart or more: ' + gaps.join(' | '));
   // 6. destructive: a named, red confirm; no browser OK/Cancel
   await page.click('.tab[data-tab="chat"]'); await page.evaluate(() => selectChat('c1'));
@@ -2750,8 +2780,8 @@ test('v246: the Home header and chat top bar are see-through with no cut (no rim
   await page.click('.tab[data-tab="chat"]'); await page.waitForSelector('.topbar #board-btn'); await page.waitForTimeout(400);
   const t = await edge('.topbar');
   expect(t.bw === '0px 0px 0px 0px' && t.sh === 'none' && /gradient/.test(t.mask) && !t.layers.length && t.bf && t.bf !== 'none', 'the chat top bar: see-through, no rim, line, shadow or bevel, it fades out: ' + JSON.stringify(t));
-  const sw2 = await page.evaluate(() => ['#board-btn svg', '#memory-btn svg'].map((s) => parseFloat(getComputedStyle(document.querySelector(s)).strokeWidth)));
-  expect(sw2.every((w) => w >= 2.5), 'Board and Memory are drawn thicker: ' + sw2);
+  const sw2 = await page.evaluate(() => ['#board-btn svg'].map((s) => parseFloat(getComputedStyle(document.querySelector(s)).strokeWidth)));
+  expect(sw2.every((w) => w >= 2.5), 'Board is drawn thicker (v248: Memory moved to the side menu): ' + sw2);
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
