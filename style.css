@@ -10,7 +10,7 @@ html, :where(body, body *) { touch-action: manipulation; }
 }
 
 :root {
-  --ts-off: var(--surface-2); --ts-edge: var(--muted); --ts-edge-hover: var(--text); --ts-on: var(--text); --ts-knob: var(--surface); --ts-ink: var(--text); /* the Dark mode switch */
+  --mask-on: #000; /* (a mask's solid part: only its alpha counts) */ --ts-off: var(--surface-2); --ts-edge: var(--muted); --ts-edge-hover: var(--text); --ts-on: var(--text); --ts-knob: var(--surface); --ts-ink: var(--text); /* the Dark mode switch */
   /* Cassie's colours: Blush & Sage. Warm cream paper, Cassie's blush for actions, a calm sage for
      second actions. A boy's profile flips them (sage leads, blush second): html[data-pal="sage"].
      A colour picked in Appearance (--accent) still wins over both. Every text pair reaches 4.5:1. */
@@ -3753,7 +3753,7 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
    bottom line; the frosted glass fades out over its last 16px instead */
 @media (max-width: 760px) {
   html.native .hub-hero, html.native .topbar { border: 0 !important; border-radius: 0 !important; box-shadow: none !important;
-    -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--sp-4, 16px)), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - var(--sp-4, 16px)), transparent); }
+    -webkit-mask-image: linear-gradient(180deg, var(--mask-on) calc(100% - var(--sp-4, 16px)), transparent); mask-image: linear-gradient(180deg, var(--mask-on) calc(100% - var(--sp-4, 16px)), transparent); }
   html.native .topbar:has(.isle-card.open) { -webkit-mask-image: none; mask-image: none; } /* (the island's card hangs below the bar) */
   html.lgm.native .topbar.lgp-b::before, html.lgm.native .topbar.lgp-a::after { display: none; }
   html.native .topbar { padding-bottom: var(--sp-4, 16px); }
