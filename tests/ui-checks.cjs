@@ -426,4 +426,47 @@ async function tapResponseIssues(page, o) {
   return out;
 }
 
-module.exports = { tapTargetIssues, contrastIssues, tapResponseIssues };
+
+// (v247) the 8 button rules, read off what is on screen: labels that don't say what happens, more than one filled
+// button in a sheet, icon-only buttons (universal ones aside), and neighbours closer than 8px
+async function uxRuleIssues(page, root = 'body') {
+  return page.evaluate((rootSel) => {
+    const R = document.querySelector(rootSel) || document.body;
+    const W = innerWidth, H = innerHeight;
+    const seen = (e) => { if (!e.getClientRects().length || (e.checkVisibility && !e.checkVisibility({ contentVisibilityAuto: true }))) return false; const st = getComputedStyle(e); if (st.visibility === 'hidden' || +st.opacity === 0 || e.closest('[hidden], [inert], [aria-hidden="true"]')) return false; const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1 && r.bottom > 0 && r.top < H && r.right > 0 && r.left < W; };
+    const text = (e) => { let t = ''; const walk = (n) => { for (const c of n.childNodes) { if (c.nodeType === 3) t += c.textContent; else if (c.nodeType === 1 && c.getAttribute('aria-hidden') !== 'true' && getComputedStyle(c).display !== 'none' && c.tagName !== 'svg') walk(c); } }; walk(e); return t.replace(/\s+/g, ' ').trim(); };
+    const name = (e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${e.classList.length ? '.' + [...e.classList].slice(0, 2).join('.') : ''}`;
+    // (only what is on top: a button under a sheet or the tab bar is not what a finger reaches)
+    const top = (e) => { const r = e.getBoundingClientRect(), x = Math.min(Math.max(r.left + r.width / 2, 0), W - 1), y = Math.min(Math.max(r.top + r.height / 2, 0), H - 1), h = document.elementFromPoint(x, y); return !!h && (h === e || e.contains(h) || h.contains(e)); };
+    const btns = [...R.querySelectorAll('button, [role=button], a.btn, a[class*="-go"]')].filter(seen).filter(top);
+    const BAD = /^(submit|ok|okay|click here|go|done|yes|next|continue|save|confirm|apply|check|clear|start|reset|proceed)$/i;
+    const labels = btns.filter((b) => BAD.test(text(b))).map((b) => `${name(b)} "${text(b)}"`);
+    // icon-only: no words on the button (its name lives in aria-label)
+    const UNIVERSAL = /^(close|search|back|menu|open the menu|send|stop|play|pause|previous|reminders|more|clear the search|delete|remove|dismiss|go back|open your settings|you|menu: |light or dark|dark mode)/i;
+    const icons = btns.filter((b) => !text(b) && b.querySelector('svg, i, img, canvas') && !b.matches('.theme-switch, [role=switch], [role=tab]')).map((b) => ({ el: name(b), label: (b.getAttribute('aria-label') || b.title || '').trim() })).filter((x) => !UNIVERSAL.test(x.label)).map((x) => `${x.el} "${x.label}"`);
+    // filled buttons per sheet: an opaque fill that stands out against the page surface (3:1)
+    const lum = (c) => { const m = c.match(/[\d.]+/g); if (!m) return null; const [r, g, b, a = 1] = m.map(Number); const f = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return { L: .2126 * f(r) + .7152 * f(g) + .0722 * f(b), a }; };
+    const surf = lum(getComputedStyle(document.body).backgroundColor) || { L: 1 };
+    const filled = (b) => { const x = lum(getComputedStyle(b).backgroundColor); if (!x || x.a < .85) return false; const hi = Math.max(x.L, surf.L), lo = Math.min(x.L, surf.L); return (hi + .05) / (lo + .05) >= 3; };
+    const sheets = [...document.querySelectorAll('[role=dialog], [aria-modal="true"], .plus-card, .bp-card')].filter(seen).filter((s, i, all) => !all.some((o) => o !== s && o.contains(s) && o.matches('.plus-card, .bp-card')));
+    const many = [];
+    for (const s of sheets) { const f = [...s.querySelectorAll('button, a')].filter(seen).filter(filled); if (f.length > 1) many.push(`${name(s)}: ${f.map((b) => `"${text(b) || b.getAttribute('aria-label')}"`).join(', ')}`); }
+    // neighbours: two targets side by side (or stacked) closer than 8px
+    const gaps = [];
+    const bar = (n) => { for (; n && n !== document.body; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') return n; } return null; };
+    const rs = btns.map((b) => [b, b.getBoundingClientRect()]);
+    for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+      const [a, ra] = rs[i], [b, rb] = rs[j];
+      if (a.contains(b) || b.contains(a)) continue;
+      if (bar(a) !== bar(b)) continue; // (a floating bar over the page: what scrolls past it changes with the scroll)
+      if (a.parentElement === b.parentElement && a.closest('[role=tablist], .tabbar, [role=radiogroup], .seg, .set-seg, [data-seg]')) continue; // (a tab bar or a segmented switch is one control, its parts touch on purpose)
+      const ov = (a1, a2, b1, b2) => Math.min(a2, b2) - Math.max(a1, b1);
+      const vOv = ov(ra.top, ra.bottom, rb.top, rb.bottom), hOv = ov(ra.left, ra.right, rb.left, rb.right);
+      const gx = Math.max(rb.left - ra.right, ra.left - rb.right), gy = Math.max(rb.top - ra.bottom, ra.top - rb.bottom);
+      if ((vOv > 8 && gx >= -0.5 && gx < 7.5) || (hOv > 8 && gy >= -0.5 && gy < 7.5)) gaps.push(`${name(a)} "${text(a) || a.getAttribute('aria-label') || ''}".."${text(b) || b.getAttribute('aria-label') || ''}" ${Math.round(Math.max(gx, gy))}px`);
+    }
+    return { labels, icons, many, gaps };
+  }, root);
+}
+
+module.exports = { tapTargetIssues, contrastIssues, tapResponseIssues, uxRuleIssues };

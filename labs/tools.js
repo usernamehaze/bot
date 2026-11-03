@@ -9,6 +9,7 @@ import { el, esc, group, seg, button, row, stats, shuffle, fmtTime, plusOnly, er
 /* ---------- shared ---------- */
 // the JSON inside one of Cassie's replies ([…] or {…})
 // a mic beside a writing box (mic.js): what is said stays in the box to edit
+const sure = (o) => (window.askSure ? window.askSure(o) : Promise.resolve(window.confirm(o.title + (o.text ? '\n' + o.text : '')))); // (v247: the app's clear confirm sheet)
 const mic = (box) => { if (window.CassieMic) window.CassieMic.attach(box); };
 
 export function jsonIn(reply, open = '[') {
@@ -39,7 +40,8 @@ function download(name, text, type = 'text/plain') {
   setTimeout(() => URL.revokeObjectURL(u), 4000);
 }
 // Cassie is busy: a button says so while she works
-async function busy(btn, text, fn) {
+async function busy(btn, text, fn) { // (v247: the app's spinner and "-ing…" label, disabled against repeat taps)
+  if (window.busyButton) { const done = window.busyButton(btn, text); try { return await fn(); } finally { done(); } }
   const was = btn.textContent;
   btn.disabled = true; btn.textContent = text;
   try { return await fn(); } finally { btn.disabled = false; btn.textContent = was; }
@@ -934,7 +936,7 @@ const thesisLab = {
     const testBtn = button(r, 'Cassie, stress-test my argument', () => test(), 'main');
     button(r, 'Copy reference list', plusOnly('Copying your reference list', () => copyRefs()));
     const r2 = row(panel);
-    button(r2, 'Start a new map', () => { if (confirm('Start a new, empty map? This one will be cleared.')) { map = BLANK_MAP(); save(); draw(); } });
+    button(r2, 'Start a new map', async () => { if (await sure({ title: 'Clear this argument map?', text: 'Its claim, reasons and evidence go, and an empty map starts. This can’t be undone.', yes: 'Clear the map' })) { map = BLANK_MAP(); save(); draw(); } });
     button(r2, 'Load the example', () => { map = JSON.parse(JSON.stringify(SAMPLE_MAP)); save(); draw(); });
     const fb = el('p', 'tl-msg'); fb.hidden = true; panel.appendChild(fb);
     const sources = () => { const out = []; map.reasons.forEach((rs) => rs.ev.forEach((e) => out.push(e))); return out; };
@@ -1007,10 +1009,10 @@ const thesisLab = {
       st.set([['Reasons', String(map.reasons.length)], ['Sources', String(sources().length)], ['Strength', score + '/100']]);
       if (map.thesis.trim()) api.check(0);
     });
-    page.addEventListener('click', (e) => {
+    page.addEventListener('click', async (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.addr != null) { map.reasons.push({ text: '', ev: [] }); save(); draw(); return; }
-      if (b.dataset.delr != null) { if (!map.reasons[+b.dataset.delr].ev.length || confirm('Remove this reason and its evidence?')) { map.reasons.splice(+b.dataset.delr, 1); save(); draw(); } return; }
+      if (b.dataset.delr != null) { if (!map.reasons[+b.dataset.delr].ev.length || await sure({ title: 'Remove this reason?', text: `It and its ${map.reasons[+b.dataset.delr].ev.length} ${map.reasons[+b.dataset.delr].ev.length === 1 ? 'piece' : 'pieces'} of evidence go.`, yes: 'Remove reason' })) { map.reasons.splice(+b.dataset.delr, 1); save(); draw(); } return; }
       if (b.dataset.adde != null) { editing = [+b.dataset.adde, null]; draw(); page.querySelector('.tl-form textarea').focus(); return; }
       if (b.dataset.edit != null) { editing = b.dataset.edit.split('.').map(Number); draw(); return; }
       if (b.dataset.dele != null) { const [i, j] = b.dataset.dele.split('.').map(Number); map.reasons[i].ev.splice(j, 1); save(); draw(); return; }

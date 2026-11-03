@@ -88,7 +88,7 @@
     const card = document.createElement('div');
     card.className = 'tour-card'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'Cassie’s tour');
     card.innerHTML = `<p class="tour-count"></p><p class="tour-say" aria-live="polite"></p><p class="tour-vnote" role="status" hidden></p>
-      <div class="tour-row"><button type="button" class="tour-btn" data-t="back">Back</button><button type="button" class="tour-btn tour-main" data-t="next">Next</button></div>
+      <div class="tour-row"><button type="button" class="tour-btn" data-t="back">Back</button><button type="button" class="tour-btn tour-main" data-t="next">Next step</button></div>
       <div class="tour-row"><button type="button" class="tour-btn tour-voice" data-t="voice" aria-pressed="true">Voice on</button><button type="button" class="tour-btn" data-t="skip">Skip tour</button></div>`;
     document.body.append(veil, ring, card);
     const $ = (s) => card.querySelector(s);
@@ -151,7 +151,7 @@
     card.querySelector('.tour-count').textContent = `Stop ${k + 1} of ${run.stops.length}`;
     card.querySelector('.tour-say').textContent = stop.say();
     card.querySelector('[data-t="back"]').disabled = k === 0;
-    card.querySelector('[data-t="next"]').textContent = k === run.stops.length - 1 ? 'Finish tour' : 'Next';
+    card.querySelector('[data-t="next"]').textContent = k === run.stops.length - 1 ? 'Finish tour' : 'Next step';
     card.dataset.stop = stop.id;
     place();
     if (el) detourToElement(el, { resumeAfter: 1e9 }); // (Cassie's cursor glides there; with Reduce Motion it just appears)

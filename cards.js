@@ -172,6 +172,11 @@
       action: 'Write a card',
       onAction: () => { const d = body().querySelector('.fc-new'); d.open = true; d.querySelector('[name=f]').focus(); },
     })));
+    // (v247: one filled button at a time: while the card form is open, its Add card is the main action and the
+    // empty note's Write a card steps aside)
+    const fcNew = body().querySelector('.fc-new');
+    const sync = () => { const act = body().querySelector('.empty-state .es-go'); if (act) act.hidden = fcNew.open; };
+    fcNew.addEventListener('toggle', sync); sync();
     const form = body().querySelector('.fc-form');
     const check = window.CassieErrors ? window.CassieErrors.form(form, { f: (v) => (!v.trim() ? 'card_front' : ''), b: (v) => (!v.trim() ? 'card_back' : '') }) : { check: () => true };
     form.noValidate = true;
@@ -183,7 +188,8 @@
       renderHome(n ? 'Card added.' : 'That card is already in the deck.');
     });
   }
-  function onClick(e) {
+  const sure = (o) => (window.askSure ? window.askSure(o) : Promise.resolve(window.confirm(o.title + (o.text ? '\n' + o.text : '')))); // (v247: the app's clear confirm sheet)
+  async function onClick(e) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.study != null) { startStudy(t.dataset.study, !!t.dataset.all); return; }
@@ -202,7 +208,7 @@
       return;
     }
     if (t.dataset.del) {
-      if (!confirm(`Delete the deck “${t.dataset.del}” and all its cards?`)) return;
+      if (!(await sure({ title: `Delete the deck “${t.dataset.del}”?`, text: `All ${all().filter((c) => c.deck === t.dataset.del).length} of its cards and their review history go. This can’t be undone.`, yes: 'Delete deck' }))) return;
       const keep = all().filter((c) => c.deck !== t.dataset.del);
       ctx.state().cards = keep; changed(); return;
     }

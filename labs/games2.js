@@ -307,7 +307,7 @@ const sequencerLab = {
     const msg = el('p', 'gm-msg', 'Earliest at the top.'); msg.setAttribute('aria-live', 'polite');
     seg(group(panel, 'Events from'), { options: Object.entries(EVENT_SETS).map(([k, [n]]) => [k, n]), value: set, onChange: (v) => { set = v; deal(); } });
     const r = row(panel, 'lab-row-btns');
-    button(r, 'Check', () => check(), 'main'); button(r, 'New events', () => deal());
+    button(r, 'Check my order', () => check(), 'main'); button(r, 'New events', () => deal());
     panel.appendChild(msg);
     const st = stats(panel);
     function deal() { list = shuffle(shuffle(EVENT_SETS[set][1], rand).slice(0, 6), rand); while (list.every((e, i) => i === 0 || list[i - 1][0] < e[0])) list = shuffle(list, rand); tries = 0; checked = new Set(); msg.className = 'gm-msg'; msg.textContent = 'Earliest at the top. Move them with the arrows, then press Check.'; draw(); report(); }

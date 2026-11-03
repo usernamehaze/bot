@@ -2582,7 +2582,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=246'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=247'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2604,7 +2604,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=246'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=247'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2738,7 +2738,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=246').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=247').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2919,7 +2919,7 @@ function openPodcastSources() {
     <div class="pod-body"></div>
     <div class="pod-use" hidden></div>
     <p class="pod-status" aria-live="polite"></p>
-    <div class="plus-actions"><button type="button" class="plus-go pod-next" hidden>Next</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
+    <div class="plus-actions"><button type="button" class="plus-go pod-next" hidden>Use these notes</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
   const body = w.querySelector('.pod-body'), use = w.querySelector('.pod-use'), status = w.querySelector('.pod-status'), next = w.querySelector('.pod-next');
   let chosen = null; // { title, text, parts: [[title, words]] }
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
@@ -3089,9 +3089,9 @@ function podPlayer(card, lines, title, voiceOk) {
     else if (k === 'dl') {
       const script = () => downloadBlob(`${title} podcast.txt`, new Blob([lines.map((l) => `${l.who}: ${l.say}`).join('\n\n')], { type: 'text/plain' }));
       if (!voiceOk) { script(); return; }
-      b.disabled = true; b.textContent = 'Getting it ready…';
+      const dlDone = busyButton(b, 'Getting the audio ready…');
       Promise.all(lines.map((_, i) => clip(i)))
-        .then((blobs) => { downloadBlob(`${title} podcast.mp3`, new Blob(blobs, { type: 'audio/mpeg' })); b.textContent = 'Download'; }, (e2) => { rest(e2); voiceOk = false; b.textContent = 'Download the script'; })
+        .then((blobs) => { dlDone(); downloadBlob(`${title} podcast.mp3`, new Blob(blobs, { type: 'audio/mpeg' })); b.textContent = 'Download'; }, (e2) => { dlDone(); rest(e2); voiceOk = false; b.textContent = 'Download the script'; })
         .finally(() => { b.disabled = false; });
     }
   });
@@ -3394,7 +3394,7 @@ function deskChats() {
     card.querySelector('.dk-chat-q').textContent = String(first.display || first.content || '').replace(/\s+/g, ' ').slice(0, 140);
     card.querySelector('.dk-open').setAttribute('aria-label', `Open ${card.querySelector('b').textContent}`);
     card.querySelector('.dk-open').addEventListener('click', () => selectChat(c.id));
-    card.querySelector('.dk-del').addEventListener('click', () => { if (!confirm('Delete this chat?')) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
+    card.querySelector('.dk-del').addEventListener('click', async () => { if (!(await askSure({ title: `Delete “${card.querySelector('b').textContent}”?`, text: 'The chat and its messages go from this device. This can’t be undone.', yes: 'Delete chat' }))) return; state.chats = state.chats.filter((x) => x.id !== c.id); if (!state.chats.length) state.chats.push(makeChat()); if (!state.chats.some((x) => x.id === state.currentId)) { state.currentId = state.chats[0].id; state.messages = curChat().messages; } save(); renderChatList(); renderHistory(); });
     grid.appendChild(card);
   });
   if (!list.length) grid.replaceWith(cassieEmpty(CassieErrors.empty({ title: all.length ? 'No chats here' : 'No chats yet', text: all.length ? 'Try another filter.' : 'Ask Cassie anything and your chat shows up here.', action: all.length ? '' : 'Ask Cassie', onAction: () => deskAct('ask') })));
@@ -4069,8 +4069,8 @@ function examSection() {
     });
     const allBtn = card.querySelector('.ex-all');
     allBtn.addEventListener('click', () => { ol.hidden = !ol.hidden; allBtn.setAttribute('aria-expanded', String(!ol.hidden)); allBtn.textContent = ol.hidden ? 'See the whole plan' : 'Hide the whole plan'; });
-    card.querySelector('.ex-del').addEventListener('click', () => {
-      if (!confirm(`Delete your plan for ${e.name}?`)) return;
+    card.querySelector('.ex-del').addEventListener('click', async () => {
+      if (!(await askSure({ title: `Delete your plan for ${e.name}?`, text: 'Its days and what you ticked off go. This can’t be undone.', yes: 'Delete plan' }))) return;
       state.exams = examsNow().filter((x) => x.id !== e.id); save(); refreshHub();
     });
     wrap.appendChild(card);
@@ -4168,7 +4168,7 @@ function openExamSheet(pre = null) {
     if (!check.check()) return;
     if (!canChat()) { close(); openSettings(); return; }
     const btn = w.querySelector('.ex-make');
-    btn.disabled = true; status.textContent = 'Cassie is making your plan…';
+    const makeDone = busyButton(btn, 'Making your plan…'); status.textContent = 'Cassie is making your plan…';
     try {
       const e = await makeExamPlan({ name: noDashes(f.name.value.trim()).slice(0, 60), date: f.date.value, topics: noDashes(f.topics.value.trim()).slice(0, 600), notes });
       made = e;
@@ -4178,7 +4178,7 @@ function openExamSheet(pre = null) {
       refreshHub();
       return e;
     } catch (err) {
-      btn.disabled = false;
+      makeDone();
       status.innerHTML = '';
       const p = document.createElement('span'); p.textContent = CassieErrors.explain(err, 'exam_plan_failed');
       const again = document.createElement('button'); again.type = 'button'; again.className = 'ex-again'; again.textContent = 'Try again';
@@ -5692,11 +5692,11 @@ function exportBackup() {
 function importBackupFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     let data;
     try { data = JSON.parse(reader.result); } catch (e) { alert('That file isn’t valid JSON. It may be corrupted.'); return; }
     if (!data || data.app !== 'cassie' || data.kind !== 'backup') { alert('That doesn’t look like a Cassie backup file.'); return; }
-    if (!confirm('Import this backup? It replaces the memory and chats on this device. Your saved API keys stay as they are.')) return;
+    if (!(await askSure({ title: 'Replace your chats and memory with this backup?', text: 'The memory and chats on this device are replaced by the backup’s. Your saved API keys stay as they are. This can’t be undone.', yes: 'Replace with backup' }))) return;
     try { if (data.memory) localStorage.setItem(MEM_KEY, JSON.stringify(data.memory)); } catch (e) { /* ignore */ }
     try {
       if (data.state) {
@@ -6012,6 +6012,28 @@ function reviewMistakes(all = false) {
   handleSend(`Let's review the quiz questions I got wrong before. Ask them one at a time (you may reword them slightly), wait for my answer, then grade it:\n${qs}`);
 }
 
+/* (v247) "Are you sure?" the clear way: the sheet names what goes and whether it comes back, Cancel is outlined and
+   the action is a red button that says what it does ("Delete chat"). Resolves true or false. A danger: false sheet
+   uses the usual filled button. */
+function askSure({ title, text = '', yes, no = 'Cancel', danger = true } = {}) {
+  return new Promise((resolve) => {
+    document.querySelector('.sure-sheet')?.remove();
+    const w = document.createElement('div');
+    w.className = 'plus-sheet sure-sheet'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'sure-h'); w.setAttribute('aria-describedby', 'sure-p');
+    w.innerHTML = `<div class="plus-card sure-card"><h3 id="sure-h"></h3><p id="sure-p" class="plus-why"></p>
+      <div class="plus-actions"><button type="button" class="plus-ok sure-no"></button><button type="button" class="${danger ? 'sure-danger' : 'plus-go'} sure-yes"></button></div></div>`;
+    w.querySelector('h3').textContent = title; w.querySelector('p').textContent = text; if (!text) w.querySelector('p').hidden = true;
+    w.querySelector('.sure-no').textContent = no; w.querySelector('.sure-yes').textContent = yes;
+    const back = document.activeElement;
+    const done = (v) => { w.remove(); document.removeEventListener('keydown', onKey, true); try { back && back.focus && back.focus({ preventScroll: true }); } catch (e) { /* gone */ } resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    document.addEventListener('keydown', onKey, true);
+    w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('.sure-no')) done(false); else if (e.target.closest('.sure-yes')) done(true); });
+    document.body.appendChild(w);
+    w.querySelector('.sure-no').focus(); // (the safe choice has focus: Enter on autopilot keeps things)
+  });
+}
+window.askSure = askSure;
 // (v232) a button that waits on the internet, the AI or a file: disabled against repeat taps, a small spinner
 // and a short label ("Signing in…"), aria-busy while it waits. Returns done(); call it when the wait ends.
 function busyButton(btn, label) {
@@ -7001,7 +7023,7 @@ async function startRoom(code, title) {
     const typed = input && input.value.trim();
     const q = typed || 'Check our shared board. If it’s maths or a proof, check every step; if it’s code or a diagram of how code fits together, look for bugs and design problems; if it’s a drawing, diagram or notes, say whether it’s right. Say what’s right, what’s wrong, and how to fix it.';
     const was = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Cassie is looking…';
+    const lookDone = busyButton(btn, 'Cassie is looking…');
     session.showNote({ reply: 'Cassie is checking the board for everyone…' });
     try {
       const out = await askBoard(session.snapshot(), q, session.parts());
@@ -7012,7 +7034,7 @@ async function startRoom(code, title) {
       if (study) study.share(typed ? q : 'Check our board', a, { board: 1 });
       track('feature', 'room:check');
     } catch (e) { session.showNote({ reply: errorText(e) }); }
-    finally { btn.disabled = false; btn.textContent = was; }
+    finally { lookDone(); }
   }
   banner('Connecting…');
   // one check at a time; and back to the tab: check now (a hidden tab only checks every 15 s)
@@ -7390,7 +7412,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=246');
+      exploreMod = await import('./explore/cell3d.js?v=247');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7440,7 +7462,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=246');
+      labsMod = await import('./labs/labs.js?v=247');
       islandRest();
     }
     labsMod.open({
@@ -7972,7 +7994,7 @@ if (window.CassieMemory) window.CassieMemory.onReview = startReview;
 
 if (memoryBtn) memoryBtn.addEventListener('click', openMemory);
 if (memoryPanel) {
-  memoryPanel.addEventListener('click', (e) => {
+  memoryPanel.addEventListener('click', async (e) => {
     if (e.target === memoryPanel) return closeMemory();
     const rev = e.target.closest('.mem-review');
     if (rev) return startReview(rev.dataset.topic);
@@ -7991,7 +8013,7 @@ if (memoryPanel) {
       return;
     }
     if (e.target.closest('#mem-clear')) {
-      if (confirm('Clear everything Cassie remembers about you? This cannot be undone.')) {
+      if (await askSure({ title: 'Clear everything Cassie remembers about you?', text: 'Your name, facts, topics and review history go from this device. This can’t be undone.', yes: 'Clear memory' })) {
         window.CassieMemory.clearAll(); renderMemory(); updateMemoryDot();
       }
     }
@@ -8054,7 +8076,7 @@ if (memoryPanel) {
     const dots = [0, 1, 2, 3].map((i) => `<span class="${i < (cycles % 4 || (cycles && mode !== 'focus' ? 4 : 0)) ? 'on' : ''}"></span>`).join('');
     cyclesEl.innerHTML = dots;
     ringFill.style.width = `${Math.max(0, Math.min(100, (1 - remaining / total()) * 100))}%`;
-    toggleBtn.textContent = running ? 'Pause' : 'Start';
+    toggleBtn.textContent = running ? 'Pause timer' : 'Start timer';
     wrap.classList.toggle('break', mode !== 'focus');
   }
   function switchMode(next) { mode = next; remaining = total(); render(); }
@@ -8147,8 +8169,9 @@ if (memoryPanel) {
   render();
 })();
 
-clearChatBtn.addEventListener('click', () => {
-  if (!confirm('Clear this conversation?')) return;
+clearChatBtn.addEventListener('click', async () => {
+  const nm = curChat().title || deriveTitle(curChat().messages) || 'this chat';
+  if (!(await askSure({ title: `Clear “${nm}”?`, text: 'Every message in this chat goes. This can’t be undone.', yes: 'Clear chat' }))) return;
   const c = curChat();
   c.messages.length = 0;
   c.title = '';
@@ -9297,10 +9320,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=246').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=247').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=246', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=247', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9447,7 +9470,7 @@ function frOnboard(at = 0) {
       ${Q.body}
       <p class="fr-err" role="alert" hidden></p>
     </div>
-    <button type="submit" class="fr-go">${at === TOTAL - 1 ? 'Start studying' : 'Next'}</button>
+    <button type="submit" class="fr-go">${at === TOTAL - 1 ? 'Start studying' : 'Next question'}</button>
   </form>`;
   const f = el.querySelector('form'), err = el.querySelector('.fr-err');
   const say = (m) => { err.textContent = m; err.hidden = !m; };
@@ -9908,14 +9931,14 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   // signed in: the plan may have just been given — check, and say so
-  if (!signedOut && authToken()) refreshPlan(true).then(() => { if ((isPro ? planName() === 'pro' : isSubscriber()) && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-done').forEach((x) => x.remove()); planAskClear(); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if ((isPro ? planName() === 'pro' : isSubscriber()) && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-done').forEach((x) => x.remove()); planAskClear(); w.querySelector('.plus-ok').textContent = 'Close'; } });
   const form = w.querySelector('.plus-early'), mail = form.querySelector('input'), err = form.querySelector('.plus-err');
   const join = async () => {
     const btn = w.querySelector('.plus-join');
     if (!btn) return;
     const typed = !form.hidden;
     if (typed && !mail.value.trim()) { err.textContent = 'Type your email first.'; err.hidden = false; mail.focus(); return; }
-    btn.disabled = true; err.hidden = true;
+    const joinDone = busyButton(btn, 'Joining the early list…'); err.hidden = true;
     try {
       const email = await joinEarly(typed ? mail.value.trim() : '', src);
       form.remove();
@@ -9925,7 +9948,7 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
       w.querySelector('.plus-ok').textContent = 'Close';
       w.querySelector('.plus-ok').focus();
     } catch (e2) {
-      btn.disabled = false;
+      joinDone();
       // no account email to use: ask for one
       if (!typed) { form.hidden = false; btn.textContent = 'Keep my spot'; mail.focus(); if (e2.status !== 400) { err.textContent = CassieErrors.explain(e2, 'unknown'); err.hidden = false; } return; }
       err.textContent = CassieErrors.explain(e2, 'unknown'); err.hidden = false; mail.focus();
@@ -10290,7 +10313,7 @@ document.getElementById('account-row')?.addEventListener('click', async (e) => {
   if (act === 'signin') { settingsPanel.hidden = true; openAuth({ mode: 'signin' }); return; }
   if (act === 'signout') { await signOutNow(); return; }
   if (act === 'delete') {
-    if (!confirm('Delete your Cassie account? Your profile and saved mistakes are removed from the server. What’s on this device stays.')) return;
+    if (!(await askSure({ title: 'Delete your Cassie account?', text: 'Your account, profile and saved mistakes are removed from the server. What’s on this device stays. This can’t be undone.', yes: 'Delete account' }))) return;
     try { await authCall('/auth/delete', {}); signedOutLocally(); mascotSay('Account deleted.', 2500); } catch (e2) { alert(CassieErrors.explain(e2)); }
   }
 });
