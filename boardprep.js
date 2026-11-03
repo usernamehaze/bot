@@ -1,4 +1,4 @@
-/* Board and licensure exams (v240): one screen with two folders.
+/* Board and Licensure exams (v240): one screen with two folders.
    Lessons: every exam, then its parts and topics. A topic's box has Read the lesson (a short reviewer Cassie writes
    the first time it opens, kept on this device) and Quiz me (5 questions, one at a time, explained after each). The
    quiz can stop at any time and pick up where it was, with the lesson one tap away.
@@ -74,7 +74,7 @@
     onClose = typeof start.onClose === 'function' ? start.onClose : null;
     w = document.createElement('div');
     w.className = 'letc bp'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'bp-h');
-    w.innerHTML = '<div class="letc-card bp-card"><div class="letc-head bp-head"><button type="button" class="letc-x bp-back" aria-label="Back" hidden>‹</button><h2 id="bp-h">Board and licensure exams</h2><button type="button" class="letc-x bp-x" aria-label="Close">×</button></div><div class="bp-body" aria-live="polite"><p class="letc-note">Getting your exams ready…</p></div></div>';
+    w.innerHTML = '<div class="letc-card bp-card"><div class="letc-head bp-head"><button type="button" class="letc-x bp-back" aria-label="Back" hidden>‹</button><h2 id="bp-h">Board and Licensure exams</h2><button type="button" class="letc-x bp-x" aria-label="Close">×</button></div><div class="bp-body" aria-live="polite"><p class="letc-note">Getting your exams ready…</p></div></div>';
     document.body.appendChild(w);
     body = w.querySelector('.bp-body'); head = w.querySelector('#bp-h'); back = w.querySelector('.bp-back');
     w.querySelector('.bp-x').addEventListener('click', close);
@@ -126,7 +126,7 @@
 
   // the two folders
   function home() {
-    head.textContent = 'Board and licensure exams';
+    head.textContent = 'Board and Licensure exams';
     const p = P(), started = ORDER.filter((ex) => p.exams[ex] || Object.keys(p.read).some((k) => k.startsWith(ex + '|')));
     h(`<div class="bp-folders">
       <button type="button" class="bp-folder" data-go="lessons"><b>Lessons</b><small>Pick your exam, read a short reviewer for each topic, then quiz yourself.</small></button>

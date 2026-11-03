@@ -5,7 +5,7 @@
      { name: 'Read my PDF', blurb: 'Cassie reads it and explains it', go: 'pdf' }       (the app's own lesson action)
    An entry with neither lab nor ask asks Cassie to teach its name.
    Levels: pre (Nursery and Kindergarten), elem (Elementary), jhs (Junior High), shs (Senior High),
-   college (College). Board and licensure exams have their own folders (labs.js, from boardprep.js). */
+   college (College). Board and Licensure exams have their own folders (labs.js, from boardprep.js). */
 export const LEVEL_LESSONS = {
   pre: [],
   elem: [],

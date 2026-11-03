@@ -29,18 +29,18 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=242';
+import { MUSEUM } from './museum.js?v=243';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=242';
+import { LEVEL_LESSONS } from './level-lessons.js?v=243';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
 // labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone; the little ones' labs need no reading)
 const NO_HELPERS = new Set(['solar', 'space3d', ...KIDS.map((l) => l.id)]);
 // Levels, as the app's Lessons has them: the student's own first (app.js lessonLevel(), from the profile)
-export const LEVELS = [['pre', 'Nursery and Kindergarten'], ['elem', 'Elementary'], ['jhs', 'Junior High'], ['shs', 'Senior High'], ['college', 'College'], ['board', 'Board and licensure exams']];
+export const LEVELS = [['pre', 'Nursery and Kindergarten'], ['elem', 'Elementary'], ['jhs', 'Junior High'], ['shs', 'Senior High'], ['college', 'College'], ['board', 'Board and Licensure exams']];
 // which of a lab's own levels (levels: [...] in its file, docs/learn-levels.md) each level shows
 const LAB_LEVELS = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'], board: [] };
 const levelNow = () => {
@@ -94,7 +94,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=20', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=21', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
@@ -389,7 +389,7 @@ function createView() {
     });
     return box;
   }
-  /* v241: Board and licensure exams, a level of its own: Lessons (a folder per exam: My notes and reviewers, then
+  /* v241: Board and Licensure exams, a level of its own: Lessons (a folder per exam: My notes and reviewers, then
      every topic, each opening its reviewer or quiz) and Simulations (a folder per exam, opening its mock exam).
      The topics, progress and screens are boardprep.js's; Learn draws its folders and opens those screens. */
   let bpCat = null;
