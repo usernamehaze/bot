@@ -2462,9 +2462,10 @@ test('the LET, Cassie’s way: every major gets its own areas and all of Profess
   expect(by.elementary.length === 30 && by.elementary.includes('Teaching reading') && by.elementary.includes('Learning theories and motivation') && by.elementary.includes('Government and the Constitution with human rights') && !by.elementary.some((x) => /calculus/i.test(x)), 'Elementary: all of Prof Ed and Gen Ed, no major: ' + by.elementary.length);
   expect(T.every(([, l]) => l.every((x) => !/[,–—]/.test(x))), 'no commas or dashes in any topic');
   const last = () => { const m = groqCalls.at(-1).messages.filter((x) => x.role === 'user').at(-1); return typeof m.content === 'string' ? m.content : JSON.stringify(m.content); };
-  // LET practice (Lessons): Cassie's own board-style questions, taught step by step after each answer
-  await page.evaluate(() => goLesson('let:practice')); await page.waitForTimeout(1200);
-  expect(/Quiz me on: the LET/.test(last()) && /PRC board exam/.test(last()) && /four options/.test(last()) && /each choice on its own line/.test(last()) && /your own multiple choice/.test(last()) && /step by step/.test(last()), 'LET practice is board-style and taught step by step: ' + last().slice(0, 300));
+  // LET practice (v240): it opens Board exams' Simulations, where every question is Cassie's own (the Board exams test checks them)
+  await page.evaluate(() => goLesson('let:practice')); await page.waitForSelector('.bp');
+  expect(/Simulations/.test(await page.locator('#bp-h').innerText()), 'LET practice opens the simulations');
+  await page.evaluate(() => window.CassieBoardPrep.close());
   // a LET plan's quiz and learn tasks are board-style; another exam's are not
   await page.evaluate(() => { openExamTask({ kind: 'quiz', topic: 'Assessment of Student Learning' }, { name: 'LET Secondary: Mathematics' }); });
   await page.waitForTimeout(1200);
