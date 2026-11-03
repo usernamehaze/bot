@@ -3752,7 +3752,7 @@ html.native:not(.lite) { background:
 /* v244: the ask box takes less of a phone. The bar's room is counted once (the box's own margin no longer adds the
    home indicator again), and in a chat that has started, while nobody types, the box is one row and the quick
    actions step aside (app.js chatRest: a tap on the box brings everything back). */
-html.native.tab-chat:not(.typing) #app { padding-bottom: calc(76px + var(--safe-bottom)); }
+html.native.tab-chat:not(.typing) #app { padding-bottom: calc(80px + var(--safe-bottom)); }
 html.native.tab-chat .composer { margin-bottom: var(--sp-2, 8px); }
 html.native.tab-chat .composer { padding: var(--sp-2, 8px) var(--sp-3, 12px); gap: var(--sp-1, 4px); }
 html.native.tab-chat #quick-actions { padding-top: var(--sp-1, 4px); padding-bottom: 0; }

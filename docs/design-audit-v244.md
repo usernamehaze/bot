@@ -41,7 +41,7 @@ Five checks on every main screen: hierarchy, type, space, color, and "why it loo
 
 | # | Selector | Before | Now | Status |
 |---|---|---|---|---|
-| 8 | `html.native.tab-chat:not(.typing) #app` padding-bottom | 72px + safe area, plus the composer's own margin of 12px + safe area | 76px + safe area; composer margin 8px | Done |
+| 8 | `html.native.tab-chat:not(.typing) #app` padding-bottom | 72px + safe area, plus the composer’s own margin of 12px + safe area | 80px + safe area (on the 8-point scale); composer margin 8px | Done |
 | 9 | `html.chat-rest` (app.js `chatRest`) | always the full composer and chips | in a chat that has started and while nobody types: one row (box, mic, Send), chips step aside; tapping the box brings everything back | Done |
 | 10 | Composer at rest | 130px | 66px | Done |
 | 11 | Composer while typing | 130px | 118px | Done |
