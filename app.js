@@ -2582,7 +2582,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=245'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=246'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2604,7 +2604,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=245'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=246'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2653,6 +2653,7 @@ function hubAct(act) {
   if (act === 'lab') { if (onPhoneHome()) nav('labs'); else openLabs(); return; }
   if (act === 'today') { openLabs(todayLab()); return; }
   if (act === 'calendar') { openCalFull(); return; }
+  if (act === 'plan') { const a = planAsk(); if (a) plusSheet(a.what, a.why, a.src || 'bell', a.title || undefined, a.plan); else openSettings('plans'); return; }
   if (act === 'lessons') { openLessons(); return; }
   if (act === 'games') { openLabs(undefined, { section: 'games' }); return; }
   if (act === 'board') { nav('chat'); const bb = document.getElementById('board-btn'); if (bb) bb.click(); return; }
@@ -2683,13 +2684,13 @@ function hubHero(name, returning, due, phone) {
   if (phone) { // a phone: the hello and the bell
     const hr = new Date().getHours(), part = hr < 12 ? 'Morning' : hr < 18 ? 'Afternoon' : 'Evening';
     hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><h1 class="hub-me"></h1></span>
-    ${themeSwitch('hub-theme')}<button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
+    ${themeSwitch('hub-theme')}<button type="button" class="hub-bell" aria-label="Reminders" aria-expanded="false">${HUB_BELL}</button></div>`;
     hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
     hero.querySelector('.hub-me').textContent = `${part}${name ? ', ' + name : ''}`;
     return hero;
   }
   hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><small>${returning ? 'Hi, welcome back' : 'Hi, welcome'}</small>${returning ? '<h1 class="hub-me"></h1>' : '<b class="hub-me"></b>'}</span>
-    <button type="button" class="hub-bell" aria-label="Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}" aria-expanded="false">${HUB_BELL}${due ? '<i class="hub-dot" aria-hidden="true"></i>' : ''}</button></div>`;
+    <button type="button" class="hub-bell" aria-label="Reminders" aria-expanded="false">${HUB_BELL}</button></div>`;
   hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
   hero.querySelector('.hub-me').textContent = name || 'Student';
   return hero;
@@ -2697,6 +2698,12 @@ function hubHero(name, returning, due, phone) {
 // the bell: what's waiting today (cards due, the focus timer, your streak, today's lab)
 let hubRemindOpen = false;
 var hubMoreOpen = (() => { try { return sessionStorage.getItem('cassie.moreTools') === '1'; } catch (e) { return false; } })(); // (More tools tapped: all of them for the rest of this visit)
+// the bell's dot and name: cards due, or a plan reminder (v246)
+function hubBellMark(bell, due) {
+  const a = planAsk();
+  if (due || a) bell.insertAdjacentHTML('beforeend', '<i class="hub-dot" aria-hidden="true"></i>');
+  bell.setAttribute('aria-label', `Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}${a ? `${due ? ',' : ':'} a plan reminder` : ''}`);
+}
 function hubReminders(due, streak) {
   const box = document.createElement('div');
   box.className = 'hub-remind' + (hubRemindOpen ? ' open' : ''); // (Home is redrawn often on a phone: the open state lives in hubRemindOpen)
@@ -2709,6 +2716,7 @@ function hubReminders(due, streak) {
   ];
   box.innerHTML = '<h2 class="hub-h">Reminders</h2>' + rows.map(([a, i]) => `<button type="button" class="hub-chat" data-hub="${a}"><i>${i}</i><span><b></b><small></small></span>${HUB_ICON.go}</button>`).join('');
   box.querySelectorAll('.hub-chat').forEach((b, k) => { b.querySelector('b').textContent = rows[k][2]; b.querySelector('small').textContent = rows[k][3]; });
+  const ask = planAsk(); if (ask) box.querySelector('.hub-h').insertAdjacentElement('afterend', planAskRow(ask)); // (the plan reminder first)
   return box;
 }
 // the phone's Today's Lab: a big live preview, the lab's name and subject, and a play button
@@ -2730,7 +2738,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=245').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=246').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2852,6 +2860,7 @@ function buildHub({ ideas = false, phone = false } = {}) {
   } else el.prepend(hero, remind, homeTop(), boxes);
   const bell = hero.querySelector('.hub-bell');
   bell.setAttribute('aria-expanded', String(hubRemindOpen));
+  hubBellMark(bell, due);
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
@@ -3262,8 +3271,7 @@ function deskChrome() {
     me.querySelector('small').textContent = email || (accountsOn() ? 'Sign in' : 'Your settings');
     me.setAttribute('aria-label', `${name || 'You'}: ${email ? 'your account' : 'open your settings'}`);
   }
-  const due = window.CassieCards ? window.CassieCards.dueCount() : 0, dot = document.querySelector('#top-bell .top-dot');
-  if (dot) { dot.hidden = !due; document.getElementById('top-bell').setAttribute('aria-label', `Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}`); }
+  planAskDots(); // (the bell's dot: cards due or a plan reminder)
 }
 setInterval(deskChrome, 2000);
 (() => { // (Lessons in the computer's Menu, just after Study plan)
@@ -7382,7 +7390,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=245');
+      exploreMod = await import('./explore/cell3d.js?v=246');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7432,7 +7440,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=245');
+      labsMod = await import('./labs/labs.js?v=246');
       islandRest();
     }
     labsMod.open({
@@ -9289,10 +9297,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=245').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=246').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=245', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=246', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9786,7 +9794,7 @@ async function paidReturn(id) {
     if (st && st.status === 'paid') {
       await refreshPlan(true);
       const name = st.plan === 'pro' ? 'Pro' : 'Plus', paid = /^US\$/.test(st.shown || '') ? `${pesos(st.php)} (${st.shown})` : pesos(st.php);
-      sh.set(`✅ You have Cassie ${name} until ${planDate(st.until || (state.plan && state.plan.until) || Date.now())}`, `Paid ${paid}. It never renews by itself: Cassie reminds you before it ends. Thank you!`);
+      sh.set(`You have Cassie ${name} until ${planDate(st.until || (state.plan && state.plan.until) || Date.now())}`, `Paid ${paid}. It never renews by itself: Cassie reminds you before it ends. Thank you!`);
       renderAccountRow();
       return;
     }
@@ -9824,9 +9832,50 @@ async function joinEarly(email, src) {
   track('feature', 'early-' + src);
   return r.email;
 }
+/* The bell remembers the last plan feature a student tried (v246): "You're accessing a Pro feature. Get the plan?"
+   in the Home bell (and the computer's), with a dot, for 7 days or until they have the plan. One tap reopens this sheet. */
+const PLAN_ASK_KEY = 'cassie.planAsk', PLAN_ASK_DAYS = 7;
+function planAsk() {
+  let a = null;
+  try { a = JSON.parse(localStorage.getItem(PLAN_ASK_KEY) || 'null'); } catch (e) { a = null; }
+  if (!a || !a.at || Date.now() - a.at > PLAN_ASK_DAYS * 864e5) return null;
+  if (a.plan === 'pro' ? planName() === 'pro' : isSubscriber()) return null; // (they have it now)
+  return a;
+}
+function planAskClear() { try { localStorage.removeItem(PLAN_ASK_KEY); } catch (e) { /* storage blocked */ } planAskDots(); }
+function planAskLines(a) { const p = a.plan === 'pro' ? 'Pro' : 'Plus'; return [`You’re accessing a ${p} feature`, `${a.what ? a.what + ' comes with ' + p + '. ' : ''}Get the plan?`]; }
+// the bells' dots and names follow: cards due or a plan reminder
+function planAskDots() {
+  const a = planAsk(), due = window.CassieCards ? window.CassieCards.dueCount() : 0;
+  const label = `Reminders${due ? `: ${due} ${due === 1 ? 'card' : 'cards'} due` : ''}${a ? `${due ? ',' : ':'} a plan reminder` : ''}`;
+  document.querySelectorAll('.hub-bell').forEach((b) => {
+    let d = b.querySelector('.hub-dot');
+    if ((due || a) && !d) { d = document.createElement('i'); d.className = 'hub-dot'; d.setAttribute('aria-hidden', 'true'); b.appendChild(d); }
+    if (!(due || a) && d) d.remove();
+    b.setAttribute('aria-label', label);
+  });
+  const td = document.querySelector('#top-bell .top-dot');
+  if (td) { td.hidden = !(due || a); document.getElementById('top-bell').setAttribute('aria-label', label); }
+  document.querySelectorAll('.hub-remind').forEach((box) => { // (an open list gets the row at once)
+    const row = box.querySelector('[data-hub="plan"]');
+    if (!a) { if (row) row.remove(); return; }
+    if (row) return;
+    box.querySelector('.hub-h')?.insertAdjacentElement('afterend', planAskRow(a));
+  });
+}
+function planAskRow(a) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'hub-chat hub-plan'; b.dataset.hub = 'plan';
+  b.innerHTML = `<i>${PLAN_ICON}</i><span><b></b><small></small></span>${HUB_ICON.go}`;
+  const [t, x] = planAskLines(a); b.querySelector('b').textContent = t; b.querySelector('small').textContent = x;
+  return b;
+}
+const PLAN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.5v2.5"/></svg>';
 function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'pro' asks for Pro, v235)
   const isPro = plan === 'pro';
   track('feature', 'plus-ask');
+  try { localStorage.setItem(PLAN_ASK_KEY, JSON.stringify({ what: String(what || '').slice(0, 60), why: String(why || '').slice(0, 200), title: title || '', plan: isPro ? 'pro' : 'plus', src, at: Date.now() })); } catch (e) { /* storage blocked */ }
+  setTimeout(planAskDots, 0);
   document.querySelector('.plus-sheet')?.remove();
   const signedOut = accountsOn() && !authToken();
   const w = document.createElement('div');
@@ -9844,24 +9893,22 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
       <li>Your exams planned day by day, up to 5 at once, even from your notes</li>
       <li>All the 3D any time, and save or print your notes and boards</li>`}
     </ul>
-    <p class="plus-foot">${serverPay ? 'One payment, and it never renews: 7 days to change your mind. Everything else in Cassie stays free.' : isPro ? 'Coming soon: Pro, from ₱349 a month or ₱1,399 for the semester. One payment that never renews, with 7 days to change your mind.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
+    <p class="plus-foot">${serverPay ? `One payment, and it never renews: 7 days to change your mind.${payPrices ? ` <button type="button" class="plus-buy plus-buy-sem plus-linkish" data-bill="sem">Or pay once for the semester: ${escapeHtml(priceLine(isPro ? 'pro' : 'plus', 'sem'))}</button>` : ''}` : isPro ? 'Coming soon: Pro, from ₱349 a month or ₱1,399 for the semester. One payment that never renews, with 7 days to change your mind.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
     <form class="plus-early" novalidate hidden>
       <label for="plus-early-mail">Your email, so Cassie can tell you the day it opens</label>
       <input id="plus-early-mail" type="email" autocomplete="email" inputmode="email" placeholder="juan@gmail.com" required>
       <p class="plus-err" role="alert" hidden></p>
     </form>
     <div class="plus-actions">
-      ${serverPay && payPrices ? (isPro ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Pro: ${escapeHtml(priceLine('pro', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">Pro for the semester: ${escapeHtml(priceLine('pro', 'sem'))}</button>` : `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">The Pasado Pass: ${escapeHtml(priceLine('plus', 'sem'))}</button>`)
+      ${serverPay && payPrices ? (isPro ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Pro: ${escapeHtml(priceLine('pro', 'month'))}</button>` : `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button>`)
         : earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : `<button type="button" class="plus-go plus-join">${isPro ? 'Get Pro early' : 'Get the Pasado Pass early'}</button>`}
-      <a class="plus-see" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
-      ${signedOut ? '<button type="button" class="plus-in">I have a plan. Sign in</button>' : ''}
       <button type="button" class="plus-ok">Not now</button>
     </div></div>`;
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
   // signed in: the plan may have just been given — check, and say so
-  if (!signedOut && authToken()) refreshPlan(true).then(() => { if ((isPro ? planName() === 'pro' : isSubscriber()) && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-see, .plus-done').forEach((x) => x.remove()); w.querySelector('.plus-ok').textContent = 'OK'; } });
+  if (!signedOut && authToken()) refreshPlan(true).then(() => { if ((isPro ? planName() === 'pro' : isSubscriber()) && w.isConnected) { w.querySelector('h3').textContent = `You have ${planName() === 'pro' ? 'Pro' : 'Plus'}`; w.querySelector('.plus-list').remove(); w.querySelector('.plus-why')?.remove(); w.querySelector('.plus-foot').textContent = 'Your plan just came through. Tap it again to open it.'; w.querySelectorAll('.plus-join, .plus-done').forEach((x) => x.remove()); planAskClear(); w.querySelector('.plus-ok').textContent = 'OK'; } });
   const form = w.querySelector('.plus-early'), mail = form.querySelector('input'), err = form.querySelector('.plus-err');
   const join = async () => {
     const btn = w.querySelector('.plus-join');
@@ -9887,7 +9934,6 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
   form.addEventListener('submit', (e) => { e.preventDefault(); join(); });
   w.addEventListener('click', (e) => {
     if (e.target === w || e.target.closest('.plus-ok')) close();
-    else if (e.target.closest('.plus-in')) { close(); openAuth({ mode: 'signin' }); }
     else if (e.target.closest('.plus-buy')) { close(); buyPlan(plan, e.target.closest('.plus-buy').dataset.bill); }
     else if (e.target.closest('.plus-join')) {
       // signed in: one tap, with the account's email; otherwise the email field first

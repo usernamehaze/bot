@@ -104,3 +104,10 @@ These change what a screen shows or where things live, so nothing here was built
 2. **Get Pro sheet.** It has 4 actions (Get early, See the plans, Sign in, Not now). Cut it to 2 (Get Pro, Not now) and move the rest to a link line?
 3. **Learn for a board reviewee.** Today's Labs (a science lab) is the first thing they see. Should their Board and Licensure exams folder come before Today's Labs?
 4. **Chat top bar.** The first question in a chat scrolls under the frosted top bar, half-read. Make the top bar solid in chat?
+
+## Your decisions, built in v246
+
+1. **Home header.** Kept see-through, with no cut anywhere: no rim, bevel, shadow or bottom line; the frosted glass fades out over its last 16px. The light and dark switch is smaller (track 52x30 to 40x24), and its tap area stays 48px.
+2. **Get Pro sheet.** Two buttons: Get (or Get early) and Not now. When payments open, the semester price is a line in the small print. When a student tries a plan feature, the bell (top right on Home, and on the computer's top bar) gets a dot and the first reminder reads "You're accessing a Pro feature. Every board exam lesson comes with Pro. Get the plan?". One tap reopens the sheet. The reminder lasts 7 days and goes away once they have the plan.
+3. **Learn.** Today's Lab stays first and full width, as a slim card (72px): only the lab's name and the play button.
+4. **Chat top bar.** Kept see-through, with no rim, bevel, shadow or bottom line; it fades out like the Home header. The Board and Memory icons are drawn at 2.6 (was 1.9 and 2), so they stay clear over the chat.

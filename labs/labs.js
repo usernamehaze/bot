@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=245';
+import { MUSEUM } from './museum.js?v=246';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=245';
+import { LEVEL_LESSONS } from './level-lessons.js?v=246';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -263,10 +263,9 @@ function createView() {
   function lpRec() {
     const id = (typeof todayLab === 'function' && todayLab()) || todays().id, lab = LABS.find((l) => l.id === id) || todays();
     const info = (typeof LAB_INFO === 'object' && LAB_INFO[lab.id]) || [lab.name, NAMES[lab.subject] || 'Science', 10];
-    $('.lp-rec').innerHTML = `<div class="lp-card">
-      <canvas class="lp-pv lp-big" data-pv="${lab.id}" aria-hidden="true"></canvas>
-      <span class="lp-tag">Today’s Lab</span>${CURSOR.replace('labs-cur', 'labs-cur lp-peek')}
-      <div class="lp-info"><b>${esc(lab.name)}</b><small>${esc(info[1])} · about ${info[2]} min</small></div>
+    // (v246: a slim card, full width, only the lab's name and the play button; the section title says it is today's)
+    $('.lp-rec').innerHTML = `<div class="lp-card lp-slim" data-subject="${esc(info[1])}">
+      <div class="lp-info"><b>${esc(lab.name)}</b></div>
       <button type="button" class="lp-play" data-lab="${lab.id}" aria-label="Open today’s lab: ${esc(lab.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button></div>`;
   }
   // a list: the Learn labs and 3D views, the study tools, or one filter's labs; a folder of folders
