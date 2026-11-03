@@ -499,6 +499,13 @@ button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is
   flex-shrink: 0;
 }
 .model-pill:hover { border-color: var(--primary); }
+.model-pill .mp-ic { display: none; width: 20px; height: 20px; flex: none; }
+/* (v248) a phone's side menu: Memory under New chat, with its name */
+.side-mem { position: relative; display: flex !important; align-items: center; justify-content: center; gap: var(--sp-2, 8px); width: 100%; min-height: var(--tap, 48px); margin-top: var(--sp-2, 8px); padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; }
+#memory-btn.side-mem { width: 100% !important; height: auto !important; min-width: 0 !important; min-height: var(--tap, 48px) !important; border-radius: 999px !important; padding: 0 var(--sp-4, 16px) !important; margin-bottom: var(--sp-2, 8px); }
+#memory-btn.side-mem svg { display: block !important; width: 20px; height: 20px; flex: none; }
+.topbar .side-mem .app-label, .side-mem .app-label { display: inline !important; }
+.side-mem .memory-dot { position: static; }
 .model-pill #model-pill-model { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .model-pill #model-pill-level { color: var(--muted); white-space: nowrap; }
 /* on narrow phones, drop the level label so the model name stays readable */
@@ -3653,7 +3660,11 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
   .composer-row .composer-spacer { display: none; }
   .composer-row .model-pill { margin-right: auto; min-width: 0; flex: 0 1 auto; padding-inline: var(--sp-2, 8px); }
   .composer-row .model-pill #model-pill-model { display: none; }
-  .composer-row .model-pill[data-short]::before { content: attr(data-short); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  /* (v248) the model picker is a small icon (its name is in its label), so every button keeps 8px from the next */
+  .composer-row { gap: var(--sp-2, 8px); }
+  .composer-row .model-pill { width: var(--tap, 48px); min-width: var(--tap, 48px); height: var(--tap, 48px); padding: var(--sp-1, 4px) !important; justify-content: center; border-color: transparent; background: transparent; background-clip: content-box; outline: 1px solid var(--border); outline-offset: -5px; border-radius: 50%; }
+  .composer-row .model-pill > span { display: none !important; }
+  .composer-row .model-pill .mp-ic { display: block; }
   .composer-row .icon-btn.round { padding: var(--sp-1, 4px); border-color: transparent; background-clip: content-box; outline: 1px solid var(--border); outline-offset: -5px; }
   .composer-row .icon-btn.round.primary { outline-color: var(--primary); }
   .composer-row .icon-btn.round:focus-visible { outline: 3px solid var(--lab-accent, currentColor); outline-offset: 0; }

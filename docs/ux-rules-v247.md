@@ -134,3 +134,10 @@ Nothing here was built.
 2. **Phone tab bar.** Only the open tab shows its name. Showing all 6 names would make every tab 60px wide with small words under the icons (like iPhone apps), or keep 5 tabs and move one into You.
 3. **Chat top bar, Board and Memory.** Small words under each icon ("Board", "Memory") fit if the bar grows 12px taller, or they move into the menu.
 4. **Ask box icons.** Camera, file, Talk and mic could show names in a row above the keyboard while typing, or a first-time hint could name each once.
+
+## Your decisions, built in v248
+
+1. **Ask box while typing:** the model picker is a small sparkle icon on a phone (its name, such as "Model: GPT-OSS 120B, Auto", is in its label). Every button in the row is now 8px or more apart. A computer keeps the name.
+2. **Tab bar:** unchanged, icons only with the open tab named.
+3. **Chat top bar:** Board stays, icon only. Memory moved to the phone side menu, just under New chat, with its name; a tap opens Memory and closes the menu. A computer keeps Memory under General.
+4. **Ask box icons:** unchanged, icons only.
