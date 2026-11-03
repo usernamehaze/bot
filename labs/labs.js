@@ -29,21 +29,22 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=240';
+import { MUSEUM } from './museum.js?v=241';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=240';
+import { LEVEL_LESSONS } from './level-lessons.js?v=241';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
 // labs without Teach me, Ask Cassie and Quiz me (in the 3D space labs they froze a real phone; the little ones' labs need no reading)
 const NO_HELPERS = new Set(['solar', 'space3d', ...KIDS.map((l) => l.id)]);
 // Levels, as the app's Lessons has them: the student's own first (app.js lessonLevel(), from the profile)
-export const LEVELS = [['pre', 'Nursery and Kindergarten'], ['elem', 'Elementary'], ['jhs', 'Junior High'], ['shs', 'Senior High'], ['college', 'College and board exams']];
+export const LEVELS = [['pre', 'Nursery and Kindergarten'], ['elem', 'Elementary'], ['jhs', 'Junior High'], ['shs', 'Senior High'], ['college', 'College'], ['board', 'Board and licensure exams']];
 // which of a lab's own levels (levels: [...] in its file, docs/learn-levels.md) each level shows
-const LAB_LEVELS = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'] };
+const LAB_LEVELS = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'], board: [] };
 const levelNow = () => {
+  if (typeof state !== 'undefined' && state.profile && state.profile.grade === 'Board exam reviewee') return 'board'; // (v241)
   const l = (typeof lessonLevel === 'function' && lessonLevel()) || '';
   if (LAB_LEVELS[l]) return l;
   const g = (typeof labLevel === 'function' && labLevel()) || '';
@@ -93,7 +94,7 @@ function createView() {
   let cssReady = Promise.resolve();
   if (!document.querySelector('link[data-labs-css]')) {
     const css = document.createElement('link');
-    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=18', import.meta.url).href; css.dataset.labsCss = '1';
+    css.rel = 'stylesheet'; css.href = new URL('./labs.css?v=19', import.meta.url).href; css.dataset.labsCss = '1';
     cssReady = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 5000); });
     document.head.appendChild(css);
   }
@@ -321,8 +322,10 @@ function createView() {
   function groupName(key) {
     const [kind, k] = key.split(':');
     const lv = (LEVELS.find((x) => x[0] === k) || [])[1] || '';
-    if (kind === 'lessons') return `${lv} lessons`;
-    if (kind === 'levelsims') return `${lv} simulations`;
+    if (kind === 'lessons') return k === 'board' ? 'Board exam lessons' : `${lv} lessons`;
+    if (kind === 'levelsims') return k === 'board' ? 'Board exam simulations' : `${lv} simulations`;
+    if (kind === 'bexam') return bpName(k);
+    if (kind === 'bnotes') return 'My notes and reviewers';
     if (kind === 'visual') return 'Visual Labs';
     const all = { level: LEVELS, subject: [...SUBJECT_FOLDERS, ['3d', '3D']], tools: [...TOOL_FOLDERS, ['all', 'Study tools']] }[kind] || [];
     return (all.find((x) => x[0] === k) || [])[1] || '';
@@ -350,7 +353,7 @@ function createView() {
     const mine = levelNow(), order = [...LEVELS.filter(([k]) => k === mine), ...LEVELS.filter(([k]) => k !== mine)];
     const box = el('div', 'lf-box');
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    box.append(folderGrid(order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine })), 'lf-levels'), hint);
+    box.append(folderGrid(order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine, ...(k === 'board' ? { sub: 'Lessons and simulations' } : {}) })), 'lf-levels'), hint);
     return box;
   }
   const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
@@ -360,6 +363,11 @@ function createView() {
   function innerFolders(key) {
     const [kind, k] = key.split(':');
     if (kind === 'visual') return simFolders();
+    if (key === 'level:board') return folderGrid([{ key: 'lessons:board', name: 'Lessons', sub: 'A reviewer for every topic' }, { key: 'levelsims:board', name: 'Simulations', sub: 'A mock exam for each' }], 'lf-inlevel');
+    if (key === 'lessons:board') return boardExams('bexam');
+    if (key === 'levelsims:board') return boardExams('bsim');
+    if (kind === 'bexam') return boardExamBox(k);
+    if (kind === 'bnotes') return boardNotesBox(k);
     if (kind !== 'level') return null;
     const ls = levelLessons(k);
     return folderGrid([{ key: 'lessons:' + k, name: 'Lessons', sub: ls.length ? `${ls.length} ${ls.length === 1 ? 'lesson' : 'lessons'}` : 'Coming soon' }, { key: 'levelsims:' + k, name: 'Simulations' }], 'lf-inlevel');
@@ -375,11 +383,91 @@ function createView() {
     box.setAttribute('role', 'list');
     ls.forEach((l, i) => {
       const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.setAttribute('role', 'listitem');
-      if (l.lab) b.dataset.lab = l.lab; else b.dataset.lessonAsk = l.ask || `Teach me ${l.name}`;
+      if (l.lab) b.dataset.lab = l.lab; else if (l.go) b.dataset.lessonGo = l.go; else b.dataset.lessonAsk = l.ask || `Teach me ${l.name}`;
       b.innerHTML = `<span class="lp-row-text"><b>${esc(l.name)}</b>${l.blurb ? `<small>${esc(l.blurb)}</small>` : ''}</span><i aria-hidden="true">›</i>`;
       b.dataset.i = i; box.appendChild(b);
     });
     return box;
+  }
+  /* v241: Board and licensure exams, a level of its own: Lessons (a folder per exam: My notes and reviewers, then
+     every topic, each opening its reviewer or quiz) and Simulations (a folder per exam, opening its mock exam).
+     The topics, progress and screens are boardprep.js's; Learn draws its folders and opens those screens. */
+  let bpCat = null;
+  const bpName = (ex) => { const x = bpCat && bpCat.exams.find((e) => e.key === ex); return x ? x.name : ''; };
+  const bpLoad = () => (typeof boardPrepReady === 'function' ? boardPrepReady().then((B) => B.catalog()).then((c) => (bpCat = c)) : Promise.reject(new Error('board')));
+  // a box that fills once the exams are known
+  const bpBox = (cls, fill) => {
+    const box = el('div', 'lf-board ' + cls);
+    const go = () => { box.replaceChildren(); fill(box); };
+    if (bpCat) go(); else { box.innerHTML = '<p class="lf-hint">Getting the exams ready…</p>'; bpLoad().then(go).catch(() => { box.innerHTML = '<p class="lf-hint">The exams couldn’t load. Check your connection, then open this again.</p>'; }); }
+    return box;
+  };
+  // every exam, as folders: kind bexam (its lessons) or bsim (its simulation)
+  function boardExams(kind) {
+    return bpBox('lf-bexams', (box) => {
+      [['Philippine board exams', true], ['For studying or working abroad', false]].forEach(([title, ph]) => {
+        const h = el('h4', 'lf-sub'); h.textContent = title; box.appendChild(h);
+        box.appendChild(folderGrid(bpCat.exams.filter((x) => x.ph === ph).map((x) => {
+          let sub = x.full;
+          if (kind === 'bexam') { const c = bpCat.count(x.key); if (c) sub = `${c[0]} of ${c[1]} topics done`; }
+          else { const s = bpCat.sim(x.key); if (s && s.fin) sub = `Last score ${s.score}%`; else if (s && s.n) sub = `In progress: question ${s.i + 1} of ${s.n}`; }
+          return { key: `${kind}:${x.key}`, name: x.name, sub };
+        }), 'lf-exams'));
+      });
+    });
+  }
+  // an exam's lessons: My notes and reviewers first, then its parts and topics
+  function boardExamBox(ex) {
+    return bpBox('lf-bexam', (box) => {
+      const n = bpCat.notes(ex).length;
+      box.appendChild(folderGrid([{ key: 'bnotes:' + ex, name: 'My notes and reviewers', sub: n ? `${n} saved` : 'Add your own' }], 'lf-notesf'));
+      if (bpCat.needsSetup(ex)) {
+        const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.dataset.bpSetup = ex;
+        b.innerHTML = '<span class="lp-row-text"><b>Choose your level first</b><small>Then its topics show here</small></span><i aria-hidden="true">›</i>';
+        box.appendChild(b); return;
+      }
+      const lv = bpCat.level(ex); if (lv) { const p = el('p', 'lf-hint'); p.textContent = `${lv}. `; const c = el('button', 'lab-btn lf-change'); c.type = 'button'; c.dataset.bpSetup = ex; c.textContent = 'Change level'; p.appendChild(c); box.appendChild(p); }
+      bpCat.parts(ex).forEach((part) => {
+        const h = el('h4', 'lf-sub'); h.textContent = part.name; box.appendChild(h);
+        const list = el('div', 'lf-lessons'); list.setAttribute('role', 'list');
+        part.topics.forEach((tp) => {
+          const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.setAttribute('role', 'listitem');
+          b.dataset.bpTopic = tp.t; b.dataset.bpPart = part.name; b.dataset.bpEx = ex; if (tp.locked) b.dataset.bpPro = '1';
+          const tag = tp.locked ? 'Pro' : tp.status;
+          b.innerHTML = `<span class="lp-row-text"><b>${esc(tp.t)}</b><small>${tag ? esc(tag) : 'Read the lesson or quiz yourself'}</small></span><i aria-hidden="true">›</i>`;
+          list.appendChild(b);
+        });
+        box.appendChild(list);
+      });
+    });
+  }
+  // the student's own notes and reviewers for one exam
+  function boardNotesBox(ex) {
+    return bpBox('lf-bnotes', (box) => {
+      const add = el('button', 'lab-btn lf-addnote'); add.type = 'button'; add.dataset.bpAddnote = ex; add.textContent = 'Add notes or a reviewer'; box.appendChild(add);
+      const ns = bpCat.notes(ex);
+      if (!ns.length) { const p = el('p', 'lf-hint'); p.textContent = 'Paste your notes, or attach a PDF, a Word file or a photo. Cassie can quiz you on them on the spot. They stay on this device.'; box.appendChild(p); return; }
+      const list = el('div', 'lf-lessons'); list.setAttribute('role', 'list');
+      ns.forEach((n) => {
+        const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.setAttribute('role', 'listitem'); b.dataset.bpNote = n.id; b.dataset.bpEx = ex;
+        b.innerHTML = `<span class="lp-row-text"><b>${esc(n.title)}</b><small>Read it, or let Cassie quiz you on it</small></span><i aria-hidden="true">›</i>`;
+        list.appendChild(b);
+      });
+      box.appendChild(list);
+    });
+  }
+  // Learn draws again when a Board exams screen closes (progress, a new note)
+  const bpRedraw = () => { bpLoad().then(() => { if (!lpList.hidden && lp.dataset.view) lpShow(lp.dataset.view); renderShelf(); }).catch(() => {}); };
+  const bpOpen = (start) => { if (typeof openBoardPrep === 'function') openBoardPrep({ ...start, onClose: bpRedraw }); };
+  // a tap on a board row or an exam's simulation folder (true: handled)
+  function bpClick(e) {
+    const t = e.target.closest('[data-bp-topic]');
+    if (t) { if (t.dataset.bpPro && typeof boardProAsk === 'function') boardProAsk(); else bpOpen({ view: 'topic', exam: t.dataset.bpEx, t: t.dataset.bpTopic, part: t.dataset.bpPart }); return true; }
+    const n = e.target.closest('[data-bp-note]'); if (n) { bpOpen({ view: 'note', exam: n.dataset.bpEx, id: n.dataset.bpNote }); return true; }
+    const a = e.target.closest('[data-bp-addnote]'); if (a) { bpOpen({ view: 'addnote', exam: a.dataset.bpAddnote }); return true; }
+    const s = e.target.closest('[data-bp-setup]'); if (s) { bpOpen({ view: 'setup', exam: s.dataset.bpSetup }); return true; }
+    const f = e.target.closest('.lf[data-group^="bsim:"]'); if (f) { bpOpen({ view: 'sims', exam: f.dataset.group.slice(5) }); return true; }
+    return false;
   }
   let lpPath = []; // (the phone: the folders open, one inside the next)
   const toolFolders = () => folderGrid(TOOL_FOLDERS.map(([k, name]) => ({ key: 'tools:' + k, name })), 'lf-tools');
@@ -426,6 +514,7 @@ function createView() {
       if (id === 'all') lpHomeView(); else { lpChip(id); lpPath = [id]; previews().then(() => lpShow(id)); }
       return;
     }
+    if (bpClick(e)) return;
     const f = e.target.closest('.lf');
     if (f) { openFolder(f, () => previews().then(() => { lpPath.push(f.dataset.group); lpShow(f.dataset.group); })); return; }
     const go = e.target.closest('[data-lp-open]');
@@ -718,6 +807,9 @@ function createView() {
     // a lesson Cassie teaches (labs/level-lessons.js, an entry without a lab)
     const la = e.target.closest('[data-lesson-ask]');
     if (la && shelf.contains(la)) { const ask = la.dataset.lessonAsk; close(); if (opts.onAsk) opts.onAsk(ask, {}); return; }
+    const lg = e.target.closest('[data-lesson-go]');
+    if (lg && shelf.contains(lg)) { const go = lg.dataset.lessonGo; close(); if (typeof goLesson === 'function') goLesson(go); return; }
+    if (!lp.contains(e.target) && bpClick(e)) return; // (the phone list has its own)
     // a computer's folders: open one (inside the one that is open), or back one step
     const f = e.target.closest('.labs-scroll .lf');
     if (f) { openFolder(f, () => { deskPath.push(f.dataset.group); renderShelf(); $('.labs-scroll').scrollTop = 0; }); return; }

@@ -606,7 +606,7 @@ const dinerLab = {
       draw(); cv.redraw();
     }
     function draw() {
-      st.set([['Served', `${served}/8`], ['Hearts', '❤'.repeat(hearts) || '-'], ['Tips', '₱' + coins]]);
+      st.set([['Served', `${served}/8`], ['Hearts left', String(Math.max(0, hearts))], ['Tips', '₱' + coins]]);
       if (!order) { card.innerHTML = '<p class="gm-q">Welcome to the Fraction Diner! Tap “Start a shift”.</p>'; return; }
       if (over) return;
       const o = order;
@@ -687,7 +687,7 @@ const dinerLab = {
       over = true; clearInterval(tick);
       const b = api.best(coins, `₱${coins} in tips`);
       card.innerHTML = `<p class="gm-q">Shift over! You earned <b>₱${coins}</b> in tips${hearts ? ` with ${hearts} heart${hearts === 1 ? '' : 's'} left` : ''}.${b && b.isNew ? ' New best!' : ''}</p>`;
-      order = null; cv.redraw(); st.set([['Served', '8/8'], ['Hearts', '❤'.repeat(Math.max(0, hearts)) || '-'], ['Tips', '₱' + coins]]);
+      order = null; cv.redraw(); st.set([['Served', '8/8'], ['Hearts left', String(Math.max(0, hearts))], ['Tips', '₱' + coins]]);
     }
     draw();
     return { state: () => (order ? `serving an order: ${order.text}${order.kind === 'pizza' ? `: I cut ${slices} slices and picked ${picked.size}` : order.kind === 'drink' ? `: I poured ${syrup} mL syrup and ${water} mL water` : ''}` : `Fraction Diner: ₱${coins} in tips`), destroy: () => { clearInterval(tick); cv.destroy(); } };
@@ -766,7 +766,7 @@ const marketLab = {
     function reset() { month = 0; happy = 70; budget = 20; price = 50; tax = 5; spend = 4; ev = EVENTS[0]; hist = []; over = false; goBtn.disabled = false; sP.set(price); sT.set(tax); sS.set(spend); tag(msg, ''); preview(); }
     function draw() {
       const o = outcome;
-      head.innerHTML = `<div class="gm-bar"><span>Month ${Math.min(12, month + 1)} of 12</span><span>${esc(ev[0])}</span><span>😊 ${Math.round(happy)}</span><span>₱${budget.toFixed(1)}M</span></div>
+      head.innerHTML = `<div class="gm-bar"><span>Month ${Math.min(12, month + 1)} of 12</span><span>${esc(ev[0])}</span><span>Happiness ${Math.round(happy)}</span><span>₱${budget.toFixed(1)}M</span></div>
         <p class="gm-small">${esc(ev[1])} This month: buyers pay ₱${o.pb.toFixed(1)}/kg · ${o.shortage > 0.03 ? `<b class="gm-badtext">shortage ${Math.round(o.shortage * 100)}%</b>` : o.surplus > 0.03 ? `<b class="gm-badtext">surplus ${Math.round(o.surplus * 100)}%</b>` : '<b class="gm-goodtext">balanced</b>'} · tax brings ₱${o.revenue.toFixed(1)}M</p>`;
       st.set([['Happiness', String(Math.round(happy))], ['Budget', '₱' + budget.toFixed(1) + 'M'], ['Market price', '≈ ₱' + Math.round(o.eq)], ['Sold', Math.round(o.q) + 'k kg/day']]);
     }

@@ -2601,6 +2601,73 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v241: Learn has College and Board and licensure exams as separate levels; Board opens into Lessons (a folder per exam: My notes and reviewers, then every topic opening its reviewer or quiz) and Simulations (a folder per exam opening its mock); notes are saved and Cassie quizzes on them on the spot; a scrolled page goes back so sheets are never cut off; no emoji anywhere', async (b) => {
+  const fake = (body) => { const m = JSON.stringify(body.messages || []); if (/using ONLY these notes/.test(m)) return { text: JSON.stringify(Array.from({ length: 5 }, (_, i) => ({ t: 'notes', q: `From my notes ${i + 1}?`, o: ['a', 'b', 'c', 'd'], a: 1, why: 'Your notes say b.' }))) }; return prepFake(body); };
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: fake });
+  const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
+  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
+  const lv = await page.$$eval('.lp .lf-levels .lf', (x) => x.map((f) => [f.dataset.level, f.querySelector('b').textContent, f.classList.contains('lf-mine')]));
+  expect(lv[0][0] === 'board' && lv[0][2] && lv[0][1] === 'Board and licensure exams' && lv.some(([k, n]) => k === 'college' && n === 'College'), 'Learn: Board and licensure exams (their level, first) and College, separate: ' + JSON.stringify(lv));
+  await shot('l0-levels');
+  const tap = async (key) => { await page.$eval(`.lp .lf[data-group="${key}"]`, (f) => f.scrollIntoView({ block: 'center' })); await page.click(`.lp .lf[data-group="${key}"]`); await page.waitForFunction((k) => document.querySelector('.lp').dataset.view === k, key); await page.waitForTimeout(250); };
+  await tap('level:board');
+  expect((await page.$$eval('.lp-list .lf', (x) => x.map((f) => f.dataset.group))).join() === 'lessons:board,levelsims:board', 'Board: Lessons and Simulations');
+  await shot('l1-board');
+  await tap('lessons:board'); await page.waitForSelector('.lp-list .lf[data-group="bexam:cpale"]');
+  const ex = await page.$$eval('.lp-list .lf', (x) => x.map((f) => f.dataset.group.slice(6)));
+  expect(ex.join() === 'let,cpale,cse,cle,nle,cele,pmle,nclex,ielts,oet,toefl,sat,jlpt,eps' && (await page.$$eval('.lp-list .lf-sub', (x) => x.map((e) => e.textContent))).join('|') === 'Philippine board exams|For studying or working abroad', 'a folder per exam, Philippine first: ' + ex);
+  await shot('l2-exams');
+  await tap('bexam:cpale'); await page.waitForSelector('.lp-list [data-bp-topic]');
+  const first = await page.$$eval('.lp-list :is(.lf, .lf-sub, [data-bp-topic])', (x) => x.slice(0, 3).map((e) => e.dataset.group || e.dataset.bpTopic || e.textContent));
+  expect(first[0] === 'bnotes:cpale' && first[1] === 'Financial Accounting and Reporting' && first[2] === 'FAR: the conceptual framework and PFRS', 'CPALE: My notes and reviewers first, then its parts and topics: ' + first);
+  await shot('l3-cpale');
+  // a topic opens its reviewer or quiz, over Learn
+  await page.click('.lp-list [data-bp-topic="FAR: inventories"]'); await page.waitForSelector('.bp .bp-read');
+  expect(/FAR: inventories/.test(await page.locator('.bp .bp-title').innerText()), 'the topic opens: Read the lesson or Quiz me');
+  await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson .bp-lcard');
+  await page.click('.bp .bp-x'); await page.waitForSelector('.lp-list [data-bp-topic="FAR: inventories"] small >> text=Read');
+  // my notes: add, read, quiz on the spot, and they show in the folder
+  await tap('bnotes:cpale'); await page.waitForSelector('.lp-list [data-bp-addnote]');
+  await page.click('.lp-list [data-bp-addnote]'); await page.waitForSelector('.bp .bp-ta');
+  await shot('l4-addnote');
+  await page.fill('.bp #bp-ntitle', 'Estate tax, my summary'); await page.fill('.bp .bp-ta', 'Estate tax is 6% of the net estate. File within one year.');
+  await page.click('.bp .bp-savenote'); await page.waitForSelector('.bp .bp-nquiz');
+  expect(/6% of the net estate/.test(await page.locator('.bp .bp-notetext').innerText()) && await page.evaluate(() => state.prep.notes.cpale.length === 1), 'saved on the device and shown');
+  await page.click('.bp .bp-nquiz'); await page.waitForSelector('.bp .bp-opt');
+  const qa = JSON.stringify(groqCalls.at(-1).messages);
+  expect(/using ONLY these notes/.test(qa) && /6% of the net estate/.test(qa) && /From my notes 1/.test(await page.locator('.bp .bp-q').innerText()), 'Cassie quizzes on the notes on the spot');
+  await page.click('.bp .bp-x'); await page.waitForSelector('.lp-list [data-bp-note]');
+  expect(await page.$eval('.lp-list [data-bp-note] b', (e) => e.textContent) === 'Estate tax, my summary', 'the note is in My notes and reviewers');
+  await shot('l5-notes');
+  // Simulations: a folder per exam opens its mock
+  for (let i = 0; i < 3; i++) { await page.click('.lp-back'); await page.waitForTimeout(300); }
+  await page.waitForSelector('.lp-list .lf[data-group="levelsims:board"]');
+  await tap('levelsims:board'); await page.waitForSelector('.lp-list .lf[data-group="bsim:nle"]');
+  await page.click('.lp-list .lf[data-group="bsim:nle"]'); 
+  await page.waitForSelector('.bp [data-size="mini"]');
+  expect(/Nursing simulation/.test(await page.locator('#bp-h').innerText()), 'Nursing’s folder opens its simulation');
+  await page.click('.bp .bp-x');
+  // a page left scrolled (as an iPhone does after the keyboard) goes back, so sheets are never cut off
+  const sc = await page.evaluate(async () => { const d = document.createElement('div'); d.style.height = '3000px'; d.id = 'tall'; document.body.appendChild(d); window.scrollTo(0, 60); document.documentElement.scrollTop = 60; await new Promise((r) => setTimeout(r, 400)); const y = window.scrollY || document.documentElement.scrollTop; d.remove(); return y; });
+  expect(sc === 0, 'the page goes back to the top: ' + sc);
+  // the cut-off: on a phone, the sheet fills the screen, its header below the status bar
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  await page.evaluate(() => openBoardPrep({ view: 'sims', exam: 'cpale' })); await page.waitForSelector('.bp [data-size]');
+  const box = await page.evaluate(() => { const c = document.querySelector('.bp-card').getBoundingClientRect(), hd = document.querySelector('.bp-head').getBoundingClientRect(); return { top: c.top, bottom: c.bottom, h: innerHeight, head: hd.top }; });
+  expect(box.top === 0 && Math.abs(box.bottom - box.h) < 1 && box.head >= 47, 'the sheet fills the screen, its header under the status bar: ' + JSON.stringify(box));
+  // Cassie never uses emoji
+  expect(await page.evaluate(() => /Never use emoji or emoticons in any reply/.test(SYSTEM_PROMPT)), 'Cassie’s rules: no emoji');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // and nothing the student sees has emoji (the owner’s server dashboard aside)
+  const EMO = /[\u{1F000}-\u{1FAFF}☀-⛿✨❄❤✏⏩-⏺▶◀]/u;
+  const files = ['app.html', 'index.html', 'terms.html', 'privacy.html', 'support.html', 'let.html', 'rescue.html', 'start.html', 'bot.html', 'boardprep.js', 'cards.js', 'study-room.js', 'sketch.js', 'listen.js', 'bot-page.js', 'rescue.js', 'extension/sketch.js',
+    ...fs.readdirSync(path.join(ROOT, 'labs')).filter((f) => f.endsWith('.js')).map((f) => 'labs/' + f)];
+  const bad = files.filter((f) => EMO.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').split('\n').filter((l) => EMO.test(l) && !/\|✅\|🎉\/i\.test\(reply\)/.test(l));
+  expect(!bad.length && !app.length, 'no emoji: ' + bad.join(', ') + ' ' + app.map((l) => l.trim().slice(0, 80)).join(' | '));
+});
+
 test('Board exams v240: Lessons splits College from Board and licensure exams; the Board exams screen has Lessons (exam, then topic: Read the lesson, written once and kept, or Quiz me, 5 questions you can stop and pick up again with the lesson one tap away) and Simulations (a timed mini mock, scored by part, weakest topics linked to their lessons); the old course carries over; Pro opens every topic and the full mock once paid plans are on', async (b) => {
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, letCourse: { exam: 'cpale', level: 'cpale', major: '', parts: [], first: [], done: { 'TAX: estate tax': 1 }, at: 1 } }, fakeGroq: prepFake });
   const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
@@ -4207,7 +4274,7 @@ test('study room: studying together — chat, Cassie for everyone, shared flashc
     if (process.env.SHOTS) await B.page.screenshot({ path: process.env.SHOTS + '/study-keep-notes.png' });
     // a focus timer for everyone
     await A.page.click('.sr-head [data-act="timer"]');
-    await B.page.waitForFunction(() => /⏱ (25|24):/.test(document.querySelector('.sr-tm').textContent), null, { timeout: 8000 });
+    await B.page.waitForFunction(() => /Focus (25|24):/.test(document.querySelector('.sr-tm').textContent), null, { timeout: 8000 });
     // someone joining late sees it all
     const C = await open(b, { device: 'Desktop Chrome', state: { profile: { ...PROFILE, name: 'Cara' } } });
     await C.page.goto(APP + '?room=' + code);
@@ -5691,10 +5758,10 @@ test('Cassie chats like the student: their energy (playful or calm), their mood 
   await says(() => { lastChatAt = Date.now() - 2 * 60 * 1000 - 1; });
   await page.fill('#prompt-input', 'ab'); await page.waitForTimeout(300);
   expect(!(await says(() => document.getElementById('mascot-bubble').hidden)), 'after 2 minutes a typing hint may show');
-  // playful and short: lots of emoji and slang get emoji-friendly, shorter lines; formal gets calm lines with no emoji
+  // playful and short: lots of emoji and slang get shorter lines (v241: Cassie never adds emoji); formal gets calm lines with no emoji
   const playful = await says(() => { localStorage.removeItem('cassie.chatStyle'); for (const t of ['haha omg 😂😂', 'grabe lol 🤣', 'ty bro!!']) noteStyle(t); const out = []; for (let i = 0; i < 12; i++) out.push(cassieLine(CASSIE_LINES.en.correct, 'correct')); return { tone: chatTone(), out, short: byLength(CASSIE_LINES.en.long) }; });
   const shortest = [...(await says(() => CASSIE_LINES.en.long))].sort((a, c) => a.length - c.length).slice(0, 3).sort();
-  expect(playful.tone === 'playful' && playful.out.some((t) => EMO.test(t)) && JSON.stringify([...playful.short].sort()) === JSON.stringify(shortest), 'playful and short: ' + JSON.stringify(playful));
+  expect(playful.tone === 'playful' && playful.out.every((t) => !EMO.test(t)) && JSON.stringify([...playful.short].sort()) === JSON.stringify(shortest), 'playful and short: ' + JSON.stringify(playful));
   const calm = await says(() => { localStorage.removeItem('cassie.chatStyle'); for (const t of ['Good morning. Could you please explain how photosynthesis works in plants, step by step, with an example?', 'Thank you. May I ask how the light reactions differ from the Calvin cycle in terms of their products?', 'Could you please give me three practice questions about this topic so I can check my understanding?']) noteStyle(t); const out = []; for (let i = 0; i < 12; i++) out.push(cassieLine(CASSIE_LINES.en.correct, 'correct')); return { tone: chatTone(), out }; });
   expect(calm.tone === 'calm' && calm.out.every((t) => !EMO.test(t) && !t.includes('!')), 'formal: calm lines, no emoji: ' + JSON.stringify(calm));
   const long = await says(() => byLength(CASSIE_LINES.en.long));
@@ -9287,7 +9354,7 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     // 2. the levels: the student's own (Junior High) first, about 1.5 times a folder, with Your level
     const lv = await page.evaluate((S) => [...document.querySelectorAll(S + ' .lf-levels .lf')].map((f) => ({ k: f.dataset.level, mine: f.classList.contains('lf-mine'), w: f.getBoundingClientRect().width, tag: (f.querySelector('.lf-yours') || {}).textContent || '' })), S);
     const ratio = lv[1] ? lv[0].w / lv[1].w : 0;
-    expect(JSON.stringify(lv.map((x) => x.k)) === JSON.stringify(['jhs', 'pre', 'elem', 'shs', 'college']) && lv[0].mine && lv[0].tag === 'Your level' && lv.slice(1).every((x) => !x.mine && !x.tag), `${where}: Junior High first and marked Your level, then the others: ` + JSON.stringify(lv));
+    expect(JSON.stringify(lv.map((x) => x.k)) === JSON.stringify(['jhs', 'pre', 'elem', 'shs', 'college', 'board']) && lv[0].mine && lv[0].tag === 'Your level' && lv.slice(1).every((x) => !x.mine && !x.tag), `${where}: Junior High first and marked Your level, then the others: ` + JSON.stringify(lv));
     expect(ratio > 1.35 && ratio < 1.65, `${where}: the student’s level is about 1.5 times bigger: ` + ratio.toFixed(2));
     for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400); const { bad } = await contrastIssues(page, phone ? '.lp-home' : '.labs-scroll'); expect(!bad.length, `${where}: Learn’s words (${scheme}): ` + bad.join(' | ')); }
     await page.emulateMedia({ colorScheme: 'light' });
@@ -9303,12 +9370,14 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     const seen = new Set();
     // 3. each level: Lessons (coming soon) and Simulations; Back one step at a time
     for (const { k } of lv) {
+      if (k === 'board') continue; // (v241: its own folders, in the Learn board exams test)
       await go('level:' + k);
       const inside = await folders();
       expect(JSON.stringify(inside) === JSON.stringify(['lessons:' + k, 'levelsims:' + k]), `${where}: ${k} opens into Lessons and Simulations: ` + JSON.stringify(inside));
       await go('lessons:' + k);
       const soon = await page.evaluate(() => { const e = [...document.querySelectorAll('.lf-soon')].find((x) => x.getClientRects().length); return e ? e.textContent : ''; });
-      expect(/Lessons are coming soon/.test(soon), `${where}: ${k} Lessons: coming soon: ` + soon);
+      if (k === 'college') expect((await page.evaluate(() => [...document.querySelectorAll('.lf-lesson b')].filter((x) => x.getClientRects().length).map((x) => x.textContent))).join() === 'Read my PDF,Research with citations,Exam plan', `${where}: College lessons (v241)`);
+      else expect(/Lessons are coming soon/.test(soon), `${where}: ${k} Lessons: coming soon: ` + soon);
       if (k === 'jhs') for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await contrastIssues(page, '.lf-soon'); expect(!bad.length, `${where}: coming soon (${scheme}): ` + bad.join(' | ')); }
       await page.emulateMedia({ colorScheme: 'light' });
       await back();
@@ -9369,14 +9438,14 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     await learnTab(page);
     const f = await forYou(page), L = await levelsOf(page);
     expect(f[0] && f[0].k === 'pre' && f[0].mine && f[0].label === 'Nursery and Kindergarten' && f.filter((x) => x.mine).length === 1, 'Kindergarten’s first folder is Nursery and Kindergarten, in dark glass: ' + JSON.stringify(f));
-    expect(f.length === 5 && await page.locator('details.lp-other').count() === 0, 'five folders, no Other levels dropdown: ' + f.length);
-    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; const LV = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'] }; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).some((x) => LV[k].includes(x))).length + (['elem', 'jhs', 'shs'].includes(k) ? 1 : 0) + (['jhs', 'shs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells; v220: Junior and Senior High show the High school labs, College and board exams the College and LET ones)
-    expect(f.every((x) => x.papers === 3 && x.label && x.count === want[x.k] && x.go[0] >= 44 && x.go[1] >= 44), 'every folder: 3 papers, a label, its lab count and a 44px button: ' + JSON.stringify([f, want]));
+    expect(f.length === 6 && await page.locator('details.lp-other').count() === 0, 'six folders (v241: Board and licensure exams too), no Other levels dropdown: ' + f.length);
+    const want = await page.evaluate(async () => { const m = await import('./labs/labs.js'); const g = (l) => l.subject === 'puzzles' || l.subject === 'games'; const LV = { pre: ['pre'], elem: ['elem'], jhs: ['hs'], shs: ['hs'], college: ['college', 'grad'], board: [] }; return Object.fromEntries(m.LEVELS.map(([k]) => [k, m.LABS.filter((l) => !g(l) && (l.levels || []).some((x) => (LV[k] || []).includes(x))).length + (['elem', 'jhs', 'shs'].includes(k) ? 1 : 0) + (['jhs', 'shs', 'college'].includes(k) ? 1 : 0)])); }); // (+ the 3D body and cells; v220: Junior and Senior High show the High school labs, College and board exams the College and LET ones)
+    expect(f.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.label && x.count === want[x.k] && x.go[0] >= 44 && x.go[1] >= 44), 'every folder: 3 papers, a label, its lab count and a 44px button: ' + JSON.stringify([f, want]));
     const kids = await openLevel(page, 'pre');
     expect(JSON.stringify(kids.slice().sort()) === JSON.stringify(['count', 'shapes', 'trace-letters', 'trace-numbers']) && await page.$eval('.lp-list h3', (h) => h.textContent) === 'Nursery and Kindergarten simulations', 'the folder holds the 4 little ones’ labs: ' + kids);
     if (SHOTS) await page.screenshot({ path: SHOTS + '/learn-kinder-open.png' });
     await backHome(page);
-    expect(JSON.stringify(f.slice(1).map((x) => x.k)) === JSON.stringify(['elem', 'jhs', 'shs', 'college']) && f.slice(1).every((x) => !x.mine), 'then the other levels in order, in frosted glass: ' + JSON.stringify(f.map((x) => x.k)));
+    expect(JSON.stringify(f.slice(1).map((x) => x.k)) === JSON.stringify(['elem', 'jhs', 'shs', 'college', 'board']) && f.slice(1).every((x) => !x.mine), 'then the other levels in order, in frosted glass: ' + JSON.stringify(f.map((x) => x.k)));
     const elem = await openLevel(page, 'elem');
     expect(elem.length === want.elem && elem.every((id) => !L.of[id] || L.of[id].includes('elem')), 'a folder holds only its level’s labs: ' + elem);
     await backHome(page);
@@ -9442,7 +9511,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
       // the level folders on a computer: hover leans the pocket back, a click opens the level, Back returns
       await page.waitForSelector('.labs-foryou .lf');
       const df = await forYou(page, '.labs-foryou');
-      expect(df.length === 5 && df.every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 5 folders: ' + JSON.stringify(df));
+      expect(df.length === 6 && df.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 6 folders (v241: Board and licensure exams too): ' + JSON.stringify(df));
       const front = () => page.$eval('.labs-foryou .lf[data-level="elem"] .lf-front', (x) => getComputedStyle(x).transform);
       expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(await front()), 'at rest the pocket stands straight');
       await page.hover('.labs-foryou .lf[data-level="elem"]'); await page.waitForTimeout(400);

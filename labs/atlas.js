@@ -82,7 +82,7 @@ export const atlasLab = {
       if (!q || !data.length) { sugg.replaceChildren(); return; }
       const hits = data.filter((c) => c.n.toLowerCase().includes(q) || c.o.toLowerCase().includes(q) || (c.cap || []).some((x) => x.toLowerCase().includes(q))).slice(0, 6);
       sugg.innerHTML = hits.map((c) => `<button type="button" data-c3="${esc(c.c3)}">${c.f ? `<img src="${flagUrl(c)}" alt="">` : ''}${esc(c.n)}${(c.cap || []).length ? ` <small>· ${esc(c.cap[0])}</small>` : ''}</button>`).join('')
-        + `<button type="button" data-place="${esc(input.value.trim())}" class="atlas-place-btn">🔎 Search places: “${esc(input.value.trim())}”</button>`;
+        + `<button type="button" data-place="${esc(input.value.trim())}" class="atlas-place-btn">Search places: “${esc(input.value.trim())}”</button>`;
     }
     input.addEventListener('input', suggest);
     sugg.addEventListener('click', (e) => {
@@ -157,7 +157,7 @@ export const atlasLab = {
       showPeek('', w.title, w.kind);
       const img = safeImg(w.image);
       card.innerHTML = `${img ? `<img class="atlas-photo" src="${esc(img)}" alt="${esc(w.title)}">` : ''}<h3>${esc(w.title)}</h3>${w.kind ? `<p class="space-sub">${esc(w.kind)}</p>` : ''}<p>${esc(w.text)}</p>
-        ${w.at ? `<p class="lab-note">📍 ${num(Math.abs(w.at[0]), 4)}° ${w.at[0] >= 0 ? 'N' : 'S'}, ${num(Math.abs(w.at[1]), 4)}° ${w.at[1] >= 0 ? 'E' : 'W'}: pinned on the map</p>` : '<p class="lab-note">Wikipedia has no single location for this, so it isn’t pinned.</p>'}
+        ${w.at ? `<p class="lab-note">Location: ${num(Math.abs(w.at[0]), 4)}° ${w.at[0] >= 0 ? 'N' : 'S'}, ${num(Math.abs(w.at[1]), 4)}° ${w.at[1] >= 0 ? 'E' : 'W'}: pinned on the map</p>` : '<p class="lab-note">Wikipedia has no single location for this, so it isn’t pinned.</p>'}
         ${safeUrl(w.url) ? `<a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">Read more on Wikipedia ↗</a>` : ''}`;
       const inside = w.at && world && countryAt(w.at[1], w.at[0]), c = inside && byN3.get(String(inside.id));
       if (c) { const b = el('button', 'lab-btn', `About ${c.n} ›`); b.type = 'button'; b.addEventListener('click', () => choose(c)); card.appendChild(b); }

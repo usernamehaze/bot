@@ -63,7 +63,7 @@
   const MOODS = {
     idle: 'caret eyes blink', greeting: 'hello!', listening: 'I-beam eyes', thinking: '… on her wing', writing: 'typing lines', reading: 'eyes scan a page',
     searching: 'lens sweep', highlighting: 'highlighter stripe', snipping: 'marching ants', drawing: 'pencil scribble', done: 'click-bounce ✓', proud: 'star eyes',
-    encourage: 'you got this', oops: 'cursor ⊘', busy: 'hourglass', sleeping: 'zz', love: 'heart eyes', surprised: 'whoa', wink: '😉', dizzy: 'spiral eyes', sad: 'aww', talking: 'reads aloud',
+    encourage: 'you got this', oops: 'cursor ⊘', busy: 'hourglass', sleeping: 'zz', love: 'heart eyes', surprised: 'whoa', wink: 'a wink', dizzy: 'spiral eyes', sad: 'aww', talking: 'reads aloud',
   };
   const moods = document.getElementById('moods');
   B.STATES.forEach((s) => {

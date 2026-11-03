@@ -16,8 +16,9 @@ function say(t) {
   } catch (e) { /* no voice on this device: the pictures still work */ }
 }
 const still = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const SPEAK = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>', PREV = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>', NEXT = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 const kidButton = (host, text, label, onClick) => {
-  const b = el('button', 'kid-btn'); b.type = 'button'; b.textContent = text; b.setAttribute('aria-label', label);
+  const b = el('button', 'kid-btn'); b.type = 'button'; if (text.startsWith('<svg')) b.innerHTML = text; else b.textContent = text; b.setAttribute('aria-label', label);
   b.addEventListener('click', onClick); host.appendChild(b); return b;
 };
 
@@ -92,10 +93,10 @@ function traceLab(id, name, list, spoken) {
       const cv = canvas(stage, draw);
       cv.c.classList.add('kid-trace'); cv.c.setAttribute('role', 'img');
       const bar = el('div', 'kid-row'); panel.appendChild(bar);
-      kidButton(bar, '◀', 'Back one', () => go(i - 1));
-      kidButton(bar, '🔊', 'Say it again', () => say(spoken(list[i])));
+      kidButton(bar, PREV, 'Back one', () => go(i - 1));
+      kidButton(bar, SPEAK, 'Say it again', () => say(spoken(list[i])));
       kidButton(bar, '↺', 'Trace it again', () => go(i));
-      kidButton(bar, '▶', 'Next one', () => go(i + 1));
+      kidButton(bar, NEXT, 'Next one', () => go(i + 1));
       function layout() {
         const s = Math.min(cv.w, cv.h) * 0.72;
         box = { x: (cv.w - s * 0.9) / 2, y: (cv.h - s) / 2, s };
@@ -126,7 +127,7 @@ function traceLab(id, name, list, spoken) {
         // the finger's own line, faint
         ctx.strokeStyle = 'rgba(242,242,244,.25)'; ctx.lineWidth = lw * 0.35; ctx.beginPath();
         trail.forEach((p, k) => (k && !p.start ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke();
-        if (done) { ctx.fillStyle = '#ffcf5a'; ctx.font = `700 ${Math.round(box.s * 0.14)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('★', w / 2, Math.max(box.s * 0.14, box.y - 6)); }
+        if (done) { ctx.fillStyle = '#ffcf5a'; const r = box.s * 0.06, cx = w / 2, cy = Math.max(box.s * 0.14, box.y - 6) - r * 0.6; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r; ctx.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a)); } ctx.closePath(); ctx.fill(); } // (a drawn star, not a text glyph)
       }
       // the finger moves on along the path only near the next few dots: in order, not anywhere
       function follow(p) {
@@ -170,7 +171,7 @@ const countLab = {
     stage.classList.add('kid-stage');
     const field = el('div', 'kid-field'); stage.appendChild(field);
     const bar = el('div', 'kid-row'); panel.appendChild(bar);
-    kidButton(bar, '🔊', 'Say it again', () => say(tapped >= n ? `${NUMBER_WORDS[n]}! You counted ${NUMBER_WORDS[n]}!` : `Let's count! Tap each one.`));
+    kidButton(bar, SPEAK, 'Say it again', () => say(tapped >= n ? `${NUMBER_WORDS[n]}! You counted ${NUMBER_WORDS[n]}!` : `Let's count! Tap each one.`));
     kidButton(bar, 'More', 'More to count', () => deal());
     function deal() {
       if (round++) n = 1 + Math.floor(Math.random() * 10);
@@ -210,7 +211,7 @@ const shapesLab = {
     stage.classList.add('kid-stage');
     const field = el('div', 'kid-field kid-shapes'); stage.appendChild(field);
     const bar = el('div', 'kid-row'); panel.appendChild(bar);
-    kidButton(bar, '🔊', 'Say it again', () => want && say(`Tap the ${want.colour} ${want.shape}.`));
+    kidButton(bar, SPEAK, 'Say it again', () => want && say(`Tap the ${want.colour} ${want.shape}.`));
     kidButton(bar, 'Next', 'A new one', () => deal());
     const pick = (o) => o[Math.floor(Math.random() * o.length)];
     function deal() {

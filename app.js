@@ -138,6 +138,7 @@ How you work:
 - Do exactly what you're asked. Read the request carefully and follow every part of it: the task, the format, the length, the language and any limits ("only the answer", "in 3 bullets", "in Filipino", "graph it", "make it shorter"). Never swap their request for a different one, never skip a part, and never refuse something you can do. If they ask you to do something with a picture or a snip (graph it, solve it, explain it, check it), do that exact thing with what's in the picture. Ask a question back only when the request truly can't be done without the answer; otherwise make a sensible assumption, say it in one short line, and do it.
 - Language: answer in the language they write in. English gets English, Filipino gets Filipino, and Taglish (English and Filipino mixed) gets natural Taglish, mixed the way they mix it. Keep science, math and technical terms in English, the way they're taught in class. If they ask for a language, use that one.
 - Sound like a real person: warm, natural and a little playful, like a smart friend sitting next to them, not a robot or a textbook. Use plain words and contractions, and react to what they actually said. No canned openers ("Certainly!", "Great question!"), no repeating their question back, and no speeches about being an AI.
+- Never use emoji or emoticons in any reply. Plain words and plain punctuation only.
 - Exams: every practice question you write is your own, made from the exam's published topics. Never claim a question is a real, actual, leaked or "recalled" board or exam question, and never promise anyone will pass. If someone pastes what looks like a leaked or stolen exam paper or a whole question bank and asks you to copy, collect or rebuild it, kindly say you can't, then offer to teach the topics it covers with your own questions. Checking a student's own reviewer, one question at a time, is fine.
 - CITATIONS: never fabricate a source, author, title, year, DOI, journal, or quotation. Only cite works the user gave you or that were retrieved for you. If asked to write a literature review without sources, either use the sources provided, or say clearly that you can't invent citations and offer to find real ones (the app's Research tool can pull real papers). It is far better to say "I don't have a source for that" than to make one up.
 - Accuracy comes first. If you are not sure of a fact, say so plainly instead of guessing. Never invent dates, quotes, statistics, or sources. A careful "I'm not fully certain, but…" is better than a confident wrong answer.
@@ -1010,28 +1011,28 @@ const CHAT_GAP = 2 * 60 * 1000;
 let lastChatAt = 0;
 const CASSIE_LINES = {
   en: {
-    open: ['Good to see you today!', 'Hi {name}! Ready when you are.', 'A new day to learn something cool.', 'Welcome back! What are we studying today?', 'Hello again, {name}! 👋', "Fresh day, fresh start. Let's go!"],
-    streak: ['{n} days in a row! 🔥', 'Wow, a {n} day streak!', '{n} days straight, {name}! Proud of you.', 'Streak: {n} days. You keep showing up!', '{n} days! Small steps add up.', 'Look at you go: {n} days! 🔥'],
-    correct: ['Correct! 🎉', 'Nailed it!', 'Yes! You got it, {name}!', 'Brilliant!', "That's right! 🎉", 'Spot on!'],
+    open: ['Good to see you today!', 'Hi {name}! Ready when you are.', 'A new day to learn something cool.', 'Welcome back! What are we studying today?', 'Hello again, {name}!', "Fresh day, fresh start. Let's go!"],
+    streak: ['{n} days in a row!', 'Wow, a {n} day streak!', '{n} days straight, {name}! Proud of you.', 'Streak: {n} days. You keep showing up!', '{n} days! Small steps add up.', 'Look at you go: {n} days!'],
+    correct: ['Correct!', 'Nailed it!', 'Yes! You got it, {name}!', 'Brilliant!', "That's right!", 'Spot on!'],
     long: ['25 minutes of focus! Nice work.', "You've been at it a while. Stretch break?", 'Great focus, {name}! Drink some water.', 'Long session! Rest your eyes for a bit.', 'So much studying! Take five if you need it.', "You're on a roll. A short break helps it stick."],
     late: ["It's late. Rest soon, okay?", 'Getting late, {name}. Sleep helps you remember.', 'Studying late? Rest soon.', "Don't forget to sleep. Your brain needs it.", 'One more, then rest soon?', "It's past 10. Be kind to yourself and rest soon."],
-    happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Hope it is a good one.', '{hi}! Glad you stopped by.', '{hi}! Learn something fun today.'],
-    honor: ['Today is {h}. 🇵🇭', "It's {h} today. We remember the ones who stood up for us.", 'Today is {h}, {name}. A good day to thank our heroes.', '{h} today. Their courage is part of our story.', 'Today we remember: {h}. 🇵🇭', "It's {h}. Learning is one way to honor them."],
+    happy: ['{hi}!', '{hi}, {name}!', '{hi}!', '{hi}! Hope it is a good one.', '{hi}! Glad you stopped by.', '{hi}! Learn something fun today.'],
+    honor: ['Today is {h}.', "It's {h} today. We remember the ones who stood up for us.", 'Today is {h}, {name}. A good day to thank our heroes.', '{h} today. Their courage is part of our story.', 'Today we remember: {h}.', "It's {h}. Learning is one way to honor them."],
     stressed: ["Hey, breathe. We'll take it one step at a time.", "You're not alone in this, {name}. Let's go slow.", "Tough day? I'm right here with you.", "It's okay to find this hard. That's how learning feels.", "Small steps. You've got more in you than you think.", "Let's break it into tiny pieces together."],
-    cheer: ['Yay! That energy! 🎉', "Let's gooo, {name}!", 'Love that! Keep it up! ✨', 'Woohoo! 🙌', "That's the spirit!", 'Look at you go! 💪'],
+    cheer: ['Yay! That energy!', "Let's gooo, {name}!", 'Love that! Keep it up!', 'Woohoo!', "That's the spirit!", 'Look at you go!'],
     back: ['Last time we looked at "{topic}". Want to pick it up again?', 'Hi {name}! Back to "{topic}"?', 'Welcome back! Still on "{topic}"?', 'Want a quick review of "{topic}" today?', 'I remember "{topic}". Shall we pick it back up?', 'Good to see you! "{topic}" again, or something new?'],
     quiet: ["It's {h}. Take a quiet moment today.", '{h} today. Be gentle with yourself.', "It's {h}, {name}. I'll keep things calm.", 'A quiet {h}. Study at your own pace.', "It's {h}. Thinking of you and your family.", '{h} today. Rest when you need to.'],
   },
   tl: {
-    open: ['Uy, hello ulit! Ready ka na?', 'Hi {name}! Anong aaralin natin today?', 'Bagong araw, bagong learning!', 'Welcome back! Tara, aral tayo.', 'Hello {name}! 👋 Kumusta?', 'Good to see you ulit today!'],
-    streak: ['{n} days in a row! Galing! 🔥', 'Wow, {n} day streak na!', "{n} days straight, {name}! Proud ako sa'yo.", 'Tuloy-tuloy ka talaga: {n} days!', "{n} days na! Kaya mo 'yan.", 'Grabe, {n} days! 🔥'],
-    correct: ['Tama! 🎉', 'Galing mo!', 'Yes! Nakuha mo, {name}!', 'Ang galing!', 'Tumpak! 🎉', 'Sakto!'],
+    open: ['Uy, hello ulit! Ready ka na?', 'Hi {name}! Anong aaralin natin today?', 'Bagong araw, bagong learning!', 'Welcome back! Tara, aral tayo.', 'Hello {name}! Kumusta?', 'Good to see you ulit today!'],
+    streak: ['{n} days in a row! Galing!', 'Wow, {n} day streak na!', "{n} days straight, {name}! Proud ako sa'yo.", 'Tuloy-tuloy ka talaga: {n} days!', "{n} days na! Kaya mo 'yan.", 'Grabe, {n} days!'],
+    correct: ['Tama!', 'Galing mo!', 'Yes! Nakuha mo, {name}!', 'Ang galing!', 'Tumpak!', 'Sakto!'],
     long: ['25 minutes na! Galing ng focus mo.', 'Medyo matagal na tayo. Stretch muna?', 'Great focus, {name}! Inom ka muna ng tubig.', 'Pahinga muna ang mata, kahit saglit.', 'Ang sipag! Break ka muna kung kailangan.', 'Tuloy-tuloy ka! Short break para tumatak.'],
     late: ['Gabi na. Rest soon, ha?', 'Late na, {name}. Tulog ka rin, okay?', 'Puyat na naman? Rest soon.', "'Wag kalimutang matulog, ha.", 'Isa pa, tapos pahinga na?', 'Lampas 10 na. Rest soon, okay?'],
-    happy: ['{hi}!', '{hi}, {name}!', '{hi}! 🎉', '{hi}! Enjoy today!', '{hi}! Buti dumaan ka.', '{hi}! Aral tayo nang masaya.'],
-    honor: ['Ngayon ay {h}. 🇵🇭', '{h} ngayon. Alalahanin natin ang mga bayani.', "{h} ngayon, {name}. Salamat sa ating mga bayani.", '{h} ngayon. Parte ng kwento natin ang tapang nila.', 'Today we remember: {h}. 🇵🇭', '{h} ngayon. Ang pag-aaral ay paraan para parangalan sila.'],
+    happy: ['{hi}!', '{hi}, {name}!', '{hi}!', '{hi}! Enjoy today!', '{hi}! Buti dumaan ka.', '{hi}! Aral tayo nang masaya.'],
+    honor: ['Ngayon ay {h}.', '{h} ngayon. Alalahanin natin ang mga bayani.', "{h} ngayon, {name}. Salamat sa ating mga bayani.", '{h} ngayon. Parte ng kwento natin ang tapang nila.', 'Today we remember: {h}.', '{h} ngayon. Ang pag-aaral ay paraan para parangalan sila.'],
     stressed: ['Hinga muna. Isa-isang step lang tayo.', "Hindi ka nag-iisa, {name}. Dahan-dahan lang.", 'Rough day? Andito lang ako.', 'Okay lang mahirapan. Ganyan talaga pag nag-aaral.', 'Kaya mo pa, promise. Small steps lang.', "Hatiin natin sa maliliit na parts, ha?"],
-    cheer: ['Yay! Ganyan nga! 🎉', "Let's gooo, {name}!", 'Love it! Tuloy lang! ✨', 'Woohoo! 🙌', 'Ayan! Ganyang energy!', 'Galing mo talaga! 💪'],
+    cheer: ['Yay! Ganyan nga!', "Let's gooo, {name}!", 'Love it! Tuloy lang!', 'Woohoo!', 'Ayan! Ganyang energy!', 'Galing mo talaga!'],
     back: ['Last time, "{topic}" tayo. Ituloy natin?', 'Hi {name}! Balik tayo sa "{topic}"?', 'Welcome back! "{topic}" pa rin ba?', 'Quick review ng "{topic}" today?', 'Naaalala ko pa ang "{topic}". Tuloy natin?', 'Uy! "{topic}" ulit, or bago naman?'],
     quiet: ['{h} ngayon. Take a quiet moment.', '{h} ngayon. Dahan-dahan lang, ha.', "{h} ngayon, {name}. Tahimik lang tayo today.", 'Tahimik na {h}. Aral ka sa sarili mong pace.', '{h} ngayon. Ingat kayo ng pamilya mo.', '{h} ngayon. Pahinga ka kung kailangan.'],
   },
@@ -1039,10 +1040,10 @@ const CASSIE_LINES = {
 // tap her once: the first line; tap again right after: the line that follows on from it
 // (p: playful, left out on quiet days)
 const TAP_PAIRS = {
-  en: [['Hi! Need help? 🙌', "Just ask me anything. I'm right here."], ['Hey there! 👋', 'Still here! Tap me anytime you need me.'], ['You found me!', "Okay, I'm not hiding anymore. What do you need?", 'p'],
-    ['Hello, {name}!', 'Did you know I can quiz you on anything?'], ['Boop! 😊', 'That tickles! Ready to study?', 'p'], ['Need a hint?', 'Try the Hint button, or just ask me.'], ['I believe in you!', 'Really. One step at a time.']],
-  tl: [['Hi! Need help? 🙌', 'Tanong ka lang, nandito lang ako.'], ['Uy! 👋', 'Andito pa rin ako! Tap mo lang ako anytime.'], ['Nahanap mo ako!', "Sige na, 'di na ako magtatago. Ano'ng kailangan mo?", 'p'],
-    ['Hello, {name}!', 'Alam mo ba, pwede kitang i-quiz kahit ano?'], ['Boop! 😊', 'Nakikiliti ako! Aral na tayo?', 'p'], ['Need ng hint?', "Try mo 'yung Hint button, or tanong ka lang."], ["Kaya mo 'yan!", 'Promise. Isa-isang step lang.']],
+  en: [['Hi! Need help?', "Just ask me anything. I'm right here."], ['Hey there!', 'Still here! Tap me anytime you need me.'], ['You found me!', "Okay, I'm not hiding anymore. What do you need?", 'p'],
+    ['Hello, {name}!', 'Did you know I can quiz you on anything?'], ['Boop!', 'That tickles! Ready to study?', 'p'], ['Need a hint?', 'Try the Hint button, or just ask me.'], ['I believe in you!', 'Really. One step at a time.']],
+  tl: [['Hi! Need help?', 'Tanong ka lang, nandito lang ako.'], ['Uy!', 'Andito pa rin ako! Tap mo lang ako anytime.'], ['Nahanap mo ako!', "Sige na, 'di na ako magtatago. Ano'ng kailangan mo?", 'p'],
+    ['Hello, {name}!', 'Alam mo ba, pwede kitang i-quiz kahit ano?'], ['Boop!', 'Nakikiliti ako! Aral na tayo?', 'p'], ['Need ng hint?', "Try mo 'yung Hint button, or tanong ka lang."], ["Kaya mo 'yan!", 'Promise. Isa-isang step lang.']],
 };
 const TL_WORDS = /\b(ako|ikaw|ka|ko|mo|ang|ng|mga|sa|na|po|ba|naman|lang|yung|kasi|paano|pano|ano|bakit|hindi|di|wala|meron|talaga|pa|nga|sana|tayo|natin|kayo|siya|ito|yan|dito|gusto|kailangan|ganito|ganun|pag)\b/gi;
 // whether the student writes in Taglish (remembered: only yes or no, never what they wrote)
@@ -1076,7 +1077,6 @@ const chatMood = (text) => (STRESSED.test(text || '') ? 'stressed' : EXCITED.tes
 function shapeLine(t, moment) {
   const tone = chatTone();
   if (tone === 'calm' || moment === 'quiet' || moment === 'honor' || moment === 'stressed') t = t.replace(EMOJI, '').replace(/\uFE0F/g, '').replace(/!/g, '.').replace(/\.{2,}/g, '.').replace(/\s+([.?,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
-  else if (tone === 'playful' && !EMOJI.test(t) && Math.random() < 0.5) t += ' ' + ['😄', '✨', '🙌', '💪', '😊'][Math.floor(Math.random() * 5)];
   EMOJI.lastIndex = 0;
   return t;
 }
@@ -1187,7 +1187,7 @@ const MASCOT_REACTIONS = {
     { t: "Let's explore!", e: 'emote-happy' },
   ],
   math: [
-    { t: 'Math time! 🧮', e: 'emote-focused' },
+    { t: 'Math time!', e: 'emote-focused' },
     { t: 'Numbers, my fave!', e: 'emote-star' },
     { t: 'Step by step…', e: 'emote-focused' },
   ],
@@ -1196,7 +1196,7 @@ const MASCOT_REACTIONS = {
     { t: 'Big one. I got it!', e: 'emote-cool' },
   ],
   greet: [
-    { t: 'Hi there! 👋', e: 'emote-happy' },
+    { t: 'Hi there!', e: 'emote-happy' },
     { t: 'Ready to learn?', e: 'emote-star' },
   ],
   type: [
@@ -1212,17 +1212,17 @@ const MASCOT_REACTIONS = {
     { t: "You're doing great!", e: 'emote-love' },
     { t: 'Believe in you!', e: 'emote-star' },
     { t: 'One step at a time.', e: 'emote-focused' },
-    { t: 'Learning is cool 😎', e: 'emote-cool' },
+    { t: 'Learning is cool', e: 'emote-cool' },
     { t: 'Never give up!', e: 'emote-happy' },
   ],
   image: [
-    { t: 'Painting it… 🎨', e: 'emote-star' },
+    { t: 'Painting it…', e: 'emote-star' },
     { t: 'Ooh, fun one!', e: 'emote-happy' },
   ],
   celebrate: [
-    { t: 'Correct! 🎉', e: 'emote-star' },
+    { t: 'Correct!', e: 'emote-star' },
     { t: 'Nailed it!', e: 'emote-love' },
-    { t: 'Yesss! 🎉', e: 'emote-happy' },
+    { t: 'Yesss!', e: 'emote-happy' },
     { t: 'Brilliant!', e: 'emote-star' },
   ],
   done: [
@@ -1423,7 +1423,7 @@ function wakeMascot() {
   mascot.classList.remove('sleeping');
   if (mascotBubble) mascotBubble.hidden = true;
   set3D('encouraging');
-  mascotSay('*yawn* Hi! 👋', 2400);
+  mascotSay('*yawn* Hi!', 2400);
   setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2200);
 }
 // Reset the 5-minute idle→sleep countdown on any real activity (also wakes her).
@@ -1481,7 +1481,7 @@ if (mascotBtn && mascot) {
       mascotDragging = false;
       mascotUserMoved = true;
       mascot.classList.remove('dragging');
-      chatterSay(angryDrag ? 'Hey! Careful 😠' : 'Wheee… so dizzy 😵', 1800);
+      chatterSay(angryDrag ? 'Hey! Careful!' : 'Wheee… so dizzy', 1800);
       setTimeout(() => { if (!mascotDragging && !mascotAsleep) set3D('neutral'); }, 1400);
       resetIdle();
     }
@@ -1508,7 +1508,7 @@ if (mascotBtn && mascot) {
   });
 
   // while the student types → thinking, with a friendly cloud bubble
-  const TYPING_MSGS = ['typing…', 'take your time', "I'm listening 👂", 'no rush!', 'go on…'];
+  const TYPING_MSGS = ['typing…', 'take your time', "I'm listening", 'no rush!', 'go on…'];
   let typingRevertTimer = null, lastTypeSay = 0;
   if (promptInput) {
     promptInput.addEventListener('input', () => {
@@ -1553,7 +1553,7 @@ if (mascotBtn && mascot) {
     if (mascotAsleep || mascotDragging || mascot.classList.contains('thinking') || mascot.classList.contains('happy')) return; // already busy with a question
     set3D('encouraging');
     botMood('greeting'); // Cursor Cassie waves hello
-    if (!helloChat()) { mascotSay('Hi, I’m Cassie! 👋', 2600); lastChatAt = Date.now(); }
+    if (!helloChat()) { mascotSay('Hi, I’m Cassie!', 2600); lastChatAt = Date.now(); }
     setTimeout(() => { if (!mascotAsleep && !mascotDragging && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2400);
   }, 1400);
 }
@@ -2581,7 +2581,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=240'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=241'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2602,9 +2602,11 @@ const BOARD_TASTE = 3;
    lesson or Quiz me) and Simulations (timed mock exams). It replaces the one-exam course of v235 to v239, whose exam,
    level and opened lessons carry over. */
 let prepLoad = null;
+function boardPrepReady() { // (also Learn's Board and licensure exams folders)
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=241'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+}
 function openBoardPrep(start = {}) {
-  const ready = window.CassieBoardPrep ? Promise.resolve() : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=240'; sc.onload = res; sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
-  return ready.then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
+  return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
 }
 function openLetCourse() { return openBoardPrep({ view: 'lessons' }); } // (old links and the LET page's ?lesson=let:course)
 // Home and the Study plan: topics done in the exam studied last (from what was saved, no loading)
@@ -2727,7 +2729,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=240').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=241').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3035,7 +3037,7 @@ function podPlayer(card, lines, title, voiceOk) {
   const box = document.createElement('div');
   box.className = 'pod-player';
   box.innerHTML = `<ol class="pod-lines"></ol>
-    <div class="pod-ctrl" role="group" aria-label="Podcast controls"><button type="button" data-p="back" aria-label="Back one line">⏮</button><button type="button" class="pod-play" data-p="play" aria-label="Play">▶</button><button type="button" data-p="skip" aria-label="Skip to the next line">⏭</button><button type="button" class="pod-speed" data-p="speed" aria-label="Speed 1x">1x</button><button type="button" class="pod-dl" data-p="dl">Download</button></div>
+    <div class="pod-ctrl" role="group" aria-label="Podcast controls"><button type="button" data-p="back" aria-label="Back one line"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 6l-8 6 8 6z"/></svg></button><button type="button" class="pod-play" data-p="play" aria-label="Play"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l12 7-12 7z"/></svg></button><button type="button" data-p="skip" aria-label="Skip to the next line"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"/><path d="M6 6l8 6-8 6z"/></svg></button><button type="button" class="pod-speed" data-p="speed" aria-label="Speed 1x">1x</button><button type="button" class="pod-dl" data-p="dl">Download</button></div>
     <p class="pod-note" role="status"></p>`;
   const ol = box.querySelector('.pod-lines'), note = box.querySelector('.pod-note'), playBtn = box.querySelector('.pod-play');
   lines.forEach((l, i) => { const li = document.createElement('li'); li.dataset.i = i; li.className = 'pod-line pod-' + l.who.toLowerCase(); li.innerHTML = '<b></b><span></span>'; li.querySelector('b').textContent = l.who; li.querySelector('span').textContent = l.say; li.tabIndex = 0; ol.appendChild(li); });
@@ -3048,7 +3050,7 @@ function podPlayer(card, lines, title, voiceOk) {
     const p = clips.get(i); p.catch(() => {}); return p;
   };
   const mark = () => ol.querySelectorAll('.pod-line').forEach((li) => { const on = +li.dataset.i === at; li.classList.toggle('on', on); if (on) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current'); });
-  const setPlay = (on) => { playing = on; playBtn.textContent = on ? '⏸' : '▶'; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); };
+  const setPlay = (on) => { playing = on; playBtn.innerHTML = on ? '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg>' : '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l12 7-12 7z"/></svg>'; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play'); };
   const rest = (e) => { setPlay(false); note.textContent = e && e.why === 'guest' ? CassieErrors.say('voice_signin') : e && e.why === 'mine' ? CassieErrors.say('voice_mine', { date: 'the 1st' }) : e && e.why === 'day' ? CassieErrors.say('voice_today') : e && e.why === 'month' ? CassieErrors.say('voice_resting', { date: 'next month' }) : CassieErrors.say('voice_typing'); };
   function play(i) {
     if (stopped || i < 0) return;
@@ -5456,7 +5458,7 @@ function renderAttachments() {
     if (a.kind === 'image' && a.image && a.image.dataUrl) { const img = document.createElement('img'); img.src = a.image.dataUrl; img.alt = a.name || 'attached photo'; chip.appendChild(img); }
     else { const t = document.createElement('span'); t.className = 'att-name'; t.textContent = a.note || a.name; chip.appendChild(t); }
     if (a.kind === 'doc' && a.status === 'ready' && a.doc && a.doc.text) {
-      const r = document.createElement('button'); r.type = 'button'; r.className = 'att-read'; r.textContent = '📖'; r.title = `Read ${a.name} here and highlight any part`; r.setAttribute('aria-label', r.title); chip.appendChild(r);
+      const r = document.createElement('button'); r.type = 'button'; r.className = 'att-read'; r.innerHTML = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 1 4 17.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>'; r.title = `Read ${a.name} here and highlight any part`; r.setAttribute('aria-label', r.title); chip.appendChild(r);
     }
     const x = document.createElement('button'); x.type = 'button'; x.className = 'att-x'; x.textContent = '×'; x.setAttribute('aria-label', `Remove ${a.name || 'attachment'}`); chip.appendChild(x);
     return chip;
@@ -6159,7 +6161,7 @@ async function handleSend(text, opts = {}) {
     addTextDownload(bubble, reply, { title, want });
     if (doc && doc.text && !doc.combined) { // open the file itself to read it and highlight any part
       const rb = document.createElement('button');
-      rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `📖 Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
+      rb.type = 'button'; rb.className = 'attach-read reader-open-btn'; rb.textContent = `Read & highlight ${doc.name.length > 28 ? doc.name.slice(0, 28) + '…' : doc.name}`;
       rb.addEventListener('click', () => openReader(doc));
       bubble.appendChild(rb);
     }
@@ -6966,13 +6968,13 @@ async function startRoom(code, title) {
       state.chats.push(c); save(); renderChatList();
       return true;
     },
-    onUnread: (n) => { const b = document.querySelector('[data-room-act="study"]'); if (b) b.textContent = n ? `📚 Study together (${n})` : '📚 Study together'; },
+    onUnread: (n) => { const b = document.querySelector('[data-room-act="study"]'); if (b) b.textContent = n ? `Study together (${n})` : 'Study together'; },
   }) : null;
   const stopRoom = R.stop;
   R.stop = () => { stopRoom(); if (study) study.destroy(); };
   const banner = (note = '') => {
     const who = R.members.map((m) => `<span>${escapeHtml(m.uid === me ? `${m.name} (you)` : m.name)}</span>`).join('');
-    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button><button type="button" class="csk-btn" data-room-act="check" title="Cassie looks at the whole board, a proof, code, a diagram, and everyone sees her answer">🔎 Ask Cassie to check our board</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">📚 Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
+    const el = session.setRoom(`<span>Room</span><b>${code}</b><button type="button" class="csk-btn" data-room-act="copy">Copy invite link</button><button type="button" class="csk-btn" data-room-act="check" title="Cassie looks at the whole board, a proof, code, a diagram, and everyone sees her answer">Ask Cassie to check our board</button>${study ? `<button type="button" class="csk-btn primary" data-room-act="study">Study together${study.unread() ? ` (${study.unread()})` : ''}</button>` : ''}${note ? `<span class="csk-room-note">${escapeHtml(note)}</span>` : ''}<span class="csk-who">${who}</span>`);
     const sb = el.querySelector('[data-room-act="study"]');
     if (sb) sb.onclick = () => study.toggle();
     el.querySelector('[data-room-act="check"]').onclick = (e) => groupCheck(e.currentTarget);
@@ -7280,7 +7282,7 @@ const IN_LAB = {
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
 function labsCss() {
-  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=12'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=19'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
 }
 // the panel for one 3D view (made when first needed, gone when the view closes)
 let help3d = null;
@@ -7354,7 +7356,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=240');
+      exploreMod = await import('./explore/cell3d.js?v=241');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7404,7 +7406,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=240');
+      labsMod = await import('./labs/labs.js?v=241');
       islandRest();
     }
     labsMod.open({
@@ -8670,7 +8672,7 @@ new MutationObserver(holdPageSize).observe(document.body, { childList: true }); 
 document.addEventListener('focusin', holdPageSize, true);
 if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (inFullView()) setTimeout(holdPageSize, 150); });
 
-// One thing said out loud (the lab tutor's 🎤): the browser's own listening where there is one, else a
+// One thing said out loud (the lab tutor's mic): the browser's own listening where there is one, else a
 // short recording written down by Whisper. { done: Promise<text>, stop() } — stop() ends it early.
 function hearOnce() {
   let stopFn = () => {}, finish, fail;
@@ -9201,7 +9203,7 @@ function saveProfile({ name, age, grade, gender, who }, first, prev = {}) {
   applyAccent();
   dressCassie();
   if (first) { track('signup'); track('open'); set3D('celebratory'); setTimeout(() => set3D('neutral'), 2200); }
-  try { mascotSay(first ? (name ? `Nice to meet you, ${name}! 👋` : 'Nice to meet you! 👋') : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
+  try { mascotSay(first ? (name ? `Nice to meet you, ${name}!` : 'Nice to meet you!') : 'Profile saved ✓', 3000); } catch (e3) { /* ignore */ }
   renderProfileSummary();
   if (labsMod && labsMod.levelChanged) labsMod.levelChanged(); // (Learn's For you follows the new level at once)
 }
@@ -9229,6 +9231,18 @@ function frShell() {
 function frClose() { const el = document.querySelector('.fr'); if (el) el.remove(); }
 // While a full-screen first-run or sign-in page is open, the app behind it is locked: it can't scroll
 // (iOS scrolls the page up to a field when the keyboard opens) and taps and screen readers skip it.
+/* v241: the page itself never scrolls (html and body are overflow: hidden), but an iPhone can leave it scrolled after
+   the keyboard closes or a field takes focus. Every fixed sheet then sits that far up: under the status bar at the
+   top, with a gap at the bottom. So whenever the page is found scrolled and nobody is typing, it goes back to the top. */
+(function keepPagePut() {
+  const root = document.documentElement;
+  const typing = () => { const a = document.activeElement; return !!a && a !== document.body && a.matches('input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select, [contenteditable="true"]'); };
+  const put = () => { if (!typing() && (window.scrollY || root.scrollTop || document.body.scrollTop)) { window.scrollTo(0, 0); root.scrollTop = 0; document.body.scrollTop = 0; } };
+  window.addEventListener('scroll', put, { passive: true });
+  document.addEventListener('focusout', () => setTimeout(put, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => setTimeout(put, 250));
+  new MutationObserver(put).observe(document.body, { childList: true }); // (a sheet opening)
+})();
 (function lockBehindFullScreen() {
   const app = document.getElementById('app'), root = document.documentElement;
   const unscroll = () => { if (root.classList.contains('fr-open') && (window.scrollY || root.scrollTop)) window.scrollTo(0, 0); };
@@ -9248,10 +9262,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=240').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=241').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=240', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=241', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9900,7 +9914,7 @@ function afterSignIn(res) {
     state.setupLater = false; save();
     if (firstHere) { frClose(); offerTour(); }
     track('open');
-    try { mascotSay(`Welcome back, ${state.profile.name}! 👋`, 3000); } catch (e) { /* ignore */ }
+    try { mascotSay(`Welcome back, ${state.profile.name}!`, 3000); } catch (e) { /* ignore */ }
   } else {
     if (state.profile && !state.setupLater) { // this device already has a profile → save it to the account
       syncAccount(true);
@@ -10374,7 +10388,7 @@ function showShareCard(text, source) {
   if (state.messages.length) createNewChat();
   const card = document.createElement('div');
   card.className = 'share-card';
-  card.innerHTML = '<div class="share-head">What should I do with this?</div><blockquote class="share-quote"></blockquote><div class="share-from"></div><div class="share-row"></div><div class="share-tip" hidden>Equations copied from a PDF can lose their formatting. If my answer looks off, send a <b>screenshot</b> instead (📎): I read pictures exactly.</div>';
+  card.innerHTML = '<div class="share-head">What should I do with this?</div><blockquote class="share-quote"></blockquote><div class="share-from"></div><div class="share-row"></div><div class="share-tip" hidden>Equations copied from a PDF can lose their formatting. If my answer looks off, send a <b>screenshot</b> instead (with the paperclip button): I read pictures exactly.</div>';
   card.querySelector('.share-tip').hidden = !looksMathy(t);
   card.querySelector('.share-quote').textContent = t.length > 600 ? t.slice(0, 600) + '…' : t;
   if (source) card.querySelector('.share-from').textContent = 'From ' + source;

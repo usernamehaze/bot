@@ -235,7 +235,7 @@ const museumLab = {
     function drawGame() {
       const g = game;
       if (g.i >= g.pool.length) {
-        page.innerHTML = `<div class="tl-empty"><b>${g.score} of ${g.pool.length} right!</b><p>${g.score === g.pool.length ? 'A perfect round. You know your art! 🎨' : 'Tap a work in the gallery to read its story, then play again.'}</p><p><button type="button" class="lab-btn main" data-again>Play again</button> <button type="button" class="lab-btn" data-close>Back to the gallery</button></p></div>`;
+        page.innerHTML = `<div class="tl-empty"><b>${g.score} of ${g.pool.length} right!</b><p>${g.score === g.pool.length ? 'A perfect round. You know your art!' : 'Tap a work in the gallery to read its story, then play again.'}</p><p><button type="button" class="lab-btn main" data-again>Play again</button> <button type="button" class="lab-btn" data-close>Back to the gallery</button></p></div>`;
         if (g.score >= 6) api.check(2);
         api.best(g.score, `${g.score}/${g.pool.length} in “Who painted it?”`);
         return;
