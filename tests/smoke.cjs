@@ -6118,7 +6118,7 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
-test('the model picker on a phone (360 and 390 wide): it shows the whole short model name (OSS 120B), not cut off, and every button in the ask box row is 44px or more to tap, in one row', async (b) => {
+test('the model picker on a phone (360 and 390 wide): a small icon whose label names the model (v248, was the short name OSS 120B), and every button in the ask box row is 44px or more to tap, in one row', async (b) => {
   for (const w of [360, 390]) {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: w, height: 844 }, server: false, lite: 'off', state: { tab: 'chat', groqKey: 'gsk_test', groqModel: 'openai/gpt-oss-120b' } });
     await page.waitForSelector('.composer-row #model-pill'); await page.waitForTimeout(800);
@@ -6130,8 +6130,8 @@ test('the model picker on a phone (360 and 390 wide): it shows the whole short m
       const pc = getComputedStyle(pill), room = pill.getBoundingClientRect().width - parseFloat(pc.paddingLeft) - parseFloat(pc.paddingRight) - parseFloat(pc.borderLeftWidth) - parseFloat(pc.borderRightWidth);
       return { label: pill.dataset.short, shown: cs.content, need: +m.measureText(pill.dataset.short || '').width.toFixed(1), room: +room.toFixed(1), small: kids.filter((k) => k.width < 44 || k.height < 44).length, rows: new Set(kids.map((k) => Math.round(k.top))).size, right: Math.max(...kids.map((k) => k.right)), vw: innerWidth };
     });
-    expect(r.label === 'OSS 120B' && /OSS 120B/.test(r.shown), `${w}: the pill says OSS 120B: ` + JSON.stringify(r));
-    expect(r.need <= r.room + 0.5, `${w}: the whole name fits, nothing cut off: ` + JSON.stringify(r));
+    const icon = await page.evaluate(() => { const p = document.getElementById('model-pill'); return { ic: getComputedStyle(p.querySelector('.mp-ic')).display !== 'none', words: [...p.querySelectorAll('span')].some((x) => x.getClientRects().length), aria: p.getAttribute('aria-label') }; });
+    expect(icon.ic && !icon.words && /^Model: GPT-OSS 120B/.test(icon.aria), `${w}: the picker is an icon, and its label names the model: ` + JSON.stringify(icon));
     expect(r.small === 0 && r.rows === 1 && r.right <= r.vw, `${w}: every button 44px or more, one row, on screen: ` + JSON.stringify(r));
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
