@@ -966,3 +966,6 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-addnote, .lf-change { min-height: var(--tap, 48px); }
 .lf-addnote { margin: 0 0 var(--sp-3, 12px); }
 .kid-btn svg, .tut-mic svg { width: 24px; height: 24px; vertical-align: middle; }
+/* (an exam's name never breaks inside a word: Criminology, Psychometrician) */
+.lf-exams .lf-txt b { -webkit-hyphens: manual; hyphens: manual; overflow-wrap: normal; word-break: keep-all; font-size: .82rem; }
+@media (max-width: 560px) { .lf-grid.lf-exams { grid-template-columns: 1fr; gap: var(--sp-3, 12px); } .labs .lf-grid.lf-exams .lf { aspect-ratio: 3 / 1; } } /* (a phone: one exam a row, low and wide, so every name fits whole) */

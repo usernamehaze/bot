@@ -2616,6 +2616,9 @@ test('v241: Learn has College and Board and licensure exams as separate levels; 
   await tap('lessons:board'); await page.waitForSelector('.lp-list .lf[data-group="bexam:cpale"]');
   const ex = await page.$$eval('.lp-list .lf', (x) => x.map((f) => f.dataset.group.slice(6)));
   expect(ex.join() === 'let,cpale,cse,cle,nle,cele,pmle,nclex,ielts,oet,toefl,sat,jlpt,eps' && (await page.$$eval('.lp-list .lf-sub', (x) => x.map((e) => e.textContent))).join('|') === 'Philippine board exams|For studying or working abroad', 'a folder per exam, Philippine first: ' + ex);
+  const cut = await page.$$eval('.lp-list .lf-exams .lf-txt b', (bs) => bs.filter((x) => x.scrollWidth > x.clientWidth + 1 || x.scrollHeight > x.clientHeight + 1).map((x) => x.textContent));
+  const subs = await page.$$eval('.lp-list .lf-exams .lf-txt small', (x) => x.map((e) => e.textContent));
+  expect(!cut.length && subs.every((t) => t.length <= 24), 'every exam name fits whole, with a short line under it: ' + JSON.stringify([cut, subs]));
   await shot('l2-exams');
   await tap('bexam:cpale'); await page.waitForSelector('.lp-list [data-bp-topic]');
   const first = await page.$$eval('.lp-list :is(.lf, .lf-sub, [data-bp-topic])', (x) => x.slice(0, 3).map((e) => e.dataset.group || e.dataset.bpTopic || e.textContent));
@@ -2659,9 +2662,9 @@ test('v241: Learn has College and Board and licensure exams as separate levels; 
   expect(await page.evaluate(() => /Never use emoji or emoticons in any reply/.test(SYSTEM_PROMPT)), 'Cassie’s rules: no emoji');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
-  // and nothing the student sees has emoji (the owner’s server dashboard aside)
+  // and nothing anyone sees has emoji, the owner’s server dashboard too
   const EMO = /[\u{1F000}-\u{1FAFF}☀-⛿✨❄❤✏⏩-⏺▶◀]/u;
-  const files = ['app.html', 'index.html', 'terms.html', 'privacy.html', 'support.html', 'let.html', 'rescue.html', 'start.html', 'bot.html', 'boardprep.js', 'cards.js', 'study-room.js', 'sketch.js', 'listen.js', 'bot-page.js', 'rescue.js', 'extension/sketch.js',
+  const files = ['server/dashboard.html', 'app.html', 'index.html', 'terms.html', 'privacy.html', 'support.html', 'let.html', 'rescue.html', 'start.html', 'bot.html', 'boardprep.js', 'cards.js', 'study-room.js', 'sketch.js', 'listen.js', 'bot-page.js', 'rescue.js', 'extension/sketch.js',
     ...fs.readdirSync(path.join(ROOT, 'labs')).filter((f) => f.endsWith('.js')).map((f) => 'labs/' + f)];
   const bad = files.filter((f) => EMO.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').split('\n').filter((l) => EMO.test(l) && !/\|✅\|🎉\/i\.test\(reply\)/.test(l));
@@ -9621,7 +9624,7 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
         cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
     expect(parts.order.join('|') === 'Today’s Labs|Levels|Simulations: Visual Labs|Study Tools: Learn your way', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
-    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[5,1,4]', `${size}: no chips, tabs or card grid; 5 level folders, the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
+    expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[6,1,4]', `${size}: no chips, tabs or card grid; 6 level folders (v241: Board and licensure exams too), the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
     if (SHOTS) {
       if (phone) { await page.evaluate(() => document.querySelector('.lp-home').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
       else { await page.evaluate(() => { document.querySelector('.labs-scroll').scrollTop = 0; }); await page.waitForTimeout(500); }
@@ -9634,6 +9637,7 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
     const anyF = (key) => `.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`;
     const paths = [];
     for (const key of keys) {
+      if (key === 'level:board') continue; // (v241: exam folders, not labs: the v241 test)
       if (key.startsWith('level:')) paths.push([key, 'levelsims:' + key.slice(6)]);
       else if (key === 'visual:all') { await page.click(anyF(key)); await page.waitForSelector(anyF('subject:physics')); await page.waitForTimeout(100); const subs = await page.$$eval('.labs:not([hidden]) .lf', (f) => f.filter((x) => x.getClientRects().length).map((x) => x.dataset.group)); subs.forEach((g) => paths.push([key, g])); await page.click(S.back); await page.waitForSelector(S.folders); }
       else paths.push([key]);
@@ -12538,7 +12542,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(!top.chips.length, 'no filter chips (the folders replace them): ' + top.chips.join());
   expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
-  expect(top.forYou.join() === 'pre,elem,jhs,shs,college' && top.forPv >= 10, 'For you (no level saved): the 5 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
+  expect(top.forYou.join() === 'pre,elem,jhs,shs,college,board' && top.forPv >= 10, 'For you (no level saved): the 6 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
   const f0 = await fr('.lp-big'); await page.waitForTimeout(900);
   expect(await fr('.lp-big') > f0 + 3, 'the Recommended preview is moving');
@@ -12602,7 +12606,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     await o.page.evaluate(() => openLabs());
     await o.page.waitForSelector('.labs:not([hidden]) .labs-scroll .lf');
     const d = await o.page.evaluate(() => { const vis = (s) => { const e = document.querySelector(s); return !!e && !!e.getClientRects().length; }; return { lp: vis('.lp'), on: document.querySelector('.labs').classList.contains('lp-on'), head: vis('.labs-head'), tabs: [...document.querySelectorAll('.labs-tabs [data-section]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.section), search: vis('.labs-search'), chips: document.querySelectorAll('.labs-chips button').length, cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter((x) => x.getClientRects().length).length, folders: document.querySelectorAll('.labs-scroll .lf').length, feature: vis('.labs-feature'), bg: getComputedStyle(document.querySelector('.labs')).backgroundImage.slice(0, 15) }; });
-    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 10 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf (v220: 5 levels, Visual Labs, 4 study tools: 10 folders): ' + JSON.stringify(d));
+    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 11 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf (v241: 6 levels, Visual Labs, 4 study tools: 11 folders): ' + JSON.stringify(d));
     await o.ctx.close();
   }
 });
