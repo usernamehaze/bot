@@ -2382,8 +2382,8 @@ test('the Pasado Pass: the pricing page opens on Monthly (₱149), the semester 
   await app.evaluate(() => { closeSettings(); plusSheet('The 3D human body'); });
   const foot = await app.locator('.plus-sheet .plus-foot').innerText();
   expect(/Pasado Pass, one payment of ₱599 for your whole semester\. It never renews, and you have 7 days to change your mind\./.test(foot), 'the Plus sheet: ' + foot);
-  expect(await app.locator('.plus-sheet .plus-see').getAttribute('href') === 'index.html#pricing', 'its link still goes to the plans');
-  const [go, ok] = [await app.locator('.plus-sheet .plus-see').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
+  expect(await app.locator('.plus-sheet .plus-see').count() === 0, 'v246: two buttons only (Plans stays in Settings and the bell)');
+  const [go, ok] = [await app.locator('.plus-sheet .plus-go').boundingBox(), await app.locator('.plus-sheet .plus-ok').boundingBox()];
   expect(ok.height >= 44 && Math.abs(ok.height - go.height) < 1, 'Not now is the same size: ' + JSON.stringify([go, ok]));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await actx.close();
@@ -2601,6 +2601,50 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v246: the Home header and chat top bar are see-through with no cut (no rim, bevel, shadow or hard line; they fade out); a smaller theme switch with a 48px tap; the plan sheet has 2 buttons and the bell reminds about the plan feature tried; Today’s Lab in Learn is a slim title card; Board and Memory are drawn thicker', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, chats: [{ id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain the Code of Ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents. '.repeat(20) }], updatedAt: Date.now() }], currentChatId: 'c1' } });
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  await page.evaluate(() => { state.plan = null; }); // (the harness gives Pro by default)
+  await page.waitForSelector('#home .hub-hero .hub-theme'); await page.waitForTimeout(500);
+  const edge = (sel) => page.evaluate((s) => { const e = document.querySelector(s), c = getComputedStyle(e), pb = getComputedStyle(e, '::before'), pa = getComputedStyle(e, '::after');
+    return { bw: [c.borderTopWidth, c.borderLeftWidth, c.borderRightWidth, c.borderBottomWidth].join(' '), sh: c.boxShadow, rad: c.borderBottomLeftRadius, mask: c.webkitMaskImage || c.maskImage, layers: [pb, pa].filter((x) => x.display !== 'none' && x.content !== 'none' && x.content !== 'normal').map((x) => x.content + ' ' + x.backgroundImage.slice(0, 40)), bf: c.backdropFilter || c.webkitBackdropFilter }; }, sel);
+  const h = await edge('#home .hub-hero');
+  expect(h.bw === '0px 0px 0px 0px' && h.sh === 'none' && h.rad === '0px' && /gradient/.test(h.mask) && !h.layers.length, 'the Home header: no rim, line, shadow or bevel; it fades out: ' + JSON.stringify(h));
+  // the switch: smaller to see, 48px to tap
+  const sw = await page.evaluate(() => { const t = document.querySelector('.hub-theme .ts-track').getBoundingClientRect(), k = document.querySelector('.hub-theme').getBoundingClientRect(); return { tw: t.width, th: t.height, w: k.width, h: k.height }; });
+  expect(sw.tw <= 40 && sw.th <= 24 && sw.w >= 48 && sw.h >= 48, 'the theme switch is smaller (40x24) and still a 48px tap: ' + JSON.stringify(sw));
+  // the plan sheet: 2 buttons
+  expect(await page.locator('.hub-bell .hub-dot').count() === 0, 'no dot before');
+  await page.evaluate(() => plusSheet('Every board exam lesson', 'Pro opens every lesson.', 'board', 'Every board exam lesson comes with Pro', 'pro')); await page.waitForSelector('.plus-sheet');
+  const btns = await page.$$eval('.plus-sheet .plus-actions :is(button, a)', (x) => x.filter((e) => e.getClientRects().length).map((e) => e.textContent.trim()));
+  expect(btns.length === 2 && /Get Pro/.test(btns[0]) && btns[1] === 'Not now' && !(await page.locator('.plus-sheet .plus-see, .plus-sheet .plus-in').count()), 'the plan sheet has 2 buttons: ' + JSON.stringify(btns));
+  await page.click('.plus-sheet .plus-ok'); await page.waitForTimeout(200);
+  // the bell: a dot, and the reminder first; a tap reopens the sheet
+  expect(await page.locator('.hub-bell .hub-dot').count() === 1 && /plan reminder/.test(await page.getAttribute('.hub-bell', 'aria-label')), 'the bell shows a dot and says so');
+  await page.tap('.hub-bell'); await page.waitForSelector('.hub-remind.open [data-hub="plan"]');
+  const row = (await page.locator('.hub-remind.open .hub-chat').first().innerText()).replace(/\s+/g, ' ');
+  expect(/You’re accessing a Pro feature/.test(row) && /Every board exam lesson comes with Pro\. Get the plan\?/.test(row), 'the reminder is first: ' + row);
+  await page.tap('.hub-remind.open [data-hub="plan"]'); await page.waitForSelector('.plus-sheet');
+  expect(/Every board exam lesson comes with Pro/.test(await page.locator('.plus-sheet h3').innerText()), 'a tap on the reminder opens the plan sheet again');
+  await page.click('.plus-sheet .plus-ok');
+  // with the plan, the reminder goes
+  await page.evaluate(() => { state.plan = { plan: 'pro', until: Date.now() + 864e5 }; planAskDots(); });
+  expect(await page.locator('.hub-remind [data-hub="plan"]').count() === 0 && await page.locator('.hub-bell .hub-dot').count() === 0, 'with Pro, the reminder and the dot go');
+  await page.evaluate(() => { state.plan = null; });
+  // Learn: Today's Lab first, full width, a slim title card
+  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-rec .lp-card');
+  const lab = await page.evaluate(() => { const c = document.querySelector('.lp-rec .lp-card'), r = c.getBoundingClientRect(), lv = document.querySelector('.lp .lf-levels'); return { h: r.height, w: r.width, vw: innerWidth, first: !lv || r.top < lv.getBoundingClientRect().top, pv: !!c.querySelector('canvas'), tag: !!c.querySelector('.lp-tag'), small: !!c.querySelector('.lp-info small'), title: c.querySelector('.lp-info b').textContent, play: c.querySelector('.lp-play').getBoundingClientRect().width }; });
+  expect(lab.h <= 96 && lab.w >= lab.vw - 48 && lab.first && !lab.pv && !lab.tag && !lab.small && lab.title && lab.play >= 48, 'Today’s Lab: first, full width, 96px or less, only the title and play: ' + JSON.stringify(lab));
+  // the chat top bar: no cut, thicker icons
+  await page.click('.tab[data-tab="chat"]'); await page.waitForSelector('.topbar #board-btn'); await page.waitForTimeout(400);
+  const t = await edge('.topbar');
+  expect(t.bw === '0px 0px 0px 0px' && t.sh === 'none' && /gradient/.test(t.mask) && !t.layers.length && t.bf && t.bf !== 'none', 'the chat top bar: see-through, no rim, line, shadow or bevel, it fades out: ' + JSON.stringify(t));
+  const sw2 = await page.evaluate(() => ['#board-btn svg', '#memory-btn svg'].map((s) => parseFloat(getComputedStyle(document.querySelector(s)).strokeWidth)));
+  expect(sw2.every((w) => w >= 2.5), 'Board and Memory are drawn thicker: ' + sw2);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v244: the ask box gives the answers room (one row at rest in a started chat, 66px; 118px and the quick actions while typing; the answer area 60% of a phone); onboarding has no mascot beside the writing; no glint streak on the glass; the Home header and full-screen sheets run edge to edge; the backdrop reaches the bottom; small copy and layout fixes from the design audit', async (b) => {
   const long = 'The Code of Ethics asks teachers to work with parents as partners and to communicate honestly about progress. '.repeat(8);
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'chat', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, chats: [{ id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain the commitment to parents' }, { role: 'assistant', content: long }], updatedAt: Date.now() }], currentChatId: 'c1' } });
@@ -12567,23 +12611,23 @@ test('phone Home is drawn again only when it needs to be (coming into view, Home
   await ctx.close();
 });
 
-test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab with a live preview), For you (Learn, Study tools) with a live preview on every row, 3 moving at once; still with Reduce Motion or Lite mode; a computer keeps its Labs shelf', async (b) => {
+test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab, a slim card with its name), For you (Learn, Study tools) with a live preview on every row, 3 moving at once; still with Reduce Motion or Lite mode; a computer keeps its Labs shelf', async (b) => {
   const { contrastIssues, tapTargetIssues } = require('./ui-checks.cjs');
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', scale: 1, lite: 'off', server: false, state: { groqKey: 'gsk_test', tab: 'home', plan: null, profile: { ...PROFILE, grade: '', who: 'teach' } } }); // (no level: For you keeps its two doors; by level: the Learn test)
   page.on('dialog', (d) => d.dismiss().catch(() => {}));
   await page.click('.tab[data-tab="labs"]');
-  await page.waitForSelector('.labs:not([hidden]) .lp:not([hidden]) .lp-big[data-preview]', { timeout: 15000 });
+  await page.waitForSelector('.labs:not([hidden]) .lp:not([hidden]) .lp-foryou canvas[data-preview]', { timeout: 15000 });
   const top = await page.evaluate(() => ({ title: document.querySelector('.lp-head h2').textContent, find: document.querySelector('.lp-find').getBoundingClientRect().width,
     chips: [...document.querySelectorAll('.lp-chips button')].map((c) => c.textContent), rec: document.querySelector('.lp-card .lp-info b').textContent, want: (LAB_INFO[todayLab()] || [])[0],
-    pv: document.querySelector('.lp-big').dataset.preview, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, peek: !!document.querySelector('.lp-card .lp-peek'),
+    pv: document.querySelector('.lp-play').dataset.lab, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, slim: document.querySelector('.lp-card').classList.contains('lp-slim'),
     forYou: [...document.querySelectorAll('.lp-foryou .lf')].map((x) => x.dataset.level), forPv: document.querySelectorAll('.lp-foryou .lf canvas[data-preview]').length }));
   expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(!top.chips.length, 'no filter chips (the folders replace them): ' + top.chips.join());
-  expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.peek, 'Recommended: today’s lab, its live preview, a play button and Cassie peeking: ' + JSON.stringify(top));
+  expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.slim, 'Recommended: today’s lab, its name and a play button (v246: a slim card): ' + JSON.stringify(top));
   expect(top.forYou.join() === 'pre,elem,jhs,shs,college,board' && top.forPv >= 10, 'For you (no level saved): the 6 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
-  const f0 = await fr('.lp-big'); await page.waitForTimeout(900);
-  expect(await fr('.lp-big') > f0 + 3, 'the Recommended preview is moving');
+  const f0 = await fr('.lp-foryou canvas[data-preview]'); await page.waitForTimeout(900);
+  expect(await fr('.lp-foryou canvas[data-preview]') > f0 + 3, 'the folders’ previews are moving');
   for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(500); const { bad } = await contrastIssues(page, '.lp'); expect(!bad.length, `Labs tab (${scheme}): ` + bad.join(' | ')); }
   await page.emulateMedia({ colorScheme: 'light' });
   const small = await tapTargetIssues(page); expect(!small.length, 'Labs tab: tap targets: ' + small.join(' | '));
@@ -12632,7 +12676,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     const o = await open(b, { device: 'iPhone 13', scale: 1, lite, server: false, state: { groqKey: 'gsk_test', plan: null } });
     if (motion) await o.page.emulateMedia({ reducedMotion: motion });
     await o.page.evaluate(() => openLabs());
-    await o.page.waitForSelector('.lp:not([hidden]) .lp-big[data-preview]', { timeout: 15000 });
+    await o.page.waitForSelector('.lp:not([hidden]) canvas[data-preview]', { timeout: 15000 });
     await o.page.waitForTimeout(500);
     const st = await o.page.evaluate(() => [...document.querySelectorAll('.lp canvas[data-preview]')].map((c) => c.dataset.still));
     expect(st.length >= 3 && st.every((x) => x === '1'), `${why}: still previews: ` + st.join());
@@ -13326,7 +13370,7 @@ test('the other screens in Liquid Glass: Plus sheet, offline note, board, flashc
   await page.evaluate(() => plusSheet('Real 3D views', 'You’ve used this week’s 2 free views. They come back on Monday.'));
   const sheet = page.locator('.plus-sheet');
   expect(/Real 3D views comes with Plus/.test(await sheet.locator('h3').innerText()) && await sheet.locator('.plus-list li').count() === 3, 'the Plus sheet says what it is and what Plus adds');
-  expect(await sheet.locator('.plus-see').getAttribute('href') === 'index.html#pricing' && await sheet.locator('.plus-join').count() === 1, 'See the plans goes to the plans, and the early list is one tap (no payment here)');
+  expect(await sheet.locator('.plus-actions button').count() === 2 && await sheet.locator('.plus-join').count() === 1, 'two buttons, and the early list is one tap (no payment here)');
   await sheet.locator('.plus-ok').click();
   expect(await page.locator('.plus-sheet').count() === 0, 'Not now closes it');
   // offline: a calm note says what still works, and goes away when the internet is back
