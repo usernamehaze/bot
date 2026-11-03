@@ -1118,6 +1118,7 @@ function lastTopic() {
 // say a line for a moment, unless she said something in the last 2 minutes (a tap: force)
 function cassieChat(moment, vars, { force = false, ms = 3600 } = {}) {
   if (!mascotBubble || (!force && Date.now() - lastChatAt < CHAT_GAP)) return false;
+  if (!force && document.documentElement.classList.contains('chat-rest')) return false; // (v244: in a chat that has started, her own lines never sit on an answer; a tap still gets one)
   const lines = CASSIE_LINES[chatLang()][moment];
   if (!lines) return false;
   lastChatAt = Date.now();
@@ -2581,7 +2582,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=243'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=244'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2603,7 +2604,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=243'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=244'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2729,7 +2730,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=243').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=244').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -7246,6 +7247,31 @@ function autoGrow() {
   promptInput.style.height = Math.min(120, promptInput.scrollHeight) + 'px';
 }
 promptInput.addEventListener('input', autoGrow);
+/* v244: more room for the answers. On a phone, in a chat that has started, while nobody is typing, the ask box is one
+   row (the box, the mic and Send) and the quick actions step aside; tapping the box brings the model, camera, attach,
+   voice and the quick actions back. A new chat, a quiz, a file waiting or text in the box keeps everything out. */
+(function chatRest() {
+  const root = document.documentElement, preview = document.getElementById('attach-preview'), comp = document.getElementById('composer');
+  let keep = 0;
+  const sync = () => {
+    const on = root.classList.contains('native') && root.classList.contains('tab-chat') && (state.messages || []).length > 0 && !quizMode
+      && document.activeElement !== promptInput && !promptInput.value.trim() && !(preview && !preview.hidden) && Date.now() > keep;
+    if (root.classList.contains('chat-rest') !== on) {
+      root.classList.toggle('chat-rest', on);
+    }
+    // (her dock moves with the box: if she sits lower than it now allows, over the box, she goes back up)
+    clearTimeout(sync.t); sync.t = setTimeout(() => { try { if (!mascotUserMoved && mascot && mascot.getBoundingClientRect().top > mascotBounds().maxY + 2) restMascot(); } catch (e) { /* she stays */ } }, 250);
+  };
+  // (a tap on a tool or a quick action: the box loses focus first; it stays open long enough for the tap to land)
+  ['pointerdown', 'touchstart'].forEach((t) => [comp, document.getElementById('quick-actions')].forEach((el) => el && el.addEventListener(t, () => { keep = Date.now() + 600; }, { passive: true })));
+  promptInput.addEventListener('focus', sync);
+  promptInput.addEventListener('input', sync);
+  promptInput.addEventListener('blur', () => setTimeout(sync, 650));
+  new MutationObserver(() => setTimeout(sync, 0)).observe(chatLog, { childList: true });
+  new MutationObserver(() => setTimeout(sync, 0)).observe(root, { attributes: true, attributeFilter: ['class'] }); // (the tab changed; sync only acts on a real change)
+  if (preview) new MutationObserver(sync).observe(preview, { attributes: true, attributeFilter: ['hidden'] });
+  sync();
+})();
 
 /* ---------- tutor quick-actions: Hint & Quiz ---------- */
 if (hintBtn) {
@@ -7282,7 +7308,7 @@ const IN_LAB = {
   speak: (t) => window.CassieVoice && window.CassieVoice.speak(cleanForSpeech(t), { gender: voiceGender() }),
 };
 function labsCss() {
-  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=21'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
+  if (!document.querySelector('link[data-labs-css]')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'labs/labs.css?v=22'; l.dataset.labsCss = '1'; document.head.appendChild(l); }
 }
 // the panel for one 3D view (made when first needed, gone when the view closes)
 let help3d = null;
@@ -7356,7 +7382,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=243');
+      exploreMod = await import('./explore/cell3d.js?v=244');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7406,7 +7432,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=243');
+      labsMod = await import('./labs/labs.js?v=244');
       islandRest();
     }
     labsMod.open({
@@ -7809,6 +7835,7 @@ function fillYou() {
   const week = Date.now() - 7 * 864e5;
   const asked = state.chats.reduce((n, c) => n + (c.messages || []).filter((m) => m.role === 'user' && (m.at || c.updatedAt || 0) >= week).length, 0);
   document.getElementById('st-questions').textContent = asked;
+  { const q = document.getElementById('st-questions'), l = q && q.nextElementSibling; if (l) l.textContent = asked === 1 ? 'question this week' : 'questions this week'; } // (v244: one question, not one questions)
   document.getElementById('st-cards').textContent = (state.cards || []).filter((c) => (c.box || 0) >= 4).length;
   document.getElementById('st-streak').textContent = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
 }
@@ -9262,10 +9289,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=243').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=244').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=243', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=244', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -9405,8 +9432,8 @@ function frOnboard(at = 0) {
       <button type="button" class="fr-skip">Skip for now</button>
     </div>
     <div class="fr-mid">
-      ${at === 0 ? `<div class="fr-guide" aria-hidden="true"><div class="fr-guide-bot"></div><svg class="fr-ink" viewBox="0 0 300 64" preserveAspectRatio="xMinYMid meet"><text class="fr-ink-name" x="6" y="46"></text></svg></div>` : ''}
-      ${at === 2 ? `<div class="fr-guide" aria-hidden="true"><div class="fr-guide-bot"></div><svg class="fr-card-draw" viewBox="0 0 124 80"><rect class="frc-edge" x="4" y="4" width="116" height="72" rx="10" pathLength="100"/><path class="frc-line frc-l1" d="M20 28 H100" pathLength="100"/><path class="frc-line frc-l2" d="M20 42 H88" pathLength="100"/><path class="frc-line frc-l3" d="M20 56 H66" pathLength="100"/></svg></div>` : ''}
+      ${at === 0 ? `<div class="fr-guide" aria-hidden="true"><svg class="fr-ink" viewBox="0 0 300 64" preserveAspectRatio="xMidYMid meet"><text class="fr-ink-name" x="150" y="46" text-anchor="middle"></text></svg></div>` : ''}
+      ${at === 2 ? `<div class="fr-guide" aria-hidden="true"><svg class="fr-card-draw" viewBox="0 0 124 80"><rect class="frc-edge" x="4" y="4" width="116" height="72" rx="10" pathLength="100"/><path class="frc-line frc-l1" d="M20 28 H100" pathLength="100"/><path class="frc-line frc-l2" d="M20 42 H88" pathLength="100"/><path class="frc-line frc-l3" d="M20 56 H66" pathLength="100"/></svg></div>` : ''}
       <h1 class="fr-h">${Q.h}</h1>
       ${Q.sub ? `<p class="fr-sub">${Q.sub}</p>` : ''}
       ${Q.body}
@@ -9426,12 +9453,11 @@ function frOnboard(at = 0) {
   };
   mark();
   const typed = () => { if (f.name) a.name = f.name.value.trim(); if (f.age) a.age = f.age.value; };
-  // (v231) Cassie guides the setup: she writes your name as you type it, and draws your first study card.
-  // Only decoration: it never blocks typing or Next; with Reduce Motion or in Lite mode the finished drawing just shows.
+  // (v231) the setup writes your name as you type it, and draws your first study card (v244: on their own, with no
+  // mascot beside them). Only decoration: it never blocks typing or Next; Reduce Motion or Lite: the finished drawing.
   const guide = el.querySelector('.fr-guide'), still = reduceMotion() || !!window.CASSIE_LITE;
   if (guide) {
     guide.dataset.anim = still ? 'still' : 'run';
-    try { window.CassieBot.create(guide.querySelector('.fr-guide-bot'), { state: at === 0 ? 'writing' : 'drawing', flat: true }); } catch (e) { /* the drawing still works */ } // (the small flat Cassie: at once, no 3D to load here)
     if (at === 2 && !still) guide.classList.add('fr-draw-go');
   }
   const ink = el.querySelector('.fr-ink-name');
@@ -9818,7 +9844,7 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
       <li>Your exams planned day by day, up to 5 at once, even from your notes</li>
       <li>All the 3D any time, and save or print your notes and boards</li>`}
     </ul>
-    <p class="plus-foot">${serverPay ? 'One payment, and it never renews: 7 days to change your mind. Everything else in Cassie stays free.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
+    <p class="plus-foot">${serverPay ? 'One payment, and it never renews: 7 days to change your mind. Everything else in Cassie stays free.' : isPro ? 'Coming soon: Pro, from ₱349 a month or ₱1,399 for the semester. One payment that never renews, with 7 days to change your mind.' : 'Coming soon: the Pasado Pass, one payment of ₱599 for your whole semester. It never renews, and you have 7 days to change your mind. Everything else in Cassie stays free.'}</p>
     <form class="plus-early" novalidate hidden>
       <label for="plus-early-mail">Your email, so Cassie can tell you the day it opens</label>
       <input id="plus-early-mail" type="email" autocomplete="email" inputmode="email" placeholder="juan@gmail.com" required>
@@ -9826,9 +9852,9 @@ function plusSheet(what, why, src = 'plus', title, plan = 'plus') { // (plan: 'p
     </form>
     <div class="plus-actions">
       ${serverPay && payPrices ? (isPro ? `<button type="button" class="plus-go plus-buy" data-bill="month">Get Pro: ${escapeHtml(priceLine('pro', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">Pro for the semester: ${escapeHtml(priceLine('pro', 'sem'))}</button>` : `<button type="button" class="plus-go plus-buy" data-bill="month">Get Plus: ${escapeHtml(priceLine('plus', 'month'))}</button><button type="button" class="plus-buy plus-buy-sem" data-bill="sem">The Pasado Pass: ${escapeHtml(priceLine('plus', 'sem'))}</button>`)
-        : earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : '<button type="button" class="plus-go plus-join">Get the Pasado Pass early</button>'}
+        : earlyJoined() ? `<p class="plus-done">You’re on the early list. Cassie will email ${escapeHtml(earlyJoined().email || 'you')} the day it opens.</p>` : `<button type="button" class="plus-go plus-join">${isPro ? 'Get Pro early' : 'Get the Pasado Pass early'}</button>`}
       <a class="plus-see" href="index.html#pricing" target="_blank" rel="noopener">See the plans</a>
-      ${signedOut ? '<button type="button" class="plus-in">I have Plus. Sign in</button>' : ''}
+      ${signedOut ? '<button type="button" class="plus-in">I have a plan. Sign in</button>' : ''}
       <button type="button" class="plus-ok">Not now</button>
     </div></div>`;
   const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); };
@@ -10458,8 +10484,8 @@ applyTheme();
      costs frames).
    - light, on every pane and in every browser (an element filter, under the pane's words): a thin rim,
      smoothstep(rimW, 0, inside), brightest where the light hits; soft shading on the bevel and a faint shadow on the
-     side away from the light; and a tight specular glint, pow(N.H, 120), from a light that moves with the pointer,
-     the scroll and once when the pane appears (still with Reduce Motion). */
+     side away from the light; the light moves with the pointer, the scroll and once when the pane appears (still with
+     Reduce Motion). v244: no specular glint: its small white streak on the bars, chips and ask box read as a flaw. */
 const LG_PANES = '.hub .hub-box, .hub-card, .hub-tlab, .lp-card, .dk-card, .dk-stat, .dk-task, .set-group, .lesson, .composer, .fc-decks li, .labs .lp-row, .wk-card, .hub-chat.ex-new, .hub-chat.dk-letc, .dk-col, .dk-col .empty-state, .ht-tile, .labs .labs-card, .labs .labs-feature, .labs .labs-board, .labs .labs-search, .lf-front, .sidebar, .topbar, html.native .tabbar, #quick-actions .chip, .settings-card, .letc-card, .hub-hero, html.native .bubble-assistant';
 // (panes that are mostly small words: the light keeps still there, so nothing moves under the words)
 const LG_WORDY = '.set-group, .sidebar, .settings-card, .dk-card, .dk-stat';
@@ -10510,13 +10536,12 @@ function glassStill(w, h, r, dark) {
     hf[j] = Math.sqrt(Math.max(0, 1 - slope * slope)); slopeA[j] = slope; rimA[j] = smooth(RIM, 0, on); covA[j] = Math.min(1, Math.max(0, inside * k + .5));
   }
   const L = [-.55, -.55, .63], Ll = Math.hypot(...L); L[0] /= Ll; L[1] /= Ll; L[2] /= Ll; // (from the top-left, 30 degrees up)
-  const Hv = [L[0], L[1], L[2] + 1], Hl = Math.hypot(...Hv); Hv[0] /= Hl; Hv[1] /= Hl; Hv[2] /= Hl;
   const A = dark ? { rim: .9, shade: .14, shadow: .5 } : { rim: 1.5, shade: .3, shadow: .35 }, SC = 9;
   for (let y = 1; y < Hh - 1; y++) for (let x = 1; x < W - 1; x++) {
     const j = y * W + x, cov = covA[j], bev = slopeA[j] * cov; if (!bev && !rimA[j]) { if (slopeA[j] === 0 && hf[j] === 1 && x < W - 1 - x) x = W - 2 - x; continue; } // (clear middle: on to the far edge)
     let nx = -(hf[j + 1] - hf[j - 1]) * SC * k / 2, ny = -(hf[j + W] - hf[j - W]) * SC * k / 2, nz = 1; const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
-    const dif = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]), spec = Math.pow(Math.max(0, nx * Hv[0] + ny * Hv[1] + nz * Hv[2]), 120) * bev;
-    const white = Math.min(1, rimA[j] * cov * dif * A.rim + bev * dif * A.shade + spec * 1.6), black = bev * (1 - dif) * A.shadow;
+    const dif = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]); // (v244: no specular glint, only the rim and the shading)
+    const white = Math.min(1, rimA[j] * cov * dif * A.rim + bev * dif * A.shade), black = bev * (1 - dif) * A.shadow;
     const a = white + black * (1 - white), i = j * 4; if (a <= 0) continue;
     const v = (255 * white) / a; d[i] = d[i + 1] = d[i + 2] = Math.round(v); d[i + 3] = Math.round(a * 255);
   }
@@ -10571,7 +10596,7 @@ const liquidGlass = (() => {
       <feComposite in="Dw" in2="rim" operator="in" result="r1"/><feComponentTransfer in="r1" result="rimlit"><feFuncA type="linear" slope="var"/></feComponentTransfer>
       <feComposite in="Dw" in2="bevel" operator="in" result="s1"/><feComponentTransfer in="s1" result="shade"><feFuncA type="linear" slope="var"/></feComponentTransfer>
       <feComposite in="Dk" in2="bevel" operator="in" result="s2"/><feComponentTransfer in="s2" result="shadow"><feFuncA type="linear" slope="var"/></feComponentTransfer>
-      <feMerge><feMergeNode in="shadow"/><feMergeNode in="shade"/><feMergeNode in="rimlit"/><feMergeNode in="spec"/></feMerge>`;
+      <feMerge><feMergeNode in="shadow"/><feMergeNode in="shade"/><feMergeNode in="rimlit"/></feMerge>`;
     // (how strong each part is: the theme's tokens, read once per pane)
     const cs = getComputedStyle(el), num = (v, d) => parseFloat(cs.getPropertyValue(v)) || d;
     const funcs = f.querySelectorAll('feFuncA');

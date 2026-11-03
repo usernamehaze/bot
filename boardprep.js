@@ -194,7 +194,7 @@
     const [d, n] = doneCount(ex);
     h(`<p class="letc-what bp-what"></p><div class="letc-prog" role="img" aria-label="${d} of ${n} topics done"><i style="width:${n ? Math.round((d / n) * 100) : 0}%"></i></div><p class="letc-count">${d} of ${n} topics done</p>
       <div class="letc-row">${i.levels ? '<button type="button" class="letc-line bp-change">Change level</button>' : ''}<button type="button" class="letc-line bp-sim">Simulate this exam</button><button type="button" class="letc-line bp-rev">Check my reviewer</button></div>
-      <p class="letc-note bp-note"></p><p class="letc-note bp-says"></p><p class="letc-note bp-taste" hidden></p><div class="bp-parts"></div>`);
+      <p class="letc-note bp-note"></p><p class="letc-note bp-taste" hidden></p><div class="bp-parts"></div><p class="letc-note bp-says bp-fine"></p>`); // (v244: the topics first; the fine print after them)
     body.querySelector('.bp-what').textContent = fullName(ex);
     body.querySelector('.bp-note').textContent = i.note || '';
     body.querySelector('.bp-says').textContent = says(ex);

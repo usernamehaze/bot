@@ -2601,6 +2601,44 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v244: the ask box gives the answers room (one row at rest in a started chat, 66px; 118px and the quick actions while typing; the answer area 60% of a phone); onboarding has no mascot beside the writing; no glint streak on the glass; the Home header and full-screen sheets run edge to edge; the backdrop reaches the bottom; small copy and layout fixes from the design audit', async (b) => {
+  const long = 'The Code of Ethics asks teachers to work with parents as partners and to communicate honestly about progress. '.repeat(8);
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'chat', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, chats: [{ id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain the commitment to parents' }, { role: 'assistant', content: long }], updatedAt: Date.now() }], currentChatId: 'c1' } });
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  await page.evaluate(() => { try { selectChat('c1'); } catch (e) { /* */ } }); await page.waitForTimeout(1200);
+  const M = () => page.evaluate(() => { const r = (s) => { const e = document.querySelector(s); return e && e.getClientRects().length ? e.getBoundingClientRect() : null; }; const c = r('.composer'), q = r('#quick-actions'), t = r('.topbar'), send = r('#send-btn'), mas = r('#mascot-btn') || r('#mascot'); return { rest: document.documentElement.classList.contains('chat-rest'), comp: c && Math.round(c.height), chips: q ? Math.round(q.height) : 0, area: Math.round(c.top - t.bottom), h: innerHeight, send: send && Math.round(send.height), onSend: !!(mas && send && !(mas.right <= send.left || mas.left >= send.right || mas.bottom <= send.top || mas.top >= send.bottom)) }; });
+  const rest = await M();
+  expect(rest.rest && rest.comp <= 80 && !rest.chips && rest.area >= 0.6 * rest.h && rest.send >= 44 && !rest.onSend, 'at rest: one row, no chips, the answers get 60% of the screen, Cassie not on Send: ' + JSON.stringify(rest));
+  await page.focus('#prompt-input'); await page.waitForTimeout(400);
+  const typing = await M();
+  expect(!typing.rest && typing.comp <= 120 && typing.chips > 0 && typing.chips <= 56 && await page.locator('#model-pill').isVisible() && await page.locator('#attach-btn').isVisible(), 'typing: the full box (120px or less) and the chips (56px or less) are back: ' + JSON.stringify(typing));
+  // a tap on a tool lands, though the box loses focus first
+  await page.locator('#attach-btn').dispatchEvent('pointerdown'); await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
+  expect(await page.locator('#attach-btn').isVisible(), 'a tool tapped while the box closes is still there to take the tap');
+  // no glint: the light filter has no specular part, and the still light has no streak
+  expect(await page.evaluate(() => !document.querySelector('#lg-lenses feMergeNode[in="spec"]')), 'no specular glint in the glass light');
+  // the backdrop reaches the bottom of the screen
+  expect(await page.evaluate(() => /radial-gradient/.test(getComputedStyle(document.documentElement).backgroundImage)), 'the page root paints the backdrop too');
+  // Home: the header is a flat bar across the top
+  await page.click('.tab[data-tab="home"]'); await page.waitForSelector('#home .hub-hero'); await page.waitForTimeout(500);
+  const hero = await page.evaluate(() => { const r = document.querySelector('#home .hub-hero').getBoundingClientRect(), c = getComputedStyle(document.querySelector('#home .hub-hero')); return { l: r.left, w: r.width, t: r.top, rad: c.borderTopLeftRadius + ' ' + c.borderBottomRightRadius, vw: innerWidth }; });
+  expect(hero.l === 0 && hero.w === hero.vw && hero.t <= 0 && hero.rad === '0px 0px', 'the Home header runs edge to edge from the top: ' + JSON.stringify(hero));
+  // a full-screen sheet: no rim or side shadow
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'cpale' })); await page.waitForSelector('.bp [data-topic]');
+  const sheet = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('.bp-card')), parts = document.querySelector('.bp-parts'), says = document.querySelector('.bp-says'); return { bw: c.borderLeftWidth, sh: c.boxShadow, after: !!(parts.compareDocumentPosition(says) & Node.DOCUMENT_POSITION_FOLLOWING) }; });
+  expect(sheet.bw === '0px' && sheet.sh === 'none' && sheet.after, 'the sheet has no rim or shadow, and the fine print comes after the topics: ' + JSON.stringify(sheet));
+  await page.evaluate(() => window.CassieBoardPrep.close());
+  // copy: one question; the Pro sheet speaks of Pro
+  await page.evaluate(() => { plusSheet('', 'why', 'board', 'Every board exam lesson comes with Pro', 'pro'); }); await page.waitForSelector('.plus-sheet');
+  const ps = (await page.locator('.plus-sheet').innerText()).replace(/\s+/g, ' ');
+  expect(/Get Pro early/.test(ps) && /from ₱349 a month/.test(ps) && !/Pasado Pass/.test(ps), 'the Pro sheet speaks of Pro: ' + ps);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // the audit is written down
+  const doc = fs.readFileSync(path.join(ROOT, 'docs/design-audit-v244.md'), 'utf8');
+  expect(/## Needs your decision/.test(doc) && /Hierarchy/.test(doc) && (doc.match(/\| Done \|/g) || []).length >= 15, 'docs/design-audit-v244.md lists the findings, what was done and what needs a decision');
+});
+
 test('v241: Learn has College and Board and Licensure exams as separate levels; Board opens into Lessons (a folder per exam: My notes and reviewers, then every topic opening its reviewer or quiz) and Simulations (a folder per exam opening its mock); notes are saved and Cassie quizzes on them on the spot; a scrolled page goes back so sheets are never cut off; no emoji anywhere', async (b) => {
   const fake = (body) => { const m = JSON.stringify(body.messages || []); if (/using ONLY these notes/.test(m)) return { text: JSON.stringify(Array.from({ length: 5 }, (_, i) => ({ t: 'notes', q: `From my notes ${i + 1}?`, o: ['a', 'b', 'c', 'd'], a: 1, why: 'Your notes say b.' }))) }; return prepFake(body); };
   const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: fake });
@@ -6058,7 +6096,7 @@ test('Cassie v231: her hello ring fades from white to soft pink (none with Reduc
       await page.waitForSelector('.fr-start', { timeout: 10000 }); await page.click('.fr-start');
       await page.waitForSelector('.fr-ob .fr-guide', { timeout: 10000 });
       expect(await page.$eval('.fr-guide', (g) => g.dataset.anim) === (calm ? 'still' : 'run'), `${where}: the guide ${calm ? 'is still' : 'animates'}`);
-      await page.waitForSelector('.fr-guide-bot .cassie-bot', { state: 'attached', timeout: 5000 });
+      expect(!(await page.locator('.fr-guide-bot, .fr-guide .cassie-bot').count()), `${where}: no mascot beside the writing (v244)`);
       await page.type('.fr-ob input[name=name]', 'Mara', { delay: 40 });
       await page.waitForTimeout(450);
       const ink = await page.evaluate(() => { const g = document.querySelector('.fr-guide'), t = g.querySelector('.fr-ink-name'); return { text: t.textContent, go: g.classList.contains('fr-ink-go'), anim: getComputedStyle(t).animationName, typed: document.querySelector('.fr-ob input[name=name]').value, focus: document.activeElement && document.activeElement.name }; });

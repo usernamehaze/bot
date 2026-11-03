@@ -2254,8 +2254,6 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-big::placeholder { color: var(--muted); font-weight: 700; }
 /* (v231) Cassie guides the setup: she writes your name, and draws your first study card (decoration only) */
 .fr-guide { --fr-ink: var(--primary-ink); flex: none; display: flex; align-items: center; justify-content: center; gap: var(--sp-3, 12px); height: 64px; pointer-events: none; }
-.fr-guide-bot { width: 56px; height: 56px; flex: none; }
-.fr-guide-bot .cassie-bot, .fr-guide-bot .cassie-3d { width: 100%; height: 100%; display: block; }
 .fr-ink { width: min(240px, 60vw); height: 56px; overflow: visible; }
 .fr-ink-name { font: 600 40px/1 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive; fill: var(--fr-ink); stroke: var(--fr-ink); stroke-width: .8; }
 .fr-ink-go .fr-ink-name { stroke-dasharray: 600; stroke-dashoffset: 600; fill-opacity: 0; animation: frInk 1.4s ease-out forwards; }
@@ -2267,7 +2265,7 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-draw-go .frc-l1 { animation-delay: .8s; } .fr-draw-go .frc-l2 { animation-delay: 1.05s; } .fr-draw-go .frc-l3 { animation-delay: 1.3s; }
 @keyframes frDraw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .fr-ink-go .fr-ink-name, .fr-draw-go .frc-edge, .fr-draw-go .frc-line { animation: none; stroke-dashoffset: 0; fill-opacity: 1; } }
-@media (max-height: 700px) { .fr-guide { height: 48px; } .fr-guide-bot { width: var(--tap, 48px); height: var(--tap, 48px); } }
+@media (max-height: 700px) { .fr-guide { height: 48px; } }
 .fr-mid > .fr-skipall { flex: none; } /* (the guide never squeezes Skip setup below 44px) */
 .fr-select { font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 14px; padding: var(--sp-3, 12px) var(--sp-4, 16px); min-height: 52px; background: var(--surface); color: var(--text); text-align: left; }
 .fr-select:focus { border-color: var(--primary); }
@@ -2547,7 +2545,9 @@ button.plan-go:not(.plan-go-line) { border: 0; }
 .hub-remind .hub-h { margin-top: 2px; }
 /* phones: edge to edge, under the status bar */
 @media (max-width: 760px) {
-  html.native .hub-hero { width: calc(100% + 40px); margin: calc(calc(-1 * var(--sp-5, 24px)) - var(--safe-top)) calc(-1 * var(--sp-5, 24px)) var(--sp-1, 4px); padding: calc(var(--sp-3, 12px) + var(--safe-top)) var(--sp-5, 24px) var(--sp-4, 16px); border-radius: 0 0 24px 24px; border-top: 0; }
+  /* (v244: a flat bar across the whole width, from the very top: it was 4px short of each side, and its rounded
+     bottom corners left the light layer cut. Full bleed whatever the page's padding is.) */
+  html.native .hub-hero { width: 100vw; max-width: none; margin: calc(-1 * var(--home-pt, calc(var(--sp-5, 24px) + var(--safe-top)))) 0 var(--sp-2, 8px); align-self: center; padding: calc(var(--sp-3, 12px) + var(--safe-top)) var(--sp-5, 24px) var(--sp-4, 16px); border-radius: 0; border-width: 0 0 1px; }
 }
 
 /* Home's big boxes: every study feature under the header (2 across on a phone, 4 on a computer) */
@@ -3734,3 +3734,36 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
 .bp-notetext { margin-top: var(--sp-4, 16px); white-space: pre-wrap; line-height: 1.55; overflow-wrap: anywhere; }
 .pod-ctrl button svg, .att-read svg { width: 20px; height: 20px; vertical-align: middle; }
 .fc-big svg { width: 56px; height: 56px; }
+/* v244: the phone's Home header is a flat bar across the top: frosted fill and a hairline under it, no bevel or rim
+   along the screen's own edges (they read as a frame cut by the glass) */
+@media (max-width: 760px) { html.lgm.native .hub-hero.lgp-b::before, html.lgm.native .hub-hero.lgp-a::after { display: none; } html.native .hub-hero { border-color: var(--lg-line, var(--border)); box-shadow: none; } }
+/* v244: a sheet that fills a phone runs edge to edge: no rim, radius, side shadow or bevel at the screen's edges */
+@media (max-width: 760px) {
+  .letc-card { border: 0; box-shadow: none; background: var(--lg-sheen) padding-box, linear-gradient(var(--lg-tint), var(--lg-tint)) padding-box, var(--lg-fill-thick) padding-box; }
+  html.lgm .letc-card.lgp-b::before, html.lgm .letc-card.lgp-a::after { display: none; }
+}
+/* v244: the app's backdrop reaches the very bottom of an iPhone (under the home indicator): the page is at least the
+   full screen tall, and the root paints the same backdrop, so no plain black band shows below the tab bar */
+@supports (height: 100lvh) { html.native, html.native body { min-height: 100lvh; } }
+html.native:not(.lite) { background:
+  radial-gradient(62% 38% at 12% 8%, var(--amb-1), transparent 72%),
+  radial-gradient(58% 36% at 92% 38%, var(--amb-2), transparent 72%),
+  radial-gradient(70% 40% at 28% 96%, var(--amb-3), transparent 72%), var(--bg); }
+/* v244: the ask box takes less of a phone. The bar's room is counted once (the box's own margin no longer adds the
+   home indicator again), and in a chat that has started, while nobody types, the box is one row and the quick
+   actions step aside (app.js chatRest: a tap on the box brings everything back). */
+html.native.tab-chat:not(.typing) #app { padding-bottom: calc(76px + var(--safe-bottom)); }
+html.native.tab-chat .composer { margin-bottom: var(--sp-2, 8px); }
+html.native.tab-chat .composer { padding: var(--sp-2, 8px) var(--sp-3, 12px); gap: var(--sp-1, 4px); }
+html.native.tab-chat #quick-actions { padding-top: var(--sp-1, 4px); padding-bottom: 0; }
+html.native.tab-chat.chat-rest #quick-actions { display: none; }
+html.native.tab-chat.chat-rest .composer { flex-direction: row; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-2, 8px) var(--sp-2, 8px) var(--sp-3, 12px); }
+html.native.tab-chat.chat-rest #prompt-input { flex: 1; min-width: 0; min-height: var(--tap, 48px); height: var(--tap, 48px) !important; padding-top: var(--sp-3, 12px); }
+html.native.tab-chat.chat-rest .composer-row { flex: none; }
+html.native.tab-chat.chat-rest .composer-row > :not(#send-btn):not(#mic-btn) { display: none !important; }
+/* v244 audit: what fights for attention steps back */
+html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), linear-gradient(180deg, rgba(var(--glass-rgb), .84), rgba(var(--glass-rgb), .76)); } /* (what scrolls under the bar no longer reads through it) */
+.bp-fine { margin-top: var(--sp-5, 24px); font-size: .8rem; line-height: 1.5; }
+.ht-edit { min-height: 40px; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; }
+@media (pointer: coarse) { .ht-edit { min-height: var(--tap, 48px); } }
+@media (max-width: 430px) { .fc-decks li { flex-wrap: wrap; } .fc-decks li .fc-deck-name { flex: 1 1 100%; } .fc-decks li .fc-deck-acts { margin-left: auto; } }
