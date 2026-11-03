@@ -2593,24 +2593,117 @@ test('Quiz me, Explain a topic, Solve step by step and Research a topic wait for
   await ctx.close();
 });
 
+// (a stand-in for Cassie in the Board exams tests: a lesson as data, or N exam-style questions with B the answer)
+const prepFake = (body) => {
+  const m = JSON.stringify(body.messages || []);
+  if (/short reviewer lesson/.test(m)) return { text: JSON.stringify({ goals: ['Tell what estate tax covers', 'Compute the tax due', 'Know the deadline'], cards: [{ h: 'What it is', p: 'A tax on passing property to heirs at death.' }, { h: 'The rate', p: 'A flat 6% of the net estate.' }, { h: 'The deadline', p: 'File within one year of death.' }], example: { q: 'What is the estate tax rate?', o: ['2%', '6%', '10%', '12%'], a: 1, why: 'The TRAIN law set a flat 6%.' }, traps: ['Using the gross estate', 'Forgetting the standard deduction'], terms: [{ t: 'Net estate', d: 'The gross estate less deductions.' }, { t: 'Gross estate', d: 'Everything the person owned at death.' }], summary: ['6% of the net estate', 'File within a year', 'Deductions first'] }) };
+  const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
+  return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
+};
+test('Board exams v240: Lessons splits College from Board and licensure exams; the Board exams screen has Lessons (exam, then topic: Read the lesson, written once and kept, or Quiz me, 5 questions you can stop and pick up again with the lesson one tap away) and Simulations (a timed mini mock, scored by part, weakest topics linked to their lessons); the old course carries over; Pro opens every topic and the full mock once paid plans are on', async (b) => {
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, letCourse: { exam: 'cpale', level: 'cpale', major: '', parts: [], first: [], done: { 'TAX: estate tax': 1 }, at: 1 } }, fakeGroq: prepFake });
+  const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
+  // Lessons: two folders for a college student
+  await page.evaluate(() => openLessons()); await page.waitForSelector('.lessons-sheet .lesson-folder');
+  const L = await page.$$eval('.lessons-sheet .lessons-strand, .lessons-sheet .lesson', (xs) => xs.map((x) => x.textContent.trim().slice(0, 40)));
+  expect(/^Board and licensure exams/.test(L[0]) && /^Board exams: lessons and simulations/.test(L[1]) && /^College/.test(L[2]) && !L.some((x) => /Board exam course|Check my board exam reviewer/.test(x)), 'Lessons: Board and licensure exams, then College: ' + L.join(' | '));
+  await shot('bp-0-lessons');
+  await page.click('.lessons-sheet .lesson-folder'); await page.waitForSelector('.bp .bp-folder');
+  expect((await page.$$eval('.bp .bp-folder b', (x) => x.map((e) => e.textContent))).join() === 'Lessons,Simulations', 'the Board exams screen: two folders');
+  await shot('bp-1-home');
+  // the old course carried over
+  const P0 = await page.evaluate(() => state.prep);
+  expect(P0.last === 'cpale' && P0.exams.cpale && P0.read['cpale|TAX: estate tax'], 'the old CPALE course carries over: ' + JSON.stringify(P0).slice(0, 200));
+  // Lessons: every exam in two groups
+  await page.click('.bp [data-go="lessons"]'); await page.waitForSelector('.bp .bp-ph [data-exam]');
+  const ph = await page.$$eval('.bp .bp-ph [data-exam]', (x) => x.map((e) => e.dataset.exam)), ab = await page.$$eval('.bp .bp-ab [data-exam]', (x) => x.map((e) => e.dataset.exam));
+  expect(ph.join() === 'let,cpale,cse,cle,nle,cele,pmle' && ab.join() === 'nclex,ielts,oet,toefl,sat,jlpt,eps', 'the exams, Philippine first: ' + ph + ' / ' + ab);
+  await shot('bp-2-exams');
+  await page.click('.bp [data-exam="cpale"]'); await page.waitForSelector('.bp .bp-parts [data-topic]');
+  const T = await page.$$eval('.bp .bp-parts .bp-h3', (x) => x.map((e) => e.textContent));
+  expect(T[0] === 'Financial Accounting and Reporting' && T.length === 6 && /Board of Accountancy/.test(await page.locator('.bp').innerText()) && /not affiliated with the PRC/.test(await page.locator('.bp').innerText()), 'CPALE: its six subjects, its note and the disclaimer: ' + T);
+  expect(await page.locator('.bp [data-topic="TAX: estate tax"] em').innerText() === 'Read', 'a lesson read before shows Read');
+  await shot('bp-3-exam');
+  // a topic: Read the lesson or Quiz me
+  await page.click('.bp [data-topic="FAR: cash and receivables"]'); await page.waitForSelector('.bp .bp-box .bp-read');
+  expect(/FAR: cash and receivables/.test(await page.locator('.bp .bp-title').innerText()) && await page.locator('.bp .bp-quiz').innerText() === 'Quiz me', 'the topic box');
+  await shot('bp-4-topic');
+  const before = groqCalls.length;
+  await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson .bp-lcard');
+  const lessonTxt = await page.locator('.bp .bp-lesson').innerText();
+  expect(!(await page.locator('.bp .bp-wait').count()), 'the waiting dots are gone once the lesson is there');
+  expect(/What you’ll learn/i.test(lessonTxt) && /Worked example/i.test(lessonTxt) && /Exam traps/i.test(lessonTxt) && /Key terms/i.test(lessonTxt) && /Remember this/i.test(lessonTxt) && groqCalls.length === before + 1, 'the lesson: goals, cards, a worked example, traps, terms and a summary: ' + lessonTxt.slice(0, 200));
+  expect(/short reviewer lesson on \\"FAR: cash and receivables\\" for the CPA Licensure Examination/.test(JSON.stringify(groqCalls.at(-1).messages)), 'written for the CPALE topic');
+  await shot('bp-5-lesson');
+  await page.click('.bp .bp-cardsave'); expect(/Saved 2 cards/.test(await page.locator('.bp .bp-cardsave').innerText()), 'key terms become flashcards');
+  // Quiz me: one at a time, explained; Stop keeps the place
+  await page.click('.bp .bp-end .bp-quiz'); await page.waitForSelector('.bp .bp-opt');
+  expect(/Question 1 of 5/.test(await page.locator('.bp .bp-qn').innerText()) && !(await page.locator('.bp .bp-wait').count()), 'question 1 of 5, no waiting dots');
+  await page.click('.bp .bp-opt >> nth=0');
+  const fb = await page.locator('.bp .bp-fb').innerText();
+  expect(/Not quite\. The answer is B/.test(fb) && /second one is right/.test(fb) && await page.evaluate(() => state.mistakes.some((m) => /Practice question 1/.test(m.q))), 'a miss: the answer, why, and it goes to Review my mistakes: ' + fb);
+  await shot('bp-6-quiz');
+  await page.click('.bp .bp-next'); await page.waitForSelector('.bp .bp-qn >> text=Question 2 of 5');
+  await page.click('.bp .bp-stop'); await page.waitForSelector('.bp .bp-box .bp-quiz');
+  expect(/Continue the quiz \(question 2 of 5\)/.test(await page.locator('.bp .bp-quiz').innerText()), 'Stop: back to the topic, the quiz kept');
+  await page.click('.bp .bp-quiz'); await page.waitForSelector('.bp .bp-toread');
+  const calls = groqCalls.length;
+  await page.click('.bp .bp-toread'); await page.waitForSelector('.bp .bp-lesson');
+  expect(groqCalls.length === calls, 'the lesson again: kept, not written again');
+  await page.click('.bp .bp-end .bp-quiz'); await page.waitForSelector('.bp .bp-qn >> text=Question 2 of 5');
+  for (let i = 2; i <= 5; i++) { await page.click('.bp .bp-opt >> nth=1'); await page.click('.bp .bp-next'); }
+  await page.waitForSelector('.bp .bp-big');
+  expect(await page.locator('.bp .bp-big').innerText() === '4 of 5' && /Passed/.test(await page.locator('.bp .bp-scoremsg').innerText()), 'the score: 4 of 5, passed');
+  await shot('bp-7-score');
+  await page.click('.bp .bp-back'); await page.waitForSelector('.bp .bp-box'); await page.click('.bp .bp-back'); await page.waitForSelector('.bp .bp-parts');
+  expect(await page.locator('.bp [data-topic="FAR: cash and receivables"] em').innerText() === 'Done', 'the topic is Done');
+  // Simulations: a mini mock
+  await page.evaluate(() => { window.CassieBoardPrep.close(); openBoardPrep({ view: 'sims', exam: 'cpale' }); }); await page.waitForSelector('.bp [data-size="mini"]');
+  expect(/20 questions/.test(await page.locator('.bp [data-size="mini"]').innerText()) && /70 questions/.test(await page.locator('.bp [data-size="full"]').innerText()), 'mini and full mocks');
+  await shot('bp-8-sims');
+  await page.click('.bp [data-size="mini"]'); await page.waitForSelector('.bp .bp-timer');
+  const t0 = await page.locator('.bp .bp-timer').innerText(); await page.waitForTimeout(2200);
+  expect(/Question 1 of 20/.test(await page.locator('.bp .bp-qn').innerText()) && !(await page.locator('.bp .bp-wait').count()) && await page.locator('.bp .bp-timer').innerText() !== t0, 'question 1 of 20, and the clock runs: ' + t0);
+  await page.click('.bp .bp-opt >> nth=1'); await page.click('.bp .bp-flag');
+  await shot('bp-9-sim');
+  await page.click('.bp .bp-nextq'); await page.click('.bp .bp-opt >> nth=0');
+  page.once('dialog', (d) => d.accept());
+  await page.click('.bp .bp-finish'); await page.waitForSelector('.bp .bp-table');
+  const res = await page.locator('.bp').innerText();
+  expect(/5%/.test(res) && /1 of 20 right/.test(res) && /By part/.test(res) && await page.locator('.bp .bp-weakrow').count() >= 1, 'the results: the score, by part, and lessons to read next: ' + res.replace(/\s+/g, ' ').slice(0, 300));
+  await shot('bp-10-results');
+  await page.click('.bp .bp-weakrow >> nth=0'); await page.waitForSelector('.bp .bp-box .bp-read');
+  // taps and words
+  const taps = await page.$$eval('.bp button', (bs) => bs.filter((x) => x.getClientRects().length).map((x) => [x.className, Math.round(x.getBoundingClientRect().height)]).filter(([, hh]) => hh < 44));
+  expect(!taps.length, 'every button is 44px or more: ' + JSON.stringify(taps));
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.bp-card'); expect(!bad.length, `it reads (${scheme}): ` + bad.join(' | ')); }
+  await page.emulateMedia({ colorScheme: 'light' });
+  // paid plans on and no Pro: 3 topics each, the full mock is Pro
+  await page.evaluate(() => { window.CassieBoardPrep.close(); serverPay = true; state.plan = null; openBoardPrep({ view: 'lessons', exam: 'cpale' }); }); await page.waitForSelector('.bp .bp-parts [data-topic]');
+  const badges = await page.$$eval('.bp .bp-parts [data-topic]', (x) => x.map((e) => (e.querySelector('em') || {}).textContent || ''));
+  expect(badges.slice(3).filter((x) => x === 'Pro').length > 50 && !badges.slice(0, 3).includes('Pro') && /The first 3 topics are yours on every plan/.test(await page.locator('.bp').innerText()), 'Free: 3 topics, the rest Pro: ' + badges.slice(0, 6));
+  await page.evaluate(() => { window.CassieBoardPrep.close(); openBoardPrep({ view: 'sims', exam: 'cpale' }); }); await page.waitForSelector('.bp [data-size="full"]');
+  expect(/Pro/.test(await page.locator('.bp [data-size="full"]').innerText()), 'the full mock is Pro');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('exam courses v239: TOEFL iBT (the 2026 tasks), SAT (its eight content areas), JLPT (N5 to N1) and EPS-TOPIK are courses; JLPT asks the level and teaches for it; each names its owner and says Cassie isn’t affiliated; the terms name them', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: prepFake });
   const D = await page.evaluate(() => letRescue().then((R) => ({ toefl: R.boardParts('toefl', 'toefl').flatMap((p) => p.topics), sat: R.boardParts('sat', 'sat').map((p) => p.name), eps: R.boardParts('eps', 'eps').map((p) => p.name), ex: R.boardExams() })));
   expect(D.toefl.includes('TOEFL Reading: complete the words') && D.toefl.includes('TOEFL Writing: build a sentence') && D.toefl.includes('TOEFL Speaking: take an interview') && /1 to 6/.test(D.ex.find((x) => x.key === 'toefl').note), 'TOEFL iBT: the 2026 tasks and the 1 to 6 scale');
   expect(D.sat.join('|') === 'Information and Ideas|Craft and Structure|Expression of Ideas|Standard English Conventions|Algebra|Advanced Math|Problem-Solving and Data Analysis|Geometry and Trigonometry' && /54 questions in 64 minutes/.test(D.ex.find((x) => x.key === 'sat').note), 'SAT: the eight content areas: ' + D.sat);
   expect(D.eps.length === 4 && /HRD Korea’s latest notice/.test(D.ex.find((x) => x.key === 'eps').note), 'EPS-TOPIK: its parts, and check the latest notice');
   for (const k of ['toefl', 'sat', 'jlpt', 'eps']) expect(/trademark|run by/.test(D.ex.find((x) => x.key === k).owner), k + ': its owner is named');
   // JLPT: the level, then lessons for that level
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
-  await page.click('.letc .letc-exam[data-exam="jlpt"]');
-  const lv = await page.$$eval('.letc .letc-lvl', (bs) => bs.map((x) => x.textContent));
-  expect(/N5 is the easiest/.test(await page.locator('.letc').innerText()) && lv.join() === 'N5,N4,N3,N2,N1', 'JLPT asks the level: ' + lv);
-  await page.click('.letc .letc-lvl[data-lvl="n3"]'); await page.click('.letc .letc-go'); await page.click('.letc .letc-skip');
-  const txt = await page.locator('.letc').innerText();
-  expect(/^JLPT course$/.test(await page.locator('#letc-h').innerText()) && /Japanese-Language Proficiency Test \(JLPT\): N3/.test(txt) && /Japan Foundation/.test(txt) && /not affiliated with or endorsed by them/.test(txt), 'the JLPT N3 course with its disclaimer: ' + txt.slice(0, 300));
-  await page.click('.letc .letc-next'); await page.waitForTimeout(1200);
-  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
-  expect(/Teach me \\"JLPT: kanji readings and writing\\" for the Japanese-Language Proficiency Test \(JLPT\), N3/.test(ask), 'the lesson is for N3: ' + ask.slice(0, 200));
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'jlpt' })); await page.waitForSelector('.bp .bp-lvl');
+  const lv = await page.$$eval('.bp .bp-lvl', (bs) => bs.map((x) => x.textContent));
+  expect(/N5 is the easiest/.test(await page.locator('.bp').innerText()) && lv.join() === 'N5,N4,N3,N2,N1', 'JLPT asks the level: ' + lv);
+  await page.click('.bp .bp-lvl[data-lvl="n3"]'); await page.waitForSelector('.bp .bp-parts');
+  const txt = await page.locator('.bp').innerText();
+  expect(/^JLPT lessons$/.test(await page.locator('#bp-h').innerText()) && /Japanese-Language Proficiency Test \(JLPT\), N3/.test(txt) && /Japan Foundation/.test(txt) && /not affiliated with or endorsed by them/.test(txt), 'the JLPT N3 lessons with the disclaimer: ' + txt.slice(0, 300));
+  await page.click('.bp [data-topic="JLPT: kanji readings and writing"]'); await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson');
+  expect(/short reviewer lesson on \\"JLPT: kanji readings and writing\\" for the Japanese-Language Proficiency Test \(JLPT\), N3/.test(JSON.stringify(groqCalls.at(-1).messages)), 'the lesson is for N3');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   const terms = fs.readFileSync(path.join(ROOT, 'terms.html'), 'utf8');
@@ -2618,7 +2711,7 @@ test('exam courses v239: TOEFL iBT (the 2026 tasks), SAT (its eight content area
 });
 
 test('exam courses v237: Nursing follows the PRC’s 2025 tables; NCLEX-RN, IELTS (Academic or General Training) and OET Nursing are courses with their published formats; every course says who it isn’t affiliated with and that its questions are Cassie’s own; the terms, the website and Cassie’s own rules say no leaked questions', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 } }, fakeGroq: prepFake });
   const D = await page.evaluate(() => letRescue().then((R) => ({ nle: R.boardParts('nle', 'nle'), nclex: R.boardParts('nclex', 'nclex').map((p) => p.key), gen: R.boardParts('ielts', 'general'), ac: R.boardParts('ielts', 'academic'), oet: R.boardParts('oet', 'oet').map((p) => p.name), ex: R.boardExams() })));
   const nleT = D.nle.flatMap((p) => p.topics), nleN = D.nle.map((p) => p.name);
   expect(/Surgery Oxygenation Fluids Infection and Cancer/.test(nleN[2]) && /Nutrition Endocrine and the Nervous System/.test(nleN[3]) && /Mental Health and High Acuity/.test(nleN[4]), 'Nursing Practice III to V as the 2025 tables group them: ' + nleN);
@@ -2630,20 +2723,18 @@ test('exam courses v237: Nursing follows the PRC’s 2025 tables; NCLEX-RN, IELT
   expect(D.oet.join() === 'Listening,Reading,Writing,Speaking', 'OET: the four sub-tests');
   for (const k of ['nclex', 'ielts', 'oet']) expect(/owned|trademark/.test(D.ex.find((x) => x.key === k).owner), k + ': its owner is named');
   // IELTS by taps
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
-  await page.click('.letc .letc-exam[data-exam="ielts"]');
-  expect(/Academic or General Training\?/.test(await page.locator('.letc').innerText()), 'IELTS asks which one');
-  await page.click('.letc .letc-lvl[data-lvl="general"]');
-  await page.click('.letc .letc-go'); await page.click('.letc .letc-skip');
-  const txt = await page.locator('.letc').innerText();
-  expect(/^IELTS course$/.test(await page.locator('#letc-h').innerText()) && /IELTS: General Training · Listening, Reading, Writing, Speaking/.test(txt), 'the IELTS course: ' + txt.slice(0, 160));
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'ielts' })); await page.waitForSelector('.bp .bp-lvl');
+  expect(/Academic or General Training\?/.test(await page.locator('.bp').innerText()), 'IELTS asks which one');
+  await page.click('.bp .bp-lvl[data-lvl="general"]'); await page.waitForSelector('.bp .bp-parts');
+  const txt = await page.locator('.bp').innerText();
+  expect(/^IELTS lessons$/.test(await page.locator('#bp-h').innerText()) && /IELTS, General Training/.test(txt) && (await page.$$eval('.bp .bp-parts .bp-h3', (x) => x.map((e) => e.textContent))).join() === 'Listening,Reading,Writing,Speaking', 'the IELTS lessons: ' + txt.slice(0, 160));
   expect(/jointly owned by the British Council/.test(txt) && /not affiliated with or endorsed by them/.test(txt) && /Every practice question is Cassie’s own/.test(txt), 'it says who owns IELTS and that Cassie isn’t affiliated: ' + txt.slice(0, 600));
-  await page.click('.letc .letc-next'); await page.waitForTimeout(1200);
-  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
-  expect(/Teach me \\"IELTS Listening: everyday conversations\\" for the IELTS \(International English Language Testing System\), General Training/.test(ask) && !/Philippines/.test(ask), 'the lesson is for IELTS General Training: ' + ask.slice(0, 220));
-  // a Philippine course says the PRC line
-  await page.evaluate(() => { state.letCourse = { exam: 'nle', level: 'nle', parts: [], first: [], done: {}, at: Date.now() }; }); await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-count');
-  const nt = await page.locator('.letc').innerText();
+  await page.click('.bp [data-topic="IELTS Listening: everyday conversations"]'); await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson');
+  const ask = JSON.stringify(groqCalls.at(-1).messages);
+  expect(/short reviewer lesson on \\"IELTS Listening: everyday conversations\\" for the IELTS, General Training/.test(ask) && !/Philippines/.test(ask), 'the lesson is for IELTS General Training: ' + ask.slice(0, 220));
+  // a Philippine exam says the PRC line
+  await page.evaluate(() => { window.CassieBoardPrep.close(); openBoardPrep({ view: 'lessons', exam: 'nle' }); }); await page.waitForSelector('.bp .bp-parts');
+  const nt = await page.locator('.bp').innerText();
   expect(/not affiliated with the PRC or the Civil Service Commission/.test(nt) && /never uses real, leaked or recalled board questions/.test(nt) && /NP1: individuals with non-communicable diseases/.test(nt), 'Nursing: the PRC line and the new topics: ' + nt.slice(0, 300));
   // Cassie's own rules
   expect(await page.evaluate(() => /Never claim a question is a real, actual, leaked or "recalled"/.test(SYSTEM_PROMPT) && /can't, then offer to teach the topics/.test(SYSTEM_PROMPT)), 'Cassie won’t pass questions off as real or rebuild a leaked bank');
@@ -2658,7 +2749,7 @@ test('exam courses v237: Nursing follows the PRC’s 2025 tables; NCLEX-RN, IELT
 });
 
 test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil Service, Criminology, Nursing, Civil Engineering, Psychometrician), each with its official areas; CPALE and the Civil Service Exam (Professional or Subprofessional) by taps; lessons and practice are taught for that exam; once paid plans are on, Free and Plus open the first 3 lessons and Pro (₱349) opens every one', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 23 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 23 } }, fakeGroq: prepFake });
   // the map: every exam, its areas, short names with no commas or dashes
   const M = await page.evaluate(() => letRescue().then((R) => ({ ex: R.boardExams().map((x) => x.key), cpa: R.boardParts('cpale', 'cpale').map((p) => p.name), pro: R.boardParts('cse', 'professional').map((p) => p.key), sub: R.boardParts('cse', 'subprofessional').map((p) => p.key),
     all: R.boardExams().flatMap((x) => R.boardParts(x.key, x.levels ? x.levels[0][0] : x.key).concat(x.levels ? R.boardParts(x.key, x.levels[1][0]) : []).flatMap((p) => p.topics)) })));
@@ -2666,112 +2757,94 @@ test('board exam courses v235: the course asks the exam first (LET, CPALE, Civil
   expect(M.cpa.join('|') === 'Financial Accounting and Reporting|Advanced Financial Accounting and Reporting|Management Services|Auditing|Taxation|Regulatory Framework for Business Transactions', 'CPALE: the six subjects: ' + M.cpa);
   expect(M.pro.join() === 'verbal,numerical,analytical,geninfo' && M.sub.join() === 'verbal,numerical,clerical,geninfo', 'Civil Service: analytical for Professional, clerical for Subprofessional: ' + [M.pro, M.sub]);
   expect(M.all.length > 100 && M.all.every((t) => t.length <= 50 && !/[,–—]/.test(t)), 'short topic names, no commas or dashes: ' + M.all.filter((t) => t.length > 50 || /[,–—]/.test(t)));
-  // CPALE by taps
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-exam');
-  const picks = await page.$$eval('.letc .letc-exam', (bs) => bs.map((x) => x.textContent));
+  // every exam, in Board exams (v240)
+  await page.evaluate(() => openBoardPrep({ view: 'lessons' })); await page.waitForSelector('.bp [data-exam]');
+  const picks = await page.$$eval('.bp [data-exam] b', (bs) => bs.map((x) => x.textContent));
   expect(picks.join() === 'LET,CPALE,Civil Service Exam,Criminology,Nursing,Civil Engineering,Psychometrician,NCLEX-RN,IELTS,OET Nursing,TOEFL iBT,SAT,JLPT,EPS-TOPIK', 'the exams to pick: ' + picks);
-  await page.click('.letc .letc-exam[data-exam="cpale"]');
-  expect(/What should we focus on/.test(await page.locator('.letc').innerText()) && /Taxation/.test(await page.locator('.letc').innerText()), 'CPALE: straight to the subjects');
-  await page.click('.letc .letc-part[data-part="far"]'); await page.click('.letc .letc-part[data-part="afar"]'); await page.click('.letc .letc-part[data-part="ms"]'); await page.click('.letc .letc-part[data-part="aud"]');
-  await page.click('.letc .letc-go'); await page.click('.letc .letc-topic >> text=TAX: estate tax'); await page.click('.letc .letc-go');
-  const c = await page.evaluate(() => state.letCourse);
-  expect(c.exam === 'cpale' && c.level === 'cpale' && JSON.stringify(c.parts) === '["tax","rfbt"]' && c.order[0] === 'TAX: estate tax' && c.order[1] === 'TAX: general principles and tax remedies' && c.order.every((t) => /^(TAX|RFBT):/.test(t)), 'saved: the picked topic first, then Taxation and RFBT: ' + JSON.stringify(c).slice(0, 300));
-  const txt = await page.locator('.letc').innerText();
-  expect(/^CPALE course$/.test(await page.locator('#letc-h').innerText()) && /CPA Licensure Examination · Taxation, Regulatory Framework/.test(txt) && /Board of Accountancy/.test(txt) && !/Pro/.test(await page.locator('.letc-list').innerText()), 'the course: its name, its subjects, every lesson open while paid plans are off: ' + txt.slice(0, 200));
-  const taps = await page.$$eval('.letc button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
+  await page.click('.bp [data-exam="cpale"]'); await page.waitForSelector('.bp [data-topic]');
+  const txt = await page.locator('.bp').innerText();
+  expect(/CPA Licensure Examination/.test(txt) && /Board of Accountancy/.test(txt) && /Taxation/.test(txt) && !(await page.locator('.bp [data-topic] em >> text=Pro').count()), 'CPALE: its subjects, every topic open while paid plans are off');
+  const taps = await page.$$eval('.bp button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
   expect(!taps.length, 'every button is at least 44px: ' + taps);
-  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.letc-card'); expect(!bad.length, `the course reads (${scheme}): ` + bad.join(' | ')); }
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.bp-card'); expect(!bad.length, `CPALE reads (${scheme}): ` + bad.join(' | ')); }
   await page.emulateMedia({ colorScheme: 'light' });
-  // a lesson: taught for the CPALE
-  await page.click('.letc .letc-next'); await page.waitForTimeout(1200);
-  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
-  expect(/Teach me \\"TAX: estate tax\\" for the CPA Licensure Examination \(CPALE\)/.test(ask) && /3 exam-style questions/.test(ask), 'the lesson is for the CPALE: ' + ask.slice(0, 200));
-  // practice and the reviewer follow the exam
-  await page.evaluate(() => goLesson('let:practice')); await page.waitForTimeout(1200);
-  const pr = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content);
-  expect(/CPA Licensure Examination/.test(pr) && /the real exam/.test(pr) && !/PRC board exam/.test(pr), 'practice is CPALE questions: ' + pr.slice(0, 200));
-  await page.evaluate(() => goLesson('let:reviewer'));
+  // a lesson and a quiz, written for the CPALE
+  await page.click('.bp [data-topic="TAX: estate tax"]'); await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson');
+  expect(/short reviewer lesson on \\"TAX: estate tax\\" for the CPA Licensure Examination/.test(JSON.stringify(groqCalls.at(-1).messages)), 'the lesson is for the CPALE');
+  await page.click('.bp .bp-end .bp-quiz'); await page.waitForSelector('.bp .bp-opt');
+  const qa = JSON.stringify(groqCalls.at(-1).messages);
+  expect(/exam-style multiple-choice questions for the CPA Licensure Examination/.test(qa) && /never copied from a real exam/.test(qa), 'the quiz: CPALE-style, Cassie’s own');
+  // practice opens its simulation; the reviewer follows the exam
+  await page.evaluate(() => { window.CassieBoardPrep.close(); goLesson('let:practice'); }); await page.waitForSelector('.bp [data-size="mini"]');
+  expect(/CPALE simulation/.test(await page.locator('#bp-h').innerText()), 'practice: the CPALE simulation');
+  await page.evaluate(() => { window.CassieBoardPrep.close(); goLesson('let:reviewer'); });
   expect(/my CPALE reviewer/.test(await page.inputValue('#prompt-input')), 'the reviewer is the CPALE reviewer');
   await page.fill('#prompt-input', '');
-  // Home's tile names the course
+  // Home's tile names the exam
   await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
-  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'CPALE course', 'Home: the CPALE course');
+  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'Board exams' && /^CPALE:/.test(await page.$eval('.desk-home .ht-lessons small', (e) => e.textContent)), 'Home: Board exams, CPALE');
   // Civil Service: the level first
-  await page.evaluate(() => openLetCourse('exam')); await page.waitForSelector('.letc .letc-exam');
-  await page.click('.letc .letc-exam[data-exam="cse"]');
-  expect(/Which level are you taking\?/.test(await page.locator('.letc').innerText()) && /80% passes/.test(await page.locator('.letc').innerText()), 'Civil Service: Professional or Subprofessional');
-  await page.click('.letc .letc-lvl[data-lvl="subprofessional"]');
-  const parts = await page.$$eval('.letc .letc-part', (bs) => bs.map((x) => x.dataset.part));
-  expect(parts.join() === 'verbal,numerical,clerical,geninfo', 'Subprofessional: clerical, no analytical: ' + parts);
-  await page.click('.letc .letc-go'); await page.click('.letc .letc-skip');
-  const cs = await page.evaluate(() => state.letCourse);
-  expect(cs.exam === 'cse' && cs.level === 'subprofessional' && cs.order.some((t) => /^Clerical:/.test(t)) && !cs.order.some((t) => /^Analytical:/.test(t)), 'saved: Subprofessional: ' + cs.order.slice(0, 3));
-  // paid plans on: Free and Plus get the first 3 lessons, Pro all of them
-  await page.evaluate(() => { document.querySelector('.letc')?.remove(); serverPay = true; payPrices = { php: { pro: { month: { php: 349, shown: '₱349' }, sem: { php: 1399, shown: '₱1,399' } }, plus: { month: { php: 149, shown: '₱149' }, sem: { php: 599, shown: '₱599' } } } }; payPrices.usd = payPrices.php; state.letCourse.done = {}; state.plan = null; });
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-lesson');
-  const L = await page.$$eval('.letc .letc-lesson', (bs) => bs.map((x) => x.querySelector('em').textContent));
-  expect(L.slice(0, 3).every((x) => x === 'Start') && L.slice(3).length > 3 && L.slice(3).every((x) => x === 'Pro'), 'Free: 3 open, the rest Pro: ' + L);
-  expect(/The first 3 lessons are yours on every plan\. Pro opens all/.test(await page.locator('.letc').innerText()), 'it says so');
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'cse' })); await page.waitForSelector('.bp .bp-lvl');
+  expect(/Which level are you taking\?/.test(await page.locator('.bp').innerText()), 'Civil Service: Professional or Subprofessional');
+  await page.click('.bp .bp-lvl[data-lvl="subprofessional"]'); await page.waitForSelector('.bp .bp-parts');
+  const parts = await page.$$eval('.bp .bp-parts .bp-h3', (x) => x.map((e) => e.textContent));
+  expect(parts.join() === 'Verbal ability,Numerical ability,Clerical ability,General information' && /80% passes/.test(await page.locator('.bp').innerText()), 'Subprofessional: clerical, no analytical: ' + parts);
+  // paid plans on: Free and Plus get the first 3 topics, Pro all of them
+  await page.evaluate(() => { window.CassieBoardPrep.close(); serverPay = true; payPrices = { php: { pro: { month: { php: 349, shown: '₱349' }, sem: { php: 1399, shown: '₱1,399' } }, plus: { month: { php: 149, shown: '₱149' }, sem: { php: 599, shown: '₱599' } } } }; payPrices.usd = payPrices.php; state.plan = null; openBoardPrep({ view: 'lessons', exam: 'cse' }); });
+  await page.waitForSelector('.bp [data-topic]');
+  const L = await page.$$eval('.bp [data-topic]', (bs) => bs.map((x) => (x.querySelector('em') || {}).textContent || ''));
+  expect(L.slice(0, 3).every((x) => x !== 'Pro') && L.slice(3).length > 3 && L.slice(3).every((x) => x === 'Pro'), 'Free: 3 open, the rest Pro: ' + L);
   const before = groqCalls.length;
-  await page.click('.letc .letc-lesson.locked >> nth=0'); await page.waitForSelector('.plus-sheet');
+  await page.click('.bp [data-topic].locked >> nth=0'); await page.waitForSelector('.plus-sheet');
   const sheet = (await page.locator('.plus-sheet').innerText()).replace(/\s+/g, ' ');
-  expect(/Every board exam lesson comes with Pro/.test(sheet) && /CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering, Psychometrician, NCLEX-RN, IELTS, OET Nursing, TOEFL iBT, SAT, JLPT and EPS-TOPIK/.test(sheet) && /Get Pro: ₱349 for 30 days/.test(sheet) && /₱1,399/.test(sheet) && groqCalls.length === before, 'a locked lesson asks for Pro, at ₱349, and sends nothing: ' + sheet);
-  await page.evaluate(() => { document.querySelector('.plus-sheet')?.remove(); state.plan = { plan: 'pro', until: Date.now() + 864e5 }; });
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-lesson');
-  const P = await page.$$eval('.letc .letc-lesson', (bs) => bs.map((x) => x.querySelector('em').textContent));
-  expect(P.every((x) => x === 'Start') && !(await page.locator('.letc-taste:visible').count()), 'Pro: every lesson open: ' + P);
+  expect(/Every board exam lesson comes with Pro/.test(sheet) && /CPALE, Civil Service Exam, Criminology, Nursing, Civil Engineering, Psychometrician, NCLEX-RN, IELTS, OET Nursing, TOEFL iBT, SAT, JLPT and EPS-TOPIK/.test(sheet) && /Get Pro: ₱349 for 30 days/.test(sheet) && /₱1,399/.test(sheet) && groqCalls.length === before, 'a locked topic asks for Pro, at ₱349, and sends nothing: ' + sheet);
+  await page.evaluate(() => { document.querySelector('.plus-sheet')?.remove(); state.plan = { plan: 'pro', until: Date.now() + 864e5 }; openBoardPrep({ view: 'lessons', exam: 'cse' }); });
+  await page.waitForSelector('.bp [data-topic]');
+  const P = await page.$$eval('.bp [data-topic]', (bs) => bs.map((x) => (x.querySelector('em') || {}).textContent || ''));
+  expect(!P.includes('Pro') && !(await page.locator('.bp-taste:visible').count()), 'Pro: every topic open: ' + P);
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
 
 test('the LET course: the topic map (Prof Ed, Gen Ed and each major), Cassie asks the student’s LET by taps (level, major, focus, topics to start with), saves it, puts Prof Ed first, teaches one lesson at a time with 3 board-style checks, keeps what’s done after a reload, and shows on Lessons, Home’s Lessons tile, the Study plan page and the LET page', async (b) => {
-  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 22 } }, fakeGroq: () => ({ text: 'Lesson.\n\nCheck 1 of 3\n\nWhich?\n\nA. a\nB. b\nC. c\nD. d' }) });
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 22 } }, fakeGroq: prepFake });
   // the map
   const M = await page.evaluate(() => letRescue().then((R) => ({ e: R.letParts('elementary', ''), m: R.letParts('secondary', 'Filipino'), v: R.letParts('secondary', 'Values Education'), s: R.letParts('secondary', 'Social Studies'), sc: R.letParts('secondary', 'General Science') })));
   expect(M.e.profed.includes('Code of Ethics for Professional Teachers') && M.e.profed.includes('Magna Carta for Teachers and Education Act 1982') && M.e.profed.includes('Test construction and item analysis') && M.e.profed.includes('Teaching reading') && !M.e.major.length, 'Prof Ed: ethics, the laws, assessment and reading; Elementary has no major');
   expect(M.e.gened.includes('Economics taxation and agrarian reform') && M.e.gened.includes('Filipino: Masining na Pagpapahayag') && M.e.gened.includes('Society and culture with family planning'), 'Gen Ed: the social sciences in full');
   expect(M.m.major.includes('Filipino: Sining ng Pakikipagtalastasan') && M.v.major.includes('Values Ed: work ethics and community service') && M.s.major.includes('Social Studies: Asian history and world affairs') && M.sc.major[0] === 'Science: integrated science', 'the majors: ' + JSON.stringify([M.m.major, M.v.major.slice(-4)]));
   expect([M.e, M.m, M.v, M.s, M.sc].every((p) => [...p.profed, ...p.gened, ...p.major].every((t) => t.length <= 50 && !/[,–—]/.test(t))), 'short names, no commas or dashes');
-  // it shows where a reviewee looks: Home's Lessons tile, Lessons, the Study plan page
+  // it shows where a reviewee looks: Home's Lessons tile, Lessons, the Study plan page (v240: Board exams)
   await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
-  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'Board exam course', 'Home’s Lessons tile is the board exam course for a reviewee');
+  expect(await page.$eval('.desk-home .ht-lessons .ht-go b', (e) => e.textContent) === 'Board exams', 'Home’s Lessons tile is Board exams for a reviewee');
   await page.evaluate(() => deskGo('plan')); await page.waitForSelector('.desk-plan .dk-letc');
   await page.evaluate(() => deskGo('lessons')); await page.waitForTimeout(400);
-  expect(await page.locator('.lesson[data-go="let:course"]').count() >= 1, 'Lessons has the LET course');
-  // the questions, by taps
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-pick');
-  expect(/Which exam are you taking\?/.test(await page.locator('.letc').innerText()), 'it asks the exam first (v235)');
-  await page.click('.letc .letc-exam[data-exam="let"]');
-  expect(/Which LET are you taking\?/.test(await page.locator('.letc').innerText()) && /60% Professional Education/.test(await page.locator('.letc').innerText()), 'it asks the level, with the weights');
-  await page.click('.letc .letc-pick >> text=Secondary');
-  await page.click('.letc .letc-pick >> text=Mathematics');
-  expect(/What should we focus on/.test(await page.locator('.letc').innerText()), 'then the focus');
-  await page.click('.letc .letc-part[data-part="gened"]'); // (Prof Ed and the major only)
-  await page.click('.letc .letc-go');
-  await page.click('.letc .letc-topic >> text=Math: calculus');
-  await page.click('.letc .letc-go');
-  const c = await page.evaluate(() => state.letCourse);
-  expect(c.level === 'secondary' && c.major === 'Mathematics' && JSON.stringify(c.parts) === '["profed","major"]' && c.first[0] === 'Math: calculus' && c.order[0] === 'Math: calculus' && c.order[1] === 'Code of Ethics for Professional Teachers' && !c.order.some((t) => /^English:|Economics/.test(t)), 'saved: the picked topic first, then Prof Ed (the anchor), then the major, no Gen Ed: ' + JSON.stringify(c).slice(0, 300));
-  const n = c.order.length;
-  expect(new RegExp(`0 of ${n} lessons`).test(await page.locator('.letc').innerText()), 'progress shows');
-  const taps = await page.$$eval('.letc button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
+  expect(await page.locator('.lesson[data-go="board"]').count() >= 1, 'Lessons has Board exams');
+  // the LET by taps: the level and the major, then its parts, Professional Education first
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'let' })); await page.waitForSelector('.bp .bp-lvl');
+  expect(/Which LET are you taking\?/.test(await page.locator('.bp').innerText()), 'it asks the level');
+  await page.click('.bp .bp-lvl[data-lvl="secondary"]');
+  await page.click('.bp .bp-maj >> text=Mathematics'); await page.waitForSelector('.bp .bp-parts [data-topic]');
+  const H = await page.$$eval('.bp .bp-parts .bp-h3', (x) => x.map((e) => e.textContent));
+  expect(H.join('|') === 'Professional Education|Your major: Mathematics|General Education' && /60% Professional Education/.test(await page.locator('.bp').innerText()), 'Prof Ed first, the major, Gen Ed, with the weights: ' + H);
+  expect(await page.evaluate(() => JSON.stringify(state.prep.exams.let)) === '{"level":"secondary","major":"Mathematics"}' && await page.locator('.bp [data-topic="Math: calculus"]').count() === 1, 'saved: Secondary, Mathematics');
+  const n = await page.locator('.bp .bp-parts [data-topic]').count();
+  const taps = await page.$$eval('.bp button', (bs) => bs.map((x) => Math.round(x.getBoundingClientRect().height)).filter((h) => h && h < 44));
   expect(!taps.length, 'every button is at least 44px: ' + taps);
-  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.letc-card'); expect(!bad.length, `the course reads (${scheme}): ` + bad.join(' | ')); }
+  for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300); const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.bp-card'); expect(!bad.length, `the LET reads (${scheme}): ` + bad.join(' | ')); }
   await page.emulateMedia({ colorScheme: 'light' });
-  // a lesson: taught for the LET, 3 board-style checks laid out one choice a line
-  await page.click('.letc .letc-next'); await page.waitForTimeout(1500);
-  const ask = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'user').at(-1).content), rules = JSON.stringify(groqCalls.at(-1).messages.filter((m) => m.role === 'system').map((m) => m.content));
-  expect(/Teach me \\"Math: calculus\\" for the LET/.test(ask) && /3 board-style questions of your own/.test(ask) && /each choice on its own line/.test(rules) && !/each choice on its own line/.test(ask), 'the lesson asks in a few words, the layout rules go to Cassie: ' + ask.slice(0, 200));
-  await page.waitForSelector('#chat-log .md-choice', { timeout: 8000 }).catch(() => {});
-  const lc = await page.evaluate(() => { const bs = [...document.querySelectorAll('#chat-log .bubble-assistant')]; return bs.length ? bs.pop().querySelectorAll('.md-choice').length : -1; });
-  expect(lc === 4, 'its check shows A to D one a line: ' + lc);
+  // a lesson, written for the LET, then its quiz passed
+  await page.click('.bp [data-topic="Math: calculus"]'); await page.click('.bp .bp-read'); await page.waitForSelector('.bp .bp-lesson');
+  expect(/short reviewer lesson on \\"Math: calculus\\" for the Licensure Examination for Teachers \(LET\), Secondary \(Mathematics major\)/.test(JSON.stringify(groqCalls.at(-1).messages)), 'the lesson is for LET Secondary, Mathematics');
+  await page.click('.bp .bp-end .bp-quiz'); await page.waitForSelector('.bp .bp-opt');
+  for (let i = 0; i < 5; i++) { await page.click('.bp .bp-opt >> nth=1'); await page.click('.bp .bp-next'); }
+  await page.waitForSelector('.bp .bp-big');
   // kept after a reload, and shown on Home
   await page.reload(); await page.evaluate(() => deskGo('home')); await page.waitForSelector('.desk-home .ht-lessons');
-  expect(await page.evaluate(() => !!state.letCourse.done['Math: calculus']), 'the lesson stays done after a reload');
-  expect(new RegExp(`1 of ${n} lessons`).test(await page.$eval('.desk-home .ht-lessons small', (e) => e.textContent)), 'Home shows the progress');
-  await page.evaluate(() => openLetCourse()); await page.waitForSelector('.letc .letc-count');
-  expect(new RegExp(`1 of ${n} lessons`).test(await page.locator('.letc .letc-count').innerText()), 'and so does the course');
-  expect(await page.evaluate(() => !!accountData().letCourse), 'it syncs with the account');
+  expect(await page.evaluate(() => !!state.prep.done['let|Math: calculus']), 'the topic stays done after a reload');
+  expect(/LET: 1 topic done/.test(await page.$eval('.desk-home .ht-lessons small', (e) => e.textContent)), 'Home shows the progress');
+  await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'let' })); await page.waitForSelector('.bp .letc-count');
+  expect(new RegExp(`1 of ${n} topics done`).test(await page.locator('.bp .letc-count').innerText()), 'and so does the exam');
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
   // the LET page: the weights
@@ -5311,8 +5384,8 @@ test('Lessons follow the student’s level: Nursery or Kindergarten comes first 
     'Grade 3': ['Read with Cassie', 'Phonics and spelling', 'Times tables', 'Fractions', 'Science labs for kids'],
     'Grade 8': ['Algebra', 'Science labs', 'Essay helper', 'Quiz me'],
     'Grade 11': ['Physics labs', 'Calculus', 'Accounting basics', 'Essays', 'Research', 'Practical research'],
-    '2nd year college': ['Read my PDF', 'Research with citations', 'Exam plan', 'Board exam course: one lesson at a time', 'Board exam practice', 'Check my board exam reviewer'],
-    'Board exam reviewee': ['Read my PDF', 'Research with citations', 'Exam plan', 'Board exam course: one lesson at a time', 'Board exam practice', 'Check my board exam reviewer'],
+    '2nd year college': ['Board exams: lessons and simulations', 'Read my PDF', 'Research with citations', 'Exam plan'],
+    'Board exam reviewee': ['Board exams: lessons and simulations', 'Read my PDF', 'Research with citations', 'Exam plan'],
   };
   // onboarding: the little ones first
   {
