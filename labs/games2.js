@@ -66,20 +66,20 @@ function matchBoard(stage, { items, places, cls = '', onRight, onWrong, onDone }
 }
 
 /* ---------------- Animal habitats ---------------- */
-export const HABITATS = { polar: ['❄️', 'Polar ice and snow'], desert: ['🏜️', 'Desert'], forest: ['🌳', 'Rainforest'], ocean: ['🌊', 'Ocean'], grass: ['🌾', 'Grassland'], wet: ['🪷', 'Pond and wetland'] };
+export const HABITATS = { polar: ['', 'Polar ice and snow'], desert: ['', 'Desert'], forest: ['', 'Rainforest'], ocean: ['', 'Ocean'], grass: ['', 'Grassland'], wet: ['', 'Pond and wetland'] };
 export const ANIMALS = [
-  ['polarbear', '🐻‍❄️', 'Polar bear', 'polar', 'Thick fur and a layer of fat keep a polar bear warm on the Arctic ice.'],
-  ['penguin', '🐧', 'Penguin', 'polar', 'Emperor penguins huddle together on the Antarctic ice to stay warm.'],
-  ['camel', '🐫', 'Camel', 'desert', 'A camel can go days without drinking, and its wide feet don’t sink in the sand.'],
-  ['scorpion', '🦂', 'Scorpion', 'desert', 'Scorpions hide under rocks in the hot day and hunt in the cool night.'],
-  ['monkey', '🐒', 'Monkey', 'forest', 'Monkeys climb and swing through the tall rainforest trees, eating fruit and leaves.'],
-  ['parrot', '🦜', 'Parrot', 'forest', 'Parrots eat the fruits and nuts of the rainforest, and their bright colours hide among the flowers.'],
-  ['whale', '🐋', 'Whale', 'ocean', 'Whales live their whole lives in the sea, coming up to breathe air.'],
-  ['octopus', '🐙', 'Octopus', 'ocean', 'An octopus hides in rocks on the sea floor and can change colour.'],
-  ['lion', '🦁', 'Lion', 'grass', 'Lions live in the grasslands of Africa, where their sandy colour hides them in the dry grass.'],
-  ['zebra', '🦓', 'Zebra', 'grass', 'Zebras eat grass and live in big herds on the open plains.'],
-  ['frog', '🐸', 'Frog', 'wet', 'Frogs lay their eggs in water, and tadpoles grow up in ponds.'],
-  ['carabao', '🐃', 'Carabao', 'wet', 'A carabao (water buffalo) cools off by wallowing in mud and water, in wetlands and rice fields.'],
+  ['polarbear', '', 'Polar bear', 'polar', 'Thick fur and a layer of fat keep a polar bear warm on the Arctic ice.'],
+  ['penguin', '', 'Penguin', 'polar', 'Emperor penguins huddle together on the Antarctic ice to stay warm.'],
+  ['camel', '', 'Camel', 'desert', 'A camel can go days without drinking, and its wide feet don’t sink in the sand.'],
+  ['scorpion', '', 'Scorpion', 'desert', 'Scorpions hide under rocks in the hot day and hunt in the cool night.'],
+  ['monkey', '', 'Monkey', 'forest', 'Monkeys climb and swing through the tall rainforest trees, eating fruit and leaves.'],
+  ['parrot', '', 'Parrot', 'forest', 'Parrots eat the fruits and nuts of the rainforest, and their bright colours hide among the flowers.'],
+  ['whale', '', 'Whale', 'ocean', 'Whales live their whole lives in the sea, coming up to breathe air.'],
+  ['octopus', '', 'Octopus', 'ocean', 'An octopus hides in rocks on the sea floor and can change colour.'],
+  ['lion', '', 'Lion', 'grass', 'Lions live in the grasslands of Africa, where their sandy colour hides them in the dry grass.'],
+  ['zebra', '', 'Zebra', 'grass', 'Zebras eat grass and live in big herds on the open plains.'],
+  ['frog', '', 'Frog', 'wet', 'Frogs lay their eggs in water, and tadpoles grow up in ponds.'],
+  ['carabao', '', 'Carabao', 'wet', 'A carabao (water buffalo) cools off by wallowing in mud and water, in wetlands and rice fields.'],
 ];
 const habitatsLab = {
   id: 'habitats', name: 'Animal habitats', subject: 'games', levels: ['pre', 'elem'],
@@ -100,8 +100,8 @@ const habitatsLab = {
       const pickOne = (h) => shuffle(ANIMALS.filter((a) => a[3] === h), rand)[0];
       const set = Object.keys(HABITATS).map(pickOne);
       matchBoard(stage, {
-        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `<span class="mt-emoji" aria-hidden="true">${e}</span><span class="mt-name">${esc(name)}</span>`, label: name, to, why })),
-        places: Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `<span class="mt-emoji" aria-hidden="true">${e}</span><span class="mt-name">${esc(name)}</span>`, label: name })),
+        items: shuffle(set, rand).map(([id, e, name, to, why]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name, to, why })),
+        places: Object.entries(HABITATS).map(([id, [e, name]]) => ({ id, html: `<span class="mt-name">${esc(name)}</span>`, label: name })),
         cls: 'mt-kids',
         onRight: (it) => { right++; msg.className = 'gm-msg good'; msg.textContent = `Yes! ${it.why}`; say(`Yes! ${it.why}`); api.check(0); report(); },
         onWrong: (it, p) => { wrong++; msg.className = 'gm-msg bad'; msg.textContent = `Not the ${p.label.toLowerCase()}. Where would a ${it.label.toLowerCase()} find its food and shelter?`; say(`Not there. Try again!`); report(); },

@@ -121,7 +121,7 @@ const projectileLab = {
       report();
     }
     const ov = overlay(stage, 'tr');
-    button(ov, '▶ Launch', () => launch(), 'main big');
+    button(ov, 'Launch', () => launch(), 'main big');
     const tick = clock((dt) => {
       if (!flight) return false;
       const P = flight.P, speed = Math.max(1, P.T / 2.4); // long flights play faster

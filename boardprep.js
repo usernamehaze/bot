@@ -16,7 +16,7 @@
   const esc = (s) => escapeHtml(String(s == null ? '' : s));
   const P = () => {
     const p = state.prep || (state.prep = {});
-    ['exams', 'read', 'quiz', 'done', 'sims'].forEach((k) => { if (!p[k] || typeof p[k] !== 'object') p[k] = {}; });
+    ['exams', 'read', 'quiz', 'done', 'sims', 'notes'].forEach((k) => { if (!p[k] || typeof p[k] !== 'object') p[k] = {}; });
     // the old one-exam course (v235 to v239): its exam, level and the lessons it opened carry over, once
     if (!p.moved && state.letCourse && state.letCourse.level) {
       const c = state.letCourse, ex = c.exam || 'let';
@@ -68,9 +68,10 @@
   const doneCount = (ex) => { const ts = topicsOf(ex); return [ts.filter((x) => P().done[key(ex, x.t)]).length, ts.length]; };
 
   // ---------- the screen ----------
-  let w = null, body = null, head = null, back = null, nav = [], tick = 0;
+  let w = null, body = null, head = null, back = null, nav = [], tick = 0, onClose = null;
   function open(start = {}) {
     close();
+    onClose = typeof start.onClose === 'function' ? start.onClose : null;
     w = document.createElement('div');
     w.className = 'letc bp'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'bp-h');
     w.innerHTML = '<div class="letc-card bp-card"><div class="letc-head bp-head"><button type="button" class="letc-x bp-back" aria-label="Back" hidden>‹</button><h2 id="bp-h">Board and licensure exams</h2><button type="button" class="letc-x bp-x" aria-label="Close">×</button></div><div class="bp-body" aria-live="polite"><p class="letc-note">Getting your exams ready…</p></div></div>';
@@ -85,6 +86,11 @@
       R = r; info = {}; R.boardExams().forEach((x) => { info[x.key] = x; });
       P(); save();
       const ex = start.exam && examInfo(start.exam) ? start.exam : '';
+      // (from Learn's folders: straight to a topic, an exam's notes, a note, or adding one)
+      if (ex && start.view === 'topic' && start.t) { go(needsSetup(ex) ? { v: 'setup', ex, then: { v: 'topic', ex, t: start.t, part: start.part } } : { v: 'topic', ex, t: start.t, part: start.part || '' }, true); return; }
+      if (ex && start.view === 'note' && start.id) { go({ v: 'note', ex, id: start.id }, true); return; }
+      if (ex && start.view === 'addnote') { go({ v: 'addnote', ex }, true); return; }
+      if (ex && start.view === 'setup') { go({ v: 'setup', ex, then: { v: 'exam', ex } }, true); return; }
       if (start.view === 'sims') go(ex ? { v: 'simexam', ex } : { v: 'exams', mode: 'sims' }, true);
       else if (start.view === 'lessons' || ex) go(ex ? { v: 'exam', ex } : { v: 'exams', mode: 'lessons' }, true);
       else go({ v: 'home' }, true);
@@ -96,6 +102,7 @@
     if (w) { w.remove(); w = null; }
     document.removeEventListener('keydown', onKey, true);
     if (typeof refreshHub === 'function') refreshHub();
+    const done = onClose; onClose = null; if (done) try { done(); } catch (e) { /* Learn redraws next time */ }
   }
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
   // go to a view (home is the root); Back returns to the one before
@@ -107,7 +114,7 @@
     const v = nav[nav.length - 1];
     back.hidden = nav.length < 2;
     body.innerHTML = '';
-    ({ home, exams, setup, exam, topic, read, quiz, simexam, sim, results, review }[v.v] || home)(v);
+    ({ home, exams, setup, exam, topic, read, quiz, simexam, sim, results, review, addnote, note }[v.v] || home)(v);
     const card = w.querySelector('.bp-card'); card.scrollTop = 0;
     const first = body.querySelector('button, a, input'); if (first && v.v !== 'sim') first.focus({ preventScroll: true });
   }
@@ -122,8 +129,8 @@
     head.textContent = 'Board and licensure exams';
     const p = P(), started = ORDER.filter((ex) => p.exams[ex] || Object.keys(p.read).some((k) => k.startsWith(ex + '|')));
     h(`<div class="bp-folders">
-      <button type="button" class="bp-folder" data-go="lessons"><span class="bp-fi" aria-hidden="true">📖</span><b>Lessons</b><small>Pick your exam, read a short reviewer for each topic, then quiz yourself.</small></button>
-      <button type="button" class="bp-folder" data-go="sims"><span class="bp-fi" aria-hidden="true">🧪</span><b>Simulations</b><small>A timed practice exam in your exam’s shape, scored by part.</small></button>
+      <button type="button" class="bp-folder" data-go="lessons"><b>Lessons</b><small>Pick your exam, read a short reviewer for each topic, then quiz yourself.</small></button>
+      <button type="button" class="bp-folder" data-go="sims"><b>Simulations</b><small>A timed practice exam in your exam’s shape, scored by part.</small></button>
     </div>`);
     if (started.length) {
       h('<h3 class="bp-h3">Pick up where you left off</h3><div class="bp-list bp-recent"></div>');
@@ -280,14 +287,16 @@
   }
   // the quiz: 5 questions, one at a time; Stop keeps the place
   async function quiz(v) {
-    const { ex, t } = v, k = key(ex, t), p = P();
+    const { ex, t } = v, k = v.note ? key(ex, 'note:' + v.note) : key(ex, t), p = P();
     head.textContent = examInfo(ex).name;
     let q = p.quiz[k];
     if (!q || !q.qs || !q.qs.length || q.fin) {
       if (cannot()) return;
       wait('Cassie is writing your questions…');
       let qs = [];
-      try { qs = parseQs(await askCassie([{ role: 'user', content: qPrompt(ex, [t], QUIZ_N) }])); } catch (e) { /* below */ }
+      const n0 = v.note && (p.notes[ex] || []).find((x) => x.id === v.note);
+      const ask = n0 ? `Write ${QUIZ_N} exam-style multiple-choice questions for the ${fullName(ex)}, using ONLY these notes of mine (nothing they don't say). 4 options each, exactly one right answer. Reply with ONLY a JSON array, no other text: [{"t": "${n0.title.replace(/"/g, "'")}", "q": "question", "o": ["option A", "option B", "option C", "option D"], "a": 0, "why": "why, in 2 short sentences, from my notes"}]\n\nMy notes:\n${n0.text.slice(0, 9000)}` : qPrompt(ex, [t], QUIZ_N);
+      try { qs = parseQs(await askCassie([{ role: 'user', content: ask }])); } catch (e) { /* below */ }
       if (!w || nav[nav.length - 1].v !== 'quiz') return;
       if (!qs.length) { oops('Cassie couldn’t write the questions just now.', () => render()); return; }
       q = p.quiz[k] = { qs, i: 0, right: 0, picked: [], fin: false }; save();
@@ -303,7 +312,7 @@
     return Array.isArray(a) ? a.filter((x) => x && x.q && Array.isArray(x.o) && x.o.length >= 2 && Number.isInteger(+x.a) && +x.a >= 0 && +x.a < x.o.length).map((x) => ({ t: String(x.t || ''), q: String(x.q), o: x.o.map(String).slice(0, 5), a: +x.a, why: String(x.why || '') })) : [];
   }
   function showQ(v, q) {
-    const { ex, t } = v, k = key(ex, t);
+    const { ex, t } = v;
     body.innerHTML = '';
     if (q.i >= q.qs.length) { finishQuiz(v, q); return; }
     const x = q.qs[q.i], picked = q.picked[q.i];
@@ -331,22 +340,24 @@
       save(); answered(pick);
     });
     on('.bp-next', () => { q.i++; save(); render(); });
-    on('.bp-stop', () => { save(); while (nav.length > 1 && nav[nav.length - 1].v !== 'topic') nav.pop(); if (nav[nav.length - 1].v !== 'topic') nav.push({ v: 'topic', ex, t, part: v.part }); render(); });
-    on('.bp-toread', () => { save(); nav[nav.length - 1] = { v: 'read', ex, t, part: v.part }; render(); });
-    void k;
+    const home = v.note ? { v: 'note', ex, id: v.note } : { v: 'topic', ex, t, part: v.part };
+    on('.bp-stop', () => { save(); while (nav.length > 1 && nav[nav.length - 1].v !== home.v) nav.pop(); if (nav[nav.length - 1].v !== home.v) nav.push(home); render(); });
+    on('.bp-toread', () => { save(); nav[nav.length - 1] = v.note ? home : { v: 'read', ex, t, part: v.part }; render(); });
+    if (v.note) body.querySelector('.bp-toread').textContent = 'Read my notes';
   }
   function finishQuiz(v, q) {
-    const { ex, t } = v, k = key(ex, t), pass = q.right >= PASS;
+    const { ex, t } = v, k = v.note ? key(ex, 'note:' + v.note) : key(ex, t), pass = q.right >= PASS;
     q.fin = true;
-    if (pass) P().done[k] = P().done[k] || Date.now();
+    if (pass && !v.note) P().done[k] = P().done[k] || Date.now();
     save();
-    const next = (() => { const ts = topicsOf(ex), i = ts.findIndex((x) => x.t === t); return ts.slice(i + 1).find((x, j) => !P().done[key(ex, x.t)] && !locked(i + 1 + j)) || null; })();
+    const next = v.note ? null : (() => { const ts = topicsOf(ex), i = ts.findIndex((x) => x.t === t); return ts.slice(i + 1).find((x, j) => !P().done[key(ex, x.t)] && !locked(i + 1 + j)) || null; })();
     h(`<div class="bp-score"><p class="bp-big">${q.right} of ${q.qs.length}</p><p class="bp-scoremsg"></p></div>
       <div class="letc-row"><button type="button" class="letc-go bp-again2">Quiz me again</button><button type="button" class="letc-line bp-toread">Read the lesson again</button>${next ? '<button type="button" class="letc-line bp-nexttopic">Next topic</button>' : ''}</div>`);
-    body.querySelector('.bp-scoremsg').textContent = pass ? `Passed. “${t}” is done.` : `Almost. Read the lesson again, then try new questions. You need ${PASS} of ${q.qs.length}.`;
+    body.querySelector('.bp-scoremsg').textContent = v.note ? (pass ? 'Well done. You know these notes.' : 'Read your notes again, then try new questions.') : pass ? `Passed. “${t}” is done.` : `Almost. Read the lesson again, then try new questions. You need ${PASS} of ${q.qs.length}.`;
+    if (v.note) body.querySelector('.bp-toread').textContent = 'Read my notes again';
     if (pass && typeof botMood === 'function') botMood('celebrate', 3000);
     on('.bp-again2', () => { delete P().quiz[k]; save(); render(); });
-    on('.bp-toread', () => { nav[nav.length - 1] = { v: 'read', ex, t, part: v.part }; render(); });
+    on('.bp-toread', () => { nav[nav.length - 1] = v.note ? { v: 'note', ex, id: v.note } : { v: 'read', ex, t, part: v.part }; render(); });
     on('.bp-nexttopic', () => { nav[nav.length - 1] = { v: 'topic', ex, t: next.t, part: next.part }; render(); });
   }
 
@@ -475,6 +486,90 @@
     });
     body.appendChild(ol);
   }
+  // ---------- my notes and reviewers: the student's own, kept on this device; Cassie quizzes on them on the spot ----------
+  const NOTE_MAX = 20000, NOTES_MAX = 30;
+  const notesOf = (ex) => P().notes[ex] || (P().notes[ex] = []);
+  function addnote(v) {
+    const ex = v.ex;
+    head.textContent = `${examInfo(ex).name}: add notes`;
+    h(`<form class="bp-form" novalidate><label class="bp-lab" for="bp-ntitle">Title</label><input id="bp-ntitle" class="bp-in" maxlength="80" placeholder="Like: Code of Ethics, my summary" autocomplete="off">
+      <label class="bp-lab" for="bp-ntext">Your notes or reviewer</label><textarea id="bp-ntext" class="bp-in bp-ta" rows="10" placeholder="Paste or type them here"></textarea>
+      <input type="file" class="bp-file" accept=".pdf,.docx,.txt,image/*" hidden>
+      <div class="letc-row"><button type="button" class="letc-line bp-attach">Attach a PDF, Word file or photo</button></div>
+      <p class="letc-note bp-fmsg" role="status"></p>
+      <div class="letc-row"><button type="submit" class="letc-go bp-savenote">Save</button><button type="button" class="letc-line bp-out">Cancel</button></div>
+      <p class="letc-note">Saved on this device only. Only add notes and reviewers that are yours or that you’re allowed to use.</p></form>`);
+    const form = body.querySelector('.bp-form'), file = form.querySelector('.bp-file'), ta = form.querySelector('.bp-ta'), ti = form.querySelector('#bp-ntitle'), msg = form.querySelector('.bp-fmsg');
+    on('.bp-attach', () => file.click());
+    on('.bp-out', () => goBack());
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0]; if (!f) return;
+      msg.textContent = 'Reading your file…';
+      try {
+        const text = await readNoteFile(f);
+        ta.value = (ta.value ? ta.value + '\n\n' : '') + text.slice(0, NOTE_MAX);
+        if (!ti.value) ti.value = f.name.replace(/\.[^.]+$/, '').slice(0, 80);
+        msg.textContent = text.trim() ? `Read ${f.name}.` : `${f.name} had no text Cassie could read.`;
+      } catch (e) { msg.textContent = (e && e.friendly && e.message) || 'That file couldn’t be read. Try a PDF, a Word file, a text file or a clear photo.'; }
+      file.value = '';
+    });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = ta.value.trim().slice(0, NOTE_MAX);
+      if (!text) { msg.textContent = 'Add some notes first: paste them, or attach a file.'; ta.focus(); return; }
+      const list = notesOf(ex), id = 'n' + Date.now().toString(36);
+      list.unshift({ id, title: (ti.value.trim() || text.split('\n')[0]).slice(0, 80), text, at: Date.now() });
+      if (list.length > NOTES_MAX) list.length = NOTES_MAX;
+      save(); track('feature', 'board-note');
+      nav[nav.length - 1] = { v: 'note', ex, id }; render();
+    });
+  }
+  // a PDF, a Word file, a text file, or a photo Cassie reads out (the app's own readers)
+  async function readNoteFile(f) {
+    const name = (f.name || '').toLowerCase();
+    if (/\.pdf$/.test(name) || f.type === 'application/pdf') return (await extractPdf(f)).text || '';
+    if (/\.docx$/.test(name)) return extractDocxText(f);
+    if (/^text\//.test(f.type) || /\.txt$/.test(name)) return f.text();
+    if (/^image\//.test(f.type)) {
+      if (!canChat()) throw Object.assign(new Error('Reading a photo needs Cassie’s connection. Paste the text instead, or try again online.'), { friendly: true });
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const text = await askCassie([{ role: 'user', content: 'Type out all the text in this picture of my notes, exactly as written, line by line. Reply with only the text, nothing else.' }], { mimeType: 'image/jpeg', base64: c.toDataURL('image/jpeg', 0.85).split(',')[1] });
+      return String(text || '');
+    }
+    throw Object.assign(new Error('Attach a PDF, a Word file (.docx), a text file or a photo.'), { friendly: true });
+  }
+  function note(v) {
+    const ex = v.ex, n = notesOf(ex).find((x) => x.id === v.id);
+    if (!n) { goBack(); return; }
+    head.textContent = `${examInfo(ex).name}: my notes`;
+    h(`<div class="bp-box"><p class="bp-part">My notes and reviewers</p><h3 class="bp-title"></h3><p class="bp-state"></p>
+      <div class="bp-acts"><button type="button" class="letc-go bp-nquiz">Quiz me on this</button><button type="button" class="letc-line bp-ndel">Delete</button></div></div>
+      <article class="bp-lesson bp-notetext"></article>`);
+    body.querySelector('.bp-title').textContent = n.title;
+    body.querySelector('.bp-state').textContent = `Added ${new Date(n.at).toLocaleDateString('en-PH', { day: 'numeric', month: 'long', year: 'numeric' })}. Cassie writes ${QUIZ_N} questions from these notes on the spot.`;
+    body.querySelector('.bp-notetext').textContent = n.text;
+    on('.bp-nquiz', () => go({ v: 'quiz', ex, t: n.title, note: n.id }));
+    on('.bp-ndel', () => {
+      if (!confirm(`Delete “${n.title}”? This can’t be undone.`)) return;
+      P().notes[ex] = notesOf(ex).filter((x) => x.id !== n.id); delete P().quiz[key(ex, 'note:' + n.id)]; save(); goBack();
+    });
+  }
+  // for Learn's folders: what each exam has, without opening this screen
+  async function catalog() {
+    if (!R) { R = await letRescue(); info = {}; R.boardExams().forEach((x) => { info[x.key] = x; }); }
+    return {
+      exams: ORDER.map((ex) => ({ key: ex, name: examInfo(ex).name, full: examInfo(ex).full, ph: PH.includes(ex) })),
+      needsSetup,
+      level: (ex) => levelLabel(ex, cfgOf(ex)),
+      parts: (ex) => { let i = 0; return partsOf(ex).map((p) => ({ name: p.name, topics: p.topics.map((t) => ({ t, status: status(ex, t)[0], done: !!P().done[key(ex, t)], locked: locked(i++) && !P().done[key(ex, t)] })) })); },
+      count: (ex) => (needsSetup(ex) ? null : doneCount(ex)),
+      notes: (ex) => notesOf(ex).map((n) => ({ id: n.id, title: n.title, at: n.at })),
+      sim: (ex) => { const s = P().sims[ex]; return s ? { fin: !!s.fin, score: s.score, i: s.i, n: s.n } : null; },
+    };
+  }
   // the student's own reviewer, checked in the chat (one question at a time)
   function reviewer(ex) {
     const name = (examInfo(ex) || { name: 'board exam' }).name;
@@ -490,5 +585,5 @@
     if (needsSetup(p.last)) return null;
     return { exam: examInfo(p.last).name, n: doneCount(p.last) };
   }
-  window.CassieBoardPrep = { open, close, progress };
+  window.CassieBoardPrep = { open, close, progress, catalog };
 })();

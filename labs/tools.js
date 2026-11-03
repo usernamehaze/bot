@@ -681,7 +681,7 @@ const matrixLab = {
     }
     function drawStudy() {
       const s = study, i = s.queue[0];
-      if (i == null) { page.innerHTML = `<div class="tl-empty"><b>Round done! 🎉</b><p>${s.done} cards, ${s.again} “again”. Save them to your Flashcards so spaced repetition brings them back at the right time.</p><p><button type="button" class="lab-btn" data-back>Back to the grid</button></p></div>`; return; }
+      if (i == null) { page.innerHTML = `<div class="tl-empty"><b>Round done!</b><p>${s.done} cards, ${s.again} “again”. Save them to your Flashcards so spaced repetition brings them back at the right time.</p><p><button type="button" class="lab-btn" data-back>Back to the grid</button></p></div>`; return; }
       const c = cards[i];
       page.innerHTML = `<p class="tl-hint">${s.queue.length} left · ${s.done} done</p><div class="tl-study${s.flip ? ' tl-flipped' : ''}" role="button" tabindex="0" data-flip><small>${s.flip ? 'answer' : 'question'}</small><p>${esc(s.flip ? c.b : c.f)}</p>${s.flip ? '' : '<em>tap to see the answer</em>'}</div>
         ${s.flip ? '<div class="tl-grade"><button type="button" class="lab-btn" data-grade="again">Again</button><button type="button" class="lab-btn" data-grade="hard">Hard</button><button type="button" class="lab-btn main" data-grade="good">Good</button><button type="button" class="lab-btn" data-grade="easy">Easy</button></div>' : ''}

@@ -83,7 +83,7 @@
     let tab = 'chat', unread = 0, pending = new Map(), voice = null;
     const root = document.createElement('section');
     root.className = 'sr'; root.hidden = true; root.setAttribute('aria-label', 'Study together');
-    root.innerHTML = `<div class="sr-head"><h3>Study together</h3><button type="button" class="sr-tm" data-act="timer" title="A focus timer for everyone in the room">⏱ Focus</button><button type="button" class="sr-x" data-act="close" aria-label="Close">×</button></div>
+    root.innerHTML = `<div class="sr-head"><h3>Study together</h3><button type="button" class="sr-tm" data-act="timer" title="A focus timer for everyone in the room">Focus</button><button type="button" class="sr-x" data-act="close" aria-label="Close">×</button></div>
       <p class="sr-warn" hidden>Group study needs the newest Cassie server. Ask whoever runs Cassie to update it. Drawing together still works.</p>
       <div class="sr-tabs" role="tablist">${[['chat', 'Chat'], ['cards', 'Cards'], ['quiz', 'Quiz'], ['notes', 'Notes']].map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${l}</button>`).join('')}</div>
       <div class="sr-body"></div><div class="sr-foot"></div>`;
@@ -136,7 +136,7 @@
     function chat() {
       const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
       body.innerHTML = S.msgs.length ? S.msgs.map((m, i) => (m.a != null
-        ? `<div class="sr-share"><small>${esc(nameOf(m.uid, m.name))} asked Cassie for everyone</small><b>${esc(m.q)}</b><p>${esc(m.a)}</p><button type="button" class="sr-mini" data-say="${i}">🔊 Listen</button></div>`
+        ? `<div class="sr-share"><small>${esc(nameOf(m.uid, m.name))} asked Cassie for everyone</small><b>${esc(m.q)}</b><p>${esc(m.a)}</p><button type="button" class="sr-mini" data-say="${i}">Listen</button></div>`
         : `<div class="sr-msg${m.uid === o.me ? ' me' : ''}">${m.uid === o.me ? '' : `<b>${esc(nameOf(m.uid, m.name))}</b>`}<span>${esc(m.text)}</span></div>`)).join('')
         : '<p class="sr-empty">Say hi to your study group! Ask Cassie something for everyone: her answer shows up for the whole room.</p>';
       if (atEnd || body.dataset.view !== 'chat') body.scrollTop = body.scrollHeight;
@@ -158,7 +158,7 @@
         const myGrade = g.get(o.me);
         html += `<p class="sr-tally">${esc(d.title)} · card ${S.card.i + 1} of ${d.cards.length} · shared by ${esc(d.by)}</p>
           <button type="button" class="sr-card" data-act="flip"><small>${S.card.flip ? 'Answer' : 'Question: think, then tap'}</small><big>${esc(c.f)}</big>${S.card.flip ? `<span class="sr-ans">${esc(c.b)}</span>` : ''}</button>
-          <div class="sr-row"><button type="button" class="sr-btn soft" data-act="prev" ${S.card.i ? '' : 'disabled'}>‹ Back</button><button type="button" class="sr-btn soft" data-act="say">🔊 Listen</button><button type="button" class="sr-btn" data-act="next" ${S.card.i < d.cards.length - 1 ? '' : 'disabled'}>Next ›</button></div>
+          <div class="sr-row"><button type="button" class="sr-btn soft" data-act="prev" ${S.card.i ? '' : 'disabled'}>‹ Back</button><button type="button" class="sr-btn soft" data-act="say">Listen</button><button type="button" class="sr-btn" data-act="next" ${S.card.i < d.cards.length - 1 ? '' : 'disabled'}>Next ›</button></div>
           ${S.card.flip ? `<div class="sr-row" style="margin-top:var(--sp-2, 8px)"><button type="button" class="sr-btn soft" data-act="got" ${myGrade && myGrade.ok ? 'disabled' : ''}>✓ Got it</button><button type="button" class="sr-btn soft" data-act="miss" ${myGrade && !myGrade.ok ? 'disabled' : ''}>✗ Not yet</button></div>` : ''}
           ${g.size ? `<p class="sr-tally">${[...g.values()].map((x) => `${esc(x.name)} ${x.ok ? '✓' : '✗'}`).join(' · ')}</p>` : ''}`;
         // keep it: the room ends after a day, the cards stay in your own flashcards
@@ -204,11 +204,11 @@
       const left = S.timer ? S.timer.ends - (Date.now() + S.offset) : 0;
       if (left > 0) {
         const m = Math.floor(left / 60e3), s = Math.floor((left % 60e3) / 1000);
-        b.textContent = `⏱ ${m}:${String(s).padStart(2, '0')}`; b.classList.add('on'); b.title = `Focus time for everyone (started by ${S.timer.by}). Tap to stop`;
+        b.textContent = `Focus ${m}:${String(s).padStart(2, '0')}`; b.classList.add('on'); b.title = `Focus time for everyone (started by ${S.timer.by}). Tap to stop`;
         tick = setTimeout(timerLabel, 1000);
       } else {
         if (S.timer && left <= 0 && !S.timer.rang) { S.timer.rang = true; if (o.speak) o.speak('Time for a break! Great focus, everyone.'); }
-        b.textContent = '⏱ Focus'; b.classList.remove('on'); b.title = 'Start a 25-minute focus timer for everyone';
+        b.textContent = 'Focus'; b.classList.remove('on'); b.title = 'Start a 25-minute focus timer for everyone';
       }
     }
 

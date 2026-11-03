@@ -89,7 +89,7 @@ export function tutor({ view, lab, mounted, described, ask, speak, speaker, hear
     <div class="tut-resume" hidden><button type="button" class="tut-btn tut-go tut-continue">Continue lesson</button><button type="button" class="tut-btn tut-restart">Start over</button></div>
     <div class="tut-nav" hidden><button type="button" class="tut-btn tut-prev" aria-label="Back a step">‹ Back</button><span class="tut-step"></span><button type="button" class="tut-btn tut-next">Next ›</button></div>
     <form class="tut-ask"><input type="text" placeholder="Ask anything: “how do I use this?”" aria-label="Ask Cassie how to do something here" enterkeyhint="send">
-      ${hear ? '<button type="button" class="tut-btn tut-mic" aria-label="Say it out loud" title="Say it out loud">🎤</button>' : ''}<button type="submit" class="tut-btn tut-go">Ask</button></form>`;
+      ${hear ? '<button type="button" class="tut-btn tut-mic" aria-label="Say it out loud" title="Say it out loud"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>' : ''}<button type="submit" class="tut-btn tut-go">Ask</button></form>`;
   view.appendChild(box);
   const topBar = watchTopBar(view); // (the card never covers the lab's top bar: Back must always work)
   const $ = (s) => box.querySelector(s);
@@ -389,7 +389,7 @@ Give 2 to 6 steps. "point" is the number of the thing to look at or tap, or 0 fo
       const said = await listening.done;
       if (said) { input.value = ''; teach(said); }
     } catch (e) { sayEl.textContent = errorWordsFor(e, 'not_heard'); }
-    finally { listening = null; mic.classList.remove('on'); mic.textContent = '🎤'; input.placeholder = 'Ask anything: “how do I use this?”'; }
+    finally { listening = null; mic.classList.remove('on'); mic.innerHTML = '<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>'; input.placeholder = 'Ask anything: “how do I use this?”'; }
   });
   function stop() {
     alive = false; asking++;

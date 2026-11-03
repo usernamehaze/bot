@@ -1721,7 +1721,7 @@
           const out = await opts.onAsk(snapshot(), q, parts());
           const reply = out && typeof out === 'object' ? out.reply : out;
           if (out && typeof out === 'object' && out.draw) draw(out.draw);
-          showNote({ reply: reply || (out && out.draw ? 'Drawn on your board ✏️' : '(no reply)') }); input.value = '';
+          showNote({ reply: reply || (out && out.draw ? 'Drawn on your board.' : '(no reply)') }); input.value = '';
         }
         catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie. Try again.' }); }
         finally { btn.disabled = false; btn.textContent = 'Ask'; }

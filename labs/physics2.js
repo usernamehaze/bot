@@ -645,7 +645,7 @@ const rocketLab = {
     });
     cv.c.classList.add('lab-hud');
     const ov = overlay(stage, 'br');
-    button(ov, '▶ Launch', () => { if (!flight || flight.over) launch(); }, 'main big');
+    button(ov, 'Launch', () => { if (!flight || flight.over) launch(); }, 'main big');
     if (use3d) button(ov, 'Zoom out', () => R3 && R3.zoomOut());
     if (use3d) stage.appendChild(el('p', 'lab-hint-3d', 'Drag to look around the rocket · pinch or scroll to zoom'));
     seg(group(panel, 'Stages'), { options: [[1, '1'], [2, '2'], [3, '3']], value: n, onChange: (v) => { n = v; build(); report(); } });

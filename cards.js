@@ -148,7 +148,7 @@
       ${note ? `<p class="fc-note">${esc(note)}</p>` : ''}
       ${ds.length ? `<ul class="fc-decks">${ds.map((d) => `
         <li><div class="fc-deck-name"><b>${esc(d.name)}</b><span>${d.total} card${d.total === 1 ? '' : 's'} · ${d.due ? `<em>${d.due} to review</em>` : 'all done for now'} · ${d.learned} learned</span></div>
-          <div class="fc-deck-acts">${ctx.speak ? `<button type="button" class="fc-btn" data-listen="${esc(d.name)}" title="Cassie reads the cards to you: the question, a moment to think, then the answer">🎧 Listen</button>` : ''}<button type="button" class="fc-btn main" data-study="${esc(d.name)}"${d.due ? '' : ' data-all="1"'}>${d.due ? 'Study' : 'Practise'}</button>
+          <div class="fc-deck-acts">${ctx.speak ? `<button type="button" class="fc-btn" data-listen="${esc(d.name)}" title="Cassie reads the cards to you: the question, a moment to think, then the answer">Listen</button>` : ''}<button type="button" class="fc-btn main" data-study="${esc(d.name)}"${d.due ? '' : ' data-all="1"'}>${d.due ? 'Study' : 'Practise'}</button>
           <details class="fc-more"><summary aria-label="More for ${esc(d.name)}">⋯</summary><div>
             <button type="button" data-anki="${esc(d.name)}">Export for Anki</button>
             <button type="button" data-quizlet="${esc(d.name)}">Copy for Quizlet</button>
@@ -236,7 +236,7 @@
     }
     if (session.i >= session.list.length) {
       const left = dueOf(session.deck).length;
-      body().innerHTML = `<div class="fc-done"><div class="fc-big">🎉</div><h3>Done! ${session.done} card${session.done === 1 ? '' : 's'} reviewed.</h3>
+      body().innerHTML = `<div class="fc-done"><div class="fc-big" aria-hidden="true"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div><h3>Done! ${session.done} card${session.done === 1 ? '' : 's'} reviewed.</h3>
         <p>${left ? `${left} more ${left === 1 ? 'is' : 'are'} due. Study a few more, or come back later.` : 'Nothing else is due in this deck. Cassie will bring the cards back right when you’re about to forget them.'}</p>
         <div class="fc-row"><button type="button" class="fc-btn" data-back-home="1">All decks</button>${left ? `<button type="button" class="fc-btn main" data-study="${esc(session.deck)}">Study more</button>` : ''}</div></div>`;
       body().querySelector('[data-back-home]').addEventListener('click', () => { session = null; renderHome(); });
@@ -247,7 +247,7 @@
     session.card = session.list[session.i];
     session.flipped = false;
     const c = session.card, left = session.list.length - session.i;
-    body().innerHTML = `<p class="fc-progress">${esc(session.deck)} · ${left} left${ctx.speak ? `<span class="fc-say"><button type="button" class="fc-mini" data-say="1" aria-label="Read this card aloud">🔊 Listen</button><button type="button" class="fc-mini" data-aloud="1" aria-pressed="${!!ctx.state().cardsAloud}" title="Read every card aloud">Auto</button></span>` : ''}</p>
+    body().innerHTML = `<p class="fc-progress">${esc(session.deck)} · ${left} left${ctx.speak ? `<span class="fc-say"><button type="button" class="fc-mini" data-say="1" aria-label="Read this card aloud">Listen</button><button type="button" class="fc-mini" data-aloud="1" aria-pressed="${!!ctx.state().cardsAloud}" title="Read every card aloud">Auto</button></span>` : ''}</p>
       <button type="button" class="fc-card" data-flip="1" aria-label="Show the answer"><span class="fc-side">Question</span><span class="fc-text">${esc(c.f)}</span><span class="fc-tap">Tap to see the answer</span></button>
       <div class="fc-grades" hidden>
         ${[['again', 'Again'], ['hard', 'Hard'], ['good', 'Good'], ['easy', 'Easy']].map(([k, l], i) => `<button type="button" class="fc-grade ${k}" data-grade="${k}"><b>${l}</b><small>${nextLabel(c, k)}</small><kbd>${i + 1}</kbd></button>`).join('')}
@@ -284,7 +284,7 @@
     let i = 0, stopped = false, wait = 0, skipNow = null;
     const pause = (ms) => new Promise((r) => { skipNow = r; wait = setTimeout(r, ms); });
     const show = (c, side) => {
-      body().innerHTML = `<p class="fc-progress">🎧 ${esc(deck)} · card ${i + 1} of ${list.length}</p>
+      body().innerHTML = `<p class="fc-progress">${esc(deck)} · card ${i + 1} of ${list.length}</p>
         <div class="fc-card flipped fc-listening"><span class="fc-side">Question</span><span class="fc-q">${esc(c.f)}</span>${side === 'b' ? `<span class="fc-side">Answer</span><span class="fc-text">${esc(c.b)}</span>` : '<span class="fc-tap">Think of the answer…</span>'}</div>
         <div class="fc-row"><button type="button" class="fc-btn" data-lstop="1">Stop</button><button type="button" class="fc-btn main" data-lnext="1">Next card</button></div>`;
     };

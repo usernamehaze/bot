@@ -3726,3 +3726,11 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
 .bp-rev-list p { margin: 0; }
 .bp-err { color: var(--danger-ink); font-weight: 650; }
 .lesson-folder { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+/* v241: My notes and reviewers (boardprep.js), and the line icons that replaced emoji */
+.bp-form { display: grid; gap: var(--sp-2, 8px); }
+.bp-lab { margin-top: var(--sp-2, 8px); font-size: .9rem; font-weight: 700; }
+.bp-in { width: 100%; min-height: var(--tap, 48px); padding: var(--sp-3, 12px); border-radius: 12px; border: 1px solid var(--lg-line, var(--border)); background: var(--surface); color: var(--text); font: inherit; }
+.bp-ta { min-height: 200px; resize: vertical; line-height: 1.5; }
+.bp-notetext { margin-top: var(--sp-4, 16px); white-space: pre-wrap; line-height: 1.55; overflow-wrap: anywhere; }
+.pod-ctrl button svg, .att-read svg { width: 20px; height: 20px; vertical-align: middle; }
+.fc-big svg { width: 56px; height: 56px; }
