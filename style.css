@@ -1734,7 +1734,8 @@ html.native .sidebar { padding-bottom: calc(88px + var(--safe-bottom)); }
 .fc-deck-name span { color: var(--muted); font-size: .8rem; }
 .fc-deck-name em { font-style: normal; color: var(--text); font-weight: 600; }
 .fc-deck-acts { display: flex; align-items: center; gap: var(--sp-2, 8px); flex-shrink: 0; }
-.fc-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 99px; padding: var(--sp-2, 8px) var(--sp-4, 16px); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; list-style: none; }
+.fc-btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 99px; padding: var(--sp-2, 8px) var(--sp-4, 16px); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; list-style: none; min-height: 40px; } /* (v247: 40px with a mouse, 48px to touch) */
+summary.fc-btn { display: inline-flex; align-items: center; }
 .fc-btn.main { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .fc-more { position: relative; }
 .fc-more summary { list-style: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); cursor: pointer; font-weight: 700; }
@@ -2060,7 +2061,7 @@ html.lite {
   .auth-eye { width: var(--tap); height: var(--tap); right: 0; display: inline-flex; align-items: center; justify-content: center; }
   .accent-sw { width: var(--tap); height: var(--tap); padding: var(--sp-2, 8px); background-clip: content-box; border-width: 0; box-shadow: inset 0 0 0 8px var(--surface), inset 0 0 0 10px var(--border); }
   .accent-sw.active { box-shadow: inset 0 0 0 6px var(--surface), inset 0 0 0 8px var(--text); }
-  .accent-swatches { grid-template-columns: repeat(auto-fill, var(--tap)); gap: 0; }
+  .accent-swatches { grid-template-columns: repeat(auto-fill, var(--tap)); gap: var(--sp-2, 8px); } /* (v247: 8px between taps) */
   .topbar-actions .icon-btn { width: var(--tap); height: var(--tap); }
   .quick-actions { padding-top: var(--sp-2, 8px); padding-bottom: var(--sp-2, 8px); margin-top: calc(-1 * var(--sp-2, 8px)); margin-bottom: calc(-1 * var(--sp-2, 8px)); position: relative; z-index: 6; }
   #prompt-input { min-height: var(--tap); padding-top: var(--sp-3, 12px); }
@@ -2143,6 +2144,13 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .plus-list li { display: flex; gap: var(--sp-2); align-items: flex-start; }
 .plus-list li::before { content: "✓"; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; margin-top: 1px; }
 .plus-foot { margin-bottom: var(--sp-4) !important; }
+/* (v247) a destructive action: a red button that says what it does; Cancel is outlined, beside it */
+.plus-actions .sure-danger { background: var(--danger-fill); border-color: var(--danger-fill); color: var(--on-danger); }
+@media (hover: hover) { .plus-actions .sure-danger:hover { background: var(--danger-fill-hover); border-color: var(--danger-fill-hover); } }
+.plus-actions .sure-danger:active { background: var(--danger-fill-down); border-color: var(--danger-fill-down); }
+.plus-actions .sure-danger:focus-visible { outline: 2px solid var(--danger-fill); outline-offset: 2px; }
+.sure-card h3 { overflow-wrap: anywhere; }
+.sure-card .plus-actions > * { flex: 1 1 40%; }
 .plus-foot .plus-linkish { display: inline-flex; align-items: center; min-height: var(--tap, 48px); padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; } /* (v246: the semester price, a line, not a third button) */
 .plus-actions > * { font-size: var(--fs-md); }
 .plus-actions .plus-ok, .plus-actions .plus-in { background: var(--lg-fill); border-color: var(--lg-line); }
@@ -2802,7 +2810,7 @@ html.native #ext-video-row { display: none; } /* (the extension is for Chrome an
   .top-search:hover { border-color: var(--text); }
   .top-search:focus-visible, .top-me:focus-visible, .top-timer:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .topbar .island { margin: 0 auto; }
-  .topbar-actions { margin-left: auto; gap: var(--sp-1, 4px); }
+  .topbar-actions { margin-left: auto; gap: var(--sp-2, 8px); } /* (v247: 8px between the top bar's buttons) */
   .top-timer { display: inline-flex; align-items: center; gap: var(--sp-2, 8px); min-height: 40px; margin-right: var(--sp-2, 8px); padding: 0 var(--sp-3, 12px); border-radius: 999px; border: 0; background: var(--dark-1); color: var(--on-dark); font: inherit; font-size: .82rem; cursor: pointer; }
   .top-timer[hidden] { display: none; }
   .top-timer i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
@@ -3605,9 +3613,10 @@ button.dk-day.cal-cell:focus-visible { outline: 2px solid var(--focus); outline-
 .cal-full .cal-cell:has(.cal-more) .cal-ev { max-width: calc(100% - 18px); }
 
 /* (v232) status colours: ok, warn, danger and info, each a word colour on its own background (AA in both themes) */
+:root { --danger-fill: #b3261e; --danger-fill-hover: #8f1e18; --danger-fill-down: #741812; --on-danger: #fff; } /* (v247: the red button of a destructive action; white on it is 5.6:1 and up) */
 :root { --ok: #1f6b3f; --ok-bg: #e2f3e9; --warn: #7a4a00; --warn-bg: #fcefd4; --danger-ink: #a3241c; --danger-bg: #fde7e5; --info: #1e56a8; --info-bg: #e4edfb; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; } }
-:root[data-theme="dark"] { --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --danger-fill: #c42b22; --danger-fill-hover: #a3241c; --danger-fill-down: #861d17; --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; } }
+:root[data-theme="dark"] { --danger-fill: #c42b22; --danger-fill-hover: #a3241c; --danger-fill-down: #861d17; --ok: #8fe0b0; --ok-bg: #14301f; --warn: #f6c56f; --warn-bg: #36270b; --danger-ink: #ffa29a; --danger-bg: #3b1614; --info: #a3c3ff; --info-bg: #15264a; }
 .st-badge { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); padding: 2px var(--sp-2, 8px); border-radius: 999px; font-size: .76rem; font-weight: 700; line-height: 1.5; white-space: nowrap; font-style: normal; }
 .st-ok { color: var(--ok); background: var(--ok-bg); } .st-warn { color: var(--warn); background: var(--warn-bg); }
 .st-danger { color: var(--danger-ink); background: var(--danger-bg); } .st-info { color: var(--info); background: var(--info-bg); }
@@ -3757,6 +3766,7 @@ html.native:not(.lite) .bubble-assistant.error, html.native:not(.lite) .bubble.e
   html.native .topbar:has(.isle-card.open) { -webkit-mask-image: none; mask-image: none; } /* (the island's card hangs below the bar) */
   html.lgm.native .topbar.lgp-b::before, html.lgm.native .topbar.lgp-a::after { display: none; }
   html.native .topbar { padding-bottom: var(--sp-4, 16px); }
+  html.native .topbar-actions { gap: var(--sp-2, 8px); } /* (v247: Board and Memory 8px apart) */
   html.native .topbar-actions :is(#board-btn, #memory-btn) svg:not(#x) { stroke-width: 2.6; color: var(--text); opacity: 1; } /* (Board and Memory stay clear over the chat) */
 }
 /* v244: a sheet that fills a phone runs edge to edge: no rim, radius, side shadow or bevel at the screen's edges */
@@ -3781,7 +3791,7 @@ html.native.tab-chat #quick-actions { padding-top: var(--sp-1, 4px); padding-bot
 html.native.tab-chat.chat-rest #quick-actions { display: none; }
 html.native.tab-chat.chat-rest .composer { flex-direction: row; align-items: center; gap: var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-2, 8px) var(--sp-2, 8px) var(--sp-3, 12px); }
 html.native.tab-chat.chat-rest #prompt-input { flex: 1; min-width: 0; min-height: var(--tap, 48px); height: var(--tap, 48px) !important; padding-top: var(--sp-3, 12px); }
-html.native.tab-chat.chat-rest .composer-row { flex: none; }
+html.native.tab-chat.chat-rest .composer-row { flex: none; gap: var(--sp-2, 8px); } /* (v247: mic and Send 8px apart) */
 html.native.tab-chat.chat-rest .composer-row > :not(#send-btn):not(#mic-btn) { display: none !important; }
 /* v244 audit: what fights for attention steps back */
 html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var(--lg-tint)), linear-gradient(180deg, rgba(var(--glass-rgb), .84), rgba(var(--glass-rgb), .76)); } /* (what scrolls under the bar no longer reads through it) */

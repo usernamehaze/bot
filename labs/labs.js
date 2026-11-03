@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=246';
+import { MUSEUM } from './museum.js?v=247';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=246';
+import { LEVEL_LESSONS } from './level-lessons.js?v=247';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -692,11 +692,11 @@ function createView() {
     const n = e.target.closest('[data-nudge]');
     if (n && current && opts.explain) {
       const i = +n.dataset.nudge, out = n.parentElement.querySelector('.lab-nudge-text'), lab = current;
-      n.disabled = true; out.hidden = false; out.textContent = 'Cassie is thinking…'; out.classList.add('muted');
+      const nDone = window.busyButton ? window.busyButton(n, 'Asking Cassie…') : (n.disabled = true, () => { n.disabled = false; }); out.hidden = false; out.textContent = 'Cassie is thinking…'; out.classList.add('muted');
       opts.explain(`A student is working on this challenge in the ${lab.name} simulation (${lab.blurb}): "${lab.tries[i]}". What is on their screen now: ${described() || 'they have just started'}. Give one short, friendly hint in at most two sentences that points them in the right direction WITHOUT giving the answer or the exact numbers. Plain text, no formatting.`)
         .then((text) => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = String(text || '').replace(/[*_#`>]/g, '').trim() || 'Try changing one thing at a time and watch what happens.'; })
         .catch(() => { if (current !== lab) return; out.classList.remove('muted'); out.textContent = errorWords('lab_ai_failed', { next: 'Read the hint above, or tap Ask Cassie.' }); })
-        .finally(() => { n.disabled = false; });
+        .finally(() => { nDone(); });
     }
   });
   // Teach me: Cassie as a tutor in this lab (labs/tutor.js)

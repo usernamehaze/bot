@@ -288,7 +288,7 @@ const magnetLab = {
     const ov = overlay(stage, 'tl');
     button(ov, '+ Magnet', () => { if (mags.length < 4) { mags.push({ x: W * (0.3 + 0.15 * mags.length), y: H * 0.7, a: 0 }); report(); } });
     button(ov, '+ Wire', () => { if (wires.length < 4) { wires.push({ x: W * (0.25 + 0.17 * wires.length), y: H * 0.25, I: 1 }); report(); } });
-    button(ov, 'Clear', () => { mags.length = 0; wires.length = 0; report(); });
+    button(ov, 'Clear magnets and wires', () => { mags.length = 0; wires.length = 0; report(); });
     seg(group(panel, 'Show'), { options: [['lines', 'Field lines'], ['arrows', 'Arrows'], ['both', 'Both'], ['filings', 'Iron filings']], value: view, onChange: (v) => { view = v; ver++; cv.redraw(); } });
     panel.appendChild(el('p', 'lab-note', 'Drag magnets, wires and the compass. Tap a magnet to turn it 45°. Tap a wire to flip its current: ⊙ comes out of the screen, ⊗ goes in.'));
     const st = stats(panel);

@@ -119,6 +119,7 @@
     const first = body.querySelector('button, a, input'); if (first && v.v !== 'sim') first.focus({ preventScroll: true });
   }
   const h = (html) => { const d = document.createElement('div'); d.innerHTML = html; while (d.firstChild) body.appendChild(d.firstChild); };
+  const sure = (o) => (window.askSure ? window.askSure(o) : Promise.resolve(window.confirm(o.title + (o.text ? '\n' + o.text : '')))); // (v247: the app's clear confirm sheet)
   const on = (sel, fn) => body.querySelectorAll(sel).forEach((b) => b.addEventListener('click', (e) => fn(b, e)));
   const wait = (text) => { body.innerHTML = `<div class="bp-wait"><span class="bp-dots" aria-hidden="true"><i></i><i></i><i></i></span><p>${esc(text)}</p></div>`; };
   const oops = (text, again) => { body.innerHTML = `<p class="letc-note bp-err">${esc(text)}</p><div class="letc-row"><button type="button" class="letc-go bp-again">Try again</button><button type="button" class="letc-line bp-out">Back</button></div>`; on('.bp-again', again); on('.bp-out', goBack); };
@@ -369,7 +370,7 @@
     head.textContent = `${i.name} simulation`;
     const s = P().sims[ex], [fn, fm] = FULL[ex], going = s && s.qs && s.qs.length && !s.fin;
     h(`<p class="letc-what bp-what"></p>
-      ${going ? `<div class="bp-box"><p class="bp-state">In progress: question ${s.i + 1} of ${s.n}, ${mmss(s.left)} left.</p><div class="bp-acts"><button type="button" class="letc-go bp-cont">Continue</button><button type="button" class="letc-line bp-drop">Start over</button></div></div>` : ''}
+      ${going ? `<div class="bp-box"><p class="bp-state">In progress: question ${s.i + 1} of ${s.n}, ${mmss(s.left)} left.</p><div class="bp-acts"><button type="button" class="letc-go bp-cont">Continue the simulation</button><button type="button" class="letc-line bp-drop">Start over</button></div></div>` : ''}
       <div class="bp-folders bp-sizes">
         <button type="button" class="bp-folder" data-size="mini"><b>Mini mock</b><small>${MINI} questions · ${Math.round((fm / fn) * MINI)} minutes · every part</small></button>
         <button type="button" class="bp-folder${fullLocked() ? ' locked' : ''}" data-size="full"><b>Full mock${fullLocked() ? ' <em class="st-badge st-info">Pro</em>' : ''}</b><small>${fn} questions · ${fm} minutes</small></button>
@@ -381,10 +382,10 @@
     on('.bp-cont', () => go({ v: 'sim', ex }));
     on('.bp-drop', () => { delete P().sims[ex]; save(); render(); });
     on('.bp-last', () => go({ v: 'results', ex }));
-    on('[data-size]', (b) => {
+    on('[data-size]', async (b) => {
       const full = b.dataset.size === 'full';
       if (full && fullLocked()) { boardProAsk(close); return; }
-      if (going && !confirm('Start a new simulation? The one in progress ends.')) return;
+      if (going && !(await sure({ title: `End your ${fullName(ex)} simulation in progress?`, text: `You are on question ${s.i + 1} of ${s.n}. Its answers so far go, and a new one starts. This can’t be undone.`, yes: 'End it and start new' }))) return;
       const n = full ? fn : MINI;
       P().sims[ex] = { size: full ? 'full' : 'mini', n, qs: [], i: 0, picks: {}, flags: {}, left: Math.round((fm / fn) * n) * 60, fin: false, at: Date.now() };
       save(); track('feature', 'board-sim-' + (full ? 'full' : 'mini'));
@@ -421,7 +422,7 @@
     body.innerHTML = '';
     h(`<div class="bp-simtop"><span class="bp-timer" role="timer" aria-live="off">${mmss(s.left)}</span><span class="bp-qn">Question ${s.i + 1} of ${s.n}</span><button type="button" class="letc-line bp-flag" aria-pressed="${!!s.flags[s.i]}">${s.flags[s.i] ? 'Flagged' : 'Flag'}</button></div>
       <p class="bp-part bp-simpart"></p><p class="bp-q"></p><div class="bp-opts" role="radiogroup" aria-label="Choices"></div>
-      <div class="letc-row bp-simnav"><button type="button" class="letc-line bp-prev"${s.i ? '' : ' disabled'}>Previous</button><button type="button" class="letc-go bp-nextq">${s.i + 1 < s.n ? 'Next' : 'Finish'}</button></div>
+      <div class="letc-row bp-simnav"><button type="button" class="letc-line bp-prev"${s.i ? '' : ' disabled'}>Previous</button><button type="button" class="letc-go bp-nextq">${s.i + 1 < s.n ? 'Next question' : 'Finish and see my score'}</button></div>
       <details class="bp-grid"><summary>All questions · ${Object.keys(s.picks).length} answered, ${Object.keys(s.flags).filter((k) => s.flags[k]).length} flagged</summary><div class="bp-nums"></div></details>
       <div class="letc-row"><button type="button" class="letc-line bp-finish">Finish and see my score</button><button type="button" class="letc-line bp-pause">Pause</button></div>`);
     body.querySelector('.bp-simpart').textContent = x.part || '';
@@ -434,7 +435,7 @@
     on('.bp-flag', (b) => { s.flags[s.i] = !s.flags[s.i]; if (!s.flags[s.i]) delete s.flags[s.i]; save(); b.setAttribute('aria-pressed', String(!!s.flags[s.i])); b.textContent = s.flags[s.i] ? 'Flagged' : 'Flag'; });
     on('.bp-prev', () => { s.i = Math.max(0, s.i - 1); save(); render(); });
     on('.bp-nextq', () => { if (s.i + 1 >= s.n) { endSim(ex, s); return; } s.i++; save(); render(); });
-    on('.bp-finish', () => { const left = s.n - Object.keys(s.picks).length; if (left && !confirm(`${left} ${left === 1 ? 'question is' : 'questions are'} not answered yet. Finish anyway?`)) return; endSim(ex, s); });
+    on('.bp-finish', async () => { const left = s.n - Object.keys(s.picks).length; if (left && !(await sure({ title: `${left} ${left === 1 ? 'question is' : 'questions are'} not answered yet`, text: 'Unanswered questions count as wrong.', yes: 'Finish and see my score', no: 'Keep answering', danger: false }))) return; endSim(ex, s); });
     on('.bp-pause', () => { save(); goBack(); });
     if (s.qs.length - s.i <= 3) moreQs(ex, s); // (the next batch, before it's needed)
     const timer = body.querySelector('.bp-timer');
@@ -497,7 +498,7 @@
       <input type="file" class="bp-file" accept=".pdf,.docx,.txt,image/*" hidden>
       <div class="letc-row"><button type="button" class="letc-line bp-attach">Attach a PDF, Word file or photo</button></div>
       <p class="letc-note bp-fmsg" role="status"></p>
-      <div class="letc-row"><button type="submit" class="letc-go bp-savenote">Save</button><button type="button" class="letc-line bp-out">Cancel</button></div>
+      <div class="letc-row"><button type="submit" class="letc-go bp-savenote">Save note</button><button type="button" class="letc-line bp-out">Cancel</button></div>
       <p class="letc-note">Saved on this device only. Only add notes and reviewers that are yours or that you’re allowed to use.</p></form>`);
     const form = body.querySelector('.bp-form'), file = form.querySelector('.bp-file'), ta = form.querySelector('.bp-ta'), ti = form.querySelector('#bp-ntitle'), msg = form.querySelector('.bp-fmsg');
     on('.bp-attach', () => file.click());
@@ -552,8 +553,8 @@
     body.querySelector('.bp-state').textContent = `Added ${new Date(n.at).toLocaleDateString('en-PH', { day: 'numeric', month: 'long', year: 'numeric' })}. Cassie writes ${QUIZ_N} questions from these notes on the spot.`;
     body.querySelector('.bp-notetext').textContent = n.text;
     on('.bp-nquiz', () => go({ v: 'quiz', ex, t: n.title, note: n.id }));
-    on('.bp-ndel', () => {
-      if (!confirm(`Delete “${n.title}”? This can’t be undone.`)) return;
+    on('.bp-ndel', async () => {
+      if (!(await sure({ title: `Delete “${n.title}”?`, text: 'The note and its quiz results go from this device. This can’t be undone.', yes: 'Delete note' }))) return;
       P().notes[ex] = notesOf(ex).filter((x) => x.id !== n.id); delete P().quiz[key(ex, 'note:' + n.id)]; save(); goBack();
     });
   }

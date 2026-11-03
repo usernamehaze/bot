@@ -110,6 +110,8 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
 // A lab card says "Opening…" at once and opens its lab a frame later (so the tap shows at once): wait for it
 // Labs is open: the shelf on a computer, the Labs tab on a phone
 const LABS_READY = '.labs:not([hidden]) :is(.labs-card, .lp-card, .lp-row, .lf) >> visible=true'; // (the first one that shows: a list can hide the others)
+// (v247) the app's confirm sheet: tap its red (or main) button once it shows
+const sureYes = (p) => p.evaluate(() => { const mo = new MutationObserver(() => { const y = document.querySelector('.sure-sheet .sure-yes'); if (y) { mo.disconnect(); y.click(); } }); mo.observe(document.body, { childList: true, subtree: true }); setTimeout(() => mo.disconnect(), 15000); });
 async function openCard(page, sel) {
   // a phone: the Labs tab has no shelf grid; find the lab under its filter, as a student would, and tap its row
   const id = (sel.match(/data-lab="([^"]+)"/) || [])[1];
@@ -2601,6 +2603,115 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v247: the 8 button rules: labels say what happens, one filled button per sheet, 48px taps 8px apart, AA in every state, every state designed, destructive actions named and red, icon-only buttons listed, and a wait shows a spinner and blocks repeat taps', async (b) => {
+  const { uxRuleIssues, contrastIssues } = require('./ui-checks.cjs');
+  const dialogs = [];
+  const chat = { id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents.' }], updatedAt: Date.now() };
+  const fake = (body) => new Promise((r) => setTimeout(() => r({ text: 'Answer.' }), 900));
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'home', plan: null, profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, chats: [chat], currentChatId: 'c1', cards: [] } });
+  page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  await page.waitForSelector('#home .hub-hero'); await page.waitForTimeout(500);
+  const scans = {};
+  const scan = async (name, act) => { await act(); await page.waitForTimeout(500); scans[name] = await uxRuleIssues(page); };
+  const reset = () => page.evaluate(() => { document.querySelectorAll('.plus-sheet, .sure-sheet').forEach((x) => x.remove()); try { closeSettings(); } catch (e) { /* */ } try { window.CassieBoardPrep.close(); } catch (e) { /* */ } });
+  await scan('home', async () => {});
+  await scan('chat', async () => { await page.click('.tab[data-tab="chat"]'); await page.evaluate(() => selectChat('c1')); });
+  await scan('learn', async () => { await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf'); });
+  await scan('settings', async () => { await page.evaluate(() => openSettings('all')); });
+  await scan('appearance', async () => { await page.evaluate(() => openSettings('appearance')); });
+  await reset();
+  await scan('plan sheet', async () => { await page.evaluate(() => plusSheet('X', 'why', 'board', 'Every board exam lesson comes with Pro', 'pro')); });
+  await reset();
+  await scan('podcast', async () => { await page.evaluate(() => openPodcastSources()); });
+  await reset();
+  await scan('board prep', async () => { await page.evaluate(() => openBoardPrep({ view: 'lessons', exam: 'cpale' })); await page.waitForSelector('.bp [data-topic]'); });
+  await reset();
+  // 1. labels: no bare Submit, OK, Next, Save, Check... anywhere scanned; and the ones that were vague now say what happens
+  const lab = Object.entries(scans).filter(([, v]) => v.labels.length).map(([k, v]) => k + ': ' + v.labels.join(', '));
+  expect(!lab.length, '1. every label says what happens: ' + lab.join(' | '));
+  const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  expect(/bp-savenote">Save note</.test(src('boardprep.js')) && /'Next question' : 'Finish and see my score'/.test(src('boardprep.js')) && /pod-next" hidden>Use these notes</.test(src('app.js')) && /data-t="next">Next step</.test(src('tour.js')) && /pomo-toggle" class="pomo-btn primary">Start timer</.test(src('app.html')) && /'Check my order'/.test(src('labs/games2.js')), '1. the vague labels were renamed (Save note, Next question, Use these notes, Next step, Start timer, Check my order)');
+  // 2. one filled button per sheet
+  const many = Object.entries(scans).filter(([, v]) => v.many.length).map(([k, v]) => k + ': ' + v.many.join(', '));
+  expect(!many.length, '2. one filled button per sheet: ' + many.join(' | '));
+  await page.evaluate(() => window.CassieCards.open()); await page.waitForSelector('.fc-new');
+  await page.evaluate(() => { document.querySelector('.fc-new').open = true; document.querySelector('.fc-new').dispatchEvent(new Event('toggle')); }); await page.waitForTimeout(300);
+  const fcMany = (await uxRuleIssues(page)).many;
+  expect(!fcMany.length, '2. Flashcards with the card form open: only Add card is filled: ' + fcMany.join(' | '));
+  await page.evaluate(() => { document.querySelector('.fc-x')?.click(); });
+  // 3. 48px taps 8px apart (the ask box's typing row is on the decision list)
+  const gaps = Object.entries(scans).map(([k, v]) => [k, v.gaps.filter((g) => !/model-pill|camera-btn|attach-btn|voice-btn/.test(g))]).filter(([, g]) => g.length).map(([k, g]) => k + ': ' + g.join(', '));
+  expect(!gaps.length, '3. neighbouring taps are 8px apart or more: ' + gaps.join(' | '));
+  // 6. destructive: a named, red confirm; no browser OK/Cancel
+  await page.click('.tab[data-tab="chat"]'); await page.evaluate(() => selectChat('c1'));
+  await page.evaluate(() => document.getElementById('clear-chat-btn').click()); await page.waitForSelector('.sure-sheet');
+  const sure = await page.evaluate(() => { const w = document.querySelector('.sure-sheet'), y = w.querySelector('.sure-yes'), n = w.querySelector('.sure-no'); const bg = getComputedStyle(y).backgroundColor, want = getComputedStyle(document.documentElement).getPropertyValue('--danger-fill').trim(); const c = document.createElement('canvas').getContext('2d'); c.fillStyle = want; return { h: w.querySelector('h3').textContent, p: w.querySelector('p').textContent, yes: y.textContent, no: n.textContent, red: c.fillStyle, bg, focus: document.activeElement === n, role: w.getAttribute('role') }; });
+  const rgb = (h) => 'rgb(' + [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ') + ')';
+  expect(sure.h === 'Clear “Ethics”?' && /can’t be undone/.test(sure.p) && sure.yes === 'Clear chat' && sure.no === 'Cancel' && sure.bg === rgb(sure.red) && sure.focus && sure.role === 'alertdialog', '6. clearing a chat names it, says it can’t be undone, and the button is red and says Clear chat (Cancel has focus): ' + JSON.stringify(sure));
+  const sMany = (await uxRuleIssues(page)).many; expect(!sMany.length, '2. the confirm sheet has one filled button: ' + sMany.join(' | '));
+  // 4 and 5: AA in every state of the confirm's buttons and the plan sheet's, light and dark
+  const states = async (sel, tag) => {
+    const out = [];
+    const cdp = await page.context().newCDPSession(page); await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+    const { root } = await cdp.send('DOM.getDocument');
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+    for (const st of ['default', 'hover', 'active', 'focus-visible']) {
+      await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: st === 'default' ? [] : [st] }); await page.waitForTimeout(250);
+      const { bad } = await contrastIssues(page, sel); if (bad.length) out.push(`${tag} ${sel} ${st}: ${bad.join(', ')}`);
+    }
+    await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+    await page.evaluate((s) => { const x = document.querySelector(s); x.dataset.keep = x.innerHTML; window.__done = busyButton(x, 'Working on it…'); }, sel); await page.waitForTimeout(250);
+    const busy = await page.evaluate((s) => { const x = document.querySelector(s); return { dis: x.disabled, aria: x.getAttribute('aria-busy'), spin: !!x.querySelector('.busy-spin'), t: x.textContent }; }, sel);
+    if (!(busy.dis && busy.aria === 'true' && busy.spin && /…$/.test(busy.t))) out.push(`${tag} ${sel} loading: ` + JSON.stringify(busy));
+    const { bad } = await contrastIssues(page, sel); if (bad.length) out.push(`${tag} ${sel} loading: ${bad.join(', ')}`);
+    await page.evaluate(() => window.__done()); await cdp.detach();
+    return out;
+  };
+  const bad = [];
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(400);
+    bad.push(...await states('.sure-sheet .sure-yes', scheme), ...await states('.sure-sheet .sure-no', scheme));
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  expect(!bad.length, '4 and 5. every state of the confirm’s buttons reads at AA, and loading shows a spinner and "…": ' + bad.join(' | '));
+  await page.click('.sure-sheet .sure-no'); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => state.chats.find((c) => c.id === 'c1').messages.length === 2), '6. Cancel keeps the chat');
+  await page.evaluate(() => document.getElementById('clear-chat-btn').click()); await page.waitForSelector('.sure-sheet .sure-yes'); await page.click('.sure-sheet .sure-yes'); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => state.chats.find((c) => c.id === 'c1').messages.length === 0), '6. Clear chat clears it');
+  // a deck: named, with its card count
+  await page.evaluate(() => { window.CassieCards.add([{ f: 'What is H2O?', b: 'Water' }, { f: 'NaCl?', b: 'Salt' }], 'Chem'); window.CassieCards.open(); }); await page.waitForSelector('[data-del="Chem"]', { state: 'attached' });
+  await page.evaluate(() => document.querySelector('[data-del="Chem"]').click()); await page.waitForSelector('.sure-sheet');
+  const deck = await page.evaluate(() => [document.querySelector('.sure-sheet h3').textContent, document.querySelector('.sure-sheet p').textContent, document.querySelector('.sure-sheet .sure-yes').textContent]);
+  expect(deck[0] === 'Delete the deck “Chem”?' && /All 2 of its cards/.test(deck[1]) && deck[2] === 'Delete deck', '6. deleting a deck names it and its cards: ' + deck.join(' | '));
+  await page.click('.sure-sheet .sure-no');
+  const conf = ['app.js', 'boardprep.js', 'cards.js', 'sketch.js', 'labs/tools.js'].filter((f) => /[^.\w]confirm\(/.test(src(f).replace(/window\.confirm\(o\.title/g, '')));
+  expect(!conf.length && !dialogs.length, '6. no browser OK/Cancel confirms left: ' + conf.join(', ') + ' ' + dialogs.join(' | '));
+  await page.evaluate(() => { document.querySelector('.fc-x')?.click(); });
+  // 8. a wait: Send shows a spinner, and a second tap does nothing
+  await page.click('.tab[data-tab="chat"]'); await page.fill('#prompt-input', 'What is osmosis?');
+  const before = groqCalls.length;
+  await page.evaluate(() => { const s = document.getElementById('send-btn'); s.click(); s.click(); s.click(); });
+  const sending = await page.evaluate(() => { const s = document.getElementById('send-btn'); return { dis: s.disabled, aria: s.getAttribute('aria-busy'), spin: !!s.querySelector('.busy-spin') }; });
+  await page.waitForTimeout(1500);
+  expect(sending.dis && sending.aria === 'true' && sending.spin && groqCalls.length - before === 1, '8. Send: a spinner, disabled while Cassie answers, and three taps send once: ' + JSON.stringify([sending, groqCalls.length - before]));
+  // 7. icon-only buttons are counted (the ones that stay icon-only are on the decision list in docs/ux-rules-v247.md)
+  const doc = src('docs/ux-rules-v247.md');
+  expect(['Rule 1', 'Rule 2', 'Rule 3', 'Rule 4', 'Rule 5', 'Rule 6', 'Rule 7', 'Rule 8'].every((r) => doc.includes('## ' + r)) && /## Needs your decision/.test(doc), 'docs/ux-rules-v247.md covers the 8 rules and what needs a decision');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+  // 8. the early list: Joining the early list…, and a double tap sends one request
+  let early = 0;
+  const o = await open(b, { device: 'iPhone 13', lite: 'off', state: { plan: null }, setup: (c) => c.route(/\/early$/, async (r) => { early++; await new Promise((z) => setTimeout(z, 900)); r.fulfill({ json: { email: 'juan@gmail.com' } }); }) });
+  await o.page.evaluate(() => plusSheet('More questions today', 'why', 'limit'));
+  await o.page.click('.plus-sheet .plus-join'); await o.page.fill('#plus-early-mail', 'juan@gmail.com');
+  await o.page.evaluate(() => { const j = document.querySelector('.plus-join'); j.click(); j.click(); });
+  const joining = await o.page.evaluate(() => { const j = document.querySelector('.plus-join'); return j ? { t: j.textContent, dis: j.disabled, spin: !!j.querySelector('.busy-spin') } : null; });
+  await o.page.waitForSelector('.plus-sheet .plus-done', { timeout: 5000 });
+  expect(joining && joining.t === 'Joining the early list…' && joining.dis && joining.spin && early === 1, '8. the early list: a spinner and "Joining the early list…", and two taps send one request: ' + JSON.stringify([joining, early]));
+  await o.ctx.close();
+});
+
 test('v246: the Home header and chat top bar are see-through with no cut (no rim, bevel, shadow or hard line; they fade out); a smaller theme switch with a 48px tap; the plan sheet has 2 buttons and the bell reminds about the plan feature tried; Today’s Lab in Learn is a slim title card; Board and Memory are drawn thicker', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home', profile: { ...PROFILE, grade: 'Board exam reviewee', age: 24 }, chats: [{ id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain the Code of Ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents. '.repeat(20) }], updatedAt: Date.now() }], currentChatId: 'c1' } });
   await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
@@ -2820,7 +2931,7 @@ test('Board exams v240: Lessons splits College from Board and Licensure exams; t
   await page.click('.bp .bp-opt >> nth=1'); await page.click('.bp .bp-flag');
   await shot('bp-9-sim');
   await page.click('.bp .bp-nextq'); await page.click('.bp .bp-opt >> nth=0');
-  page.once('dialog', (d) => d.accept());
+  await sureYes(page);
   await page.click('.bp .bp-finish'); await page.waitForSelector('.bp .bp-table');
   const res = await page.locator('.bp').innerText();
   expect(/5%/.test(res) && /1 of 20 right/.test(res) && /By part/.test(res) && await page.locator('.bp .bp-weakrow').count() >= 1, 'the results: the score, by part, and lessons to read next: ' + res.replace(/\s+/g, ' ').slice(0, 300));
@@ -4266,7 +4377,7 @@ test('study room: two students draw on the same board, live (code, link, undo on
     await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 1, null, { timeout: 8000 });
     expect(await count(B.page) === 1, 'Ana’s stroke stays on Ben’s board');
     // clear only clears your own
-    B.page.once('dialog', (d) => d.accept());
+    await sureYes(B.page);
     await draw(B.page, 0.6, 0.2);
     await A.page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 2, null, { timeout: 8000 });
     await B.page.click('[data-act="clear"]');
@@ -4507,7 +4618,7 @@ test('board: Cassie writes flashcards for it, notes sort into colour groups, and
   const data = JSON.parse(json.toString());
   expect(data.cassie === 'board' && data.strokes.length === before && data.strokes.some((s) => s.tool === 'card' && /evaporation/.test(s.f)), 'the board file has everything');
   // start over, then open the file again
-  page.once('dialog', (d) => d.accept());
+  await sureYes(page);
   await page.click('[data-act="clear"]');
   await page.waitForFunction(() => window.CassieSketch.session().strokeCount() === 0);
   const file = path.join(require('os').tmpdir(), 'cassie-board-test.json'); fs.writeFileSync(file, json);
@@ -5283,7 +5394,7 @@ test('board: pictures are things on the board: the Move tool picks one (corner h
   // an old board file (its picture was the page): the picture is back at 0,0 as the background, the strokes where they were
   const old = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 600; c.height = 300; const x = c.getContext('2d'); x.fillStyle = '#ffd'; x.fillRect(0, 0, 600, 300); return { cassie: 'board', v: 1, title: 'Old', w: 600, h: 300, grid: false, image: c.toDataURL('image/jpeg', 0.8), strokes: [{ tool: 'pen', color: '#1b1b1d', size: 4, points: [[100, 100], [300, 200], [500, 250]] }] }; });
   const file = path.join(require('os').tmpdir(), 'cassie-old-board.json'); fs.writeFileSync(file, JSON.stringify(old));
-  page.once('dialog', (d) => d.accept());
+  await sureYes(page);
   await page.click('[data-act="save"]');
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.csk-pop [data-pop="open"]')]);
   await chooser.setFiles(file);
@@ -5436,7 +5547,7 @@ test('board on a phone: a calm header (More holds Save and Close), the Ask bar t
   // an older file with graph paper (grid: true) opens on Graph
   const file = path.join(require('os').tmpdir(), 'cassie-grid-board.json');
   fs.writeFileSync(file, JSON.stringify({ cassie: 'board', v: 1, title: 'Old', w: 1600, h: 1000, grid: true, image: null, strokes: [{ tool: 'pen', color: '#1b1b1d', size: 4, points: [[10, 10], [200, 200]] }] }));
-  p.once('dialog', (d) => d.accept());
+  await sureYes(p);
   await p.click('[data-act="save"]');
   const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.click('.csk-pop [data-pop="open"]')]);
   await chooser.setFiles(file);
@@ -8958,12 +9069,12 @@ test('Games: Animal habitats, World jigsaw, Landform match, History in order, Sh
     await lab('sequencer');
     const years = () => page.$$eval(`${V} .sq-ev`, (xs) => xs.map((x) => +x.dataset.year));
     const sortIt = async () => { for (let pass = 0; pass < 8; pass++) { const y = await years(); const i = y.findIndex((v, k) => k > 0 && y[k - 1] > v); if (i < 0) break; await page.click(`${V} .sq-ev:nth-child(${i + 1}) .sq-mv:first-of-type`); } for (let pass = 0; pass < 40; pass++) { const y = await years(); const i = y.findIndex((v, k) => k > 0 && y[k - 1] > v); if (i < 0) return; await page.click(`${V} .sq-ev:nth-child(${i + 1}) .sq-mv:first-of-type`); } };
-    await press('Check'); expect(/of 6 in the right place/.test(await msg()) && !(await done('sequencer'))[0], `${where}: mixed up is not in order: ` + await msg());
-    await sortIt(); await press('Check');
+    await press('Check my order'); expect(/of 6 in the right place/.test(await msg()) && !(await done('sequencer'))[0], `${where}: mixed up is not in order: ` + await msg());
+    await sortIt(); await press('Check my order');
     expect(/All in order in 2 tries/.test(await msg()) && (await done('sequencer'))[0] && !(await done('sequencer'))[1], `${where}: in order on the second check: ` + await msg());
-    await segBtn('World history'); await sortIt(); await press('Check');
+    await segBtn('World history'); await sortIt(); await press('Check my order');
     const wy = await years(); expect(/first try/.test(await msg()) && (await done('sequencer'))[1] && wy.every((v, k) => !k || wy[k - 1] < v), `${where}: World history in order first time (BC first): ` + wy);
-    await segBtn('Science and inventions'); await sortIt(); await press('Check'); expect((await done('sequencer'))[2], `${where}: all three sets finished`);
+    await segBtn('Science and inventions'); await sortIt(); await press('Check my order'); expect((await done('sequencer'))[2], `${where}: all three sets finished`);
     await check('sequencer');
 
     // 5. Shape sorter: each shape fits only its own hole

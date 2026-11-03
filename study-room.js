@@ -219,10 +219,10 @@
       if (a === 'send') { const t = cut(input.value, 500); if (!t) { input.focus(); return; } input.value = ''; send({ t: 'msg', text: t }); return; }
       if (a === 'ask') {
         const q = cut(input.value, 300); if (!q) { input.placeholder = 'Type a question for Cassie first'; input.focus(); return; }
-        input.value = ''; el.disabled = true; el.textContent = 'Cassie is thinking…';
+        input.value = ''; const askDone = window.busyButton ? window.busyButton(el, 'Asking Cassie…') : (el.disabled = true, () => { el.disabled = false; });
         try { const ans = await o.ask(q); send({ t: 'share', q, a: cut(ans, 4000) }); }
         catch (e) { send({ t: 'msg', text: q }); }
-        finally { el.disabled = false; el.textContent = 'Ask Cassie'; }
+        finally { askDone(); }
         return;
       }
       if (a === 'timer') { const running = S.timer && S.timer.ends > Date.now() + S.offset; send({ t: 'timer', mins: running ? 0 : 25 }); return; }
@@ -232,10 +232,11 @@
       if (a === 'say' && S.card) { const c = S.decks.get(S.card.deck).cards[S.card.i]; say(S.card.flip ? `${c.f}. ${c.b}` : c.f); return; }
       if (a === 'quiz') {
         const topic = cut(input.value, 80); if (!topic) { input.focus(); return; }
-        el.disabled = true; el.textContent = 'Cassie is writing it…';
-        try { const qs = await o.makeQuiz(topic); if (qs && qs.length) { input.value = ''; send({ t: 'quiz', topic, qs }); } else el.textContent = 'Try another topic'; }
-        catch (e) { el.textContent = 'Couldn’t make it. Try again'; }
-        finally { setTimeout(() => { el.disabled = false; el.textContent = 'Make a group quiz'; }, 1200); }
+        const qDone = window.busyButton ? window.busyButton(el, 'Making the quiz…') : (el.disabled = true, () => {});
+        let bad = '';
+        try { const qs = await o.makeQuiz(topic); if (qs && qs.length) { input.value = ''; send({ t: 'quiz', topic, qs }); } else bad = 'Try another topic'; }
+        catch (e) { bad = 'Couldn’t make it. Try again'; }
+        finally { qDone(); el.disabled = true; if (bad) el.textContent = bad; setTimeout(() => { el.disabled = false; el.textContent = 'Make a group quiz'; }, 1200); }
         return;
       }
       if (a === 'keepdeck' && S.card) {
