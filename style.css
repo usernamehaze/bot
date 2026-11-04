@@ -500,11 +500,52 @@ button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is
 }
 .model-pill:hover { border-color: var(--primary); }
 .model-pill .mp-ic { display: none; width: 20px; height: 20px; flex: none; }
+/* (v249) one + in the ask box; what it holds lives in "Add to your question" */
+.composer-row .in-plus { display: none !important; }
+#plus-btn { margin-right: auto; }
+.plus-sheet.add-sheet { align-items: flex-end; padding: 0; }
+html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the sheet is open) */
+@media (max-width: 760px) { .plus-sheet .add-card { max-width: none; border-width: 1px 0 0 !important; box-shadow: none !important; } } /* (edge to edge on a phone, no side or bottom rim) */
+.add-card { max-width: 560px; border-radius: var(--r-xl, 28px) var(--r-xl, 28px) 0 0 !important; padding: var(--sp-4, 16px) var(--sp-4, 16px) calc(var(--sp-6, 32px) + var(--safe-bottom, 0px)) !important; display: grid; gap: var(--sp-3, 12px); }
+.add-head { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; }
+.add-head h3 { margin: 0; text-align: center; font-size: 1.1rem; }
+.add-x { display: grid; place-items: center; width: var(--tap, 48px); height: var(--tap, 48px); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
+.add-x svg, .add-row > svg { width: 22px; height: 22px; }
+.add-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--sp-3, 12px); }
+.add-tile { display: grid; place-items: center; align-content: center; gap: var(--sp-2, 8px); min-height: 96px; padding: var(--sp-3, 12px); border: 1px solid var(--lg-line, var(--border)); border-radius: 20px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.add-tile svg { width: 26px; height: 26px; }
+.add-row { display: flex; align-items: center; gap: var(--sp-3, 12px); width: 100%; min-height: 56px; padding: 0 var(--sp-4, 16px); border: 1px solid var(--lg-line, var(--border)); border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.add-row span { flex: 1; }
+.add-row em { font-style: normal; font-weight: 500; color: var(--muted); }
+.add-row > svg:last-child { width: 18px; height: 18px; color: var(--muted); }
+@media (hover: hover) { .add-tile:hover, .add-row:hover { border-color: var(--text); } }
+.add-tile:active, .add-row:active { transform: scale(.98); }
+.add-tile:focus-visible, .add-row:focus-visible, .add-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* (v249) personal talk with Cassie: her own chat box, from the bottom edge */
+.plus-sheet.talk-sheet { align-items: flex-end; padding: 0; }
+.talk-card { display: flex; flex-direction: column; gap: var(--sp-3, 12px); width: 100%; max-width: 560px; height: min(80vh, 680px); border-radius: var(--r-xl, 28px) var(--r-xl, 28px) 0 0 !important; padding: var(--sp-4, 16px) var(--sp-4, 16px) calc(var(--sp-4, 16px) + var(--safe-bottom, 0px)) !important; }
+@media (max-width: 760px) { .plus-sheet .talk-card { max-width: none; border-width: 1px 0 0 !important; box-shadow: none !important; } }
+.tk-head { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; }
+.tk-title { text-align: center; }
+.tk-title h3 { margin: 0; font-size: 1.1rem; }
+.tk-title small { display: block; margin-top: 2px; color: var(--muted); font-size: .8rem; }
+.tk-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-2, 8px); padding: var(--sp-1, 4px) 0; overscroll-behavior: contain; }
+.tk-msg { max-width: 85%; padding: var(--sp-3, 12px) var(--sp-4, 16px); border-radius: 20px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tk-her { align-self: flex-start; background: var(--surface); border: 1px solid var(--lg-line, var(--border)); border-bottom-left-radius: 8px; }
+.tk-me { align-self: flex-end; background: var(--text); color: var(--bg); border-bottom-right-radius: 8px; }
+.tk-wait { color: var(--muted); }
+.tk-err { color: var(--danger-ink); background: var(--danger-bg); }
+.tk-msg .care-card, .tk-msg > div { white-space: normal; }
+.tk-study { display: flex; align-items: center; min-height: var(--tap, 48px); margin-top: var(--sp-2, 8px); padding: 0 var(--sp-4, 16px); border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.tk-form { display: flex; align-items: flex-end; gap: var(--sp-2, 8px); }
+.tk-in { flex: 1; min-height: var(--tap, 48px); max-height: 120px; padding: var(--sp-3, 12px) var(--sp-4, 16px); border: 1px solid var(--border); border-radius: 24px; background: var(--bg); color: var(--text); font: inherit; resize: none; }
+.tk-in:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.tk-clear { align-self: center; min-height: var(--tap, 48px); padding: 0 var(--sp-4, 16px); border: 0; background: none; color: var(--muted); font: inherit; font-size: .88rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 /* (v248) a phone's side menu: Memory under New chat, with its name */
-.side-mem { position: relative; display: flex !important; align-items: center; justify-content: center; gap: var(--sp-2, 8px); width: 100%; min-height: var(--tap, 48px); margin-top: var(--sp-2, 8px); padding: 0 var(--sp-4, 16px); border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; }
-#memory-btn.side-mem { width: 100% !important; height: auto !important; min-width: 0 !important; min-height: var(--tap, 48px) !important; border-radius: 999px !important; padding: 0 var(--sp-4, 16px) !important; margin-bottom: var(--sp-2, 8px); }
+/* (v249) a phone's side menu: Memory is one of Menu's rows, with its name */
+#memory-btn.side-mem { width: 100% !important; height: auto !important; min-width: 0 !important; min-height: var(--tap, 48px) !important; padding: var(--sp-2, 8px) var(--sp-3, 12px) !important; justify-content: flex-start !important; border: 0 !important; border-radius: 10px !important; background: transparent !important; box-shadow: none !important; }
 #memory-btn.side-mem svg { display: block !important; width: 20px; height: 20px; flex: none; }
-.topbar .side-mem .app-label, .side-mem .app-label { display: inline !important; }
+.side-mem .app-label { display: inline !important; }
 .side-mem .memory-dot { position: static; }
 .model-pill #model-pill-model { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .model-pill #model-pill-level { color: var(--muted); white-space: nowrap; }
@@ -1532,6 +1573,11 @@ html.vc-open, html.vc-open body { overflow: hidden; }
    It's a pill with an arrow, so it reads as a button with more inside */
 .side-menu-label { display: inline-flex; align-self: flex-start; align-items: center; gap: var(--sp-2, 8px); min-height: 40px; margin: 0 0 var(--sp-2, 8px); padding: 0 var(--sp-3, 12px) 0 var(--sp-4, 16px); border: 1.5px solid color-mix(in srgb, var(--primary) 55%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .side-menu-label:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); border-color: var(--primary); }
+/* (v249) a phone: Menu is a full-width row like New chat (outlined), never cut */
+@media (max-width: 760px) {
+  .side-menu-label { display: flex; align-self: stretch; width: 100%; min-height: var(--tap, 48px); justify-content: center; margin: var(--sp-2, 8px) 0; padding: 0 var(--sp-4, 16px); border: 1px solid var(--border); background: var(--surface); font-size: .95rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .side-menu-label svg { width: 18px; height: 18px; }
+}
 .side-menu-label:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .side-menu-label svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
 .side-menu-label[aria-expanded="false"] svg { transform: rotate(-90deg); }
@@ -3095,6 +3141,15 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   html.native .settings-panel { position: fixed; inset: 0; padding: var(--safe-top) 0 calc(80px + var(--safe-bottom)); background: var(--bg); }
   html.native .settings-card { max-height: 100%; background-color: var(--bg); background-image: var(--amb-sheet); -webkit-backdrop-filter: none; backdrop-filter: none; padding-bottom: var(--sp-5, 24px); }
   html.native .set-head { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom-color: var(--border); }
+}
+/* (v249) no cut: the You sheet runs edge to edge and to the bottom of the screen (the tab bar floats over its end),
+   with no rim, rounded corner, shadow or bevel; its header fades into the page instead of a hard line */
+@media (max-width: 760px) {
+  html.native .settings-panel { padding-bottom: 0; }
+  html.native .settings-card { height: 100%; max-height: none; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding-bottom: calc(80px + var(--safe-bottom) + var(--sp-5, 24px)); }
+  html.lgm.native .settings-card.lgp-b::before, html.lgm.native .settings-card.lgp-a::after { display: none; }
+  html.native .set-head { border-bottom: 0 !important; background: linear-gradient(180deg, var(--bg) calc(100% - var(--sp-4, 16px)), transparent); }
+  html.native .home-badge { display: none; } /* (an empty badge read as a stray dot above the hello) */
 }
 
 /* every icon moves like the recording (docs/icon-motions.md; app.js icGo sets data-ia and ia-go). At rest the

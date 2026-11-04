@@ -469,4 +469,34 @@ async function uxRuleIssues(page, root = 'body') {
   }, root);
 }
 
-module.exports = { tapTargetIssues, contrastIssues, tapResponseIssues, uxRuleIssues };
+// (v249) cut edges: a surface that fills the screen (or a side of it) must not draw a rim, rounded corner, shadow or
+// glass bevel where it meets the screen's edge, and a near-full-width surface must not stop short of the edges
+async function edgeCuts(page) {
+  return page.evaluate(() => {
+    const W = innerWidth, H = innerHeight, out = [];
+    const name = (e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${e.classList.length ? '.' + [...e.classList].slice(0, 3).join('.') : ''}`;
+    const px = (v) => parseFloat(v) || 0;
+    for (const e of document.querySelectorAll('body *')) {
+      if (!e.getClientRects().length || e.closest('[hidden], [inert]')) continue;
+      const s = getComputedStyle(e);
+      if (s.visibility === 'hidden' || +s.opacity === 0 || s.display === 'none') continue;
+      const r = e.getBoundingClientRect();
+      if (r.width < W * 0.9 || r.height < 120) continue;          // (a surface that spans the screen)
+      const painted = s.backgroundColor !== 'rgba(0, 0, 0, 0)' || s.backgroundImage !== 'none' || s.backdropFilter !== 'none' || px(s.borderTopWidth) || px(s.borderLeftWidth);
+      if (!painted) continue;
+      const L = r.left <= 1, R = r.right >= W - 1, T = r.top <= 1, B = r.bottom >= H - 1;
+      if (!L && !R) { if (r.width >= W - 24) out.push(`${name(e)} stops short of the screen edges (${Math.round(r.left)}..${Math.round(W - r.right)}px)`); continue; }
+      const bad = [];
+      if (L && px(s.borderLeftWidth)) bad.push('left rim'); if (R && px(s.borderRightWidth)) bad.push('right rim');
+      if (B && px(s.borderBottomWidth) && r.height > H * 0.5) bad.push('bottom rim');
+      if ((L && T && px(s.borderTopLeftRadius)) || (R && T && px(s.borderTopRightRadius))) bad.push('rounded top corner at the screen');
+      if ((L && B && px(s.borderBottomLeftRadius)) || (R && B && px(s.borderBottomRightRadius))) bad.push('rounded bottom corner at the screen');
+      if (L && R && s.boxShadow !== 'none' && r.height > H * 0.5) bad.push('shadow');
+      for (const ps of ['::before', '::after']) { const p = getComputedStyle(e, ps); if (p.content !== 'none' && p.display !== 'none' && (e.classList.contains('lgp-b') || e.classList.contains('lgp-a')) && L && R && r.height > H * 0.5) bad.push('glass bevel ' + ps); }
+      if (bad.length) out.push(`${name(e)} ${Math.round(r.width)}x${Math.round(r.height)}: ${bad.join(', ')}`);
+    }
+    return out;
+  });
+}
+
+module.exports = { tapTargetIssues, contrastIssues, tapResponseIssues, uxRuleIssues, edgeCuts };

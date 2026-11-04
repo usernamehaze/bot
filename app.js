@@ -1503,7 +1503,7 @@ if (mascotBtn && mascot) {
     if (moved) { moved = false; return; } // a drag, not a tap
     if (mascotPoke()) return; // was asleep → just woke her
     set3D('encouraging');
-    tapChat();
+    openTalk(); // (v249: her own chat box, a personal check-in; her hello is its first message)
     emotionHoldUntil = Date.now() + 2600;
     setTimeout(() => { if (!mascotDragging && !mascotAsleep && !mascot.classList.contains('thinking')) set3D('neutral'); }, 2600);
   });
@@ -3333,9 +3333,12 @@ function placeApps() {
   });
   const mem = document.getElementById('memory-btn'), set = document.getElementById('settings-btn');
   if (wide && mem.previousElementSibling !== set) set.after(mem);
-  // (v248) a phone: Memory sits in the side menu under New chat, with its name; the top bar keeps Board only
-  mem.classList.toggle('side-mem', !wide);
-  if (!wide) document.getElementById('new-chat-btn').after(mem);
+  // (v249) a phone's side menu: New chat first, then Menu (full width), and Memory is one of Menu's rows; the top bar
+  // keeps Board only. A computer keeps its own order.
+  const nc = document.getElementById('new-chat-btn'), menuBtn = document.getElementById('side-menu-toggle'), tools = document.getElementById('side-tools');
+  mem.classList.toggle('side-mem', !wide); mem.classList.toggle('side-tool', !wide);
+  if (!wide) { menuBtn.before(nc); tools.append(mem); }
+  else if (nc.previousElementSibling !== tools) tools.after(nc);
 }
 placeApps();
 sideWide.addEventListener('change', () => { placeApps(); deskChrome(); });
@@ -7196,6 +7199,153 @@ fileInput.addEventListener('change', async () => {
   const files = [...(fileInput.files || [])];
   fileInput.value = '';
   for (const f of files) await attachFile(f); // in order, so photo 1 is the first one picked
+});
+
+/* (v249) Personal talk with Cassie: tap her and she opens a small chat box of her own, a check-in like a warm,
+   supportive teacher or parent. Personal talk only (study questions go to the main chat). She mirrors how the student
+   writes (English, Filipino or Taglish; short or long; casual or formal). Free: it never uses the day's questions.
+   Kept apart from study: saved only on this device (cassie.talk), never in Recents, search, the plan, memory or cards.
+   Safety first: the same care check and crisis lines as the main chat (care.js, numbers checked on NCMH's own site). */
+const TALK_KEY = 'cassie.talk', TALK_MAX = 60, TALK_STUDY = '[[STUDY]]';
+const talkLoad = () => { try { const m = JSON.parse(localStorage.getItem(TALK_KEY) || '[]'); return Array.isArray(m) ? m : []; } catch (e) { return []; } };
+const talkSave = (m) => { try { localStorage.setItem(TALK_KEY, JSON.stringify(m.slice(-TALK_MAX))); } catch (e) { /* storage blocked: the talk still works for now */ } };
+const TALK_HELLO = {
+  en: ['Hi{n}! How are you, really? How was your day?', 'Hey{n}. I was hoping you would stop by. How are you feeling today?', 'Hi{n}! Before anything else, how are you doing?'],
+  tl: ['Hi{n}! Kumusta ka talaga? Kumusta ang araw mo?', 'Uy{n}, buti dumaan ka. Kumusta pakiramdam mo ngayon?', 'Hi{n}! Bago ang lahat, kumusta ka?'],
+};
+function talkSystem() {
+  const p = state.profile || {}, age = +p.age || 0, name = firstName();
+  return `You are Cassie, in a private personal check-in with ${name || 'a student'}. This is not a study session. Be like a warm, supportive teacher or parent who truly cares: calm, kind, patient, never preachy.
+How you talk:
+- Mirror how the student writes: the same language (English, Filipino or Taglish), about the same length, and casual if they are casual. Keep replies short: 1 to 4 sentences.
+- Listen first. Name what they seem to feel, then encourage or ask. Ask at most one gentle question at a time. Never lecture, and never list advice unless they ask for it. Celebrate small wins.
+- Personal talk only: feelings, stress, motivation, sleep, rest, school pressure, family, friends, their day.
+- If they ask a study or homework question, do not answer it here. Say in one short, kind line that you would love to help with that in the main chat, then end your reply with ${TALK_STUDY}
+- You are not a therapist or a doctor. Never diagnose, never name a condition, never give medical advice. If something feels heavy or keeps coming back, gently encourage them to talk to someone they trust: a parent, a teacher or the guidance counselor.
+- If they say someone is hurting them, or they are not safe at home or anywhere: stay calm and warm, say it is not their fault, and encourage them to go to a safe place and tell a trusted adult right away.
+- No emojis. No dashes. No markdown headings or lists.${age && age < 18 ? `\nThey are ${age}: use simple, gentle words, and when something is heavy, suggest telling a trusted adult (a parent, a teacher or the guidance counselor).` : ''}${window.CassieCare ? `\n\n${window.CassieCare.INSTRUCTION}` : ''}`;
+}
+async function talkAsk(hist) {
+  const messages = [{ role: 'system', content: talkSystem() }, ...hist.slice(-20).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))];
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 500 }); if (t) return t; } catch (e) { /* the usual brain below */ } }
+  if (!canChat()) throw new Error('Add your Groq API key in Settings first.');
+  return groqChat(messages, { model: state.groqModel, maxTokens: 500, rotate: true }); // (no q: a personal talk never uses the day's questions)
+}
+let talkW = null;
+function openTalk() {
+  if (talkW && talkW.isConnected) { talkW.querySelector('.tk-in').focus(); return; }
+  const lang = chatLang(), msgs = talkLoad();
+  if (!msgs.length) { const n = firstName(), list = TALK_HELLO[lang]; msgs.push({ role: 'assistant', content: list[Math.floor(Math.random() * list.length)].replace('{n}', n ? ', ' + n : ''), at: Date.now() }); talkSave(msgs); }
+  const w = document.createElement('div');
+  w.className = 'plus-sheet talk-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'tk-h');
+  w.innerHTML = `<div class="plus-card talk-card">
+    <div class="tk-head"><button type="button" class="add-x tk-x" aria-label="Close">${addIc('x')}</button><div class="tk-title"><h3 id="tk-h">Just you and Cassie</h3><small>Personal talk. Saved only on this phone.</small></div><span></span></div>
+    <div class="tk-log" role="log" aria-live="polite"></div>
+    <form class="tk-form"><label class="sr-only" for="tk-in">Message Cassie</label><textarea id="tk-in" class="tk-in" rows="1" maxlength="1500" placeholder="Tell Cassie anything…" enterkeyhint="send"></textarea><button type="submit" class="tk-send icon-btn round primary" aria-label="Send to Cassie"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button></form>
+    <button type="button" class="tk-clear">Clear this talk</button>
+  </div>`;
+  talkW = w;
+  const log = w.querySelector('.tk-log'), form = w.querySelector('.tk-form'), input = w.querySelector('.tk-in'), send = w.querySelector('.tk-send');
+  const add = (m) => {
+    const b = document.createElement('div');
+    b.className = 'tk-msg ' + (m.role === 'user' ? 'tk-me' : 'tk-her');
+    if (m.care && window.CassieCare) b.appendChild(window.CassieCare.card(m.care.lang, m.care.aiWords));
+    else b.textContent = m.content;
+    if (m.study) { const go = document.createElement('button'); go.type = 'button'; go.className = 'tk-study'; go.textContent = 'Ask it in the main chat'; go.dataset.q = m.study; b.appendChild(go); }
+    log.appendChild(b); log.scrollTop = log.scrollHeight;
+    return b;
+  };
+  msgs.forEach(add);
+  const close = () => { w.remove(); talkW = null; document.removeEventListener('keydown', onKey, true); document.documentElement.classList.remove('add-open'); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', async (e) => {
+    if (e.target === w || e.target.closest('.tk-x')) { close(); return; }
+    const st = e.target.closest('.tk-study');
+    if (st) { close(); if (onPhoneHome() || !document.documentElement.classList.contains('tab-chat')) { try { window.CassieNative.go('chat'); } catch (er) { /* a computer */ } } promptInput.value = st.dataset.q; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); return; }
+    if (e.target.closest('.tk-clear')) {
+      if (!(await askSure({ title: 'Clear this talk with Cassie?', text: 'Every message here goes from this phone. This can’t be undone.', yes: 'Clear talk' }))) return;
+      try { localStorage.removeItem(TALK_KEY); } catch (er) { /* */ }
+      close(); openTalk();
+    }
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim(); if (!text || send.disabled) return;
+    input.value = '';
+    const all = talkLoad(); const mine = { role: 'user', content: text, at: Date.now() }; all.push(mine); talkSave(all); add(mine);
+    // safety first: the words alone can say a student is at risk; then she answers with care and the lines, no AI needed
+    const risk = window.CassieCare && window.CassieCare.check(text);
+    if (risk) { const m = { role: 'assistant', content: window.CassieCare.reply(risk.lang), care: { lang: risk.lang }, at: Date.now() }; all.push(m); talkSave(all); add(m); return; }
+    const done = busyButton(send); const wait = add({ role: 'assistant', content: '…' }); wait.classList.add('tk-wait');
+    try {
+      let reply = String(await talkAsk(all) || '').trim();
+      const care = window.CassieCare && window.CassieCare.fromAI(reply);
+      let m;
+      if (care) { const lang2 = window.CassieCare.langOf(text); m = { role: 'assistant', content: window.CassieCare.reply(lang2, care.aiWords), care: { lang: lang2, aiWords: care.aiWords }, at: Date.now() }; }
+      else {
+        const study = reply.includes(TALK_STUDY); reply = noDashes(reply.replace(TALK_STUDY, '').trim()) || 'I am here. Tell me more?';
+        m = { role: 'assistant', content: reply, at: Date.now(), ...(study ? { study: text } : {}) };
+      }
+      wait.remove(); all.push(m); talkSave(all); add(m);
+    } catch (er) {
+      wait.remove(); const m = add({ role: 'assistant', content: CassieErrors.explain(er, 'network') }); m.classList.add('tk-err');
+    } finally { done(); input.focus({ preventScroll: true }); }
+  });
+  document.body.appendChild(w); document.documentElement.classList.add('add-open');
+  setTimeout(() => input.focus({ preventScroll: true }), 50);
+}
+window.openTalk = openTalk;
+/* (v249) One + in the ask box: "Add to your question" holds the camera, photos, files, Talk with Cassie and the model.
+   Each tile or row presses the same button as before (now hidden), so every limit and check still applies. */
+const plusBtn = document.getElementById('plus-btn'), photoInput = document.getElementById('photo-input');
+const ADD_IC = {
+  camera: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
+  photos: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-5-5-8.5 8.5"/>',
+  files: '<path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5M12 17v-6M9.5 13.5 12 11l2.5 2.5"/>',
+  talk: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>',
+  model: '<path d="M12 3.5l1.7 4.6 4.6 1.7-4.6 1.7L12 16.1l-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+  go: '<path d="M9 6l6 6-6 6"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+};
+const addIc = (k) => `<svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ADD_IC[k]}</svg>`;
+function openAddSheet() {
+  document.querySelector('.add-sheet')?.remove();
+  const cam = document.getElementById('camera-btn'), voice = document.getElementById('voice-btn'), pill = document.getElementById('model-pill');
+  const camOk = window.matchMedia('(max-width: 760px)').matches; // (the camera is for phones, as before)
+  const w = document.createElement('div');
+  w.className = 'plus-sheet add-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'add-h');
+  w.innerHTML = `<div class="plus-card add-card">
+    <div class="add-head"><button type="button" class="add-x" aria-label="Close">${addIc('x')}</button><h3 id="add-h">Add to your question</h3><span></span></div>
+    <div class="add-tiles">${camOk ? `<button type="button" class="add-tile" data-add="camera">${addIc('camera')}<span>Camera</span></button>` : ''}<button type="button" class="add-tile" data-add="photos">${addIc('photos')}<span>Photos</span></button><button type="button" class="add-tile" data-add="files">${addIc('files')}<span>Files</span></button></div>
+    ${voice.hidden ? '' : `<button type="button" class="add-row" data-add="talk">${addIc('talk')}<span>Talk with Cassie</span>${addIc('go')}</button>`}
+    <button type="button" class="add-row" data-add="model">${addIc('model')}<span>Model</span><em></em>${addIc('go')}</button>
+  </div>`;
+  w.querySelector('.add-row[data-add="model"] em').textContent = `${document.getElementById('model-pill-model').textContent}, ${document.getElementById('model-pill-level').textContent}`;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); plusBtn.setAttribute('aria-expanded', 'false'); document.documentElement.classList.remove('add-open'); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); plusBtn.focus(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => {
+    if (e.target === w || e.target.closest('.add-x')) { close(); return; }
+    const b = e.target.closest('[data-add]'); if (!b) return;
+    const k = b.dataset.add; close();
+    if (k === 'camera') cam.click();
+    else if (k === 'photos') photoInput.click();
+    else if (k === 'files') attachBtn.click();
+    else if (k === 'talk') voice.click();
+    else if (k === 'model') pill.click();
+  });
+  document.body.appendChild(w); document.documentElement.classList.add('add-open');
+  plusBtn.setAttribute('aria-expanded', 'true');
+  w.querySelector('.add-tile').focus({ preventScroll: true });
+}
+plusBtn.addEventListener('click', openAddSheet);
+// Photos: the same path as Files (each picture is checked and read the same way)
+photoInput.addEventListener('change', () => {
+  const files = [...(photoInput.files || [])]; photoInput.value = '';
+  if (!files.length) return;
+  const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f));
+  fileInput.files = dt.files; fileInput.dispatchEvent(new Event('change'));
 });
 
 // Attach a picture or document to the next message (it joins the others — up to 15 photos and
