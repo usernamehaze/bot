@@ -2606,6 +2606,68 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+// (v251) two drawings the AI could write: a 3D jet engine and a flat water cycle
+const LD_JET = { title: 'How a jet engine works', mode: '3d', axis: 'x', intro: 'Here is a jet engine. Watch me build it part by part.', summary: 'Air in, squeeze, burn, spin, push. Turn it, open it, or pull it apart.',
+  parts: [
+    { id: 'case', label: 'Casing', say: 'The casing holds everything and guides the air.', color: '#b9bec8', shell: true, shapes: [{ t: 'cylinder', r: 1.05, r2: 0.92, len: 5.4, axis: 'x', pos: [0, 0, 0], open: true }, { t: 'torus', r: 1.05, tube: 0.07, axis: 'x', pos: [-2.7, 0, 0] }] },
+    { id: 'fan', label: 'Fan', say: 'The big fan at the front pulls air in.', color: '#7fb0ff', spin: true, shapes: [{ t: 'blades', n: 18, len: 0.85, width: 0.22, hub: 0.12, axis: 'x', pos: [-2.3, 0, 0] }, { t: 'cone', r: 0.3, len: 0.6, axis: 'x', dir: -1, pos: [-2.5, 0, 0] }] },
+    { id: 'comp', label: 'Compressor', say: 'Rows of small blades squeeze the air tight.', color: '#a3c9ff', spin: true, shapes: [-1.5, -1.3, -1.1, -0.9, -0.7].map((x, i) => ({ t: 'disc', r: 0.78 - i * 0.07, thick: 0.08, axis: 'x', pos: [x, 0, 0] })) },
+    { id: 'comb', label: 'Combustor', say: 'Fuel sprays into the squeezed air and burns.', color: '#ffb067', glow: true, shapes: [{ t: 'torus', r: 0.5, tube: 0.2, axis: 'x', pos: [0.1, 0, 0] }, { t: 'cone', r: 0.28, len: 0.9, axis: 'x', pos: [0.55, 0, 0], color: '#ff7a59' }] },
+    { id: 'turb', label: 'Turbine', say: 'The hot gas spins the turbine, which turns the fan.', color: '#ffd29e', spin: true, shapes: [1.1, 1.32, 1.54].map((x, i) => ({ t: 'disc', r: 0.6 + i * 0.05, thick: 0.09, axis: 'x', pos: [x, 0, 0] })) },
+    { id: 'noz', label: 'Nozzle', say: 'The gas shoots out the back and pushes the plane forward.', color: '#c8ccd4', shapes: [{ t: 'cone', r: 0.42, len: 1, axis: 'x', pos: [2.3, 0, 0] }] },
+  ] };
+const LD_WATER = { title: 'The water cycle', mode: '2d', intro: 'Let me draw how water travels around.', summary: 'Evaporate, condense, fall, collect, and it starts again.',
+  parts: [
+    { id: 'sea', label: 'Ocean', say: 'It starts in the ocean, lakes and rivers.', color: '#7fb0ff', shapes: [{ t: 'path', d: 'M10 220 Q60 205 110 220 T210 220 T310 220 T390 220 L390 250 L10 250 Z', fill: true }] },
+    { id: 'sun', label: 'Sun', say: 'The sun heats the water.', color: '#ffd29e', shapes: [{ t: 'circle', cx: 350, cy: 50, r: 22, fill: true }, { t: 'line', x1: 320, y1: 50, x2: 300, y2: 50 }, { t: 'line', x1: 350, y1: 82, x2: 350, y2: 100 }] },
+    { id: 'evap', label: 'Evaporation', say: 'Warm water turns into vapour and rises.', color: '#8fe0b0', shapes: [{ t: 'arrow', x1: 120, y1: 205, x2: 120, y2: 110 }, { t: 'arrow', x1: 160, y1: 205, x2: 160, y2: 110 }] },
+    { id: 'cloud', label: 'Condensation', say: 'High up it cools into tiny drops: clouds.', color: '#e8e8ee', shapes: [{ t: 'path', d: 'M150 80 Q150 55 175 58 Q185 38 210 48 Q235 38 245 60 Q270 62 265 82 Z', fill: true }] },
+    { id: 'rain', label: 'Rain', say: 'When drops get heavy they fall as rain.', color: '#7ee0e0', shapes: [{ t: 'line', x1: 190, y1: 95, x2: 182, y2: 125, dash: true }, { t: 'line', x1: 215, y1: 95, x2: 207, y2: 125, dash: true }, { t: 'line', x1: 240, y1: 95, x2: 232, y2: 125, dash: true }] },
+    { id: 'land', label: 'Runoff', say: 'Rain runs down the hills back to the sea.', color: '#c9a7ff', shapes: [{ t: 'path', d: 'M230 215 L280 150 L330 215' }, { t: 'arrow', x1: 300, y1: 190, x2: 250, y2: 214 }] },
+  ] };
+
+test('v251: live drawing: "draw me how a jet engine works" builds a 3D model part by part (named tags, the case open, pull apart, tap a part); "show me how the water cycle works" draws stroke by stroke (labels, tap a part); a reload shows them finished; pictures and graphs keep their own ways; what the AI writes is made safe', async (b) => {
+  let n = 0;
+  const fake = (body) => { const sys = (body.messages || [])[0] && body.messages[0].content || ''; if (!/explains by DRAWING/.test(sys)) return { text: 'Answer.' }; n++; const last = body.messages.at(-1).content; return { text: /water/.test(last) ? JSON.stringify(LD_WATER) : /trap/.test(last) ? JSON.stringify({ title: '<img src=x onerror=alert(1)>', mode: '2d', parts: [{ label: '<b>x</b>', say: 'ok', shapes: [{ t: 'path', d: 'M0 0 L10 10"/><script>alert(1)</script>' }, { t: 'circle', cx: 9e9, cy: 'x', r: -5 }] }] }) : JSON.stringify(LD_JET) }; };
+  const pics = []; 
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' }, setup: (c) => c.route(/pollinations\.ai/, (r) => { pics.push(r.request().url()); r.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }); }) });
+  await page.evaluate(() => createNewChat());
+  // 3D
+  await page.fill('#prompt-input', 'draw me how a jet engine works'); await page.click('#send-btn');
+  await page.waitForSelector('.ld .ld-canvas', { timeout: 20000 });
+  await page.waitForFunction(() => /Cassie built it in 3D/.test(document.querySelector('.ld-state').textContent), null, { timeout: 30000 });
+  const j = await page.evaluate(() => ({ tags: [...document.querySelectorAll('.ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent), title: document.querySelector('.ld-title').textContent, acts: [...document.querySelectorAll('.ld-btn')].filter((x) => !x.hidden).map((x) => x.textContent), caseOpen: document.querySelector('.ld-btn').getAttribute('aria-pressed') }));
+  expect(n === 1 && !pics.length && j.title === 'How a jet engine works', '3D: one drawing call, no picture maker: ' + JSON.stringify([n, pics.length, j.title]));
+  expect(['2 Fan', '3 Compressor', '4 Combustor', '5 Turbine', '6 Nozzle'].every((x) => j.tags.includes(x)) && j.caseOpen === 'true' && j.acts.join() === 'Close the case,Pull apart,Draw it again,Quiz me on it,Make it realistic', '3D: every part named, the case open to see inside, and the actions: ' + JSON.stringify(j));
+  await page.click('.ld-btn:text-is("Pull apart")'); await page.waitForTimeout(600);
+  expect(await page.getAttribute('.ld-btn:text-is("Put it back")', 'aria-pressed') === 'true', '3D: Pull apart pulls it apart, and the button says Put it back');
+  await page.click('.ld-tag:text-is("4 Combustor")'); await page.waitForTimeout(300);
+  expect(/Fuel sprays into the squeezed air and burns/.test(await page.locator('.ld-say').innerText()) && await page.locator('.ld-btn:text-is("Ask about the Combustor")').isVisible(), '3D: tapping a part tells about it and offers to ask more');
+  // 2D
+  await page.fill('#prompt-input', 'show me how the water cycle works'); await page.click('#send-btn');
+  await page.waitForFunction(() => document.querySelectorAll('.ld').length === 2 && /Cassie drew it/.test(document.querySelectorAll('.ld-state')[1].textContent), null, { timeout: 40000 });
+  const w = await page.evaluate(() => { const d = document.querySelectorAll('.ld')[1]; return { parts: d.querySelectorAll('.ld-part').length, labels: [...d.querySelectorAll('.ld-labels text')].map((t) => t.textContent), flow: d.querySelectorAll('.ld-flow').length }; });
+  expect(w.parts === 6 && ['1 Ocean', '2 Sun', '4 Condensation', '6 Runoff'].every((x) => w.labels.includes(x)) && w.flow >= 3, '2D: six parts, each named, the arrows flow: ' + JSON.stringify(w));
+  await page.evaluate(() => document.querySelectorAll('.ld')[1].querySelector('.ld-part[data-i="3"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))); await page.waitForTimeout(200);
+  const pick = await page.evaluate(() => { const d = document.querySelectorAll('.ld')[1]; return { dim: d.querySelectorAll('.ld-part.dim').length, say: d.querySelector('.ld-say').textContent }; });
+  expect(pick.dim === 5 && /cools into tiny drops/.test(pick.say), '2D: a tapped part stands out and she explains it: ' + JSON.stringify(pick));
+  // saved: a reload shows both, finished
+  const saved = await page.evaluate(() => state.messages.filter((m) => m.role === 'assistant').map((m) => [/^\[I drew a live/.test(m.content), /```cassie-draw/.test(m.display || '')]));
+  expect(saved.length === 2 && saved.every(([a, c]) => a && c), 'saved: a short note for the AI, the drawing for the screen: ' + JSON.stringify(saved));
+  await page.reload(); await page.waitForSelector('.ld .ld-stage', { timeout: 20000 }); await page.waitForTimeout(1500);
+  const back = await page.evaluate(() => ({ n: document.querySelectorAll('.ld').length, labels: document.querySelectorAll('.ld-labels text').length, state: [...document.querySelectorAll('.ld-state')].map((x) => x.textContent) }));
+  expect(back.n === 2 && back.labels >= 6 && !back.state.some((s) => /is drawing/.test(s)), 'a reload shows both drawings finished: ' + JSON.stringify(back));
+  // made safe
+  await page.fill('#prompt-input', 'draw the trap diagram'); await page.click('#send-btn');
+  await page.waitForFunction(() => document.querySelectorAll('.ld').length === 3 && !document.querySelector('.ld-loading'), null, { timeout: 30000 }); await page.waitForTimeout(800);
+  const safe = await page.evaluate(() => { const d = [...document.querySelectorAll('.ld')].pop(); return { img: !!d.querySelector('img, script, .ld-labels b'), title: d.querySelector('.ld-title').textContent, paths: d.querySelectorAll('.ld-part path').length }; });
+  expect(!safe.img && !/</.test(safe.title) && safe.paths === 0, 'what the AI writes never becomes markup, and a bad path is dropped: ' + JSON.stringify(safe));
+  // pictures and graphs keep their ways
+  expect(await page.evaluate(() => [liveDrawRequest('make me a picture of a volcano'), liveDrawRequest('graph y = x^2'), liveDrawRequest('draw a realistic photo of a cat')].every((x) => !x) && !!liveDrawRequest('draw me a jet') && !!liveDrawRequest('explain photosynthesis with a diagram')), 'pictures and graphs keep their own ways; draw, diagram and show me how draw live');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v250: on the board, "draw me a jet" puts a real picture on the board (never the [[IMAGE: …]] words), and the mic stays a mic after an Ask', async (b) => {
   const fake = () => ({ text: '[[IMAGE: a simple white line drawing of a jet airplane, on a dark background]]' });
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
