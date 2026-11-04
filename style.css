@@ -3915,4 +3915,4 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-photo-wrap { position: relative; margin-top: var(--sp-2, 8px); border-radius: 14px; overflow: hidden; }
 .ld-photo-wrap img { display: block; width: 100%; height: auto; }
 .ld-pin { position: absolute; transform: translate(-50%, -50%); padding: var(--sp-1, 4px) var(--sp-2, 8px); border-radius: 99px; background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--text); border: 1px solid var(--lg-line, var(--border)); font-size: .76rem; font-weight: 700; white-space: nowrap; pointer-events: none; }
-.ld-pin::after { content: ""; position: absolute; left: 50%; top: 100%; width: 6px; height: 6px; margin: 2px 0 0 -3px; border-radius: 50%; background: var(--primary); }
+.ld-pin::after { content: ""; position: absolute; left: 50%; top: 100%; width: 6px; height: 6px; margin-top: 2px; transform: translateX(-50%); border-radius: 50%; background: var(--primary); }
