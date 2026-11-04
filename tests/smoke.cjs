@@ -2244,7 +2244,7 @@ test('buying a plan: sign in first, then PayMongo’s checkout (pesos; a US$ pla
     const sent = mode1.paymongoCalls.at(-1), at = sent.body.data.attributes, item = at.line_items[0];
     expect(/^Basic /.test(sent.auth) && Buffer.from(sent.auth.slice(6), 'base64').toString() === 'sk_live_fake_paymongo:', 'PayMongo is asked with the secret key from Cloudflare (never from the page)');
     expect(item.currency === 'PHP' && item.amount === (cur === 'usd' ? 49900 : 14900) && item.quantity === 1 && /Cassie Plus, 30 days/.test(item.name) && (cur === 'usd' ? /US\$7\.99, charged as ₱499 \(PHP\)/.test(item.description) : /Never renews/.test(item.description)), 'one pass, in pesos, at the server’s price: ' + JSON.stringify(item));
-    expect(JSON.stringify(at.payment_method_types) === (cur === 'usd' ? '["card"]' : '["card","gcash","paymaya"]') && /\/app\.html\?paid=cas_[a-f0-9]{24}$/.test(at.success_url) && /paid=cancel$/.test(at.cancel_url) && at.send_email_receipt === true && at.billing.email === mail, 'GCash, Maya and card (a US$ plan: card), back to Cassie after, a receipt by email: ' + JSON.stringify([at.payment_method_types, at.success_url]));
+    expect(JSON.stringify(at.payment_method_types) === (cur === 'usd' ? '["card"]' : '["card","gcash","paymaya"]') && /\/app\.html\?paid=cas_[a-f0-9]{24}$/.test(at.success_url) && /paid=cancel$/.test(at.cancel_url) && at.send_email_receipt === true && at.billing.email === mail, 'GCash, Maya and card (a US$ plan: card), back to Cassie after, a receipt by email: ' + JSON.stringify([cur, at.payment_method_types, at.success_url, at.cancel_url, at.send_email_receipt, at.billing, mail]));
     let pay = (await dump()).payments.find((x) => x.id === at.reference_number);
     expect(pay && pay.status === 'pending' && pay.plan === 'plus' && pay.bill === 'month' && pay.live === 1 && !(await dump()).plans.some((x) => x.note && x.note.includes(pay.id)), 'a pending payment, and no plan until PayMongo says it’s paid');
     // a forged "paid" message gives nothing; PayMongo's signed one gives the plan, once
@@ -4804,7 +4804,7 @@ test('a new exam plan: the card says Your Exam Plan with the subject and topics,
       const m = document.getElementById('side-menu-toggle'), cs = getComputedStyle(m), r = m.getBoundingClientRect(), svg = m.querySelector('svg');
       return { h: r.height, w: r.width, side: document.getElementById('sidebar').getBoundingClientRect().width, radius: parseFloat(cs.borderTopLeftRadius), border: parseFloat(cs.borderTopWidth), bg: cs.backgroundColor, arrow: !!svg && getComputedStyle(svg).display !== 'none' && svg.getBoundingClientRect().width > 0, text: m.innerText.trim() };
     });
-    expect(pill.radius >= pill.h / 2 - 1 && pill.border >= 1 && pill.bg !== 'rgba(0, 0, 0, 0)' && pill.arrow && pill.w < pill.side * 0.6 && (phone ? /^menu$/i : /^study tools$/i).test(pill.text), `${viewport.width}: Menu is an oval pill with an arrow: ` + JSON.stringify(pill));
+    expect(pill.radius >= pill.h / 2 - 1 && pill.border >= 1 && pill.bg !== 'rgba(0, 0, 0, 0)' && pill.arrow && (phone ? pill.w > pill.side * 0.8 : pill.w < pill.side * 0.6) && (phone ? /^menu$/i : /^study tools$/i).test(pill.text), `${viewport.width}: Menu is an oval pill with an arrow (v249: full width on a phone): ` + JSON.stringify(pill));
     if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/menu-pill-${viewport.width}.png` });
     await page.click('#side-menu-toggle');
     expect(await page.locator('#side-menu-toggle').getAttribute('aria-expanded') === 'true' && await page.locator('#side-tools .side-tool').first().isVisible(), `${viewport.width}: the pill opens the tools`);
@@ -8891,7 +8891,7 @@ test('for the little ones (Nursery and Kindergarten): Trace letters accepts a tr
   }
 });
 
-test('phone You sheets (iPhone, with the notch and home bar): You, Account, Study, Voice, Privacy and data, Plans and All settings start under the status bar, end above the tab bar, are not see-through, keep Back and Close on screen (44px) while scrolling; each tab’s own icon moves when tapped (still with Reduce Motion or Lite mode)', async (b) => {
+test('phone You sheets (iPhone, with the notch and home bar): You, Account, Study, Voice, Privacy and data, Plans and All settings start under the status bar, run to the bottom with the last row clear of the tab bar, are not see-through, keep Back and Close on screen (44px) while scrolling; each tab’s own icon moves when tapped (still with Reduce Motion or Lite mode)', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, lite: 'off', state: { tab: 'home' } });
   await page.waitForSelector('html.native .tabbar .tab[data-tab="you"]');
   await page.evaluate(() => { document.documentElement.style.setProperty('--safe-top', '47px'); document.documentElement.style.setProperty('--safe-bottom', '34px'); });
@@ -8908,7 +8908,7 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
       bg: cs.backgroundColor, img: cs.backgroundImage, opaque: (alpha === undefined || Number.isNaN(alpha) || alpha === 1) && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) /* (soft shapes may sit on it: the colour under them is solid) */ && !/rgba/.test(ps.backgroundColor), behind: ps.backgroundColor,
       headAfterScroll: Math.round(r(head).top), btns: btns.map((x) => { const q = r(x); return [Math.round(q.width), Math.round(q.height), Math.round(q.top)]; }) };
   }, name);
-  const ok = (g) => g.headTop >= 47 && g.cardTop >= 47 && g.cardBottom <= g.barTop + 1 && g.lastBottom <= g.barTop + 1 && g.opaque && Math.abs(g.headAfterScroll - g.headTop) <= 1 && g.btns.length >= 1 && g.btns.every(([w, h, t]) => w >= 44 && h >= 44 && t >= 47);
+  const ok = (g) => g.headTop >= 47 && g.cardTop >= 47 && g.cardBottom >= g.barTop && g.lastBottom <= g.barTop + 1 /* (v249: the sheet runs to the bottom, no cut; the tab bar floats over its end and the last row still scrolls clear of it) */ && g.opaque && Math.abs(g.headAfterScroll - g.headTop) <= 1 && g.btns.length >= 1 && g.btns.every(([w, h, t]) => w >= 44 && h >= 44 && t >= 47);
   await page.click('.tab[data-tab="you"]');
   await page.waitForSelector('#settings-panel:not([hidden]) .set-profile');
   await page.waitForTimeout(400);
