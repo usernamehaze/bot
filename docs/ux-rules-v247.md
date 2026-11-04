@@ -141,3 +141,26 @@ Nothing here was built.
 2. **Tab bar:** unchanged, icons only with the open tab named.
 3. **Chat top bar:** Board stays, icon only. Memory moved to the phone side menu, just under New chat, with its name; a tap opens Memory and closes the menu. A computer keeps Memory under General.
 4. **Ask box icons:** unchanged, icons only.
+
+## v249: side menu, one +, personal talk, cut edges
+
+**Side menu (phone):** New chat comes first, then Menu as a full-width outlined row (40px with a mouse, 48px to touch, never cut), and Memory is one of Menu's rows. The computer sidebar is unchanged.
+
+**The "<" pill on the right screen edge:** it is not drawn by Cassie. Nothing in the app or in the Chrome extension makes a tab like it at any phone size (checked in the app's styles, native.js and the extension's content script, whose own tab is a slim bar with no arrow). It is most likely another Safari extension on the phone (Settings, Apps, Safari, Extensions), so nothing was removed.
+
+**One + in the ask box:** the row is +, then the mic and Send. + opens "Add to your question": Camera (phones), Photos and Files as tiles, then Talk with Cassie and Model (its name and level) as rows. Every tile and row is 48px or more; Escape, the X and a tap outside close it. The old buttons are still there (hidden) and do the work, so every limit and Pro check is unchanged.
+
+**Personal talk with Cassie:** tapping her opens her own chat box, a warm check-in. She mirrors the student's language (English, Filipino or Taglish) and length, asks one gentle question at a time, never lectures, never diagnoses, and sends study questions to the main chat. It never uses the day's questions (your choice: free, no cap; the server's overall daily safety limit still applies). It is saved only on the device (cassie.talk), never in Recents, search, the plan, memory or cards, and "Clear this talk" uses the red confirm. Words of self-harm get the care message and the crisis lines at once (care.js: NCMH 1553 and its numbers, checked on ncmh.gov.ph), with no AI in between; the AI's own care flag does the same. The Philippines' 911 was not added: its official site could not be reached to verify it.
+
+## v249: cut edges
+
+| Screen | Selector | Before | Now |
+|---|---|---|---|
+| You and every Settings page (phone, Safari and app) | `html.native .settings-card` | 1px rim on all sides, rounded top corners, shadow, glass bevel; stopped 80px above the bottom (an edge above the tab bar) | no rim, corners, shadow or bevel; runs to the bottom of the screen, the tab bar floats over its end |
+| You header | `html.native .set-head` | a solid band with a hard 1px line under it | fades into the page over its last 16px |
+| Empty chat | `html.native .home-badge` | an empty white dot above "Hi, I'm Cassie" | hidden |
+| The board (phone) | `html.native .csk-wrap .csk-panel` | rims on the left, right and bottom, and a shadow | none |
+| The board's drawing area | `.csk-stage` padding, sketch.js `fit()` | a 10px frame on every side (hard-coded) | edge to edge on a phone (the frame is the stage's own padding) |
+| Add to your question, the talk box | `.plus-sheet .add-card`, `.talk-card` | (new) | from the bottom edge, full width, top rim only |
+
+Checked at 390x844 (app, safe areas) and 390x664 (Safari), light and dark: Home, Chat (empty and with messages), Learn, Games, Flashcards, You, All settings, Plans, Privacy, Memory, the plan sheet, the + sheet, the talk box, Board exams, the side menu, the board, Podcast and Lessons. The scan is `edgeCuts` in tests/ui-checks.cjs.

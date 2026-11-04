@@ -3151,6 +3151,13 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
   html.native .set-head { border-bottom: 0 !important; background: linear-gradient(180deg, var(--bg) calc(100% - var(--sp-4, 16px)), transparent); }
   html.native .home-badge { display: none; } /* (an empty badge read as a stray dot above the hello) */
 }
+/* (v249) no cut on the board (phone): the panel meets the screen edges with no rim or shadow, and the drawing
+   area runs edge to edge (no 10px frame) */
+@media (max-width: 760px) {
+  html.native .csk-wrap .csk-panel { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  html.native .csk-wrap .csk-stage { padding: 0; }
+  html.native .csk-wrap .csk-board { box-shadow: none; }
+}
 
 /* every icon moves like the recording (docs/icon-motions.md; app.js icGo sets data-ia and ia-go). At rest the
    icon is its own drawing (ia-rest); while it moves, the same lines split into parts (ia-p1, ia-p2…, plus any

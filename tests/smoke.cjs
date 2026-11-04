@@ -2606,6 +2606,70 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v249: side menu (New chat, then a full-width Menu with Memory inside); one + in the ask box opens Add to your question (Camera, Photos, Files, Model); tapping Cassie opens her own personal talk (warm, free, kept apart, care lines first); no cut edges on You (Safari and app), the board, the sheets or the empty chat', async (b) => {
+  const { edgeCuts } = require('./ui-checks.cjs');
+  const chat = { id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents.' }], updatedAt: Date.now() };
+  const fake = (body) => { const sys = (body.messages || [])[0] && body.messages[0].content || ''; return { text: /private personal check-in/.test(sys) ? 'Ang bigat niyan. Kumusta ka ngayon?' : 'Answer.' }; };
+  const { ctx, page, errors, groqCalls } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat', chats: [chat], currentChatId: 'c1' } });
+  const dialogs = []; page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
+  await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
+  // 1. side menu
+  await page.click('#menu-btn'); await page.waitForTimeout(400);
+  const side = await page.evaluate(() => { const nc = document.getElementById('new-chat-btn'), mb = document.getElementById('side-menu-toggle'), sb = document.querySelector('.sidebar'), mr = mb.getBoundingClientRect(), nr = nc.getBoundingClientRect(); return { order: !!(nc.compareDocumentPosition(mb) & Node.DOCUMENT_POSITION_FOLLOWING), menuW: mr.width, newW: nr.width, menuH: mr.height, newH: nr.height, memInMenu: !!document.querySelector('#side-tools #memory-btn') }; });
+  expect(side.order && Math.abs(side.menuW - side.newW) <= 1 && side.menuH >= 40 && side.memInMenu, '1. New chat comes first, then Menu as wide as New chat (40px with a mouse, 48px to touch), and Memory is inside Menu: ' + JSON.stringify(side));
+  if (await page.getAttribute('#side-menu-toggle', 'aria-expanded') !== 'true') await page.click('#side-menu-toggle');
+  await page.$eval('#memory-btn', (x) => x.scrollIntoView({ block: 'center' })); await page.click('#memory-btn'); await page.waitForTimeout(400);
+  expect(await page.evaluate(() => !document.getElementById('memory-panel').hidden && !document.querySelector('.sidebar').classList.contains('open')), '1. Memory (in Menu) opens Memory and closes the menu');
+  await page.evaluate(() => closeMemory());
+  // 2. one + in the ask box
+  await page.evaluate(() => selectChat('c1')); await page.focus('#prompt-input'); await page.waitForTimeout(400);
+  const row = await page.evaluate(() => [...document.querySelector('.composer-row').children].filter((c) => c.getClientRects().length && c.matches('button')).map((c) => c.id));
+  expect(row[0] === 'plus-btn' && !row.some((id) => /camera-btn|attach-btn|voice-btn|model-pill/.test(id)) && row.includes('send-btn'), '2. the ask box row: +, then mic and Send only: ' + row.join());
+  await page.click('#plus-btn'); await page.waitForSelector('.add-sheet');
+  const sheet = await page.evaluate(() => ({ h: document.querySelector('.add-sheet h3').textContent, tiles: [...document.querySelectorAll('.add-tile')].map((x) => x.textContent.trim()), model: document.querySelector('.add-row[data-add="model"] em').textContent, small: [...document.querySelectorAll('.add-tile, .add-row, .add-x')].filter((x) => { const r = x.getBoundingClientRect(); return r.width < 48 || r.height < 48; }).length, exp: document.getElementById('plus-btn').getAttribute('aria-expanded') }));
+  expect(sheet.h === 'Add to your question' && sheet.tiles.join() === 'Camera,Photos,Files' && /, /.test(sheet.model) && !sheet.small && sheet.exp === 'true', '2. + opens Add to your question: Camera, Photos, Files, and Model with its name, every tap 48px: ' + JSON.stringify(sheet));
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.add-tile[data-add="files"]')]);
+  expect(chooser.isMultiple() && !(await page.locator('.add-sheet').count()), '2. Files opens the file picker (as the clip did) and the sheet closes');
+  await chooser.setFiles([]);
+  await page.click('#plus-btn'); await page.waitForSelector('.add-sheet'); await page.keyboard.press('Escape');
+  expect(!(await page.locator('.add-sheet').count()), '2. Escape closes the sheet');
+  // 3. personal talk
+  const before = groqCalls.length, chatsBefore = await page.evaluate(() => state.chats.length);
+  await page.click('#mascot-btn'); await page.waitForSelector('.talk-sheet .tk-her');
+  expect(/how are you|kumusta/i.test(await page.locator('.talk-sheet .tk-her').first().textContent()), '3. tapping Cassie opens her talk box with a hello');
+  await page.fill('.tk-in', 'Kinakabahan ako sa exam bukas'); await page.click('.tk-send');
+  await page.waitForFunction(() => document.querySelectorAll('.tk-her').length >= 2 && !document.querySelector('.tk-wait'), null, { timeout: 8000 });
+  const call = groqCalls[before], sys = call && call.messages[0].content;
+  expect(call && /private personal check-in/.test(sys) && /Mirror how the student writes/.test(sys) && /never diagnose/i.test(sys) && /\[\[CARE\]\]/.test(sys) && !call.messages.some((m) => /Explain ethics/.test(m.content)), '3. she talks as a warm check-in (mirrors them, never diagnoses, the care rule), with none of the study chat: ' + (sys || '').slice(0, 80));
+  const kept = await page.evaluate(() => ({ talk: JSON.parse(localStorage.getItem('cassie.talk') || '[]').length, chats: state.chats.length, inChats: JSON.stringify(state.chats).includes('Kinakabahan') }));
+  expect(kept.talk >= 3 && kept.chats === chatsBefore && !kept.inChats, '3. the talk is saved on its own, never in the study chats: ' + JSON.stringify(kept));
+  const n0 = groqCalls.length;
+  await page.fill('.tk-in', 'I want to hurt myself'); await page.click('.tk-send'); await page.waitForSelector('.tk-msg .care-num');
+  const care = await page.evaluate(() => [...document.querySelectorAll('.tk-msg .care-num')].map((a) => a.getAttribute('href')));
+  expect(care.includes('tel:1553') && groqCalls.length === n0, '3. words of self-harm: the care message and the checked crisis lines at once, as call buttons: ' + care.join());
+  const cut1 = await edgeCuts(page); expect(!cut1.length, '4. the talk box has no cut edges: ' + cut1.join(' | '));
+  await page.click('.tk-clear'); await page.waitForSelector('.sure-sheet .sure-danger'); await page.click('.sure-sheet .sure-yes'); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.talk') || '[]').length === 1), '3. Clear this talk (red confirm) starts fresh with her hello');
+  await page.click('.talk-sheet .tk-x');
+  // 4. no cut edges
+  await page.evaluate(() => createNewChat()); await page.waitForTimeout(400);
+  expect(!(await page.evaluate(() => { const b = document.querySelector('.home-badge'); return !!b && b.getClientRects().length > 0; })), '4. the empty chat has no stray dot');
+  await page.click('.tab[data-tab="you"]'); await page.waitForTimeout(500);
+  const cutYou = await edgeCuts(page); expect(!cutYou.length, '4. You (app): no cut edges: ' + cutYou.join(' | '));
+  await page.click('.tab[data-tab="chat"]'); await page.click('#board-btn'); await page.waitForTimeout(900);
+  const cutBoard = await edgeCuts(page); expect(!cutBoard.length, '4. the board: no cut edges: ' + cutBoard.join(' | '));
+  expect(!dialogs.length && !errors.length, 'page errors: ' + errors.join('; ') + dialogs.join('; '));
+  await ctx.close();
+  // Safari (no safe areas, its bars take the bottom of the screen), light and dark
+  for (const scheme of ['light', 'dark']) {
+    const o = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 664 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'home' } });
+    await o.page.emulateMedia({ colorScheme: scheme });
+    await o.page.click('.tab[data-tab="you"]'); await o.page.waitForTimeout(500);
+    const c = await edgeCuts(o.page); expect(!c.length, `4. You in Safari (${scheme}): no cut edges: ` + c.join(' | '));
+    await o.ctx.close();
+  }
+});
+
 test('v248: your picks: the model picker in the ask box is a small icon (its name in its label) so every button is 8px apart; the chat top bar keeps Board only, as an icon; Memory moves to the phone side menu with its name; the tab bar and the ask box icons stay as they are; a computer keeps Memory under General', async (b) => {
   const { uxRuleIssues } = require('./ui-checks.cjs');
   const chat = { id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents.' }], updatedAt: Date.now() };
