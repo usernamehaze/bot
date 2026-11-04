@@ -80,7 +80,7 @@ async function open(browser, { server = true, state = {}, fakeGroq, lite = 'on',
     window.CASSIE_SERVER = srv; // '' = no server (never the real one in tests)
     if (seedJson && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('cassie.deskPage', 'chat'); /* (a computer starts on Home, with no ask box: the tests start in a new chat, and the dashboard tests open Home) */ localStorage.setItem('cassie.v2', seedJson); localStorage.setItem('cassie.labs.ui', '{"tries":"max"}'); sessionStorage.setItem('seeded', '1'); } // (the tests read the goals: keep "Try this" open on phone screens)
   }, [server ? SERVER : '', seed ? JSON.stringify(seed) : '']);
-  await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png' }));
+  await ctx.route(/pollinations\.ai/, (route) => route.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } })); // (the picture service allows other sites to use its pictures)
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
   await ctx.route(/workers\.dev/, (route) => route.abort()); // never touch the real Cassie server
   await fakeGoogle(ctx); // never the real Google
@@ -2606,6 +2606,21 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
+test('v250: on the board, "draw me a jet" puts a real picture on the board (never the [[IMAGE: …]] words), and the mic stays a mic after an Ask', async (b) => {
+  const fake = () => ({ text: '[[IMAGE: a simple white line drawing of a jet airplane, on a dark background]]' });
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.click('#board-btn'); await page.waitForSelector('.csk-ask input');
+  const pics0 = await page.evaluate(() => window.CassieSketch.session().pictures().length);
+  await page.fill('.csk-ask input', 'draw me a jet'); await page.click('.csk-ask button[type=submit]');
+  await page.waitForFunction((n) => window.CassieSketch.session().pictures().length > n, pics0, { timeout: 20000 }).catch(async () => { throw new Error('no picture; note: ' + await page.evaluate(() => (document.querySelector('.csk-note') || {}).innerText) + ' | errors: ' + errors.join('; ')); });
+  await page.waitForTimeout(400);
+  const r = await page.evaluate(() => ({ note: (document.querySelector('.csk-note') || {}).innerText || '', mic: !!document.querySelector('.csk-ask .csk-mic svg') && !/Ask/.test(document.querySelector('.csk-ask .csk-mic').textContent), asks: [...document.querySelectorAll('.csk-ask button')].filter((x) => x.textContent.trim() === 'Ask').length }));
+  expect(!/\[\[IMAGE/i.test(r.note), 'the board never shows the [[IMAGE: …]] words: ' + r.note);
+  expect(r.mic && r.asks === 1, 'after an Ask the mic is still a mic, and there is one Ask button: ' + JSON.stringify(r));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v249: side menu (New chat, then a full-width Menu with Memory inside); one + in the ask box opens Add to your question (Camera, Photos, Files, Model); tapping Cassie opens her own personal talk (warm, free, kept apart, care lines first); no cut edges on You (Safari and app), the board, the sheets or the empty chat', async (b) => {
   const { edgeCuts } = require('./ui-checks.cjs');
   const chat = { id: 'c1', title: 'Ethics', messages: [{ role: 'user', content: 'Explain ethics' }, { role: 'assistant', content: 'The Code asks teachers to work with parents.' }], updatedAt: Date.now() };

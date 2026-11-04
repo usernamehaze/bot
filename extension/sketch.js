@@ -531,11 +531,12 @@
     ctx.restore();
   }
 
-  function loadImage(src) {
+  function loadImage(src, cors = false) {
     return new Promise((resolve) => {
       if (!src) return resolve(null);
       if (src instanceof HTMLCanvasElement) return resolve(src);
       const img = new Image();
+      if (cors && typeof src === 'string' && /^https?:/.test(src)) img.crossOrigin = 'anonymous'; // (a picture from a picture service: kept as the board's own)
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
       img.src = src;
@@ -1593,7 +1594,7 @@
       return '';
     }
     async function useImageSource(url) {
-      const img = await loadImage(url);
+      const img = (typeof url === 'string' && /^https?:/.test(url) && await loadImage(url, true)) || await loadImage(url);
       if (!img) return false;
       const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
       let src = typeof url === 'string' && PIC_SRC.test(url) && Math.max(iw, ih) <= 1800 ? url : '';
@@ -1714,7 +1715,7 @@
     if (askForm) {
       askForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const input = askForm.querySelector('input'), btn = askForm.querySelector('button');
+        const input = askForm.querySelector('input'), btn = askForm.querySelector('button[type=submit]'); // (the Ask button, not the mic beside it)
         const q = input.value.trim();
         if (!q && !btn.disabled) { input.focus(); return; } // nothing typed yet: the box is where to type
         if (!q || btn.disabled) return;
@@ -1724,7 +1725,11 @@
           const out = await opts.onAsk(snapshot(), q, parts());
           const reply = out && typeof out === 'object' ? out.reply : out;
           if (out && typeof out === 'object' && out.draw) draw(out.draw);
-          showNote({ reply: reply || (out && out.draw ? 'Drawn on your board.' : '(no reply)') }); input.value = '';
+          // (v250) a picture she made for the board goes on the board, not as words
+          let put = false;
+          if (out && typeof out === 'object' && out.picture) { showNote({ reply: 'Cassie is drawing it…' }); put = await useImageSource(out.picture); }
+          if (out && out.picture && !put) { showNote({ reply: 'I made the picture, but this picture service would not let me put it on the board. Ask me in the chat and I will show it there.' }); input.value = ''; return; }
+          showNote({ reply: reply || (put ? 'Drawn on your board. Draw on it, or ask me about any part.' : out && out.draw ? 'Drawn on your board.' : '(no reply)') }); input.value = '';
         }
         catch (err) { showNote({ reply: (err && err.message) || 'Couldn’t reach Cassie. Try again.' }); }
         finally { btn.disabled = false; btn.textContent = 'Ask'; }
