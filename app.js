@@ -2583,7 +2583,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=251'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=252'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2605,7 +2605,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=251'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=252'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2739,7 +2739,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=251').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=252').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6500,32 +6500,91 @@ function liveDrawRequest(text) {
   return { topic: t };
 }
 const LIVE_LITE = () => document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-function liveDrawPrompt(lite) {
-  return `You are Cassie, a warm tutor who explains by DRAWING. Reply with ONLY one JSON object, no other text, no markdown fence.
-Choose "mode": "3d" when the answer is a real physical object you can turn around (a machine or engine, an organ, a cell, the Earth's layers, a volcano, a molecule, a building, a plant).${lite ? ' (This phone is in Lite mode: use "2d" only.)' : ''} Choose "2d" for processes, cycles, steps, comparisons, timelines, maps, flows and code ideas.
-Schema:
-{"title": short title, "mode": "2d" or "3d", "axis": "x" (3d only: the long axis the parts line up on), "intro": one short sentence, "summary": one short sentence that ties it together,
- "parts": [ 3 to 8 parts IN TEACHING ORDER, each {"id": short id, "label": 1 to 3 words, "say": 1 or 2 short sentences that explain this part, "color": "#hex", "glow": true only for hot or glowing parts, "spin": true only for parts that spin (fans, turbines, wheels), "shell": true only for an outer case or skin that hides the inside (3d), "shapes": [...] } ] }
-2d shapes (picture is 400 wide, 260 tall; keep everything inside 10..390 and 20..250; draw the real object or process, not just boxes):
- {"t":"path","d":"M.. C.. Q.. L.. Z"} curves and outlines, {"t":"line","x1","y1","x2","y2"}, {"t":"arrow","x1","y1","x2","y2"} for movement or flow,
- {"t":"rect","x","y","w2","h","r"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"poly","pts":[[x,y],...]}, {"t":"text","x","y","text","size"} only for short values like numbers;
- any shape may add "fill": true (a soft fill in the part's colour) or "dash": true. Up to 12 shapes a part. The part's label is placed for you.
-3d shapes (units: the whole model about 6 long; centre it on 0,0,0; "pos":[x,y,z]; "axis":"x"|"y"|"z" is the direction a shape runs):
- {"t":"cylinder","r","r2","len","axis","pos","open":true for a hollow case,"cut":true to show a cutaway}, {"t":"disc","r","thick","axis","pos"}, {"t":"cone","r","len","axis","pos","dir":1 or -1},
- {"t":"sphere","r","pos","cut":true for a cutaway}, {"t":"box","size":[w,h,d],"pos"}, {"t":"torus","r","tube","axis","pos"}, {"t":"blades","n","len","width","hub","axis","pos"} for fans and turbines; "rot":[x,y,z] radians to tilt. Up to 8 shapes a part.
-Rules: build it so it really looks like the thing (proportions, the right number of parts, parts touching where they connect). Use the student's language (English, Filipino or Taglish, like they wrote). Facts must be correct. No dashes in the words. No emojis.`;
+// (v252) she draws flat (2d) unless the student asks for 3D; "draw" never means 3D
+const LIVE_3D_RE = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
+const LD_EXAMPLE_HOUSE = {"title":"A house being built","mode":"2d","layout":"side view; the ground at y 232; the house 60 to 340 wide; the roof peak at y 40","intro":"A house goes up from the ground: foundation, floor, walls, then roof.","summary":"Foundation, floor joists, wall studs, top plate, roof trusses, then sheathing closes it in.","photo":"a real timber frame house under construction on a building site, concrete foundation, exposed wall studs and roof trusses, partly covered with plywood sheathing","parts":[
+ {"id":"found","label":"Foundation","say":"First a concrete foundation is poured into the ground to carry the weight.","color":"#a3a3ad","box":[56,206,288,30],"shapes":[{"t":"line","x1":20,"y1":232,"x2":380,"y2":232},{"t":"rect","x":60,"y":208,"w2":280,"h":24,"fill":true},{"t":"line","x1":60,"y1":220,"x2":340,"y2":220,"dash":true}]},
+ {"id":"joists","label":"Floor joists","say":"Wooden joists lie across the foundation to hold up the floor.","color":"#ffb067","box":[58,196,284,12],"shapes":[{"t":"line","x1":60,"y1":200,"x2":340,"y2":200},{"t":"line","x1":60,"y1":206,"x2":340,"y2":206},{"t":"line","x1":100,"y1":200,"x2":100,"y2":206},{"t":"line","x1":160,"y1":200,"x2":160,"y2":206},{"t":"line","x1":220,"y1":200,"x2":220,"y2":206},{"t":"line","x1":280,"y1":200,"x2":280,"y2":206}]},
+ {"id":"studs","label":"Wall studs","say":"Upright studs about 40 cm apart make the wall frame.","color":"#ffd29e","box":[60,118,280,82],"shapes":[{"t":"line","x1":64,"y1":198,"x2":64,"y2":120},{"t":"line","x1":104,"y1":198,"x2":104,"y2":120},{"t":"line","x1":144,"y1":198,"x2":144,"y2":120},{"t":"rect","x":168,"y":150,"w2":44,"h":48},{"t":"line","x1":232,"y1":198,"x2":232,"y2":120},{"t":"line","x1":272,"y1":198,"x2":272,"y2":120},{"t":"line","x1":312,"y1":198,"x2":312,"y2":120},{"t":"line","x1":336,"y1":198,"x2":336,"y2":120}]},
+ {"id":"plate","label":"Top plate","say":"A top plate ties the studs together and carries the roof.","color":"#c9a7ff","box":[58,112,284,10],"shapes":[{"t":"line","x1":60,"y1":116,"x2":340,"y2":116},{"t":"line","x1":60,"y1":120,"x2":340,"y2":120}]},
+ {"id":"truss","label":"Roof trusses","say":"Triangle trusses sit on top. Triangles keep the roof strong and stiff.","color":"#7fb0ff","box":[46,38,308,80],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[352,116],[48,116]]},{"t":"line","x1":200,"y1":40,"x2":200,"y2":116},{"t":"line","x1":124,"y1":78,"x2":160,"y2":116},{"t":"line","x1":276,"y1":78,"x2":240,"y2":116}]},
+ {"id":"sheath","label":"Sheathing","say":"Plywood sheathing is nailed on to close in the walls and roof.","color":"#8fe0b0","box":[60,40,148,160],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[200,52],[72,116]],"fill":true},{"t":"rect","x":64,"y":122,"w2":80,"h":76,"fill":true}]}]};
+const LD_EXAMPLE_WATER = {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[
+ {"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}]},
+ {"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}]},
+ {"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}]},
+ {"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}]},
+ {"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}]},
+ {"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}]}]};
+function liveDrawPrompt(want3d) {
+  return `You are Cassie, a careful tutor who explains by DRAWING, like a teacher drawing on a whiteboard. Reply with ONLY one JSON object, no other text, no markdown fence.
+ACCURACY FIRST: the drawing must look like the real thing (true proportions, the right number of parts, parts connected where they really connect), and every fact must be correct.
+"mode": ${want3d ? '"3d" (the student asked for 3D: build a model from the 3d shapes below)' : '"2d" (ALWAYS 2d: a flat pen drawing)'}.
+Plan first: "layout" says in words how the picture is arranged, and every part has a "box": [x, y, w, h] where it sits in the 400 wide by 260 tall picture. Then draw each part's strokes INSIDE its box. Spread the parts over the whole picture; leave about 30 px of free space somewhere for the names.
+Draw the real outline and inner lines of each part (silhouettes, edges, folds, holes, details), never just a plain box for a real object. 3 to 8 parts in TEACHING ORDER (the order you would draw them on a board), 2 to 24 strokes each. Every stroke is drawn on screen one by one, like a pen, so put each part's strokes in drawing order.
+Schema: {"title","mode","layout","intro": one short sentence,"summary": one short sentence,"photo": a precise description of a REAL photo of this subject (what is visible, where it is), "parts":[{"id","label": 1 to 3 words,"say": 1 or 2 short sentences,"color":"#hex","box":[x,y,w,h],"shapes":[...]}]}
+2d shapes (ABSOLUTE coordinates only, x 10 to 390, y 20 to 250): {"t":"line","x1","y1","x2","y2"}, {"t":"arrow","x1","y1","x2","y2"} for movement or flow, {"t":"path","d":"M x y L x y Q x y x y C x y x y x y Z"} using CAPITAL letters only, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} only for numbers or values; add "fill": true for a soft fill, "dash": true for a dashed line. Do not write the part names as text: the app writes each label for you.
+${want3d ? `3d shapes (the model about 6 units long, centred on 0,0,0; "pos":[x,y,z]; "axis":"x"|"y"|"z"): {"t":"cylinder","r","r2","len","axis","pos","open":true,"cut":true}, {"t":"disc","r","thick","axis","pos"}, {"t":"cone","r","len","axis","pos","dir":1 or -1}, {"t":"sphere","r","pos","cut":true}, {"t":"box","size":[w,h,d],"pos"}, {"t":"torus","r","tube","axis","pos"}, {"t":"blades","n","len","width","hub","axis","pos"}; parts may add "spin": true, "glow": true, "shell": true (an outer case). Add "axis" at the top level: the axis the parts line up along.\n` : ''}Two good 2d examples (follow this level of care, not these subjects):
+${JSON.stringify(LD_EXAMPLE_HOUSE)}
+${JSON.stringify(LD_EXAMPLE_WATER)}
+Use the student's language (English, Filipino or Taglish, like they wrote). No dashes in the words. No emojis.`;
 }
-async function liveDrawAsk(question) {
-  const lite = LIVE_LITE();
-  const messages = [{ role: 'system', content: liveDrawPrompt(lite) }, { role: 'user', content: question }];
-  let reply = '';
-  if (SERVER && serverClaude) { try { reply = await serverChat(messages, { brain: 'claude', maxTokens: 4000, q: true }); } catch (e) { reply = ''; } }
-  if (!reply && (state.groqKey || SERVER)) { try { reply = await groqChat(messages, { model: state.groqModel, maxTokens: 4000, rotate: true, q: true }); } catch (e) { if (!state.geminiKey) throw e; } }
-  if (!reply) reply = await askCassie([{ role: 'user', content: liveDrawPrompt(lite) + '\n\nThe question: ' + question }], null, {});
-  return reply;
+// one drawing call: Cassie's best brain (Claude on her server) when it is there; otherwise the usual one, marked simpler
+async function liveDrawCall(messages, q) {
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 6000, q }); if (t) return { text: t, simple: false }; } catch (e) { /* the usual brain below */ } }
+  if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
+  return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
+}
+// Cassie looks at a picture of her own drawing and says what is wrong (never counted as a question)
+async function liveDrawLook(text, png) {
+  const image = { mimeType: 'image/png', base64: String(png).split(',')[1] || '' };
+  const sys = 'You check pictures for a tutor. Be strict and specific. Reply with ONLY one JSON object.';
+  try {
+    if (SERVER && serverClaude) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { brain: 'claude', maxTokens: 700 });
+    if (state.geminiKey) return await askGeminiVision([{ role: 'user', content: sys + '\n\n' + text }], image, {});
+    if (SERVER) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { model: 'vision', maxTokens: 700 });
+    if (state.groqKey) return await askGroqVision([{ role: 'user', content: text }], [image], { system: sys, maxTokens: 700 });
+  } catch (e) { /* no check this time */ }
+  return '';
+}
+const ldJson = (t) => { const s = String(t || ''), a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a < 0 || b <= a) return null; try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; } };
+// draw, check it (the app's own checks, then a look at a picture of it), and redraw once each time something is wrong
+async function liveDrawAsk(question, onStep = () => {}) {
+  const want3d = LIVE_3D_RE.test(question);
+  const m = await liveDrawLoad();
+  const messages = [{ role: 'system', content: liveDrawPrompt(want3d) }, { role: 'user', content: question }];
+  let { text, simple } = await liveDrawCall(messages, true); // (the drawing is the one question it counts as)
+  let spec = m.clean(text);
+  const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp)]);
+  let wrong = issues(spec);
+  if (wrong.length) {
+    onStep('Cassie is fixing her drawing…');
+    const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.` }], false);
+    const s2 = m.clean(again.text);
+    if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; wrong = issues(s2); simple = simple || again.simple; }
+  }
+  if (!spec) return { text, spec: null };
+  if (!want3d && spec.mode === '3d') spec.mode = '2d';
+  // the look: a picture of the finished drawing, judged like a strict teacher would
+  const png = await m.snapshot(spec);
+  if (png) {
+    onStep('Cassie is checking her drawing…');
+    const verdict = ldJson(await liveDrawLook(`This picture is a drawing meant to show: "${question}" (titled "${spec.title}", parts: ${spec.parts.map((p, i) => `${i + 1} ${p.label}`).join(', ')}). Does it clearly and correctly look like that, with each numbered name on the right part? Reply {"ok": true} or {"ok": false, "wrong": ["short, specific things to fix, saying where"]}.`, png));
+    if (verdict && verdict.ok === false && Array.isArray(verdict.wrong) && verdict.wrong.length) {
+      onStep('Cassie is redrawing it…');
+      const fix = await liveDrawCall([...messages, { role: 'assistant', content: JSON.stringify(spec) }, { role: 'user', content: `I looked at a picture of your drawing. What is wrong:\n- ${verdict.wrong.slice(0, 8).map((x) => String(x).slice(0, 200)).join('\n- ')}\nRedraw it: send the whole corrected JSON object.` }], false).catch(() => null);
+      const s3 = fix && m.clean(fix.text);
+      if (s3 && issues(s3).length <= wrong.length) { spec = s3; simple = simple || fix.simple; }
+    }
+  }
+  if (!want3d && spec.mode === '3d') spec.mode = '2d';
+  spec.simple = simple;
+  return { text, spec };
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=251')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=252')));
+// a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
+const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
 let liveDrawFresh = false;
 function liveDrawInto(container, body) {
@@ -6535,9 +6594,11 @@ function liveDrawInto(container, body) {
   const animate = liveDrawFresh; liveDrawFresh = false;
   liveDrawLoad().then((m) => m.render(box, body, {
     animate,
+    simpleNote: authToken() ? 'A simpler drawing: Cassie’s best drawing brain is busy right now.' : 'A simpler drawing. Sign in for Cassie’s best drawings.',
     onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`),
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
-    onRealistic: (spec) => handleImageRequest(`a realistic picture of ${spec.title}`, `a realistic labelled cutaway of ${spec.title}`),
+    canRealistic: realPhotoOk,
+    onRealistic: (spec) => realPhoto(spec),
   })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; scrollToBottom(); })
     .catch(() => { box.classList.remove('ld-loading'); box.innerHTML = '<p class="ld-say">This drawing could not load. Check the connection and open the chat again.</p>'; });
 }
@@ -6549,12 +6610,11 @@ async function liveDrawReply(text) {
   renderMessage('user', label);
   promptInput.value = ''; autoGrow(); clearFollowups();
   if (!canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
-  mascotReact && mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
+  mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
   const done = busyButton(sendBtn);
   try {
-    const reply = await liveDrawAsk(label);
-    const m = await liveDrawLoad(), spec = m.clean(reply);
+    const { text: reply, spec } = await liveDrawAsk(label, (t) => setTypingStatus(typing, t));
     typing.remove();
     if (!spec) { // she answered in words: show them as usual
       const words = noDashes(String(reply || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
@@ -6571,6 +6631,33 @@ async function liveDrawReply(text) {
     typing.remove();
     renderError(err, () => liveDrawReply(label), 'unknown');
   } finally { done(); setCursorMode('idle'); }
+}
+// "Show a real photo": an accurate photo (Gemini), then Cassie finds each part in it and lays her own labels on top;
+// a part she can't clearly see is listed instead of being pinned in the wrong place
+async function realPhoto(spec) {
+  if (!realPhotoOk()) return;
+  const label = `Show me a real photo of ${spec.title}`;
+  state.messages.push({ role: 'user', content: label }); touchChat(); save(); renderMessage('user', label);
+  const typing = renderTyping(); setTypingStatus(typing, 'Finding the real thing…');
+  const prompt = `A real, accurate, true to life photograph of ${spec.photo || spec.title}. Taken with a real camera on location, natural light, sharp detail, the whole subject in view. Not a model, toy, miniature, 3D render, illustration, cartoon or diagram. No text, no labels, no watermark.`;
+  let src = await serverGeminiImage(prompt);
+  if (!src && state.geminiKey && !geminiImageOff) { try { src = await geminiImage(prompt); } catch (e) { src = null; } }
+  if (!src) { typing.remove(); const t = 'I could not make an accurate photo right now. Try again a little later.'; state.messages.push({ role: 'assistant', content: t }); save(); renderMessage('assistant', t); return; }
+  setTypingStatus(typing, 'Cassie is labelling it…');
+  const want = spec.parts.map((p) => p.label).filter(Boolean);
+  const found = ldJson(await liveDrawLook(`Find these parts in this photo: ${want.join(', ')}. Reply {"marks":[{"label": one of those names exactly, "x": 0 to 1 from the left, "y": 0 to 1 from the top}]}. Leave out any part you cannot clearly see.`, src));
+  const marks = (found && Array.isArray(found.marks) ? found.marks : []).filter((k) => k && want.includes(k.label) && +k.x >= 0 && +k.x <= 1 && +k.y >= 0 && +k.y <= 1).slice(0, 10);
+  typing.remove();
+  const caption = `A real photo of ${spec.title}.`;
+  const bubble = renderMessage('assistant', caption);
+  const wrap = document.createElement('div'); wrap.className = 'ld-photo-wrap';
+  const img = document.createElement('img'); img.src = src; img.alt = `A real photo of ${spec.title}`; wrap.appendChild(img);
+  marks.forEach((k) => { const tag = document.createElement('span'); tag.className = 'ld-pin'; tag.textContent = `${want.indexOf(k.label) + 1} ${k.label}`; tag.style.left = (k.x * 100) + '%'; tag.style.top = (k.y * 100) + '%'; wrap.appendChild(tag); });
+  bubble.appendChild(wrap);
+  const missing = want.filter((w) => !marks.some((k) => k.label === w));
+  if (missing.length) { const p = document.createElement('p'); p.className = 'ld-note'; p.textContent = `Not clearly visible in this photo: ${missing.join(', ')}.`; bubble.appendChild(p); }
+  state.messages.push({ role: 'assistant', content: `[I showed a real photo of ${spec.title}, labelled: ${marks.map((k) => k.label).join(', ') || 'none'}]`, display: caption });
+  save(); scrollToBottom();
 }
 async function handleImageRequest(text, subject) {
   const label = text.trim();
@@ -7662,7 +7749,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=251');
+      exploreMod = await import('./explore/cell3d.js?v=252');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7712,7 +7799,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=251');
+      labsMod = await import('./labs/labs.js?v=252');
       islandRest();
     }
     labsMod.open({
@@ -9571,10 +9658,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=251').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=252').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=251', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=252', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
