@@ -741,17 +741,19 @@
         W = basePic().w; H = basePic().h;
       } else {
         // a blank page takes the shape of the space it's in (tall on a phone)
-        const r = stage.getBoundingClientRect();
-        W = 1600; H = Math.round(Math.min(2800, Math.max(700, 1600 * ((r.height - 20) / Math.max(1, r.width - 20)))));
+        const r = stage.getBoundingClientRect(), pad = stagePad();
+        W = 1600; H = Math.round(Math.min(2800, Math.max(700, 1600 * ((r.height - pad) / Math.max(1, r.width - pad)))));
       }
       viewed = false;
       fit();
     }
     // the board fills its area; the view keeps its middle and its zoom when that area changes
     let anchor = null; // (the board's place on screen before the Ask bar tucked or came back)
+    // (v249) the frame around the board is the stage's own padding (none on a phone, so the board meets the edges)
+    function stagePad() { const s = getComputedStyle(stage); return (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0); }
     function fit() {
-      const r = stage.getBoundingClientRect();
-      const aw = Math.max(50, Math.round(r.width - 20)), ah = Math.max(50, Math.round(r.height - 20));
+      const r = stage.getBoundingClientRect(), pad = stagePad();
+      const aw = Math.max(50, Math.round(r.width - pad)), ah = Math.max(50, Math.round(r.height - pad));
       const mid = viewed ? worldAt(CW / dpr / 2, CH / dpr / 2) : null, z = viewed ? zoomNow() : 1;
       boardEl.style.width = aw + 'px'; boardEl.style.height = ah + 'px';
       dpr = Math.min(2, window.devicePixelRatio || 1);

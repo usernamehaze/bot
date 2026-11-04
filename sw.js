@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v248';
+const CACHE_NAME = 'cassie-v249';
 const ASSETS = [
   './',
   'index.html',
@@ -108,7 +108,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // A file with its version in the address (app.js?v=248) never changes (a new version has a new address), so
+  // A file with its version in the address (app.js?v=249) never changes (a new version has a new address), so
   // once fetched it comes from this device straight away: faster loads and less mobile data.
   if (/[?&]v=\d+/.test(url.search)) {
     event.respondWith(caches.open(CACHE_NAME).then((cache) => cache.match(event.request).then((hit) => hit || fetch(event.request).then((response) => {
