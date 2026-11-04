@@ -3336,7 +3336,7 @@ function placeApps() {
   // (v249) a phone's side menu: New chat first, then Menu (full width), and Memory is one of Menu's rows; the top bar
   // keeps Board only. A computer keeps its own order.
   const nc = document.getElementById('new-chat-btn'), menuBtn = document.getElementById('side-menu-toggle'), tools = document.getElementById('side-tools');
-  mem.classList.toggle('side-mem', !wide); mem.classList.toggle('side-tool', !wide);
+  mem.classList.toggle('side-mem', !wide); if (!wide) mem.classList.add('side-tool'); // (a computer: the loop above already made it a sidebar tool)
   if (!wide) { menuBtn.before(nc); tools.append(mem); }
   else if (nc.previousElementSibling !== tools) tools.after(nc);
 }

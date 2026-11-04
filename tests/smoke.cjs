@@ -2697,8 +2697,9 @@ test('v248: your picks: the model picker in the ask box is a small icon (its nam
   await ctx.close();
   const o = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { groqKey: 'gsk_test' } });
   await o.page.waitForSelector('#side-general #memory-btn');
-  const desk = await o.page.evaluate(() => ({ cls: document.getElementById('memory-btn').classList.contains('side-mem'), pill: getComputedStyle(document.querySelector('#model-pill .mp-ic')).display, words: document.getElementById('model-pill-model').getClientRects().length > 0 }));
-  expect(!desk.cls && desk.pill === 'none' && desk.words, 'a computer: Memory stays under General, and the model picker keeps its name: ' + JSON.stringify(desk));
+  await o.page.click('#plus-btn'); await o.page.waitForSelector('.add-row[data-add="model"]');
+  const desk = await o.page.evaluate(() => ({ cls: document.getElementById('memory-btn').classList.contains('side-mem'), name: document.querySelector('.add-row[data-add="model"] em').textContent }));
+  expect(!desk.cls && /, /.test(desk.name), 'a computer: Memory stays under General, and the model keeps its name (v249: in the + sheet): ' + JSON.stringify(desk));
   await o.ctx.close();
 });
 
