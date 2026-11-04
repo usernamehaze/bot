@@ -1574,11 +1574,13 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   const { ctx, page, errors } = await open(b, { device: 'iPhone 13', state: { groqKey: '' } }); // (no key: Cassie's server reads the photo)
   await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="chat"]'); if (t && t.offsetParent) t.click(); });
   const sent = []; page.on('request', (rq) => { const d = rq.postData() || ''; if (/image_url|inlineData|"image"/.test(d)) sent.push(d); });
-  const cam = await page.evaluate(() => { const i = document.getElementById('camera-input'), bt = document.getElementById('camera-btn'), r = bt.getBoundingClientRect(); return { accept: i.accept, capture: i.getAttribute('capture'), shown: r.width >= 40 && r.height >= 40, label: bt.getAttribute('aria-label') }; });
+  await page.click('#plus-btn'); await page.waitForSelector('.add-sheet'); // (v249: the camera is in the + sheet)
+  const cam = await page.evaluate(() => { const i = document.getElementById('camera-input'), bt = document.querySelector('.add-tile[data-add="camera"]'), r = bt.getBoundingClientRect(); return { accept: i.accept, capture: i.getAttribute('capture'), shown: r.width >= 40 && r.height >= 40, label: bt.textContent }; });
+  await page.click('.add-sheet .add-x');
   expect(cam.accept === 'image/*' && cam.capture === 'environment' && cam.shown && /camera/i.test(cam.label), 'a camera button that opens the back camera: ' + JSON.stringify(cam));
   const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 80; c.height = 40; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 80, 40); g.fillStyle = '#000'; g.font = '20px sans-serif'; g.fillText('2x=8', 8, 28); return c.toDataURL('image/png').split(',')[1]; });
   // the camera's button opens the picker the phone shows as its camera
-  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#camera-btn')]);
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), (async () => { await page.click('#plus-btn'); await page.click('.add-tile[data-add="camera"]'); })()]); // (v249: through +)
   expect(!chooser.isMultiple(), 'one photo at a time');
   await chooser.setFiles({ name: 'snap.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await page.waitForFunction(() => { const a = [...document.querySelectorAll('#chat-log .bubble-assistant')].pop(); return a && !a.querySelector('.typing-dots') && a.innerText.trim().length > 3; }, null, { timeout: 30000 });
@@ -1594,7 +1596,8 @@ test('snap a problem: a camera button in the ask box on phones opens the back ca
   await ctx.close();
   // a computer: the clip only
   const d = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { groqKey: 'gsk_test' } });
-  expect(await d.page.evaluate(() => !document.getElementById('camera-btn').getClientRects().length && !!document.getElementById('attach-btn').getClientRects().length), 'a computer has the clip, no camera button');
+  await d.page.click('#plus-btn'); await d.page.waitForSelector('.add-sheet');
+  expect(await d.page.evaluate(() => !document.querySelector('.add-tile[data-add="camera"]') && !!document.querySelector('.add-tile[data-add="files"]')), 'a computer: the + sheet has Files, no camera');
   await d.ctx.close();
 });
 
@@ -2609,8 +2612,8 @@ test('v248: your picks: the model picker in the ask box is a small icon (its nam
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { groqKey: 'gsk_test', tab: 'chat', chats: [chat], currentChatId: 'c1' } });
   await page.addStyleTag({ content: ':root{--safe-top:47px !important;--safe-bottom:34px !important}' });
   await page.evaluate(() => selectChat('c1')); await page.focus('#prompt-input'); await page.waitForTimeout(600);
-  const ask = await page.evaluate(() => { const m = document.getElementById('model-pill'), r = m.getBoundingClientRect(), row = [...document.querySelector('.composer-row').children].filter((c) => c.getClientRects().length).map((c) => c.getBoundingClientRect()); return { w: r.width, h: r.height, icon: !!m.querySelector('.mp-ic') && getComputedStyle(m.querySelector('.mp-ic')).display !== 'none', words: [...m.querySelectorAll('span')].some((x) => x.getClientRects().length), label: m.getAttribute('aria-label'), gaps: row.slice(1).map((x, i) => Math.round(x.left - row[i].right)) }; });
-  expect(ask.w === 48 && ask.h === 48 && ask.icon && !ask.words && /^Model: .+Change it in Settings$/.test(ask.label) && ask.gaps.every((g) => g >= 8), '1. the model picker is a 48px icon with its name in its label, and the ask box buttons are 8px apart or more: ' + JSON.stringify(ask));
+  const ask = await page.evaluate(() => { const row = [...document.querySelector('.composer-row').children].filter((c) => c.getClientRects().length).map((c) => c.getBoundingClientRect()); return { ids: [...document.querySelector('.composer-row').children].filter((c) => c.getClientRects().length).map((c) => c.id || c.className), label: document.getElementById('model-pill').getAttribute('aria-label'), gaps: row.slice(1).map((x, i) => Math.round(x.left - row[i].right)) }; });
+  expect(/^Model: .+Change it in Settings$/.test(ask.label) && ask.gaps.every((g) => g >= 8), '1. the model keeps its name in its label (v249: reached through +), and the ask box buttons are 8px apart or more: ' + JSON.stringify(ask));
   const typingGaps = (await uxRuleIssues(page)).gaps; expect(!typingGaps.length, '1. no taps closer than 8px while typing: ' + typingGaps.join(' | '));
   await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
   const top = await page.evaluate(() => { const vis = (e) => !!e && !!e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden'; const t = document.querySelector('.topbar-actions'); return { board: vis(t.querySelector('#board-btn')), boardWords: vis(t.querySelector('#board-btn .app-label')), mem: !!t.querySelector('#memory-btn'), tabs: [...document.querySelectorAll('.tabbar .tab')].filter((x) => x.querySelector('span') && x.querySelector('span').getClientRects().length).length }; });
@@ -2619,8 +2622,10 @@ test('v248: your picks: the model picker in the ask box is a small icon (its nam
   const icons = await page.evaluate(() => ['camera-btn', 'attach-btn', 'voice-btn', 'mic-btn'].filter((id) => { const e = document.getElementById(id); return e && e.textContent.trim(); }));
   expect(!icons.length, '4. the ask box icons stay icons only');
   await page.click('#menu-btn'); await page.waitForTimeout(400);
+  if (await page.getAttribute('#side-menu-toggle', 'aria-expanded') !== 'true') { await page.click('#side-menu-toggle'); await page.waitForTimeout(300); } // (v249: Memory is inside Menu)
+  await page.$eval('#memory-btn', (x) => x.scrollIntoView({ block: 'center' }));
   const mem = await page.evaluate(() => { const m = document.getElementById('memory-btn'), r = m.getBoundingClientRect(); return { after: m.previousElementSibling && m.previousElementSibling.id, inSide: !!m.closest('#sidebar, .sidebar'), h: r.height, w: r.width, words: m.querySelector('.app-label').getClientRects().length > 0 && m.querySelector('.app-label').textContent }; });
-  expect(mem.after === 'new-chat-btn' && mem.inSide && mem.h >= 48 && mem.w > 200 && mem.words === 'Memory', '3. Memory sits in the side menu under New chat, 48px, with its name: ' + JSON.stringify(mem));
+  expect(mem.inSide && mem.h >= 48 && mem.w > 200 && mem.words === 'Memory', '3. Memory sits in the side menu, 48px, with its name (v249: inside Menu): ' + JSON.stringify(mem));
   await page.click('#memory-btn'); await page.waitForTimeout(500);
   const opened = await page.evaluate(() => ({ panel: !document.getElementById('memory-panel').hidden, side: document.querySelector('.sidebar').classList.contains('open') }));
   expect(opened.panel && !opened.side, '3. a tap opens Memory and closes the menu: ' + JSON.stringify(opened));
@@ -2796,10 +2801,10 @@ test('v244: the ask box gives the answers room (one row at rest in a started cha
   expect(rest.rest && rest.comp <= 80 && !rest.chips && rest.area >= 0.6 * rest.h && rest.send >= 44 && !rest.onSend, 'at rest: one row, no chips, the answers get 60% of the screen, Cassie not on Send: ' + JSON.stringify(rest));
   await page.focus('#prompt-input'); await page.waitForTimeout(400);
   const typing = await M();
-  expect(!typing.rest && typing.comp <= 120 && typing.chips > 0 && typing.chips <= 56 && await page.locator('#model-pill').isVisible() && await page.locator('#attach-btn').isVisible(), 'typing: the full box (120px or less) and the chips (56px or less) are back: ' + JSON.stringify(typing));
+  expect(!typing.rest && typing.comp <= 120 && typing.chips > 0 && typing.chips <= 56 && await page.locator('#plus-btn').isVisible(), 'typing: the full box (120px or less) and the chips (56px or less) are back: ' + JSON.stringify(typing));
   // a tap on a tool lands, though the box loses focus first
-  await page.locator('#attach-btn').dispatchEvent('pointerdown'); await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
-  expect(await page.locator('#attach-btn').isVisible(), 'a tool tapped while the box closes is still there to take the tap');
+  await page.locator('#plus-btn').dispatchEvent('pointerdown'); await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
+  expect(await page.locator('#plus-btn').isVisible(), 'a tool tapped while the box closes is still there to take the tap');
   // no glint: the light filter has no specular part, and the still light has no streak
   expect(await page.evaluate(() => !document.querySelector('#lg-lenses feMergeNode[in="spec"]')), 'no specular glint in the glass light');
   // the backdrop reaches the bottom of the screen
@@ -3385,7 +3390,7 @@ test('care everywhere: Talk with Cassie says it gently with the lines on screen,
   const t = await a.innerText();
   expect(await a.evaluate((e) => e.classList.contains('bubble-care')) && /That sounds really heavy/.test(t) && careShows(t) && !/\[\[CARE\]\]/.test(t), 'the AI noticed, and the lines show under its words: ' + t.slice(0, 160));
   // Talk with Cassie: said gently out loud, the numbers on screen
-  await page.click('#voice-btn');
+  await page.click('#plus-btn'); await page.click('.add-row[data-add="talk"]'); // (v249: through +)
   await page.waitForFunction(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   await page.evaluate(() => window.__say('ayoko na, gusto ko nang mamatay'));
   await page.waitForFunction(() => window.__shown.some((t) => /Ligtas ka ba ngayon/.test(t)), null, { timeout: 15000 });
@@ -5948,18 +5953,11 @@ test('Cassie dresses for the holidays (Philippine time) and says so; two taps in
   const plain = await day('2026-07-15');
   expect(plain.acc === '', 'a normal day: no holiday accessory: ' + plain.acc.slice(0, 80));
   expect(!/Happy|Today is|ngayon/.test(plain.said), 'a normal day: no holiday line: ' + plain.said);
-  // two taps in a row: the second line follows on from the first (not a repeat)
+  // (v249) a tap opens her personal talk box, with a warm hello as its first message
   const { page } = plain;
-  await page.evaluate(() => { document.getElementById('mascot-bubble').hidden = true; });
-  const taps = [];
-  for (let i = 0; i < 2; i++) {
-    await page.click('#mascot-btn');
-    await page.waitForFunction(() => !document.getElementById('mascot-bubble').hidden, null, { timeout: 3000 });
-    taps.push(await page.locator('#mascot-bubble').textContent());
-  }
-  const pairs = await page.evaluate(() => TAP_PAIRS.en.map((p) => [p[0], p[1]]));
-  const fill = (t) => t.replace('{name}', 'Test');
-  expect(taps[0] !== taps[1] && pairs.some(([a, c]) => fill(a) === taps[0] && fill(c) === taps[1]), 'two taps: two different lines from the same little exchange: ' + JSON.stringify(taps));
+  await page.click('#mascot-btn'); await page.waitForSelector('.talk-sheet .tk-her');
+  const hello = await page.locator('.talk-sheet .tk-her').first().textContent();
+  expect(/how are you|kumusta/i.test(hello), 'a tap: her talk box opens with a hello: ' + hello);
   expect(plain.errors.length === 0, 'page errors: ' + plain.errors.join('; '));
   await plain.ctx.close();
 });
@@ -6118,10 +6116,10 @@ test('Cursor Cassie: the default Cassie, she reacts to the app', async (b) => {
   await ctx.close();
 });
 
-test('the model picker on a phone (360 and 390 wide): a small icon whose label names the model (v248, was the short name OSS 120B), and every button in the ask box row is 44px or more to tap, in one row', async (b) => {
+test('the model picker on a phone (360 and 390 wide): the + sheet names the model (v249; v248 was a small icon, before that the short name OSS 120B), and every button in the ask box row is 44px or more to tap, in one row', async (b) => {
   for (const w of [360, 390]) {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: w, height: 844 }, server: false, lite: 'off', state: { tab: 'chat', groqKey: 'gsk_test', groqModel: 'openai/gpt-oss-120b' } });
-    await page.waitForSelector('.composer-row #model-pill'); await page.waitForTimeout(800);
+    await page.waitForSelector('.composer-row #plus-btn'); await page.waitForTimeout(800);
     const r = await page.evaluate(() => {
       const pill = document.getElementById('model-pill'), row = document.querySelector('.composer-row'), cs = getComputedStyle(pill, '::before');
       const kids = [...row.children].filter((c) => c.getClientRects().length && c.matches('button')).map((c) => c.getBoundingClientRect());
@@ -6130,8 +6128,10 @@ test('the model picker on a phone (360 and 390 wide): a small icon whose label n
       const pc = getComputedStyle(pill), room = pill.getBoundingClientRect().width - parseFloat(pc.paddingLeft) - parseFloat(pc.paddingRight) - parseFloat(pc.borderLeftWidth) - parseFloat(pc.borderRightWidth);
       return { label: pill.dataset.short, shown: cs.content, need: +m.measureText(pill.dataset.short || '').width.toFixed(1), room: +room.toFixed(1), small: kids.filter((k) => k.width < 44 || k.height < 44).length, rows: new Set(kids.map((k) => Math.round(k.top))).size, right: Math.max(...kids.map((k) => k.right)), vw: innerWidth };
     });
-    const icon = await page.evaluate(() => { const p = document.getElementById('model-pill'); return { ic: getComputedStyle(p.querySelector('.mp-ic')).display !== 'none', words: [...p.querySelectorAll('span')].some((x) => x.getClientRects().length), aria: p.getAttribute('aria-label') }; });
-    expect(icon.ic && !icon.words && /^Model: GPT-OSS 120B/.test(icon.aria), `${w}: the picker is an icon, and its label names the model: ` + JSON.stringify(icon));
+    await page.click('#plus-btn'); await page.waitForSelector('.add-row[data-add="model"]'); // (v249: the model is in the + sheet, with its name)
+    const icon = await page.evaluate(() => ({ row: document.querySelector('.add-row[data-add="model"] em').textContent, h: document.querySelector('.add-row[data-add="model"]').getBoundingClientRect().height, aria: document.getElementById('model-pill').getAttribute('aria-label') }));
+    expect(/^GPT-OSS 120B, /.test(icon.row) && icon.h >= 48 && /^Model: GPT-OSS 120B/.test(icon.aria), `${w}: the + sheet names the model: ` + JSON.stringify(icon));
+    await page.click('.add-sheet .add-x');
     expect(r.small === 0 && r.rows === 1 && r.right <= r.vw, `${w}: every button 44px or more, one row, on screen: ` + JSON.stringify(r));
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -6633,7 +6633,7 @@ test.slow('Bella only: a 7-step lesson and a long Listen in Bella’s voice when
   await page.keyboard.press('Escape');
   // voice chat: the same line, and the chat stays typed (the voice screen never opens)
   await clearNote();
-  await page.click('#voice-btn');
+  await page.click('#plus-btn'); await page.click('.add-row[data-add="talk"]'); // (v249: through +)
   await page.waitForTimeout(800);
   expect(await page.evaluate(() => !document.querySelector('.vc') || document.querySelector('.vc').hidden), 'the voice screen did not open');
   expect((await notes()).length === 2 && (await notes())[1] === RESTING, 'voice chat said the same line');
@@ -7710,7 +7710,7 @@ test('Talk with Cassie: a voice conversation, and Teach Cassie (she asks questio
   await ctx.addInitScript(FAKE_VOICE, {});
   await page.reload();
   const phase = () => page.evaluate(() => document.querySelector('.vc') && document.querySelector('.vc').dataset.phase);
-  await page.click('#voice-btn');
+  await page.click('#plus-btn'); await page.click('.add-row[data-add="talk"]'); // (v249: through +)
   await page.waitForFunction(() => document.querySelector('.vc') && !document.querySelector('.vc').hidden && document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   expect((await page.evaluate(() => window.__shown))[0] === 'Hi! I’m listening. Ask me anything.', 'Cassie greets you out loud');
   await page.evaluate(() => window.__say('What is x if 2x equals 8?'));
@@ -7753,7 +7753,7 @@ test('Talk with Cassie without a built-in speech recognizer: Cassie’s server w
   const { ctx, page, errors } = await open(b, {});
   await ctx.addInitScript(FAKE_VOICE, { noRecognizer: true });
   await page.reload();
-  await page.click('#voice-btn');
+  await page.click('#plus-btn'); await page.click('.add-row[data-add="talk"]'); // (v249: through +)
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   expect(/tap the mic to send/i.test(await page.locator('.vc-status').innerText()), 'it says to tap the mic when done: ' + await page.locator('.vc-status').innerText());
   await page.click('.vc-mic'); // done talking
@@ -7778,7 +7778,7 @@ test('Talk with Cassie hears with Whisper by default (most accurate), even where
   const { ctx, page, errors } = await open(b, {});
   await ctx.addInitScript(FAKE_VOICE, {});
   await page.reload();
-  await page.click('#voice-btn');
+  await page.click('#plus-btn'); await page.click('.add-row[data-add="talk"]'); // (v249: through +)
   await page.waitForFunction(() => document.querySelector('.vc').dataset.phase === 'listening', null, { timeout: 5000 });
   expect(!(await page.evaluate(() => window.__recs.some((r) => r.live))), 'the browser’s own recognizer is not used');
   await page.click('.vc-mic');
@@ -9951,7 +9951,7 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
     await page.evaluate(() => { document.getElementById('mic-btn').hidden = false; });
     const C = await all(page);
     expect(!C.bad.length, '1280x800 chat: every icon moves its own parts like the recording: ' + C.bad.join(' | '));
-    for (const [sel, ia, name, part] of [['#send-btn', 'send', 'ia-fly', 'svg'], ['#attach-btn', 'clip', 'ia-redraw', 'ia-p1'], ['#mic-btn', 'mic', 'ia-fill', 'ia-p1'], ['#quiz-btn', 'pencil', 'ia-underline', 'ia-x1']]) await hover(sel, ia, name, part);
+    for (const [sel, ia, name, part] of [['#send-btn', 'send', 'ia-fly', 'svg'], ['#mic-btn', 'mic', 'ia-fill', 'ia-p1'], ['#quiz-btn', 'pencil', 'ia-underline', 'ia-x1']]) await hover(sel, ia, name, part);
     // a press: the icon moves and the button still presses to 0.94
     const r = await page.$eval('#settings-btn', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; });
     await page.mouse.move(r[0], r[1]); await page.waitForTimeout(900);
@@ -9997,7 +9997,7 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
     for (const [sel, ia, name, part] of [['.hub-bell', 'bell', 'ia-ring', 'ia-p1'], ['.tab[data-tab="home"]', 'home', 'ia-echo', 'ia-x1'], ['.tab[data-tab="cards"]', 'cards', 'ia-move', 'ia-p2'],
       ['.tab[data-tab="you"]', 'person', 'ia-move', 'ia-p1'], ['[data-ht="timer"], .hub-timer', 'clock', 'ia-spin', 'ia-p2'], ['.tab[data-tab="labs"]', 'flask', 'ia-slosh', 'ia-p3']]) await tap(sel, ia, name, part);
     await page.evaluate(() => { createNewChat(); CassieNative.go('chat'); }); await page.waitForSelector('#send-btn'); await page.waitForTimeout(600);
-    for (const [sel, ia, name, part] of [['#menu-btn', 'menu', 'ia-x-top', 'ia-p1'], ['#camera-btn', 'camera', 'ia-zoom', 'ia-p2'], ['#send-btn', 'send', 'ia-fly', 'svg']]) await tap(sel, ia, name, part);
+    for (const [sel, ia, name, part] of [['#menu-btn', 'menu', 'ia-x-top', 'ia-p1'], ['#send-btn', 'send', 'ia-fly', 'svg']]) await tap(sel, ia, name, part);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.touchscreen.tap(...await page.$eval('.tab[data-tab="cards"]', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }));
     await page.waitForTimeout(40);

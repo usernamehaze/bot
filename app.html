@@ -206,21 +206,24 @@
     <input type="file" id="file-input" multiple accept="image/*,.heic,.heif,.pdf,.docx,.pptx,.txt,.md,.doc,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
     <!-- phones: snap a problem, a textbook page or notes with the camera, and Cassie works through it -->
     <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+    <input type="file" id="photo-input" accept="image/*,.heic,.heif" multiple hidden>
     <textarea id="prompt-input" rows="1" placeholder="Ask Cassie a question…" autocomplete="off"></textarea>
     <div class="composer-row">
-      <button type="button" id="model-pill" class="model-pill" title="Change model & level in Settings">
+      <!-- (v249) one +: camera, photos, files, Talk with Cassie and the model are in its sheet -->
+      <button type="button" id="plus-btn" class="icon-btn round" aria-label="Add a photo or file, talk with Cassie, or change the model" aria-haspopup="dialog" aria-expanded="false"><svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="plus"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button type="button" id="model-pill" class="model-pill in-plus" title="Change model & level in Settings">
         <svg class="mp-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.7 4.6 4.6 1.7-4.6 1.7L12 16.1l-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>
         <span id="model-pill-model">GPT-OSS 120B</span>
         <span id="model-pill-level">Auto</span>
       </button>
       <span class="composer-spacer"></span>
-      <button type="button" id="camera-btn" class="icon-btn round phone-only" title="Snap a problem with the camera" aria-label="Snap a problem with the camera">
+      <button type="button" id="camera-btn" class="icon-btn round phone-only in-plus" title="Snap a problem with the camera" aria-label="Snap a problem with the camera">
         <svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="camera"><path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
       </button>
-      <button type="button" id="attach-btn" class="icon-btn round" title="Attach a file (PDF, Word, PowerPoint, or image)" aria-label="Attach a file">
+      <button type="button" id="attach-btn" class="icon-btn round in-plus" title="Attach a file (PDF, Word, PowerPoint, or image)" aria-label="Attach a file">
         <svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="clip"><path d="M20 11.5l-7.6 7.6a5 5 0 0 1-7.1-7.1l8.1-8.1a3.3 3.3 0 0 1 4.7 4.7l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/></svg>
       </button>
-      <button type="button" id="voice-btn" class="icon-btn round" title="Talk with Cassie: a voice conversation. Chat, teach her a topic, or get quizzed out loud." aria-label="Talk with Cassie" hidden>
+      <button type="button" id="voice-btn" class="icon-btn round in-plus" title="Talk with Cassie: a voice conversation. Chat, teach her a topic, or get quizzed out loud." aria-label="Talk with Cassie" hidden>
         <svg class="ic-line" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-ia="bars"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
       </button>
       <button type="button" id="mic-btn" class="icon-btn round" title="Ask by voice" aria-label="Ask by voice" hidden>
