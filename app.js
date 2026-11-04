@@ -1876,6 +1876,7 @@ function renderFormatted(container, text) {
       }
       // Cassie's board: render the drawing instead of showing JSON as code — whatever
       // the block was tagged, and even if the JSON is a little off.
+      if (lang === 'cassie-draw') { liveDrawInto(container, body); return; } // (v251: a live drawing)
       const B = window.CassieBoard;
       if (B && (lang === 'cassie-board' || (B.looksLikeBoard && B.looksLikeBoard(lang, body)))) {
         const spec = B.parseSpec ? B.parseSpec(body) : null;
@@ -2582,7 +2583,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=250'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=251'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2604,7 +2605,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=250'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=251'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2738,7 +2739,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=250').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=251').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6076,6 +6077,7 @@ async function handleSend(text, opts = {}) {
   if (!text.trim() && !images.length && !docs.length) return;
   if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
   if (!images.length && !docs.length && !opts.mode) {
+    if (liveDrawRequest(text)) return liveDrawReply(text); // (v251: she draws it, live)
     const pic = imageRequest(text);
     if (pic) return handleImageRequest(text, pic.subject);
   }
@@ -6483,6 +6485,92 @@ async function answerPicture(label) {
   } catch (e) { bubble.appendChild(Object.assign(document.createElement('p'), { textContent: CassieErrors.say('picture_save_failed') })); }
   state.messages.push({ role: 'assistant', content: '[I saved a picture of my answer]', display: caption });
   save();
+}
+/* ---------- (v251) Live drawing: Cassie explains with real graphics, drawn while she talks ----------
+   "Draw me a jet", "show me how the heart pumps", "explain photosynthesis with a diagram": she writes a drawing as a
+   small JSON spec (flat for steps and processes, a 3D model for real objects) and livedraw.js draws it part by part,
+   each part with its name and a sentence. Pictures (a photo, a poster, "realistic") still go to the picture maker,
+   and graphs of equations stay on the math board. It counts as one question, like any answer. */
+const LIVE_DRAW_RE = /\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing)\b|\bshow\s+me\s+(?:how|what|the\s+parts|the\s+inside)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
+const LIVE_PIC_RE = /\b(?:picture|pic|photo|image|realistic|photorealistic|poster|logo|wallpaper|paint(?:ing)?|cartoon|anime|larawan|illustration\s+of\s+a\s+(?:person|character))\b/i;
+const LIVE_MATH_RE = /\b(?:graph|plot|chart|equation|function|parabola|slope|y\s*=|f\(x\)|x\^)/i;
+function liveDrawRequest(text) {
+  const t = String(text || '').trim();
+  if (t.length < 6 || t.length > 400 || !LIVE_DRAW_RE.test(t) || LIVE_PIC_RE.test(t) || LIVE_MATH_RE.test(t)) return null;
+  return { topic: t };
+}
+const LIVE_LITE = () => document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function liveDrawPrompt(lite) {
+  return `You are Cassie, a warm tutor who explains by DRAWING. Reply with ONLY one JSON object, no other text, no markdown fence.
+Choose "mode": "3d" when the answer is a real physical object you can turn around (a machine or engine, an organ, a cell, the Earth's layers, a volcano, a molecule, a building, a plant).${lite ? ' (This phone is in Lite mode: use "2d" only.)' : ''} Choose "2d" for processes, cycles, steps, comparisons, timelines, maps, flows and code ideas.
+Schema:
+{"title": short title, "mode": "2d" or "3d", "axis": "x" (3d only: the long axis the parts line up on), "intro": one short sentence, "summary": one short sentence that ties it together,
+ "parts": [ 3 to 8 parts IN TEACHING ORDER, each {"id": short id, "label": 1 to 3 words, "say": 1 or 2 short sentences that explain this part, "color": "#hex", "glow": true only for hot or glowing parts, "spin": true only for parts that spin (fans, turbines, wheels), "shell": true only for an outer case or skin that hides the inside (3d), "shapes": [...] } ] }
+2d shapes (picture is 400 wide, 260 tall; keep everything inside 10..390 and 20..250; draw the real object or process, not just boxes):
+ {"t":"path","d":"M.. C.. Q.. L.. Z"} curves and outlines, {"t":"line","x1","y1","x2","y2"}, {"t":"arrow","x1","y1","x2","y2"} for movement or flow,
+ {"t":"rect","x","y","w2","h","r"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"poly","pts":[[x,y],...]}, {"t":"text","x","y","text","size"} only for short values like numbers;
+ any shape may add "fill": true (a soft fill in the part's colour) or "dash": true. Up to 12 shapes a part. The part's label is placed for you.
+3d shapes (units: the whole model about 6 long; centre it on 0,0,0; "pos":[x,y,z]; "axis":"x"|"y"|"z" is the direction a shape runs):
+ {"t":"cylinder","r","r2","len","axis","pos","open":true for a hollow case,"cut":true to show a cutaway}, {"t":"disc","r","thick","axis","pos"}, {"t":"cone","r","len","axis","pos","dir":1 or -1},
+ {"t":"sphere","r","pos","cut":true for a cutaway}, {"t":"box","size":[w,h,d],"pos"}, {"t":"torus","r","tube","axis","pos"}, {"t":"blades","n","len","width","hub","axis","pos"} for fans and turbines; "rot":[x,y,z] radians to tilt. Up to 8 shapes a part.
+Rules: build it so it really looks like the thing (proportions, the right number of parts, parts touching where they connect). Use the student's language (English, Filipino or Taglish, like they wrote). Facts must be correct. No dashes in the words. No emojis.`;
+}
+async function liveDrawAsk(question) {
+  const lite = LIVE_LITE();
+  const messages = [{ role: 'system', content: liveDrawPrompt(lite) }, { role: 'user', content: question }];
+  let reply = '';
+  if (SERVER && serverClaude) { try { reply = await serverChat(messages, { brain: 'claude', maxTokens: 4000, q: true }); } catch (e) { reply = ''; } }
+  if (!reply && (state.groqKey || SERVER)) { try { reply = await groqChat(messages, { model: state.groqModel, maxTokens: 4000, rotate: true, q: true }); } catch (e) { if (!state.geminiKey) throw e; } }
+  if (!reply) reply = await askCassie([{ role: 'user', content: liveDrawPrompt(lite) + '\n\nThe question: ' + question }], null, {});
+  return reply;
+}
+let liveDrawLib = null;
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=251')));
+// a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
+let liveDrawFresh = false;
+function liveDrawInto(container, body) {
+  const box = document.createElement('div'); box.className = 'ld ld-loading';
+  box.innerHTML = '<p class="ld-say">Cassie is getting her pencils…</p>';
+  container.appendChild(box);
+  const animate = liveDrawFresh; liveDrawFresh = false;
+  liveDrawLoad().then((m) => m.render(box, body, {
+    animate,
+    onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`),
+    onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
+    onRealistic: (spec) => handleImageRequest(`a realistic picture of ${spec.title}`, `a realistic labelled cutaway of ${spec.title}`),
+  })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; scrollToBottom(); })
+    .catch(() => { box.classList.remove('ld-loading'); box.innerHTML = '<p class="ld-say">This drawing could not load. Check the connection and open the chat again.</p>'; });
+}
+async function liveDrawReply(text) {
+  const label = text.trim();
+  if (!state.messages.length) chatLog.innerHTML = '';
+  state.messages.push({ role: 'user', content: label });
+  touchChat(); save();
+  renderMessage('user', label);
+  promptInput.value = ''; autoGrow(); clearFollowups();
+  if (!canChat()) { const b = renderMessage('assistant', 'I need a key to draw. Add one in Settings.'); b.classList.add('need-key-msg'); openSettings(); return; }
+  mascotReact && mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
+  const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
+  const done = busyButton(sendBtn);
+  try {
+    const reply = await liveDrawAsk(label);
+    const m = await liveDrawLoad(), spec = m.clean(reply);
+    typing.remove();
+    if (!spec) { // she answered in words: show them as usual
+      const words = noDashes(String(reply || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
+      state.messages.push({ role: 'assistant', content: words }); save(); renderMessage('assistant', words); return;
+    }
+    const fenced = '```cassie-draw\n' + JSON.stringify(spec) + '\n```';
+    state.messages.push({ role: 'assistant', content: `[I drew a live ${spec.mode === '3d' ? '3D model' : 'diagram'}: ${spec.title}. Parts: ${spec.parts.map((p) => p.label).join(', ')}. ${spec.summary}]`, display: fenced });
+    save();
+    liveDrawFresh = true;
+    renderMessage('assistant', fenced);
+    track('feature', spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
+    mascotCelebrate();
+  } catch (err) {
+    typing.remove();
+    renderError(err, () => liveDrawReply(label), 'unknown');
+  } finally { done(); setCursorMode('idle'); }
 }
 async function handleImageRequest(text, subject) {
   const label = text.trim();
@@ -7574,7 +7662,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=250');
+      exploreMod = await import('./explore/cell3d.js?v=251');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7624,7 +7712,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=250');
+      labsMod = await import('./labs/labs.js?v=251');
       islandRest();
     }
     labsMod.open({
@@ -9483,10 +9571,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=250').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=251').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=250', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=251', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
