@@ -2621,11 +2621,15 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   await page.evaluate(() => createNewChat());
   // 1. "draw" asks first; nothing is drawn yet
   await page.fill('#prompt-input', 'draw me how photosynthesis works'); await page.click('#send-btn');
-  await page.waitForSelector('#chat-log .ld-ask button', { timeout: 10000 });
-  const ask = await page.evaluate(() => [...document.querySelectorAll('#chat-log .ld-ask button')].map((x) => x.textContent));
-  expect(ask.join() === 'Draw it,3D model,Just explain' && !calls.length, '1. "draw" asks how to show it (no real photo without Gemini) before any drawing: ' + JSON.stringify([ask, calls.length]));
+  await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
+  const ask = await page.evaluate(() => { const pop = document.querySelector('.ld-pop'), comp = document.getElementById('composer').getBoundingClientRect(), r = pop.getBoundingClientRect(); return { ways: [...pop.querySelectorAll('.ld-ask button')].map((x) => x.querySelector('.ld-pop-t').textContent + ': ' + x.querySelector('.ld-pop-d').textContent), dialog: pop.getAttribute('role'), above: r.bottom <= comp.top && r.top >= 0, kept: document.getElementById('prompt-input').value, inChat: !!document.querySelector('#chat-log .ld-ask'), focus: document.activeElement.dataset.show, tall: Math.min(...[...pop.querySelectorAll('.ld-ask button')].map((x) => x.getBoundingClientRect().height)) }; });
+  expect(ask.ways.map((w) => w.split(':')[0]).join() === 'Draw it,3D model,Just explain' && ask.ways.every((w) => /: \S/.test(w)) && ask.dialog === 'dialog' && ask.above && ask.kept === 'draw me how photosynthesis works' && !ask.inChat && ask.focus === 'draw' && ask.tall >= 48 && !calls.length, '1. "draw" pops up How should I show it? over the ask box (each way with a line on what it gives, no real photo without Gemini, the words kept in the ask box) before any drawing: ' + JSON.stringify([ask, calls.length]));
+  // Escape closes it and keeps the words; asking again brings it back
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => !document.querySelector('.ld-pop') && document.getElementById('prompt-input').value === 'draw me how photosynthesis works'), '1. Escape closes it and keeps the question in the ask box');
+  await page.click('#send-btn'); await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
   // 2. Draw it: the first stroke comes while the check is still looking
-  await page.click('#chat-log [data-show="draw"]');
+  await page.click('.ld-pop [data-show="draw"]');
   await page.waitForSelector('#chat-log .ld-part > [data-drawing], #chat-log .ld-part > [data-drawn]', { timeout: 20000 });
   const firstStroke = Date.now();
   await page.waitForFunction(() => /Cassie drew it/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 90000 });
@@ -2635,7 +2639,8 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   const lab = await page.evaluate(() => {
     const d = document.querySelector('#chat-log .ld'), spec = LD_EXAMPLE_PHOTO, parts = [...d.querySelectorAll('.ld-part')];
     const bb = (n) => { const r = n.getBBox(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }, hit = (a, c) => a.x < c.x + c.w - 1 && c.x < a.x + a.w - 1 && a.y < c.y + c.h - 1 && c.y < a.y + a.h - 1;
-    const hard = parts.flatMap((g) => [...g.children]).map(bb).filter((r) => r.w * r.h < 400 * 260 / 3);
+    const els = parts.flatMap((g) => [...g.children]); // (each stroke by its real outline: a line by its line, a curve by its curve, a word by its box)
+    const over = (box) => els.some((n) => { const r = bb(n); if (!hit(box, { x: r.x - 1, y: r.y - 1, w: r.w + 2, h: r.h + 2 })) return false; if (n.tagName === 'text') return true; for (let y = box.y + 1; y < box.y + box.h - 1; y += 2) for (let x = box.x + 1; x < box.x + box.w - 1; x += 2) { if (n.tagName === 'line') { const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((k) => +n.getAttribute(k)), dx = x2 - x1, dy = y2 - y1, t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy || 1))); if (Math.hypot(x - x1 - t * dx, y - y1 - t * dy) <= 1) return true; } else { const pt = new DOMPoint(x, y); if (((n.getAttribute('fill') || 'none') !== 'none' && n.isPointInFill(pt)) || n.isPointInStroke(pt)) return true; } } return false; });
     const out = { n: 0, markers: d.querySelectorAll('.ld-marker').length, offAnchor: [], offShape: [], overHard: [], overlaps: 0 }, boxes = [];
     d.querySelectorAll('.ld-label').forEach((g) => {
       const i = +g.dataset.i, a = spec.parts[i].anchor; out.n++;
@@ -2643,12 +2648,16 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
       const ln = g.querySelector('.ld-lead'); if (Math.abs(+ln.getAttribute('x2') - a[0]) > .5 || Math.abs(+ln.getAttribute('y2') - a[1]) > .5) out.offAnchor.push(i + 1);
       if (![...parts[i].children].some((s) => { const r = bb(s); return a[0] >= r.x - 6 && a[0] <= r.x + r.w + 6 && a[1] >= r.y - 6 && a[1] <= r.y + r.h + 6; })) out.offShape.push(i + 1);
       const box = bb(g.querySelector('.ld-lbg')); boxes.push(box);
-      if (hard.some((r) => hit(box, r))) out.overHard.push(i + 1);
+      const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((k) => +ln.getAttribute(k)), len = Math.hypot(x2 - x1, y2 - y1); out.far = Math.max(out.far || 0, Math.round(len));
+      const words = els.filter((n) => n.tagName === 'text').map(bb);
+      for (let k = 1; k < 20; k++) { const x = x1 + (x2 - x1) * k / 20, y = y1 + (y2 - y1) * k / 20; if (words.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h)) { out.crossWord = (out.crossWord || []).concat(i + 1); break; } }
+      if (over(box)) out.overHard.push(i + 1);
     });
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (hit(boxes[i], boxes[j])) out.overlaps++;
     return out;
   });
   expect(lab.n === 7 && !lab.offAnchor.length && !lab.offShape.length && !lab.overHard.length && !lab.overlaps, '3. each name ends at its own anchor on its own shape, never over a stroke, a word or another name: ' + JSON.stringify(lab));
+  expect(!lab.crossWord && lab.far <= 48, '3. no name\u2019s line crosses a word (the Glucose line clear of C6H12O6), and every name sits close to its part: ' + JSON.stringify(lab));
   // 4. the check asks about every number
   const look = calls.find((c) => c.look);
   expect(look && ['1 = Sunlight', '2 = Leaf', '3 = Chloroplast', '7 = Glucose'].every((x) => look.all.includes(x)) && /For EACH number/.test(look.all), '4. the check lists every numbered name and asks about each one');
@@ -2659,7 +2668,7 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   const before = calls.length;
   await page.fill('#prompt-input', 'sketch how photosynthesis works'); await page.click('#send-btn');
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2, null, { timeout: 30000 });
-  expect(!(await page.locator('#chat-log .ld-ask').count()) && calls.slice(before).some((c) => c.sys), '6. the way to show it is kept for the chat');
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(before).some((c) => c.sys), '6. the way to show it is kept for the chat');
   // 7. the check says number 2 points at the sun: one redraw naming it, swapped in place, and she says so
   for (let k = 0; k < 40 && calls.filter((c) => c.look).length < 2; k++) await page.waitForTimeout(250); await page.waitForTimeout(2800);
   lookReply = () => '{"labels":[{"n":2,"ok":false,"points_at":"the sun"}],"shapes":[],"facts":[]}';
@@ -2670,16 +2679,16 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   expect(re && /number 2 \("Leaf"\) points at the sun; move its anchor onto the Leaf itself/.test(re.all.replace(/\\"/g, '"')) && fixed.n === 3 && fixed.note === 'Cassie fixed her drawing' && fixed.saved === 3, '7. a wrong label is redrawn once, swapped in place, with a note: ' + JSON.stringify(fixed));
   // 8. Show another way asks again; Just explain answers in words
   await page.locator('#chat-log .ld-change').last().click();
-  await page.waitForSelector('#chat-log .ld-ask button', { timeout: 10000 });
-  await page.click('#chat-log [data-show="explain"]');
+  await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
+  await page.click('.ld-pop [data-show="explain"]');
   await page.waitForFunction(() => /Answer in words/.test(document.querySelector('#chat-log').textContent), null, { timeout: 30000 });
   expect(await page.evaluate(() => curChat().showAs === 'explain'), '8. Show another way asks again, and Just explain answers in words');
   // 9. a 3D ask skips the question; with Gemini, Real photo is offered
   await page.evaluate(() => createNewChat()); const b3 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a heart'); await page.click('#send-btn'); await page.waitForTimeout(800);
-  expect(!(await page.locator('#chat-log .ld-ask').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model');
+  expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model');
   await page.waitForFunction(() => !document.querySelector('#chat-log .ld-loading') && !!document.querySelector('#chat-log .ld'), null, { timeout: 30000 });
-  const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('#chat-log .ld-ask button')].map((x) => x.textContent); document.querySelector('#chat-log .ld-askbubble').remove(); state.geminiKey = ''; return r; });
+  const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-t')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
   expect(four.join() === 'Draw it,3D model,Real photo,Just explain', '9. with Gemini there are four ways: ' + four.join());
   // 10. the app's own check: plain circles standing in for a leaf, and an anchor off its shape
   const chk = await page.evaluate(async () => { const m = await import('./livedraw.js?v=253'); const leaf = { title: 'x', mode: '2d', parts: [{ id: 'leaf', label: 'Leaf', box: [100, 60, 200, 140], shapes: [{ t: 'circle', cx: 200, cy: 130, r: 60, fill: true }, { t: 'circle', cx: 200, cy: 130, r: 30 }] }, { id: 'sun', label: 'Sun', box: [10, 10, 80, 80], anchor: [300, 240], shapes: [{ t: 'circle', cx: 40, cy: 40, r: 20 }, { t: 'line', x1: 40, y1: 10, x2: 40, y2: 2 }] }] }; return m.check(m.clean(JSON.stringify(leaf))); });
