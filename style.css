@@ -3916,3 +3916,28 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-photo-wrap img { display: block; width: 100%; height: auto; }
 .ld-pin { position: absolute; transform: translate(-50%, -50%); padding: var(--sp-1, 4px) var(--sp-2, 8px); border-radius: 99px; background: color-mix(in srgb, var(--bg) 85%, transparent); color: var(--text); border: 1px solid var(--lg-line, var(--border)); font-size: .76rem; font-weight: 700; white-space: nowrap; pointer-events: none; }
 .ld-pin::after { content: ""; position: absolute; left: 50%; top: 100%; width: 6px; height: 6px; margin-top: 2px; transform: translateX(-50%); border-radius: 50%; background: var(--primary); }
+/* (v253) labels point at an anchor on their part; a compact action row under each drawing */
+.ld-anchor { fill: var(--text); stroke: var(--bg); stroke-width: 1; }
+.ld-marker { stroke-width: 1.5; }
+.ld-legend { margin: 0 2px; font-size: .8rem; font-weight: 600; color: var(--muted); white-space: pre-wrap; }
+.ld-acts { gap: var(--sp-2, 8px); }
+.ld-acts .ld-btn { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1, 4px); min-height: 32px; padding: 0 var(--sp-3, 12px) 0 var(--sp-2, 8px); border: 1px solid var(--lg-line, var(--border)); border-radius: 999px; background: transparent; color: var(--muted); font-size: .8rem; font-weight: 600; }
+.ld-acts .ld-btn svg { width: 16px; height: 16px; flex: none; }
+.ld-acts .ld-btn::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; bottom: -8px; } /* (a 32px chip with a 48px tap) */
+@media (hover: hover) { .ld-acts .ld-btn:hover { color: var(--text); border-color: var(--text); } }
+.ld-acts .ld-btn[aria-pressed="true"] { color: var(--bg); background: var(--text); border-color: var(--text); }
+@media (pointer: coarse) { .ld-acts .ld-btn { min-height: 32px; } .ld-acts { row-gap: var(--sp-4, 16px); } }
+.bubble:has(.ld) .listen-btn { min-height: 32px; padding: 0 var(--sp-3, 12px); font-size: .8rem; color: var(--muted); }
+.ld-fixed { margin: 0; font-size: .78rem; color: var(--muted); }
+/* the "how should I show it" choice */
+.ld-ask { display: flex; flex-wrap: wrap; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.ld-ask button { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1, 4px); min-height: 36px; padding: 0 var(--sp-3, 12px); border: 1px solid var(--lg-line, var(--border)); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer; }
+.ld-ask button::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+.ld-ask button svg { width: 16px; height: 16px; }
+@media (hover: hover) { .ld-ask button:hover { border-color: var(--text); } }
+.ld-ask button:focus-visible, .ld-acts .ld-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* (v253) a hidden action stays hidden; "Show another way" is a quiet link at the end of the row */
+.ld-acts .ld-btn[hidden] { display: none; }
+.ld-acts .ld-btn.ld-change { border-color: transparent; padding: 0 var(--sp-2, 8px); text-decoration: underline; text-underline-offset: 4px; }
+.ld-acts .ld-btn.ld-change svg { display: none; }
+@media (pointer: coarse) { .ld-ask { row-gap: var(--sp-6, 24px); } } /* (48px taps, kept 8px apart when the choices wrap) */

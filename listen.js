@@ -37,11 +37,12 @@
   }
   function dress() {
     log.querySelectorAll('.bubble-assistant').forEach((bubble) => {
-      if (bubble.querySelector('.listen-btn') || bubble.querySelector('.typing-dots')) return;
+      if (bubble.querySelector('.listen-btn') || bubble.querySelector('.typing-dots') || bubble.classList.contains('ld-askbubble')) return; // (not on the How should I show it question)
       if (words(bubble).trim().length < 2) return;
-      const row = bubble.querySelector('.bubble-tools');
+      const row = bubble.querySelector('.bubble-tools'), acts = bubble.querySelector('.ld-acts');
       const b = button(() => words(bubble));
-      if (row) row.prepend(b);
+      if (acts) { b.classList.add('ld-btn'); acts.prepend(b); } // (a drawing: with its own small actions)
+      else if (row) row.prepend(b);
       else { const r = document.createElement('div'); r.className = 'listen-row'; r.appendChild(b); bubble.appendChild(r); }
     });
     // the 3D explorers' part card
