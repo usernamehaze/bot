@@ -2583,7 +2583,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=252'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=253'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2605,7 +2605,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=252'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=253'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2739,7 +2739,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=252').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=253').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6077,7 +6077,7 @@ async function handleSend(text, opts = {}) {
   if (!text.trim() && !images.length && !docs.length) return;
   if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
   if (!images.length && !docs.length && !opts.mode) {
-    if (liveDrawRequest(text)) return liveDrawReply(text); // (v251: she draws it, live)
+    if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
     const pic = imageRequest(text);
     if (pic) return handleImageRequest(text, pic.subject);
   }
@@ -6491,7 +6491,10 @@ async function answerPicture(label) {
    small JSON spec (flat for steps and processes, a 3D model for real objects) and livedraw.js draws it part by part,
    each part with its name and a sentence. Pictures (a photo, a poster, "realistic") still go to the picture maker,
    and graphs of equations stay on the math board. It counts as one question, like any answer. */
-const LIVE_DRAW_RE = /\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing)\b|\bshow\s+me\s+(?:how|what|the\s+parts|the\s+inside)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
+// (v253) any way of asking to see it ("draw", "show me", "sketch", "build me", "illustrate", "diagram", "visualize"):
+// Cassie asks how to show it, once a chat (Draw it, 3D model, Real photo, Just explain). A message that already says
+// how ("in 3D") skips the question; pictures and photos keep the picture maker, graphs keep the math board.
+const LIVE_DRAW_RE = /\b(?:draw|sketch|diagram|illustrate|visuali[sz]e|iguhit|idrawing|i-?drawing|ipakita)\b|\bshow\s+(?:me|us)\b|\bbuild\s+(?:me|us)\b|\bmake\s+(?:me\s+)?an?\s+(?:diagram|model|drawing|sketch)\b|\b(?:explain|teach)\b.*\b(?:with|using|in)\s+(?:a\s+)?(?:drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
 const LIVE_PIC_RE = /\b(?:picture|pic|photo|image|realistic|photorealistic|poster|logo|wallpaper|paint(?:ing)?|cartoon|anime|larawan|illustration\s+of\s+a\s+(?:person|character))\b/i;
 const LIVE_MATH_RE = /\b(?:graph|plot|chart|equation|function|parabola|slope|y\s*=|f\(x\)|x\^)/i;
 function liveDrawRequest(text) {
@@ -6499,58 +6502,61 @@ function liveDrawRequest(text) {
   if (t.length < 6 || t.length > 400 || !LIVE_DRAW_RE.test(t) || LIVE_PIC_RE.test(t) || LIVE_MATH_RE.test(t)) return null;
   return { topic: t };
 }
-const LIVE_LITE = () => document.documentElement.classList.contains('lite') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-// (v252) she draws flat (2d) unless the student asks for 3D; "draw" never means 3D
 const LIVE_3D_RE = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
-const LD_EXAMPLE_HOUSE = {"title":"A house being built","mode":"2d","layout":"side view; the ground at y 232; the house 60 to 340 wide; the roof peak at y 40","intro":"A house goes up from the ground: foundation, floor, walls, then roof.","summary":"Foundation, floor joists, wall studs, top plate, roof trusses, then sheathing closes it in.","photo":"a real timber frame house under construction on a building site, concrete foundation, exposed wall studs and roof trusses, partly covered with plywood sheathing","parts":[
- {"id":"found","label":"Foundation","say":"First a concrete foundation is poured into the ground to carry the weight.","color":"#a3a3ad","box":[56,206,288,30],"shapes":[{"t":"line","x1":20,"y1":232,"x2":380,"y2":232},{"t":"rect","x":60,"y":208,"w2":280,"h":24,"fill":true},{"t":"line","x1":60,"y1":220,"x2":340,"y2":220,"dash":true}]},
- {"id":"joists","label":"Floor joists","say":"Wooden joists lie across the foundation to hold up the floor.","color":"#ffb067","box":[58,196,284,12],"shapes":[{"t":"line","x1":60,"y1":200,"x2":340,"y2":200},{"t":"line","x1":60,"y1":206,"x2":340,"y2":206},{"t":"line","x1":100,"y1":200,"x2":100,"y2":206},{"t":"line","x1":160,"y1":200,"x2":160,"y2":206},{"t":"line","x1":220,"y1":200,"x2":220,"y2":206},{"t":"line","x1":280,"y1":200,"x2":280,"y2":206}]},
- {"id":"studs","label":"Wall studs","say":"Upright studs about 40 cm apart make the wall frame.","color":"#ffd29e","box":[60,118,280,82],"shapes":[{"t":"line","x1":64,"y1":198,"x2":64,"y2":120},{"t":"line","x1":104,"y1":198,"x2":104,"y2":120},{"t":"line","x1":144,"y1":198,"x2":144,"y2":120},{"t":"rect","x":168,"y":150,"w2":44,"h":48},{"t":"line","x1":232,"y1":198,"x2":232,"y2":120},{"t":"line","x1":272,"y1":198,"x2":272,"y2":120},{"t":"line","x1":312,"y1":198,"x2":312,"y2":120},{"t":"line","x1":336,"y1":198,"x2":336,"y2":120}]},
- {"id":"plate","label":"Top plate","say":"A top plate ties the studs together and carries the roof.","color":"#c9a7ff","box":[58,112,284,10],"shapes":[{"t":"line","x1":60,"y1":116,"x2":340,"y2":116},{"t":"line","x1":60,"y1":120,"x2":340,"y2":120}]},
- {"id":"truss","label":"Roof trusses","say":"Triangle trusses sit on top. Triangles keep the roof strong and stiff.","color":"#7fb0ff","box":[46,38,308,80],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[352,116],[48,116]]},{"t":"line","x1":200,"y1":40,"x2":200,"y2":116},{"t":"line","x1":124,"y1":78,"x2":160,"y2":116},{"t":"line","x1":276,"y1":78,"x2":240,"y2":116}]},
- {"id":"sheath","label":"Sheathing","say":"Plywood sheathing is nailed on to close in the walls and roof.","color":"#8fe0b0","box":[60,40,148,160],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[200,52],[72,116]],"fill":true},{"t":"rect","x":64,"y":122,"w2":80,"h":76,"fill":true}]}]};
-const LD_EXAMPLE_WATER = {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[
- {"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}]},
- {"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}]},
- {"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}]},
- {"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}]},
- {"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}]},
- {"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}]}]};
+const LD_EXAMPLE_HOUSE = {"title":"A house being built","mode":"2d","layout":"side view; the ground at y 232; the house 60 to 340 wide; the roof peak at y 40","intro":"A house goes up from the ground: foundation, floor, walls, then roof.","summary":"Foundation, floor joists, wall studs, top plate, roof trusses, then sheathing closes it in.","photo":"a real timber frame house under construction on a building site, concrete foundation, exposed wall studs and roof trusses, partly covered with plywood sheathing","parts":[{"id":"found","label":"Foundation","say":"First a concrete foundation is poured into the ground to carry the weight.","color":"#a3a3ad","box":[56,206,288,30],"shapes":[{"t":"line","x1":20,"y1":232,"x2":380,"y2":232},{"t":"rect","x":60,"y":208,"w2":280,"h":24,"fill":true},{"t":"line","x1":60,"y1":220,"x2":340,"y2":220,"dash":true}],"anchor":[200,220]},{"id":"joists","label":"Floor joists","say":"Wooden joists lie across the foundation to hold up the floor.","color":"#ffb067","box":[58,196,284,12],"shapes":[{"t":"line","x1":60,"y1":200,"x2":340,"y2":200},{"t":"line","x1":60,"y1":206,"x2":340,"y2":206},{"t":"line","x1":100,"y1":200,"x2":100,"y2":206},{"t":"line","x1":160,"y1":200,"x2":160,"y2":206},{"t":"line","x1":220,"y1":200,"x2":220,"y2":206},{"t":"line","x1":280,"y1":200,"x2":280,"y2":206}],"anchor":[160,203]},{"id":"studs","label":"Wall studs","say":"Upright studs about 40 cm apart make the wall frame.","color":"#ffd29e","box":[60,118,280,82],"shapes":[{"t":"line","x1":64,"y1":198,"x2":64,"y2":120},{"t":"line","x1":104,"y1":198,"x2":104,"y2":120},{"t":"line","x1":144,"y1":198,"x2":144,"y2":120},{"t":"rect","x":168,"y":150,"w2":44,"h":48},{"t":"line","x1":232,"y1":198,"x2":232,"y2":120},{"t":"line","x1":272,"y1":198,"x2":272,"y2":120},{"t":"line","x1":312,"y1":198,"x2":312,"y2":120},{"t":"line","x1":336,"y1":198,"x2":336,"y2":120}],"anchor":[272,160]},{"id":"plate","label":"Top plate","say":"A top plate ties the studs together and carries the roof.","color":"#c9a7ff","box":[58,112,284,10],"shapes":[{"t":"line","x1":60,"y1":116,"x2":340,"y2":116},{"t":"line","x1":60,"y1":120,"x2":340,"y2":120}],"anchor":[200,118]},{"id":"truss","label":"Roof trusses","say":"Triangle trusses sit on top. Triangles keep the roof strong and stiff.","color":"#7fb0ff","box":[46,38,308,80],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[352,116],[48,116]]},{"t":"line","x1":200,"y1":40,"x2":200,"y2":116},{"t":"line","x1":124,"y1":78,"x2":160,"y2":116},{"t":"line","x1":276,"y1":78,"x2":240,"y2":116}],"anchor":[200,80]},{"id":"sheath","label":"Sheathing","say":"Plywood sheathing is nailed on to close in the walls and roof.","color":"#8fe0b0","box":[60,40,148,160],"shapes":[{"t":"poly","pts":[[48,116],[200,40],[200,52],[72,116]],"fill":true},{"t":"rect","x":64,"y":122,"w2":80,"h":76,"fill":true}],"anchor":[104,160]}]};
+const LD_EXAMPLE_WATER = {"title":"The water cycle","mode":"2d","layout":"the sea along the bottom, a hill on the right, the sun top right, a cloud in the middle top","intro":"Water keeps moving between the sea, the sky and the land.","summary":"Evaporate, condense, fall, collect, and it starts again.","photo":"a real landscape with the sea, a hill, clouds and rain falling, on a sunny day","parts":[{"id":"sea","label":"Ocean","say":"Most water is in the oceans, lakes and rivers.","color":"#7fb0ff","box":[10,206,380,46],"shapes":[{"t":"path","d":"M10 222 Q60 210 110 222 T210 222 T310 222 T390 222","fill":false},{"t":"path","d":"M10 222 L10 250 L390 250 L390 222","fill":false}],"anchor":[200,236]},{"id":"sun","label":"Sun","say":"The sun heats the water.","color":"#ffd29e","box":[318,24,64,64],"shapes":[{"t":"circle","cx":350,"cy":56,"r":20,"fill":true},{"t":"line","x1":350,"y1":28,"x2":350,"y2":20},{"t":"line","x1":322,"y1":56,"x2":314,"y2":56},{"t":"line","x1":330,"y1":36,"x2":324,"y2":30}],"anchor":[350,56]},{"id":"evap","label":"Evaporation","say":"Warm water turns into vapour and rises.","color":"#8fe0b0","box":[100,110,70,96],"shapes":[{"t":"arrow","x1":112,"y1":204,"x2":112,"y2":116},{"t":"arrow","x1":136,"y1":204,"x2":136,"y2":116},{"t":"arrow","x1":160,"y1":204,"x2":160,"y2":116}],"anchor":[136,160]},{"id":"cloud","label":"Condensation","say":"High up the vapour cools into tiny drops: clouds.","color":"#a3a3ad","box":[150,40,124,48],"shapes":[{"t":"path","d":"M154 84 Q150 62 172 62 Q178 42 202 48 Q222 36 238 54 Q264 54 266 72 Q272 86 254 86 Z","fill":true},{"t":"path","d":"M182 70 Q194 62 206 70"}],"anchor":[210,66]},{"id":"rain","label":"Precipitation","say":"When the drops get heavy they fall as rain.","color":"#7ee0e0","box":[176,92,80,40],"shapes":[{"t":"line","x1":190,"y1":94,"x2":184,"y2":124,"dash":true},{"t":"line","x1":214,"y1":94,"x2":208,"y2":124,"dash":true},{"t":"line","x1":238,"y1":94,"x2":232,"y2":124,"dash":true}],"anchor":[214,108]},{"id":"runoff","label":"Runoff","say":"Rain runs down the land back to the sea.","color":"#c9a7ff","box":[240,140,140,82],"shapes":[{"t":"path","d":"M244 220 L300 148 L372 220"},{"t":"arrow","x1":326,"y1":190,"x2":272,"y2":216}],"anchor":[330,190]}]};
+const LD_EXAMPLE_PHOTO = {"title":"How photosynthesis works","mode":"2d","layout":"a leaf in the middle on its stem; the sun top left; CO2 coming in from the left; water rising from the roots; O2 leaving top right; glucose bottom right","intro":"A leaf makes its own food from light, air and water.","summary":"Light, carbon dioxide and water make glucose and release oxygen in the chloroplast.","photo":"a real green leaf on a plant in bright sunlight, close up, showing its veins","parts":[{"id":"sun","label":"Sunlight","say":"Sunlight gives the leaf the energy it needs.","color":"#ffd29e","box":[30,30,126,78],"anchor":[54,54],"shapes":[{"t":"circle","cx":54,"cy":54,"r":18,"fill":true},{"t":"line","x1":54,"y1":28,"x2":54,"y2":20},{"t":"line","x1":28,"y1":54,"x2":20,"y2":54},{"t":"line","x1":36,"y1":36,"x2":30,"y2":30},{"t":"arrow","x1":76,"y1":66,"x2":152,"y2":104}]},{"id":"leaf","label":"Leaf","say":"The leaf is a thin green blade with veins that carry water and food.","color":"#8fe0b0","box":[136,70,200,170],"anchor":[214,170],"shapes":[{"t":"path","d":"M150 190 C170 120 250 70 330 80 C320 150 250 200 150 190 Z","fill":true},{"t":"path","d":"M150 190 Q240 140 330 80"},{"t":"line","x1":200,"y1":160,"x2":204,"y2":132},{"t":"line","x1":200,"y1":160,"x2":226,"y2":178},{"t":"line","x1":250,"y1":128,"x2":252,"y2":100},{"t":"line","x1":250,"y1":128,"x2":282,"y2":146},{"t":"line","x1":150,"y1":190,"x2":140,"y2":236}]},{"id":"chloro","label":"Chloroplast","say":"Inside the leaf cells, chloroplasts catch the light with green chlorophyll.","color":"#7ee0e0","box":[244,108,36,24],"anchor":[262,120],"shapes":[{"t":"ellipse","cx":262,"cy":120,"rx":16,"ry":9,"fill":true},{"t":"path","d":"M251 117 L273 117"},{"t":"path","d":"M251 123 L273 123"}]},{"id":"co2","label":"Carbon dioxide in","say":"Carbon dioxide from the air enters through tiny holes called stomata.","color":"#a3a3ad","box":[16,130,148,40],"anchor":[90,152],"shapes":[{"t":"text","x":20,"y":142,"text":"CO2"},{"t":"arrow","x1":20,"y1":152,"x2":160,"y2":152},{"t":"arrow","x1":20,"y1":164,"x2":154,"y2":164}]},{"id":"water","label":"Water from roots","say":"The roots take in water, and it travels up the stem to the leaf.","color":"#7fb0ff","box":[118,196,48,60],"anchor":[147,216],"shapes":[{"t":"path","d":"M140 236 L124 252"},{"t":"path","d":"M140 236 L156 252"},{"t":"path","d":"M140 236 L140 254"},{"t":"arrow","x1":147,"y1":234,"x2":147,"y2":198},{"t":"text","x":152,"y":230,"text":"H2O"}]},{"id":"o2","label":"Oxygen out","say":"Oxygen is made and leaves the leaf into the air.","color":"#c9a7ff","box":[296,20,92,80],"anchor":[360,34],"shapes":[{"t":"arrow","x1":300,"y1":96,"x2":352,"y2":44},{"t":"circle","cx":360,"cy":34,"r":6},{"t":"circle","cx":374,"cy":30,"r":6},{"t":"text","x":352,"y":58,"text":"O2"}]},{"id":"gluc","label":"Glucose","say":"Glucose, a sugar, is the food the plant makes and uses to grow.","color":"#ffb067","box":[268,126,100,104],"anchor":[330,193],"shapes":[{"t":"arrow","x1":270,"y1":128,"x2":318,"y2":182},{"t":"poly","pts":[[318,186],[330,180],[342,186],[342,200],[330,206],[318,200],[318,186]],"fill":true},{"t":"text","x":296,"y":226,"text":"C6H12O6"}]}]};
 function liveDrawPrompt(want3d) {
-  return `You are Cassie, a careful tutor who explains by DRAWING, like a teacher drawing on a whiteboard. Reply with ONLY one JSON object, no other text, no markdown fence.
-ACCURACY FIRST: the drawing must look like the real thing (true proportions, the right number of parts, parts connected where they really connect), and every fact must be correct.
-"mode": ${want3d ? '"3d" (the student asked for 3D: build a model from the 3d shapes below)' : '"2d" (ALWAYS 2d: a flat pen drawing)'}.
-Plan first: "layout" says in words how the picture is arranged, and every part has a "box": [x, y, w, h] where it sits in the 400 wide by 260 tall picture. Then draw each part's strokes INSIDE its box. Spread the parts over the whole picture; leave about 30 px of free space somewhere for the names.
-Draw the real outline and inner lines of each part (silhouettes, edges, folds, holes, details), never just a plain box for a real object. 3 to 8 parts in TEACHING ORDER (the order you would draw them on a board), 2 to 24 strokes each. Every stroke is drawn on screen one by one, like a pen, so put each part's strokes in drawing order.
-Schema: {"title","mode","layout","intro": one short sentence,"summary": one short sentence,"photo": a precise description of a REAL photo of this subject (what is visible, where it is), "parts":[{"id","label": 1 to 3 words,"say": 1 or 2 short sentences,"color":"#hex","box":[x,y,w,h],"shapes":[...]}]}
-2d shapes (ABSOLUTE coordinates only, x 10 to 390, y 20 to 250): {"t":"line","x1","y1","x2","y2"}, {"t":"arrow","x1","y1","x2","y2"} for movement or flow, {"t":"path","d":"M x y L x y Q x y x y C x y x y x y Z"} using CAPITAL letters only, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} only for numbers or values; add "fill": true for a soft fill, "dash": true for a dashed line. Do not write the part names as text: the app writes each label for you.
-${want3d ? `3d shapes (the model about 6 units long, centred on 0,0,0; "pos":[x,y,z]; "axis":"x"|"y"|"z"): {"t":"cylinder","r","r2","len","axis","pos","open":true,"cut":true}, {"t":"disc","r","thick","axis","pos"}, {"t":"cone","r","len","axis","pos","dir":1 or -1}, {"t":"sphere","r","pos","cut":true}, {"t":"box","size":[w,h,d],"pos"}, {"t":"torus","r","tube","axis","pos"}, {"t":"blades","n","len","width","hub","axis","pos"}; parts may add "spin": true, "glow": true, "shell": true (an outer case). Add "axis" at the top level: the axis the parts line up along.\n` : ''}Two good 2d examples (follow this level of care, not these subjects):
+  return `You are Cassie, a careful tutor for students who explains by DRAWING on a whiteboard. Reply with ONLY one JSON object.
+Students learn from this: every fact, label, arrow direction and count MUST be correct. If you are not sure of something, leave that part out.
+"mode": ${want3d ? '"3d" (build a model from the 3d shapes below)' : '"2d" (a flat pen drawing)'}. Picture: 400 wide, 260 tall, absolute coordinates, x 10 to 390, y 20 to 250.
+Plan: "layout" says how it is arranged; every part has "box":[x,y,w,h] where it sits and "anchor":[x,y], a point ON its main shape (the sun's disc, the leaf's blade); its name's line ends there. Strokes stay inside the box. Spread parts over the picture and leave clear space for the names.
+Draw REAL outlines: a leaf with a pointed tip, a midrib and side veins; a cell with its real organelle shapes; an engine with its real profile. Never a plain circle or box for a real object. 3 to 8 parts in drawing order, 2 to 24 strokes each, each part's strokes in pen order.
+{"title","mode","layout","intro":one sentence,"summary":one sentence,"photo":what a real photo of it shows,"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","box","anchor","shapes":[...]}]}
+2d shapes: {"t":"line","x1","y1","x2","y2"}, {"t":"arrow",...same} for movement, {"t":"path","d":"M L Q C Z, CAPITAL letters only"}, {"t":"poly","pts":[[x,y],...]}, {"t":"rect","x","y","w2","h"}, {"t":"circle","cx","cy","r"}, {"t":"ellipse","cx","cy","rx","ry"}, {"t":"text","x","y","text"} for values only ("H2O"); "fill":true, "dash":true. Never write a part's name as text: the app does.
+${want3d ? `3d shapes (about 6 units long, centred on 0,0,0; "pos":[x,y,z]; "axis":"x"|"y"|"z"): cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}; parts may add "spin","glow","shell"; top level "axis".\n` : ''}Three good drawings (this level of care, not these subjects):
+${JSON.stringify(LD_EXAMPLE_PHOTO)}
 ${JSON.stringify(LD_EXAMPLE_HOUSE)}
 ${JSON.stringify(LD_EXAMPLE_WATER)}
-Use the student's language (English, Filipino or Taglish, like they wrote). No dashes in the words. No emojis.`;
+Use the student's language (English, Filipino or Taglish). No dashes in the words. No emojis.`;
 }
 // one drawing call: Cassie's best brain (Claude on her server) when it is there; otherwise the usual one, marked simpler
 async function liveDrawCall(messages, q) {
-  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 6000, q }); if (t) return { text: t, simple: false }; } catch (e) { /* the usual brain below */ } }
+  if (SERVER && serverClaude) { try { const t = await serverChat(messages, { brain: 'claude', maxTokens: 5000, q }); if (t) return { text: t, simple: false }; } catch (e) { /* the usual brain below */ } }
   if (state.groqKey || SERVER) { try { const t = await groqChat(messages, { model: state.groqModel, maxTokens: 5000, rotate: true, q }); if (t) return { text: t, simple: true }; } catch (e) { if (!state.geminiKey) throw e; } }
   return { text: await askCassie([{ role: 'user', content: messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n\n') }], null, {}), simple: true };
 }
-// Cassie looks at a picture of her own drawing and says what is wrong (never counted as a question)
+// Cassie looks at a picture of her own drawing (never counted as a question)
 async function liveDrawLook(text, png) {
   const image = { mimeType: 'image/png', base64: String(png).split(',')[1] || '' };
-  const sys = 'You check pictures for a tutor. Be strict and specific. Reply with ONLY one JSON object.';
+  const sys = 'You check drawings made for students. Be strict and specific. Reply with ONLY one JSON object.';
   try {
-    if (SERVER && serverClaude) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { brain: 'claude', maxTokens: 700 });
+    if (SERVER && serverClaude) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { brain: 'claude', maxTokens: 900 });
     if (state.geminiKey) return await askGeminiVision([{ role: 'user', content: sys + '\n\n' + text }], image, {});
-    if (SERVER) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { model: 'vision', maxTokens: 700 });
-    if (state.groqKey) return await askGroqVision([{ role: 'user', content: text }], [image], { system: sys, maxTokens: 700 });
+    if (SERVER) return await serverChat([{ role: 'system', content: sys }, { role: 'user', content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: png } }] }], { model: 'vision', maxTokens: 900 });
+    if (state.groqKey) return await askGroqVision([{ role: 'user', content: text }], [image], { system: sys, maxTokens: 900 });
   } catch (e) { /* no check this time */ }
   return '';
 }
 const ldJson = (t) => { const s = String(t || ''), a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a < 0 || b <= a) return null; try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; } };
-// draw, check it (the app's own checks, then a look at a picture of it), and redraw once each time something is wrong
-async function liveDrawAsk(question, onStep = () => {}) {
-  const want3d = LIVE_3D_RE.test(question);
+// the look's question: every numbered name, one by one; every shape; and the facts
+function liveDrawLookAsk(question, spec) {
+  return `This picture is a drawing for a student, meant to show: "${question}" (titled "${spec.title}").
+Its numbered names are: ${spec.parts.map((p, i) => `${i + 1} = ${p.label}`).join('; ')}.
+For EACH number, check that its line points at that very thing in the picture (not something else). For each part, check that its shape looks like the real thing. Check every fact, arrow direction and count.
+Reply {"labels":[{"n":1,"ok":true or false,"points_at":"what number 1 really points at"}],"shapes":[{"n":1,"ok":true or false,"why":"what is wrong with its shape"}],"facts":[{"ok":false,"fix":"a wrong fact and the right one"}]} with an entry for every number.`;
+}
+function liveDrawFixes(verdict, spec) {
+  if (!verdict || typeof verdict !== 'object') return [];
+  const name = (n) => (spec.parts[n - 1] || {}).label || `part ${n}`, out = [];
+  for (const l of Array.isArray(verdict.labels) ? verdict.labels : []) if (l && l.ok === false) out.push(`number ${l.n} ("${name(l.n)}") points at ${String(l.points_at || 'the wrong thing').slice(0, 80)}; move its anchor onto the ${name(l.n)} itself`);
+  for (const sh of Array.isArray(verdict.shapes) ? verdict.shapes : []) if (sh && sh.ok === false) out.push(`number ${sh.n} ("${name(sh.n)}") does not look like a real ${name(sh.n)}: ${String(sh.why || 'draw its real outline').slice(0, 120)}`);
+  for (const f of Array.isArray(verdict.facts) ? verdict.facts : []) if (f && f.ok === false && f.fix) out.push(`fact: ${String(f.fix).slice(0, 160)}`);
+  if (verdict.ok === false && Array.isArray(verdict.wrong)) verdict.wrong.forEach((w) => out.push(String(w).slice(0, 160)));
+  return out.slice(0, 10);
+}
+// the first drawing: as soon as one passes the app's own checks (re-asked once with what is wrong); shown at once
+async function liveDrawFirst(question, want3d) {
   const m = await liveDrawLoad();
   const messages = [{ role: 'system', content: liveDrawPrompt(want3d) }, { role: 'user', content: question }];
   let { text, simple } = await liveDrawCall(messages, true); // (the drawing is the one question it counts as)
@@ -6558,31 +6564,30 @@ async function liveDrawAsk(question, onStep = () => {}) {
   const issues = (sp) => (!sp ? ['the reply was not one valid JSON object in the schema'] : [...(!want3d && sp.mode === '3d' ? ['it must be a flat 2d pen drawing, mode "2d"'] : []), ...m.check(sp)]);
   let wrong = issues(spec);
   if (wrong.length) {
-    onStep('Cassie is fixing her drawing…');
     const again = await liveDrawCall([...messages, { role: 'assistant', content: String(text).slice(0, 12000) }, { role: 'user', content: `Your drawing has these problems:\n- ${wrong.join('\n- ')}\nSend the whole corrected JSON object again.` }], false);
     const s2 = m.clean(again.text);
-    if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; wrong = issues(s2); simple = simple || again.simple; }
+    if (s2 && issues(s2).length <= wrong.length) { spec = s2; text = again.text; simple = simple || again.simple; }
   }
-  if (!spec) return { text, spec: null };
-  if (!want3d && spec.mode === '3d') spec.mode = '2d';
-  // the look: a picture of the finished drawing, judged like a strict teacher would
-  const png = await m.snapshot(spec);
-  if (png) {
-    onStep('Cassie is checking her drawing…');
-    const verdict = ldJson(await liveDrawLook(`This picture is a drawing meant to show: "${question}" (titled "${spec.title}", parts: ${spec.parts.map((p, i) => `${i + 1} ${p.label}`).join(', ')}). Does it clearly and correctly look like that, with each numbered name on the right part? Reply {"ok": true} or {"ok": false, "wrong": ["short, specific things to fix, saying where"]}.`, png));
-    if (verdict && verdict.ok === false && Array.isArray(verdict.wrong) && verdict.wrong.length) {
-      onStep('Cassie is redrawing it…');
-      const fix = await liveDrawCall([...messages, { role: 'assistant', content: JSON.stringify(spec) }, { role: 'user', content: `I looked at a picture of your drawing. What is wrong:\n- ${verdict.wrong.slice(0, 8).map((x) => String(x).slice(0, 200)).join('\n- ')}\nRedraw it: send the whole corrected JSON object.` }], false).catch(() => null);
-      const s3 = fix && m.clean(fix.text);
-      if (s3 && issues(s3).length <= wrong.length) { spec = s3; simple = simple || fix.simple; }
-    }
-  }
-  if (!want3d && spec.mode === '3d') spec.mode = '2d';
-  spec.simple = simple;
-  return { text, spec };
+  if (spec && !want3d && spec.mode === '3d') spec.mode = '2d';
+  if (spec) { spec.simple = simple; spec.q = question.slice(0, 300); }
+  return { text, spec, messages, issues };
+}
+// the look, while she draws: a picture of the drawing, every number checked; one redraw when something is wrong
+async function liveDrawVerify(question, first) {
+  const m = await liveDrawLoad();
+  const png = await m.snapshot(first.spec);
+  if (!png) return null;
+  const fixes = liveDrawFixes(ldJson(await liveDrawLook(liveDrawLookAsk(question, first.spec), png)), first.spec);
+  if (!fixes.length) return null;
+  const fix = await liveDrawCall([...first.messages, { role: 'assistant', content: JSON.stringify(first.spec) }, { role: 'user', content: `I looked at a picture of your drawing. What is wrong:\n- ${fixes.join('\n- ')}\nRedraw it: send the whole corrected JSON object.` }], false).catch(() => null);
+  const s3 = fix && m.clean(fix.text);
+  if (!s3 || first.issues(s3).length) return null;
+  if (s3.mode === '3d' && first.spec.mode === '2d') s3.mode = '2d';
+  s3.simple = first.spec.simple || fix.simple; s3.q = first.spec.q;
+  return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=252')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=253')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -6595,14 +6600,49 @@ function liveDrawInto(container, body) {
   liveDrawLoad().then((m) => m.render(box, body, {
     animate,
     simpleNote: authToken() ? 'A simpler drawing: Cassie’s best drawing brain is busy right now.' : 'A simpler drawing. Sign in for Cassie’s best drawings.',
-    onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`),
+    onQuiz: (spec) => handleSend(`Quiz me on ${spec.title}`, { noDraw: true }),
     onAsk: (p, spec) => { promptInput.value = `Tell me more about the ${p.label} in ${spec.title}`; promptInput.dispatchEvent(new Event('input')); promptInput.focus(); },
     canRealistic: realPhotoOk,
     onRealistic: (spec) => realPhoto(spec),
-  })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; scrollToBottom(); })
+    onChange: (spec) => { const c = curChat(); if (c) { delete c.showAs; save(); } liveShowAsk(spec.q || spec.title); },
+  })).then((ok) => { box.classList.remove('ld-loading'); if (!ok) box.innerHTML = '<p class="ld-say">This drawing could not be shown.</p>'; liveDrawListen(box); scrollToBottom(); })
     .catch(() => { box.classList.remove('ld-loading'); box.innerHTML = '<p class="ld-say">This drawing could not load. Check the connection and open the chat again.</p>'; });
 }
-async function liveDrawReply(text) {
+// (v253) Listen sits in the drawing's own row of small actions, not on a row of its own
+function liveDrawListen(box) {
+  const acts = box.querySelector('.ld-acts'), bubble = box.closest('.bubble');
+  const move = () => { const b = bubble && bubble.querySelector('.listen-btn'); if (!acts || !b || acts.contains(b)) return !!b; const row = b.closest('.listen-row'); b.classList.add('ld-btn'); acts.prepend(b); if (row && !row.children.length) row.remove(); return true; };
+  if (!move()) setTimeout(move, 400);
+}
+// "How should I show it?": four small choices; the choice is kept for the rest of this chat
+const SHOW_ICON = { draw: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', '3d': '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', explain: '<path d="M4 5h16v11H9l-5 4z"/>' };
+function liveShowAsk(text) {
+  const c = curChat(), want3d = LIVE_3D_RE.test(text);
+  if (want3d) return liveDrawReply(text, true);
+  if (c && c.showAs) return liveShowGo(text, c.showAs);
+  promptInput.value = ''; autoGrow();
+  if (!state.messages.length) chatLog.innerHTML = '';
+  const b = renderMessage('assistant', 'How should I show it?');
+  b.classList.add('ld-askbubble');
+  const row = document.createElement('div'); row.className = 'ld-ask'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'How should Cassie show it');
+  [['draw', 'Draw it'], ['3d', '3D model'], ...(realPhotoOk() ? [['photo', 'Real photo']] : []), ['explain', 'Just explain']].forEach(([k, t]) => {
+    const btn = document.createElement('button'); btn.type = 'button'; btn.dataset.show = k;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SHOW_ICON[k]}</svg><span></span>`;
+    btn.querySelector('span').textContent = t;
+    btn.addEventListener('click', () => { const cc = curChat(); if (cc) { cc.showAs = k; save(); } b.remove(); liveShowGo(text, k); });
+    row.appendChild(btn);
+  });
+  b.querySelectorAll('.listen-row, .listen-btn').forEach((n) => n.remove());
+  b.appendChild(row); scrollToBottom();
+  row.querySelector('button').focus({ preventScroll: true });
+}
+function liveShowGo(text, k) {
+  if (k === '3d') return liveDrawReply(text, true);
+  if (k === 'photo' && realPhotoOk()) return realPhoto({ title: text, photo: text, parts: [] }, text);
+  if (k === 'explain' || k === 'photo') return handleSend(text, { noDraw: true });
+  return liveDrawReply(text, false);
+}
+async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text)) {
   const label = text.trim();
   if (!state.messages.length) chatLog.innerHTML = '';
   state.messages.push({ role: 'user', content: label });
@@ -6613,30 +6653,42 @@ async function liveDrawReply(text) {
   mascotReact('image'); setCursorMode('thinking'); botMood('drawing');
   const typing = renderTyping(); setTypingStatus(typing, 'Cassie is sketching…');
   const done = busyButton(sendBtn);
+  let first;
   try {
-    const { text: reply, spec } = await liveDrawAsk(label, (t) => setTypingStatus(typing, t));
+    first = await liveDrawFirst(label, want3d);
     typing.remove();
-    if (!spec) { // she answered in words: show them as usual
-      const words = noDashes(String(reply || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
+    if (!first.spec) { // she answered in words: show them as usual
+      const words = noDashes(String(first.text || '').replace(/```[\s\S]*?```/g, '').trim()) || 'I could not draw that one. Try asking it a little differently.';
       state.messages.push({ role: 'assistant', content: words }); save(); renderMessage('assistant', words); return;
     }
-    const fenced = '```cassie-draw\n' + JSON.stringify(spec) + '\n```';
-    state.messages.push({ role: 'assistant', content: `[I drew a live ${spec.mode === '3d' ? '3D model' : 'diagram'}: ${spec.title}. Parts: ${spec.parts.map((p) => p.label).join(', ')}. ${spec.summary}]`, display: fenced });
-    save();
-    liveDrawFresh = true;
-    renderMessage('assistant', fenced);
-    track('feature', spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
-    mascotCelebrate();
   } catch (err) {
-    typing.remove();
-    renderError(err, () => liveDrawReply(label), 'unknown');
-  } finally { done(); setCursorMode('idle'); }
+    typing.remove(); done(); setCursorMode('idle');
+    renderError(err, () => liveDrawReply(label, want3d), 'unknown');
+    return;
+  }
+  const fenced = (sp) => '```cassie-draw\n' + JSON.stringify(sp) + '\n```';
+  const note = (sp) => `[I drew a live ${sp.mode === '3d' ? '3D model' : 'diagram'}: ${sp.title}. Parts: ${sp.parts.map((p) => p.label).join(', ')}. ${sp.summary}]`;
+  const msg = { role: 'assistant', content: note(first.spec), display: fenced(first.spec) };
+  state.messages.push(msg); save();
+  liveDrawFresh = true;
+  const bubble = renderMessage('assistant', fenced(first.spec)); // (she starts drawing now, while the check runs)
+  track('feature', first.spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
+  done(); setCursorMode('idle'); mascotCelebrate();
+  if (first.spec.mode !== '2d') return;
+  try {
+    const better = await liveDrawVerify(label, first);
+    if (better && bubble.isConnected) { // swap it in place, and say so
+      msg.content = note(better); msg.display = fenced(better); save();
+      bubble.replaceChildren(); liveDrawFresh = true; renderFormatted(bubble, fenced(better));
+      const p = document.createElement('p'); p.className = 'ld-fixed'; p.textContent = 'Cassie fixed her drawing'; bubble.prepend(p);
+    }
+  } catch (e) { /* the first drawing stays */ }
 }
 // "Show a real photo": an accurate photo (Gemini), then Cassie finds each part in it and lays her own labels on top;
 // a part she can't clearly see is listed instead of being pinned in the wrong place
-async function realPhoto(spec) {
+async function realPhoto(spec, asked) {
   if (!realPhotoOk()) return;
-  const label = `Show me a real photo of ${spec.title}`;
+  const label = asked || `Show me a real photo of ${spec.title}`;
   state.messages.push({ role: 'user', content: label }); touchChat(); save(); renderMessage('user', label);
   const typing = renderTyping(); setTypingStatus(typing, 'Finding the real thing…');
   const prompt = `A real, accurate, true to life photograph of ${spec.photo || spec.title}. Taken with a real camera on location, natural light, sharp detail, the whole subject in view. Not a model, toy, miniature, 3D render, illustration, cartoon or diagram. No text, no labels, no watermark.`;
@@ -6645,7 +6697,7 @@ async function realPhoto(spec) {
   if (!src) { typing.remove(); const t = 'I could not make an accurate photo right now. Try again a little later.'; state.messages.push({ role: 'assistant', content: t }); save(); renderMessage('assistant', t); return; }
   setTypingStatus(typing, 'Cassie is labelling it…');
   const want = spec.parts.map((p) => p.label).filter(Boolean);
-  const found = ldJson(await liveDrawLook(`Find these parts in this photo: ${want.join(', ')}. Reply {"marks":[{"label": one of those names exactly, "x": 0 to 1 from the left, "y": 0 to 1 from the top}]}. Leave out any part you cannot clearly see.`, src));
+  const found = !want.length ? null : ldJson(await liveDrawLook(`Find these parts in this photo: ${want.join(', ')}. Reply {"marks":[{"label": one of those names exactly, "x": 0 to 1 from the left, "y": 0 to 1 from the top}]}. Leave out any part you cannot clearly see.`, src));
   const marks = (found && Array.isArray(found.marks) ? found.marks : []).filter((k) => k && want.includes(k.label) && +k.x >= 0 && +k.x <= 1 && +k.y >= 0 && +k.y <= 1).slice(0, 10);
   typing.remove();
   const caption = `A real photo of ${spec.title}.`;
@@ -7749,7 +7801,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=252');
+      exploreMod = await import('./explore/cell3d.js?v=253');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7799,7 +7851,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=252');
+      labsMod = await import('./labs/labs.js?v=253');
       islandRest();
     }
     labsMod.open({
@@ -9658,10 +9710,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=252').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=253').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=252', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=253', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

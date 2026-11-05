@@ -35,6 +35,7 @@ export function clean(raw) {
     say: words(p && p.say, 360),
     color: color(p && p.color, i),
     box: mode === '2d' ? box4(p && p.box) : null,
+    anchor: mode === '2d' && Array.isArray(p && p.anchor) && p.anchor.length === 2 && Number.isFinite(+p.anchor[0]) && Number.isFinite(+p.anchor[1]) ? [num(p.anchor[0], 0, 400), num(p.anchor[1], 0, 260)] : null,
     glow: !!(p && p.glow), spin: !!(p && p.spin), shell: !!(p && p.shell),
     shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object'),
   })).filter((p) => p.shapes.length);
@@ -54,6 +55,14 @@ function shapePoints(sh) {
   if (t === 'text') return [[n('x'), n('y')]];
   return [];
 }
+// (round by nature: a plain circle is the real shape)
+const ROUND_THINGS = /\b(?:sun|moon|star|planet|earth|ball|atom|nucleus|drop|droplet|bubble|molecule|wheel|coin|pupil|egg|cell\s+membrane|o2|co2|h2o|ion|electron|proton|neutron)\b/i;
+// the box of a part's main shape: the shape its anchor sits in, else its first shape
+function shapeOf(p) {
+  const boxes = p.shapes.map((sh) => { const pts = shapePoints(sh).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)); if (!pts.length) return null; const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
+  if (p.anchor) { const hit = boxes.find((b) => b && p.anchor[0] >= b[0] - 6 && p.anchor[0] <= b[2] + 6 && p.anchor[1] >= b[1] - 6 && p.anchor[1] <= b[3] + 6); if (hit) return hit; }
+  return boxes.find(Boolean) || null;
+}
 export function check(spec) {
   const out = [];
   if (!spec || spec.mode !== '2d') return out;
@@ -64,6 +73,9 @@ export function check(spec) {
     if (!pts.length) { out.push(`"${p.label || p.id}" has no shape the picture can show, so its label points at nothing`); continue; }
     if (pts.some(([x, y]) => x < -6 || x > 406 || y < -6 || y > 266)) out.push(`"${p.label || p.id}" goes outside the 400 by 260 picture`);
     if (strokes < 2) out.push(`"${p.label || p.id}" is a single line or shape; draw its real outline and inner lines`);
+    const kinds = p.shapes.map((x) => String(x.t || x.type).toLowerCase());
+    if (strokes >= 2 && !kinds.some((k) => k === 'path' || k === 'poly' || k === 'line' || k === 'arrow') && !ROUND_THINGS.test(p.label || p.id)) out.push(`"${p.label || p.id}" is only plain circles or boxes; draw its real outline with a path (for a leaf: a pointed tip, a midrib and side veins)`);
+    if (p.anchor) { const sh = shapeOf(p); if (sh) { const [x0, y0, x1, y1] = sh; if (p.anchor[0] < x0 - 6 || p.anchor[0] > x1 + 6 || p.anchor[1] < y0 - 6 || p.anchor[1] > y1 + 6) out.push(`the anchor of "${p.label || p.id}" is not on its own main shape`); } }
     const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
     const bb = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     boxes.push(bb);
@@ -103,23 +115,27 @@ export async function render(host, rawSpec, opts = {}) {
     stage.remove();
     say.textContent = `${spec.intro ? spec.intro + ' ' : ''}${spec.parts.map((p, i) => `${i + 1}. ${p.label}: ${p.say}`).join(' ')}`;
   }
-  const btn = (label, fn, cls = '') => { const b = el('button', 'ld-btn ' + cls, label); b.type = 'button'; b.addEventListener('click', fn); acts.appendChild(b); return b; };
+  // (v253) a compact row: a small icon and a short word each, muted; the tap area stays 48px
+  const ICON = { redo: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>', quiz: '<path d="M9 9a3 3 0 1 1 4 2.8c-.7.3-1 .8-1 1.5V14M12 17.5h.01"/><circle cx="12" cy="12" r="9"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', ask: '<path d="M4 5h16v11H9l-5 4z"/>', change: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', open: '<path d="M4 12h16M12 4v16"/>', apart: '<path d="M4 12h5M15 12h5M7 9l-3 3 3 3M17 9l3 3-3 3"/>' };
+  const btn = (label, fn, cls = '', icon = '') => { const b = el('button', 'ld-btn ' + cls); b.type = 'button'; if (icon && ICON[icon]) b.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[icon]}</svg>`); b.appendChild(el('span', '', label)); b.addEventListener('click', fn); acts.appendChild(b); return b; };
+  const setLabel = (b, t) => { b.querySelector('span').textContent = t; };
   const done = () => { dot.classList.add('off'); state.textContent = spec.mode === '3d' ? 'Cassie built it in 3D' : 'Cassie drew it'; setSay(spec.summary || spec.intro || ''); host.dispatchEvent(new CustomEvent('ld-done')); };
   if (view) {
-    if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); ob.textContent = on ? 'Close the case' : 'Open it up'; ob.setAttribute('aria-pressed', String(on)); }); ob.setAttribute('aria-pressed', 'false'); }
-    if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); pb.textContent = on ? 'Put it back' : 'Pull apart'; pb.setAttribute('aria-pressed', String(on)); }); pb.setAttribute('aria-pressed', 'false'); }
-    btn('Draw it again', async () => { await view.play(true); done(); });
+    if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, '', 'open'); ob.setAttribute('aria-pressed', 'false'); }
+    if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
+    btn('Draw again', async () => { await view.play(true); done(); }, '', 'redo');
   }
-  if (opts.onQuiz) btn('Quiz me on it', () => opts.onQuiz(spec));
-  if (opts.onRealistic && (!opts.canRealistic || opts.canRealistic())) btn('Show a real photo', () => opts.onRealistic(spec), 'ld-photo');
+  if (opts.onQuiz) btn('Quiz me', () => opts.onQuiz(spec), '', 'quiz');
+  if (opts.onRealistic && (!opts.canRealistic || opts.canRealistic())) btn('Real photo', () => opts.onRealistic(spec), 'ld-photo', 'photo');
+  if (opts.onChange) btn('Show another way', () => opts.onChange(spec), 'ld-change', 'change');
   if (view) {
     view.onPick = (p) => {
       if (!p) { setSay(spec.summary || spec.intro || ''); hint.textContent = view.hintText; askBtn.hidden = true; return; }
       setSay(p.say || p.label); hint.textContent = `${p.label}. Tap it again, or tap the empty space, to see it all`;
-      askBtn.hidden = !opts.onAsk; askBtn.textContent = `Ask about the ${p.label}`; askBtn.onclick = () => opts.onAsk(p, spec);
+      askBtn.hidden = !opts.onAsk; setLabel(askBtn, `Ask about the ${p.label}`); askBtn.onclick = () => opts.onAsk(p, spec);
     };
-    const askBtn = btn('', () => {}, 'ld-askpart'); askBtn.hidden = true;
-    if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-btn'); if (ob) { ob.textContent = 'Close the case'; ob.setAttribute('aria-pressed', 'true'); } }
+    const askBtn = btn('', () => {}, 'ld-askpart', 'ask'); askBtn.hidden = true;
+    if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-btn'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
     if (animate) { await view.play(); done(); } else { await view.play(); done(); }
   }
   return true;
@@ -141,45 +157,68 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     return g;
   });
   const labels = document.createElementNS(NS, 'g'); labels.setAttribute('class', 'ld-labels'); svg.appendChild(labels);
-  // where each name goes: beside its part (right, left, above, below, then the corners, then further out), inside the
-  // picture, never over another name, with a thin line to the nearest edge of the part
+  const legend = el('p', 'ld-legend'); legend.hidden = true; stage.after(legend);
+  // (v253) each name points at its part's ANCHOR, a point on that part's main shape (the AI's, else the centre of
+  // the part's first shape). Names go in clear space: never over a stroke, a filled shape or a word in the drawing
+  // (every element smaller than a third of the picture is an obstacle; a big outline is avoided where it can be),
+  // never over another name, inside the picture. Tried in rings around the anchor; then one size smaller; then a
+  // small numbered marker on the anchor, with the name under the picture.
   const taken = [];
   const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  const textW = (t) => { try { const m = document.createElementNS(NS, 'text'); m.setAttribute('font-size', LABEL_FONT); m.setAttribute('class', 'ld-ltext'); m.textContent = t; svg.appendChild(m); const w = m.getComputedTextLength(); m.remove(); if (w > 0) return w; } catch (e) { /* */ } return t.length * 6.2; };
+  const textW = (t, fs) => { try { const m = document.createElementNS(NS, 'text'); m.setAttribute('font-size', fs); m.setAttribute('class', 'ld-ltext'); m.textContent = t; svg.appendChild(m); const w = m.getComputedTextLength(); m.remove(); if (w > 0) return w; } catch (e) { /* */ } return t.length * fs * .48; };
+  const boxOf = (n) => { try { const b = n.getBBox(); return b && (b.width || b.height) ? { x: b.x - 2, y: b.y - 2, w: b.width + 4, h: b.height + 4 } : null; } catch (e) { return null; } };
+  let obstacles = null;
+  const obstaclesNow = () => { // (every drawn element; the big ones (a third of the picture or more) only cost, the rest block)
+    const all = groups.flatMap((g) => [...g.children]).map(boxOf).filter(Boolean);
+    return { hard: all.filter((b) => b.w * b.h < 400 * 260 / 3), soft: all.filter((b) => b.w * b.h >= 400 * 260 / 3) };
+  };
+  const anchorOf = (i) => {
+    const p = spec.parts[i];
+    if (p.anchor) return p.anchor;
+    const first = groups[i].children[0], b = first && boxOf(first);
+    return b ? [b.x + b.w / 2, b.y + b.h / 2] : null;
+  };
+  let markers = 0;
   const placeLabel = (i) => {
     const p = spec.parts[i]; if (!p.label) return null;
-    let bb; try { bb = groups[i].getBBox(); } catch (e) { return null; }
-    if (!bb || (!bb.width && !bb.height)) return null;
-    const txt = `${i + 1} ${p.label}`, w = textW(txt) + LABEL_PAD * 2, h = LABEL_FONT + LABEL_PAD * 2;
-    const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-    let best = null;
-    for (const gap of [8, 18, 32, 50, 72]) {
-      const cands = [[bb.x + bb.width + gap, cy - h / 2], [bb.x - gap - w, cy - h / 2], [cx - w / 2, bb.y - gap - h], [cx - w / 2, bb.y + bb.height + gap],
-        [bb.x + bb.width + gap, bb.y - gap - h], [bb.x - gap - w, bb.y - gap - h], [bb.x + bb.width + gap, bb.y + bb.height + gap], [bb.x - gap - w, bb.y + bb.height + gap]];
-      for (const [x, y] of cands) {
-        const r = { x, y, w, h };
-        if (x < 2 || y < 2 || x + w > 398 || y + h > 258) continue;
-        if (taken.some((q) => hits(r, q))) continue;
-        best = r; break;
+    const a = anchorOf(i); if (!a) return null;
+    if (!obstacles) obstacles = obstaclesNow();
+    const txt = `${i + 1} ${p.label}`;
+    let best = null, fs = LABEL_FONT;
+    for (const size of [LABEL_FONT, LABEL_FONT - 2]) {
+      const w = textW(txt, size) + LABEL_PAD * 2, h = size + LABEL_PAD * 2;
+      let top = null;
+      for (let r = 14; r <= 150 && !top; r += 12) {
+        for (let k = 0; k < 16; k++) {
+          const ang = (k / 16) * Math.PI * 2, cx = a[0] + Math.cos(ang) * r, cy = a[1] + Math.sin(ang) * r;
+          const box = { x: cx - w / 2, y: cy - h / 2, w, h };
+          if (box.x < 2 || box.y < 2 || box.x + w > 398 || box.y + h > 258) continue;
+          if (taken.some((q) => hits(box, q)) || obstacles.hard.some((q) => hits(box, q))) continue;
+          const lx = Math.min(Math.max(a[0], box.x), box.x + w), ly = Math.min(Math.max(a[1], box.y), box.y + h);
+          const crossed = obstacles.hard.filter((q) => !(a[0] >= q.x && a[0] <= q.x + q.w && a[1] >= q.y && a[1] <= q.y + q.h) && [.2, .4, .6, .8].some((f) => { const px = lx + (a[0] - lx) * f, py = ly + (a[1] - ly) * f; return px >= q.x && px <= q.x + q.w && py >= q.y && py <= q.y + q.h; })).length;
+          const cost = r + obstacles.soft.filter((q) => hits(box, q)).length * 40 + crossed * 80; // (a leader that crosses another word or stroke costs)
+          if (!top || cost < top.cost) top = { box, cost };
+        }
       }
-      if (best) break;
+      if (top) { best = top.box; fs = size; break; }
     }
-    if (!best) { // (no free spot: inside the part, still clear of the other names if it can)
-      const r = { x: Math.min(398 - w, Math.max(2, cx - w / 2)), y: Math.min(258 - h, Math.max(2, cy - h / 2)), w, h };
-      for (let k = 0; k < 20 && taken.some((q) => hits(r, q)); k++) r.y = Math.min(258 - h, r.y + h + 2) === r.y ? Math.max(2, r.y - (h + 2) * (k + 1)) : r.y + h + 2;
-      best = r;
+    const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'ld-label'); g.dataset.i = i;
+    const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', a[0]); dot.setAttribute('cy', a[1]); dot.setAttribute('r', 2.5); dot.setAttribute('class', 'ld-anchor');
+    if (!best) { // (no clear space: a numbered marker on the part, the name under the picture)
+      const m = document.createElementNS(NS, 'circle'); m.setAttribute('cx', a[0]); m.setAttribute('cy', a[1]); m.setAttribute('r', 8); m.setAttribute('class', 'ld-lbg ld-marker');
+      const t = document.createElementNS(NS, 'text'); t.setAttribute('x', a[0]); t.setAttribute('y', a[1] + 4); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', 11); t.setAttribute('class', 'ld-ltext');
+      g.dataset.marker = '1'; g.append(m, t); labels.appendChild(g);
+      legend.hidden = false; legend.textContent = (legend.textContent ? legend.textContent + '   ' : '') + txt; markers++;
+      return { g, t, txt: String(i + 1), box: { x: a[0] - 8, y: a[1] - 8, w: 16, h: 16 }, anchor: a };
     }
     taken.push(best);
-    // the leader: from the label's nearest side to the nearest point of the part's box
-    const lx = Math.min(Math.max(cx, best.x), best.x + best.w), ly = Math.min(Math.max(cy, best.y), best.y + best.h);
-    const px = Math.min(Math.max(lx, bb.x), bb.x + bb.width), py = Math.min(Math.max(ly, bb.y), bb.y + bb.height);
-    const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'ld-label'); g.dataset.i = i;
-    const lead = document.createElementNS(NS, 'line'); lead.setAttribute('x1', lx); lead.setAttribute('y1', ly); lead.setAttribute('x2', px); lead.setAttribute('y2', py); lead.setAttribute('class', 'ld-lead');
+    // the leader: from the name's nearest edge straight to the anchor, and it ends exactly there
+    const lx = Math.min(Math.max(a[0], best.x), best.x + best.w), ly = Math.min(Math.max(a[1], best.y), best.y + best.h);
+    const lead = document.createElementNS(NS, 'line'); lead.setAttribute('x1', lx); lead.setAttribute('y1', ly); lead.setAttribute('x2', a[0]); lead.setAttribute('y2', a[1]); lead.setAttribute('class', 'ld-lead');
     const bg = document.createElementNS(NS, 'rect'); bg.setAttribute('x', best.x); bg.setAttribute('y', best.y); bg.setAttribute('width', best.w); bg.setAttribute('height', best.h); bg.setAttribute('rx', 4); bg.setAttribute('class', 'ld-lbg');
-    const t = document.createElementNS(NS, 'text'); t.setAttribute('x', best.x + LABEL_PAD); t.setAttribute('y', best.y + LABEL_PAD + LABEL_FONT - 2); t.setAttribute('font-size', LABEL_FONT); t.setAttribute('class', 'ld-ltext'); t.dataset.full = txt;
-    if (Math.hypot(px - lx, py - ly) < 3) lead.setAttribute('hidden', '');
-    g.append(lead, bg, t); labels.appendChild(g);
-    return { g, t, txt };
+    const t = document.createElementNS(NS, 'text'); t.setAttribute('x', best.x + LABEL_PAD); t.setAttribute('y', best.y + LABEL_PAD + fs - 2); t.setAttribute('font-size', fs); t.setAttribute('class', 'ld-ltext'); t.dataset.full = txt;
+    g.append(lead, dot, bg, t); labels.appendChild(g);
+    return { g, t, txt, box: best, anchor: a };
   };
   const hintText = 'Tap a part to hear about it';
   hint.textContent = hintText;
@@ -192,7 +231,7 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   groups.forEach((g, i) => { g.addEventListener('click', (e) => { e.stopPropagation(); pick(i); }); });
   svg.addEventListener('click', () => { if (picked >= 0) pick(picked); });
   let labelEls = [];
-  const clearLabels = () => { labels.replaceChildren(); taken.length = 0; labelEls = []; };
+  const clearLabels = () => { labels.replaceChildren(); taken.length = 0; labelEls = []; obstacles = null; legend.textContent = ''; legend.hidden = true; markers = 0; };
   const placeAll = () => { clearLabels(); labelEls = groups.map((_, i) => placeLabel(i)); labelEls.forEach((l) => { if (l) l.t.textContent = l.txt; }); return labelEls.some(Boolean) || !spec.parts.some((p) => p.label); };
   const view = {
     hintText,
