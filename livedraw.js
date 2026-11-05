@@ -167,11 +167,34 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
   const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
   const textW = (t, fs) => { try { const m = document.createElementNS(NS, 'text'); m.setAttribute('font-size', fs); m.setAttribute('class', 'ld-ltext'); m.textContent = t; svg.appendChild(m); const w = m.getComputedTextLength(); m.remove(); if (w > 0) return w; } catch (e) { /* */ } return t.length * fs * .48; };
   const boxOf = (n) => { try { const b = n.getBBox(); return b && (b.width || b.height) ? { x: b.x - 2, y: b.y - 2, w: b.width + 4, h: b.height + 4 } : null; } catch (e) { return null; } };
+  // (v253) the drawing is laid on a 2px grid once: each cell knows which strokes, filled shapes and words cover it
+  // (a curved shape by its real outline, a line by its line), so trying a place for a name is only a lookup
+  const G = 2, GW = 200, GH = 130;
   let obstacles = null;
-  const obstaclesNow = () => { // (every drawn element; the big ones (a third of the picture or more) only cost, the rest block)
-    const all = groups.flatMap((g) => [...g.children]).map(boxOf).filter(Boolean);
-    return { hard: all.filter((b) => b.w * b.h < 400 * 260 / 3), soft: all.filter((b) => b.w * b.h >= 400 * 260 / 3) };
+  const obstaclesNow = () => {
+    const list = [], cells = new Array(GW * GH);
+    groups.flatMap((g) => [...g.children]).forEach((n) => {
+      const b = boxOf(n); if (!b) return;
+      const o = { id: list.length, word: n.tagName === 'text' };
+      o.soft = !o.word && n.tagName !== 'line' && b.w * b.h >= 400 * 260 / 3; // (a big outline only costs; the rest block)
+      list.push(o);
+      const seg = n.tagName === 'line' ? ['x1', 'y1', 'x2', 'y2'].map((k) => +n.getAttribute(k)) : null;
+      const filled = (n.getAttribute('fill') || 'none') !== 'none', geo = !o.word && !seg && typeof n.isPointInStroke === 'function';
+      const on = (x, y) => {
+        if (o.word) return true;
+        if (seg) { const [x1, y1, x2, y2] = seg, dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / L)); return Math.hypot(x - x1 - t * dx, y - y1 - t * dy) <= 2.5; }
+        if (!geo) return true;
+        try { const pt = new DOMPoint(x, y); return (filled && n.isPointInFill(pt)) || n.isPointInStroke(pt); } catch (e) { return true; }
+      };
+      const hit = [];
+      for (let cy = Math.max(0, Math.floor(b.y / G)); cy <= Math.min(GH - 1, Math.floor((b.y + b.h) / G)); cy++) for (let cx = Math.max(0, Math.floor(b.x / G)); cx <= Math.min(GW - 1, Math.floor((b.x + b.w) / G)); cx++) if (on(cx * G + 1, cy * G + 1)) hit.push([cx, cy]);
+      hit.forEach(([cx, cy]) => { for (let ey = cy - 1; ey <= cy + 1; ey++) for (let ex = cx - 1; ex <= cx + 1; ex++) { if (ex < 0 || ey < 0 || ex >= GW || ey >= GH) continue; const k = ey * GW + ex; const c = cells[k] || (cells[k] = []); if (c[c.length - 1] !== o.id && !c.includes(o.id)) c.push(o.id); } }); // (a cell of margin round every stroke)
+    });
+    return { list, cells };
   };
+  const idsIn = (box) => { const out = new Set(); for (let cy = Math.max(0, Math.floor(box.y / G)); cy <= Math.min(GH - 1, Math.floor((box.y + box.h) / G)); cy++) for (let cx = Math.max(0, Math.floor(box.x / G)); cx <= Math.min(GW - 1, Math.floor((box.x + box.w) / G)); cx++) { const c = obstacles.cells[cy * GW + cx]; if (c) c.forEach((id) => out.add(id)); } return out; };
+  const idsAlong = (sg) => { const out = new Set(), [x1, y1, x2, y2] = sg, n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / G)); for (let k = 0; k <= n; k++) { const cx = Math.floor((x1 + (x2 - x1) * k / n) / G), cy = Math.floor((y1 + (y2 - y1) * k / n) / G); const c = cx >= 0 && cy >= 0 && cx < GW && cy < GH && obstacles.cells[cy * GW + cx]; if (c) c.forEach((id) => out.add(id)); } return out; };
+  const segHits = (sg, r) => { const [x1, y1, x2, y2] = sg, n = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 3)); for (let k = 0; k <= n; k++) { const x = x1 + (x2 - x1) * k / n, y = y1 + (y2 - y1) * k / n; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true; } return false; };
   const anchorOf = (i) => {
     const p = spec.parts[i];
     if (p.anchor) return p.anchor;
@@ -184,19 +207,25 @@ function draw2d(stage, spec, { animate, setSay, hint }) {
     const a = anchorOf(i); if (!a) return null;
     if (!obstacles) obstacles = obstaclesNow();
     const txt = `${i + 1} ${p.label}`;
+    const own = idsIn({ x: a[0] - 4, y: a[1] - 4, w: 8, h: 8 }); // (the shape the anchor sits on: its leader may touch it)
     let best = null, fs = LABEL_FONT;
     for (const size of [LABEL_FONT, LABEL_FONT - 2]) {
       const w = textW(txt, size) + LABEL_PAD * 2, h = size + LABEL_PAD * 2;
       let top = null;
-      for (let r = 14; r <= 150 && !top; r += 12) {
-        for (let k = 0; k < 16; k++) {
-          const ang = (k / 16) * Math.PI * 2, cx = a[0] + Math.cos(ang) * r, cy = a[1] + Math.sin(ang) * r;
+      for (let r = 10; r <= 150 && !top; r += 6) {
+        for (let k = 0; k < 24; k++) {
+          const ang = (k / 24) * Math.PI * 2, cx = a[0] + Math.cos(ang) * r, cy = a[1] + Math.sin(ang) * r;
           const box = { x: cx - w / 2, y: cy - h / 2, w, h };
           if (box.x < 2 || box.y < 2 || box.x + w > 398 || box.y + h > 258) continue;
-          if (taken.some((q) => hits(box, q)) || obstacles.hard.some((q) => hits(box, q))) continue;
+          if (taken.some((q) => hits(box, q))) continue;
+          const inBox = [...idsIn(box)];
+          if (inBox.some((id) => !obstacles.list[id].soft)) continue; // (never over a stroke, a filled shape or a word)
+          // the leader, from the name's nearest edge to the anchor: it never crosses a word or another name, and crossing a stroke costs
           const lx = Math.min(Math.max(a[0], box.x), box.x + w), ly = Math.min(Math.max(a[1], box.y), box.y + h);
-          const crossed = obstacles.hard.filter((q) => !(a[0] >= q.x && a[0] <= q.x + q.w && a[1] >= q.y && a[1] <= q.y + q.h) && [.2, .4, .6, .8].some((f) => { const px = lx + (a[0] - lx) * f, py = ly + (a[1] - ly) * f; return px >= q.x && px <= q.x + q.w && py >= q.y && py <= q.y + q.h; })).length;
-          const cost = r + obstacles.soft.filter((q) => hits(box, q)).length * 40 + crossed * 80; // (a leader that crosses another word or stroke costs)
+          const along = [...idsAlong([lx, ly, a[0], a[1]])].filter((id) => !own.has(id));
+          if (along.some((id) => obstacles.list[id].word) || taken.some((q) => segHits([lx, ly, a[0], a[1]], q))) continue;
+          const gap = Math.hypot(a[0] - lx, a[1] - ly); // (how far the name sits from its part: as close as the clear space allows)
+          const cost = gap + inBox.length * 40 + along.length * 80;
           if (!top || cost < top.cost) top = { box, cost };
         }
       }

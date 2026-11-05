@@ -6077,7 +6077,8 @@ async function handleSend(text, opts = {}) {
   if (!text.trim() && !images.length && !docs.length) return;
   if (!doc && !image && !many && activeDoc && activeDoc.chatId === state.currentId && DOC_FOLLOWUP_RE.test(text)) doc = activeDoc.doc;
   if (!images.length && !docs.length && !opts.mode) {
-    if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
+    liveShowClose(false); // (a new message closes an open "How should I show it?")
+  if (!opts.noDraw && liveDrawRequest(text)) return liveShowAsk(text); // (v253: she asks how to show it, then draws it live)
     const pic = imageRequest(text);
     if (pic) return handleImageRequest(text, pic.subject);
   }
@@ -6616,24 +6617,38 @@ function liveDrawListen(box) {
 }
 // "How should I show it?": four small choices; the choice is kept for the rest of this chat
 const SHOW_ICON = { draw: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>', '3d': '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', photo: '<path d="M4 7.5h3l1.6-2.5h6.8L17 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>', explain: '<path d="M4 5h16v11H9l-5 4z"/>' };
+// (v253) the question pops up over the ask box, like a decision card: each way with a line on what it gives;
+// the student's words stay in the ask box until they pick (Close or Escape keeps them there to edit)
+const SHOW_WAYS = [['draw', 'Draw it', 'Cassie draws it line by line, with every part named'], ['3d', '3D model', 'A model you can turn, open and pull apart'], ['photo', 'Real photo', 'A real photo, with Cassie\u2019s labels on it'], ['explain', 'Just explain', 'An answer in words']];
+function liveShowClose(keep) {
+  const pop = document.querySelector('.ld-pop'); if (!pop) return;
+  pop.remove(); document.removeEventListener('keydown', liveShowKey, true);
+  if (keep) promptInput.focus({ preventScroll: true });
+}
+function liveShowKey(e) { if (e.key === 'Escape') { e.preventDefault(); liveShowClose(true); } }
 function liveShowAsk(text) {
   const c = curChat(), want3d = LIVE_3D_RE.test(text);
   if (want3d) return liveDrawReply(text, true);
   if (c && c.showAs) return liveShowGo(text, c.showAs);
-  promptInput.value = ''; autoGrow();
-  if (!state.messages.length) chatLog.innerHTML = '';
-  const b = renderMessage('assistant', 'How should I show it?');
-  b.classList.add('ld-askbubble');
-  const row = document.createElement('div'); row.className = 'ld-ask'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'How should Cassie show it');
-  [['draw', 'Draw it'], ['3d', '3D model'], ...(realPhotoOk() ? [['photo', 'Real photo']] : []), ['explain', 'Just explain']].forEach(([k, t]) => {
+  liveShowClose(false);
+  liveDrawLoad().catch(() => {}); // (the drawing kit loads while the student picks)
+  promptInput.value = text; autoGrow();
+  const pop = document.createElement('div'); pop.className = 'ld-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-labelledby', 'ld-pop-q');
+  pop.innerHTML = '<div class="ld-pop-head"><p class="ld-pop-q" id="ld-pop-q">How should I show it?</p><button type="button" class="ld-pop-x" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="ld-ask" role="group" aria-labelledby="ld-pop-q"></div><p class="ld-pop-foot">Cassie remembers your choice for this chat.</p>';
+  const row = pop.querySelector('.ld-ask');
+  SHOW_WAYS.filter(([k]) => k !== 'photo' || realPhotoOk()).forEach(([k, t, d]) => {
     const btn = document.createElement('button'); btn.type = 'button'; btn.dataset.show = k;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SHOW_ICON[k]}</svg><span></span>`;
-    btn.querySelector('span').textContent = t;
-    btn.addEventListener('click', () => { const cc = curChat(); if (cc) { cc.showAs = k; save(); } b.remove(); liveShowGo(text, k); });
+    btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SHOW_ICON[k]}</svg><span class="ld-pop-t"></span><span class="ld-pop-d"></span>`;
+    btn.querySelector('.ld-pop-t').textContent = t; btn.querySelector('.ld-pop-d').textContent = d;
+    btn.addEventListener('click', () => { const cc = curChat(); if (cc) { cc.showAs = k; save(); } liveShowClose(false); liveShowGo(text, k); });
     row.appendChild(btn);
   });
-  b.querySelectorAll('.listen-row, .listen-btn').forEach((n) => n.remove());
-  b.appendChild(row); scrollToBottom();
+  pop.querySelector('.ld-pop-x').addEventListener('click', () => liveShowClose(true));
+  const comp = document.getElementById('composer');
+  comp.parentNode.insertBefore(pop, comp);
+  const place = () => { if (!pop.isConnected) return window.removeEventListener('resize', place); pop.style.bottom = Math.max(8, innerHeight - comp.getBoundingClientRect().top + 8) + 'px'; };
+  place(); window.addEventListener('resize', place);
+  document.addEventListener('keydown', liveShowKey, true);
   row.querySelector('button').focus({ preventScroll: true });
 }
 function liveShowGo(text, k) {
@@ -6675,6 +6690,8 @@ async function liveDrawReply(text, want3d = LIVE_3D_RE.test(text)) {
   track('feature', first.spec.mode === '3d' ? 'live-draw-3d' : 'live-draw');
   done(); setCursorMode('idle'); mascotCelebrate();
   if (first.spec.mode !== '2d') return;
+  // the check starts once she is drawing, so it never holds up her first line
+  for (let k = 0; k < 40 && bubble.isConnected && !bubble.querySelector('.ld-part > [data-drawing], .ld-part > [data-drawn]'); k++) await new Promise((r) => setTimeout(r, 50));
   try {
     const better = await liveDrawVerify(label, first);
     if (better && bubble.isConnected) { // swap it in place, and say so
