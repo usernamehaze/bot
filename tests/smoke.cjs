@@ -14364,7 +14364,9 @@ test('extension: drop a PDF, words or a photo on Cassie’s Island on any page',
   // app's fault: that test runs once more in a new browser, and fails only if it gives out again
   const browserGaveOut = (e) => /Target page, context or browser has been closed|browser has disconnected|Browser closed|Target crashed|Page crashed/i.test(String(e && e.message || e));
   let failed = 0, skipped = 0;
+  let resumed = !process.env.AFTER; // (AFTER="name": carry on after that test, e.g. when a run was cut off)
   for (const t of tests) {
+    if (!resumed) { if (t.name.includes(process.env.AFTER)) resumed = true; continue; }
     if (only && !t.name.includes(only)) continue;
     if (fast && t.slow && !only && !also.some((a) => t.name.includes(a))) { skipped++; continue; }
     const t0 = Date.now(); // (TIMES=1 prints how long each test takes)
