@@ -18,6 +18,7 @@ function loadState() {
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
     uiStyle: 'rounded',     // Appearance: rounded | soft | crisp — the corner style of cards, buttons and sheets
+    podMinutes: 3,          // Podcast length in minutes (3 | 5 | 10)
     lang: 'auto',           // Appearance: the language Cassie replies in — auto | en | fil | tl
     theme: 'auto',          // Appearance: auto (follows the device) | light | dark
     accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
@@ -2610,7 +2611,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=255'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=256'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2632,7 +2633,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=255'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=256'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2766,7 +2767,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=255').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=256').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2906,14 +2907,20 @@ function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ ph
    studio voices (/speak), with the transcript, Back, Pause, Skip, speed and a download. No daily limit:
    it comes out of the account's monthly studio voice (Free 7,500, Plus 15,000, Pro 30,000 characters);
    guests sign in for it. Shown before: what it costs. */
-const POD_CHARS = 2700; // (about 3 minutes of talk)
-function podPrompt(text) {
-  return 'Write a short podcast script, about 3 minutes (380 to 420 words), where two study friends, Jessica and Chris, talk through these notes for a student reviewing for an exam.\n'
+// (v256) the student picks the length; the script and the voice cost scale with it
+const POD_MINUTES = [3, 5, 10];
+function podMinutes() { const m = +state.podMinutes; return POD_MINUTES.includes(m) ? m : 3; }
+const podWordRange = (min) => [min * 130, min * 150]; // (about 130 to 150 spoken words a minute)
+const podChars = (min) => min * 900; // (about 900 characters of voice a minute; ~2700 for 3 minutes)
+function podPrompt(text, min = podMinutes()) {
+  const [lo, hi] = podWordRange(min);
+  return `Write a podcast script, about ${min} minutes (${lo} to ${hi} words), where two study friends, Jessica and Chris, talk through these notes for a student reviewing for an exam.\n`
     + 'Use ONLY what is in the notes. If something is not in them, do not say it, and never invent numbers, names or dates.\n'
     + 'Plain everyday words and short turns of 1 to 3 sentences. Jessica explains; Chris asks what a student would ask and adds a memory trick when it fits.\n'
+    + `Make it fill the whole ${min} minutes: go through the notes in order and cover every main point, do not stop early.\n`
     + 'Start with a one line welcome that names the topic, and end with a recap of the 3 most important points. No dashes.\n'
     + 'Reply with ONLY JSON, no other text: {"lines":[{"who":"Jessica","say":"..."},{"who":"Chris","say":"..."}]}\n\n'
-    + 'Notes:\n"""\n' + String(text).slice(0, 8000) + '\n"""';
+    + 'Notes:\n"""\n' + String(text).slice(0, 12000) + '\n"""';
 }
 // the reply → lines (JSON, or "Jessica: ..." lines as a fallback), each short enough for one voice clip
 function parsePodcast(reply) {
@@ -3030,21 +3037,32 @@ function openPodcast(text, title) {
   document.querySelector('.pod-sheet')?.remove();
   const CV = window.CassieVoice, left = CV && CV.studio.known() ? CV.studio.left() : null;
   const guest = !!(CV && CV.studio.guest && CV.studio.guest()); // (the studio voice said so: not signed in)
-  const voiceOk = !guest && !!(SERVER && CV && CV.studio.on() && (left == null || left >= POD_CHARS));
   const w = document.createElement('div');
   w.className = 'plus-sheet pod-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-h');
   w.innerHTML = `<div class="plus-card pod-card">
     <span class="plus-kicker">Podcast</span>
     <h3 id="pod-h"></h3>
-    <p class="plus-why">Jessica and Chris talk it through in about 3 minutes, using only what’s in it. Listen on the way to school, or while doing chores.</p>
+    <p class="plus-why">Jessica and Chris talk it through, using only what’s in it. Listen on the way to school, or while doing chores.</p>
+    <div class="pod-len-group"><span class="pod-len-l">How long?</span><div class="pod-len appx-seg" id="pod-len" role="group" aria-label="Podcast length"></div></div>
     <ul class="pod-facts"><li class="pod-cost"></li><li class="pod-allow"></li></ul>
     <p class="pod-status" aria-live="polite"></p>
     <div class="plus-actions"><button type="button" class="plus-go pod-go">Make my podcast</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
   w.querySelector('#pod-h').textContent = title;
   const max = CV && CV.studio.max ? CV.studio.max() : 0;
-  w.querySelector('.pod-cost').textContent = guest ? 'Podcasts use Cassie’s studio voice, which isn’t available for guests. Sign in (it’s free) to make one.'
-    : voiceOk ? `It uses about ${POD_CHARS.toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left this month` : ''}.`
-    : `You don’t have enough of Cassie’s voice left this month${left != null ? ` (${left.toLocaleString('en-PH')} left)` : ''}, so you get the script to read.`;
+  const voiceOkFor = (min) => !guest && !!(SERVER && CV && CV.studio.on() && (left == null || left >= podChars(min)));
+  let voiceOk = voiceOkFor(podMinutes());
+  const lenBox = w.querySelector('#pod-len');
+  lenBox.innerHTML = POD_MINUTES.map((m) => `<button type="button" data-min="${m}" aria-pressed="${m === podMinutes()}">${m} min</button>`).join('');
+  const refreshCost = () => {
+    const min = podMinutes(); voiceOk = voiceOkFor(min);
+    lenBox.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.min === min)));
+    w.querySelector('.pod-cost').textContent = guest ? 'Podcasts use Cassie’s studio voice, which isn’t available for guests. Sign in (it’s free) to make one.'
+      : voiceOk ? `It uses about ${podChars(min).toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left this month` : ''}.`
+      : `You don’t have enough of Cassie’s voice left this month${left != null ? ` (${left.toLocaleString('en-PH')} left)` : ''}, so you get the script to read.`;
+  };
+  lenBox.hidden = guest; w.querySelector('.pod-len-l').hidden = guest;
+  lenBox.addEventListener('click', (e) => { const b = e.target.closest('button[data-min]'); if (!b) return; state.podMinutes = +b.dataset.min; save(); refreshCost(); });
+  refreshCost();
   w.querySelector('.pod-allow').textContent = `No daily limit: podcasts come out of your monthly voice${max ? ` (${max.toLocaleString('en-PH')} characters on your plan)` : ''}.`;
   const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
   if (guest) go.textContent = 'Sign in';
@@ -3059,7 +3077,7 @@ function openPodcast(text, title) {
     if (!canChat()) { close(); openSettings(); return; }
     const goDone = busyButton(go, 'Writing the script…'); status.textContent = '';
     try {
-      const lines = parsePodcast(await askCassie([{ role: 'user', content: podPrompt(text) }]));
+      const lines = parsePodcast(await askCassie([{ role: 'user', content: podPrompt(text, podMinutes()) }]));
       if (lines.length < 2) throw new Error('no script');
       track('feature', 'podcast');
       w.querySelector('.pod-facts').remove(); go.remove(); w.querySelector('.plus-why').remove(); status.textContent = '';
@@ -6630,7 +6648,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=255')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=256')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7861,7 +7879,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=255');
+      exploreMod = await import('./explore/cell3d.js?v=256');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7911,7 +7929,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=255');
+      labsMod = await import('./labs/labs.js?v=256');
       islandRest();
     }
     labsMod.open({
@@ -9860,10 +9878,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=255').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=256').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=255', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=256', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
