@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cassie">
-<link rel="stylesheet" href="style.css?v=254">
+<link rel="stylesheet" href="style.css?v=255">
 </head>
 <body>
 
@@ -248,6 +248,8 @@
         <button type="button" data-go="account">Account</button>
         <button type="button" data-go="study">Study</button>
         <button type="button" data-go="appearance">Appearance</button>
+        <button type="button" data-go="language">Language</button>
+        <button type="button" data-go="notifications">Notifications</button>
         <button type="button" data-go="voice">Voice and sound</button>
         <button type="button" data-go="privacy">Privacy and data</button>
         <button type="button" data-go="plans">Plans</button>
@@ -321,18 +323,6 @@
             </select>
           </label>
           </div>
-          <!-- reminders: one a day at most, when cards are due or the streak ends tonight -->
-          <div class="set-row remind-row" data-k="reminders notifications push streak flashcards due">
-          <label class="field row">
-            <span>Reminders: one a day at most, when flashcards are due or your streak ends tonight</span>
-            <input type="checkbox" id="remind-toggle" role="switch">
-          </label>
-          <div class="remind-times" id="remind-times" hidden>
-            <label class="field"><span>Remind me at</span><select id="remind-hour"></select></label>
-            <div class="remind-quiet"><label class="field"><span>Quiet from</span><select id="quiet-from"></select></label><label class="field"><span>to</span><select id="quiet-to"></select></label></div>
-          </div>
-          <p class="field-hint" id="remind-note" aria-live="polite"></p>
-          </div>
           <div class="set-row" data-k="highlight help popup copy">
           <label class="field row">
             <span>Highlight help: Cassie pops up when I highlight words (off: highlight and copy like normal)</span>
@@ -343,54 +333,108 @@
       </section>
       <section class="set-sec" data-sec="appearance" aria-labelledby="set-h-appearance">
         <h3 class="set-sec-h" id="set-h-appearance">Appearance</h3>
-        <div class="set-group">
-          <div class="set-row set-switch-row" data-k="light dark mode theme night">
-            <span class="set-switch-l" id="set-dark-l">Dark mode</span>
-            <button type="button" class="theme-switch" role="switch" aria-checked="false" aria-labelledby="set-dark-l"><span class="ts-track"><span class="ts-knob"></span></span></button>
+        <p class="set-sec-sub">Every change previews instantly.</p>
+        <div class="appx-wrap" id="appx">
+          <div class="appx-preview" id="appx-preview" aria-hidden="true">
+            <div class="appx-preview-head"><span class="appx-dot"></span><b>Preview</b></div>
+            <div class="appx-bubble appx-them">Can you plan my week?</div>
+            <div class="appx-bubble">Sure. Let us start with Monday.</div>
+            <div class="appx-ask"><span>Ask Cassie anything...</span><span class="appx-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
           </div>
-          <div class="set-row" data-k="light dark mode theme night auto device">
-          <label class="field">
-            <span>Light or dark</span>
-            <select id="theme-select">
-              <option value="auto">Auto (follows your device)</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
+          <div class="appx-group" data-k="light dark mode theme night auto device">
+            <span class="appx-label">Appearance</span>
+            <div class="appx-seg appx-theme" id="appx-theme" role="group" aria-label="Light or dark">
+              <button type="button" data-theme="auto" aria-pressed="true">Auto</button>
+              <button type="button" data-theme="light" aria-pressed="false">Light</button>
+              <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+            </div>
           </div>
-          <div class="set-row" data-k="colour color theme monochrome lite mode data">
-          <label class="field">
-            <span>Favorite colour</span>
-            <div class="accent-named desk-only" id="accent-named" role="group" aria-label="Colours by name"></div>
-            <div class="accent-swatches" id="accent-swatches"></div>
-          </label>
-          <p class="field-hint">Colours every button, the send button, the timer and the board. <strong>Cassie</strong> is her own blush and sage; <strong>Monochrome</strong> is black and white. The loading screen and Cassie herself keep their own colours.</p>
-          <label class="field">
-            <span>Lite mode: faster on slow phones and mobile data</span>
-            <select id="lite-select">
-              <option value="auto">Auto (turns on for slow phones or Data Saver)</option>
-              <option value="on">On: still background, lighter on data</option>
-              <option value="off">Off. Always the moving background</option>
-            </select>
-          </label>
-          <p class="field-hint" id="lite-hint"></p>
+          <div class="appx-group" data-k="colour color theme monochrome accent">
+            <span class="appx-label">Theme color</span>
+            <div class="appx-colors" id="appx-colors" role="group" aria-label="Theme color"></div>
           </div>
-          <div class="set-row" data-k="text size font">
-          <label class="field">
-            <span>Text size</span>
-            <select id="textsize-select">
-              <option value="normal">Normal</option>
-              <option value="large">Large</option>
-              <option value="larger">Larger</option>
-            </select>
-          </label>
+          <div class="appx-group" data-k="text size font reading">
+            <span class="appx-label">Text size</span>
+            <div class="appx-seg" id="appx-textsize" role="group" aria-label="Text size">
+              <button type="button" data-size="normal" aria-pressed="true" aria-label="Default"><span class="appx-aa-1">Aa</span></button>
+              <button type="button" data-size="large" aria-pressed="false" aria-label="Large"><span class="appx-aa-2">Aa</span></button>
+              <button type="button" data-size="larger" aria-pressed="false" aria-label="Extra large"><span class="appx-aa-3">Aa</span></button>
+            </div>
+          </div>
+          <div class="appx-group" data-k="ui style corners rounded soft crisp shape">
+            <span class="appx-label">UI style</span>
+            <div class="appx-styles" id="appx-uistyle" role="group" aria-label="UI style">
+              <button type="button" class="appx-style" data-style="rounded" aria-pressed="true"><span class="appx-chip" aria-hidden="true"></span>Rounded</button>
+              <button type="button" class="appx-style" data-style="soft" aria-pressed="false"><span class="appx-chip" aria-hidden="true"></span>Soft</button>
+              <button type="button" class="appx-style" data-style="crisp" aria-pressed="false"><span class="appx-chip" aria-hidden="true"></span>Crisp</button>
+            </div>
+          </div>
+          <div class="appx-bar" id="appx-bar" hidden role="status" aria-live="polite">
+            <span class="appx-bar-n" id="appx-bar-n">1 change</span>
+            <span class="appx-bar-acts">
+              <button type="button" class="appx-discard" id="appx-discard">Discard</button>
+              <button type="button" class="appx-review" id="appx-review">Review</button>
+            </span>
+          </div>
+        </div>
+        <div class="set-group" data-k="lite mode data easy read spacing">
+          <div class="set-row" data-k="lite mode data saver background">
+            <label class="field">
+              <span>Lite mode: faster on slow phones and mobile data</span>
+              <select id="lite-select">
+                <option value="auto">Auto (turns on for slow phones or Data Saver)</option>
+                <option value="on">On: still background, lighter on data</option>
+                <option value="off">Off. Always the moving background</option>
+              </select>
+            </label>
+            <p class="field-hint" id="lite-hint"></p>
           </div>
           <div class="set-row" data-k="easy read spacing">
-          <label class="field row">
-            <span>Easy-read spacing</span>
-            <input type="checkbox" id="easyread-toggle">
-          </label>
+            <label class="field row">
+              <span>Easy-read spacing</span>
+              <input type="checkbox" id="easyread-toggle">
+            </label>
           </div>
+        </div>
+        <div class="set-group" hidden aria-hidden="true" id="appx-legacy">
+          <div class="set-row set-switch-row"><span class="set-switch-l" id="set-dark-l">Dark mode</span><button type="button" class="theme-switch" role="switch" aria-checked="false" aria-labelledby="set-dark-l"><span class="ts-track"><span class="ts-knob"></span></span></button></div>
+          <label class="field"><span>Light or dark</span><select id="theme-select"><option value="auto">Auto (follows your device)</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <div class="accent-named" id="accent-named"></div>
+          <div class="accent-swatches" id="accent-swatches"></div>
+          <label class="field"><span>Text size</span><select id="textsize-select"><option value="normal">Normal</option><option value="large">Large</option><option value="larger">Larger</option></select></label>
+        </div>
+      </section>
+      <section class="set-sec" data-sec="language" aria-labelledby="set-h-language">
+        <h3 class="set-sec-h" id="set-h-language">Language</h3>
+        <p class="set-sec-sub">Pick the language Cassie replies in.</p>
+        <div class="lang-wrap">
+          <div class="lang-preview" aria-hidden="true"><span class="lang-hi" id="lang-hi">Hello</span><small id="lang-note">Cassie matches how you write.</small></div>
+          <div class="lang-list" id="lang-list" role="radiogroup" aria-label="Reply language">
+            <button type="button" class="lang-opt" data-lang="auto" role="radio" aria-checked="true"><span><b>Match how I write</b><small>English, Filipino or Taglish, like you</small></span><span class="lang-tick" aria-hidden="true"></span></button>
+            <button type="button" class="lang-opt" data-lang="en" role="radio" aria-checked="false"><span><b>English</b><small>Always reply in English</small></span><span class="lang-tick" aria-hidden="true"></span></button>
+            <button type="button" class="lang-opt" data-lang="fil" role="radio" aria-checked="false"><span><b>Filipino</b><small>Laging sumagot sa Filipino</small></span><span class="lang-tick" aria-hidden="true"></span></button>
+            <button type="button" class="lang-opt" data-lang="tl" role="radio" aria-checked="false"><span><b>Taglish</b><small>English at Filipino, halo</small></span><span class="lang-tick" aria-hidden="true"></span></button>
+          </div>
+          <p class="field-hint">Cassie keeps science, math and technical terms in English the way they are taught in class.</p>
+        </div>
+      </section>
+      <section class="set-sec" data-sec="notifications" aria-labelledby="set-h-notifications">
+        <h3 class="set-sec-h" id="set-h-notifications">Notifications</h3>
+        <p class="set-sec-sub">Choose what is worth a buzz.</p>
+        <div class="notif-wrap">
+          <div class="notif-card" data-k="reminders notifications push streak flashcards due study">
+            <div class="notif-top">
+              <span class="notif-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
+              <span class="notif-h"><b>Study reminders</b><small>One a day at most, when flashcards are due or your streak ends tonight.</small></span>
+              <input type="checkbox" id="remind-toggle" role="switch" aria-label="Study reminders">
+            </div>
+            <div class="remind-times" id="remind-times" hidden>
+              <label class="field"><span>Remind me at</span><select id="remind-hour"></select></label>
+              <div class="remind-quiet"><label class="field"><span>Quiet from</span><select id="quiet-from"></select></label><label class="field"><span>to</span><select id="quiet-to"></select></label></div>
+            </div>
+            <p class="field-hint" id="remind-note" aria-live="polite"></p>
+          </div>
+          <p class="field-hint">Cassie only sends study reminders you turn on here. No ads, no spam, and nothing between your quiet hours.</p>
         </div>
       </section>
       <section class="set-sec" data-sec="voice" aria-labelledby="set-h-voice">
@@ -641,25 +685,25 @@
 
 </div>
 
-<script src="extlink.js?v=254"></script>
-<script src="errors.js?v=254"></script>
-<script src="mic.js?v=254"></script>
-<script src="care.js?v=254"></script>
-<script src="memory.js?v=254"></script>
-<script src="board.js?v=254"></script>
-<script src="export.js?v=254"></script>
-<script src="sketch.js?v=254"></script>
-<script src="config.js?v=254"></script>
-<script src="cassie-bot.js?v=254"></script>
-<script src="cards.js?v=254"></script>
-<script src="cite.js?v=254"></script>
-<script src="voice.js?v=254"></script>
+<script src="extlink.js?v=255"></script>
+<script src="errors.js?v=255"></script>
+<script src="mic.js?v=255"></script>
+<script src="care.js?v=255"></script>
+<script src="memory.js?v=255"></script>
+<script src="board.js?v=255"></script>
+<script src="export.js?v=255"></script>
+<script src="sketch.js?v=255"></script>
+<script src="config.js?v=255"></script>
+<script src="cassie-bot.js?v=255"></script>
+<script src="cards.js?v=255"></script>
+<script src="cite.js?v=255"></script>
+<script src="voice.js?v=255"></script>
 <nav id="tabbar" class="tabbar" aria-label="Sections"><button type="button" class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button><button type="button" class="tab" data-tab="chat" aria-label="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4z"/></svg><span>Chat</span></button><button type="button" class="tab" data-tab="labs" aria-label="Learn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.8 18.4A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.6L14 9.2V3M7.5 14h9"/></svg><span>Learn</span></button><button type="button" class="tab" data-tab="games" aria-label="Games"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3.5 3.5 0 0 1-6.3 2.1L14 14.5h-4l-.7 1.1A3.5 3.5 0 0 1 3 13.5V12a4 4 0 0 1 4-4zM8 10.5v3M6.5 12h3M15.5 11.5h.01M17.5 13.5h.01"/></svg><span>Games</span></button><button type="button" class="tab" data-tab="cards" aria-label="Cards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2"/></svg><span>Cards</span></button><button type="button" class="tab" data-tab="you" aria-label="You"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>You</span></button></nav>
-<script src="app.js?v=254"></script>
-<script src="native.js?v=254"></script>
-<script src="listen.js?v=254"></script>
-<script src="tour.js?v=254"></script>
-<script src="study-room.js?v=254"></script>
-<script src="gradient.js?v=254"></script>
+<script src="app.js?v=255"></script>
+<script src="native.js?v=255"></script>
+<script src="listen.js?v=255"></script>
+<script src="tour.js?v=255"></script>
+<script src="study-room.js?v=255"></script>
+<script src="gradient.js?v=255"></script>
 </body>
 </html>

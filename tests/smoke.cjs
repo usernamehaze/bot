@@ -1462,21 +1462,22 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
     await page.click('#side-general #settings-btn');
     await page.waitForSelector('#settings-panel:not([hidden]) .set-nav', { timeout: 4000 });
     const nav = await page.evaluate(() => [...document.querySelectorAll('.set-nav [data-go]')].map((x) => x.textContent));
-    expect(nav.join() === 'You,Account,Study,Appearance,Voice and sound,Privacy and data,Plans,Help,Advanced,All settings', 'the list: ' + nav.join());
+    expect(nav.join() === 'You,Account,Study,Appearance,Language,Notifications,Voice and sound,Privacy and data,Plans,Help,Advanced,All settings', 'the list: ' + nav.join());
     const geo = await page.evaluate(() => { const n = document.querySelector('.set-nav').getBoundingClientRect(), c = document.querySelector('.settings-card').getBoundingClientRect(); return { navLeft: n.left - c.left, navW: n.width, cardW: c.width }; });
     expect(geo.navLeft < 40 && geo.navW >= 200 && geo.cardW > 900, 'the list on the left of a wide page: ' + JSON.stringify(geo));
-    for (const [go, title, inside] of [['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['plans', 'Plans', '.plan-compare'], ['appearance', 'Appearance', '#accent-swatches']]) {
+    for (const [go, title, inside] of [['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['plans', 'Plans', '.plan-compare'], ['appearance', 'Appearance', '#appx-colors']]) {
       await page.click(`.set-nav [data-go="${go}"]`);
       expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator(`.set-nav [data-go="${go}"]`).getAttribute('aria-current') === 'page', `${go} opens on the right`);
     }
-    const names = await page.evaluate(() => [...document.querySelectorAll('.accent-chip')].map((x) => x.textContent));
-    expect(names.join() === 'Cassie,Monochrome,Forest,Ocean,Plum,Ember', 'colours by name: ' + names.join());
-    await page.click('.accent-chip[data-accent="#1d4ed8"]');
-    expect(await page.evaluate(() => accentChoice()) === '#1d4ed8' && await page.locator('.accent-chip[data-accent="#1d4ed8"]').getAttribute('aria-pressed') === 'true', 'Ocean picks blue');
+    const names = await page.evaluate(() => [...document.querySelectorAll('#appx-colors .appx-sw')].map((x) => x.getAttribute('aria-label')));
+    expect(['Blush and Sage', 'Monochrome', 'Ocean', 'Forest', 'Ember'].every((n) => names.includes(n)), 'theme colours by name: ' + names.join());
+    await page.click('#appx-colors .appx-sw[data-accent="#1d4ed8"]');
+    expect(await page.evaluate(() => accentChoice()) === '#1d4ed8' && await page.locator('#appx-colors .appx-sw[data-accent="#1d4ed8"]').getAttribute('aria-pressed') === 'true', 'Ocean previews blue');
+    await page.click('#appx-review');
     if (process.env.SHOTS) { await page.waitForTimeout(500); await page.screenshot({ path: `${process.env.SHOTS}/desk-settings-${viewport.width}-${scheme}.png` }); }
     const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '#settings-panel');
     expect(!bad.length, `${scheme}: every word readable: ` + bad.join(' | '));
-    await page.click('.accent-chip[data-accent="cassie"]');
+    await page.click('#appx-colors .appx-sw[data-accent="cassie"]'); await page.click('#appx-review');
     await page.click('#settings-x');
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -1485,7 +1486,7 @@ test('computer Settings is a page: its parts listed on the left (You, Account, S
   const { ctx, page } = await open(b, { device: 'iPhone 13', server: false });
   await page.evaluate(() => openSettings('appearance'));
   await page.waitForSelector('#settings-panel:not([hidden])');
-  expect(await page.evaluate(() => !document.querySelector('.set-nav').getBoundingClientRect().width && !document.querySelector('.accent-named').getBoundingClientRect().width), 'a phone’s Settings is unchanged');
+  expect(await page.evaluate(() => !document.querySelector('.set-nav').getBoundingClientRect().width && !(document.querySelector('.set-nav').getBoundingClientRect().width)), 'a phone’s Settings is unchanged');
   await ctx.close();
 });
 
@@ -2076,7 +2077,7 @@ test('reminders in Settings: on with a tap (asks to allow notifications), a time
     const { ctx, page, errors } = await open(b, { device, viewport, state: { cards }, setup });
     await page.evaluate(() => navigator.serviceWorker.ready);
     await tapSettings(page);
-    await page.evaluate(() => setPage('study'));
+    await page.evaluate(() => setPage('notifications'));
     await page.locator('#remind-toggle').check();
     await page.waitForFunction(() => state.remind && state.remind.on, null, { timeout: 8000 });
     const sub = posts.find((p) => p.path === '/push/subscribe');
@@ -2108,7 +2109,7 @@ test('reminders in Settings: on with a tap (asks to allow notifications), a time
     expect(st.length === 1 && st[0].body.nextDue < cards[0].due && !('cards' in st[0].body), 'the next due time is updated: ' + JSON.stringify(st));
     for (const scheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(300);
-      await page.locator('.remind-row').scrollIntoViewIfNeeded();
+      await page.locator('.notif-card').scrollIntoViewIfNeeded();
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/remind-${viewport ? viewport.width : 'phone'}-${scheme}.png` });
       const { bad } = await require('./ui-checks.cjs').contrastIssues(page, '.remind-row');
       expect(!bad.length, scheme + ': readable: ' + bad.join(' | '));
@@ -2124,9 +2125,9 @@ test('reminders in Settings: on with a tap (asks to allow notifications), a time
   // an iPhone in Safari (not from the Home Screen) has no push
   const { ctx, page } = await open(b, { device: 'iPhone 13', setup: async (c) => c.addInitScript(() => { delete window.PushManager; }) });
   await tapSettings(page);
-  await page.evaluate(() => setPage('study'));
+  await page.evaluate(() => setPage('notifications'));
   expect(await page.locator('#remind-toggle').isDisabled() && /add Cassie to your Home Screen first/.test(await page.locator('#remind-note').innerText()), 'iPhone: add Cassie to the Home Screen first: ' + await page.locator('#remind-note').innerText());
-  if (process.env.SHOTS) { await page.locator('.remind-row').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/remind-iphone.png` }); }
+  if (process.env.SHOTS) { await page.locator('.notif-card').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${process.env.SHOTS}/remind-iphone.png` }); }
   await ctx.close();
 });
 test('the app’s Plans show all three (Free, Plus, Pro) with an at-a-glance table that fits a phone: Pro’s price and limits, Plus still Best for school, no sideways scrolling', async (b) => {
@@ -2608,6 +2609,43 @@ const prepFake = (body) => {
 };
 // (v254) "How should I show it?" is asked for every drawing: pick a way
 async function pickWay(page, k = 'draw') { const sel = `.ld-pop [data-show="${k}"]`; await page.waitForSelector(sel, { timeout: 10000 }); await page.click(sel); }
+test('v255: "Make it yours" personalization. Appearance previews a color, text size and UI style live but saves nothing until Review (Discard puts it back, the bar counts the changes); Language sets the reply language Cassie really uses (greeting preview changes, the system prompt forces it); Notifications is its own page wrapping the real study reminders', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: 'ok' }), state: { groqKey: 'gsk_test', tab: 'chat' } });
+  // 1. Appearance previews live but does not persist until Review
+  await page.evaluate(() => openSettings('appearance'));
+  await page.waitForSelector('#appx-colors .appx-sw', { timeout: 8000 });
+  await page.click('#appx-colors .appx-sw[data-accent="#7e22ce"]');
+  await page.click('#appx-textsize button[data-size="larger"]');
+  await page.click('#appx-uistyle .appx-style[data-style="crisp"]');
+  await page.waitForTimeout(150);
+  const mid = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, n: document.getElementById('appx-bar-n').textContent, accent: state.accent, textSize: state.textSize, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle'), savedUi: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).uiStyle }));
+  expect(mid.bar && mid.n === '3 changes' && mid.accent === '#7e22ce' && mid.textSize === 'larger' && mid.uiStyle === 'crisp' && mid.uiAttr === 'crisp' && mid.savedUi !== 'crisp', '1. three choices preview live (state + data-uistyle) and the bar says "3 changes", but nothing is saved yet: ' + JSON.stringify(mid));
+  // Discard puts everything back
+  await page.click('#appx-discard'); await page.waitForTimeout(150);
+  const dis = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, accent: state.accent, uiStyle: state.uiStyle, uiAttr: document.documentElement.getAttribute('data-uistyle') }));
+  expect(!dis.bar && !dis.accent && (dis.uiStyle === 'rounded' || !dis.uiStyle) && dis.uiAttr === 'rounded', '1. Discard reverts every previewed choice and hides the bar: ' + JSON.stringify(dis));
+  // change again + Review commits and persists
+  await page.click('#appx-uistyle .appx-style[data-style="soft"]'); await page.waitForTimeout(100);
+  await page.click('#appx-review'); await page.waitForTimeout(150);
+  const rev = await page.evaluate(() => ({ bar: !!document.getElementById('appx-bar').offsetParent, uiStyle: state.uiStyle, saved: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).uiStyle }));
+  expect(!rev.bar && rev.uiStyle === 'soft' && rev.saved === 'soft', '1. Review saves the previewed choice (and the bar goes away): ' + JSON.stringify(rev));
+  // 2. Language sets the reply language Cassie really uses
+  await page.evaluate(() => openSettings('language'));
+  await page.waitForSelector('#lang-list .lang-opt');
+  await page.click('#lang-list .lang-opt[data-lang="fil"]'); await page.waitForTimeout(120);
+  const lang = await page.evaluate(() => ({ hi: document.getElementById('lang-hi').textContent, lang: state.lang, saved: (JSON.parse(localStorage.getItem('cassie.v2') || '{}')).lang, inPrompt: /reply in Filipino/i.test(buildSystemPrompt()), checked: document.querySelector('#lang-list .lang-opt[data-lang="fil"]').getAttribute('aria-checked') }));
+  expect(lang.hi === 'Kumusta' && lang.lang === 'fil' && lang.saved === 'fil' && lang.inPrompt && lang.checked === 'true', '2. Language: the greeting preview, the saved choice, and a system prompt that forces Filipino: ' + JSON.stringify(lang));
+  await page.click('#lang-list .lang-opt[data-lang="auto"]'); await page.waitForTimeout(80);
+  expect(await page.evaluate(() => !/Always reply in/i.test(buildSystemPrompt())), '2. back to "match how I write" drops the forced-language line');
+  // 3. Notifications is its own page wrapping the real reminders
+  await page.evaluate(() => openSettings('notifications'));
+  await page.waitForSelector('#remind-toggle', { timeout: 8000 });
+  const notif = await page.evaluate(() => ({ title: document.getElementById('set-title').textContent, nav: !!document.querySelector('.set-nav [data-go="notifications"]'), toggle: !!document.getElementById('remind-toggle'), times: !!document.getElementById('remind-times'), inStudy: !!document.querySelector('.set-sec[data-sec="study"] #remind-toggle') }));
+  expect(notif.title === 'Notifications' && notif.nav && notif.toggle && notif.times && !notif.inStudy, '3. Notifications is its own page with the real study-reminder controls (moved out of Study): ' + JSON.stringify(notif));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v254: a 3D model is planned and checked for any subject (nothing floats, parts inside what holds them, real sizes), Cassie checks a picture of the model and fixes it, each 3D name has a line to its part and never overlaps another, the whole model stays in the frame put together and pulled apart, and Cassie never sits on a button', async (b) => {
   // a model like the one in the recording: parts scattered, no plan
   const BAD = JSON.parse(JSON.stringify(LD_JET)); BAD.parts.forEach((p, i) => { delete p.size; delete p.inside; p.shapes.forEach((sh) => { sh.pos = [sh.pos[0] * 1.6, (i % 2 ? 2.4 : -2.4), 0]; }); }); BAD.parts = BAD.parts.filter((p) => p.id !== 'case');
@@ -10664,16 +10702,15 @@ test('the Dark mode switch (computer top bar, phone Home, Settings > Appearance)
     const lightLeft = panes.filter(([, bg]) => { const v = bg.match(/[\d.]+/g).map(Number); return v.length > 3 ? v[3] > .5 && (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255 > .6 : (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255 > .6; });
     expect(panes.length > 3 && !lightLeft.length, 'nothing stays light: ' + JSON.stringify(lightLeft));
     const r1 = await contrastIssues(page, '.topbar'); expect(!r1.bad.length, 'dark: the top bar reads (AA): ' + r1.bad.join(' | '));
-    // Settings > Appearance: the same switch, in step
-    await page.evaluate(() => openSettings('appearance')); await page.waitForTimeout(600);
-    const inSet = '#settings-panel .set-switch-row .theme-switch';
-    expect(await page.$eval(inSet, (s) => s.getAttribute('aria-checked')) === 'true', 'Settings > Appearance shows Dark mode on');
-    await page.click(inSet); await page.waitForTimeout(500);
+    // Settings > Appearance: the Auto/Light/Dark control, in step with every switch
+    await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#appx-theme button[data-theme="dark"]'); await page.waitForTimeout(400);
+    expect(await page.getAttribute('#appx-theme button[data-theme="dark"]', 'aria-pressed') === 'true', 'Settings > Appearance shows Dark on');
+    await page.click('#appx-theme button[data-theme="light"]'); await page.waitForTimeout(500);
     const s2 = await state(page);
-    expect(s2.sw.every((x) => x === 'false') && s2.cs === 'light', 'switched off in Settings: every switch off and the app light: ' + JSON.stringify(s2));
-    // a keyboard: Space flips it
-    await page.focus(inSet); await page.keyboard.press('Space'); await page.waitForTimeout(400);
-    expect((await state(page)).sw.every((x) => x === 'true'), 'Space flips the switch');
+    expect(s2.sw.every((x) => x === 'false') && s2.cs === 'light', 'picking Light in Settings: every switch off and the app light: ' + JSON.stringify(s2));
+    // a keyboard: Space picks a mode
+    await page.focus('#appx-theme button[data-theme="dark"]'); await page.keyboard.press('Space'); await page.waitForTimeout(400);
+    expect((await state(page)).sw.every((x) => x === 'true'), 'Space picks Dark');
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
   }
@@ -10830,12 +10867,13 @@ test('light or dark at a tap: the Dark mode switch (top bar and Learn) and Appea
   expect(dark.theme === 'dark' && dark.cs === 'dark' && dark.label === 'true' && dark.bg !== start.bg, 'one tap: dark, on a light device: ' + JSON.stringify(dark));
   await page.reload(); await page.waitForSelector('#top-theme svg');
   expect((await scheme()).theme === 'dark', 'dark is kept after a reload');
-  await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#theme-select');
-  expect(await page.$eval('#theme-select', (e) => e.value) === 'dark', 'Appearance shows Dark');
-  await page.selectOption('#theme-select', 'light'); await page.waitForTimeout(300);
+  await page.evaluate(() => openSettings('appearance')); await page.waitForSelector('#appx-theme button[data-theme="dark"]');
+  expect(await page.getAttribute('#appx-theme button[data-theme="dark"]', 'aria-pressed') === 'true', 'Appearance shows Dark');
+  await page.click('#appx-theme button[data-theme="light"]'); await page.waitForTimeout(300);
   expect((await scheme()).theme === 'light', 'Appearance picks Light');
-  await page.selectOption('#theme-select', 'auto'); await page.waitForTimeout(300);
+  await page.click('#appx-theme button[data-theme="auto"]'); await page.waitForTimeout(300);
   expect((await scheme()).theme === 'auto', 'and back to Auto');
+  await page.click('#appx-review'); // (keep the pick, as the old select committed live)
   await page.evaluate(() => document.getElementById('settings-x').click());
   // each surface in each scheme: glass (see-through, frosted) over the picked colours, the folders dark in dark and light in light
   const lum = (rgb) => { const [r, g, bl] = rgb.split(',').map(Number); return (0.2126 * r + 0.7152 * g + 0.0722 * bl) / 255; };

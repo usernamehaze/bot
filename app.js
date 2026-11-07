@@ -17,6 +17,8 @@ function loadState() {
     citationStyle: 'APA',   // APA | MLA | IEEE | Chicago — used for research/citations
     textSize: 'normal',     // normal | large | larger — reading accessibility
     easyRead: false,        // extra line spacing for easier reading
+    uiStyle: 'rounded',     // Appearance: rounded | soft | crisp — the corner style of cards, buttons and sheets
+    lang: 'auto',           // Appearance: the language Cassie replies in — auto | en | fil | tl
     theme: 'auto',          // Appearance: auto (follows the device) | light | dark
     accent: '',             // Appearance: '' or 'mono' = Monochrome (the main colours), 'cassie' = Blush & Sage, or a colour (hex)
     audience: 'student',    // student | pro (from the profile: Working professional is pro)
@@ -245,8 +247,20 @@ const STYLE_INSTRUCTION = {
 };
 // Build the system prompt with the chosen level and (for chat) any active
 // tutor mode. Highlight-popover calls pass tutor:false.
+// (v255) the reply language the student picked in Appearance > Language. 'auto' keeps Cassie's
+// default (match how they write); a chosen language is honoured even when they write in another.
+const LANGS = { auto: ['Match me', 'Hello  Kumusta'], en: ['English', 'Hello'], fil: ['Filipino', 'Kumusta'], tl: ['Taglish', 'Hello! Kumusta?'] };
+function langChoice() { const l = String(state.lang || 'auto').toLowerCase(); return LANGS[l] ? l : 'auto'; }
+function langInstruction() {
+  const l = langChoice();
+  if (l === 'en') return '\n\nAlways reply in English, even when the student writes in another language. Keep it natural.';
+  if (l === 'fil') return '\n\nAlways reply in Filipino (Tagalog), even when the student writes in English. Keep science, math and technical terms in English the way they are taught in class.';
+  if (l === 'tl') return '\n\nAlways reply in Taglish, a natural English and Filipino mix, even when the student writes in pure English or pure Filipino. Keep technical terms in English.';
+  return '';
+}
 function buildSystemPrompt({ tutor = false, mode = null } = {}) {
   let sp = SYSTEM_PROMPT;
+  sp += langInstruction();
   if (window.CassieCare) sp += `\n\n${window.CassieCare.INSTRUCTION}`; // a student at risk: care first (care.js)
   if (state.level && LEVEL_LABELS[state.level]) {
     sp += `\n\nAudience level: explain everything at a ${LEVEL_LABELS[state.level]} level: match your vocabulary, depth, and examples to that level.`;
@@ -301,7 +315,13 @@ function applyReading() {
   if (!appEl) return;
   appEl.setAttribute('data-textsize', state.textSize || 'normal');
   appEl.setAttribute('data-easyread', state.easyRead ? 'on' : 'off');
+  applyUiStyle();
 }
+// the corner style of cards, buttons and sheets (Appearance > UI style): redefines the radius
+// tokens on the root, so every surface that uses them softens or sharpens together
+const UI_STYLES = ['rounded', 'soft', 'crisp'];
+function uiStyleChoice() { const s = String(state.uiStyle || 'rounded').toLowerCase(); return UI_STYLES.includes(s) ? s : 'rounded'; }
+function applyUiStyle() { document.documentElement.setAttribute('data-uistyle', uiStyleChoice()); }
 
 // Cassie's colours follow the profile: blush leads for a girl (and when it isn't said), sage
 // leads for a boy (style.css: html[data-pal="sage"]). A colour picked in Appearance wins over both.
@@ -2590,7 +2610,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=254'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=255'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2612,7 +2632,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=254'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=255'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2746,7 +2766,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=254').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=255').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -4873,6 +4893,7 @@ function leanDocSystem() {
   let sp = `You are Cassie, a sharp, warm study buddy. Formatting: lead with what matters; label sections with a short **bold** phrase on its own line (never # headings); tight bullet points; key terms in **bold**; plain-text math (no LaTeX); a small table only when it truly helps.`;
   if (state.level && LEVEL_LABELS[state.level]) sp += ` Explain at a ${LEVEL_LABELS[state.level]} level.`;
   sp += ' Answer in the language they write in: English, Filipino, or Taglish mixed the way they mix it, with technical terms in English.';
+  sp += langInstruction();
   return sp + '\n\n' + DOC_INSTRUCTION;
 }
 
@@ -6609,7 +6630,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=254')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=255')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7840,7 +7861,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=254');
+      exploreMod = await import('./explore/cell3d.js?v=255');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7890,7 +7911,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=254');
+      labsMod = await import('./labs/labs.js?v=255');
       islandRest();
     }
     labsMod.open({
@@ -8085,6 +8106,91 @@ function deskCloseOthers(keep = '') {
   if (keep !== 'cards' && document.documentElement.classList.contains('fc-open') && window.CassieCards) window.CassieCards.close();
   if (keep !== 'board' && window.CassieSketch && window.CassieSketch.isOpen && window.CassieSketch.isOpen()) window.CassieSketch.close();
 }
+/* ---------- (v255) Appearance "Make it yours": preview live, commit on Review, revert on Discard ----------
+   The four appearance choices (theme, accent, text size, UI style) preview instantly as you tap, but are
+   written to state only when Review is tapped. Discard, leaving the page, or closing Settings puts them back
+   the way they were on entry, so nothing half-chosen is ever saved. */
+const APPX_KEYS = ['theme', 'accent', 'textSize', 'uiStyle'];
+let appxEntry = null; // the committed values when the Appearance page opened
+const appxSnap = () => ({ theme: state.theme, accent: state.accent, textSize: state.textSize, uiStyle: state.uiStyle });
+// the named palette shown as swatches: Cassie's own, Monochrome, then a few colours
+const APPX_COLORS = [['cassie', 'Blush and Sage', 'var(--sw-blush)'], ['mono', 'Monochrome', 'var(--sw-ink)'], ['#7e22ce', 'Plum', '#7e22ce'], ['#1d4ed8', 'Ocean', '#1d4ed8'], ['#0f766e', 'Teal', '#0f766e'], ['#15803d', 'Forest', '#15803d'], ['#c2410c', 'Ember', '#c2410c'], ['#be185d', 'Rose', '#be185d']];
+function appxBuildColors() {
+  const wrap = document.getElementById('appx-colors');
+  if (!wrap || wrap.children.length) return;
+  wrap.innerHTML = APPX_COLORS.map(([v, label, sw]) => `<button type="button" class="appx-sw" data-accent="${v}" style="--sw:${sw}" aria-label="${label}" aria-pressed="false"></button>`).join('');
+}
+function appxApplyLive() { // show the previewed choices without saving them
+  applyTheme(); // (also applies the accent)
+  applyReading(); // (also applies the UI style)
+  if (bot2d) bot2d.setAccent(accentHex() || '#d8343c');
+  if (islandBot) islandBot.setAccent(accentHex() || '#d8343c');
+}
+function appxSyncControls() {
+  const pick = accentChoice(), curAcc = pick === 'mono' ? 'mono' : pick || 'cassie';
+  document.querySelectorAll('#appx-colors .appx-sw').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.accent || '').toLowerCase() === curAcc)));
+  document.querySelectorAll('#appx-textsize button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === (state.textSize || 'normal'))));
+  document.querySelectorAll('#appx-uistyle .appx-style').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === uiStyleChoice())));
+  const curTheme = (state.theme === 'light' || state.theme === 'dark') ? state.theme : 'auto';
+  document.querySelectorAll('#appx-theme button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === curTheme)));
+  // keep the legacy controls (read by commitSettings on close) in step with the previewed state
+  const ts = document.getElementById('textsize-select'); if (ts) ts.value = state.textSize || 'normal';
+  const th = document.getElementById('theme-select'); if (th) th.value = (state.theme === 'light' || state.theme === 'dark') ? state.theme : 'auto';
+  syncAccentSwatches();
+  themeButtons();
+}
+function appxCount() { return appxEntry ? APPX_KEYS.filter((k) => String(state[k] || '') !== String(appxEntry[k] || '')).length : 0; }
+function appxBar() {
+  const bar = document.getElementById('appx-bar'); if (!bar) return;
+  const n = appxCount();
+  bar.hidden = n === 0;
+  if (n) document.getElementById('appx-bar-n').textContent = n === 1 ? '1 change' : n + ' changes';
+}
+function appxPreview(key, value) {
+  if (!appxEntry) appxEntry = appxSnap();
+  state[key] = value; // preview only, not saved
+  appxApplyLive(); appxSyncControls(); appxBar();
+}
+function appxOpen() {
+  appxBuildColors();
+  appxEntry = appxSnap();
+  appxSyncControls(); appxBar();
+}
+function appxReview() {
+  save(); // commit the previewed values under their usual keys
+  appxEntry = appxSnap();
+  appxBar(); updateModelPill();
+  track('feature', 'appearance-review');
+  islandShow && islandShow('done', 'Saved', 1600);
+}
+function appxRevert() {
+  if (!appxEntry) return;
+  APPX_KEYS.forEach((k) => { state[k] = appxEntry[k]; });
+  appxApplyLive(); appxSyncControls(); appxBar();
+}
+// leaving the page or closing Settings with pending changes: put them back (nothing half-chosen persists)
+function appxLeave() { if (appxCount() > 0) appxRevert(); appxEntry = null; }
+document.getElementById('appx-colors')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-sw'); if (b) appxPreview('accent', b.dataset.accent); });
+document.getElementById('appx-textsize')?.addEventListener('click', (e) => { const b = e.target.closest('button[data-size]'); if (b) appxPreview('textSize', b.dataset.size); });
+document.getElementById('appx-uistyle')?.addEventListener('click', (e) => { const b = e.target.closest('.appx-style'); if (b) appxPreview('uiStyle', b.dataset.style); });
+document.getElementById('appx-theme')?.addEventListener('click', (e) => { const b = e.target.closest('button[data-theme]'); if (b) appxPreview('theme', b.dataset.theme); });
+document.getElementById('appx-review')?.addEventListener('click', appxReview);
+document.getElementById('appx-discard')?.addEventListener('click', appxDiscardTease);
+function appxDiscardTease() { appxRevert(); }
+
+// (v255) Language: the reply language, applied right away (not part of the Appearance Review bar)
+const LANG_NOTE = { auto: 'Cassie matches how you write.', en: 'Cassie always replies in English.', fil: 'Lagi sumasagot si Cassie sa Filipino.', tl: 'Cassie replies in Taglish, English at Filipino na halo.' };
+function renderLang() {
+  const l = langChoice(), hi = document.getElementById('lang-hi'), note = document.getElementById('lang-note');
+  if (hi) hi.textContent = (LANGS[l] || LANGS.auto)[1];
+  if (note) note.textContent = LANG_NOTE[l] || LANG_NOTE.auto;
+  document.querySelectorAll('#lang-list .lang-opt').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.lang === l)));
+}
+document.getElementById('lang-list')?.addEventListener('click', (e) => {
+  const b = e.target.closest('.lang-opt'); if (!b) return;
+  state.lang = b.dataset.lang; save(); track('feature', 'language'); renderLang();
+});
+
 function openSettings(page = 'all') {
   deskCloseOthers('settings');
   if (settingsPanel.hidden) setTrail = [];
@@ -8224,6 +8330,7 @@ function commitSettings() {
   applyReading();
 }
 function closeSettings() {
+  appxLeave(); // (v255: un-reviewed appearance preview is dropped, not saved)
   commitSettings();
   settingsPanel.hidden = true;
   resumeFollowing();
@@ -8240,13 +8347,15 @@ settingsPanel.addEventListener('change', (e) => { if (!e.target.closest('.profil
    "profile": who you are, a few numbers and the parts of Settings about you; "all": every setting
    in grouped glass lists, with search; a section ("account", "study", "voice", "privacy" ...) on its
    own with a back arrow; "plans": Free and Plus. */
-const SET_TITLES = { profile: 'You', all: 'Settings', plans: 'Plans', account: 'Account', study: 'Study', appearance: 'Appearance', voice: 'Voice and sound', privacy: 'Privacy and data', help: 'Help' };
+const SET_TITLES = { profile: 'You', all: 'Settings', plans: 'Plans', account: 'Account', study: 'Study', appearance: 'Appearance', language: 'Language', notifications: 'Notifications', voice: 'Voice and sound', privacy: 'Privacy and data', help: 'Help' };
 const setCard = settingsPanel.querySelector('.settings-card');
 const setSearch = document.getElementById('settings-search');
 let setTrail = [];
+const appxShows = (p) => p === 'appearance' || p === 'all';
 function setPage(page, { back = false } = {}) {
   const now = setCard.dataset.page;
   if (!back && now && now !== page && !settingsPanel.hidden) setTrail.push(now);
+  if (appxShows(now) && !appxShows(page)) appxLeave(); // (v255: leaving Appearance drops any un-reviewed preview)
   setCard.dataset.page = page;
   document.getElementById('set-title').textContent = SET_TITLES[page] || 'Settings';
   settingsPanel.querySelector('.set-back').hidden = !setTrail.length;
@@ -8257,7 +8366,9 @@ function setPage(page, { back = false } = {}) {
   secs.hidden = !(page === 'all' || SET_TITLES[page] && !['profile', 'plans'].includes(page));
   if (page !== 'all' && setSearch.value) { setSearch.value = ''; filterSettings(); }
   if (page === 'profile') fillYou();
-  if (page === 'study' || page === 'all') renderRemind();
+  if (appxShows(page)) appxOpen(); // (v255: snapshot the committed appearance, so preview can be reviewed or discarded)
+  if (page === 'language' || page === 'all') renderLang();
+  if (page === 'notifications' || page === 'study' || page === 'all') renderRemind();
   settingsPanel.querySelectorAll('.set-nav [data-go]').forEach((b) => { if (b.dataset.go === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   setCard.scrollTop = 0;
 }
@@ -9749,10 +9860,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=254').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=255').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=254', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=255', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
