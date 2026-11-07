@@ -4060,3 +4060,8 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 .notif-top input[role="switch"]:checked::after { transform: translateX(20px); }
 .notif-top input[role="switch"]:disabled { opacity: .5; cursor: default; }
 .notif-top input[role="switch"]:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
+
+/* (v256) Podcast length picker */
+.pod-len-group { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin: var(--sp-2, 8px) 0 0; }
+.pod-len-l { font-size: var(--fs-sm, .9rem); color: var(--muted); font-weight: 600; }
+.pod-len.appx-seg button { min-height: 44px; }

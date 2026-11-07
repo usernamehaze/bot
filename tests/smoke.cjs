@@ -1672,6 +1672,26 @@ test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, 
   }
 });
 
+test('v256: Podcast asks how long first (3, 5 or 10 minutes), remembers the choice, and the script target scales with it', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: 'ok' }), state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.evaluate(() => openPodcast('Photosynthesis makes glucose and oxygen in the chloroplast using sunlight, water and carbon dioxide.', 'My notes'));
+  await page.waitForSelector('#pod-len button');
+  const start = await page.evaluate(() => ({ mins: [...document.querySelectorAll('#pod-len button')].map((b) => b.textContent.trim()), pressed: document.querySelector('#pod-len button[aria-pressed="true"]').dataset.min }));
+  expect(start.mins.join() === '3 min,5 min,10 min' && start.pressed === '3', '3/5/10 presets, 3 the default: ' + JSON.stringify(start));
+  await page.click('#pod-len button[data-min="10"]'); await page.waitForTimeout(150);
+  const pick = await page.evaluate(() => ({ pressed: document.querySelector('#pod-len button[aria-pressed="true"]').dataset.min, saved: state.podMinutes, w3: podPrompt('x', 3), w10: podPrompt('x', 10), current: podMinutes() }));
+  const range = (s) => (s.match(/\((\d+) to (\d+) words\)/) || []).slice(1).map(Number);
+  const r3 = range(pick.w3), r10 = range(pick.w10);
+  expect(pick.pressed === '10' && pick.saved === 10 && pick.current === 10, '10 min is picked and remembered: ' + JSON.stringify({ pressed: pick.pressed, saved: pick.saved }));
+  expect(r3.length === 2 && r10.length === 2 && r10[0] > r3[0] * 2 && /about 10 minutes/.test(pick.w10) && /about 3 minutes/.test(pick.w3), 'the word target scales with minutes: ' + JSON.stringify({ r3, r10 }));
+  // the choice persists to the next sheet
+  await page.evaluate(() => { document.querySelector('.pod-sheet').remove(); openPodcast('x', 'Again'); });
+  await page.waitForSelector('#pod-len button');
+  expect(await page.evaluate(() => document.querySelector('#pod-len button[aria-pressed="true"]').dataset.min) === '10', 'the next podcast opens on the remembered length');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('Podcast from my notes: upload a .txt or .md file, or pick notes made in Cassie, see what will be used, then make the podcast (faked); an unreadable file says why; no notes offers Make study notes (1280x800 and 390x844, AA in light and dark)', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   const LINES = [['Jessica', 'Welcome! Today: cells.'], ['Chris', 'What is inside a cell?'], ['Jessica', 'A nucleus, mitochondria and ribosomes.'], ['Chris', 'Recap: the parts of a cell.']];
