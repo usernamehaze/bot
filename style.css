@@ -3958,3 +3958,10 @@ html.lg-refract.native .tabbar { background: linear-gradient(var(--lg-tint), var
 .ld-pop-t { font-weight: 700; }
 .ld-pop-d { grid-column: 2; font-weight: 400; font-size: .82rem; color: var(--muted); }
 .ld-pop-foot { margin: var(--sp-3, 12px) 0 0; font-size: .8rem; color: var(--muted); }
+/* (v253) each 3D name has a thin line to its part, and a dot where it touches */
+.ld-tag-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.ld-tag-lines line { stroke: var(--muted); stroke-width: 1; }
+.ld-tag-lines circle { fill: var(--text); stroke: var(--surface); stroke-width: 1; }
+.ld-pop-t { display: flex; align-items: center; gap: var(--sp-2, 8px); }
+.ld-pop-last { padding: 0 var(--sp-2, 8px); border-radius: 999px; border: 1px solid var(--border); font-size: .72rem; font-weight: 600; line-height: 20px; color: var(--muted); }
+#mascot.tucked { z-index: 4; } /* (v253: no clear spot: she steps behind the answer, so its buttons stay on top) */

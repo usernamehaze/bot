@@ -2606,7 +2606,59 @@ const prepFake = (body) => {
   const n = +((m.match(/Write (\d+) exam-style/) || [])[1] || 5);
   return { text: JSON.stringify(Array.from({ length: n }, (_, i) => ({ t: 'topic', q: `Practice question ${i + 1}?`, o: ['First', 'Second', 'Third', 'Fourth'], a: 1, why: `Because the second one is right (${i + 1}).` }))) };
 };
-test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemini, Just explain; kept per chat; a 3D ask skips it; Show another way asks again); each name points at its own part from clear space; the drawing starts before the check ends; the check asks about every number and a wrong one is redrawn and swapped in place; plain circles for a real thing are flagged; small actions in one row', async (b) => {
+// (v254) "How should I show it?" is asked for every drawing: pick a way
+async function pickWay(page, k = 'draw') { const sel = `.ld-pop [data-show="${k}"]`; await page.waitForSelector(sel, { timeout: 10000 }); await page.click(sel); }
+test('v254: a 3D model is planned and checked for any subject (nothing floats, parts inside what holds them, real sizes), Cassie checks a picture of the model and fixes it, each 3D name has a line to its part and never overlaps another, the whole model stays in the frame put together and pulled apart, and Cassie never sits on a button', async (b) => {
+  // a model like the one in the recording: parts scattered, no plan
+  const BAD = JSON.parse(JSON.stringify(LD_JET)); BAD.parts.forEach((p, i) => { delete p.size; delete p.inside; p.shapes.forEach((sh) => { sh.pos = [sh.pos[0] * 1.6, (i % 2 ? 2.4 : -2.4), 0]; }); }); BAD.parts = BAD.parts.filter((p) => p.id !== 'case');
+  const calls = []; let lookReply = () => '{"labels":[],"shapes":[],"facts":[]}';
+  const fake = (body) => {
+    const sys = (body.messages || [])[0] && body.messages[0].content || '', all = JSON.stringify(body.messages);
+    if (/You check drawings/.test(all)) { calls.push({ look: true, all }); return { text: lookReply(all) }; }
+    if (!/explains by DRAWING/.test(sys)) return { text: 'Answer.' };
+    const c = { sys, all }; calls.push(c);
+    if (/I looked at a picture of your drawing/.test(all)) { c.redrawn = true; return { text: JSON.stringify(LD_JET) }; }
+    return { text: JSON.stringify(/problems:/.test(all) ? LD_JET : BAD) };
+  };
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
+  await page.evaluate(() => createNewChat());
+  // 1. her own plan, checked: the scattered model is sent back with what is wrong, for any subject (no worked example of one)
+  await page.fill('#prompt-input', 'draw me or show me how to build a jet'); await page.click('#send-btn'); await pickWay(page, '3d');
+  await page.waitForFunction(() => /Cassie built it in 3D/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 60000 });
+  const draws = calls.filter((c) => c.sys);
+  expect(/"mode": "3d"/.test(draws[0].sys) && /First think how the real object is built/.test(draws[0].sys) && !/How photosynthesis works|A house being built/.test(draws[0].sys) && /"inside"/.test(draws[0].sys) && /"size"/.test(draws[0].sys), '1. the 3D instructions ask her to plan the real structure (inside, size) and carry no worked example of one subject');
+  expect(draws.length >= 2 && /floats apart from the rest/.test(draws[1].all) && /plan every part first/.test(draws[1].all), '1. a model with floating parts and no plan is sent back, naming what is wrong: ' + (draws[1] ? draws[1].all.slice(-400) : 'no re-ask'));
+  const chk = await page.evaluate(async () => { const m = await import('./livedraw.js?v=254'); const heart = { title: 'Heart', mode: '3d', parts: [{ id: 'h', label: 'Heart', size: 1, shapes: [{ t: 'sphere', r: 2, pos: [0, 0, 0] }] }, { id: 'v', label: 'Valve', inside: 'h', size: .1, shapes: [{ t: 'disc', r: 2.6, thick: .1, axis: 'y', pos: [0, 0, 0] }] }] }; return m.check(m.clean(JSON.stringify(heart))); });
+  expect(chk.some((x) => /"Valve" should sit inside "Heart"/.test(x)) && chk.some((x) => /"Valve" is drawn at \d+% of the whole object's size, but your plan says 10%/.test(x)), '1. any subject: a part bigger than what holds it, and a size against its plan, are caught: ' + JSON.stringify(chk));
+  // 2. she checks a picture of the 3D model, every number listed
+  for (let k = 0; k < 40 && !calls.some((c) => c.look); k++) await page.waitForTimeout(250);
+  const look = calls.find((c) => c.look);
+  expect(look && /3D model for a student/.test(look.all) && /1 = Casing/.test(look.all) && /6 = Nozzle/.test(look.all), '2. Cassie looks at a picture of the 3D model and checks every numbered name');
+  // 3. each name has a line to its part; no two names overlap; all in the frame
+  await page.waitForTimeout(1200);
+  const tags = async () => page.evaluate(() => { const st = document.querySelector('#chat-log .ld-stage'), sr = st.getBoundingClientRect(); const ts = [...st.querySelectorAll('.ld-tag')].filter((t) => !t.hidden), rs = ts.map((t) => t.getBoundingClientRect()); let ov = 0; for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) { const a = rs[i], c = rs[j]; if (a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom) ov++; } const ls = [...st.querySelectorAll('.ld-tag-lines line')]; return { n: ts.length, lines: ls.length, ends: ts.every((t, i) => ls[i] && Math.abs(+ls[i].getAttribute('x2') - +t.dataset.ax) <= 1 && Math.abs(+ls[i].getAttribute('y2') - +t.dataset.ay) <= 1), ov, inFrame: rs.every((r) => r.left >= sr.left - 1 && r.right <= sr.right + 1 && r.top >= sr.top - 1 && r.bottom <= sr.bottom + 1), anchorsIn: ts.every((t) => +t.dataset.ax >= 0 && +t.dataset.ax <= sr.width && +t.dataset.ay >= 0 && +t.dataset.ay <= sr.height) }; });
+  const t1 = await tags();
+  expect(t1.n >= 5 && t1.lines === t1.n && t1.ends && !t1.ov && t1.inFrame && t1.anchorsIn, '3. every 3D name has a line ending on its part, none overlap, and the whole model is in the frame: ' + JSON.stringify(t1));
+  // 4. pulled apart: the camera stands back so every part stays in the frame, names still clear
+  await page.click('#chat-log .ld-btn:has(span:text-is("Pull apart"))'); await page.waitForTimeout(2200);
+  const t2 = await tags();
+  expect(t2.n >= 5 && t2.lines === t2.n && t2.ends && !t2.ov && t2.inFrame && t2.anchorsIn, '4. pulled apart: every part still in the frame, each name on its line, none overlapping: ' + JSON.stringify(t2));
+  // 5. the check finds a name on the wrong part: one redraw, swapped in place
+  lookReply = () => '{"labels":[{"n":5,"ok":false,"points_at":"the fan"}],"shapes":[],"facts":[]}';
+  await page.fill('#prompt-input', 'show me a jet engine in 3D'); await page.click('#send-btn');
+  await page.waitForSelector('#chat-log .ld-fixed', { timeout: 60000 });
+  const re = calls.find((c) => c.redrawn);
+  expect(re && /number 5 \("Turbine"\) points at the fan/.test(re.all.replace(/\\"/g, '"')), '5. a 3D name on the wrong part is redrawn once and swapped in place');
+  // 6. Cassie (the mascot) never sits on a button: clear of every button, or behind the answer so the buttons stay on top
+  await page.evaluate(() => { document.querySelector('#chat-log .ld-acts').scrollIntoView({ block: 'end' }); }); await page.waitForTimeout(400);
+  await page.evaluate(() => keepMascotClear()); await page.waitForTimeout(600);
+  const m = await page.evaluate(() => { const ms = document.getElementById('mascot'); if (!ms || getComputedStyle(ms).display === 'none') return { none: true }; const r = document.getElementById('mascot-btn').getBoundingClientRect(); const bs = [...document.querySelectorAll('#chat-log button')].filter((x) => x.offsetParent).map((x) => x.getBoundingClientRect()).filter((q) => q.bottom > 0 && q.top < innerHeight); const over = bs.filter((q) => q.left < r.right && r.left < q.right && q.top < r.bottom && r.top < q.bottom); const onTop = over.every((q) => { const e = document.elementFromPoint((Math.max(q.left, r.left) + Math.min(q.right, r.right)) / 2, (Math.max(q.top, r.top) + Math.min(q.bottom, r.bottom)) / 2); return e && !ms.contains(e); }); return { over: over.length, onTop, tucked: ms.classList.contains('tucked') }; });
+  expect(m.none || !m.over || m.onTop, '6. Cassie never covers a button under her: ' + JSON.stringify(m));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemini, Just explain; asked every time, the last way first; a 3D ask skips it; Show another way asks again); each name points at its own part from clear space; the drawing starts before the check ends; the check asks about every number and a wrong one is redrawn and swapped in place; plain circles for a real thing are flagged; small actions in one row', async (b) => {
   const calls = []; let lookReply = () => '{"labels":[],"shapes":[],"facts":[]}', lookDone = 0;
   const fake = async (body) => {
     const sys = (body.messages || [])[0] && body.messages[0].content || '', all = JSON.stringify(body.messages);
@@ -2622,7 +2674,7 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   // 1. "draw" asks first; nothing is drawn yet
   await page.fill('#prompt-input', 'draw me how photosynthesis works'); await page.click('#send-btn');
   await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
-  const ask = await page.evaluate(() => { const pop = document.querySelector('.ld-pop'), comp = document.getElementById('composer').getBoundingClientRect(), r = pop.getBoundingClientRect(); return { ways: [...pop.querySelectorAll('.ld-ask button')].map((x) => x.querySelector('.ld-pop-t').textContent + ': ' + x.querySelector('.ld-pop-d').textContent), dialog: pop.getAttribute('role'), above: r.bottom <= comp.top && r.top >= 0, kept: document.getElementById('prompt-input').value, inChat: !!document.querySelector('#chat-log .ld-ask'), focus: document.activeElement.dataset.show, tall: Math.min(...[...pop.querySelectorAll('.ld-ask button')].map((x) => x.getBoundingClientRect().height)) }; });
+  const ask = await page.evaluate(() => { const pop = document.querySelector('.ld-pop'), comp = document.getElementById('composer').getBoundingClientRect(), r = pop.getBoundingClientRect(); return { ways: [...pop.querySelectorAll('.ld-ask button')].map((x) => x.querySelector('.ld-pop-name').textContent + ': ' + x.querySelector('.ld-pop-d').textContent), dialog: pop.getAttribute('role'), above: r.bottom <= comp.top && r.top >= 0, kept: document.getElementById('prompt-input').value, inChat: !!document.querySelector('#chat-log .ld-ask'), focus: document.activeElement.dataset.show, tall: Math.min(...[...pop.querySelectorAll('.ld-ask button')].map((x) => x.getBoundingClientRect().height)) }; });
   expect(ask.ways.map((w) => w.split(':')[0]).join() === 'Draw it,3D model,Just explain' && ask.ways.every((w) => /: \S/.test(w)) && ask.dialog === 'dialog' && ask.above && ask.kept === 'draw me how photosynthesis works' && !ask.inChat && ask.focus === 'draw' && ask.tall >= 48 && !calls.length, '1. "draw" pops up How should I show it? over the ask box (each way with a line on what it gives, no real photo without Gemini, the words kept in the ask box) before any drawing: ' + JSON.stringify([ask, calls.length]));
   // Escape closes it and keeps the words; asking again brings it back
   await page.keyboard.press('Escape');
@@ -2667,12 +2719,16 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   // 6. the choice is kept for this chat: "sketch" draws straight away
   const before = calls.length;
   await page.fill('#prompt-input', 'sketch how photosynthesis works'); await page.click('#send-btn');
+  await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
+  const again = await page.evaluate(() => { const b = document.querySelector('.ld-pop .ld-ask button'); return { first: b.dataset.show, last: (b.querySelector('.ld-pop-last') || {}).textContent, marks: document.querySelectorAll('.ld-pop .ld-pop-last').length }; });
+  expect(again.first === 'draw' && again.last === 'Last used' && again.marks === 1, '6. asked again for the next drawing, with the way used last time first and marked Last used: ' + JSON.stringify(again));
+  await page.click('.ld-pop [data-show="draw"]');
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2, null, { timeout: 30000 });
-  expect(!(await page.locator('.ld-pop').count()) && calls.slice(before).some((c) => c.sys), '6. the way to show it is kept for the chat');
+  expect(calls.slice(before).some((c) => c.sys), '6. then she draws it');
   // 7. the check says number 2 points at the sun: one redraw naming it, swapped in place, and she says so
   for (let k = 0; k < 40 && calls.filter((c) => c.look).length < 2; k++) await page.waitForTimeout(250); await page.waitForTimeout(2800);
   lookReply = () => '{"labels":[{"n":2,"ok":false,"points_at":"the sun"}],"shapes":[],"facts":[]}';
-  await page.fill('#prompt-input', 'draw me how photosynthesis works'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw me how photosynthesis works'); await page.click('#send-btn'); await pickWay(page);
   await page.waitForSelector('#chat-log .ld-fixed', { timeout: 60000 });
   const fixed = await page.evaluate(() => ({ n: document.querySelectorAll('#chat-log .ld').length, note: document.querySelector('#chat-log .ld-fixed').textContent, saved: state.messages.filter((m) => m.display).length }));
   const re = calls.find((c) => c.redrawn);
@@ -2682,14 +2738,14 @@ test('v253: "draw" asks how to show it (Draw it, 3D model, Real photo with Gemin
   await page.waitForSelector('.ld-pop .ld-ask button', { timeout: 10000 });
   await page.click('.ld-pop [data-show="explain"]');
   await page.waitForFunction(() => /Answer in words/.test(document.querySelector('#chat-log').textContent), null, { timeout: 30000 });
-  expect(await page.evaluate(() => curChat().showAs === 'explain'), '8. Show another way asks again, and Just explain answers in words');
+  expect(await page.evaluate(() => state.lastShowAs === 'explain'), '8. Show another way asks again, and Just explain answers in words');
   // 9. a 3D ask skips the question; with Gemini, Real photo is offered
   await page.evaluate(() => createNewChat()); const b3 = calls.length;
   await page.fill('#prompt-input', 'show me a 3D model of a heart'); await page.click('#send-btn'); await page.waitForTimeout(800);
   expect(!(await page.locator('.ld-pop').count()) && calls.slice(b3).some((c) => /"mode": "3d"/.test(c.sys || '')), '9. a 3D ask goes straight to a 3D model');
   await page.waitForFunction(() => !document.querySelector('#chat-log .ld-loading') && !!document.querySelector('#chat-log .ld'), null, { timeout: 30000 });
-  const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-t')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
-  expect(four.join() === 'Draw it,3D model,Real photo,Just explain', '9. with Gemini there are four ways: ' + four.join());
+  const four = await page.evaluate(() => { createNewChat(); state.geminiKey = 't'; geminiImageOff = false; liveShowAsk('draw me a leaf'); const r = [...document.querySelectorAll('.ld-pop .ld-pop-name')].map((x) => x.textContent); liveShowClose(false); state.geminiKey = ''; return r; });
+  expect(four.join() === 'Just explain,Draw it,3D model,Real photo', '9. with Gemini there are four ways (the one used last first): ' + four.join());
   // 10. the app's own check: plain circles standing in for a leaf, and an anchor off its shape
   const chk = await page.evaluate(async () => { const m = await import('./livedraw.js?v=253'); const leaf = { title: 'x', mode: '2d', parts: [{ id: 'leaf', label: 'Leaf', box: [100, 60, 200, 140], shapes: [{ t: 'circle', cx: 200, cy: 130, r: 60, fill: true }, { t: 'circle', cx: 200, cy: 130, r: 30 }] }, { id: 'sun', label: 'Sun', box: [10, 10, 80, 80], anchor: [300, 240], shapes: [{ t: 'circle', cx: 40, cy: 40, r: 20 }, { t: 'line', x1: 40, y1: 10, x2: 40, y2: 2 }] }] }; return m.check(m.clean(JSON.stringify(leaf))); });
   expect(chk.some((x) => /"Leaf" is only plain circles or boxes/.test(x)) && chk.some((x) => /anchor of "Sun" is not on its own main shape/.test(x)) && !chk.some((x) => /"Sun" is only plain/.test(x)), '10. check flags a circle for a leaf and an anchor off its shape (a round sun is fine): ' + JSON.stringify(chk));
@@ -2711,10 +2767,10 @@ test('v252: live drawing is drawn line by line (one stroke at a time, each name 
     return { text: JSON.stringify(ex) };
   };
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' } });
-  await page.evaluate(() => { createNewChat(); curChat().showAs = 'draw'; }); // (v253: the way to show it is asked once per chat)
+  await page.evaluate(() => createNewChat());
   // record the order things appear: every stroke and every name, as it happens
   await page.evaluate(() => { window.__ld = []; new MutationObserver((ms) => ms.forEach((m) => { const t = m.target; if (m.attributeName === 'data-drawn' && t.dataset.drawn) window.__ld.push(['s', t.parentNode.dataset.i, [...t.parentNode.children].indexOf(t)]); if (m.attributeName === 'data-done' && t.dataset.done) window.__ld.push(['l', t.dataset.i]); if (m.attributeName === 'data-drawing' && t.dataset.drawing) window.__ld.push(['d', document.querySelectorAll('.ld-part > [data-drawing]').length]); })).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['data-drawn', 'data-done', 'data-drawing'] }); });
-  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => /Cassie drew it/.test((document.querySelector('#chat-log .ld-state') || {}).textContent || ''), null, { timeout: 90000 });
   const seq = await page.evaluate(() => window.__ld), strokes = await page.evaluate(() => document.querySelectorAll('#chat-log .ld-part > *').length);
   const drawn = seq.filter((x) => x[0] === 's'), oneAtATime = seq.filter((x) => x[0] === 'd').every((x) => x[1] === 1);
@@ -2732,17 +2788,17 @@ test('v252: live drawing is drawn line by line (one stroke at a time, each name 
   expect(/the student asked for 3D|"mode": "3d"/.test(calls[0].sys), 'asking for 3D asks for a 3D model');
   // a 3D reply to a plain "draw" is re-asked flat
   calls.length = 0; mode = 'as3d';
-  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 3, null, { timeout: 60000 });
   expect(calls.filter((c) => !c.look).length >= 2 && /must be a flat 2d pen drawing/.test(calls.filter((c) => !c.look)[1].all), 'a 3D answer to "draw" is re-asked as a flat drawing');
   // out of the picture: re-asked once, saying what is wrong
   calls.length = 0; mode = 'out';
-  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 4, null, { timeout: 60000 });
   expect(/goes outside the 400 by 260 picture/.test(calls.filter((c) => !c.look)[1].all), 'a part outside the picture is re-asked, naming the problem');
   // the look finds something wrong: one redraw, with what it saw
   calls.length = 0; mode = 'badlook';
-  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw me a house that is being built'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 5 && !!document.querySelector('#chat-log .ld-fixed'), null, { timeout: 60000 });
   expect(calls.filter((c) => c.redrawn).length === 1 && /the roof is missing its trusses/.test(calls.find((c) => c.redrawn).all), 'Cassie checked a picture of it and redrew once with what was wrong');
   // a real photo with Gemini: Cassie's own labels where she found the parts
@@ -2758,12 +2814,12 @@ test('v252: live drawing is drawn line by line (one stroke at a time, each name 
 // (v251) two drawings the AI could write: a 3D jet engine and a flat water cycle
 const LD_JET = { title: 'How a jet engine works', mode: '3d', axis: 'x', intro: 'Here is a jet engine. Watch me build it part by part.', summary: 'Air in, squeeze, burn, spin, push. Turn it, open it, or pull it apart.',
   parts: [
-    { id: 'case', label: 'Casing', say: 'The casing holds everything and guides the air.', color: '#b9bec8', shell: true, shapes: [{ t: 'cylinder', r: 1.05, r2: 0.92, len: 5.4, axis: 'x', pos: [0, 0, 0], open: true }, { t: 'torus', r: 1.05, tube: 0.07, axis: 'x', pos: [-2.7, 0, 0] }] },
-    { id: 'fan', label: 'Fan', say: 'The big fan at the front pulls air in.', color: '#7fb0ff', spin: true, shapes: [{ t: 'blades', n: 18, len: 0.85, width: 0.22, hub: 0.12, axis: 'x', pos: [-2.3, 0, 0] }, { t: 'cone', r: 0.3, len: 0.6, axis: 'x', dir: -1, pos: [-2.5, 0, 0] }] },
-    { id: 'comp', label: 'Compressor', say: 'Rows of small blades squeeze the air tight.', color: '#a3c9ff', spin: true, shapes: [-1.5, -1.3, -1.1, -0.9, -0.7].map((x, i) => ({ t: 'disc', r: 0.78 - i * 0.07, thick: 0.08, axis: 'x', pos: [x, 0, 0] })) },
-    { id: 'comb', label: 'Combustor', say: 'Fuel sprays into the squeezed air and burns.', color: '#ffb067', glow: true, shapes: [{ t: 'torus', r: 0.5, tube: 0.2, axis: 'x', pos: [0.1, 0, 0] }, { t: 'cone', r: 0.28, len: 0.9, axis: 'x', pos: [0.55, 0, 0], color: '#ff7a59' }] },
-    { id: 'turb', label: 'Turbine', say: 'The hot gas spins the turbine, which turns the fan.', color: '#ffd29e', spin: true, shapes: [1.1, 1.32, 1.54].map((x, i) => ({ t: 'disc', r: 0.6 + i * 0.05, thick: 0.09, axis: 'x', pos: [x, 0, 0] })) },
-    { id: 'noz', label: 'Nozzle', say: 'The gas shoots out the back and pushes the plane forward.', color: '#c8ccd4', shapes: [{ t: 'cone', r: 0.42, len: 1, axis: 'x', pos: [2.3, 0, 0] }] },
+    { id: 'case', label: 'Casing', say: 'The casing holds everything and guides the air.', color: '#b9bec8', shell: true, size: 1, inside: null, shapes: [{ t: 'cylinder', r: 1.05, r2: 0.92, len: 5.4, axis: 'x', pos: [0, 0, 0], open: true }, { t: 'torus', r: 1.05, tube: 0.07, axis: 'x', pos: [-2.7, 0, 0] }] },
+    { id: 'fan', label: 'Fan', say: 'The big fan at the front pulls air in.', color: '#7fb0ff', spin: true, size: .35, inside: 'case', shapes: [{ t: 'blades', n: 18, len: 0.85, width: 0.22, hub: 0.12, axis: 'x', pos: [-2.3, 0, 0] }, { t: 'cone', r: 0.3, len: 0.6, axis: 'x', dir: -1, pos: [-2.5, 0, 0] }] },
+    { id: 'comp', label: 'Compressor', say: 'Rows of small blades squeeze the air tight.', color: '#a3c9ff', spin: true, size: .3, inside: 'case', shapes: [-1.5, -1.3, -1.1, -0.9, -0.7].map((x, i) => ({ t: 'disc', r: 0.78 - i * 0.07, thick: 0.08, axis: 'x', pos: [x, 0, 0] })) },
+    { id: 'comb', label: 'Combustor', say: 'Fuel sprays into the squeezed air and burns.', color: '#ffb067', glow: true, size: .25, inside: 'case', shapes: [{ t: 'torus', r: 0.5, tube: 0.2, axis: 'x', pos: [0.1, 0, 0] }, { t: 'cone', r: 0.28, len: 0.9, axis: 'x', pos: [0.55, 0, 0], color: '#ff7a59' }] },
+    { id: 'turb', label: 'Turbine', say: 'The hot gas spins the turbine, which turns the fan.', color: '#ffd29e', spin: true, size: .25, inside: 'case', shapes: [1.1, 1.32, 1.54].map((x, i) => ({ t: 'disc', r: 0.6 + i * 0.05, thick: 0.09, axis: 'x', pos: [x, 0, 0] })) },
+    { id: 'noz', label: 'Nozzle', say: 'The gas shoots out the back and pushes the plane forward.', color: '#c8ccd4', size: .2, inside: 'case', shapes: [{ t: 'cone', r: 0.42, len: 1, axis: 'x', pos: [2.3, 0, 0] }] },
   ] };
 const LD_WATER = { title: 'The water cycle', mode: '2d', intro: 'Let me draw how water travels around.', summary: 'Evaporate, condense, fall, collect, and it starts again.',
   parts: [
@@ -2780,7 +2836,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   const fake = (body) => { const sys = (body.messages || [])[0] && body.messages[0].content || ''; if (!/explains by DRAWING/.test(sys)) return { text: 'Answer.' }; n++; const last = JSON.stringify(body.messages.slice(1)); return { text: /water/.test(last) ? JSON.stringify(LD_WATER) : /trap/.test(last) ? JSON.stringify({ title: '<img src=x onerror=alert(1)>', mode: '2d', parts: [{ label: '<b>x</b>', say: 'ok', shapes: [{ t: 'path', d: 'M0 0 L10 10"/><script>alert(1)</script>' }, { t: 'circle', cx: 9e9, cy: 'x', r: -5 }] }] }) : JSON.stringify(LD_JET) }; };
   const pics = []; 
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: fake, state: { groqKey: 'gsk_test', tab: 'chat' }, setup: (c) => c.route(/pollinations\.ai/, (r) => { pics.push(r.request().url()); r.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }); }) });
-  await page.evaluate(() => { createNewChat(); curChat().showAs = 'draw'; }); // (v253: asked once per chat)
+  await page.evaluate(() => createNewChat());
   // 3D
   await page.fill('#prompt-input', 'show me a jet engine in 3D'); await page.click('#send-btn'); // (v252: 3D only when asked)
   await page.waitForSelector('.ld .ld-canvas', { timeout: 20000 });
@@ -2793,7 +2849,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   await page.click('#chat-log .ld-tag:text-is("4 Combustor")', { timeout: 8000 }); await page.waitForTimeout(300);
   expect(/Fuel sprays into the squeezed air and burns/.test(await page.locator('.ld-say').innerText()) && await page.locator('.ld-btn:has(span:text-is("Ask about the Combustor"))').isVisible(), '3D: tapping a part tells about it and offers to ask more');
   // 2D
-  await page.fill('#prompt-input', 'show me how the water cycle works'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'show me how the water cycle works'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 2 && /Cassie drew it/.test(document.querySelectorAll('#chat-log .ld-state')[1].textContent), null, { timeout: 40000 });
   const w = await page.evaluate(() => { const d = document.querySelectorAll('#chat-log .ld')[1]; return { parts: d.querySelectorAll('.ld-part').length, labels: [...d.querySelectorAll('.ld-labels text')].map((t) => t.textContent), flow: d.querySelectorAll('line[marker-end]').length }; });
   expect(w.parts === 6 && ['1 Ocean', '2 Sun', '4 Condensation', '6 Runoff'].every((x) => w.labels.includes(x)) && w.flow >= 3, '2D: six parts, each named, with arrows: ' + JSON.stringify(w));
@@ -2807,7 +2863,7 @@ test('v251: live drawing: "draw me how a jet engine works" builds a 3D model par
   const back = await page.evaluate(() => ({ n: document.querySelectorAll('#chat-log .ld').length, labels: document.querySelectorAll('#chat-log .ld-labels text').length, state: [...document.querySelectorAll('#chat-log .ld-state')].map((x) => x.textContent) }));
   expect(back.n === 2 && back.labels >= 6 && !back.state.some((s) => /is drawing/.test(s)), 'a reload shows both drawings finished: ' + JSON.stringify(back));
   // made safe
-  await page.fill('#prompt-input', 'draw the trap diagram'); await page.click('#send-btn');
+  await page.fill('#prompt-input', 'draw the trap diagram'); await page.click('#send-btn'); await pickWay(page); // (v254: asked every time)
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .ld').length === 3 && !document.querySelector('#chat-log .ld-loading'), null, { timeout: 30000 }); await page.waitForTimeout(800);
   const safe = await page.evaluate(() => { const d = [...document.querySelectorAll('#chat-log .ld')].pop(); return { img: !!d.querySelector('img, script, .ld-labels b'), title: d.querySelector('.ld-title').textContent, paths: d.querySelectorAll('.ld-part path').length }; });
   expect(!safe.img && !/</.test(safe.title) && safe.paths === 0, 'what the AI writes never becomes markup, and a bad path is dropped: ' + JSON.stringify(safe));

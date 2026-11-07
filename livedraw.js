@@ -37,6 +37,10 @@ export function clean(raw) {
     box: mode === '2d' ? box4(p && p.box) : null,
     anchor: mode === '2d' && Array.isArray(p && p.anchor) && p.anchor.length === 2 && Number.isFinite(+p.anchor[0]) && Number.isFinite(+p.anchor[1]) ? [num(p.anchor[0], 0, 400), num(p.anchor[1], 0, 260)] : null,
     glow: !!(p && p.glow), spin: !!(p && p.spin), shell: !!(p && p.shell),
+    // (3d) her plan for the part: what it sits inside, its real size against the whole, what it touches
+    inside: mode === '3d' ? words(p && p.inside, 40) || null : null,
+    size: mode === '3d' && Number.isFinite(+(p && p.size)) && +p.size > 0 ? Math.min(1, +p.size) : null,
+    attached: mode === '3d' && Array.isArray(p && p.attached) ? p.attached.slice(0, 6).map((x) => words(x, 40)).filter(Boolean) : [],
     shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object'),
   })).filter((p) => p.shapes.length);
   if (!parts.length) return null;
@@ -65,6 +69,7 @@ function shapeOf(p) {
 }
 export function check(spec) {
   const out = [];
+  if (spec && spec.mode === '3d') return check3d(spec);
   if (!spec || spec.mode !== '2d') return out;
   const boxes = [];
   for (const p of spec.parts) {
@@ -86,6 +91,53 @@ export function check(spec) {
     if (ux * uy < 400 * 260 * .18) out.push('everything is piled into one small corner; spread the drawing across the picture');
   }
   return out;
+}
+
+// ---------- is it a good model? (3d) her own plan against the shapes she placed, for any subject ----------
+// Each shape's box (roughly, from its size and axis): a part's box is all its shapes; the model's is all parts.
+const n3 = (v, d) => (Number.isFinite(+v) ? +v : d);
+function box3(s) {
+  const t = String(s.t || s.type || '').toLowerCase(), axis = ['x', 'y', 'z'].includes(s.axis) ? s.axis : 'x';
+  const pos = Array.isArray(s.pos) ? [0, 1, 2].map((k) => n3(s.pos[k], 0)) : [0, 0, 0];
+  const r = Math.abs(n3(s.r, .5)), len = Math.abs(n3(s.len ?? s.h, 1));
+  let along = 0, across = 0, half = null;
+  if (t === 'cylinder' || t === 'tube') { along = len / 2; across = Math.max(r, Math.abs(n3(s.r2, r))); }
+  else if (t === 'disc') { along = Math.abs(n3(s.thick ?? s.len, .08)) / 2; across = r; }
+  else if (t === 'cone') { along = len / 2; across = r; }
+  else if (t === 'torus' || t === 'ring') { const tb = Math.abs(n3(s.tube, .12)); along = tb; across = r + tb; }
+  else if (t === 'blades') { along = Math.abs(n3(s.width, .18)) / 2; across = Math.abs(n3(s.hub, .12)) + Math.abs(n3(s.len, r)); }
+  else if (t === 'sphere') half = [r, r, r];
+  else if (t === 'box') { const sz = Array.isArray(s.size) ? s.size : [1, 1, 1]; half = [0, 1, 2].map((k) => Math.abs(n3(sz[k], 1)) / 2); }
+  else return null;
+  if (!half) half = ['x', 'y', 'z'].map((a) => (a === axis ? along : across));
+  return [pos[0] - half[0], pos[1] - half[1], pos[2] - half[2], pos[0] + half[0], pos[1] + half[1], pos[2] + half[2]];
+}
+const join3 = (bs) => bs.reduce((a, b) => (a ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2]), Math.max(a[3], b[3]), Math.max(a[4], b[4]), Math.max(a[5], b[5])] : b.slice()), null);
+const gap3 = (a, b) => Math.hypot(...[0, 1, 2].map((k) => Math.max(0, a[k] - b[k + 3], b[k] - a[k + 3])));
+const long3 = (b) => Math.max(b[3] - b[0], b[4] - b[1], b[5] - b[2]);
+export function check3d(spec) {
+  const out = [];
+  const parts = spec.parts.map((p) => ({ p, b: join3(p.shapes.map(box3).filter(Boolean)) }));
+  parts.filter((x) => !x.b).forEach((x) => out.push(`"${x.p.label || x.p.id}" has no 3d shape the model can show`));
+  const ok = parts.filter((x) => x.b);
+  if (!ok.length) return out;
+  const all = join3(ok.map((x) => x.b)), L = long3(all) || 1;
+  const name = (x) => `"${x.p.label || x.p.id}"`, byId = (id) => ok.find((x) => x.p.id === id || x.p.label === id);
+  if (L > 12 || L < 2) out.push(`the whole model is ${L.toFixed(1)} units long; make it about 6 units, centred on 0,0,0`);
+  if (ok.some((x) => x.p.size == null)) out.push('plan every part first: give each part "size" (how big it really is, its longest side, against the whole object, 0 to 1) and "inside" (the id of the part it sits in, or null)');
+  for (const x of ok) {
+    const others = ok.filter((y) => y !== x);
+    // nothing floats: every part touches or sits in another part
+    if (others.length && Math.min(...others.map((y) => gap3(x.b, y.b))) > L * .08) out.push(`${name(x)} floats apart from the rest; in the real object it touches or sits inside the part it connects to, so move it there`);
+    // inside what she said it is inside
+    const home = x.p.inside && byId(x.p.inside);
+    if (home && home !== x) { const pad = L * .04, b = x.b, h = home.b; if (b[0] < h[0] - pad || b[1] < h[1] - pad || b[2] < h[2] - pad || b[3] > h[3] + pad || b[4] > h[4] + pad || b[5] > h[5] + pad) out.push(`${name(x)} should sit inside ${name(home)} (your plan says so) but it sticks out of it; make it smaller or move it in`); }
+    // as big as she planned
+    if (x.p.size != null) { const real = long3(x.b) / L, want = x.p.size; if (real > want * 1.8 + .06 || real < want / 1.8 - .06) out.push(`${name(x)} is drawn at ${Math.round(real * 100)}% of the whole object's size, but your plan says ${Math.round(want * 100)}%; give it its real size`); }
+    // touching what she said it is attached to
+    for (const id of x.p.attached) { const y = byId(id); if (y && y !== x && gap3(x.b, y.b) > L * .05) out.push(`${name(x)} should touch ${name(y)} but there is a gap between them`); }
+  }
+  return [...new Set(out)].slice(0, 10);
 }
 
 // ---------- the frame around a drawing: the picture, what she says, and what you can do ----------
@@ -121,7 +173,7 @@ export async function render(host, rawSpec, opts = {}) {
   const setLabel = (b, t) => { b.querySelector('span').textContent = t; };
   const done = () => { dot.classList.add('off'); state.textContent = spec.mode === '3d' ? 'Cassie built it in 3D' : 'Cassie drew it'; setSay(spec.summary || spec.intro || ''); host.dispatchEvent(new CustomEvent('ld-done')); };
   if (view) {
-    if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, '', 'open'); ob.setAttribute('aria-pressed', 'false'); }
+    if (view.open) { const ob = btn('Open it up', () => { const on = view.open(); setLabel(ob, on ? 'Close the case' : 'Open it up'); ob.setAttribute('aria-pressed', String(on)); }, 'ld-open', 'open'); ob.setAttribute('aria-pressed', 'false'); }
     if (view.explode) { const pb = btn('Pull apart', () => { const on = view.explode(); setLabel(pb, on ? 'Put it back' : 'Pull apart'); pb.setAttribute('aria-pressed', String(on)); }, '', 'apart'); pb.setAttribute('aria-pressed', 'false'); }
     btn('Draw again', async () => { await view.play(true); done(); }, '', 'redo');
   }
@@ -135,7 +187,7 @@ export async function render(host, rawSpec, opts = {}) {
       askBtn.hidden = !opts.onAsk; setLabel(askBtn, `Ask about the ${p.label}`); askBtn.onclick = () => opts.onAsk(p, spec);
     };
     const askBtn = btn('', () => {}, 'ld-askpart', 'ask'); askBtn.hidden = true;
-    if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-btn'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
+    if (spec.mode === '3d' && view.setOpen && view.open) { view.setOpen(true); const ob = acts.querySelector('.ld-open'); if (ob) { setLabel(ob, 'Close the case'); ob.setAttribute('aria-pressed', 'true'); } }
     if (animate) { await view.play(); done(); } else { await view.play(); done(); }
   }
   return true;
@@ -332,11 +384,25 @@ export async function snapshot(rawSpec) {
   try {
     await render(host, spec, { animate: false });
     await sleep(spec.mode === '3d' ? 900 : 120);
+    const bg = lightPage() ? '#ffffff' : '#141417', ink = lightPage() ? '#111111' : '#f2f2f5';
     const canvas = host.querySelector('canvas');
-    if (canvas) { try { return canvas.toDataURL('image/png'); } catch (e) { return null; } }
+    if (canvas) { // (3d) the model as the student sees it, with each numbered name and its line drawn on top
+      const st = host.querySelector('.ld-stage'), sw = st.clientWidth || 640, sh = st.clientHeight || 360, k = 800 / sw;
+      const cv = document.createElement('canvas'); cv.width = 800; cv.height = Math.round(sh * k);
+      const x = cv.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(canvas, 0, 0, cv.width, cv.height);
+      x.font = '600 22px Arial, sans-serif'; x.textBaseline = 'middle'; x.textAlign = 'center';
+      host.querySelectorAll('.ld-tag').forEach((t) => {
+        if (t.hidden) return;
+        const tx = parseFloat(t.style.left) * k, ty = parseFloat(t.style.top) * k, ax = +t.dataset.ax * k, ay = +t.dataset.ay * k, tw = x.measureText(t.textContent).width + 20;
+        x.strokeStyle = '#888'; x.lineWidth = 2; x.beginPath(); x.moveTo(tx, ty); x.lineTo(ax, ay); x.stroke();
+        x.fillStyle = ink; x.beginPath(); x.arc(ax, ay, 5, 0, Math.PI * 2); x.fill();
+        x.fillStyle = bg; x.fillRect(tx - tw / 2, ty - 16, tw, 32); x.strokeRect(tx - tw / 2, ty - 16, tw, 32);
+        x.fillStyle = ink; x.fillText(t.textContent, tx, ty + 1);
+      });
+      try { return cv.toDataURL('image/png'); } catch (e) { return null; }
+    }
     const svg = host.querySelector('svg'); if (!svg) return null;
     const c2 = svg.cloneNode(true);
-    const bg = lightPage() ? '#ffffff' : '#141417', ink = lightPage() ? '#111111' : '#f2f2f5';
     c2.setAttribute('width', 800); c2.setAttribute('height', 520);
     c2.querySelectorAll('.ld-ltext, .ld-word').forEach((t) => { t.setAttribute('fill', ink); t.setAttribute('font-family', 'Arial, sans-serif'); });
     c2.querySelectorAll('.ld-lbg').forEach((r) => { r.setAttribute('fill', bg); r.setAttribute('stroke', '#888'); });
@@ -364,6 +430,8 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.setSize(W(), H()); renderer.outputColorSpace = T.SRGBColorSpace;
   const canvas = renderer.domElement; canvas.className = 'ld-canvas'; canvas.style.touchAction = 'none'; stage.prepend(canvas);
   const tags = el('div', 'ld-tags'); stage.appendChild(tags);
+  const lines = document.createElementNS(NS, 'svg'); lines.setAttribute('class', 'ld-tag-lines'); lines.setAttribute('aria-hidden', 'true'); stage.insertBefore(lines, tags); // (each name's thin line to its part)
+  const offscreen = !!stage.closest('.ld-shot'); // (the copy she takes a picture of: always drawn)
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(34, W() / H(), 0.05, 200);
   scene.add(new T.HemisphereLight(0xe4ecff, 0x1a1a22, 1.15));
   const sun = new T.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 6, 5); scene.add(sun);
@@ -386,8 +454,20 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
   const box = new T.Box3().setFromObject(model), size = box.getSize(new T.Vector3()), mid = box.getCenter(new T.Vector3());
   model.position.sub(mid); model.updateMatrixWorld(true);
   const R = Math.max(size.x, size.y, size.z, 1);
-  const home = new T.Vector3(R * .55, R * .38, R * 1.02);
-  cam.position.copy(home); controls.target.set(0, 0, 0); controls.update();
+  const VIEW = new T.Vector3(.55, .38, 1.02).normalize();
+  // (v253) the camera stands back far enough that the whole model (or the pulled-apart one) is in the frame from any side
+  // the nearest distance along a direction at which every corner of the box is inside the frame, with room for the names
+  const fitBox = (bx, dir) => {
+    const cs = []; for (const x of [bx.min.x, bx.max.x]) for (const y of [bx.min.y, bx.max.y]) for (const z of [bx.min.z, bx.max.z]) cs.push(new T.Vector3(x, y, z));
+    const probe = cam.clone(), fits = (d) => { probe.position.copy(dir).multiplyScalar(d); probe.lookAt(0, 0, 0); probe.updateMatrixWorld(); probe.updateProjectionMatrix(); return cs.every((c) => { if (c.clone().applyMatrix4(probe.matrixWorldInverse).z > -probe.near * 4) return false; const q = c.clone().project(probe); return Math.abs(q.x) <= .78 && Math.abs(q.y) <= .72; }); };
+    let lo = .5, hi = 400; for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    return hi;
+  };
+  const fullBox = new T.Box3().setFromObject(model); // (its full size, before the build-up animation shrinks the parts)
+  const fitDist = () => fitBox(fullBox, VIEW);
+  let camTo = null;
+  const home = VIEW.clone().multiplyScalar(fitDist());
+  cam.position.copy(home); controls.target.set(0, 0, 0); controls.maxDistance = Math.max(40, home.length() * 3); controls.update();
   // where each part sits (for its name tag, and for pulling it apart along the main axis)
   const ax = AX[spec.axis];
   groups.forEach((g) => { const b = new T.Box3().setFromObject(g); g.userData.center = b.getCenter(new T.Vector3()); g.userData.home = g.position.clone(); });
@@ -421,23 +501,34 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     if (!still()) groups.forEach((g) => { if (g.userData.part.spin && g.visible) g.rotation[spec.axis] += dt * 3; });
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
+    if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
     controls.update();
     renderer.render(scene, cam);
-    const spots = [];
+    // each name: a spot near its part, clear of the other names, with a thin line to the part
+    const spots = [], segs = [], w = W(), h = H();
     groups.forEach((g, i) => {
       const t = tagEls[i]; if (!t) return;
       if (!g.visible || (g.userData.part.shell && (opened || exploded))) { t.hidden = true; return; }
       t.hidden = false; tmp.copy(g.userData.center).add(g.position).sub(g.userData.home); tmp.project(cam);
-      const x = (tmp.x + 1) / 2 * W(), up = spots.length % 2 === 0, tw = t.offsetWidth || 80;
-      let y = (1 - tmp.y) / 2 * H() + (up ? -34 : 34);
-      for (let k = 0; k < 6 && spots.some((q) => Math.abs(q.x - x) < (q.w + tw) / 2 + 4 && Math.abs(q.y - y) < 30); k++) y += up ? -30 : 30;
-      y = Math.min(H() - 16, Math.max(16, y)); spots.push({ x, y, w: tw });
-      t.style.left = Math.min(W() - tw / 2 - 4, Math.max(tw / 2 + 4, x)) + 'px'; t.style.top = y + 'px';
+      const px = (tmp.x + 1) / 2 * w, py = (1 - tmp.y) / 2 * h, tw = t.offsetWidth || 80, th = t.offsetHeight || 24;
+      const free = (x, y) => x - tw / 2 >= 4 && x + tw / 2 <= w - 4 && y - th / 2 >= 4 && y + th / 2 <= h - 4 && !spots.some((q) => Math.abs(q.x - x) < (q.w + tw) / 2 + 6 && Math.abs(q.y - y) < (q.h + th) / 2 + 4);
+      const tries = [];
+      if (t._spot) tries.push(t._spot); // (stay where it was while that is still free, so the names do not jump about)
+      for (const r of [36, 60, 88]) for (const [dx, dy] of [[0, -1], [0, 1], [.8, -.6], [-.8, -.6], [1, 0], [-1, 0], [.8, .6], [-.8, .6]]) tries.push([dx * (r + tw / 4), dy * r]);
+      const at = tries.find(([dx, dy]) => free(px + dx, py + dy)) || [0, -36];
+      t._spot = at;
+      const x = Math.min(w - tw / 2 - 4, Math.max(tw / 2 + 4, px + at[0])), y = Math.min(h - th / 2 - 4, Math.max(th / 2 + 4, py + at[1]));
+      spots.push({ x, y, w: tw, h: th });
+      t.style.left = x + 'px'; t.style.top = y + 'px';
+      t.dataset.ax = Math.round(px); t.dataset.ay = Math.round(py);
+      const ex = Math.min(Math.max(px, x - tw / 2), x + tw / 2), ey = Math.min(Math.max(py, y - th / 2), y + th / 2);
+      segs.push(`<line x1="${ex.toFixed(1)}" y1="${ey.toFixed(1)}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}"/><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.5"/>`);
     });
+    lines.setAttribute('viewBox', `0 0 ${w} ${h}`); lines.innerHTML = segs.join('');
   };
   raf = requestAnimationFrame(tick);
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver((en) => { visible = en.some((x) => x.isIntersecting); }) : null; if (io) io.observe(stage);
-  const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); }) : null; if (ro) ro.observe(stage);
+  const io = !offscreen && 'IntersectionObserver' in window ? new IntersectionObserver((en) => { visible = en.some((x) => x.isIntersecting); }) : null; if (io) io.observe(stage);
+  const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); if (!exploded) { home.copy(VIEW).multiplyScalar(fitDist()); camTo = cam.position.clone().normalize().multiplyScalar(home.length()); } }) : null; if (ro) ro.observe(stage);
   const gone = new MutationObserver(() => { if (!stage.isConnected) { cancelAnimationFrame(raf); renderer.dispose(); io && io.disconnect(); ro && ro.disconnect(); gone.disconnect(); } });
   gone.observe(document.body, { childList: true, subtree: true });
   const view = {
@@ -460,10 +551,13 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
     open: shells.length ? () => { opened = !opened; if (picked) pick(picked); shells.forEach((g) => fade(g, opened ? .14 : 1)); return opened; } : null,
     explode: order.length > 1 ? () => {
       exploded = !exploded; if (picked) pick(picked);
-      const gap = R * .32, n = order.length;
+      const gap = R * .22, n = order.length;
       order.forEach((g, k) => { g.userData.to = exploded ? g.userData.home.clone().addScaledVector(ax, (k - (n - 1) / 2) * gap) : g.userData.home.clone(); });
       shells.forEach((g) => { g.visible = !exploded; });
-      const far = home.clone().multiplyScalar(exploded ? 1.45 : 1); cam.position.copy(far); controls.update();
+      // stand back to fit the pulled-apart model (from where the student is looking now)
+      const spread = new T.Box3(); groups.forEach((g) => { if (!g.visible) return; const sc = g.scale.x; g.scale.setScalar(1); g.updateMatrixWorld(true); const b = new T.Box3().setFromObject(g); g.scale.setScalar(sc); g.updateMatrixWorld(true); if (g.userData.to) b.translate(g.userData.to.clone().sub(g.position)); spread.union(b); });
+      const dir = cam.position.clone().normalize();
+      camTo = dir.multiplyScalar(exploded && !spread.isEmpty() ? fitBox(spread, dir) : home.length());
       return exploded;
     } : null,
   };
