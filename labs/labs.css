@@ -894,14 +894,6 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-soon p { margin: 0; color: var(--lf-muted); line-height: 1.45; }
 .lf-soon-ico svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 .lf-lessons .lf-lesson { min-height: var(--tap, 48px); }
-/* (v260) My subjects, at the top of every level's Lessons: the folders and an add-a-subject row */
-.lf-subjects-strip { margin-bottom: var(--sp-5, 24px); }
-.lf-subjects-hint { margin: 0 0 var(--sp-3, 12px); color: var(--lf-muted); font-size: .88rem; line-height: 1.4; }
-.lf-subject-add { display: flex; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
-.lf-subject-name { flex: 1; min-width: 0; min-height: var(--tap, 48px); padding: 0 var(--sp-3, 12px); border-radius: 12px; border: 1px solid var(--lf-edge); background: rgba(var(--lf-glass), .4); color: var(--lf-ink); font: inherit; }
-.lf-subject-name::placeholder { color: var(--lf-muted); }
-.lf-subject-name:focus-visible { outline: 2px solid var(--lab-accent, #f2f2f4); outline-offset: 2px; }
-.lf-subject-go { flex: none; min-height: var(--tap, 48px); }
 /* (v226) pH mixer: the indicator paper round */
 .lab-paper { list-style: none; margin: var(--sp-2, 8px) 0 0; padding: 0; display: grid; gap: var(--sp-2, 8px); }
 .lab-paper[hidden], .lab-paper-sort[hidden] { display: none; }
