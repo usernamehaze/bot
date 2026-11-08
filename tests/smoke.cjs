@@ -1672,47 +1672,46 @@ test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, 
   }
 });
 
-test('v260: My subjects sits at the top of a level’s Lessons; a student opens Lessons, makes a subject folder, uploads a file read with Cassie, sees its title, and Make a reviewer gives Cassie’s standard reviewer; folders persist and the folder’s Back returns to the lessons', async (b) => {
+test('v261: My subjects is its own folder next to Lessons and Simulations in a level; opening it offers Add a file, each file gives Make a reviewer (Cassie’s standard reviewer), files persist in one folder, and Back returns to the level', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: '**The big picture**\nCells are the unit of life.\n\n**Quick review**\nterm: meaning\n\n**Practice questions**\n1. What makes energy?' }), state: { groqKey: 'gsk_test', tab: 'home', profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
-  // Grade 10 -> Junior High (jhs): open the Learn tab, the student's level, then its Lessons
-  const openLessons = async () => {
+  // Grade 10 -> Junior High (jhs): open the Learn tab, the student's level, then the My subjects folder
+  const gotoMySubjects = async () => {
     await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
     await page.$eval('.lp .lf[data-level="jhs"]', (f) => f.scrollIntoView({ block: 'center' })); await page.click('.lp .lf[data-level="jhs"]');
     await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'level:jhs');
-    await page.click('.lp-list .lf[data-group="lessons:jhs"]'); await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'lessons:jhs');
-    await page.waitForSelector('.lf-subjects-strip .lf-subject-name');
+    await page.click('.lp-list .lf[data-group="subjects:home"]'); await page.waitForSelector('.lessons-sheet .subject-upload');
   };
-  // 1. My subjects is the first thing in the Lessons list (above the built-in lessons / coming soon)
-  await openLessons();
-  const atTop = await page.evaluate(() => { const box = document.querySelector('.lf-lessons'), strip = box && box.firstElementChild, sub = strip && strip.querySelector('.lf-sub'); return !!strip && strip.classList.contains('lf-subjects-strip') && !!sub && sub.textContent === 'My subjects'; });
-  expect(atTop, '1. My subjects is the first thing in Lessons');
-  // 2. add a subject -> its folder opens
-  await page.fill('.lf-subjects-strip .lf-subject-name', 'Biology'); await page.click('.lf-subjects-strip .lf-subject-go');
-  await page.waitForSelector('.subject-upload');
-  expect(await page.evaluate(() => state.subjects.length === 1 && state.subjects[0].name === 'Biology'), '2. adding a subject makes a folder: ' + await page.evaluate(() => JSON.stringify((state.subjects || []).map((f) => f.name))));
-  // 3. upload a file -> stored with a title, kind and text
+  // 1. the level opens into three folders: Lessons, Simulations, My subjects; My subjects opens its own files screen
+  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
+  await page.$eval('.lp .lf[data-level="jhs"]', (f) => f.scrollIntoView({ block: 'center' })); await page.click('.lp .lf[data-level="jhs"]');
+  await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'level:jhs');
+  const fol = await page.$$eval('.lp-list .lf', (x) => x.map((f) => f.dataset.group));
+  expect(fol.join() === 'lessons:jhs,levelsims:jhs,subjects:home', '1. My subjects is a folder next to Lessons and Simulations: ' + fol);
+  await page.click('.lp-list .lf[data-group="subjects:home"]'); await page.waitForSelector('.lessons-sheet .subject-upload');
+  const head = await page.evaluate(() => ({ title: document.querySelector('.lessons-sheet #lessons-h').textContent, add: document.querySelector('.subject-upload').textContent.trim(), del: !!document.querySelector('.lessons-sheet .subject-del') }));
+  expect(head.title === 'My subjects' && head.add === 'Add a file' && !head.del, '1b. opens with Add a file and no per-subject delete: ' + JSON.stringify(head));
+  // 2. Add a file -> stored in the one My subjects folder (state.subjects is a single "my" folder)
   page.once('filechooser', (fc) => fc.setFiles({ name: 'Cell biology notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Cell Biology\nThe cell is the basic unit of life. Mitochondria make energy.') }));
   await page.click('.subject-upload');
   await page.waitForSelector('.subject-file', { timeout: 8000 });
-  const item = await page.evaluate(() => { const it = state.subjects[0].items[0]; return { title: it.title, kind: it.kind, hasText: (it.text || '').length > 10, shownTitle: document.querySelector('.subject-title').textContent }; });
-  expect(item.title === 'Cell biology notes' && item.hasText && item.shownTitle === 'Cell biology notes', '3. the uploaded file is stored with its title and text: ' + JSON.stringify(item));
-  // 4. Make a reviewer: goes to chat, attaches the file, sends Cassie's exact reviewer prompt, and a reviewer comes back
+  const item = await page.evaluate(() => { const f = state.subjects.find((s) => s.id === 'my'); const it = f.items[0]; return { title: it.title, hasText: (it.text || '').length > 10, shownTitle: document.querySelector('.subject-title').textContent, n: state.subjects.length }; });
+  expect(item.title === 'Cell biology notes' && item.hasText && item.shownTitle === 'Cell biology notes' && item.n === 1, '2. the file is stored in the single My subjects folder: ' + JSON.stringify(item));
+  // 3. Make a reviewer: goes to chat, attaches the file, sends Cassie's exact reviewer prompt, and a reviewer comes back
   await page.click('.subject-review');
   await page.waitForFunction(() => document.querySelectorAll('#chat-log .bubble-user').length > 0, null, { timeout: 8000 });
   await page.waitForFunction(() => /big picture/i.test(([...document.querySelectorAll('#chat-log .bubble-assistant')].pop() || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const rev = await page.evaluate(() => ({ user: [...document.querySelectorAll('#chat-log .bubble-user')].map((x) => x.textContent).join(' '), got: /big picture/i.test([...document.querySelectorAll('#chat-log .bubble-assistant')].map((x) => x.textContent).join(' ')), sheetGone: !document.querySelector('.lessons-sheet') }));
-  expect(/Read this whole file and make me a complete reviewer of it\./.test(rev.user) && /attached/i.test(rev.user) && rev.got && rev.sheetGone, '4. Make a reviewer attaches the file and sends the standard reviewer prompt: ' + JSON.stringify({ user: rev.user.slice(0, 90), got: rev.got }));
-  // 5. folders persist across a reload
+  expect(/Read this whole file and make me a complete reviewer of it\./.test(rev.user) && /attached/i.test(rev.user) && rev.got && rev.sheetGone, '3. Make a reviewer attaches the file and sends the standard reviewer prompt: ' + JSON.stringify({ user: rev.user.slice(0, 90), got: rev.got }));
+  // 4. the file persists across a reload
   await page.reload(); await page.waitForTimeout(1200);
-  const kept = await page.evaluate(() => (state.subjects || []).map((f) => `${f.name}:${f.items.length}`).join());
-  expect(kept === 'Biology:1', '5. the subject and its file are still there after a reload: ' + kept);
-  // 6. the folder's Back returns to the level's Lessons (My subjects still at the top), not the Home Lessons screen
-  await openLessons();
-  await page.click('.lf-subjects-strip .lf-subject-row'); await page.waitForSelector('.lessons-sheet .lessons-back');
+  const kept = await page.evaluate(() => { const f = (state.subjects || []).find((s) => s.id === 'my'); return f ? `my:${f.items.length}` : 'gone'; });
+  expect(kept === 'my:1', '4. the file is still there after a reload: ' + kept);
+  // 5. Back from My subjects returns to the level (Lessons, Simulations, My subjects), not the Home Lessons screen
+  await gotoMySubjects(); await page.waitForSelector('.subject-file');
   const backLabel = await page.$eval('.lessons-sheet .lessons-back', (b) => b.getAttribute('aria-label'));
   await page.click('.lessons-sheet .lessons-back'); await page.waitForTimeout(300);
-  const backOk = await page.evaluate(() => !document.querySelector('.lessons-sheet') && document.querySelector('.lp').dataset.view === 'lessons:jhs' && !!document.querySelector('.lf-subjects-strip .lf-subject-row'));
-  expect(backOk && backLabel === 'Back to lessons', '6. Back from a subject folder returns to the level’s Lessons: ' + JSON.stringify({ backOk, backLabel }));
+  const backOk = await page.evaluate(() => !document.querySelector('.lessons-sheet') && document.querySelector('.lp').dataset.view === 'level:jhs' && !!document.querySelector('.lp-list .lf[data-group="subjects:home"]'));
+  expect(backOk && backLabel === 'Back', '5. Back returns to the level’s folders: ' + JSON.stringify({ backOk, backLabel }));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -10081,7 +10080,7 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
       if (k === 'board') continue; // (v241: its own folders, in the Learn board exams test)
       await go('level:' + k);
       const inside = await folders();
-      expect(JSON.stringify(inside) === JSON.stringify(['lessons:' + k, 'levelsims:' + k]), `${where}: ${k} opens into Lessons and Simulations: ` + JSON.stringify(inside));
+      expect(JSON.stringify(inside) === JSON.stringify(['lessons:' + k, 'levelsims:' + k, 'subjects:home']), `${where}: ${k} opens into Lessons, Simulations and My subjects (v261): ` + JSON.stringify(inside));
       await go('lessons:' + k);
       const soon = await page.evaluate(() => { const e = [...document.querySelectorAll('.lf-soon')].find((x) => x.getClientRects().length); return e ? e.textContent : ''; });
       if (k === 'college') expect((await page.evaluate(() => [...document.querySelectorAll('.lf-lesson b')].filter((x) => x.getClientRects().length).map((x) => x.textContent))).join() === 'Read my PDF,Research with citations,Exam plan', `${where}: College lessons (v241)`);
@@ -10090,7 +10089,7 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
       await page.emulateMedia({ colorScheme: 'light' });
       await back();
       const again = await folders();
-      expect(JSON.stringify(again) === JSON.stringify(['lessons:' + k, 'levelsims:' + k]), `${where}: Back from Lessons goes to the level, not Learn: ` + JSON.stringify(again));
+      expect(JSON.stringify(again) === JSON.stringify(['lessons:' + k, 'levelsims:' + k, 'subjects:home']), `${where}: Back from Lessons goes to the level, not Learn: ` + JSON.stringify(again));
       await go('levelsims:' + k);
       const labs = await labsShown(); labs.forEach((id) => seen.add(id));
       expect(labs.length > 0, `${where}: ${k} Simulations has its labs: ` + labs.length);

@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=260'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=261'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=260'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=261'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2684,14 +2684,19 @@ const SUBJECT_ITEM_CAP = 20000; // characters kept per file (enough for a full r
 const SUBJECT_MAX = 30, SUBJECT_ITEMS_MAX = 40;
 function mySubjects() { if (!Array.isArray(state.subjects)) state.subjects = []; return state.subjects; }
 function subjectFind(id) { return mySubjects().find((f) => f.id === id); }
-function subjectAdd(name) {
-  const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 50);
-  if (!n || mySubjects().length >= SUBJECT_MAX) return null;
-  const f = { id: 'sub_' + Math.random().toString(36).slice(2, 10), name: n, items: [], at: Date.now() };
-  mySubjects().unshift(f); save(); track('feature', 'subject-add');
+// (v261) one "My subjects" folder holds all the student's files. ensureMyFolder returns it, making it on
+// first use and folding in any files from the older per-subject folders (v258-v260) so nothing is lost.
+function ensureMyFolder() {
+  const subs = mySubjects();
+  let f = subs.find((x) => x.id === 'my');
+  if (!f) { f = { id: 'my', name: 'My subjects', items: [], at: Date.now() }; subs.unshift(f); }
+  const legacy = subs.filter((x) => x.id !== 'my');
+  if (legacy.length) { legacy.forEach((o) => { if (Array.isArray(o.items) && o.items.length) f.items = o.items.concat(f.items); }); state.subjects = [f]; }
+  f.items = f.items.slice(0, SUBJECT_ITEMS_MAX);
+  save();
   return f;
 }
-function subjectDelete(id) { state.subjects = mySubjects().filter((f) => f.id !== id); save(); }
+function openMySubjects(opts = {}) { ensureMyFolder(); openSubjectFolder('my', opts); }
 function subjectItemAdd(id, item) { const f = subjectFind(id); if (!f) return; f.items.unshift(item); f.items = f.items.slice(0, SUBJECT_ITEMS_MAX); save(); }
 function subjectItemDel(id, itemId) { const f = subjectFind(id); if (f) { f.items = f.items.filter((x) => x.id !== itemId); save(); } }
 const SUBJECT_KIND = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', txt: 'Text', md: 'Text', image: 'Photo' };
@@ -2706,17 +2711,18 @@ function openSubjectFolder(id, opts = {}) {
   closeLessons();
   const w = document.createElement('div');
   w.className = 'lessons-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'lessons-h');
+  const single = id === 'my'; // (v261) the one My subjects folder: no per-subject delete
   w.innerHTML = `<div class="lessons-head"><button type="button" class="lessons-back" aria-label="${backLabel}">‹</button><h2 id="lessons-h"></h2>
-    <button type="button" class="subject-del" aria-label="Delete this subject" title="Delete this subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button></div>
-    <p class="lessons-sub subject-note" aria-live="polite">Upload your slides, notes, documents or a PDF.</p>
-    <div class="subject-files"></div>
-    <button type="button" class="btn subject-upload">Upload a file</button>`;
+    ${single ? '' : '<button type="button" class="subject-del" aria-label="Delete this subject" title="Delete this subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button>'}</div>
+    <p class="lessons-sub subject-note" aria-live="polite">Add your slides, notes, documents or a PDF, then make a reviewer.</p>
+    <button type="button" class="btn subject-upload">Add a file</button>
+    <div class="subject-files"></div>`;
   w.querySelector('#lessons-h').textContent = f.name;
   const note = w.querySelector('.subject-note'), files = w.querySelector('.subject-files');
   const render = () => {
     const cur = subjectFind(id); if (!cur) { closeLessons(); return; }
     files.innerHTML = '';
-    if (!cur.items.length) { const p = document.createElement('p'); p.className = 'subject-empty'; p.textContent = 'No files yet. Upload one, then tap Make a reviewer.'; files.appendChild(p); return; }
+    if (!cur.items.length) { const p = document.createElement('p'); p.className = 'subject-empty'; p.textContent = 'No files yet. Add one, then tap Make a reviewer.'; files.appendChild(p); return; }
     cur.items.forEach((it) => {
       const card = document.createElement('div'); card.className = 'subject-file';
       card.innerHTML = `<div class="subject-file-top"><span class="subject-kind"></span><b class="subject-title"></b></div>
@@ -2733,8 +2739,9 @@ function openSubjectFolder(id, opts = {}) {
   };
   render();
   w.querySelector('.lessons-back').addEventListener('click', () => { closeLessons(); back(); });
-  w.querySelector('.subject-del').addEventListener('click', () => {
-    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { subjectDelete(id); closeLessons(); back(); } });
+  const del = w.querySelector('.subject-del');
+  if (del) del.addEventListener('click', () => {
+    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { state.subjects = mySubjects().filter((x) => x.id !== id); save(); closeLessons(); back(); } });
   });
   w.querySelector('.subject-upload').addEventListener('click', () => subjectUpload(id, note, render));
   w.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLessons(); back(); } });
@@ -2868,7 +2875,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=260').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=261').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6761,7 +6768,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=260')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=261')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7992,7 +7999,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=260');
+      exploreMod = await import('./explore/cell3d.js?v=261');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8042,7 +8049,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=260');
+      labsMod = await import('./labs/labs.js?v=261');
       islandRest();
     }
     labsMod.open({
@@ -9991,10 +9998,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=260').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=261').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=260', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=261', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
