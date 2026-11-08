@@ -1672,6 +1672,37 @@ test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, 
   }
 });
 
+test('v258: Learn Lessons has My subjects: a student makes a subject folder, uploads a file into it (read with Cassie), sees its title, and Make a reviewer gives Cassie’s standard reviewer; folders persist', async (b) => {
+  const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: '**The big picture**\nCells are the unit of life.\n\n**Quick review**\nterm: meaning\n\n**Practice questions**\n1. What makes energy?' }), state: { groqKey: 'gsk_test', tab: 'chat', profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
+  await page.evaluate(() => openLessons());
+  await page.waitForSelector('.subjects .subject-name');
+  // 1. the My subjects section exists above the built-in lessons
+  const hasSection = await page.evaluate(() => { const subs = document.querySelector('.subjects'), list = document.querySelector('.lessons-list'); return !!subs && !!list && list.firstElementChild === subs; });
+  expect(hasSection, '1. My subjects shows at the top of the lessons list');
+  // 2. add a subject -> its folder opens
+  await page.fill('.subjects .subject-name', 'Biology'); await page.click('.subjects .subject-add-go');
+  await page.waitForSelector('.subject-upload');
+  expect(await page.evaluate(() => state.subjects.length === 1 && state.subjects[0].name === 'Biology'), '2. adding a subject makes a folder: ' + await page.evaluate(() => JSON.stringify((state.subjects || []).map((f) => f.name))));
+  // 3. upload a file -> stored with a title, kind and text
+  page.once('filechooser', (fc) => fc.setFiles({ name: 'Cell biology notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Cell Biology\nThe cell is the basic unit of life. Mitochondria make energy.') }));
+  await page.click('.subject-upload');
+  await page.waitForSelector('.subject-file', { timeout: 8000 });
+  const item = await page.evaluate(() => { const it = state.subjects[0].items[0]; return { title: it.title, kind: it.kind, hasText: (it.text || '').length > 10, shownTitle: document.querySelector('.subject-title').textContent }; });
+  expect(item.title === 'Cell biology notes' && item.hasText && item.shownTitle === 'Cell biology notes', '3. the uploaded file is stored with its title and text: ' + JSON.stringify(item));
+  // 4. Make a reviewer: goes to chat, attaches the file, sends Cassie's exact reviewer prompt, and a reviewer comes back
+  await page.click('.subject-review');
+  await page.waitForFunction(() => document.querySelectorAll('#chat-log .bubble-user').length > 0, null, { timeout: 8000 });
+  await page.waitForFunction(() => /big picture/i.test(([...document.querySelectorAll('#chat-log .bubble-assistant')].pop() || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  const rev = await page.evaluate(() => ({ user: [...document.querySelectorAll('#chat-log .bubble-user')].map((x) => x.textContent).join(' '), got: /big picture/i.test([...document.querySelectorAll('#chat-log .bubble-assistant')].map((x) => x.textContent).join(' ')), sheetGone: !document.querySelector('.lessons-sheet') }));
+  expect(/Read this whole file and make me a complete reviewer of it\./.test(rev.user) && /attached/i.test(rev.user) && rev.got && rev.sheetGone, '4. Make a reviewer attaches the file and sends the standard reviewer prompt: ' + JSON.stringify({ user: rev.user.slice(0, 90), got: rev.got }));
+  // 5. folders persist across a reload
+  await page.reload(); await page.waitForTimeout(1200);
+  const kept = await page.evaluate(() => (state.subjects || []).map((f) => `${f.name}:${f.items.length}`).join());
+  expect(kept === 'Biology:1', '5. the subject and its file are still there after a reload: ' + kept);
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
   let healed = false; // node-side flag: before sign-in the server says guest; the on-open recheck flips it
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -2455,7 +2486,7 @@ test('the FAQ tells the truth: what an account syncs is what the app syncs, chat
   const notes = answer('Where do my notes and chats go\\?'), pay = answer('How do I pay from the Philippines\\?');
   const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
   const synced = app.match(/function accountData\(\) \{\s*return \{([^\n]+)\};/)[1].match(/(\w+):/g).map((k) => k.slice(0, -1));
-  const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', calItems: 'Calendar notes', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress' };
+  const SAYS = { letCourse: 'LET course', profile: 'profile', mistakes: 'saved quiz mistakes', cards: 'flashcards', exams: 'exam plans', calItems: 'Calendar notes', progress: 'weekly study counts', audience: 'settings', level: 'settings', accent: 'settings', citationStyle: 'settings', textSize: 'settings', easyRead: 'settings', analytics: 'settings', tour: 'settings', answerStyle: 'settings', helpWith: 'settings', streak: 'study streak', labs: 'Learn progress', subjects: 'subject folders' };
   for (const k of synced) expect(SAYS[k] && notes.includes(SAYS[k]), `the FAQ names what syncs: ${k} (“${SAYS[k]}”) in: ` + notes);
   expect(!synced.includes('chats') && /Your chats stay on your device/.test(notes), 'chats are not synced, and the FAQ says so');
   expect(/Lemon Squeezy/.test(pay) && /debit or credit card, Google Pay or Apple Pay/.test(pay) && /GCash and Maya aren’t offered yet/.test(pay) && !/pay in pesos with local options/.test(pay), 'paying lists only what is offered: ' + pay);
@@ -3341,7 +3372,7 @@ test('Board exams v240: Lessons splits College from Board and Licensure exams; t
   const shot = async (name) => { if (process.env.SHOTS) { await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/${name}.png` }); } };
   // Lessons: two folders for a college student
   await page.evaluate(() => openLessons()); await page.waitForSelector('.lessons-sheet .lesson-folder');
-  const L = await page.$$eval('.lessons-sheet .lessons-strand, .lessons-sheet .lesson', (xs) => xs.map((x) => x.textContent.trim().slice(0, 40)));
+  const L = (await page.$$eval('.lessons-sheet .lessons-strand, .lessons-sheet .lesson', (xs) => xs.map((x) => x.textContent.trim().slice(0, 40)))).filter((x) => x !== 'My subjects'); // (v258: skip the student's own My subjects group)
   expect(/^Board and Licensure exams/.test(L[0]) && /^Board exams: lessons and simulations/.test(L[1]) && /^College/.test(L[2]) && !L.some((x) => /Board exam course|Check my board exam reviewer/.test(x)), 'Lessons: Board and Licensure exams, then College: ' + L.join(' | '));
   await shot('bp-0-lessons');
   await page.click('.lessons-sheet .lesson-folder'); await page.waitForSelector('.bp .bp-folder');
@@ -6147,7 +6178,7 @@ test('Lessons follow the student’s level: Nursery or Kindergarten comes first 
       await page.waitForSelector('.desk-lessons .lesson');
       const got = await page.$$eval('.desk-lessons .lesson b', (bs) => bs.map((x) => x.textContent));
       expect(JSON.stringify(got) === JSON.stringify(want), `${grade}: ` + JSON.stringify(got));
-      if (grade === 'Grade 11') { const strands = await page.$$eval('.desk-lessons .lessons-strand', (h) => h.map((x) => x.textContent)); expect(strands.join() === 'STEM,ABM,HUMSS,Every strand', 'Senior High: by strand: ' + strands); }
+      if (grade === 'Grade 11') { const strands = (await page.$$eval('.desk-lessons .lessons-strand', (h) => h.map((x) => x.textContent))).filter((x) => x !== 'My subjects'); expect(strands.join() === 'STEM,ABM,HUMSS,Every strand', 'Senior High: by strand: ' + strands); }
     }
     expect(!errors.length, 'page errors: ' + errors.join('; '));
     await ctx.close();
