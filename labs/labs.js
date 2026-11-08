@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=259';
+import { MUSEUM } from './museum.js?v=260';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=259';
+import { LEVEL_LESSONS } from './level-lessons.js?v=260';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -312,7 +312,7 @@ function createView() {
   function groupLabs(key) {
     const [kind, k] = key.split(':');
     if (kind === 'level' || kind === 'levelsims') return levelLabs(k);
-    if (kind === 'lessons' || kind === 'subjects') return [];
+    if (kind === 'lessons') return [];
     if (kind === 'visual') return [...EXPLORE, ...SIMS];
     if (kind === 'subject') return [...EXPLORE, ...SIMS].filter((l) => (k === '3d' ? is3d(l) : l.subject === k));
     if (kind === 'tools') { const t = TOOL_FOLDERS.find((x) => x[0] === k); return t ? t[2].map((id) => LABS.find((l) => l.id === id)).filter(Boolean) : toolLabs(); }
@@ -325,7 +325,6 @@ function createView() {
     if (kind === 'levelsims') return k === 'board' ? 'Board exam simulations' : `${lv} simulations`;
     if (kind === 'bexam') return bpName(k);
     if (kind === 'bnotes') return 'My notes and reviewers';
-    if (kind === 'subjects') return 'My subjects';
     if (kind === 'visual') return 'Visual Labs';
     const all = { level: LEVELS, subject: [...SUBJECT_FOLDERS, ['3d', '3D']], tools: [...TOOL_FOLDERS, ['all', 'Study tools']] }[kind] || [];
     return (all.find((x) => x[0] === k) || [])[1] || '';
@@ -335,8 +334,7 @@ function createView() {
     const grid = el('div', 'lf-grid' + (cls ? ' ' + cls : '')); grid.setAttribute('role', 'list');
     grid.innerHTML = groups.map(({ key, name, own, sub }) => {
       const labs = groupLabs(key), level = key.startsWith('level:') ? ` data-level="${key.slice(6)}"` : '';
-      const papers = key === 'subjects:home' ? `<i class="lf-paper"><i class="lf-ico">${iconSvg('<path d="M6 12a2 2 0 0 1 2-2h11l4 5h13a2 2 0 0 1 2 2v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M24 22v9M20 26l4-4 4 4"/>')}</i><i class="lf-cap">Your subjects</i></i>`
-        : key === 'level:board' ? ['LET', 'CPALE', 'NCLEX-RN'].map((x) => `<i class="lf-paper"><i class="lf-ico">${iconSvg('<path d="M10 10h12a4 4 0 0 1 4 4v24a3 3 0 0 0-3-3H10z"/><path d="M38 10H26a4 4 0 0 0-4 4v24a3 3 0 0 1 3-3h13z"/>')}</i><i class="lf-cap">${x} · Board exam</i></i>`).join('') : labs.slice(0, 3).map((l) => {
+      const papers = key === 'level:board' ? ['LET', 'CPALE', 'NCLEX-RN'].map((x) => `<i class="lf-paper"><i class="lf-ico">${iconSvg('<path d="M10 10h12a4 4 0 0 1 4 4v24a3 3 0 0 0-3-3H10z"/><path d="M38 10H26a4 4 0 0 0-4 4v24a3 3 0 0 1 3-3h13z"/>')}</i><i class="lf-cap">${x} · Board exam</i></i>`).join('') : labs.slice(0, 3).map((l) => {
         const pid = l.id === 'cells3d' ? 'cells3d' : l.id;
         return `<i class="lf-paper">${previewIds.has(pid) ? `<canvas class="lf-pv" data-pv="${pid}" aria-hidden="true"></canvas>` : `<i class="lf-ico">${iconSvg(l.icon)}</i>`}<i class="lf-cap">${esc(l.name)} · ${esc(NAMES[l.subject] || '')}</i></i>`;
       }).join('');
@@ -354,11 +352,7 @@ function createView() {
     const mine = levelNow(), order = [...LEVELS.filter(([k]) => k === mine), ...LEVELS.filter(([k]) => k !== mine)];
     const box = el('div', 'lf-box');
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    // (v259) the student's own folder, alongside the levels: "My subjects" (upload your files, make a reviewer)
-    const n = (typeof mySubjects === 'function' ? mySubjects().length : 0);
-    const cards = [...order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine, ...(k === 'board' ? { sub: 'Lessons and simulations' } : {}) })),
-      { key: 'subjects:home', name: 'My subjects', sub: n ? `${n} ${n === 1 ? 'folder' : 'folders'}` : 'Your files and reviewers' }];
-    box.append(folderGrid(cards, 'lf-levels'), hint);
+    box.append(folderGrid(order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine, ...(k === 'board' ? { sub: 'Lessons and simulations' } : {}) })), 'lf-levels'), hint);
     return box;
   }
   const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
@@ -367,7 +361,6 @@ function createView() {
   // a folder made of folders: a level (its Lessons and Simulations) or Visual Labs (its subjects)
   function innerFolders(key) {
     const [kind, k] = key.split(':');
-    if (key === 'subjects:home') return mySubjectsBox();
     if (kind === 'visual') return simFolders();
     if (key === 'level:board') return folderGrid([{ key: 'lessons:board', name: 'Lessons', sub: 'A reviewer for every topic' }, { key: 'levelsims:board', name: 'Simulations', sub: 'A mock exam for each' }], 'lf-inlevel');
     if (key === 'lessons:board') return boardExams('bexam');
@@ -378,57 +371,60 @@ function createView() {
     const ls = levelLessons(k);
     return folderGrid([{ key: 'lessons:' + k, name: 'Lessons', sub: ls.length ? `${ls.length} ${ls.length === 1 ? 'lesson' : 'lessons'}` : 'Coming soon' }, { key: 'levelsims:' + k, name: 'Simulations' }], 'lf-inlevel');
   }
-  // a level's lessons (labs/level-lessons.js), or a calm "coming soon"
+  // a level's lessons (labs/level-lessons.js): the student's own My subjects first, then the built-in
+  // lessons (or a calm "coming soon" when a level has none yet)
   function lessonsBox(k) {
     const ls = levelLessons(k), box = el('div', 'lf-lessons');
+    box.appendChild(subjectsStrip(k)); // (v260: My subjects, at the top of every level's Lessons)
     if (!ls.length) {
-      box.classList.add('lf-soon');
-      box.innerHTML = `<span class="lf-soon-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 1 4 17.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg></span><b>Lessons are coming soon</b><p>Lessons for ${esc((LEVELS.find((x) => x[0] === k) || [])[1] || 'this level')} will show up here. For now, its Simulations are ready to try.</p>`;
+      const soon = el('div', 'lf-soon');
+      soon.innerHTML = `<span class="lf-soon-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 1 4 17.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg></span><b>Lessons are coming soon</b><p>Lessons for ${esc((LEVELS.find((x) => x[0] === k) || [])[1] || 'this level')} will show up here. For now, its Simulations are ready to try.</p>`;
+      box.appendChild(soon);
       return box;
     }
-    box.setAttribute('role', 'list');
+    const list = el('div', 'lf-lessonlist'); list.setAttribute('role', 'list');
     ls.forEach((l, i) => {
       const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.setAttribute('role', 'listitem');
       if (l.lab) b.dataset.lab = l.lab; else if (l.go) b.dataset.lessonGo = l.go; else b.dataset.lessonAsk = l.ask || `Teach me ${l.name}`;
       b.innerHTML = `<span class="lp-row-text"><b>${esc(l.name)}</b>${l.blurb ? `<small>${esc(l.blurb)}</small>` : ''}</span><i aria-hidden="true">›</i>`;
-      b.dataset.i = i; box.appendChild(b);
-    });
-    return box;
-  }
-  /* (v259) My subjects: the student's own folders, a folder on the Learn home. Each holds files they upload;
-     from a file Cassie makes her standard reviewer. The folders, uploads and reviewer flow live in app.js
-     (openSubjectFolder, subjectAdd, mySubjects); the Learn tab draws the list and opens that same screen,
-     and the folder's Back returns here. */
-  function showSubjectsPane() {
-    if (phoneOn()) { lpPath = ['subjects:home']; lpShow('subjects:home'); }
-    else { if (deskTop() !== 'subjects:home') deskPath.push('subjects:home'); renderShelf(); }
-  }
-  function openSubj(id) {
-    if (typeof openSubjectFolder === 'function') openSubjectFolder(id, { back: showSubjectsPane, backLabel: 'Back to My subjects' });
-  }
-  function mySubjectsBox() {
-    const subs = (typeof mySubjects === 'function' ? mySubjects() : []);
-    const box = el('div', 'lf-subjectbox');
-    const sub = el('p', 'lf-hint'); sub.textContent = 'Your own folders. Upload your slides, notes or PDFs, then make a reviewer from them.';
-    box.appendChild(sub);
-    const list = el('div', 'lf-lessons'); list.setAttribute('role', 'list');
-    if (!subs.length) { const empty = el('p', 'lf-subject-empty'); empty.textContent = 'No subjects yet. Add one below, then upload your files.'; list.appendChild(empty); }
-    subs.forEach((f) => {
-      const b = el('button', 'lp-row lf-lesson'); b.type = 'button'; b.setAttribute('role', 'listitem');
-      b.innerHTML = `<span class="lp-row-text"><b>${esc(f.name)}</b><small>${f.items.length ? `${f.items.length} ${f.items.length === 1 ? 'file' : 'files'}` : 'Empty, tap to add files'}</small></span><i aria-hidden="true">›</i>`;
-      b.addEventListener('click', () => openSubj(f.id));
-      list.appendChild(b);
+      b.dataset.i = i; list.appendChild(b);
     });
     box.appendChild(list);
+    return box;
+  }
+  /* (v260) My subjects: the student's own folders, shown at the top of every level's Lessons. Each holds files
+     they upload; from a file Cassie makes her standard reviewer. The folders, uploads and reviewer flow live in
+     app.js (openSubjectFolder, subjectAdd, mySubjects); Learn draws the list and opens that same screen, and the
+     folder's Back returns to this level's Lessons. */
+  function reshowLessons(k) {
+    if (phoneOn()) lpShow('lessons:' + k);
+    else renderShelf();
+  }
+  function openSubj(id, k) {
+    if (typeof openSubjectFolder === 'function') openSubjectFolder(id, { back: () => reshowLessons(k), backLabel: 'Back to lessons' });
+  }
+  function subjectsStrip(k) {
+    const wrap = el('div', 'lf-subjects-strip');
+    const h = el('h4', 'lf-sub'); h.textContent = 'My subjects'; wrap.appendChild(h);
+    const hint = el('p', 'lf-subjects-hint'); hint.textContent = 'Your own folders: upload your slides, notes or PDFs, then make a reviewer.'; wrap.appendChild(hint);
+    const subs = (typeof mySubjects === 'function' ? mySubjects() : []);
+    const list = el('div', 'lf-lessonlist'); list.setAttribute('role', 'list');
+    subs.forEach((f) => {
+      const b = el('button', 'lp-row lf-lesson lf-subject-row'); b.type = 'button'; b.setAttribute('role', 'listitem');
+      b.innerHTML = `<span class="lp-row-text"><b>${esc(f.name)}</b><small>${f.items.length ? `${f.items.length} ${f.items.length === 1 ? 'file' : 'files'}` : 'Empty, tap to add files'}</small></span><i aria-hidden="true">›</i>`;
+      b.addEventListener('click', () => openSubj(f.id, k));
+      list.appendChild(b);
+    });
+    wrap.appendChild(list);
     // add a subject: an inline name box
     const add = el('div', 'lf-subject-add');
     add.innerHTML = '<input type="text" class="lf-subject-name" maxlength="50" placeholder="New subject (e.g. Biology)" aria-label="New subject name"><button type="button" class="lab-btn lf-subject-go">Add</button>';
     const inp = add.querySelector('.lf-subject-name'), go = add.querySelector('.lf-subject-go');
-    const doAdd = () => { const f = (typeof subjectAdd === 'function') ? subjectAdd(inp.value) : null; if (f) { inp.value = ''; openSubj(f.id); } };
+    const doAdd = () => { const f = (typeof subjectAdd === 'function') ? subjectAdd(inp.value) : null; if (f) { inp.value = ''; openSubj(f.id, k); } };
     go.addEventListener('click', doAdd);
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
-    box.appendChild(add);
-    return box;
+    wrap.appendChild(add);
+    return wrap;
   }
   /* v241: Board and Licensure exams, a level of its own: Lessons (a folder per exam: My notes and reviewers, then
      every topic, each opening its reviewer or quiz) and Simulations (a folder per exam, opening its mock exam).

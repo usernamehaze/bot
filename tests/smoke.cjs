@@ -1672,17 +1672,22 @@ test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, 
   }
 });
 
-test('v259: the Learn tab has a My subjects folder (among the levels); a student makes a subject folder, uploads a file read with Cassie, sees its title, and Make a reviewer gives Cassie’s standard reviewer; folders persist and the folder’s Back returns to My subjects', async (b) => {
+test('v260: My subjects sits at the top of a level’s Lessons; a student opens Lessons, makes a subject folder, uploads a file read with Cassie, sees its title, and Make a reviewer gives Cassie’s standard reviewer; folders persist and the folder’s Back returns to the lessons', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: '**The big picture**\nCells are the unit of life.\n\n**Quick review**\nterm: meaning\n\n**Practice questions**\n1. What makes energy?' }), state: { groqKey: 'gsk_test', tab: 'home', profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
-  const openSubjects = async () => { await page.$eval('.lp .lf[data-group="subjects:home"]', (f) => f.scrollIntoView({ block: 'center' })); await page.click('.lp .lf[data-group="subjects:home"]'); await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'subjects:home'); };
-  // 1. My subjects is a folder on the Learn home, sitting among the level folders
-  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
-  const onHome = await page.$eval('.lp .lf-levels .lf[data-group="subjects:home"] b', (b) => b.textContent).catch(() => null);
-  expect(onHome === 'My subjects', '1. My subjects is a folder on the Learn home, among the levels: ' + onHome);
-  await openSubjects();
-  await page.waitForSelector('.lf-subjectbox .lf-subject-name');
+  // Grade 10 -> Junior High (jhs): open the Learn tab, the student's level, then its Lessons
+  const openLessons = async () => {
+    await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf-levels .lf', { timeout: 15000 });
+    await page.$eval('.lp .lf[data-level="jhs"]', (f) => f.scrollIntoView({ block: 'center' })); await page.click('.lp .lf[data-level="jhs"]');
+    await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'level:jhs');
+    await page.click('.lp-list .lf[data-group="lessons:jhs"]'); await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'lessons:jhs');
+    await page.waitForSelector('.lf-subjects-strip .lf-subject-name');
+  };
+  // 1. My subjects is the first thing in the Lessons list (above the built-in lessons / coming soon)
+  await openLessons();
+  const atTop = await page.evaluate(() => { const box = document.querySelector('.lf-lessons'), strip = box && box.firstElementChild, sub = strip && strip.querySelector('.lf-sub'); return !!strip && strip.classList.contains('lf-subjects-strip') && !!sub && sub.textContent === 'My subjects'; });
+  expect(atTop, '1. My subjects is the first thing in Lessons');
   // 2. add a subject -> its folder opens
-  await page.fill('.lf-subject-name', 'Biology'); await page.click('.lf-subject-go');
+  await page.fill('.lf-subjects-strip .lf-subject-name', 'Biology'); await page.click('.lf-subjects-strip .lf-subject-go');
   await page.waitForSelector('.subject-upload');
   expect(await page.evaluate(() => state.subjects.length === 1 && state.subjects[0].name === 'Biology'), '2. adding a subject makes a folder: ' + await page.evaluate(() => JSON.stringify((state.subjects || []).map((f) => f.name))));
   // 3. upload a file -> stored with a title, kind and text
@@ -1701,14 +1706,13 @@ test('v259: the Learn tab has a My subjects folder (among the levels); a student
   await page.reload(); await page.waitForTimeout(1200);
   const kept = await page.evaluate(() => (state.subjects || []).map((f) => `${f.name}:${f.items.length}`).join());
   expect(kept === 'Biology:1', '5. the subject and its file are still there after a reload: ' + kept);
-  // 6. the folder's Back returns to My subjects in the Learn tab (not the Home Lessons screen)
-  await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf[data-group="subjects:home"]');
-  await openSubjects(); await page.waitForSelector('.lf-subjectbox .lf-lesson');
-  await page.click('.lf-subjectbox .lf-lesson'); await page.waitForSelector('.lessons-sheet .lessons-back');
+  // 6. the folder's Back returns to the level's Lessons (My subjects still at the top), not the Home Lessons screen
+  await openLessons();
+  await page.click('.lf-subjects-strip .lf-subject-row'); await page.waitForSelector('.lessons-sheet .lessons-back');
   const backLabel = await page.$eval('.lessons-sheet .lessons-back', (b) => b.getAttribute('aria-label'));
   await page.click('.lessons-sheet .lessons-back'); await page.waitForTimeout(300);
-  const backOk = await page.evaluate(() => !document.querySelector('.lessons-sheet') && document.querySelector('.lp').dataset.view === 'subjects:home');
-  expect(backOk && backLabel === 'Back to My subjects', '6. Back from a subject folder returns to My subjects in the Learn tab: ' + JSON.stringify({ backOk, backLabel }));
+  const backOk = await page.evaluate(() => !document.querySelector('.lessons-sheet') && document.querySelector('.lp').dataset.view === 'lessons:jhs' && !!document.querySelector('.lf-subjects-strip .lf-subject-row'));
+  expect(backOk && backLabel === 'Back to lessons', '6. Back from a subject folder returns to the level’s Lessons: ' + JSON.stringify({ backOk, backLabel }));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
@@ -10056,7 +10060,7 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     const order = await page.evaluate((S) => { const y = (sel) => { const e = document.querySelector(S + ' ' + sel); return e ? e.getBoundingClientRect().top : -1; }; return [y(':is(.lp-rec, .labs-feature)'), y('.lf-levels'), y('.lf-visual'), y('.lf-tools')]; }, S);
     expect(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), `${where}: Today’s Labs, Levels, Visual Labs, Study Tools, top to bottom: ` + order);
     // 2. the levels: the student's own (Junior High) first, about 1.5 times a folder, with Your level
-    const lv = await page.evaluate((S) => [...document.querySelectorAll(S + ' .lf-levels .lf[data-level]')].map((f) => ({ k: f.dataset.level, mine: f.classList.contains('lf-mine'), w: f.getBoundingClientRect().width, tag: (f.querySelector('.lf-yours') || {}).textContent || '' })), S); // (v259: the level folders; My subjects is in the same grid but has no data-level)
+    const lv = await page.evaluate((S) => [...document.querySelectorAll(S + ' .lf-levels .lf')].map((f) => ({ k: f.dataset.level, mine: f.classList.contains('lf-mine'), w: f.getBoundingClientRect().width, tag: (f.querySelector('.lf-yours') || {}).textContent || '' })), S);
     const ratio = lv[1] ? lv[0].w / lv[1].w : 0;
     expect(JSON.stringify(lv.map((x) => x.k)) === JSON.stringify(['jhs', 'pre', 'elem', 'shs', 'college', 'board']) && lv[0].mine && lv[0].tag === 'Your level' && lv.slice(1).every((x) => !x.mine && !x.tag), `${where}: Junior High first and marked Your level, then the others: ` + JSON.stringify(lv));
     expect(ratio > 1.35 && ratio < 1.65, `${where}: the student’s level is about 1.5 times bigger: ` + ratio.toFixed(2));
@@ -10127,7 +10131,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
   const { contrastIssues } = require('./ui-checks.cjs');
   const levelsOf = (page) => page.evaluate(async () => { const m = await import('./labs/labs.js'); return { levels: m.LEVELS.map((l) => l[0]), of: Object.fromEntries(m.LABS.map((l) => [l.id, l.levels || []])) }; });
   // the level folders: which level, the student's own (dark), papers, label, count and the round button
-  const forYou = (page, scope = '.lp-foryou') => page.evaluate((sc) => [...document.querySelectorAll(sc + ' .lf[data-level]')].map((f) => { const g = f.querySelector('.lf-go').getBoundingClientRect();
+  const forYou = (page, scope = '.lp-foryou') => page.evaluate((sc) => [...document.querySelectorAll(sc + ' .lf')].map((f) => { const g = f.querySelector('.lf-go').getBoundingClientRect();
     return { k: f.dataset.level, mine: f.classList.contains('lf-mine'), papers: f.querySelectorAll('.lf-paper').length, label: f.querySelector('.lf-txt b').textContent, count: +f.querySelector('.lf-txt small').textContent.replace(/\D/g, ''), go: [Math.round(g.width), Math.round(g.height)] }; }), scope);
   // a folder opened: the level's labs (phone list; v220: inside the level's Simulations folder)
   const openLevel = async (page, k) => { await page.click(`.lp-foryou .lf[data-level="${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'level:' + x, k, { timeout: 4000 });
@@ -10319,10 +10323,10 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
     const parts = await page.evaluate((ph) => {
       const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
       if (ph) return { order: [...document.querySelectorAll('.lp-home > .lp-h')].filter(vis).map((h) => h.textContent), chips: document.querySelectorAll('.lp-chips button').length,
-        n: [document.querySelectorAll('.lp-foryou .lf[data-level]').length, document.querySelectorAll('.lp-sims .lf').length, document.querySelectorAll('.lp-toolsf .lf').length], today: vis(document.querySelector('.lp-rec .lp-card')) };
+        n: ['.lp-foryou', '.lp-sims', '.lp-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length), today: vis(document.querySelector('.lp-rec .lp-card')) };
       const tops = ['.labs-today', '.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => { const e = document.querySelector(s); return vis(e) ? e.getBoundingClientRect().top : -1; });
       return { order: ['Today’s Labs', 'Levels', 'Simulations: Visual Labs', 'Study Tools: Learn your way'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
-        cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: [document.querySelectorAll('.labs-foryou .lf[data-level]').length, document.querySelectorAll('.labs-sims .lf').length, document.querySelectorAll('.labs-toolsf .lf').length] };
+        cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
     expect(parts.order.join('|') === 'Today’s Labs|Levels|Simulations: Visual Labs|Study Tools: Learn your way', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
     expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[6,1,4]', `${size}: no chips, tabs or card grid; 6 level folders (v241: Board and Licensure exams too), the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
@@ -10339,7 +10343,6 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
     const paths = [];
     for (const key of keys) {
       if (key === 'level:board') continue; // (v241: exam folders, not labs: the v241 test)
-      if (key === 'subjects:home') continue; // (v259: the student's own My subjects folder holds uploads, not labs: its own test)
       if (key.startsWith('level:')) paths.push([key, 'levelsims:' + key.slice(6)]);
       else if (key === 'visual:all') { await page.click(anyF(key)); await page.waitForSelector(anyF('subject:physics')); await page.waitForTimeout(100); const subs = await page.$$eval('.labs:not([hidden]) .lf', (f) => f.filter((x) => x.getClientRects().length).map((x) => x.dataset.group)); subs.forEach((g) => paths.push([key, g])); await page.click(S.back); await page.waitForSelector(S.folders); }
       else paths.push([key]);
@@ -13240,7 +13243,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   const top = await page.evaluate(() => ({ title: document.querySelector('.lp-head h2').textContent, find: document.querySelector('.lp-find').getBoundingClientRect().width,
     chips: [...document.querySelectorAll('.lp-chips button')].map((c) => c.textContent), rec: document.querySelector('.lp-card .lp-info b').textContent, want: (LAB_INFO[todayLab()] || [])[0],
     pv: document.querySelector('.lp-play').dataset.lab, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, slim: document.querySelector('.lp-card').classList.contains('lp-slim'),
-    forYou: [...document.querySelectorAll('.lp-foryou .lf[data-level]')].map((x) => x.dataset.level), forPv: document.querySelectorAll('.lp-foryou .lf canvas[data-preview]').length }));
+    forYou: [...document.querySelectorAll('.lp-foryou .lf')].map((x) => x.dataset.level), forPv: document.querySelectorAll('.lp-foryou .lf canvas[data-preview]').length }));
   expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(!top.chips.length, 'no filter chips (the folders replace them): ' + top.chips.join());
   expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.slim, 'Recommended: today’s lab, its name and a play button (v246: a slim card): ' + JSON.stringify(top));
@@ -13308,7 +13311,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
     await o.page.evaluate(() => openLabs());
     await o.page.waitForSelector('.labs:not([hidden]) .labs-scroll .lf');
     const d = await o.page.evaluate(() => { const vis = (s) => { const e = document.querySelector(s); return !!e && !!e.getClientRects().length; }; return { lp: vis('.lp'), on: document.querySelector('.labs').classList.contains('lp-on'), head: vis('.labs-head'), tabs: [...document.querySelectorAll('.labs-tabs [data-section]')].filter((x) => x.getClientRects().length).map((x) => x.dataset.section), search: vis('.labs-search'), chips: document.querySelectorAll('.labs-chips button').length, cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter((x) => x.getClientRects().length).length, folders: document.querySelectorAll('.labs-scroll .lf').length, feature: vis('.labs-feature'), bg: getComputedStyle(document.querySelector('.labs')).backgroundImage.slice(0, 15) }; });
-    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 12 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf (v259: 6 levels, My subjects, Visual Labs, 4 study tools: 12 folders): ' + JSON.stringify(d));
+    expect(!d.lp && !d.on && d.head && !d.tabs.length && d.search && d.chips === 0 && d.cards === 0 && d.folders === 11 && d.feature && /gradient/.test(d.bg), 'a computer keeps its Labs shelf (v241: 6 levels, Visual Labs, 4 study tools: 11 folders): ' + JSON.stringify(d));
     await o.ctx.close();
   }
 });
