@@ -2558,7 +2558,7 @@ function labLevel() {
 function lessonsList() {
   const lv = lessonLevel(), box = document.createElement('div');
   box.className = 'lessons-list'; box.dataset.level = lv || 'none';
-  box.appendChild(subjectsSection()); // (v258: the student's own subject folders, above the built-in lessons)
+  // (v259: the student's own "My subjects" folders now live in the Learn tab's own home, as their own folder; see labs/labs.js)
   if (!lv) {
     box.innerHTML = '<p class="lessons-none">Pick your level, and your lessons show up here.</p><button type="button" class="btn lessons-level">Set my level</button>';
     box.querySelector('.lessons-level').addEventListener('click', () => { closeLessons(); openProfile(false); });
@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=258'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=259'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=258'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=259'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2696,41 +2696,17 @@ function subjectItemAdd(id, item) { const f = subjectFind(id); if (!f) return; f
 function subjectItemDel(id, itemId) { const f = subjectFind(id); if (f) { f.items = f.items.filter((x) => x.id !== itemId); save(); } }
 const SUBJECT_KIND = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', txt: 'Text', md: 'Text', image: 'Photo' };
 
-// the "My subjects" group shown at the top of the lessons list: each folder, and a way to add one
-function subjectsSection() {
-  const wrap = document.createElement('div');
-  wrap.className = 'subjects';
-  const h = document.createElement('h3'); h.className = 'lessons-strand'; h.textContent = 'My subjects';
-  wrap.appendChild(h);
-  const sub = document.createElement('p'); sub.className = 'subjects-sub'; sub.textContent = 'Your own folders: upload your slides, notes or PDFs, then make a reviewer from them.';
-  wrap.appendChild(sub);
-  mySubjects().forEach((f) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'lesson lesson-folder'; b.dataset.subject = f.id;
-    b.innerHTML = '<b></b><small></small>';
-    b.querySelector('b').textContent = f.name;
-    b.querySelector('small').textContent = f.items.length ? `${f.items.length} ${f.items.length === 1 ? 'file' : 'files'}` : 'Empty, tap to add files';
-    b.addEventListener('click', () => openSubjectFolder(f.id));
-    wrap.appendChild(b);
-  });
-  // add a subject: an inline name box
-  const add = document.createElement('div'); add.className = 'subject-add';
-  add.innerHTML = '<input type="text" class="subject-name" maxlength="50" placeholder="New subject (e.g. Biology)" aria-label="New subject name"><button type="button" class="btn subject-add-go">Add</button>';
-  const inp = add.querySelector('.subject-name'), go = add.querySelector('.subject-add-go');
-  const doAdd = () => { const f = subjectAdd(inp.value); if (f) { inp.value = ''; openSubjectFolder(f.id); } };
-  go.addEventListener('click', doAdd);
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
-  wrap.appendChild(add);
-  return wrap;
-}
-
-// a folder, as its own lessons sheet: its files, an Upload button, and on each file Make a reviewer
-function openSubjectFolder(id) {
+// a folder, as its own lessons sheet: its files, an Upload button, and on each file Make a reviewer.
+// opts.back is called when the student leaves (Back, Escape, or after deleting the subject); it defaults
+// to the Lessons screen, but the Learn tab passes its own so Back returns to the Learn tab's My subjects.
+function openSubjectFolder(id, opts = {}) {
+  const back = typeof opts.back === 'function' ? opts.back : openLessons;
+  const backLabel = opts.backLabel || 'Back to lessons';
   const f = subjectFind(id); if (!f) return;
   closeLessons();
   const w = document.createElement('div');
   w.className = 'lessons-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'lessons-h');
-  w.innerHTML = `<div class="lessons-head"><button type="button" class="lessons-back" aria-label="Back to lessons">‹</button><h2 id="lessons-h"></h2>
+  w.innerHTML = `<div class="lessons-head"><button type="button" class="lessons-back" aria-label="${backLabel}">‹</button><h2 id="lessons-h"></h2>
     <button type="button" class="subject-del" aria-label="Delete this subject" title="Delete this subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button></div>
     <p class="lessons-sub subject-note" aria-live="polite">Upload your slides, notes, documents or a PDF.</p>
     <div class="subject-files"></div>
@@ -2751,17 +2727,17 @@ function openSubjectFolder(id) {
       card.querySelector('.subject-preview').textContent = it.lesson ? `${it.lesson}` : (it.preview || '');
       card.querySelector('.subject-review').addEventListener('click', () => subjectReview(id, it.id, 'Read this whole file and make me a complete reviewer of it.'));
       card.querySelector('.subject-ask').addEventListener('click', () => subjectReview(id, it.id, `Tell me about ${it.title || 'this file'}: what it covers, in short clear points.`));
-      card.querySelector('.subject-rm').addEventListener('click', () => { subjectItemDel(id, it.id); render(); const ls = document.querySelector('.subjects'); });
+      card.querySelector('.subject-rm').addEventListener('click', () => { subjectItemDel(id, it.id); render(); });
       files.appendChild(card);
     });
   };
   render();
-  w.querySelector('.lessons-back').addEventListener('click', () => { closeLessons(); openLessons(); });
+  w.querySelector('.lessons-back').addEventListener('click', () => { closeLessons(); back(); });
   w.querySelector('.subject-del').addEventListener('click', () => {
-    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { subjectDelete(id); closeLessons(); openLessons(); } });
+    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { subjectDelete(id); closeLessons(); back(); } });
   });
   w.querySelector('.subject-upload').addEventListener('click', () => subjectUpload(id, note, render));
-  w.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLessons(); openLessons(); } });
+  w.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLessons(); back(); } });
   document.body.appendChild(w);
   w.querySelector('.lessons-back').focus({ preventScroll: true });
 }
@@ -2892,7 +2868,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=258').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=259').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6785,7 +6761,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=258')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=259')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8016,7 +7992,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=258');
+      exploreMod = await import('./explore/cell3d.js?v=259');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8066,7 +8042,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=258');
+      labsMod = await import('./labs/labs.js?v=259');
       islandRest();
     }
     labsMod.open({
@@ -10015,10 +9991,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=258').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=259').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=258', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=259', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
