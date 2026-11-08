@@ -2611,7 +2611,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=256'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=257'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2633,7 +2633,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=256'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=257'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2767,7 +2767,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=256').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=257').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3035,8 +3035,11 @@ function openPodcastSources() {
 }
 function openPodcast(text, title) {
   document.querySelector('.pod-sheet')?.remove();
-  const CV = window.CassieVoice, left = CV && CV.studio.known() ? CV.studio.left() : null;
-  const guest = !!(CV && CV.studio.guest && CV.studio.guest()); // (the studio voice said so: not signed in)
+  const CV = window.CassieVoice;
+  // the studio voice state is cached from the last check; re-read it here, and (below) refresh it on open
+  // when the student is signed in, so a stale "guest" from before sign-in never blocks a real account
+  let left = CV && CV.studio.known() ? CV.studio.left() : null;
+  let guest = !!(CV && CV.studio.guest && CV.studio.guest());
   const w = document.createElement('div');
   w.className = 'plus-sheet pod-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'pod-h');
   w.innerHTML = `<div class="plus-card pod-card">
@@ -3048,7 +3051,7 @@ function openPodcast(text, title) {
     <p class="pod-status" aria-live="polite"></p>
     <div class="plus-actions"><button type="button" class="plus-go pod-go">Make my podcast</button><button type="button" class="plus-ok pod-x">Not now</button></div></div>`;
   w.querySelector('#pod-h').textContent = title;
-  const max = CV && CV.studio.max ? CV.studio.max() : 0;
+  let max = CV && CV.studio.max ? CV.studio.max() : 0;
   const voiceOkFor = (min) => !guest && !!(SERVER && CV && CV.studio.on() && (left == null || left >= podChars(min)));
   let voiceOk = voiceOkFor(podMinutes());
   const lenBox = w.querySelector('#pod-len');
@@ -3060,12 +3063,21 @@ function openPodcast(text, title) {
       : voiceOk ? `It uses about ${podChars(min).toLocaleString('en-PH')} characters of Cassie’s voice${left != null ? `, and you have ${left.toLocaleString('en-PH')} left this month` : ''}.`
       : `You don’t have enough of Cassie’s voice left this month${left != null ? ` (${left.toLocaleString('en-PH')} left)` : ''}, so you get the script to read.`;
   };
-  lenBox.hidden = guest; w.querySelector('.pod-len-l').hidden = guest;
+  const applyGuest = () => { lenBox.hidden = guest; w.querySelector('.pod-len-l').hidden = guest; const g = w.querySelector('.pod-go'); if (g) g.textContent = guest ? 'Sign in' : 'Make my podcast'; };
   lenBox.addEventListener('click', (e) => { const b = e.target.closest('button[data-min]'); if (!b) return; state.podMinutes = +b.dataset.min; save(); refreshCost(); });
-  refreshCost();
+  refreshCost(); applyGuest();
+  // signed in but the cached state says guest (or is unknown): check again with the account's token, so a
+  // stale guest from before sign-in self-heals and the real plan's voice shows
+  if (SERVER && CV && authToken() && (guest || !CV.studio.known())) {
+    CV.studio.refresh().then(() => {
+      left = CV.studio.known() ? CV.studio.left() : null;
+      guest = !!(CV.studio.guest && CV.studio.guest());
+      max = CV.studio.max ? CV.studio.max() : 0;
+      if (w.isConnected) { refreshCost(); applyGuest(); }
+    }).catch(() => {});
+  }
   w.querySelector('.pod-allow').textContent = `No daily limit: podcasts come out of your monthly voice${max ? ` (${max.toLocaleString('en-PH')} characters on your plan)` : ''}.`;
   const go = w.querySelector('.pod-go'), status = w.querySelector('.pod-status');
-  if (guest) go.textContent = 'Sign in';
   let player = null;
   const close = () => { if (player) player.stop(); w.remove(); document.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -6648,7 +6660,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=256')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=257')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7879,7 +7891,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=256');
+      exploreMod = await import('./explore/cell3d.js?v=257');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7929,7 +7941,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=256');
+      labsMod = await import('./labs/labs.js?v=257');
       islandRest();
     }
     labsMod.open({
@@ -9878,10 +9890,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=256').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=257').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=256', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=257', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.

@@ -1672,6 +1672,38 @@ test('Calendar: tap a day to add a note or a label (Quiz, Exam, Assignment due, 
   }
 });
 
+test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
+  let healed = false; // node-side flag: before sign-in the server says guest; the on-open recheck flips it
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+  const { ctx, page, errors } = await open(b, {
+    server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: 'ok' }),
+    state: { tab: 'chat', account: { email: 't@x.com', name: 'T', password: true, providers: [] }, plan: { plan: 'pro', until: Date.now() + 1e9 } },
+    setup: async (c) => {
+      await c.route(/\/speak(\?|$)/, (route) => {
+        const req = route.request();
+        if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+        const authed = /Bearer/.test(req.headers()['authorization'] || '');
+        const guest = !healed || !authed; // until healed: always guest; after: only when not signed in
+        return route.fulfill({ headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(guest ? { on: true, left: 0, guest: true, used: 0, max: 0 } : { on: true, left: 9000, guest: false, used: 100, max: 30000 }) });
+      });
+      await c.route(/\/auth\/me/, (route) => route.fulfill({ headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ account: { email: 't@x.com', name: 'T', password: true, providers: [] }, plan: { plan: 'pro', until: Date.now() + 1e9 } }) }));
+      await c.route(/workers\.dev\/(config|chat|ask|e|f|care)/, (route) => route.fulfill({ headers: cors, body: '{}' }));
+    },
+  });
+  await page.waitForTimeout(700); // the app's load-time checks run while the server still says guest
+  const stale = await page.evaluate(() => window.CassieVoice.studio.guest());
+  expect(stale === true, 'before the fix the cached state is guest (signed in, but the server had said guest): ' + stale);
+  healed = true; // the account is now recognized; the next /speak check will say not-guest
+  await page.evaluate(() => localStorage.setItem('cassie.auth', 'tok_' + 'a'.repeat(40))); // signed in now
+  await page.evaluate(() => openPodcast('Cells make energy in the mitochondria using glucose and oxygen.', 'My notes'));
+  await page.waitForSelector('#pod-len button');
+  await page.waitForFunction(() => window.CassieVoice.studio.guest() === false, null, { timeout: 8000 });
+  const r = await page.evaluate(() => ({ guest: window.CassieVoice.studio.guest(), lenHidden: document.getElementById('pod-len').hidden, go: document.querySelector('.pod-go').textContent.trim(), cost: document.querySelector('.pod-cost').textContent }));
+  expect(r.guest === false && !r.lenHidden && r.go === 'Make my podcast' && !/guests/.test(r.cost), 'opening the podcast rechecks and shows the real account, not the guest message: ' + JSON.stringify(r));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v256: Podcast asks how long first (3, 5 or 10 minutes), remembers the choice, and the script target scales with it', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', fakeGroq: () => ({ text: 'ok' }), state: { groqKey: 'gsk_test', tab: 'chat' } });
   await page.evaluate(() => openPodcast('Photosynthesis makes glucose and oxygen in the chloroplast using sunlight, water and carbon dioxide.', 'My notes'));
