@@ -4066,13 +4066,17 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 .pod-len-l { font-size: var(--fs-sm, .9rem); color: var(--muted); font-weight: 600; }
 .pod-len.appx-seg button { min-height: 44px; }
 
-/* (v258) My subjects: folders, uploads and a reviewer under Lessons */
-.subjects { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-bottom: var(--sp-4, 16px); }
-.subjects-sub { margin: 0 0 var(--sp-2, 8px); color: var(--muted); font-size: var(--fs-sm, .9rem); }
-.subject-add { display: flex; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
-.subject-add .subject-name { flex: 1; min-height: 48px; padding: 0 var(--sp-3, 12px); border-radius: var(--r-md); border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; }
-.subject-add .subject-name:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
-.subject-add-go { min-height: 48px; padding: 0 var(--sp-4, 16px); flex: none; }
+/* (v259) My subjects: the Learn tab's own folder — its list and the add-a-subject row */
+.lf-subjectbox { display: flex; flex-direction: column; }
+.lf-subjectbox .lf-hint { margin: 0 0 var(--sp-3, 12px); }
+.lf-subject-empty { color: var(--muted); font-size: var(--fs-sm, .9rem); padding: var(--sp-4, 16px) 0; }
+.lf-subject-add { display: flex; gap: var(--sp-2, 8px); margin-top: var(--sp-3, 12px); }
+.lf-subject-name { flex: 1; min-height: 48px; padding: 0 var(--sp-3, 12px); border-radius: var(--r-md); border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; }
+.lf-subject-name:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
+.lf-subject-go { min-height: 48px; padding: 0 var(--sp-4, 16px); flex: none; }
+@media (pointer: coarse) { .lf-subject-name, .lf-subject-go { min-height: 48px; } }
+
+/* (v258) My subjects folder contents: uploads and a reviewer (the overlay opened from the Learn tab) */
 .subject-files { display: flex; flex-direction: column; gap: var(--sp-3, 12px); margin: var(--sp-3, 12px) 0; }
 .subject-empty { color: var(--muted); font-size: var(--fs-sm, .9rem); text-align: center; padding: var(--sp-5, 24px) var(--sp-3, 12px); }
 .subject-file { border-radius: var(--r-lg); border: 1px solid var(--lg-line, var(--border)); background: var(--lg-fill-thick, var(--surface)); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); padding: var(--sp-4, 16px); display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
