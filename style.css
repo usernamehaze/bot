@@ -4065,3 +4065,27 @@ html[data-uistyle="crisp"] { --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
 .pod-len-group { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin: var(--sp-2, 8px) 0 0; }
 .pod-len-l { font-size: var(--fs-sm, .9rem); color: var(--muted); font-weight: 600; }
 .pod-len.appx-seg button { min-height: 44px; }
+
+/* (v258) My subjects: folders, uploads and a reviewer under Lessons */
+.subjects { display: flex; flex-direction: column; gap: var(--sp-2, 8px); margin-bottom: var(--sp-4, 16px); }
+.subjects-sub { margin: 0 0 var(--sp-2, 8px); color: var(--muted); font-size: var(--fs-sm, .9rem); }
+.subject-add { display: flex; gap: var(--sp-2, 8px); margin-top: var(--sp-2, 8px); }
+.subject-add .subject-name { flex: 1; min-height: 48px; padding: 0 var(--sp-3, 12px); border-radius: var(--r-md); border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; }
+.subject-add .subject-name:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
+.subject-add-go { min-height: 48px; padding: 0 var(--sp-4, 16px); flex: none; }
+.subject-files { display: flex; flex-direction: column; gap: var(--sp-3, 12px); margin: var(--sp-3, 12px) 0; }
+.subject-empty { color: var(--muted); font-size: var(--fs-sm, .9rem); text-align: center; padding: var(--sp-5, 24px) var(--sp-3, 12px); }
+.subject-file { border-radius: var(--r-lg); border: 1px solid var(--lg-line, var(--border)); background: var(--lg-fill-thick, var(--surface)); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-edge); padding: var(--sp-4, 16px); display: flex; flex-direction: column; gap: var(--sp-2, 8px); }
+.subject-file-top { display: flex; align-items: center; gap: var(--sp-2, 8px); }
+.subject-kind { flex: none; padding: 2px var(--sp-2, 8px); border-radius: var(--r-pill); border: 1px solid var(--lg-line, var(--border)); font-size: var(--fs-xs, .72rem); font-weight: 700; color: var(--muted); }
+.subject-title { font-weight: 700; }
+.subject-preview { color: var(--muted); font-size: var(--fs-sm, .85rem); line-height: 1.4; }
+.subject-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2, 8px); margin-top: var(--sp-1, 4px); }
+.subject-ask, .subject-rm { min-height: 40px; padding: 0 var(--sp-3, 12px); border-radius: var(--r-pill); border: 1px solid var(--lg-line, var(--border)); background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.subject-rm { border-color: transparent; color: var(--muted); }
+@media (pointer: coarse) { .subject-ask, .subject-rm { min-height: 44px; } }
+.subject-ask:focus-visible, .subject-rm:focus-visible, .subject-review:focus-visible, .subject-del:focus-visible, .subject-upload:focus-visible { outline: 2px solid var(--focus, var(--text)); outline-offset: 2px; }
+.lessons-head .subject-del { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.lessons-head .subject-del svg { width: 22px; height: 22px; }
+@media (hover: hover) { .lessons-head .subject-del:hover { color: var(--text); } }
+.subject-upload { width: 100%; min-height: 48px; }

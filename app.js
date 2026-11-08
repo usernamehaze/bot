@@ -2558,6 +2558,7 @@ function labLevel() {
 function lessonsList() {
   const lv = lessonLevel(), box = document.createElement('div');
   box.className = 'lessons-list'; box.dataset.level = lv || 'none';
+  box.appendChild(subjectsSection()); // (v258: the student's own subject folders, above the built-in lessons)
   if (!lv) {
     box.innerHTML = '<p class="lessons-none">Pick your level, and your lessons show up here.</p><button type="button" class="btn lessons-level">Set my level</button>';
     box.querySelector('.lessons-level').addEventListener('click', () => { closeLessons(); openProfile(false); });
@@ -2611,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=257'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=258'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2633,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=257'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=258'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2674,6 +2675,130 @@ function deskLessons() {
   el.appendChild(lessonsList());
   return el;
 }
+
+/* ---------- (v258) My subjects: a student's own folders under Lessons ----------
+   Each folder holds files the student uploads (the same readers the chat uses). From a file, Cassie
+   makes her standard reviewer, the same one she gives when you attach a file in chat and tap Make a
+   reviewer. Folders and files are saved on the device and sync with an account like everything else. */
+const SUBJECT_ITEM_CAP = 20000; // characters kept per file (enough for a full reviewer; small in storage)
+const SUBJECT_MAX = 30, SUBJECT_ITEMS_MAX = 40;
+function mySubjects() { if (!Array.isArray(state.subjects)) state.subjects = []; return state.subjects; }
+function subjectFind(id) { return mySubjects().find((f) => f.id === id); }
+function subjectAdd(name) {
+  const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 50);
+  if (!n || mySubjects().length >= SUBJECT_MAX) return null;
+  const f = { id: 'sub_' + Math.random().toString(36).slice(2, 10), name: n, items: [], at: Date.now() };
+  mySubjects().unshift(f); save(); track('feature', 'subject-add');
+  return f;
+}
+function subjectDelete(id) { state.subjects = mySubjects().filter((f) => f.id !== id); save(); }
+function subjectItemAdd(id, item) { const f = subjectFind(id); if (!f) return; f.items.unshift(item); f.items = f.items.slice(0, SUBJECT_ITEMS_MAX); save(); }
+function subjectItemDel(id, itemId) { const f = subjectFind(id); if (f) { f.items = f.items.filter((x) => x.id !== itemId); save(); } }
+const SUBJECT_KIND = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', txt: 'Text', md: 'Text', image: 'Photo' };
+
+// the "My subjects" group shown at the top of the lessons list: each folder, and a way to add one
+function subjectsSection() {
+  const wrap = document.createElement('div');
+  wrap.className = 'subjects';
+  const h = document.createElement('h3'); h.className = 'lessons-strand'; h.textContent = 'My subjects';
+  wrap.appendChild(h);
+  const sub = document.createElement('p'); sub.className = 'subjects-sub'; sub.textContent = 'Your own folders: upload your slides, notes or PDFs, then make a reviewer from them.';
+  wrap.appendChild(sub);
+  mySubjects().forEach((f) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lesson lesson-folder'; b.dataset.subject = f.id;
+    b.innerHTML = '<b></b><small></small>';
+    b.querySelector('b').textContent = f.name;
+    b.querySelector('small').textContent = f.items.length ? `${f.items.length} ${f.items.length === 1 ? 'file' : 'files'}` : 'Empty, tap to add files';
+    b.addEventListener('click', () => openSubjectFolder(f.id));
+    wrap.appendChild(b);
+  });
+  // add a subject: an inline name box
+  const add = document.createElement('div'); add.className = 'subject-add';
+  add.innerHTML = '<input type="text" class="subject-name" maxlength="50" placeholder="New subject (e.g. Biology)" aria-label="New subject name"><button type="button" class="btn subject-add-go">Add</button>';
+  const inp = add.querySelector('.subject-name'), go = add.querySelector('.subject-add-go');
+  const doAdd = () => { const f = subjectAdd(inp.value); if (f) { inp.value = ''; openSubjectFolder(f.id); } };
+  go.addEventListener('click', doAdd);
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+  wrap.appendChild(add);
+  return wrap;
+}
+
+// a folder, as its own lessons sheet: its files, an Upload button, and on each file Make a reviewer
+function openSubjectFolder(id) {
+  const f = subjectFind(id); if (!f) return;
+  closeLessons();
+  const w = document.createElement('div');
+  w.className = 'lessons-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'lessons-h');
+  w.innerHTML = `<div class="lessons-head"><button type="button" class="lessons-back" aria-label="Back to lessons">‹</button><h2 id="lessons-h"></h2>
+    <button type="button" class="subject-del" aria-label="Delete this subject" title="Delete this subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></button></div>
+    <p class="lessons-sub subject-note" aria-live="polite">Upload your slides, notes, documents or a PDF.</p>
+    <div class="subject-files"></div>
+    <button type="button" class="btn subject-upload">Upload a file</button>`;
+  w.querySelector('#lessons-h').textContent = f.name;
+  const note = w.querySelector('.subject-note'), files = w.querySelector('.subject-files');
+  const render = () => {
+    const cur = subjectFind(id); if (!cur) { closeLessons(); return; }
+    files.innerHTML = '';
+    if (!cur.items.length) { const p = document.createElement('p'); p.className = 'subject-empty'; p.textContent = 'No files yet. Upload one, then tap Make a reviewer.'; files.appendChild(p); return; }
+    cur.items.forEach((it) => {
+      const card = document.createElement('div'); card.className = 'subject-file';
+      card.innerHTML = `<div class="subject-file-top"><span class="subject-kind"></span><b class="subject-title"></b></div>
+        <small class="subject-preview"></small>
+        <div class="subject-acts"><button type="button" class="btn subject-review">Make a reviewer</button><button type="button" class="subject-ask">Ask about it</button><button type="button" class="subject-rm" aria-label="Remove this file">Remove</button></div>`;
+      card.querySelector('.subject-kind').textContent = SUBJECT_KIND[it.kind] || 'File';
+      card.querySelector('.subject-title').textContent = it.title || 'File';
+      card.querySelector('.subject-preview').textContent = it.lesson ? `${it.lesson}` : (it.preview || '');
+      card.querySelector('.subject-review').addEventListener('click', () => subjectReview(id, it.id, 'Read this whole file and make me a complete reviewer of it.'));
+      card.querySelector('.subject-ask').addEventListener('click', () => subjectReview(id, it.id, `Tell me about ${it.title || 'this file'}: what it covers, in short clear points.`));
+      card.querySelector('.subject-rm').addEventListener('click', () => { subjectItemDel(id, it.id); render(); const ls = document.querySelector('.subjects'); });
+      files.appendChild(card);
+    });
+  };
+  render();
+  w.querySelector('.lessons-back').addEventListener('click', () => { closeLessons(); openLessons(); });
+  w.querySelector('.subject-del').addEventListener('click', () => {
+    askSure({ title: 'Delete this subject?', text: `“${f.name}” and its files will be removed from this device. This can’t be undone.`, yes: 'Delete' }).then((ok) => { if (ok) { subjectDelete(id); closeLessons(); openLessons(); } });
+  });
+  w.querySelector('.subject-upload').addEventListener('click', () => subjectUpload(id, note, render));
+  w.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeLessons(); openLessons(); } });
+  document.body.appendChild(w);
+  w.querySelector('.lessons-back').focus({ preventScroll: true });
+}
+
+// upload a file into a folder: the same reader the chat uses, then gather its title and a preview
+function subjectUpload(id, note, onChange) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = fileInput.accept; inp.hidden = true;
+  document.body.appendChild(inp);
+  inp.addEventListener('change', async () => {
+    const file = (inp.files || [])[0]; inp.remove();
+    if (!file) return;
+    note.textContent = `Reading ${file.name}…`;
+    try {
+      const doc = await readDocument(file);
+      if (!doc.text || !doc.text.trim()) throw new Error('empty');
+      const title = String(file.name || 'File').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 60) || 'File';
+      const lesson = (doc.text.split('\n').map((s) => s.trim()).find((s) => s.length > 4 && s.length < 80) || '').slice(0, 70);
+      subjectItemAdd(id, { id: 'it_' + Math.random().toString(36).slice(2, 9), title, lesson, kind: doc.kind || 'txt', preview: doc.text.replace(/\s+/g, ' ').trim().slice(0, 160), text: String(doc.text).slice(0, SUBJECT_ITEM_CAP), at: Date.now() });
+      note.textContent = 'Added. Tap Make a reviewer on a file to review it.';
+      onChange();
+    } catch (e) { note.textContent = `Couldn’t read ${file.name}. Try a PDF, Word, PowerPoint, text file or a photo.`; }
+  });
+  inp.click();
+}
+
+// Make a reviewer (or ask about it): attach the file's saved text and send Cassie the same prompt the
+// chat uses for an attached file, so the reviewer is exactly the one she makes everywhere else
+async function subjectReview(id, itemId, prompt) {
+  const f = subjectFind(id), it = f && f.items.find((x) => x.id === itemId);
+  if (!it) return;
+  closeLessons();
+  if (onPhoneHome()) window.CassieNative.go('chat'); else if (document.body.classList.contains('desk-on')) deskGo('chat');
+  const file = new File([it.text || it.preview || it.title || ''], (it.title || 'notes') + '.txt', { type: 'text/plain' });
+  const ok = await attachFile(file);
+  if (ok) handleSend(prompt);
+}
+
 // where each part of the hub goes (on a phone, through the tab bar so the right tab lights up)
 function hubAct(act) {
   const nav = (t) => (onPhoneHome() ? window.CassieNative.go(t) : null);
@@ -2767,7 +2892,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=257').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=258').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6660,7 +6785,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=257')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=258')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7891,7 +8016,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=257');
+      exploreMod = await import('./explore/cell3d.js?v=258');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -7941,7 +8066,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=257');
+      labsMod = await import('./labs/labs.js?v=258');
       islandRest();
     }
     labsMod.open({
@@ -9890,10 +10015,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=257').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=258').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=257', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=258', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10212,7 +10337,7 @@ function mergeLabs(theirs) {
   try { localStorage.setItem('cassie.labs', JSON.stringify(mine)); } catch (e) { /* ignore */ }
 }
 function accountData() {
-  return { letCourse: state.letCourse || null, profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), calItems: (state.calItems || []).slice(-600), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [], streak: window.CassieMemory ? window.CassieMemory.streakData() : null, labs: labsProgress() };
+  return { letCourse: state.letCourse || null, profile: state.profile || null, mistakes: state.mistakes || [], cards: (state.cards || []).slice(-500), exams: (state.exams || []).slice(-10), calItems: (state.calItems || []).slice(-600), progress: state.progress || {}, audience: state.audience, level: state.level, accent: state.accent, citationStyle: state.citationStyle, textSize: state.textSize, easyRead: state.easyRead, analytics: state.analytics, tour: state.tour || null, answerStyle: state.answerStyle || '', helpWith: state.helpWith || [], streak: window.CassieMemory ? window.CassieMemory.streakData() : null, labs: labsProgress(), subjects: (state.subjects || []).slice(0, 30) };
 }
 var syncTimer = null, lastSynced = '';
 function syncAccount(now) {
@@ -10235,7 +10360,7 @@ function applyAccountData(d) {
     base.done = { ...((mine && mine.done) || {}), ...(d.letCourse.done || {}) };
     state.letCourse = base;
   }
-  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour', 'answerStyle', 'helpWith'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
+  ['profile', 'audience', 'level', 'accent', 'citationStyle', 'textSize', 'easyRead', 'analytics', 'tour', 'answerStyle', 'helpWith', 'subjects'].forEach((k) => { if (d[k] != null) state[k] = d[k]; });
   if (Array.isArray(d.cards)) { // flashcards from both devices (the newest review wins)
     const mine = new Map((state.cards || []).map((c) => [c.id, c]));
     d.cards.forEach((c) => { if (!c || !c.id || !c.f) return; const m = mine.get(c.id); if (!m || (c.seen || 0) > (m.seen || 0)) mine.set(c.id, c); });
