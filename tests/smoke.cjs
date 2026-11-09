@@ -1725,6 +1725,30 @@ test('v261: My subjects is its own folder next to Lessons and Simulations in a l
   await ctx.close();
 });
 
+test('v263: a guest is gently gated at save/retrieve — My subjects asks a guest to sign in (and is honest that the data is private, never sold, never trains AI); a signed-in account opens it; the sign-in screen carries the same promise', async (b) => {
+  const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
+  // the sign-in screen and the gate both state the honest privacy promise (source, so it can't silently drift)
+  expect(/Your data is private\./.test(app) && /never sells it/.test(app) && /never trains AI on it/.test(app) && /Delete your account and it’s gone/.test(app), 'the honest private-data promise is in the copy');
+  const goSubjects = async (page) => {
+    await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf[data-level="jhs"]', { timeout: 15000 });
+    await page.click('.lp .lf[data-level="jhs"]'); await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'level:jhs');
+    await page.click('.lp-list .lf[data-group="subjects:home"]');
+  };
+  // 1. a guest (accounts on, not signed in): My subjects shows the sign-in gate, not the files
+  const g = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
+  await goSubjects(g.page);
+  await g.page.waitForSelector('.signin-gate', { timeout: 5000 });
+  const gate = await g.page.evaluate(() => ({ gated: !!document.querySelector('.signin-gate'), noFolder: !document.querySelector('.lessons-sheet .subject-upload'), privacy: /never sells it/.test(document.querySelector('.signin-gate .gate-privacy')?.textContent || ''), sign: /Sign in/i.test(document.querySelector('.signin-gate .gate-yes')?.textContent || '') }));
+  expect(gate.gated && gate.noFolder && gate.privacy && gate.sign, '1. a guest opening My subjects gets the sign-in gate with the privacy promise: ' + JSON.stringify(gate));
+  // 2. once there's a session token, no gate — My subjects opens straight into its files (same page, token set live)
+  await g.page.evaluate(() => { try { localStorage.setItem('cassie.auth', 'tok_' + 'x'.repeat(28)); } catch (e) {} const n = document.querySelector('.signin-gate .gate-no'); if (n) n.click(); });
+  await g.page.click('.lp-list .lf[data-group="subjects:home"]');
+  await g.page.waitForSelector('.lessons-sheet .subject-upload', { timeout: 6000 });
+  const opened = await g.page.evaluate(() => !document.querySelector('.signin-gate') && !!document.querySelector('.lessons-sheet .subject-upload'));
+  expect(opened, '2. with a session token, My subjects opens straight away (no gate)');
+  await g.ctx.close();
+});
+
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
   let healed = false; // node-side flag: before sign-in the server says guest; the on-open recheck flips it
   const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, content-type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
