@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=262'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=263'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=262'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=263'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2696,7 +2696,11 @@ function ensureMyFolder() {
   save();
   return f;
 }
-function openMySubjects(opts = {}) { ensureMyFolder(); openSubjectFolder('my', opts); }
+function openMySubjects(opts = {}) {
+  // (v263) My subjects is about saving and reopening files, so a guest signs in first (honest about why)
+  if (guestGate('Sign in so Cassie can keep your files and reviewers and bring them to every device. Guests can look around, but files aren’t saved or kept.')) return;
+  ensureMyFolder(); openSubjectFolder('my', opts);
+}
 function subjectItemAdd(id, item) { const f = subjectFind(id); if (!f) return; f.items.unshift(item); f.items = f.items.slice(0, SUBJECT_ITEMS_MAX); save(); }
 function subjectItemDel(id, itemId) { const f = subjectFind(id); if (f) { f.items = f.items.filter((x) => x.id !== itemId); save(); } }
 const SUBJECT_KIND = { pdf: 'PDF', docx: 'Word', pptx: 'PowerPoint', txt: 'Text', md: 'Text', image: 'Photo' };
@@ -2875,7 +2879,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=262').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=263').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6207,6 +6211,30 @@ function askSure({ title, text = '', yes, no = 'Cancel', danger = true } = {}) {
   });
 }
 window.askSure = askSure;
+/* (v263) a gentle sign-in gate for guests at save/retrieve moments. Returns true (and shows a sheet) when the
+   student is a guest, so the caller stops; false when signed in (or accounts are off), so the caller goes ahead.
+   The sheet is honest about what Cassie does with the data. */
+function guestGate(reason) {
+  if (!accountsOn() || authToken()) return false;
+  document.querySelector('.signin-gate')?.remove();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet signin-gate'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'gate-h');
+  w.innerHTML = `<div class="plus-card"><h3 id="gate-h">Sign in to save this</h3>
+    <p class="plus-why gate-why"></p>
+    <p class="gate-privacy"><b>Your data is private.</b> Cassie saves it only to sync it back to you. She never sells it, and never trains AI on it. Delete your account and it’s gone.</p>
+    <div class="plus-actions"><button type="button" class="plus-ok gate-no">Not now</button><button type="button" class="plus-go gate-yes">Sign in, it’s free</button></div></div>`;
+  w.querySelector('.gate-why').textContent = reason || 'Sign in so Cassie can save this and bring it to all your devices. Guests can look around, but their work isn’t kept.';
+  const back = document.activeElement;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); try { back && back.focus && back.focus({ preventScroll: true }); } catch (e) { /* gone */ } };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => { if (e.target === w || e.target.closest('.gate-no')) close(); else if (e.target.closest('.gate-yes')) { close(); openAuth({ mode: 'signup' }); } });
+  document.body.appendChild(w);
+  w.querySelector('.gate-yes').focus();
+  if (typeof track === 'function') track('feature', 'guest-gate');
+  return true;
+}
+window.guestGate = guestGate;
 // (v232) a button that waits on the internet, the AI or a file: disabled against repeat taps, a small spinner
 // and a short label ("Signing in…"), aria-busy while it waits. Returns done(); call it when the wait ends.
 function busyButton(btn, label) {
@@ -6768,7 +6796,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=262')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=263')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7999,7 +8027,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=262');
+      exploreMod = await import('./explore/cell3d.js?v=263');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8049,7 +8077,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=262');
+      labsMod = await import('./labs/labs.js?v=263');
       islandRest();
     }
     labsMod.open({
@@ -9998,10 +10026,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=262').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=263').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=262', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=263', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10820,7 +10848,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
         <button type="button" class="auth-skip">Continue as a guest</button>
-        <p class="auth-legal">Cassie is for learners of every age, from nursery to college and work. Young children: ask a parent or teacher to help you sign up. Your chats stay on your device; an account keeps your name, grade, settings and saved quiz mistakes in sync. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+        <p class="auth-legal"><b>Your data is private.</b> Cassie saves it only to sync it back to you. She never sells it, and never trains AI on it. Delete your account and it’s gone. Cassie is for learners of every age; young children, ask a parent or teacher to help you sign up. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
       </form>
     </div>
     <div class="auth-right" aria-hidden="true">
