@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=261'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=262'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=261'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=262'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2875,7 +2875,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=261').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=262').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6768,7 +6768,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=261')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=262')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -7999,7 +7999,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=261');
+      exploreMod = await import('./explore/cell3d.js?v=262');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8049,7 +8049,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=261');
+      labsMod = await import('./labs/labs.js?v=262');
       islandRest();
     }
     labsMod.open({
@@ -9998,10 +9998,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=261').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=262').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=261', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=262', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10102,7 +10102,7 @@ function frSignIn() {
 // Where you are: [key, what the pill says, the level saved in the profile (GRADE_GROUPS)]
 const FR_WHO = [['kinder', 'Nursery or Kindergarten', 'Kindergarten'], ['elem', 'Elementary', 'Elementary'], ['jhs', 'Junior High', 'Junior High'], ['shs', 'Senior High', 'Senior High'], ['college', 'College / University', 'College'],
   ['board', 'Reviewing for a board exam', 'Board exam reviewee'], ['teach', 'Teacher or parent', WORKING], ['work', 'Working / lifelong learner', WORKING]];
-const FR_GOALS = [['exam', 'Getting ready for an exam'], ['read', 'Getting through readings and PDFs'], ['homework', 'Homework and math problems'], ['learn', 'Learning something new'], ['labs', 'Exploring labs and games']];
+const FR_GOALS = [['exam', 'Getting ready for an exam', 'Reviewers, mock tests and a plan'], ['read', 'Readings and PDFs', 'Summaries and the key points'], ['homework', 'Homework and math', 'Step by step, worked through'], ['learn', 'Learning something new', 'Anything, explained simply'], ['labs', 'Labs and games', 'Visual, hands-on science']];
 const FR_STYLES = [['brief', 'Quick bullet summaries'], ['deep', 'Deep step-by-step breakdowns'], ['voice', 'Voice and audio explanations']];
 // an older profile's level, as one of the pills
 function whoOfGrade(g) {
@@ -10126,18 +10126,20 @@ function frOnboard(at = 0) {
   const el = frShell();
   el.dataset.step = 'ob' + (at + 1);
   const pills = (list, attr, role) => list.map(([v, l]) => `<button type="button" class="fr-pick" ${role ? 'role="radio"' : 'aria-pressed="false"'} data-${attr}="${v}">${l}</button>`).join('');
+  // (v262) a titled card with a tick circle, like the onboarding step in the reel — in Cassie's colours
+  const cards = (list, attr, role) => list.map(([v, l, s]) => `<button type="button" class="fr-card" ${role ? 'role="radio" aria-checked="false"' : 'aria-pressed="false"'} data-${attr}="${v}"><span class="fr-card-t"><b>${l}</b>${s ? `<small>${s}</small>` : ''}</span><span class="fr-card-dot" aria-hidden="true"></span></button>`).join('');
   const Q = [
-    { h: 'What should Cassie call you?', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="given-name" placeholder="Your first name" aria-label="Your first name">
+    { h: 'What should Cassie call you?', sub: 'I’ll use it so our chats feel personal.', body: `<input class="fr-big" name="name" maxlength="40" autocomplete="given-name" placeholder="Your first name" aria-label="Your first name">
         <button type="button" class="fr-skipall">Want to dive straight in? Skip setup</button>` },
     { h: 'Where are you in your learning?', body: `<div class="fr-picks" role="radiogroup" aria-label="Where you are in your learning">${pills(FR_WHO, 'who', true)}</div>
         <label class="fr-q2"><span>Your age (optional)</span><input class="fr-age" name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>` },
-    { h: 'What brings you to Cassie today?', sub: 'Pick any.', body: `<div class="fr-picks">${pills(FR_GOALS, 'goal', false)}</div>` },
-    { h: 'How do you like to learn?', sub: 'Optional. Pick one, or skip it.', body: `<div class="fr-picks" role="radiogroup" aria-label="How you like to learn">${pills(FR_STYLES, 'style', true)}</div>` },
+    { h: 'What brings you to Cassie?', sub: 'Choose as many as you like.', body: `<div class="fr-cards">${cards(FR_GOALS, 'goal', false)}</div>` },
+    { h: 'How do you like to learn?', sub: 'Optional. Pick one, or skip it.', body: `<div class="fr-cards" role="radiogroup" aria-label="How you like to learn">${cards(FR_STYLES, 'style', true)}</div>` },
   ][at];
   el.innerHTML = `<form class="fr-ob" novalidate>
     <div class="fr-top">
       <button type="button" class="fr-back"${at === 0 ? ' hidden' : ''}>‹ Back</button>
-      <div class="fr-progress"><span class="fr-bar"><i style="width:${((at + 1) / TOTAL) * 100}%"></i></span><span class="fr-count">${at + 1} of ${TOTAL}</span></div>
+      <div class="fr-progress"><span class="fr-seg-bar" aria-hidden="true">${Array.from({ length: TOTAL }, (_, i) => `<i${i <= at ? ' class="on"' : ''}></i>`).join('')}</span><span class="fr-count">${at + 1} of ${TOTAL}</span></div>
       <button type="button" class="fr-skip">Skip for now</button>
     </div>
     <div class="fr-mid">
@@ -10148,7 +10150,7 @@ function frOnboard(at = 0) {
       ${Q.body}
       <p class="fr-err" role="alert" hidden></p>
     </div>
-    <button type="submit" class="fr-go">${at === TOTAL - 1 ? 'Start studying' : 'Next question'}</button>
+    <button type="submit" class="fr-go">${at === TOTAL - 1 ? 'See my setup' : 'Continue'}</button>
   </form>`;
   const f = el.querySelector('form'), err = el.querySelector('.fr-err');
   const say = (m) => { err.textContent = m; err.hidden = !m; };
@@ -10188,7 +10190,7 @@ function frOnboard(at = 0) {
     if (s) a.style = a.style === s.dataset.style ? '' : s.dataset.style; // (optional: a second tap clears it)
     if (w || g || s) { say(''); mark(); keep(); }
   });
-  const go = (k) => { if (k >= TOTAL) frFinish(a); else { frSave({ step: 'ob', at: k, answers: a }); frOnboard(k); } };
+  const go = (k) => { if (k >= TOTAL) frSummary(a); else { frSave({ step: 'ob', at: k, answers: a }); frOnboard(k); } };
   el.querySelector('.fr-back').addEventListener('click', () => go(Math.max(0, at - 1)));
   el.querySelector('.fr-skip').addEventListener('click', () => { typed(); frFinish(a); }); // (what's answered so far is kept)
   const all = el.querySelector('.fr-skipall'); // (the name is kept; the rest can wait, and Home is where they land)
@@ -10204,6 +10206,36 @@ function frOnboard(at = 0) {
   setTimeout(() => { const first = f.querySelector('.fr-big, .fr-pick'); if (first && !f.contains(document.activeElement)) first.focus({ preventScroll: true }); }, 60);
 }
 var FR_TOTAL = 4; // (var: the first questions can open before this line runs)
+// (v262) "You're all set, [Name]!" — a calm summary card (ticks reveal one by one), then into Cassie.
+// Only shown when the questions are finished (not on Skip). Everything is set via textContent, so a
+// student's own name is never treated as markup.
+function frSummary(a) {
+  frSave({ step: 'ob', at: FR_TOTAL - 1, answers: a }); // (a reload returns to the last question)
+  const el = frShell();
+  el.dataset.step = 'summary';
+  const who = FR_WHO.find((x) => x[0] === a.who);
+  const goals = (a.goals || []).map((g) => { const x = FR_GOALS.find((y) => y[0] === g); return x ? x[1] : ''; }).filter(Boolean);
+  const style = (FR_STYLES.find((x) => x[0] === a.style) || ['', ''])[1];
+  const rows = [
+    ['Getting to know you', [a.name, who ? who[1] : ''].filter(Boolean).join(' · ') || 'Your study buddy'],
+    ['What you came for', goals.length ? goals.slice(0, 3).join(', ') : 'Everything study'],
+    ['Made yours', style || 'Clear, friendly answers'],
+    ['Ready', 'Cassie is tuned to you'],
+  ];
+  const tick = '<span class="fr-tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span>';
+  el.innerHTML = `<section class="fr-summary" aria-live="polite">
+    <h1 class="fr-h fr-set-title"></h1>
+    <p class="fr-sub">Your study buddy is ready.</p>
+    <ul class="fr-set">${rows.map(() => `<li>${tick}<span class="fr-set-t"><b></b><small></small></span></li>`).join('')}</ul>
+    <button type="button" class="fr-go fr-set-go">Start studying</button>
+  </section>`;
+  el.querySelector('.fr-set-title').textContent = `You’re all set${a.name ? `, ${a.name}` : ''}!`;
+  const lis = el.querySelectorAll('.fr-set li');
+  rows.forEach(([t, s], i) => { lis[i].querySelector('b').textContent = t; lis[i].querySelector('small').textContent = s; });
+  if (!reduceMotion() && !window.CASSIE_LITE) lis.forEach((li, i) => { li.style.setProperty('--d', `${i * 0.12 + 0.1}s`); li.classList.add('fr-set-rise'); });
+  el.querySelector('.fr-set-go').addEventListener('click', () => frFinish(a));
+  setTimeout(() => { const b = el.querySelector('.fr-set-go'); if (b) b.focus({ preventScroll: true }); }, 60);
+}
 // done (or skipped): the answers go in the profile, and the student lands straight on the ask box
 function frFinish(a) {
   const age = Math.round(+a.age) || 0, p0 = state.profile || {};

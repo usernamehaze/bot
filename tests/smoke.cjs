@@ -196,12 +196,16 @@ async function onboard(page, { name, who, age, goals = [], style } = {}) {
     goals.length && (async () => { for (const g of goals) await page.click(`.fr-ob [data-goal=${g}]`); }),
     style && (async () => { await page.click(`.fr-ob [data-style=${style}]`); }),
   ];
+  let full = false;
   for (let k = 0; k < 4; k++) {
     await page.waitForSelector(`.fr-count >> text=${k + 1} of 4`, { timeout: 5000 });
     if (!steps.slice(k).some(Boolean)) { await page.click('.fr-skip'); break; }
     if (steps[k]) await steps[k]();
     await page.click('.fr-go');
+    if (k === 3) full = true;
   }
+  // (v262) finishing every question shows the "You're all set" summary; Skip goes straight through
+  if (full) { await page.waitForSelector('.fr-set-go', { timeout: 5000 }); await page.click('.fr-set-go'); }
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
 }
 
@@ -254,10 +258,15 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-3.png' });
   await page.click('.fr-go');
   await page.waitForSelector('.fr-count >> text=4 of 4');
-  expect(/Start studying/.test(await page.locator('.fr-go').innerText()), 'the last step says Start studying');
+  expect(/See my setup/.test(await page.locator('.fr-ob .fr-go').innerText()), 'the last step says See my setup');
   await page.click('.fr-ob [data-style=deep]');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-4.png' });
-  await page.click('.fr-go');
+  await page.click('.fr-ob .fr-go');
+  // (v262) the "You're all set, [Name]!" summary, then on into sign-in
+  await page.waitForSelector('.fr-summary .fr-set-go', { timeout: 5000 });
+  expect(/You’re all set, Hazel/.test(await page.locator('.fr-summary .fr-set-title').innerText()), 'the summary greets them by name');
+  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-5-summary.png' });
+  await page.click('.fr-summary .fr-set-go');
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
   // 4. Then sign in: Google and Apple come first (when the server has them), then email, then a guest
   await page.waitForSelector('.auth-page', { timeout: 5000 });
@@ -6359,7 +6368,7 @@ test('empty screens: Flashcards, Chats and the Study plan show a still, flat Cas
 const clipIssues = (page) => page.evaluate(() => {
   const out = [], seen = new Set();
   const shown = (e) => { const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; for (let x = e; x; x = x.parentElement) { const c = getComputedStyle(x); if (c.display === 'none' || c.visibility === 'hidden' || +c.opacity === 0) return false; } return true; };
-  document.querySelectorAll('button, a.btn, .fr-pick, .hub-box, .hub-card, .hub-w, .hub-q, .dk-chip, .chip, [role="button"], .tab').forEach((e) => {
+  document.querySelectorAll('button, a.btn, .fr-pick, .fr-card, .hub-box, .hub-card, .hub-w, .hub-q, .dk-chip, .chip, [role="button"], .tab').forEach((e) => {
     if (seen.has(e) || !shown(e) || !e.innerText || !e.innerText.trim()) return;
     seen.add(e);
     const c = getComputedStyle(e);
