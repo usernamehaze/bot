@@ -1765,28 +1765,37 @@ test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve
   await g.ctx.close();
 });
 
-test('v265: after onboarding, a one-time skippable plans screen — Free stays free, Plus and Pro shown, prices in the local currency by location, per account; Continue with Free lands on the app, and it shows once a session', async (b) => {
+test('v266: the plans screen shows monthly prices first with a Monthly / Semester (Pasado Pass) switch like the website; Free stays free, prices in the local currency, per account; skippable and once a session', async (b) => {
   const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
-  // wired into the landing and reuses the app's own currency/pricing (not a second price list)
-  expect(/function frLand\(\)[\s\S]{0,200}frPaywall\(after\)/.test(app) && /function frPaywall\(/.test(app) && /payCur\(\)/.test(app) && /priceLine\(plan, FR_PLAN_BILL\[plan\]\)/.test(app), 'the plans screen is wired into frLand and reuses payCur/priceLine');
+  // wired into the landing, monthly first, reuses the app's own currency/pricing
+  expect(/function frLand\(\)[\s\S]{0,200}frPaywall\(after\)/.test(app) && /function frPaywall\(/.test(app) && /function frPayTag\(/.test(app) && /payCur\(\)/.test(app) && /let frPayBill = 'month'/.test(app), 'the plans screen is wired into frLand, starts monthly, and reuses payCur/pricing');
   const { ctx, page, errors } = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', plan: null, profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
-  // render the plans screen the way the landing does
-  await page.evaluate(() => { window.__landed = false; frPaywall(() => { window.__landed = true; }); });
-  await page.waitForSelector('.fr-pay', { timeout: 5000 });
-  const pay = await page.evaluate(() => ({
+  // render the plans screen as the landing does, with pesos forced so the amounts are deterministic
+  await page.evaluate(() => { window.payCur = () => 'php'; window.__landed = false; frPaywall(() => { window.__landed = true; }); });
+  await page.waitForSelector('.fr-pay .fr-bill', { timeout: 5000 });
+  // 1. default: Monthly is pressed; monthly prices (₱149 Plus, ₱349 Pro); Free is on it; no Pasado badge yet
+  const m = await page.evaluate(() => ({
+    monthly: document.querySelector('.fr-bill [data-bill="m"]')?.getAttribute('aria-pressed') === 'true',
     free: /You’re on it/.test(document.querySelector('.fr-plan .fr-plan-tag')?.textContent || ''),
-    plans: [...document.querySelectorAll('.fr-plan-top b')].map((b) => b.textContent),
-    cur: /pesos|dollars/.test(document.querySelector('.fr-pay .fr-sub')?.textContent || ''),
-    perAccount: /account/.test((document.querySelector('.fr-pay .fr-sub')?.textContent || '') + (document.querySelector('.fr-pay-foot')?.textContent || '')),
+    prices: [...document.querySelectorAll('.fr-plans-dyn .fr-plan-price')].map((x) => x.textContent),
+    pass: !!document.querySelector('.fr-pass'),
+    perAccount: /account/.test(document.querySelector('.fr-pay-foot')?.textContent || ''),
     skip: /Continue with Free/.test(document.querySelector('.fr-skip-pay')?.textContent || ''),
   }));
-  expect(pay.free && JSON.stringify(pay.plans) === '["Free","Plus","Pro"]' && pay.cur && pay.perAccount && pay.skip, 'the plans screen: Free (on it), Plus, Pro, local currency, per account, a Continue with Free: ' + JSON.stringify(pay));
-  // Continue with Free dismisses it and proceeds
+  expect(m.monthly && m.free && /₱149 a month/.test(m.prices[0] || '') && /₱349 a month/.test(m.prices[1] || '') && !m.pass && m.perAccount && m.skip, '1. monthly first: ₱149 Plus, ₱349 Pro, Free on it, per account, no Pasado badge: ' + JSON.stringify(m));
+  // 2. the switch: Semester shows ₱599 Plus (the Pasado Pass) and ₱1,399 Pro
+  await page.click('.fr-bill [data-bill="s"]');
+  const s = await page.evaluate(() => ({
+    sem: document.querySelector('.fr-bill [data-bill="s"]')?.getAttribute('aria-pressed') === 'true',
+    prices: [...document.querySelectorAll('.fr-plans-dyn .fr-plan-price')].map((x) => x.textContent),
+    pass: /Pasado Pass/.test(document.querySelector('.fr-plans-dyn .fr-plan-top b')?.textContent || ''),
+  }));
+  expect(s.sem && /₱599 a semester/.test(s.prices[0] || '') && /₱1,399 a semester/.test(s.prices[1] || '') && s.pass, '2. the switch flips to the semester: ₱599 Plus (Pasado Pass), ₱1,399 Pro: ' + JSON.stringify(s));
+  // 3. skippable, and it shows once a session
   await page.click('.fr-skip-pay');
   await page.waitForFunction(() => !document.querySelector('.fr-pay') && window.__landed === true, null, { timeout: 5000 });
-  // it only shows once a session: a second call just proceeds
   const again = await page.evaluate(() => { let landed = false; frPaywall(() => { landed = true; }); return { shown: !!document.querySelector('.fr-pay'), landed }; });
-  expect(!again.shown && again.landed, 'the plans screen shows once a session, then proceeds: ' + JSON.stringify(again));
+  expect(!again.shown && again.landed, '3. the plans screen shows once a session, then proceeds: ' + JSON.stringify(again));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
   await ctx.close();
 });
