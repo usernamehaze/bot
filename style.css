@@ -2373,6 +2373,21 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-set-t { display: flex; flex-direction: column; gap: 2px; }
 .fr-set-t b { font-size: 1rem; font-weight: 700; }
 .fr-set-t small { color: var(--muted); font-size: .88rem; line-height: 1.35; }
+/* (v265) the plans screen after onboarding (skippable) */
+.fr-pay { width: min(460px, 100%); display: flex; flex-direction: column; gap: var(--sp-4, 16px); animation: frIn .35s ease both; }
+.fr-plans { display: flex; flex-direction: column; gap: var(--sp-3, 12px); }
+.fr-plan { border: 1px solid var(--border); border-radius: 18px; background: var(--surface); padding: var(--sp-4, 16px); }
+.fr-plan-up { border-color: var(--primary); }
+.fr-plan-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); margin-bottom: var(--sp-2, 8px); }
+.fr-plan-top b { font-size: 1.1rem; font-weight: 800; }
+.fr-plan-price { font-weight: 700; color: var(--primary-ink); }
+.fr-plan-tag { font-size: .8rem; font-weight: 700; color: var(--muted); padding: 2px var(--sp-2, 8px); border-radius: 99px; border: 1px solid var(--border); }
+.fr-plan ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1, 4px); }
+.fr-plan li { position: relative; padding-left: var(--sp-4, 16px); color: var(--muted); font-size: .9rem; line-height: 1.35; }
+.fr-plan li::before { content: ""; position: absolute; left: 2px; top: .5em; width: 8px; height: 8px; border-radius: 99px; background: var(--primary); }
+.fr-plan-up .fr-go { margin-top: var(--sp-3, 12px); }
+.fr-skip-pay { min-height: var(--tap, 48px); border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.fr-pay-foot { margin: 0; text-align: center; color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .fr-voices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3, 12px); }
 .fr-voice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-3, 12px); min-height: 120px; border-radius: 20px; border: 2px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
 .fr-voice[aria-checked="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--primary-ink); }

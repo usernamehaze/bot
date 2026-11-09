@@ -208,6 +208,12 @@ async function onboard(page, { name, who, age, goals = [], style } = {}) {
   if (full) { await page.waitForSelector('.fr-set-go', { timeout: 5000 }); await page.click('.fr-set-go'); }
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
 }
+// (v265) after sign-in or Continue as a guest, the plans screen shows once (skippable). Dismiss it so tests
+// reach the app. Harmless when it isn't there (e.g. accounts off, or already a subscriber).
+async function skipPaywall(page) {
+  const b = await page.waitForSelector('.fr-pay .fr-skip-pay', { timeout: 2500 }).catch(() => null);
+  if (b) { await b.click(); await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 }).catch(() => {}); }
+}
 
 test('first run: Welcome, Intro, Sign in, then four questions a screen at a time (Back, Skip, a reload carries on), saving the same profile; a returning student goes straight in', async (b) => {
   let { ctx, page, errors } = await open(b, { state: null });
@@ -275,6 +281,7 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   expect(await page.inputValue('.auth-form input[name=age]') === '15', 'the age from the questions is filled in for signing up');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-signin.png' });
   await page.click('.auth-skip');
+  await skipPaywall(page);
   await page.waitForFunction(() => !document.querySelector('.auth-page') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 5000 });
   const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
   const p = st.profile;
@@ -300,6 +307,7 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   ({ ctx, page, errors } = await open(b, { state: null }));
   await toSignIn(page);
   await page.click('.auth-skip');
+  await skipPaywall(page);
   await page.waitForSelector('.auth-page', { state: 'detached', timeout: 5000 });
   const q = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).profile);
   expect(q && q.name === '' && q.grade === '' && q.age === 0 && q.gender === 'none', 'skipped: an empty profile: ' + JSON.stringify(q));
@@ -315,7 +323,7 @@ test('the four first questions fit everyone: name, where you are, what brings yo
   const skip = await page.evaluate(() => { const k = document.querySelector('.fr-skip'), r = k.getBoundingClientRect(); return { text: k.textContent, top: r.top, right: innerWidth - r.right, h: r.height, wide: document.documentElement.scrollWidth <= innerWidth }; });
   expect(skip.text === 'Skip for now' && skip.top < 80 && skip.right < 40 && skip.h >= 43.5 && skip.wide, 'Skip for now sits in the top corner, 44px, no sideways scroll at 360px: ' + JSON.stringify(skip));
   await onboard(page, { name: 'Haze', who: 'board', age: 23, goals: ['read'], style: 'deep' });
-  await page.waitForSelector('.auth-page', { timeout: 5000 }); await page.click('.auth-skip');
+  await page.waitForSelector('.auth-page', { timeout: 5000 }); await page.click('.auth-skip'); await skipPaywall(page);
   expect(await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 3000 }).then(() => true, () => false), 'done: straight to the ask box');
   expect(!(await page.locator('.tour-offer, .fr, .plus-sheet').count()), 'no extra screen after the questions');
   const r = await page.evaluate(() => ({ p: state.profile, line: profileLine(state.profile), sys: buildSystemPrompt({ tutor: true }), level: state.level }));
@@ -333,7 +341,7 @@ test('the four first questions fit everyone: name, where you are, what brings yo
   await page.waitForSelector('.fr-start', { timeout: 8000 }); await page.click('.fr-start');
   await page.waitForSelector('.fr-count >> text=1 of 4', { timeout: 5000 });
   await page.click('.fr-skip');
-  await page.waitForSelector('.auth-page', { timeout: 5000 }); await page.click('.auth-skip');
+  await page.waitForSelector('.auth-page', { timeout: 5000 }); await page.click('.auth-skip'); await skipPaywall(page);
   await page.waitForFunction(() => !document.querySelector('.fr') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 5000 });
   expect(await page.evaluate(() => !!state.profile && state.setupLater === false && localStorage.getItem('cassie.firstRun') === null), 'skipped: a profile, and the first run is over');
   expect(!(await page.locator('.tour-offer').count()), 'skipped: no tour popping up');
@@ -489,6 +497,7 @@ test('questions first: a new user sees one Get started button, answers the 4 que
       await page.waitForSelector('.auth-page', { timeout: 5000 });
       expect(/Continue as a guest/.test(await page.locator('.auth-skip').innerText()) && await page.locator('.auth-skip').isVisible(), `${device}: then the sign-in page, with Continue as a guest`);
       await page.click('.auth-skip');
+      await skipPaywall(page);
       await page.waitForFunction(() => !document.querySelector('.auth-page, .fr') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 5000 });
       const st = await page.evaluate(() => ({ p: state.profile, help: state.helpWith, style: state.answerStyle, guest: state.skippedAuth, fr: localStorage.getItem('cassie.firstRun') }));
       expect(st.p && st.p.name === 'Lia' && st.p.grade === 'College' && st.p.age === 19 && JSON.stringify(st.help) === '["homework"]' && st.style === 'brief' && st.guest === true && st.fr === null, `${device}: the guest's answers are kept: ` + JSON.stringify(st));
@@ -509,6 +518,7 @@ test('every age is welcome: nursery to work, with an account too', async (b) => 
   const signupStatus = (body) => page.evaluate(async ([srv, bb]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bb) })).status, [SERVER, body]);
   expect(await signupStatus({ email: `kid${Date.now()}@example.com`, password: 'secret-pass-1', age: 6 }) === 200, 'a 6-year-old can make an account');
   await page.click('.auth-skip');
+  await skipPaywall(page);
   await page.waitForSelector('.auth-page', { state: 'detached', timeout: 5000 });
   const r = await page.evaluate(() => ({ p: state.profile, an: state.analytics, line: profileLine(state.profile) }));
   expect(r.p.age === 4 && r.p.grade === 'Elementary', 'a 4-year-old can use Cassie: ' + JSON.stringify(r.p));
@@ -544,6 +554,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   expect(/at least 8 letters or numbers.*Add 3 more/.test(await page.locator('.auth-pw ~ .field-err, .auth-field .field-err:not([hidden])').last().textContent()), 'short password not caught under its field');
   await page.fill('.auth-form input[name=password]', 'secret-pass-1');
   await page.click('.auth-go');
+  await skipPaywall(page); // (v265: the plans screen shows once after sign-up; dismiss it)
   await page.waitForFunction(() => !document.querySelector('.auth-page, .fr') && document.activeElement && document.activeElement.id === 'prompt-input', null, { timeout: 10000 });
   expect(await page.evaluate(() => state.profile.name === 'Hazel' && localStorage.getItem('cassie.firstRun') === null), 'signed up: the answers are kept, no questions again, on to the ask box');
   await page.waitForFunction(() => lastSynced.includes('"name":"Hazel"'), null, { timeout: 5000 }); // (saved to the account)
@@ -1752,6 +1763,32 @@ test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve
   // 4. with accounts off (no sign-in to offer), there is no nudge at all — guests just use it
   expect(/if \(!accountsOn\(\) \|\| authToken\(\) \|\| guestNudgedOnce\) return;/.test(app), '4. the nudge is skipped when signed in or when accounts are off (guard in source)');
   await g.ctx.close();
+});
+
+test('v265: after onboarding, a one-time skippable plans screen — Free stays free, Plus and Pro shown, prices in the local currency by location, per account; Continue with Free lands on the app, and it shows once a session', async (b) => {
+  const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
+  // wired into the landing and reuses the app's own currency/pricing (not a second price list)
+  expect(/function frLand\(\)[\s\S]{0,200}frPaywall\(after\)/.test(app) && /function frPaywall\(/.test(app) && /payCur\(\)/.test(app) && /priceLine\(plan, FR_PLAN_BILL\[plan\]\)/.test(app), 'the plans screen is wired into frLand and reuses payCur/priceLine');
+  const { ctx, page, errors } = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', plan: null, profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
+  // render the plans screen the way the landing does
+  await page.evaluate(() => { window.__landed = false; frPaywall(() => { window.__landed = true; }); });
+  await page.waitForSelector('.fr-pay', { timeout: 5000 });
+  const pay = await page.evaluate(() => ({
+    free: /You’re on it/.test(document.querySelector('.fr-plan .fr-plan-tag')?.textContent || ''),
+    plans: [...document.querySelectorAll('.fr-plan-top b')].map((b) => b.textContent),
+    cur: /pesos|dollars/.test(document.querySelector('.fr-pay .fr-sub')?.textContent || ''),
+    perAccount: /account/.test((document.querySelector('.fr-pay .fr-sub')?.textContent || '') + (document.querySelector('.fr-pay-foot')?.textContent || '')),
+    skip: /Continue with Free/.test(document.querySelector('.fr-skip-pay')?.textContent || ''),
+  }));
+  expect(pay.free && JSON.stringify(pay.plans) === '["Free","Plus","Pro"]' && pay.cur && pay.perAccount && pay.skip, 'the plans screen: Free (on it), Plus, Pro, local currency, per account, a Continue with Free: ' + JSON.stringify(pay));
+  // Continue with Free dismisses it and proceeds
+  await page.click('.fr-skip-pay');
+  await page.waitForFunction(() => !document.querySelector('.fr-pay') && window.__landed === true, null, { timeout: 5000 });
+  // it only shows once a session: a second call just proceeds
+  const again = await page.evaluate(() => { let landed = false; frPaywall(() => { landed = true; }); return { shown: !!document.querySelector('.fr-pay'), landed }; });
+  expect(!again.shown && again.landed, 'the plans screen shows once a session, then proceeds: ' + JSON.stringify(again));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
 });
 
 test('v257: the studio voice no longer shows "guest" to a signed-in account: the podcast sheet rechecks the account on open, so a stale guest state from before sign-in self-heals', async (b) => {
@@ -7281,6 +7318,7 @@ test.slow('the tour: never pops up after the first questions (they go straight t
   await page.reload();
   await toSignIn(page, { name: 'Gia' });
   await page.click('.auth-skip');
+  await skipPaywall(page);
   await page.waitForTimeout(1500);
   expect(!(await page.locator('.tour-offer').count()), 'no tour pops up after the first questions');
   await page.evaluate(() => window.CassieTour.offer());
