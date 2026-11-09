@@ -1226,7 +1226,7 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 .report-row { margin: var(--sp-4, 16px) 0 var(--sp-1, 4px); } .report-row .btn { width: 100%; }
 
 /* ---------- sign in / sign up (Cassie accounts) ---------- */
-.auth-page { position: fixed; inset: 0; z-index: 210; display: grid; grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); background: var(--surface); color: var(--text); overflow-y: auto; }
+.auth-page { position: fixed; inset: 0; z-index: 420; display: grid; grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); background: var(--surface); color: var(--text); overflow-y: auto; }
 .auth-left { position: relative; display: flex; align-items: center; justify-content: center; padding: 72px var(--sp-5, 24px) var(--sp-6, 32px); min-height: 100%; box-sizing: border-box; }
 .auth-brand { position: absolute; top: calc(22px + var(--safe-top, 0px)); left: 26px; display: flex; align-items: center; gap: var(--sp-2, 8px); font-weight: 750; font-size: 1.1rem; letter-spacing: -.01em; }
 .auth-brand svg { width: 24px; height: 24px; color: var(--text); --logo-eyes: var(--bg); }

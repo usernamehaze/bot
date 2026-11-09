@@ -1725,27 +1725,32 @@ test('v261: My subjects is its own folder next to Lessons and Simulations in a l
   await ctx.close();
 });
 
-test('v263: a guest is gently gated at save/retrieve — My subjects asks a guest to sign in (and is honest that the data is private, never sold, never trains AI); a signed-in account opens it; the sign-in screen carries the same promise', async (b) => {
+test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve points (My subjects opens, nudge over it, honest privacy promise); the nudge’s Sign in routes to the account page; a signed-in account sees no nudge', async (b) => {
   const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
-  // the sign-in screen and the gate both state the honest privacy promise (source, so it can't silently drift)
+  // the sign-in screen and the nudge both state the honest privacy promise (source, so it can't silently drift)
   expect(/Your data is private\./.test(app) && /never sells it/.test(app) && /never trains AI on it/.test(app) && /Delete your account and it’s gone/.test(app), 'the honest private-data promise is in the copy');
   const goSubjects = async (page) => {
     await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp .lf[data-level="jhs"]', { timeout: 15000 });
     await page.click('.lp .lf[data-level="jhs"]'); await page.waitForFunction(() => document.querySelector('.lp').dataset.view === 'level:jhs');
     await page.click('.lp-list .lf[data-group="subjects:home"]');
   };
-  // 1. a guest (accounts on, not signed in): My subjects shows the sign-in gate, not the files
+  // 1. a guest: My subjects OPENS (not blocked), and a nudge appears over it with the privacy promise
   const g = await open(b, { server: true, device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', profile: { name: 'H', role: 'student', grade: 'Grade 10', age: 15, at: 1 } } });
   await goSubjects(g.page);
   await g.page.waitForSelector('.signin-gate', { timeout: 5000 });
-  const gate = await g.page.evaluate(() => ({ gated: !!document.querySelector('.signin-gate'), noFolder: !document.querySelector('.lessons-sheet .subject-upload'), privacy: /never sells it/.test(document.querySelector('.signin-gate .gate-privacy')?.textContent || ''), sign: /Sign in/i.test(document.querySelector('.signin-gate .gate-yes')?.textContent || '') }));
-  expect(gate.gated && gate.noFolder && gate.privacy && gate.sign, '1. a guest opening My subjects gets the sign-in gate with the privacy promise: ' + JSON.stringify(gate));
-  // 2. once there's a session token, no gate — My subjects opens straight into its files (same page, token set live)
-  await g.page.evaluate(() => { try { localStorage.setItem('cassie.auth', 'tok_' + 'x'.repeat(28)); } catch (e) {} const n = document.querySelector('.signin-gate .gate-no'); if (n) n.click(); });
-  await g.page.click('.lp-list .lf[data-group="subjects:home"]');
-  await g.page.waitForSelector('.lessons-sheet .subject-upload', { timeout: 6000 });
-  const opened = await g.page.evaluate(() => !document.querySelector('.signin-gate') && !!document.querySelector('.lessons-sheet .subject-upload'));
-  expect(opened, '2. with a session token, My subjects opens straight away (no gate)');
+  const nudge = await g.page.evaluate(() => ({ nudged: !!document.querySelector('.signin-gate'), folderOpen: !!document.querySelector('.lessons-sheet .subject-upload'), privacy: /never sells it/.test(document.querySelector('.signin-gate .gate-privacy')?.textContent || ''), sign: /Sign in/i.test(document.querySelector('.signin-gate .gate-yes')?.textContent || '') }));
+  expect(nudge.nudged && nudge.folderOpen && nudge.privacy && nudge.sign, '1. a guest is nudged but My subjects still opens (nudge, not block): ' + JSON.stringify(nudge));
+  // 2. the nudge's "Sign in" routes to the account page (the z-index bug fixed)
+  await g.page.click('.signin-gate .gate-yes');
+  await g.page.waitForSelector('.auth-page', { timeout: 5000 });
+  const routed = await g.page.evaluate(() => { const a = document.querySelector('.auth-page'); return !!a && a.getClientRects().length > 0 && getComputedStyle(a).visibility !== 'hidden'; });
+  expect(routed, '2. Sign in from the nudge opens the account page (visible, on top)');
+  // 3. the nudge is once a session — opening another gated feature (flashcards) shows no second nudge
+  await g.page.evaluate(() => { document.querySelector('.auth-page')?.remove(); if (typeof hubAct === 'function') hubAct('cards'); });
+  await g.page.waitForTimeout(400);
+  expect(await g.page.evaluate(() => !document.querySelector('.signin-gate')), '3. no second nudge in the same session');
+  // 4. with accounts off (no sign-in to offer), there is no nudge at all — guests just use it
+  expect(/if \(!accountsOn\(\) \|\| authToken\(\) \|\| guestNudgedOnce\) return;/.test(app), '4. the nudge is skipped when signed in or when accounts are off (guard in source)');
   await g.ctx.close();
 });
 
