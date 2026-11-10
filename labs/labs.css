@@ -819,7 +819,7 @@ html:not(.lite) .labs-shelf .labs-card, html:not(.lite) .labs-shelf .labs-featur
 .lf-papers, .lf-paper, .lf-ico { display: block; }
 .lf-paper .lf-cap { position: absolute; top: 5px; right: 6px; max-width: 86%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px var(--sp-2, 8px); border-radius: 6px;
   background: rgba(var(--lf-glass), .94); color: var(--lf-ink); font: 600 9.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; }
-.lf-front { position: absolute; left: 0; right: 0; bottom: 0; height: 60%; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-3, 12px) var(--sp-3, 12px) var(--sp-3, 12px);
+.lf-front { position: absolute; left: 0; right: 0; bottom: 0; height: auto; min-height: 60%; max-height: 100%; box-sizing: border-box; /* (v269: a long name, like Board and Licensure exams on a phone, grows the pocket up instead of spilling onto the papers) */ display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-3, 12px) var(--sp-3, 12px) var(--sp-3, 12px);
   border-radius: 16px; border: 1px solid var(--lf-line); background: linear-gradient(var(--lf-tint), var(--lf-tint)), linear-gradient(180deg, rgba(var(--lf-glass), .58), rgba(var(--lf-glass), .9) 70%);
   -webkit-backdrop-filter: blur(14px) saturate(1.7); backdrop-filter: blur(14px) saturate(1.7);
   box-shadow: inset 0 1px 0 var(--lf-hi), inset 0 -12px 22px var(--lf-glow), 0 10px 24px rgba(var(--lf-shadow), .2);
@@ -887,8 +887,8 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-yours { position: absolute; top: 10px; left: 12px; padding: var(--sp-1, 4px) var(--sp-3, 12px); border-radius: 999px; background: var(--lf-yours-bg); color: var(--lf-yours-ink); font: 700 .72rem/1.2 system-ui, sans-serif; letter-spacing: .02em; }
 .lf-grid .lf-mine .lf-yours { font-size: .8rem; }
 .lf-grid.lf-visual, .lf-grid.lf-inlevel { margin-bottom: var(--sp-2, 8px); }
-/* (v268) Your level, then one Explore more button; Explore other levels, simulations and study tools open under it */
-.labs:not(.lx-open) [data-explore] { display: none !important; }
+/* (v269) Your level, then two dropdowns: Explore other levels opens the other levels, Explore labs the simulations and study tools */
+.labs:not(.lx-levels) [data-explore="levels"], .labs:not(.lx-labs) [data-explore="labs"] { display: none !important; }
 .lx-more { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3, 12px); width: 100%; min-height: 64px; margin: var(--sp-5, 24px) 0 var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-4, 16px) var(--sp-3, 12px) var(--sp-5, 24px); border-radius: 20px; text-align: left; font: inherit; color: inherit; cursor: pointer;
   background: var(--lg-fill-thick, rgba(255, 255, 255, .6)); border: 1px solid var(--lg-line, rgba(0, 0, 0, .08)); box-shadow: var(--lg-edge, none); }
 .lx-more-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -899,10 +899,11 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lx-more[aria-expanded="true"] .lx-chev { transform: rotate(180deg); }
 .lx-more:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
 .lx-part > :first-child { margin-top: var(--sp-4, 16px); }
-.labs.lx-open .lx-part { animation: lx-in .3s ease both; }
+.lx-more[data-for="labs"] { margin-top: var(--sp-3, 12px); }
+.labs.lx-levels .lx-part[data-explore="levels"], .labs.lx-labs .lx-part[data-explore="labs"] { animation: lx-in .3s ease both; }
 @keyframes lx-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .labs.lx-open .lx-part { animation: none; } .lx-chev { transition: none; } }
-.lite .labs.lx-open .lx-part { animation: none; }
+@media (prefers-reduced-motion: reduce) { .labs.lx-levels .lx-part[data-explore], .labs.lx-labs .lx-part[data-explore] { animation: none; } .lx-chev { transition: none; } }
+.lite .labs.lx-levels .lx-part[data-explore], .lite .labs.lx-labs .lx-part[data-explore] { animation: none; }
 /* (v268) the computer's Today's Lab shows its live picture */
 .labs-feature-pv { display: block; flex: none; width: 200px; height: 112px; border-radius: 14px; background: rgba(var(--lx-rgb), .06); }
 .labs-today .lf-h { margin-top: 0; }

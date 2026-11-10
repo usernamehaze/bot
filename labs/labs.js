@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=268';
+import { MUSEUM } from './museum.js?v=269';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=268';
+import { LEVEL_LESSONS } from './level-lessons.js?v=269';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -117,7 +117,7 @@ function createView() {
           <h3 class="lp-h">Today’s Labs</h3>
           <div class="lp-rec"></div>
           <div class="lp-foryou"></div>
-          <div class="lx-part lp-explore" id="lx-explore" data-explore>
+          <div class="lx-part lp-explore" id="lx-labs" data-explore="labs">
             <h3 class="lp-h">Explore simulations</h3>
             <div class="lp-sims"></div>
             <h3 class="lp-h">Explore study tools</h3>
@@ -226,8 +226,8 @@ function createView() {
       return;
     }
     if (home) {
-      fy.replaceChildren(folders(true)); // (Your level, then Explore more: other levels, simulations, study tools)
-      sims.dataset.explore = ''; tf.dataset.explore = ''; applyExplore();
+      fy.replaceChildren(folders(true)); // (Your level, then Explore other levels and Explore labs, each its own dropdown)
+      sims.dataset.explore = tf.dataset.explore = 'labs'; sims.id = 'lx-labs-d'; tf.id = 'lx-labs-dt'; applyExplore();
       sims.innerHTML = '<h3 class="lf-h">Explore simulations</h3>'; sims.appendChild(visualFolder());
       tf.innerHTML = '<h3 class="lf-h">Explore study tools</h3>'; tf.appendChild(toolFolders());
       previews().then(() => { pv(fy); pv(sims); pv(tf); });
@@ -368,30 +368,40 @@ function createView() {
     const box = el('div', 'lf-box');
     if (own.length) box.append(head('Your level'), folderGrid(own.map(spec), 'lf-levels lf-yourlevel'));
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    const more = el('div', 'lx-part'); more.dataset.explore = '';
+    const more = el('div', 'lx-part'); more.dataset.explore = 'levels'; more.id = desk ? 'lx-levels-d' : 'lx-levels';
     more.append(head('Explore other levels'), folderGrid(others.map(spec), 'lf-levels lf-otherlevels'), hint);
-    box.append(exploreButton(), more);
+    // (the labs open just under their button: the simulations and study tools come right after this box)
+    box.append(exploreButton('levels', desk), more, exploreButton('labs', desk));
     return box;
   }
-  // (v268) Explore more: one button under Your level that opens and closes Explore other levels, Explore simulations
-  // and Explore study tools. Closed at first; it stays as the student left it for this visit. No level set: open.
-  let exploreOpen = (() => { try { return sessionStorage.getItem('cassie.learnExplore') === '1'; } catch (e) { return false; } })();
-  const exploreShown = () => exploreOpen || !levelNow();
-  function exploreButton() {
-    const b = el('button', 'lx-more'); b.type = 'button'; b.setAttribute('aria-controls', 'lx-explore');
-    b.innerHTML = '<span class="lx-more-txt"><b>Explore more</b><small>Other levels, simulations and study tools</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  // (v269) two dropdowns under Your level: Explore other levels (the other level folders) and Explore labs
+  // (the simulations, then the study tools). Each opens on its own, closed at first, and stays as the student
+  // left it for this visit. No level set: both open.
+  const EXPLORE_PARTS = {
+    levels: { key: 'cassie.learnExploreLevels', title: 'Explore other levels', sub: 'Every other grade and course', ids: (d) => d ? 'lx-levels-d' : 'lx-levels' },
+    labs: { key: 'cassie.learnExploreLabs', title: 'Explore labs', sub: 'Simulations and study tools', ids: (d) => d ? 'lx-labs-d lx-labs-dt' : 'lx-labs' },
+  };
+  const exploreOpen = {};
+  for (const k in EXPLORE_PARTS) exploreOpen[k] = (() => { try { return sessionStorage.getItem(EXPLORE_PARTS[k].key) === '1'; } catch (e) { return false; } })();
+  const exploreShown = (k) => exploreOpen[k] || !levelNow();
+  function exploreButton(part, desk) {
+    const P = EXPLORE_PARTS[part];
+    const b = el('button', 'lx-more'); b.type = 'button'; b.dataset.for = part; b.setAttribute('aria-controls', P.ids(desk));
+    b.innerHTML = `<span class="lx-more-txt"><b>${P.title}</b><small>${P.sub}</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
     b.addEventListener('click', () => {
-      exploreOpen = !exploreShown();
-      try { sessionStorage.setItem('cassie.learnExplore', exploreOpen ? '1' : '0'); } catch (e) { /* this visit only */ }
+      exploreOpen[part] = !exploreShown(part);
+      try { sessionStorage.setItem(P.key, exploreOpen[part] ? '1' : '0'); } catch (e) { /* this visit only */ }
       applyExplore();
-      if (exploreOpen) { const first = root.querySelector('.lx-part'); if (first && first.getClientRects().length) first.scrollIntoView({ block: 'nearest', behavior: still() ? 'auto' : 'smooth' }); }
+      if (exploreOpen[part]) { const first = [...root.querySelectorAll(`[data-explore="${part}"]`)].find((n) => n.getClientRects().length); if (first) first.scrollIntoView({ block: 'nearest', behavior: still() ? 'auto' : 'smooth' }); }
     });
     return b;
   }
   function applyExplore() {
-    const open = exploreShown();
-    root.classList.toggle('lx-open', open);
-    root.querySelectorAll('.lx-more').forEach((b) => b.setAttribute('aria-expanded', String(open)));
+    for (const k in EXPLORE_PARTS) {
+      const open = exploreShown(k);
+      root.classList.toggle('lx-' + k, open);
+      root.querySelectorAll(`.lx-more[data-for="${k}"]`).forEach((b) => b.setAttribute('aria-expanded', String(open)));
+    }
   }
   const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
   // Simulations: Visual Labs, one folder that opens into a folder per subject
