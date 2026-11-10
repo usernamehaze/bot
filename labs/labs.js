@@ -29,11 +29,11 @@ import { PUZZLES } from './puzzles.js';
 import { space3dLab } from './space3d.js';
 import { atlasLab } from './atlas.js';
 import { TOOLS } from './tools.js';
-import { MUSEUM } from './museum.js?v=267';
+import { MUSEUM } from './museum.js?v=268';
 import { GAMES } from './games.js';
 import { GAMES2 } from './games2.js';
 import { KIDS } from './kids.js';
-import { LEVEL_LESSONS } from './level-lessons.js?v=267';
+import { LEVEL_LESSONS } from './level-lessons.js?v=268';
 
 // two shelves: things to learn with (simulations, 3D models, the atlas) and games (the daily puzzles)
 export const SUBJECTS = [['all', 'All'], ['3d', '3D'], ['biology', 'Biology'], ['chemistry', 'Chemistry'], ['physics', 'Physics'], ['space', 'Space'], ['math', 'Math'], ['geography', 'Geography'], ['history', 'History']];
@@ -116,11 +116,10 @@ function createView() {
         <div class="lp-home">
           <h3 class="lp-h">Today’s Labs</h3>
           <div class="lp-rec"></div>
-          <h3 class="lp-h">Levels</h3>
           <div class="lp-foryou"></div>
-          <h3 class="lp-h">Simulations: Visual Labs</h3>
+          <h3 class="lp-h">Explore simulations</h3>
           <div class="lp-sims"></div>
-          <h3 class="lp-h">Study Tools: Learn your way</h3>
+          <h3 class="lp-h">Explore study tools</h3>
           <div class="lp-toolsf"></div>
         </div>
         <div class="lp-list" hidden>
@@ -210,7 +209,7 @@ function createView() {
   }
   function renderShelf() {
     const q = search.value.trim().toLowerCase();
-    // a computer's Learn: Today's Labs, the Levels, Simulations: Visual Labs, then Study Tools;
+    // a computer's Learn: Today's Labs, Your level, Explore other levels, Explore simulations, Explore study tools;
     // a folder opened: its folders, lessons or labs, with a way back one step; searching (or the games): the cards
     const home = !q && section === 'learn', top = deskTop();
     const fy = $('.labs-foryou'), sims = $('.labs-sims'), tf = $('.labs-toolsf');
@@ -225,9 +224,9 @@ function createView() {
       return;
     }
     if (home) {
-      fy.innerHTML = '<h3 class="lf-h">Levels</h3>'; fy.appendChild(folders(true));
-      sims.innerHTML = '<h3 class="lf-h">Simulations: Visual Labs</h3>'; sims.appendChild(visualFolder());
-      tf.innerHTML = '<h3 class="lf-h">Study Tools: Learn your way</h3>'; tf.appendChild(toolFolders());
+      fy.replaceChildren(folders(true)); // (Your level, then Explore other levels)
+      sims.innerHTML = '<h3 class="lf-h">Explore simulations</h3>'; sims.appendChild(visualFolder());
+      tf.innerHTML = '<h3 class="lf-h">Explore study tools</h3>'; tf.appendChild(toolFolders());
       previews().then(() => { pv(fy); pv(sims); pv(tf); });
     }
     // searching looks on Labs' two shelves (or, in Games, at the games)
@@ -349,12 +348,16 @@ function createView() {
     }).join('');
     return grid;
   }
-  // the level folders (the student's own first), with a line on how they work
+  // (v268) the levels in two parts: Your level (the student's own, one big folder) and Explore other levels
+  // (the rest, the normal size), with a line on how they work. No level set: every level is under Explore.
   function folders(desk) {
-    const mine = levelNow(), order = [...LEVELS.filter(([k]) => k === mine), ...LEVELS.filter(([k]) => k !== mine)];
+    const mine = levelNow(), own = LEVELS.filter(([k]) => k === mine), others = LEVELS.filter(([k]) => k !== mine);
+    const spec = ([k, name]) => ({ key: 'level:' + k, name, own: k === mine, ...(k === 'board' ? { sub: 'Lessons and simulations' } : {}) });
+    const head = (t) => { const h = el('h3', desk ? 'lf-h' : 'lp-h'); h.textContent = t; return h; };
     const box = el('div', 'lf-box');
+    if (own.length) box.append(head('Your level'), folderGrid(own.map(spec), 'lf-levels lf-yourlevel'));
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    box.append(folderGrid(order.map(([k, name]) => ({ key: 'level:' + k, name, own: k === mine, ...(k === 'board' ? { sub: 'Lessons and simulations' } : {}) })), 'lf-levels'), hint);
+    box.append(head('Explore other levels'), folderGrid(others.map(spec), 'lf-levels lf-otherlevels'), hint);
     return box;
   }
   const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
