@@ -887,6 +887,8 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-yours { position: absolute; top: 10px; left: 12px; padding: var(--sp-1, 4px) var(--sp-3, 12px); border-radius: 999px; background: var(--lf-yours-bg); color: var(--lf-yours-ink); font: 700 .72rem/1.2 system-ui, sans-serif; letter-spacing: .02em; }
 .lf-grid .lf-mine .lf-yours { font-size: .8rem; }
 .lf-grid.lf-visual, .lf-grid.lf-inlevel { margin-bottom: var(--sp-2, 8px); }
+/* (v268) Your level, then Explore other levels: room between the big folder and the next heading */
+.lf-box .lf-yourlevel + :is(.lf-h, .lp-h) { margin-top: var(--sp-6, 32px); }
 .labs-today .lf-h { margin-top: 0; }
 .lf-soon { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2, 8px); margin: var(--sp-4, 16px) auto; max-width: 420px; padding: var(--sp-6, 32px) var(--sp-5, 24px); border-radius: 22px; text-align: center;
   background: rgba(var(--lf-glass), .55); border: 1px solid var(--lf-edge); color: var(--lf-ink); }

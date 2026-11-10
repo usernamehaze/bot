@@ -10262,7 +10262,7 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     const all = await page.evaluate(async () => { const m = await import('./labs/labs.js'); return m.LABS.filter((l) => l.subject !== 'games' && l.subject !== 'puzzles').map((l) => l.id).concat(['body3d', 'cells3d']).sort(); });
     // 1. the sections, top to bottom
     const heads = await page.evaluate((S) => [...document.querySelectorAll(S + ' :is(.lp-h, .lf-h)')].filter((h) => h.getClientRects().length).map((h) => h.textContent.trim()), S);
-    expect(JSON.stringify(heads) === JSON.stringify(['Today’s Labs', 'Levels', 'Simulations: Visual Labs', 'Study Tools: Learn your way']), `${where}: the sections in order: ` + JSON.stringify(heads));
+    expect(JSON.stringify(heads) === JSON.stringify(['Today’s Labs', 'Your level', 'Explore other levels', 'Explore simulations', 'Explore study tools']), `${where}: the sections in order (v268): ` + JSON.stringify(heads));
     const order = await page.evaluate((S) => { const y = (sel) => { const e = document.querySelector(S + ' ' + sel); return e ? e.getBoundingClientRect().top : -1; }; return [y(':is(.lp-rec, .labs-feature)'), y('.lf-levels'), y('.lf-visual'), y('.lf-tools')]; }, S);
     expect(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), `${where}: Today’s Labs, Levels, Visual Labs, Study Tools, top to bottom: ` + order);
     // 2. the levels: the student's own (Junior High) first, about 1.5 times a folder, with Your level
@@ -10517,7 +10517,7 @@ test('Learn’s levels are where the topic is really taught (docs/learn-levels.m
   }
 });
 
-test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Labs first, then Levels, Simulations: Visual Labs (one folder, a folder per subject inside) and Study Tools (a folder per use) in that order (v220), no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
+test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Labs first, then Your level (one big folder), Explore other levels, Explore simulations (Visual Labs: one folder, a folder per subject inside) and Explore study tools (a folder per use) in that order (v268), no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
   const SHOTS = process.env.SHOTS;
   for (const [size, device, viewport] of [['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }], ['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
@@ -10528,13 +10528,19 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
     await page.waitForSelector(S.folders, { timeout: 15000 }); await page.waitForTimeout(500);
     const parts = await page.evaluate((ph) => {
       const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
-      if (ph) return { order: [...document.querySelectorAll('.lp-home > .lp-h')].filter(vis).map((h) => h.textContent), chips: document.querySelectorAll('.lp-chips button').length,
+      // (v268) Your level holds one folder, the student's own (marked lf-mine), bigger than every folder under Explore other levels
+      const sc = ph ? '.lp-foryou' : '.labs-foryou', mine = [...document.querySelectorAll(sc + ' .lf-yourlevel .lf')], others = [...document.querySelectorAll(sc + ' .lf-otherlevels .lf')];
+      const yours = { n: mine.length, own: mine.length === 1 && mine[0].classList.contains('lf-mine'), level: mine[0] ? mine[0].dataset.level : '', others: others.length, noneMine: others.every((f) => !f.classList.contains('lf-mine')),
+        bigger: mine.length === 1 && others.every((f) => mine[0].getBoundingClientRect().width > f.getBoundingClientRect().width * 1.3) };
+      if (ph) return { yours, order: [...document.querySelectorAll('.lp-home .lp-h')].filter(vis).map((h) => h.textContent), chips: document.querySelectorAll('.lp-chips button').length,
         n: ['.lp-foryou', '.lp-sims', '.lp-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length), today: vis(document.querySelector('.lp-rec .lp-card')) };
-      const tops = ['.labs-today', '.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => { const e = document.querySelector(s); return vis(e) ? e.getBoundingClientRect().top : -1; });
-      return { order: ['Today’s Labs', 'Levels', 'Simulations: Visual Labs', 'Study Tools: Learn your way'].filter((x, i) => tops[i] >= 0 && (i === 0 || tops[i] > tops[i - 1])), chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
+      const heads = [...document.querySelectorAll('.labs-scroll .lf-h')].filter(vis).map((h) => [h.getBoundingClientRect().top, h.textContent.trim()]).sort((a, b) => a[0] - b[0]).map((h) => h[1]);
+      return { yours, order: heads, chips: document.querySelectorAll('.labs-chips button, .labs-tabs [data-section]').length,
         cards: [...document.querySelectorAll('.labs-grid .labs-card')].filter(vis).length, n: ['.labs-foryou', '.labs-sims', '.labs-toolsf'].map((s) => document.querySelectorAll(s + ' .lf').length) };
     }, phone);
-    expect(parts.order.join('|') === 'Today’s Labs|Levels|Simulations: Visual Labs|Study Tools: Learn your way', `${size}: the 4 parts in order: ` + JSON.stringify(parts));
+    expect(parts.order.join('|') === 'Today’s Labs|Your level|Explore other levels|Explore simulations|Explore study tools', `${size}: the 5 parts in order: ` + JSON.stringify(parts));
+    const lvNow = await page.evaluate(() => (typeof lessonLevel === 'function' ? lessonLevel() : ''));
+    expect(parts.yours.n === 1 && parts.yours.own && parts.yours.others === 5 && parts.yours.noneMine && parts.yours.bigger && (!lvNow || parts.yours.level === lvNow), `${size}: Your level is one folder, the student’s own, bigger than the 5 under Explore other levels: ` + JSON.stringify(parts.yours) + ' level ' + lvNow);
     expect(!parts.chips && !parts.cards && JSON.stringify(parts.n) === '[6,1,4]', `${size}: no chips, tabs or card grid; 6 level folders (v241: Board and Licensure exams too), the Visual Labs folder and 4 study tool folders: ` + JSON.stringify(parts));
     if (SHOTS) {
       if (phone) { await page.evaluate(() => document.querySelector('.lp-home').scrollIntoView({ block: 'start' })); await page.waitForTimeout(500); }
