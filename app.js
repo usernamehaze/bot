@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=269'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=270'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=269'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=270'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2908,7 +2908,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=269').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=270').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -6912,7 +6912,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=269')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=270')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8143,7 +8143,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=269');
+      exploreMod = await import('./explore/cell3d.js?v=270');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8193,7 +8193,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=269');
+      labsMod = await import('./labs/labs.js?v=270');
       islandRest();
     }
     labsMod.open({
@@ -10143,10 +10143,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=269').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=270').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=269', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=270', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10993,45 +10993,97 @@ function signinReturned() {
   return out;
 }
 
+// (v270) Cassie's mark (the cursor with eyes), drawn wherever the sign-in page needs it
+const CASSIE_MARK = '<path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="currentColor" stroke="currentColor" stroke-width="56" stroke-linejoin="round"/><g fill="var(--logo-eyes, var(--bg, #fff))"><rect x="168" y="196" width="22" height="70" rx="11"/><rect x="236" y="214" width="22" height="70" rx="11"/></g>';
+const authStill = () => document.documentElement.classList.contains('lite') || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+// (v270) the sign-in header: a desk at night (a lamp, books, an open notebook, a pencil, a window with the moon).
+// Cassie's cursor drifts down a dotted path, lands on the notebook and writes a line. Still: it is already there.
+function authArt(still, wait) {
+  const TRAIL = 'M150 26 C 190 10, 236 40, 226 92 S 270 150, 282 170';
+  const stars = [[40, 24], [92, 44], [150, 18], [204, 52], [228, 22], [126, 82], [62, 96]].map(([x, y], i) => `<circle class="aa-star" cx="${x}" cy="${y}" r="${i % 3 ? 1.4 : 2}" style="--i:${i}"/>`).join('');
+  const mark = `<g class="aa-curin"><g transform="scale(.06) translate(-108 -90)">${CASSIE_MARK}</g></g>`;
+  const cur = still ? `<g class="aa-cur" transform="translate(282 170)">${mark}</g>`
+    : `<g class="aa-cur" transform="translate(150 26)">${mark}<animateMotion dur="3s" begin="${wait}s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".42 0 .2 1" path="M0 0 C 40 -16, 86 14, 76 66 S 120 124, 132 144"/></g>`;
+  return `<svg class="auth-artsvg${still ? ' is-still' : ''}" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="--wait:${wait}s">
+    <defs><linearGradient id="aa-sky" x1="0" y1="0" x2="0" y2="1"><stop class="aa-sky1" offset="0"/><stop class="aa-sky2" offset="1"/></linearGradient>
+      <radialGradient id="aa-glow" cx=".5" cy="0" r="1"><stop class="aa-glow1" offset="0"/><stop class="aa-glow2" offset="1"/></radialGradient></defs>
+    <rect width="400" height="240" fill="url(#aa-sky)"/>${stars}
+    <rect class="aa-win" x="250" y="28" width="104" height="112" rx="14"/><circle class="aa-moon" cx="322" cy="62" r="14"/><circle class="aa-winsky" cx="330" cy="56" r="12"/>
+    <path class="aa-frame" d="M302 28 V140 M250 84 H354"/>
+    <path class="aa-cone" d="M84 104 L24 198 H176 Z" fill="url(#aa-glow)"/>
+    <rect class="aa-desk" x="0" y="196" width="400" height="44"/><path class="aa-edge" d="M0 196.5 H400"/>
+    <path class="aa-lamp" d="M58 196 L48 146 L84 104"/><ellipse class="aa-lampbase" cx="58" cy="196" rx="22" ry="5"/><path class="aa-shade" d="M70 92 L102 106 L94 122 L64 108 Z"/><circle class="aa-bulb" cx="86" cy="116" r="4"/>
+    <rect class="aa-b1" x="112" y="176" width="68" height="20" rx="3"/><rect class="aa-b2" x="118" y="158" width="58" height="18" rx="3"/><rect class="aa-b3" x="114" y="142" width="64" height="16" rx="3"/>
+    <path class="aa-band" d="M124 176 V196 M168 176 V196 M130 158 V176 M164 142 V158"/>
+    <ellipse class="aa-shadow" cx="258" cy="199" rx="70" ry="5"/>
+    <path class="aa-page" d="M196 198 L258 192 L258 160 L202 166 Z"/><path class="aa-page aa-page2" d="M258 192 L320 198 L314 166 L258 160 Z"/>
+    <path class="aa-line" d="M208 176 L250 172 M208 184 L244 180 M266 172 L302 175"/><path class="aa-spine" d="M258 160 V192"/>
+    <path class="aa-write" d="M268 184 q 6 -6 10 0 t 10 0 t 10 0" pathLength="1"/>
+    <g transform="translate(336 186) rotate(-24)"><rect class="aa-pencil" x="-26" y="-4" width="46" height="8" rx="1.5"/><path class="aa-tip" d="M20 -4 L30 0 L20 4 Z"/><rect class="aa-eraser" x="-32" y="-4" width="7" height="8" rx="2"/></g>
+    <path class="aa-trail" d="${TRAIL}"/>${cur}</svg>`;
+}
+// (v270) the sign-in wait: a small card over the blurred page, Cassie's cursor going round a ring of dots
+function authOrbit() {
+  const dots = Array.from({ length: 12 }, (_, i) => { const a = (i * 30 - 90) * Math.PI / 180; return `<circle class="ab-dot" cx="${(28 * Math.cos(a)).toFixed(1)}" cy="${(28 * Math.sin(a)).toFixed(1)}" r="2.6" style="--i:${i}"/>`; }).join('');
+  return `<svg class="ab-orbit" viewBox="-40 -40 80 80" aria-hidden="true">${dots}<g class="ab-cur"><g transform="translate(0 -28) rotate(123) scale(.045) translate(-250 -250)">${CASSIE_MARK}</g></g></svg>`;
+}
+// (v270) the brand intro, once a visit on the sign-in page: the cursor underlines "Cassie", then "Your study buddy".
+// Never under Reduce Motion or Lite mode, never on the way back from Google or Apple; a tap ends it.
+function authIntro(page) {
+  let seen = false;
+  try { seen = sessionStorage.getItem('cassie.authIntro') === '1'; sessionStorage.setItem('cassie.authIntro', '1'); } catch (e) { /* every time, then */ }
+  if (seen) return 0;
+  const el = document.createElement('div');
+  el.className = 'auth-intro'; el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<div class="ai-in"><span class="ai-word"><b>Cassie</b><svg class="ai-line" viewBox="0 0 200 16" preserveAspectRatio="none"><path d="M4 9 C 60 3, 130 14, 196 6" pathLength="1"/></svg><svg class="ai-cur" viewBox="40 40 420 420">${CASSIE_MARK}</svg></span><p>Your study buddy</p></div>`;
+  page.prepend(el);
+  let t = 0;
+  const end = () => { clearTimeout(t); el.remove(); };
+  t = setTimeout(end, 1200);
+  el.addEventListener('pointerdown', end);
+  page.addEventListener('keydown', end, { once: true });
+  return 1.05;
+}
+
 function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   document.querySelector('.auth-page')?.remove();
   const page = document.createElement('div');
   page.className = 'auth-page';
-  page.innerHTML = `
+  const still = authStill();
+  const wait = still || returned ? 0 : authIntro(page);
+  page.insertAdjacentHTML('beforeend', `
+    <div class="auth-brand"><svg viewBox="40 40 420 420" aria-hidden="true">${CASSIE_MARK}</svg>Cassie</div>
+    <div class="auth-right" aria-hidden="true">
+      <div class="auth-art">${authArt(still, wait + 0.3)}</div>
+      <div class="auth-copy">
+        <p class="auth-kicker">Your study buddy</p>
+        <h2>Learn anything.<br>On every device.</h2>
+        <p>Sign in once: your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
+      </div>
+    </div>
     <div class="auth-left">
-      <div class="auth-brand"><svg viewBox="40 40 420 420" aria-hidden="true"><path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 300 L108 382 Z" fill="currentColor" stroke="currentColor" stroke-width="56" stroke-linejoin="round"/><g fill="var(--logo-eyes, var(--bg, #fff))"><rect x="168" y="196" width="22" height="70" rx="11"/><rect x="236" y="214" width="22" height="70" rx="11"/></g></svg>Cassie</div>
       <form class="auth-form" novalidate>
         <h1 class="auth-title"></h1>
         <p class="auth-sub"></p>
-        <div class="auth-providers">
-          <button type="button" class="auth-google" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Continue with Google</span></button>
-          <button type="button" class="auth-apple" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span>Sign in with Apple</span></button>
-        </div>
-        <div class="auth-or" hidden><span>or</span></div>
-        <label class="auth-field"><span>Email</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+        <label class="auth-field"><span>Email</span><span class="auth-in"><svg class="auth-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7l8 6 8-6"/></svg><input name="email" type="email" autocomplete="email" inputmode="email" required></span></label>
         <label class="auth-field auth-age"><span>Your age</span><input name="age" type="number" inputmode="numeric" min="2" max="100" placeholder="e.g. 16"></label>
-        <label class="auth-field"><span>Password</span><span class="auth-pw"><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
-        <div class="auth-busy" role="status" hidden><span class="auth-spin" aria-hidden="true"></span><b>Signing you in…</b><span class="auth-busy-sub">This takes a few seconds.</span></div>
+        <label class="auth-field"><span>Password</span><span class="auth-pw auth-in"><svg class="auth-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg><input name="password" type="password" minlength="8" required><button type="button" class="auth-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
         <p class="auth-err" role="alert" hidden></p>
         <button type="button" class="auth-retry" hidden>Try again</button>
         <button type="submit" class="auth-go"></button>
+        <div class="auth-or" hidden><span>Or continue with</span></div>
+        <div class="auth-providers">
+          <button type="button" class="auth-google" aria-label="Continue with Google" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>Google</span></button>
+          <button type="button" class="auth-apple" aria-label="Sign in with Apple" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span>Apple</span></button>
+        </div>
         <p class="auth-switch"></p>
         <p class="auth-forgot" hidden></p>
         <button type="button" class="auth-skip">Continue as a guest</button>
         <p class="auth-legal"><b>Your data is private.</b> Cassie saves it only to sync it back to you. She never sells it, and never trains AI on it. Delete your account and it’s gone. Cassie is for learners of every age; young children, ask a parent or teacher to help you sign up. <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
       </form>
     </div>
-    <div class="auth-right" aria-hidden="true">
-      <div class="auth-glow"></div>
-      <div class="auth-copy">
-        <p class="auth-kicker">Your study buddy</p>
-        <h2>Learn anything.<br>On every device.</h2>
-        <p>Sign in once: your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
-      </div>
-      <div class="auth-hero"></div>
-    </div>`;
+    <div class="auth-busy" role="status" hidden><div class="ab-card">${authOrbit()}<b>Signing you in</b><span class="auth-busy-sub">Getting your notes ready</span></div></div>`);
   document.body.appendChild(page);
-  try { window.CassieBot.create(page.querySelector('.auth-hero'), { state: 'greeting', glow: true, pokeable: true, accessory: cassieSeasonal() }); } catch (e) { /* no Cassie drawing: the words still work */ }
   const f = page.querySelector('form');
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');
@@ -11039,13 +11091,13 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   let retry = null;
   const showErr = (m, again) => { err.textContent = m; err.hidden = !m; retry = m && again ? again : null; retryBtn.hidden = !retry; };
   retryBtn.addEventListener('click', () => { const r = retry; showErr(''); if (r) r(); });
-  // "Signing you in…": the form steps aside; a watchdog makes sure it never stays up for long
+  // "Signing you in": the form stays, blurred, behind a small card; a watchdog makes sure it never stays up for long
   let busyTimer = 0, busyStop = null, busyAgain = null;
   const busy = (on, words, again) => {
     if (on) busyAgain = again || busyAgain;
-    f.classList.toggle('busy', !!on);
-    f.querySelector('.auth-busy').hidden = !on;
-    if (on) f.querySelector('.auth-busy b').textContent = words || 'Signing you in…';
+    f.classList.toggle('busy', !!on); f.inert = !!on; // (the form stays, blurred behind the card)
+    page.querySelector('.auth-busy').hidden = !on;
+    if (on) { const w = words || 'Signing you in'; page.querySelector('.auth-busy b').textContent = w; page.querySelector('.auth-busy-sub').textContent = /^Opening /.test(w) ? 'One moment' : 'Getting your notes ready'; }
     clearTimeout(busyTimer);
     if (on) busyTimer = setTimeout(() => { if (busyStop) busyStop(); busy(false); showErr(CassieErrors.say('timeout'), busyAgain || (() => location.reload())); }, SIGNIN_LIMIT);
   };
@@ -11072,8 +11124,8 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     linking = null;
     f.email.readOnly = false;
     showProviders();
-    f.querySelector('.auth-title').textContent = m === 'signup' ? 'Create your Cassie account' : 'Sign in to Cassie';
-    f.querySelector('.auth-sub').textContent = m === 'signup' ? 'Free. Keeps your profile and progress on every device.' : 'Welcome back! Pick up right where you left off.';
+    f.querySelector('.auth-title').textContent = m === 'signup' ? 'Make your account' : 'Welcome back';
+    f.querySelector('.auth-sub').textContent = m === 'signup' ? 'Free. Keeps your profile and progress on every device.' : 'Your notes and streak are waiting';
     go.textContent = m === 'signup' ? 'Create account' : 'Sign in';
     f.querySelector('.auth-age').hidden = m !== 'signup';
     f.password.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
@@ -11132,7 +11184,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     setTimeout(() => f.password.focus(), 30);
   };
   const providerCall = async (provider, body) => {
-    busy(true, 'Signing you in…', startAgain(provider));
+    busy(true, 'Signing you in', startAgain(provider));
     const stop = new AbortController();
     busyStop = () => stop.abort();
     try { providerResult(provider, await authCall('/auth/' + provider, body, 'POST', { timeout: SIGNIN_CALL_LIMIT, signal: stop.signal }), { credential: body.credential, nonce: body.nonce, name: body.name }); }
@@ -11158,13 +11210,14 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     if (!check.check()) return;
     if (linking) { linkWith({ password }); return; }
     const goDone = busyButton(go, signup() ? 'Making your account…' : 'Signing in…');
+    busy(true, signup() ? 'Making your account' : 'Signing you in', () => f.requestSubmit()); // (v270: the same card as Google and Apple)
     try {
       const res = await authCall(signup() ? '/auth/signup' : '/auth/login', signup() ? { email, password, age } : { email, password });
       if (signup() && first) frSave({ step: 'ob', at: 0, answers: { ...((frLoad() || {}).answers || {}), age: String(age) } }); // (the questions won't ask the age again)
       done(res);
     }
     catch (e2) {
-      goDone();
+      busy(false); goDone();
       const field = FIELD_OF[e2.code];
       if (field) check.show(field, e2.code, { n: Math.max(1, 8 - password.length) });
       else showErr(CassieErrors.explain(e2));
