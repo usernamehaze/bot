@@ -117,10 +117,12 @@ function createView() {
           <h3 class="lp-h">Today’s Labs</h3>
           <div class="lp-rec"></div>
           <div class="lp-foryou"></div>
-          <h3 class="lp-h">Explore simulations</h3>
-          <div class="lp-sims"></div>
-          <h3 class="lp-h">Explore study tools</h3>
-          <div class="lp-toolsf"></div>
+          <div class="lx-part lp-explore" id="lx-explore" data-explore>
+            <h3 class="lp-h">Explore simulations</h3>
+            <div class="lp-sims"></div>
+            <h3 class="lp-h">Explore study tools</h3>
+            <div class="lp-toolsf"></div>
+          </div>
         </div>
         <div class="lp-list" hidden>
           <header class="lp-list-head"><button type="button" class="lp-back" aria-label="Back">‹</button><h3></h3></header>
@@ -224,7 +226,8 @@ function createView() {
       return;
     }
     if (home) {
-      fy.replaceChildren(folders(true)); // (Your level, then Explore other levels)
+      fy.replaceChildren(folders(true)); // (Your level, then Explore more: other levels, simulations, study tools)
+      sims.dataset.explore = ''; tf.dataset.explore = ''; applyExplore();
       sims.innerHTML = '<h3 class="lf-h">Explore simulations</h3>'; sims.appendChild(visualFolder());
       tf.innerHTML = '<h3 class="lf-h">Explore study tools</h3>'; tf.appendChild(toolFolders());
       previews().then(() => { pv(fy); pv(sims); pv(tf); });
@@ -249,8 +252,14 @@ function createView() {
     const today = $('.labs-today');
     today.hidden = !!q || section !== 'learn' || (subject !== 'all' && subject !== t.subject);
     today.innerHTML = `<h3 class="lf-h">Today’s Labs</h3><button type="button" class="labs-feature" data-lab="${t.id}">
-      <span class="labs-icon big">${iconSvg(t.icon)}</span>
+      ${previewIds.has(t.id) ? `<canvas class="labs-feature-pv" data-pv="${t.id}" aria-hidden="true"></canvas>` : `<span class="labs-icon big">${iconSvg(t.icon)}</span>`}
       <span><small>Today’s lab</small><b>${esc(t.name)}</b><span>${esc(t.tries && t.tries[0] ? 'Try this: ' + t.tries[0] : t.blurb)}</span>${tp.of ? `<em>${tp.n}/${tp.of} tried</em>` : ''}</span></button>`;
+    // (v268) its live picture: once the list of labs with pictures is known, the icon becomes the picture
+    if (!today.hidden) previews().then(() => {
+      const ic = today.querySelector('.labs-feature .labs-icon');
+      if (ic && previewIds.has(t.id)) ic.outerHTML = `<canvas class="labs-feature-pv" data-pv="${t.id}" aria-hidden="true"></canvas>`;
+      pv(today);
+    });
     renderBoard(!q && section === 'games');
   }
 
@@ -262,9 +271,11 @@ function createView() {
   function lpRec() {
     const id = (typeof todayLab === 'function' && todayLab()) || todays().id, lab = LABS.find((l) => l.id === id) || todays();
     const info = (typeof LAB_INFO === 'object' && LAB_INFO[lab.id]) || [lab.name, NAMES[lab.subject] || 'Science', 10];
-    // (v246: a slim card, full width, only the lab's name and the play button; the section title says it is today's)
-    $('.lp-rec').innerHTML = `<div class="lp-card lp-slim" data-subject="${esc(info[1])}">
-      <div class="lp-info"><b>${esc(lab.name)}</b></div>
+    // (v268: Today's Lab with its live picture again, as before v246: the preview, its name, subject and minutes, Play)
+    $('.lp-rec').innerHTML = `<div class="lp-card lp-today" data-subject="${esc(info[1])}">
+      <canvas class="lp-pv lp-big" data-pv="${lab.id}" aria-hidden="true"></canvas>
+      <span class="lp-tag">Today’s Lab</span>${CURSOR.replace('labs-cur', 'labs-cur lp-peek')}
+      <div class="lp-info"><b>${esc(lab.name)}</b><small>${esc(info[1])} · about ${info[2]} min</small></div>
       <button type="button" class="lp-play" data-lab="${lab.id}" aria-label="Open today’s lab: ${esc(lab.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button></div>`;
   }
   // a list: the Learn labs and 3D views, the study tools, or one filter's labs; a folder of folders
@@ -357,8 +368,30 @@ function createView() {
     const box = el('div', 'lf-box');
     if (own.length) box.append(head('Your level'), folderGrid(own.map(spec), 'lf-levels lf-yourlevel'));
     const hint = el('p', 'lf-hint'); hint.textContent = desk ? 'Hover to peek, click to open' : 'Tap a folder to open';
-    box.append(head('Explore other levels'), folderGrid(others.map(spec), 'lf-levels lf-otherlevels'), hint);
+    const more = el('div', 'lx-part'); more.dataset.explore = '';
+    more.append(head('Explore other levels'), folderGrid(others.map(spec), 'lf-levels lf-otherlevels'), hint);
+    box.append(exploreButton(), more);
     return box;
+  }
+  // (v268) Explore more: one button under Your level that opens and closes Explore other levels, Explore simulations
+  // and Explore study tools. Closed at first; it stays as the student left it for this visit. No level set: open.
+  let exploreOpen = (() => { try { return sessionStorage.getItem('cassie.learnExplore') === '1'; } catch (e) { return false; } })();
+  const exploreShown = () => exploreOpen || !levelNow();
+  function exploreButton() {
+    const b = el('button', 'lx-more'); b.type = 'button'; b.setAttribute('aria-controls', 'lx-explore');
+    b.innerHTML = '<span class="lx-more-txt"><b>Explore more</b><small>Other levels, simulations and study tools</small></span><svg class="lx-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+    b.addEventListener('click', () => {
+      exploreOpen = !exploreShown();
+      try { sessionStorage.setItem('cassie.learnExplore', exploreOpen ? '1' : '0'); } catch (e) { /* this visit only */ }
+      applyExplore();
+      if (exploreOpen) { const first = root.querySelector('.lx-part'); if (first && first.getClientRects().length) first.scrollIntoView({ block: 'nearest', behavior: still() ? 'auto' : 'smooth' }); }
+    });
+    return b;
+  }
+  function applyExplore() {
+    const open = exploreShown();
+    root.classList.toggle('lx-open', open);
+    root.querySelectorAll('.lx-more').forEach((b) => b.setAttribute('aria-expanded', String(open)));
   }
   const simFolders = () => folderGrid(SUBJECT_FOLDERS.map(([k, name]) => ({ key: 'subject:' + k, name })), 'lf-subjects');
   // Simulations: Visual Labs, one folder that opens into a folder per subject
@@ -492,6 +525,7 @@ function createView() {
     box.replaceChildren(folders(false));
     $('.lp-sims').replaceChildren(visualFolder());
     $('.lp-toolsf').replaceChildren(toolFolders());
+    applyExplore();
   }
   // a folder's papers fan out, then its level opens (Reduce Motion or Lite mode: at once)
   // (Reduce Motion or Lite mode: the gentle version in labs.css, and a shorter wait)

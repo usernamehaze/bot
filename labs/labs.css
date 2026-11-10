@@ -887,8 +887,24 @@ html.lite .lf.lf-open .lf-paper:nth-child(n) { opacity: .85; }
 .lf-yours { position: absolute; top: 10px; left: 12px; padding: var(--sp-1, 4px) var(--sp-3, 12px); border-radius: 999px; background: var(--lf-yours-bg); color: var(--lf-yours-ink); font: 700 .72rem/1.2 system-ui, sans-serif; letter-spacing: .02em; }
 .lf-grid .lf-mine .lf-yours { font-size: .8rem; }
 .lf-grid.lf-visual, .lf-grid.lf-inlevel { margin-bottom: var(--sp-2, 8px); }
-/* (v268) Your level, then Explore other levels: room between the big folder and the next heading */
-.lf-box .lf-yourlevel + :is(.lf-h, .lp-h) { margin-top: var(--sp-6, 32px); }
+/* (v268) Your level, then one Explore more button; Explore other levels, simulations and study tools open under it */
+.labs:not(.lx-open) [data-explore] { display: none !important; }
+.lx-more { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3, 12px); width: 100%; min-height: 64px; margin: var(--sp-5, 24px) 0 var(--sp-2, 8px); padding: var(--sp-3, 12px) var(--sp-4, 16px) var(--sp-3, 12px) var(--sp-5, 24px); border-radius: 20px; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--lg-fill-thick, rgba(255, 255, 255, .6)); border: 1px solid var(--lg-line, rgba(0, 0, 0, .08)); box-shadow: var(--lg-edge, none); }
+.lx-more-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lx-more-txt b { font-size: 1.05rem; }
+.lx-more-txt small { font-size: .84rem; color: var(--muted, #6b6b75); }
+.labs:not(.lp-on) .lx-more-txt small { color: var(--lx-soft, rgba(var(--lx-rgb), .72)); }
+.lx-chev { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s ease; }
+.lx-more[aria-expanded="true"] .lx-chev { transform: rotate(180deg); }
+.lx-more:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
+.lx-part > :first-child { margin-top: var(--sp-4, 16px); }
+.labs.lx-open .lx-part { animation: lx-in .3s ease both; }
+@keyframes lx-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .labs.lx-open .lx-part { animation: none; } .lx-chev { transition: none; } }
+.lite .labs.lx-open .lx-part { animation: none; }
+/* (v268) the computer's Today's Lab shows its live picture */
+.labs-feature-pv { display: block; flex: none; width: 200px; height: 112px; border-radius: 14px; background: rgba(var(--lx-rgb), .06); }
 .labs-today .lf-h { margin-top: 0; }
 .lf-soon { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2, 8px); margin: var(--sp-4, 16px) auto; max-width: 420px; padding: var(--sp-6, 32px) var(--sp-5, 24px); border-radius: 22px; text-align: center;
   background: rgba(var(--lf-glass), .55); border: 1px solid var(--lf-edge); color: var(--lf-ink); }

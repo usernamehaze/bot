@@ -119,6 +119,11 @@ async function openCard(page, sel) {
   await page.click(sel);
   await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *, .x3d:not([hidden])', { timeout: 20000 });
 }
+// (v268) Learn's home shows Today's Lab and Your level; Explore more opens the other levels, simulations and study tools
+async function exploreLearn(page) {
+  const btn = page.locator('.labs:not([hidden]) .lx-more[aria-expanded="false"] >> visible=true');
+  if (await btn.count()) { await btn.first().click(); await page.waitForSelector('.labs:not([hidden]) .lx-more[aria-expanded="true"] >> visible=true', { timeout: 3000 }); }
+}
 // Learn is folders: open the folder a lab is in (its subject inside Visual Labs, its kind of study tool, or the
 // little ones' level's Simulations) and return the selector of its row (phone) or card (computer)
 async function openFolderOf(page, id) {
@@ -137,6 +142,7 @@ async function openFolderOf(page, id) {
     if (!phone && await page.locator('.labs-foryou .lf-back-btn').count()) { await page.click('.labs-foryou .lf-back-btn'); await page.waitForTimeout(60); continue; }
     break;
   }
+  await exploreLearn(page); // (its folder is under Explore more)
   for (const k of g) { await page.click(`.labs:not([hidden]) .lf[data-group="${k}"] >> visible=true`); if (k !== g[g.length - 1]) await page.waitForSelector(`.labs:not([hidden]) .lf[data-group="${g[g.indexOf(k) + 1]}"] >> visible=true`, { timeout: 4000 }); }
   const sel = phone ? `.lp-row[data-lab="${id}"]` : `.labs-grid [data-lab="${id}"]`;
   await page.waitForSelector(sel, { timeout: 4000 });
@@ -3464,10 +3470,10 @@ test('v246: the Home header and chat top bar are see-through with no cut (no rim
   await page.evaluate(() => { state.plan = { plan: 'pro', until: Date.now() + 864e5 }; planAskDots(); });
   expect(await page.locator('.hub-remind [data-hub="plan"]').count() === 0 && await page.locator('.hub-bell .hub-dot').count() === 0, 'with Pro, the reminder and the dot go');
   await page.evaluate(() => { state.plan = null; });
-  // Learn: Today's Lab first, full width, a slim title card
+  // Learn: Today's Lab first, full width, with its live picture (v268; it was a slim title card in v246)
   await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-rec .lp-card');
   const lab = await page.evaluate(() => { const c = document.querySelector('.lp-rec .lp-card'), r = c.getBoundingClientRect(), lv = document.querySelector('.lp .lf-levels'); return { h: r.height, w: r.width, vw: innerWidth, first: !lv || r.top < lv.getBoundingClientRect().top, pv: !!c.querySelector('canvas'), tag: !!c.querySelector('.lp-tag'), small: !!c.querySelector('.lp-info small'), title: c.querySelector('.lp-info b').textContent, play: c.querySelector('.lp-play').getBoundingClientRect().width }; });
-  expect(lab.h <= 96 && lab.w >= lab.vw - 48 && lab.first && !lab.pv && !lab.tag && !lab.small && lab.title && lab.play >= 48, 'Today’s Lab: first, full width, 96px or less, only the title and play: ' + JSON.stringify(lab));
+  expect(lab.w >= lab.vw - 48 && lab.first && lab.pv && lab.tag && lab.small && lab.title && lab.play >= 48, 'Today’s Lab (v268: its live picture again, as you asked): first, full width, the picture, the tag, the name and subject, and play: ' + JSON.stringify(lab));
   // the chat top bar: no cut, thicker icons
   await page.click('.tab[data-tab="chat"]'); await page.waitForSelector('.topbar #board-btn'); await page.waitForTimeout(400);
   const t = await edge('.topbar');
@@ -8495,7 +8501,7 @@ test.slow('Explore cells are their own view: own card on the Labs shelf and in 3
   await tapLabs(page);
   await page.waitForSelector(LABS_READY, { timeout: 20000 });
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the shelf has a cells card and a body card');
-  await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
+  await exploreLearn(page); await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:biology"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
   expect(await page.locator('.labs-grid [data-lab="cells3d"]').count() === 1 && await page.locator('.labs-grid [data-lab="body3d"]').count() === 1, 'the Biology folder has both too');
   expect(/Cells 3D/.test(await page.locator('.labs-grid [data-lab="cells3d"]').innerText()), 'the cells card is named for the cells');
   // the cells card opens the cells straight away
@@ -8844,7 +8850,7 @@ test.slow('Labs: the shelf, every lab opens and works, goals tick, and Ask Cassi
   expect(await page.locator('.labs-feature').count() === 1, 'today’s lab is featured');
   await shot('labs-shelf');
   // a subject's folder and search
-  await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
+  await exploreLearn(page); await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:chemistry"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
   expect((await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join() === 'balance,ph,atom,ice-steam,metals', 'Chemistry shows the chemistry labs: ' + (await page.$$eval('.labs-grid .labs-card', (c) => c.map((x) => x.dataset.lab))).join());
   await page.click('.labs-foryou .lf-back-btn'); await page.waitForSelector('.labs-scroll .lf');
   await page.fill('.labs-search', 'pendul');
@@ -9833,7 +9839,7 @@ test('Earth, Math and Geography: Day and night, Tectonic plates and earthquake w
     if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
     await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
     const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
-    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const go = async (key) => { await exploreLearn(page); await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
     const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
     for (const [subj, want] of [['space', ['daynight', 'tectonics']], ['math', ['unitcircle']], ['geography', ['contours']]]) {
       await go('visual:all'); await go('subject:' + subj);
@@ -9911,7 +9917,7 @@ test('Biology and Chemistry: Virtual garden, Enzyme reaction rates, Le Chatelier
     if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
     await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
     const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
-    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const go = async (key) => { await exploreLearn(page); await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
     const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
     for (const [subj, want] of [['biology', ['garden', 'enzyme']], ['chemistry', ['equilibrium', 'titration']]]) {
       await go('visual:all'); await go('subject:' + subj);
@@ -9995,7 +10001,7 @@ test('Physics: Push and pull, Seesaw and levers, Electromagnetic induction and C
     if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' }));
     await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300);
     const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
-    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
+    const go = async (key) => { await exploreLearn(page); await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(600); };
     const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
     await go('visual:all'); await go('subject:physics');
     const phys = await rows();
@@ -10152,7 +10158,7 @@ test('Biology: Photosynthesis and respiration, DNA to protein, Food web and Natu
       : { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, state: { tab: 'home', profile: { ...PROFILE, grade: 'Grade 10', age: 15 } } });
     const learn = async () => { if (phone) await page.click('.tab[data-tab="labs"]'); else await page.evaluate(() => openLabs(undefined, { section: 'learn' })); await page.waitForSelector('.labs:not([hidden]) .lf', { timeout: 15000 }); await page.waitForTimeout(300); };
     const rows = () => page.evaluate((ph) => [...document.querySelectorAll(ph ? '.lp-list:not([hidden]) .lp-row[data-lab]' : '.labs-grid:not([hidden]) [data-lab]')].map((x) => x.dataset.lab), phone);
-    const go = async (key) => { await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(550); };
+    const go = async (key) => { await exploreLearn(page); await page.click(`.labs:not([hidden]) .lf[data-group="${key}"] >> visible=true`); await page.waitForTimeout(550); };
     const home = async () => { for (let i = 0; i < 4; i++) { const back = phone ? '.lp-list:not([hidden]) .lp-back' : '.labs-foryou .lf-back-btn'; if (!await page.locator(back).count()) break; await page.click(back); await page.waitForTimeout(150); } };
     // 1. in Visual Labs > Biology, and in each one's level Simulations
     await learn();
@@ -10260,11 +10266,16 @@ test('Learn: Today’s Labs, then the levels (yours highlighted) with Lessons an
     await page.waitForSelector(`${S} .lf`, { timeout: 15000 }); await page.waitForTimeout(500);
     // every lab and tool a student could reach in v219 (the level, subject and tool folders): all but the games
     const all = await page.evaluate(async () => { const m = await import('./labs/labs.js'); return m.LABS.filter((l) => l.subject !== 'games' && l.subject !== 'puzzles').map((l) => l.id).concat(['body3d', 'cells3d']).sort(); });
+    // (v268) at first: Today's Lab and Your level, with Explore more closed; it opens the other three
+    const shut = await page.evaluate((S) => ({ heads: [...document.querySelectorAll(S + ' :is(.lp-h, .lf-h)')].filter((h) => h.getClientRects().length).map((h) => h.textContent.trim()), btn: (document.querySelector(S + ' .lx-more') || { getAttribute: () => 'none' }).getAttribute('aria-expanded') }), S);
+    expect(JSON.stringify(shut.heads) === JSON.stringify(['Today’s Labs', 'Your level']) && shut.btn === 'false', `${where}: at first only Today’s Labs and Your level, Explore more closed: ` + JSON.stringify(shut));
+    await exploreLearn(page);
     // 1. the sections, top to bottom
     const heads = await page.evaluate((S) => [...document.querySelectorAll(S + ' :is(.lp-h, .lf-h)')].filter((h) => h.getClientRects().length).map((h) => h.textContent.trim()), S);
     expect(JSON.stringify(heads) === JSON.stringify(['Today’s Labs', 'Your level', 'Explore other levels', 'Explore simulations', 'Explore study tools']), `${where}: the sections in order (v268): ` + JSON.stringify(heads));
-    const order = await page.evaluate((S) => { const y = (sel) => { const e = document.querySelector(S + ' ' + sel); return e ? e.getBoundingClientRect().top : -1; }; return [y(':is(.lp-rec, .labs-feature)'), y('.lf-levels'), y('.lf-visual'), y('.lf-tools')]; }, S);
-    expect(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), `${where}: Today’s Labs, Levels, Visual Labs, Study Tools, top to bottom: ` + order);
+    const order = await page.evaluate((S) => { const y = (sel) => { const e = document.querySelector(S + ' ' + sel); return e ? e.getBoundingClientRect().top : null; }; return [y(':is(.lp-rec, .labs-feature)'), y('.lf-levels'), y('.lf-visual'), y('.lf-tools')]; }, S);
+    // (v268: opening Explore more scrolls, so a part above the screen is fine)
+    expect(order.every((v, i) => v !== null && (i === 0 || v > order[i - 1])), `${where}: Today’s Labs, Levels, Visual Labs, Study Tools, top to bottom: ` + order);
     // 2. the levels: the student's own (Junior High) first, about 1.5 times a folder, with Your level
     const lv = await page.evaluate((S) => [...document.querySelectorAll(S + ' .lf-levels .lf')].map((f) => ({ k: f.dataset.level, mine: f.classList.contains('lf-mine'), w: f.getBoundingClientRect().width, tag: (f.querySelector('.lf-yours') || {}).textContent || '' })), S);
     const ratio = lv[1] ? lv[0].w / lv[1].w : 0;
@@ -10343,7 +10354,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
   const openLevel = async (page, k) => { await page.click(`.lp-foryou .lf[data-level="${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'level:' + x, k, { timeout: 4000 });
     await page.click(`.lp-list .lf[data-group="levelsims:${k}"]`); await page.waitForFunction((x) => document.querySelector('.lp').dataset.view === 'levelsims:' + x, k, { timeout: 4000 }); return page.$$eval('.lp-list .lp-row', (r) => r.map((x) => x.dataset.lab)); };
   const backHome = async (page) => { for (let i = 0; i < 3 && await page.locator('.lp-list:not([hidden])').count(); i++) { await page.click('.lp-back'); await page.waitForTimeout(80); } await page.waitForSelector('.lp-home:not([hidden]) .lp-foryou .lf'); };
-  const learnTab = async (page) => { await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.labs:not([hidden]) .lp-foryou .lf', { timeout: 15000 }); await page.waitForTimeout(400); };
+  const learnTab = async (page) => { await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.labs:not([hidden]) .lp-foryou .lf', { timeout: 15000 }); await exploreLearn(page); await page.waitForTimeout(400); }; // (v268: Explore more open, so every level shows)
   const SHOTS = process.env.SHOTS;
 
   // 1. Kindergarten: Nursery and Kindergarten first and open, with the 4 little ones' labs
@@ -10416,14 +10427,14 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
     if (phone) {
       await page.waitForSelector('#home .hub-boxes'); await look('Home');
       await learnTab(page); await look('Learn');
-      await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row'); await look('Learn list');
+      await exploreLearn(page); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row'); await look('Learn list');
       await page.click('.lp-back');
       await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden])'); await look('You');
     } else {
       await page.evaluate(() => deskGo('home')); await page.waitForTimeout(500); await look('Home');
       await page.click('#labs-btn'); await page.waitForSelector(LABS_READY, { timeout: 15000 }); await look('Learn');
       // the level folders on a computer: hover leans the pocket back, a click opens the level, Back returns
-      await page.waitForSelector('.labs-foryou .lf');
+      await page.waitForSelector('.labs-foryou .lf'); await exploreLearn(page);
       const df = await forYou(page, '.labs-foryou');
       expect(df.length === 6 && df.filter((x) => x.k !== 'board').every((x) => x.papers === 3 && x.go[0] >= 44), 'a computer’s For you has the 6 folders (v241: Board and Licensure exams too): ' + JSON.stringify(df));
       const front = () => page.$eval('.labs-foryou .lf[data-level="elem"] .lf-front', (x) => getComputedStyle(x).transform);
@@ -10454,7 +10465,7 @@ test('Learn (was Labs) follows the student’s level: For you is a glass folder 
 
 test('Learn’s level folders move like the recording on a computer (1280x800): the pointer over a folder tips its pocket forward at least 15deg and lifts the papers at least 20% of the folder, whatever the browser says about hover; a click fans them out before the level opens; Reduce Motion keeps a gentle lift with no turn', async (b) => {
   const { ctx, page, errors } = await open(b, { device: 'Desktop Chrome', viewport: { width: 1280, height: 800 }, server: false, lite: 'off', state: { tab: 'home' } });
-  await page.click('#labs-btn'); await page.waitForSelector('.labs-foryou .lf', { timeout: 15000 });
+  await page.click('#labs-btn'); await page.waitForSelector('.labs-foryou .lf', { timeout: 15000 }); await exploreLearn(page); // (v268: Elementary is under Explore more)
   await page.waitForTimeout(400);
   const F = '.labs-foryou .lf[data-level="elem"]';
   const look = () => page.$eval(F, (f) => {
@@ -10517,7 +10528,7 @@ test('Learn’s levels are where the topic is really taught (docs/learn-levels.m
   }
 });
 
-test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Labs first, then Your level (one big folder), Explore other levels, Explore simulations (Visual Labs: one folder, a folder per subject inside) and Explore study tools (a folder per use) in that order (v268), no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
+test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s Labs first, then Your level (one big folder), then Explore more opens Explore other levels, Explore simulations (Visual Labs: one folder, a folder per subject inside) and Explore study tools (a folder per use) in that order (v268), no card grid, tabs or subject chips; each folder’s count is its labs, every lab is in a folder, and search still finds the pendulum', async (b) => {
   const SHOTS = process.env.SHOTS;
   for (const [size, device, viewport] of [['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }], ['390x844', 'iPhone 13', { width: 390, height: 844 }]]) {
     const phone = size === '390x844';
@@ -10526,6 +10537,10 @@ test('Learn is folders, not scattered cards (1280x800 and 390x844): Today’s La
     if (phone) await page.click('.tab[data-tab="labs"]'); else await page.click('#labs-btn');
     const S = phone ? { home: '.lp-home', folders: '.lp-home .lf', open: '.lp-list:not([hidden]) .lp-row', back: '.lp-back' } : { home: '.labs-scroll', folders: '.labs-scroll .lf', open: '.labs-grid:not([hidden]) [data-lab]', back: '.lf-back-btn' };
     await page.waitForSelector(S.folders, { timeout: 15000 }); await page.waitForTimeout(500);
+    // (v268) at first: Today's Lab and Your level, with Explore more closed
+    const shut = await page.evaluate((ph) => ({ heads: [...document.querySelectorAll(ph ? '.lp-home .lp-h' : '.labs-scroll .lf-h')].filter((h) => h.getClientRects().length).map((h) => h.textContent.trim()), btn: (document.querySelector(ph ? '.lp-home .lx-more' : '.labs-scroll .lx-more') || { getAttribute: () => 'none' }).getAttribute('aria-expanded') }), phone);
+    expect(shut.heads.join('|') === 'Today’s Labs|Your level' && shut.btn === 'false', `${size}: at first only Today’s Labs and Your level, Explore more closed: ` + JSON.stringify(shut));
+    await exploreLearn(page); await page.waitForTimeout(400);
     const parts = await page.evaluate((ph) => {
       const vis = (e) => e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
       // (v268) Your level holds one folder, the student's own (marked lf-mine), bigger than every folder under Explore other levels
@@ -11093,7 +11108,7 @@ test('liquid glass everywhere, for every colour (390x844 and 1280x800): Home box
     await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-card'); await page.waitForTimeout(300);
     ok(await glass(page, ['.lp-card']), '390x844 Learn');
     await readable(page, '.lp', '390x844 Learn');
-    await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+    await exploreLearn(page); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:physics"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:physics"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
     ok(await glass(page, ['.lp-list .lp-row']), '390x844 Learn rows');
     await page.click('.tab[data-tab="you"]'); await page.waitForSelector('#settings-panel:not([hidden]) .set-group');
     ok(await glass(page, ['#settings-panel .set-group']), '390x844 You');
@@ -13092,12 +13107,12 @@ test('museum: a gallery wall where the paintings stand in a ring that turns (aft
     await page.evaluate(() => openLabs());
     await page.waitForSelector('.labs:not([hidden])');
     if (await page.locator('.lp:not([hidden])').count()) { // a phone: the History folder lists it; the Study tools folders don't
-      await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:history"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+      await exploreLearn(page); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:history"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
       expect(await page.locator('.lp-row[data-lab="museum"]').count() === 1, `${size}: History lists the Museum`);
       await page.click('.lp-back');
       expect(await page.evaluate(() => [...document.querySelectorAll('.lp-toolsf .lf')].some((f) => /Museum/.test(f.textContent))) === false, `${size}: Study tools doesn't`);
     } else {
-      await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
+      await exploreLearn(page); await page.click('.labs-scroll .lf[data-group="visual:all"]'); await page.waitForSelector('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForTimeout(100); await page.click('.labs-scroll .lf[data-group="subject:history"]'); await page.waitForSelector('.labs-grid:not([hidden]) [data-lab]', { timeout: 4000 });
       expect(await page.locator('.labs-grid [data-lab="museum"]').count() === 1, `${size}: Learn > History shows the Museum`);
     }
     await page.evaluate(() => openLabs('museum'));
@@ -13454,11 +13469,11 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.waitForSelector('.labs:not([hidden]) .lp:not([hidden]) .lp-foryou canvas[data-preview]', { timeout: 15000 });
   const top = await page.evaluate(() => ({ title: document.querySelector('.lp-head h2').textContent, find: document.querySelector('.lp-find').getBoundingClientRect().width,
     chips: [...document.querySelectorAll('.lp-chips button')].map((c) => c.textContent), rec: document.querySelector('.lp-card .lp-info b').textContent, want: (LAB_INFO[todayLab()] || [])[0],
-    pv: document.querySelector('.lp-play').dataset.lab, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, slim: document.querySelector('.lp-card').classList.contains('lp-slim'),
+    pv: document.querySelector('.lp-play').dataset.lab, today: todayLab(), play: document.querySelector('.lp-play').getBoundingClientRect().width, pic: !!document.querySelector('.lp-card canvas.lp-big[data-pv]'),
     forYou: [...document.querySelectorAll('.lp-foryou .lf')].map((x) => x.dataset.level), forPv: document.querySelectorAll('.lp-foryou .lf canvas[data-preview]').length }));
   expect(top.title === 'Learn' && top.find >= 44, 'the title and a 44px search button: ' + JSON.stringify(top));
   expect(!top.chips.length, 'no filter chips (the folders replace them): ' + top.chips.join());
-  expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.slim, 'Recommended: today’s lab, its name and a play button (v246: a slim card): ' + JSON.stringify(top));
+  expect(top.rec === top.want && top.pv === top.today && top.play >= 44 && top.pic, 'Recommended: today’s lab with its live picture, its name and a play button (v268): ' + JSON.stringify(top));
   expect(top.forYou.join() === 'pre,elem,jhs,shs,college,board' && top.forPv >= 10, 'For you (no level saved): the 6 level folders in order, with live papers, each with a preview: ' + JSON.stringify(top));
   const fr = (sel) => page.evaluate((s) => +document.querySelector(s).dataset.frames || 0, sel);
   const f0 = await fr('.lp-foryou canvas[data-preview]'); await page.waitForTimeout(900);
@@ -13494,7 +13509,7 @@ test('phone Labs tab: title and search, filter chips, Recommended (Today’s Lab
   await page.waitForSelector('.lab-view:not([hidden])[data-lab="cornell"]', { timeout: 20000 });
   await page.click('.lab-back');
   // a subject's folder, the 3D views and search
-  await page.click('.lp-back'); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:math"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:math"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
+  await page.click('.lp-back'); await exploreLearn(page); await page.click('.lp-sims .lf[data-group="visual:all"]'); await page.waitForSelector('.lp-list .lf[data-group="subject:math"]'); await page.waitForTimeout(100); await page.click('.lp-list .lf[data-group="subject:math"]'); await page.waitForSelector('.lp-list:not([hidden]) .lp-row');
   const maths = await page.$$eval('.lp-row', (r) => r.map((x) => x.dataset.lab));
   expect(maths.includes('fractions') && !maths.includes('pendulum'), 'Maths: the maths labs only: ' + maths.join());
   await page.evaluate(() => openLabs(undefined, { subject: '3d' })); await page.waitForSelector('.lp-list:not([hidden]) .lp-row[data-lab="body3d"]');
