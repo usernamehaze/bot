@@ -2612,7 +2612,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=266'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=267'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2634,7 +2634,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=266'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=267'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2802,6 +2802,8 @@ function hubAct(act) {
   if (act === 'talk') { openVoice('chat'); return; }
   if (act === 'research' || act === 'quiz') { nav('chat'); const cb = document.getElementById(act + '-btn'); if (cb) cb.click(); return; }
   if (act === 'timer') { const t = document.getElementById('pomo-toggle'); if (t) t.click(); renderHubTimer(); return; }
+  if (act === 'goal') { openGoalSheet(); return; }
+  if (act === 'awards') { if (window.CassieRewards) window.CassieRewards.openShelf(); return; }
   if (act === 'streak') { const m = document.getElementById('memory-btn'); if (m) m.click(); guestNudge('Sign in so your streak and progress are saved and show up on every device.'); return; }
   if (act.startsWith('chat:')) { selectChat(act.slice(5)); nav('chat'); guestNudge('Sign in so your chats are saved and you can reopen them from any device.'); return; }
   if (act.startsWith('tool:')) { const ex = HOME_EXAMPLES[+act.slice(5)]; if (ex) { if (onPhoneHome() && !ex.run) nav('chat'); runTool(ex); } }
@@ -2836,6 +2838,33 @@ function hubHero(name, returning, due, phone) {
   hero.querySelector('.hub-me').textContent = name || 'Student';
   return hero;
 }
+// (v267) Today on a phone's Home: the daily goal ring (today's Sparks against the goal), the streak with
+// its flame (rewards.js), and My awards.
+function sparksToday() {
+  if (!window.CassieMemory || typeof window.CassieMemory.sparks !== 'function') {
+    const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
+    return `<div class="hub-today hub-today-one"><button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button></div>`;
+  }
+  const sp = window.CassieMemory.sparks(), streak = window.CassieMemory.stats().streak;
+  const C = 163.4, off = Math.round(C * (1 - sp.pct) * 10) / 10;
+  const ring = `<svg class="goal-ring" viewBox="0 0 60 60" aria-hidden="true"><circle class="goal-track" cx="30" cy="30" r="26"/><circle class="goal-val${sp.met ? ' goal-done' : ''}" cx="30" cy="30" r="26" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg>`;
+  const centre = `<span class="goal-centre"><b>${sp.today}</b><small>of ${sp.goal}</small></span>`;
+  const sub = sp.met ? 'Goal done today' : `${Math.max(0, sp.goal - sp.today)} Sparks to go`;
+  const frz = sp.freezes ? `<span class="goal-frz" aria-label="${sp.freezes} streak ${sp.freezes === 1 ? 'freeze' : 'freezes'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></svg>${sp.freezes}</span>` : ''; // (a snowflake line icon: a freeze)
+  const RW = window.CassieRewards;
+  // the streak's flame: a new colour at day 7, 14, 30, 60 and 100, and a little bigger every day
+  const flame = RW ? RW.flameFor(streak, Math.round(24 + RW.sizeFor(Math.max(1, streak)) * 18)) : HUB_ICON.streak;
+  const awards = RW ? `<button type="button" class="hub-awards" data-hub="awards" aria-label="My awards: ${RW.earnedCount()} of ${RW.AWARDS.length} earned"><span class="aw-medal">${RW.medalFront(RW.AWARDS[2], false)}</span><span class="goal-meta"><b>Awards</b><small>${RW.earnedCount()} of ${RW.AWARDS.length}</small></span></button>` : '';
+  return `<div class="hub-today">
+    <button type="button" class="hub-goal${sp.met ? ' is-met' : ''}" data-hub="goal" aria-label="Daily goal: ${sp.today} of ${sp.goal} Sparks">
+      <span class="goal-dial">${ring}${centre}</span>
+      <span class="goal-meta"><b>Daily goal</b><small>${sub}</small></span>
+    </button>
+    <button type="button" class="hub-w hub-w-streak" data-hub="streak"><i class="${RW ? 'hub-flame' : ''}">${flame}</i><b>${streak}</b><span>day streak</span>${frz}</button>
+    ${awards}
+  </div>`;
+}
+
 // the bell: what's waiting today (cards due, the focus timer, your streak, today's lab)
 let hubRemindOpen = false;
 var hubMoreOpen = (() => { try { return sessionStorage.getItem('cassie.moreTools') === '1'; } catch (e) { return false; } })(); // (More tools tapped: all of them for the rest of this visit)
@@ -2879,7 +2908,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=266').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=267').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -2951,12 +2980,9 @@ function buildHub({ ideas = false, phone = false } = {}) {
       </div>
       <button type="button" class="hub-go" data-hub="start">Start studying</button>`;
   } else {
-    const streak = window.CassieMemory ? window.CassieMemory.stats().streak : 0;
     el.innerHTML = `<button type="button" id="home-ask" class="hub-ask" data-hub="ask">${HUB_ICON.ask}<span>Ask Cassie anything…</span></button>${ideasBtn}
       <section class="hub-sec" data-w="streak"><h2 class="hub-h">Today</h2>
-      <div class="hub-today hub-today-one">
-        <button type="button" class="hub-w" data-hub="streak"><i>${HUB_ICON.streak}</i><b>${streak}</b><span>day streak</span><em>See progress</em></button>
-      </div></section>
+      ${sparksToday()}</section>
       <section class="hub-sec" data-w="continue"><h2 class="hub-h">Continue</h2>
       <div class="hub-recent"></div></section>
       <section class="hub-sec" data-w="quick"><h2 class="hub-h">Quick actions</h2>
@@ -3332,7 +3358,7 @@ function deskHome() {
     <section class="dk-stats" aria-label="This week in numbers">
       <article class="dk-stat dk-stat-main" data-w="asked"><h2>Questions this week</h2><b>${asked}</b><small>${asked ? 'Asked in your chats' : 'Ask Cassie anything to start'}</small><button type="button" class="dk-up" data-dk="chats" aria-label="Open your chats">${DESK_ICON.up}</button></article>
       <article class="dk-stat" data-w="learned"><h2>Cards learned</h2><b>${cardsLearned}</b><small>${due ? `${due} ${due === 1 ? 'card' : 'cards'} to review today` : (state.cards || []).length ? 'Nothing to review today' : 'Make flashcards from any answer'}</small><button type="button" class="dk-up" data-dk="cards" aria-label="Open flashcards">${DESK_ICON.up}</button></article>
-      <article class="dk-stat" data-w="streak"><h2>Day streak</h2><b>${streak}</b><small>${w.now.days ? `${w.now.days} ${w.now.days === 1 ? 'day' : 'days'} studied this week, last week ${w.last.days}` : 'Study today to start one'}</small><button type="button" class="dk-up" data-dk="progress" aria-label="See your progress">${DESK_ICON.up}</button></article>
+      <article class="dk-stat" data-w="streak"><h2>Day streak</h2><div class="dk-streak">${window.CassieRewards ? window.CassieRewards.flameFor(streak, 28) : ''}<b>${streak}</b></div><small>${w.now.days ? `${w.now.days} ${w.now.days === 1 ? 'day' : 'days'} studied this week, last week ${w.last.days}` : 'Study today to start one'}</small>${window.CassieRewards ? `<button type="button" class="dk-awards" data-dk="awards">My awards, ${window.CassieRewards.earnedCount()} of ${window.CassieRewards.AWARDS.length}</button>` : ''}<button type="button" class="dk-up" data-dk="progress" aria-label="See your progress">${DESK_ICON.up}</button></article>
       <article class="dk-stat" data-w="readiness"><h2>Exam readiness</h2><b>${ready && ready.tried ? ready.pct + '%' : ex ? '0%' : 'None'}</b><small class="dk-ready-note"></small><button type="button" class="dk-up" data-dk="plan" aria-label="See your study plan">${DESK_ICON.up}</button></article>
     </section>
     <div class="dk-grid">
@@ -3405,6 +3431,7 @@ function deskAct(act) {
   if (act === 'newplan') { openExamSheet(); return; }
   if (act === 'nexttask') { const nx = nextExamTask(); if (nx) openExamTask(nx.t, nx.e); return; }
   if (act === 'plan' || act === 'progress') { deskGo(act); return; }
+  if (act === 'awards') { if (window.CassieRewards) window.CassieRewards.openShelf(); return; }
   if (act === 'tgo') { document.getElementById('pomo-toggle').click(); renderDeskTimer(); return; }
   if (act === 'tstop') { document.getElementById('pomo-reset').click(); renderDeskTimer(); }
 }
@@ -6151,6 +6178,7 @@ function captureQuizMarks(reply) {
     const key = norm(q);
     const i = state.mistakes.findIndex((m) => norm(m.q) === key);
     progressMark(!/missed/i.test(kind), !/missed/i.test(kind) && i >= 0);
+    try { if (window.CassieMemory && window.CassieMemory.quizAnswer) window.CassieMemory.quizAnswer(!/missed/i.test(kind), q); } catch (e) { /* (Sparks and awards are extra) */ }
     if (/missed/i.test(kind)) {
       const m = i >= 0 ? state.mistakes[i] : null;
       if (m) { m.a = a || m.a; m.misses = (m.misses || 1) + 1; m.due = Date.now() + DAY_MS; }
@@ -6237,6 +6265,92 @@ function guestNudge(reason) {
   if (typeof track === 'function') track('feature', 'guest-nudge');
 }
 window.guestNudge = guestNudge;
+
+/* (v267) The daily-goal picker: four tiers (Casual…Intense), Cassie's words. */
+const GOAL_TIERS = { 30: ['Casual', 'A few questions to keep the habit'], 50: ['Regular', 'A steady daily study session'], 80: ['Serious', 'Real ground every day'], 120: ['Intense', 'All in before an exam'] };
+function openGoalSheet() {
+  if (!window.CassieMemory || typeof window.CassieMemory.sparks !== 'function') return;
+  document.querySelector('.goal-sheet')?.remove();
+  const sp = window.CassieMemory.sparks(), goals = window.CassieMemory.goals();
+  const w = document.createElement('div');
+  w.className = 'plus-sheet goal-sheet'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-labelledby', 'goal-h');
+  w.innerHTML = `<div class="plus-card"><h3 id="goal-h">Your daily goal</h3>
+    <p class="plus-why">Earn Sparks for everything you study. Hit your goal and your streak keeps growing. Pick a size that fits your day.</p>
+    <div class="goal-opts" role="group" aria-label="Daily goal">${goals.map((g) => {
+      const t = GOAL_TIERS[g] || ['Goal', ''];
+      return `<button type="button" class="goal-opt${g === sp.goal ? ' is-on' : ''}" data-goal="${g}" aria-pressed="${g === sp.goal}"><b>${t[0]}</b><span>${g} Sparks a day</span><small>${t[1]}</small></button>`;
+    }).join('')}</div>
+    <div class="plus-actions"><button type="button" class="plus-ok goal-close">Done</button></div></div>`;
+  const back = document.activeElement;
+  const close = () => { w.remove(); document.removeEventListener('keydown', onKey, true); try { back && back.focus && back.focus({ preventScroll: true }); } catch (e) { /* gone */ } };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  w.addEventListener('click', (e) => {
+    if (e.target === w || e.target.closest('.goal-close')) { close(); return; }
+    const opt = e.target.closest('[data-goal]');
+    if (opt) {
+      window.CassieMemory.setGoal(+opt.dataset.goal);
+      w.querySelectorAll('.goal-opt').forEach((b) => { const on = b === opt; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', String(on)); });
+      if (typeof renderHomeAgain === 'function') renderHomeAgain();
+      if (typeof track === 'function') track('feature', 'goal-set');
+    }
+  });
+  document.body.appendChild(w);
+  (w.querySelector('.goal-opt.is-on') || w.querySelector('.goal-opt'))?.focus();
+}
+window.openGoalSheet = openGoalSheet;
+
+/* (v267) Sparks feedback: a small "+N Sparks" that floats up and fades. When the goal is met, the
+   streak's flame takes over (rewards.js): a toast on a normal day, the full moment for a new flame. */
+function sparkFloat(n) {
+  if (!(n > 0)) return;
+  document.querySelector('.spark-float')?.remove();
+  const f = document.createElement('div');
+  f.className = 'spark-float'; f.setAttribute('aria-hidden', 'true'); f.textContent = `+${n} Sparks`;
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 1400);
+}
+function patchGoalRing(res) {
+  const C = 163.4, pct = Math.max(0, Math.min(1, res.goal ? res.today / res.goal : 0)), met = res.today >= res.goal;
+  document.querySelectorAll('.hub-goal').forEach((btn) => {
+    const val = btn.querySelector('.goal-val');
+    if (val) { val.setAttribute('stroke-dashoffset', String(Math.round(C * (1 - pct) * 10) / 10)); val.classList.toggle('goal-done', met); }
+    const b = btn.querySelector('.goal-centre b'), small = btn.querySelector('.goal-centre small');
+    if (b) b.textContent = res.today; if (small) small.textContent = 'of ' + res.goal;
+    const meta = btn.querySelector('.goal-meta small');
+    if (meta) meta.textContent = met ? 'Goal done today' : `${Math.max(0, res.goal - res.today)} Sparks to go`;
+    btn.classList.toggle('is-met', met);
+    btn.setAttribute('aria-label', `Daily goal: ${res.today} of ${res.goal} Sparks`);
+  });
+  if (res.goalJustMet) document.querySelectorAll('.hub-w-streak').forEach((chip) => {
+    chip.querySelector('b').textContent = res.streak;
+    const RW = window.CassieRewards, slot = chip.querySelector('.hub-flame');
+    if (RW && slot) slot.innerHTML = RW.flameFor(res.streak, Math.round(24 + RW.sizeFor(res.streak) * 18)); // (the new day's colour and size)
+  });
+}
+function onSparkEarned(res) {
+  if (!res) return;
+  sparkFloat(res.gained);
+  patchGoalRing(res); // update the ring in place; never navigate
+  if (res.goalJustMet && window.CassieRewards) window.CassieRewards.streakMoment(res);
+}
+// an award earned: its medal moment, and the Awards card on Home counts it
+function onAwardsEarned(ids) {
+  const RW = window.CassieRewards;
+  if (!RW) return;
+  RW.awardsEarned(ids);
+  document.querySelectorAll('.hub-awards').forEach((b) => {
+    const n = RW.earnedCount(), s = b.querySelector('.goal-meta small');
+    if (s) s.textContent = `${n} of ${RW.AWARDS.length}`;
+    b.setAttribute('aria-label', `My awards: ${n} of ${RW.AWARDS.length} earned`);
+  });
+  if (typeof track === 'function') ids.forEach((id) => track('feature', 'award:' + id));
+}
+try {
+  if (window.CassieMemory) { window.CassieMemory.onSpark = onSparkEarned; window.CassieMemory.onAward = onAwardsEarned; }
+  if (window.CassieRewards) window.CassieRewards.config({ name: () => firstName(), busy: () => sendBtn.classList.contains('is-busy') }); // (a moment waits until Cassie has finished answering)
+} catch (e) { /* memory optional */ }
+
 // (v232) a button that waits on the internet, the AI or a file: disabled against repeat taps, a small spinner
 // and a short label ("Signing in…"), aria-busy while it waits. Returns done(); call it when the wait ends.
 function busyButton(btn, label) {
@@ -6798,7 +6912,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=266')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=267')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8029,7 +8143,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=266');
+      exploreMod = await import('./explore/cell3d.js?v=267');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8079,7 +8193,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=266');
+      labsMod = await import('./labs/labs.js?v=267');
       islandRest();
     }
     labsMod.open({
@@ -10029,10 +10143,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=266').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=267').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=266', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=267', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11203,7 +11317,7 @@ if (window.CassieCards) {
     session: (all) => { const s = window.CassieVoice.session({ gender: voiceGender() }); s.plan(cleanForSpeech(all)); return { speak: (t) => s.speak(cleanForSpeech(t)), end: () => s.end() }; },
     track,
     onChange: () => { if (!state.messages.length) renderHistory(); }, // the home screen shows what's due
-    onGrade: (before, after) => { if (after > before) progressAdd({ cardsUp: 1 }); }, // (the weekly card)
+    onGrade: (before, after) => { if (after > before) progressAdd({ cardsUp: 1 }); try { if (window.CassieMemory && window.CassieMemory.award) window.CassieMemory.award('card'); } catch (e) { /* */ } }, // (the weekly card; a reviewed card earns Sparks)
   });
 }
 

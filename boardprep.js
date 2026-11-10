@@ -349,8 +349,10 @@
   function finishQuiz(v, q) {
     const { ex, t } = v, k = v.note ? key(ex, 'note:' + v.note) : key(ex, t), pass = q.right >= PASS;
     q.fin = true;
+    const firstPass = pass && !v.note && !P().done[k];
     if (pass && !v.note) P().done[k] = P().done[k] || Date.now();
     save();
+    if (firstPass) { try { if (window.CassieMemory && window.CassieMemory.lessonDone) window.CassieMemory.lessonDone(); } catch (e) { /* Sparks and awards are extra */ } }
     const next = v.note ? null : (() => { const ts = topicsOf(ex), i = ts.findIndex((x) => x.t === t); return ts.slice(i + 1).find((x, j) => !P().done[key(ex, x.t)] && !locked(i + 1 + j)) || null; })();
     h(`<div class="bp-score"><p class="bp-big">${q.right} of ${q.qs.length}</p><p class="bp-scoremsg"></p></div>
       <div class="letc-row"><button type="button" class="letc-go bp-again2">Quiz me again</button><button type="button" class="letc-line bp-toread">Read the lesson again</button>${next ? '<button type="button" class="letc-line bp-nexttopic">Next topic</button>' : ''}</div>`);
@@ -452,6 +454,7 @@
     s.right = s.qs.slice(0, s.n).filter((q, i) => s.picks[i] === q.a).length;
     s.score = Math.round((s.right / s.n) * 100);
     save(); track('feature', 'board-sim-done');
+    try { if (window.CassieMemory && window.CassieMemory.mockScored) window.CassieMemory.mockScored(s.score); } catch (e) { /* Sparks and awards are extra */ }
     nav[nav.length - 1] = { v: 'results', ex }; render();
   }
   function results(v) {

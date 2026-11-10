@@ -1765,6 +1765,128 @@ test('v264: a guest gets a gentle, once-a-session sign-in nudge at save/retrieve
   await g.ctx.close();
 });
 
+test('v267: Sparks, the daily goal and the streak flame, and school medals: a goal met counts the day (a freeze covers a miss); the flame grows and changes colour at 7, 14, 30, 60 and 100 days; a normal day is a toast, a new flame pops up first and the panel follows; mock scores, quizzes, lessons and early mornings earn medals (one at a time, drop in, flip to the back with the name); My awards shows them all; Reduce Motion keeps it still; it syncs with the account', async (b) => {
+  const fs = require('fs'), path = require('path');
+  const src = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+  // shipped: in the page, in the site build and in the offline cache; nothing people read has a dash
+  expect(/rewards\.css\?v=\d+/.test(src('app.html')) && /<script src="rewards\.js\?v=\d+"><\/script>/.test(src('app.html')), 'app.html loads rewards.css and rewards.js');
+  expect(/\brewards\.js\b/.test(src('scripts/build-site.sh')) && /\brewards\.css\b/.test(src('scripts/build-site.sh')) && /'rewards\.js'/.test(src('sw.js')) && /'rewards\.css'/.test(src('sw.js')), 'rewards.js and rewards.css are in the site build and the offline cache');
+  expect(!/[–—]/.test(src('rewards.js')), 'no em or en dashes in rewards.js');
+  const ds = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const today = ds(new Date()), yest = ds(new Date(Date.now() - 864e5));
+  const mem = { v: 1, profile: { name: '', goal: '' }, topics: {}, facts: [], streak: { count: 6, lastDay: yest }, focusMinutes: 0,
+    sparks: { today: 40, day: today, goal: 50, goalSet: true, lifetime: 900, freezes: 2, onGoalDays: 6, byReason: {}, comeback: false },
+    awards: { got: { early: yest }, quiz: '', lessons: 0, bestMock: 0, early: [], improved: false } };
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off',
+    state: { tab: 'home', profile: { name: '<i>Ana</i> Cruz', role: 'student', grade: 'Grade 10', age: 15, at: 1 },
+      chats: [{ id: 'c1', title: 'Osmosis', messages: [{ role: 'user', content: 'What is osmosis?' }, { role: 'assistant', content: 'Water moving across a membrane.' }], createdAt: Date.now() - 9e5, updatedAt: Date.now() - 9e5 }] },
+    setup: async (c) => { await c.addInitScript((m) => { if (!sessionStorage.getItem('memSeeded')) { localStorage.setItem('cassie.mem.v1', JSON.stringify(m)); sessionStorage.setItem('memSeeded', '1'); } }, mem); } });
+  await page.waitForSelector('.hub-today .hub-goal', { timeout: 8000 });
+  // 1. Today on Home: the goal ring, the streak (still one chip) with its flame, and My awards
+  const home = await page.evaluate(() => ({ chips: document.querySelectorAll('.hub-today .hub-w').length, flame: !!document.querySelector('.hub-w-streak .rw-flame svg'), ring: document.querySelector('.hub-goal').getAttribute('aria-label'), awards: document.querySelector('.hub-awards').getAttribute('aria-label') }));
+  expect(home.chips === 1 && home.flame && /40 of 50 Sparks/.test(home.ring) && /1 of 9 earned/.test(home.awards), '1. Today: the ring, one streak chip with its flame, My awards: ' + JSON.stringify(home));
+  // 2. a right quiz answer: +10 Sparks meets the goal, day 7 is the Gold flame: the flame pops up alone, then the panel
+  await page.evaluate(() => captureQuizMarks('[[GOT: What is the powerhouse of the cell? || The mitochondria]]'));
+  await page.waitForSelector('.rw-pop', { timeout: 3000 });
+  const early = await page.evaluate(() => ({ bg: document.querySelector('.rw-pop').classList.contains('rw-bg'), planes: document.querySelectorAll('.rw-pop .rw-plane').length, streak: CassieMemory.stats().streak }));
+  await page.waitForSelector('.rw-pop.rw-bg', { timeout: 4000 });
+  const pop = await page.evaluate(() => ({ eyebrow: document.querySelector('.rw-eyebrow').textContent, title: document.querySelector('.rw-title').textContent, line: document.querySelector('.rw-line').textContent, focus: document.activeElement === document.querySelector('.rw-ok'), modal: document.querySelector('.rw-pop').getAttribute('aria-modal') }));
+  expect(early.streak === 7 && !early.bg && early.planes === 3, '2. the goal counted day 7 and the flame shows first, before the panel: ' + JSON.stringify(early));
+  expect(pop.eyebrow === 'New flame unlocked' && pop.title === 'Day 7' && /Gold flame/.test(pop.line) && /Rose at day 14/.test(pop.line) && pop.focus && pop.modal === 'true', '2. then the panel: New flame unlocked, Day 7, the Gold flame, Rose next; focus on Keep going: ' + JSON.stringify(pop));
+  // the flame spins when dragged
+  const box = await page.locator('.rw-flamestage').boundingBox();
+  await page.mouse.move(box.x + box.width / 2 - 40, box.y + box.height / 2); await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 6 }); await page.mouse.up();
+  const spun = await page.evaluate(() => /rotateY\(-?[1-9]/.test(document.querySelector('.rw-spin').style.transform));
+  expect(spun, '2. dragging spins the flame');
+  await page.click('.rw-ok');
+  await page.waitForFunction(() => !document.querySelector('.rw-pop'), null, { timeout: 3000 });
+  // 3. the next day is a normal day: a toast, no full moment; the flame chip keeps up
+  await page.evaluate((y) => { const d = CassieMemory.data; d.streak.lastDay = y; d.sparks.today = 45; }, yest);
+  await page.evaluate(() => captureQuizMarks('[[GOT: What is osmosis? || Water across a membrane]]'));
+  await page.waitForSelector('.rw-toast.rw-on', { timeout: 3000 });
+  const toast = await page.evaluate(() => ({ text: document.querySelector('.rw-toast').innerText, pop: !!document.querySelector('.rw-pop'), role: document.querySelector('.rw-toast').getAttribute('role'), streak: CassieMemory.stats().streak }));
+  expect(toast.streak === 8 && /Day 8, streak kept/.test(toast.text) && /6 days to the Rose flame/.test(toast.text) && !toast.pop && toast.role === 'status', '3. a normal goal day is a toast: ' + JSON.stringify(toast));
+  // 4. the rules: a freeze covers a missed day (and says so), with none the streak starts again; flashcards stop at 100 a day
+  const rules = await page.evaluate(() => {
+    const d = CassieMemory.data, ago = (n) => { const x = new Date(Date.now() - n * 864e5); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+    d.streak = { count: 20, lastDay: ago(3) }; d.sparks.freezes = 2; d.sparks.today = 0; d.sparks.byReason = {};
+    for (let i = 0; i < 5; i++) CassieMemory.award('mock');
+    const froze = { streak: d.streak.count, freezes: d.sparks.freezes, comeback: d.sparks.comeback };
+    d.streak = { count: 20, lastDay: ago(4) }; d.sparks.freezes = 1; d.sparks.today = 0; d.sparks.byReason = {};
+    for (let i = 0; i < 5; i++) CassieMemory.award('mock');
+    const reset = d.streak.count;
+    d.sparks.today = 0; d.sparks.byReason = {};
+    let cards = 0; for (let i = 0; i < 40; i++) cards += CassieMemory.award('card').gained;
+    return { froze, reset, cards };
+  });
+  expect(rules.froze.streak === 21 && rules.froze.freezes === 0 && rules.froze.comeback && rules.reset === 1 && rules.cards === 100, '4. freezes cover missed days, none left starts over, cards cap at 100 Sparks a day: ' + JSON.stringify(rules));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { document.querySelectorAll('.rw-pop .rw-ok').forEach((x) => x.click()); });
+  await page.waitForFunction(() => !document.querySelector('.rw-pop'), null, { timeout: 6000 }).catch(() => {});
+  for (let i = 0; i < 3 && await page.locator('.rw-pop').count(); i++) { await page.click('.rw-ok'); await page.waitForTimeout(400); }
+  // 5. medals: a 96% mock earns With Honors, High Honors and Highest Honors, shown one at a time
+  await page.evaluate(() => CassieMemory.mockScored(96));
+  await page.waitForSelector('.rw-pop.rw-award.rw-bg', { timeout: 5000 });
+  const m1 = await page.evaluate(() => ({ title: document.querySelector('.rw-title').textContent, eyebrow: document.querySelector('.rw-eyebrow').textContent, got: Object.keys(CassieMemory.awards().got).sort(), band: [...document.querySelectorAll('.rw-pop .rw-front textPath')].map((t) => t.textContent) }));
+  expect(m1.title === 'With Honors' && m1.eyebrow === 'Award earned' && ['early', 'hhon', 'hon', 'xhon'].every((x) => m1.got.includes(x)) && m1.band.includes('WITH HONORS'), '5. the first medal, its name in big letters on the band: ' + JSON.stringify(m1));
+  await page.click('.rw-ok');
+  await page.waitForFunction(() => document.querySelector('.rw-pop .rw-title') && document.querySelector('.rw-pop .rw-title').textContent === 'With High Honors', null, { timeout: 5000 });
+  // the back: the name (as text, never markup), the award and the date; drag to flip to it
+  const back = await page.evaluate(() => { const t = [...document.querySelectorAll('.rw-pop .rw-back text')].map((x) => x.textContent); return { name: t.includes('<i>Ana</i>'), award: t.includes('WITH HIGH') && t.includes('HONORS'), noTags: !document.querySelector('.rw-pop .rw-back svg i') }; });
+  expect(back.name && back.award && back.noTags, '5. the back is engraved with the name and the award, safely: ' + JSON.stringify(back));
+  await page.waitForTimeout(3600); // (it drops in from above the screen and turns once to say hello first)
+  const mb = await page.locator('.rw-pop .rw-medal').boundingBox();
+  await page.mouse.move(mb.x + 40, mb.y + mb.height / 2); await page.mouse.down();
+  await page.mouse.move(mb.x + 210, mb.y + mb.height / 2, { steps: 30 }); await page.mouse.up();
+  await page.waitForTimeout(2500);
+  const flip = await page.evaluate(() => { const tf = document.querySelector('.rw-pop .rw-flip').style.transform, m = /rotateY\((-?[\d.]+)deg\)/.exec(tf); const r = m ? ((+m[1] % 360) + 360) % 360 : 0; return { ok: Math.abs(r - 180) < 20, tf }; });
+  expect(flip.ok, '5. dragging the medal flips it to the back: ' + JSON.stringify(flip) + ' box ' + JSON.stringify(mb));
+  await page.click('.rw-ok'); await page.waitForTimeout(500); await page.click('.rw-ok');
+  await page.waitForFunction(() => !document.querySelector('.rw-pop'), null, { timeout: 4000 });
+  // 6. quizzes, lessons and a weak topic made strong earn theirs; My awards shows all nine
+  const more = await page.evaluate(() => {
+    for (let i = 0; i < 50; i++) CassieMemory.quizAnswer(i % 10 !== 0, 'cell question ' + i);
+    CassieMemory.quizAnswer(false, 'photosynthesis light'); CassieMemory.quizAnswer(true, 'photosynthesis light'); CassieMemory.quizAnswer(true, 'photosynthesis light'); CassieMemory.quizAnswer(true, 'photosynthesis light');
+    const sameDay = !!CassieMemory.awards().got.imp; // (weak and strong on the same day is not improvement)
+    Object.values(CassieMemory.data.topics).forEach((t) => { if (t.weakDay) t.weakDay = '2020-01-01'; }); // (it was weak on an earlier day)
+    CassieMemory.quizAnswer(true, 'photosynthesis light');
+    for (let i = 0; i < 20; i++) CassieMemory.lessonDone();
+    return { got: Object.keys(CassieMemory.awards().got).sort(), sameDay };
+  });
+  expect(['book', 'imp', 'quiz'].every((x) => more.got.includes(x)) && !more.sameDay && !more.got.includes('dean') && !more.got.includes('att'), '6. Best in Quiz, Most Improved (weak on an earlier day, strong now; not in one sitting) and Bookworm earned; Dean’s Lister and Perfect Attendance not yet: ' + JSON.stringify(more));
+  await page.evaluate(() => document.querySelectorAll('.rw-pop').forEach((x) => x.remove()));
+  await page.evaluate(() => { location.reload(); });
+  await page.waitForSelector('.hub-today .hub-awards', { timeout: 8000 });
+  await page.evaluate(() => document.querySelectorAll('.rw-pop, .rw-toast').forEach((x) => x.remove()));
+  await page.click('.hub-awards');
+  await page.waitForSelector('.rw-shelf', { timeout: 3000 });
+  const shelf = await page.evaluate(() => ({ n: document.querySelector('.rw-shelf-n').textContent, cells: document.querySelectorAll('.rw-cell').length, earnedButtons: document.querySelectorAll('button.rw-cell').length, locked: [...document.querySelectorAll('.rw-lock b')].map((x) => x.textContent), focus: document.activeElement === document.querySelector('.rw-close') }));
+  expect(shelf.n === '7 of 9 earned' && shelf.cells === 9 && shelf.earnedButtons === 7 && shelf.locked.includes('Perfect Attendance') && shelf.locked.includes('Dean’s Lister'.replace('’', "'")) && shelf.focus, '6. My awards: 7 of 9, the earned ones open, the rest say how: ' + JSON.stringify(shelf));
+  await page.keyboard.press('Escape');
+  // 7. it goes with the account (numbers and dates only) and comes back on another device, the earlier day winning
+  const sync = await page.evaluate(() => { const s = CassieMemory.streakData(); const ok = s.awards && s.awards.hon && typeof s.sparkLifetime === 'number'; CassieMemory.mergeStreak({ awards: { att: '2026-01-02', bogus: '2026-01-01' }, sparkLifetime: 999999 }); const a = CassieMemory.awards().got; return { ok, att: a.att, bogus: 'bogus' in a, life: CassieMemory.sparks().lifetime }; });
+  expect(sync.ok && sync.att === '2026-01-02' && !sync.bogus && sync.life === 999999, '7. synced with the account, unknown awards ignored: ' + JSON.stringify(sync));
+  // 8. Reduce Motion: the flame is still and the panel shows at once
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const still = await page.evaluate(() => { CassieRewards.flameMoment(14); const p = document.querySelector('.rw-pop'); return { animate: document.querySelectorAll('.rw-pop animate').length, bg: p.classList.contains('rw-bg') }; });
+  expect(still.animate === 0 && still.bg, '8. Reduce Motion: no moving fire, the panel at once: ' + JSON.stringify(still));
+  await page.click('.rw-ok');
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
+test('v267: an old memory (from before Sparks) keeps its streak: studied today means today’s goal is met, two starter freezes', async (b) => {
+  const ds = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const today = ds(new Date());
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, lite: 'off', state: { tab: 'home', profile: { name: 'O', role: 'student', grade: 'Grade 10', age: 15, at: 1 } },
+    setup: async (c) => { await c.addInitScript((t) => { localStorage.setItem('cassie.mem.v1', JSON.stringify({ v: 1, profile: {}, topics: {}, facts: [], streak: { count: 41, lastDay: t }, focusMinutes: 30 })); }, today); } });
+  const g = await page.evaluate(() => ({ streak: CassieMemory.stats().streak, sp: CassieMemory.sparks() }));
+  expect(g.streak === 41 && g.sp.met && g.sp.freezes === 2, 'grandfathered: the streak stays, today counts as met, 2 freezes: ' + JSON.stringify(g));
+  expect(!errors.length, 'page errors: ' + errors.join('; '));
+  await ctx.close();
+});
+
 test('v266: the plans screen shows monthly prices first with a Monthly / Semester (Pasado Pass) switch like the website; Free stays free, prices in the local currency, per account; skippable and once a session', async (b) => {
   const fs = require('fs'), app = fs.readFileSync(require('path').join(ROOT, 'app.js'), 'utf8');
   // wired into the landing, monthly first, reuses the app's own currency/pricing
