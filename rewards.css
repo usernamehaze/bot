@@ -1,0 +1,96 @@
+/* Cassie's rewards (rewards.js): the streak flame, its toast and moment, the school medals and My awards.
+   The flame and the medals are drawn in their own fire and metal colours; the shelf uses the app's
+   tokens so it follows light, dark and the chosen colour. Spacing is on the 8-point scale. */
+
+/* a flame in a chip (Home's streak, the toast) */
+.rw-flame { display: inline-block; flex: none; line-height: 0; }
+.rw-flame svg { width: 100%; height: 100%; overflow: visible; transform-origin: 50% 95%; animation: rw-flick 2.1s ease-in-out infinite; }
+.rw-flame.rw-out { filter: grayscale(1); opacity: .45; }
+@keyframes rw-flick { 0%, 100% { transform: scaleY(1) scaleX(1) skewX(0deg); } 25% { transform: scaleY(1.05) scaleX(.97) skewX(-2.5deg); } 50% { transform: scaleY(.97) scaleX(1.02) skewX(1.5deg); } 75% { transform: scaleY(1.03) scaleX(.99) skewX(2.5deg); } }
+
+/* the toast: a normal goal day */
+.rw-toast { position: fixed; z-index: 445; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 50%; width: min(420px, calc(100vw - 32px)); display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 12px; border-radius: 16px; background: #2a2320; color: #fff; box-shadow: 0 16px 40px rgba(20, 12, 8, .35); transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.2, 1.3, .4, 1); pointer-events: none; }
+.rw-toast.rw-on { transform: translate(-50%, 0); }
+.rw-toast b { display: block; font-size: 15px; line-height: 1.3; }
+.rw-toast small { display: block; font-size: 13px; line-height: 1.35; color: #e6dbd4; }
+
+/* a moment: the hero first (the flame or the medal), then the panel and the words fade in */
+.rw-pop { position: fixed; inset: 0; z-index: 440; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; text-align: center; color: #f6eee8; overflow: hidden; transition: opacity .25s ease; }
+.rw-pop.rw-out { opacity: 0; }
+.rw-scrim { position: absolute; inset: 0; background: radial-gradient(110% 75% at 50% 38%, #3a2618 0%, #1b120d 55%, #0d0907 100%); opacity: 0; transition: opacity .5s ease; }
+.rw-rays { display: none; position: absolute; left: 50%; top: 260px; width: 760px; height: 760px; margin: -380px 0 0 -380px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 214, 120, .12) 0deg 7deg, transparent 7deg 18deg); -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%); opacity: 0; transition: opacity .8s ease; animation: rw-turn 40s linear infinite; }
+.rw-award .rw-rays { display: block; }
+@keyframes rw-turn { to { transform: rotate(360deg); } }
+.rw-pop.rw-bg .rw-scrim, .rw-pop.rw-bg .rw-rays { opacity: 1; }
+.rw-txt { position: relative; opacity: 0; transform: translateY(8px); transition: opacity .45s ease, transform .45s ease; }
+.rw-pop.rw-bg .rw-txt { opacity: 1; transform: none; }
+.rw-pop.rw-bg .rw-bottom { transition-delay: .12s; }
+.rw-eyebrow { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--rw-pill, #e7c27a); }
+.rw-award .rw-eyebrow { color: #e7c27a; }
+.rw-title { margin: 4px 0 0; font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -.02em; color: #fff; }
+.rw-line { margin: 8px auto 0; max-width: 320px; font-size: 15px; line-height: 1.5; color: #e2d6ce; }
+.rw-hint { margin: 8px 0 0; font-size: 13px; color: #b3a49b; }
+.rw-ok { margin-top: 16px; min-height: 48px; min-width: 160px; padding: 12px 32px; border: 0; border-radius: 16px; background: #fff; color: #2a2320; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
+.rw-ok:focus-visible { outline: 3px solid #e7c27a; outline-offset: 3px; }
+.rw-stage { position: relative; display: flex; justify-content: center; }
+
+/* the flame in its moment: crossed planes that fade by how much they face you (drag to spin) */
+.rw-flamestage { position: relative; width: 260px; height: 300px; perspective: 700px; display: flex; align-items: flex-end; justify-content: center; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.rw-flamestage:active { cursor: grabbing; }
+.rw-grow { transform-origin: 50% 100%; transform: scale(0); }
+.rw-spin { position: relative; width: 150px; height: 212px; transform-style: preserve-3d; transform-origin: 50% 75%; }
+.rw-plane { position: absolute; inset: 0; }
+.rw-plane svg { width: 100%; height: 100%; overflow: visible; }
+.rw-flick { width: 100%; height: 100%; transform-origin: 50% 95%; animation: rw-flick 2.4s ease-in-out infinite; }
+.rw-ember { position: absolute; bottom: 24px; left: 50%; border-radius: 50%; pointer-events: none; mix-blend-mode: screen; }
+.rw-spark { position: absolute; left: 50%; top: 60%; width: 6px; height: 6px; border-radius: 50%; pointer-events: none; }
+
+/* a medal: its ribbon from the top of the screen, then the name, the line and the button */
+.rw-award { justify-content: flex-start; padding-top: 0; }
+.rw-award .rw-stage { order: 0; width: 100%; height: 420px; flex: none; }
+.rw-award .rw-top { order: 1; }
+.rw-award .rw-bottom { order: 2; }
+.rw-award .rw-title { font-size: 28px; }
+.rw-medalstage { position: relative; width: 100%; height: 100%; }
+.rw-medalstage .rw-hang { position: absolute; top: -8px; left: 50%; margin-left: -100px; }
+.rw-conf { position: absolute; top: -24px; pointer-events: none; z-index: 2; }
+
+.rw-hang { width: 200px; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 0; }
+.rw-sway { transform-origin: 50% 0; animation: rw-sway 3.4s ease-in-out infinite; }
+@keyframes rw-sway { 0%, 100% { transform: rotate(1.2deg); } 50% { transform: rotate(-1.2deg); } }
+.rw-rib { display: block; width: 200px; position: relative; z-index: 1; }
+.rw-medal { width: 200px; height: 210px; margin-top: -22px; perspective: 900px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.rw-medal:active { cursor: grabbing; }
+.rw-flip { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+.rw-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.rw-face svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .32)); }
+.rw-front { transform: translateZ(5px); }
+.rw-back { transform: rotateY(180deg) translateZ(5px); }
+.rw-edge { position: absolute; left: 14px; top: 26px; width: 172px; height: 172px; border-radius: 50%; }
+
+/* My awards: the shelf (a sheet from the bottom on a phone, a panel in the middle on a computer) */
+.rw-shelf { position: fixed; inset: 0; z-index: 435; display: flex; align-items: flex-end; justify-content: center; background: color-mix(in srgb, var(--text) 40%, transparent); }
+.rw-shelf-card { width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; padding: 24px 16px calc(env(safe-area-inset-bottom, 0px) + 32px); border-radius: 24px 24px 0 0; background: var(--bg); color: var(--text); box-shadow: 0 -16px 48px color-mix(in srgb, var(--text) 25%, transparent); }
+@media (min-width: 761px) { .rw-shelf { align-items: center; } .rw-shelf-card { border-radius: 24px; padding: 24px 24px 32px; } }
+.rw-shelf-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.rw-shelf-top h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.rw-shelf-n { margin: 4px 0 0; font-size: 15px; color: var(--muted); }
+.rw-close { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); cursor: pointer; }
+.rw-close svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.rw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rw-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 48px; padding: 8px 4px 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; text-align: center; }
+button.rw-cell { cursor: pointer; }
+.rw-cell b { font-size: 14px; font-weight: 800; line-height: 1.25; }
+.rw-cell small { font-size: 12px; line-height: 1.35; color: var(--muted); }
+.rw-cell em { font-style: normal; font-size: 12px; font-weight: 700; line-height: 1.35; color: var(--primary-ink); }
+.rw-mini { position: relative; display: block; width: 92px; height: 122px; }
+.rw-mini .rw-hang { position: absolute; left: 50%; top: 0; transform: translateX(-50%) scale(.46); transform-origin: 50% 0; }
+.rw-lock .rw-mini { filter: grayscale(1) contrast(.8); opacity: .45; }
+.rw-lock b { color: var(--muted); }
+
+/* still for Reduce Motion and Lite mode */
+@media (prefers-reduced-motion: reduce) {
+  .rw-flame svg, .rw-flick, .rw-sway, .rw-rays { animation: none; }
+  .rw-toast, .rw-txt, .rw-scrim, .rw-pop { transition: none; }
+}
+.lite .rw-flame svg, .lite .rw-flick, .lite .rw-sway, .lite .rw-rays { animation: none; }

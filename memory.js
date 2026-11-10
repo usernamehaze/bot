@@ -20,8 +20,37 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
+  // Sparks (XP): points for real study, a daily goal, and the streak counts a
+  // day only when the goal is met. All on-device, synced with the account as
+  // plain numbers (never what was studied).
+  const SPARK = { ask: 10, card: 5, focus: 15, lesson: 20, quiz: 10, mock: 40 };
+  const SPARK_CAP = { card: 100, quiz: 100 }; // most you can earn from one kind in a day
+  const GOALS = [30, 50, 80, 120]; // Casual / Regular / Serious / Intense
+  const DEFAULT_GOAL = 50;
+  const FREEZE_EVERY = 5; // earn one freeze each 5 on-goal days
+
+  function blankSparks() {
+    return { today: 0, day: '', goal: DEFAULT_GOAL, goalSet: false, lifetime: 0, freezes: 2, onGoalDays: 0, byReason: {}, comeback: false };
+  }
+  // Awards (school medals): what each needs, kept as plain numbers. `got` is id -> the day it was earned.
+  function blankAwards() {
+    return { got: {}, quiz: '', lessons: 0, bestMock: 0, early: [], improved: false };
+  }
+  const QUIZ_WINDOW = 50; // Best in Quiz: 90% right across the last 50 quiz answers
+  const AWARD_RULES = {
+    hon: (a) => a.bestMock >= 85,
+    hhon: (a) => a.bestMock >= 90,
+    xhon: (a) => a.bestMock >= 95,
+    att: () => data.streak.count >= 30 && data.streak.lastDay === todayStr(),
+    quiz: (a) => a.quiz.length >= QUIZ_WINDOW && (a.quiz.match(/1/g) || []).length >= QUIZ_WINDOW * 0.9,
+    imp: (a) => a.improved,
+    book: (a) => a.lessons >= 20,
+    early: (a) => a.early.length >= 5,
+    dean: () => false, // (comes with the weekly leagues)
+  };
+
   function blank() {
-    return { v: 1, profile: { name: '', goal: '' }, topics: {}, facts: [], streak: { count: 0, lastDay: '' }, focusMinutes: 0 };
+    return { v: 1, profile: { name: '', goal: '' }, topics: {}, facts: [], streak: { count: 0, lastDay: '' }, focusMinutes: 0, sparks: blankSparks(), awards: blankAwards() };
   }
 
   let data = blank();
@@ -38,6 +67,24 @@
         data.facts = parsed.facts || [];
         data.streak = Object.assign({ count: 0, lastDay: '' }, parsed.streak || {});
         data.focusMinutes = parsed.focusMinutes || 0;
+        if (parsed.sparks && typeof parsed.sparks === 'object') {
+          data.sparks = Object.assign(blankSparks(), parsed.sparks);
+          data.sparks.byReason = parsed.sparks.byReason || {};
+        } else {
+          // Grandfather an existing user onto Sparks without breaking a live
+          // streak: if they already studied today under the old rules, count
+          // today's goal as met so the streak carries on. Keep 2 starter freezes.
+          data.sparks = blankSparks();
+          if (data.streak.lastDay === todayStr()) {
+            data.sparks.day = todayStr();
+            data.sparks.today = data.sparks.goal;
+          }
+        }
+        const aw = parsed.awards && typeof parsed.awards === 'object' ? parsed.awards : {};
+        data.awards = Object.assign(blankAwards(), aw);
+        data.awards.got = aw.got && typeof aw.got === 'object' ? aw.got : {};
+        data.awards.early = Array.isArray(aw.early) ? aw.early.slice(-10) : [];
+        data.awards.quiz = typeof aw.quiz === 'string' ? aw.quiz.replace(/[^01]/g, '').slice(-QUIZ_WINDOW) : '';
       }
     } catch (e) { data = blank(); }
   }
@@ -66,13 +113,98 @@
     return data.topics[name];
   }
 
-  function bumpStreak() {
+  function dayStr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  // whole days from a yyyy-mm-dd to b yyyy-mm-dd (b later); 0 if same/invalid
+  function daysBetween(a, b) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a) || !/^\d{4}-\d{2}-\d{2}$/.test(b)) return 0;
+    const ms = Date.parse(b + 'T00:00:00') - Date.parse(a + 'T00:00:00');
+    return Math.round(ms / DAY);
+  }
+
+  function rollSparkDay() {
     const today = todayStr();
-    if (data.streak.lastDay === today) return;
-    const y = new Date(Date.now() - DAY);
-    const yStr = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
-    data.streak.count = data.streak.lastDay === yStr ? (data.streak.count + 1) : 1;
+    if (data.sparks.day !== today) {
+      data.sparks.day = today;
+      data.sparks.today = 0;
+      data.sparks.byReason = {};
+      data.sparks.comeback = false;
+    }
+  }
+
+  // The streak counts a day only when the goal is met. A banked freeze covers a
+  // missed day so one slip doesn't erase the streak.
+  function reachGoalToday() {
+    const today = todayStr();
+    if (data.streak.lastDay === today) return false; // already counted today
+    const prev = data.streak.lastDay;
+    data.sparks.comeback = false;
+    if (!prev) {
+      data.streak.count = 1;
+    } else {
+      const gap = daysBetween(prev, today); // >= 1 when prev is an earlier day
+      if (gap <= 1) {
+        data.streak.count += 1;
+      } else {
+        const missed = gap - 1;
+        if ((data.sparks.freezes || 0) >= missed) {
+          data.sparks.freezes -= missed;
+          data.streak.count += 1;
+          data.sparks.comeback = true;
+        } else {
+          data.streak.count = 1;
+        }
+      }
+    }
     data.streak.lastDay = today;
+    data.sparks.onGoalDays = (data.sparks.onGoalDays || 0) + 1;
+    // earn a freeze every FREEZE_EVERY on-goal days (capped so it can't hoard)
+    if (data.sparks.onGoalDays % FREEZE_EVERY === 0) {
+      data.sparks.freezes = Math.min(5, (data.sparks.freezes || 0) + 1);
+    }
+    return true;
+  }
+
+  // Check every award; the ones earned just now are saved with today's date and handed to the UI.
+  function checkAwards() {
+    const a = data.awards, won = [];
+    Object.keys(AWARD_RULES).forEach((id) => {
+      if (!a.got[id] && AWARD_RULES[id](a)) { a.got[id] = todayStr(); won.push(id); }
+    });
+    if (won.length) {
+      save();
+      if (typeof API.onAward === 'function') { try { API.onAward(won); } catch (e) { /* UI is optional */ } }
+    }
+    return won;
+  }
+
+  // Award Sparks for a kind of study. Returns what happened so the UI can show
+  // a "+N" and celebrate the moment the goal is reached.
+  function addSparks(reason) {
+    rollSparkDay();
+    // Early Bird: a day with study before 7 in the morning
+    if (new Date().getHours() < 7 && data.awards.early.indexOf(todayStr()) === -1) data.awards.early = data.awards.early.concat(todayStr()).slice(-10);
+    const base = SPARK[reason] || 0;
+    let n = base;
+    const cap = SPARK_CAP[reason];
+    if (cap != null) {
+      const used = data.sparks.byReason[reason] || 0;
+      n = Math.max(0, Math.min(base, cap - used));
+    }
+    const wasMet = data.sparks.today >= data.sparks.goal;
+    if (n > 0) {
+      data.sparks.byReason[reason] = (data.sparks.byReason[reason] || 0) + n;
+      data.sparks.today += n;
+      data.sparks.lifetime += n;
+    }
+    let goalJustMet = false;
+    if (!wasMet && data.sparks.today >= data.sparks.goal) goalJustMet = reachGoalToday();
+    save();
+    const res = { gained: n, today: data.sparks.today, goal: data.sparks.goal, goalJustMet: goalJustMet, comeback: data.sparks.comeback, streak: data.streak.count };
+    if (typeof API.onSpark === 'function') { try { API.onSpark(res, reason); } catch (e) { /* UI is optional */ } }
+    checkAwards();
+    return res;
   }
 
   // spaced repetition (SM-2 lite). quality: 'good' | 'again'
@@ -97,7 +229,7 @@
     get data() { return data; },
 
     recordQuestion(text) {
-      bumpStreak();
+      addSparks('ask');
       const name = normTopic(text);
       current = name;
       if (name) {
@@ -123,7 +255,7 @@
       const name = topicName || current;
       if (!name) return;
       const t = ensureTopic(name);
-      if (correct) { t.correct += 1; schedule(t, 'good'); }
+      if (correct) { t.correct += 1; schedule(t, 'good'); addSparks('quiz'); }
       else { t.wrong += 1; schedule(t, 'again'); }
       save();
     },
@@ -187,10 +319,75 @@
     },
 
     addFocusMinutes(n) {
-      bumpStreak(); // a completed focus block counts as studying today
       data.focusMinutes = (data.focusMinutes || 0) + (Number(n) || 0);
-      save();
+      addSparks('focus'); // a completed focus block earns Sparks (saves too)
     },
+
+    // Award Sparks for a kind of study (lesson/mock/card/...). Public so app.js
+    // can credit lessons, labs and mock exams. Returns the award result.
+    award(reason) { return addSparks(reason); },
+
+    // Every quiz answer (chat, board, labs) comes through here: Sparks for a right one, the last 50
+    // for Best in Quiz, and a topic that was weak becoming strong for Most Improved.
+    quizAnswer(right, question) {
+      const a = data.awards;
+      a.quiz = (a.quiz + (right ? '1' : '0')).slice(-QUIZ_WINDOW);
+      const name = normTopic(question);
+      if (name) {
+        const t = ensureTopic(name);
+        if (right) { t.correct += 1; schedule(t, 'good'); } else { t.wrong += 1; schedule(t, 'again'); }
+        t.last = Date.now();
+        // weak on an earlier day, strong now: improvement over time, not a slip and a fix in one sitting
+        if (t.wrong > 0 && t.wrong >= t.correct && !t.weakDay) t.weakDay = todayStr();
+        if (t.weakDay && t.weakDay < todayStr() && t.correct >= t.wrong + 2) a.improved = true;
+      }
+      if (right) addSparks('quiz'); else { save(); checkAwards(); }
+    },
+    // a lesson finished (a board topic's quiz passed for the first time)
+    lessonDone() { data.awards.lessons += 1; return addSparks('lesson'); },
+    // a mock exam scored (0 to 100)
+    mockScored(score) {
+      const s = Math.max(0, Math.min(100, Math.round(+score || 0)));
+      data.awards.bestMock = Math.max(data.awards.bestMock || 0, s);
+      return addSparks('mock');
+    },
+    // the awards for the shelf: which are earned (and the day), and how far along the rest are
+    awards() {
+      const a = data.awards, right = (a.quiz.match(/1/g) || []).length;
+      return {
+        got: Object.assign({}, a.got),
+        progress: {
+          hon: [a.bestMock, 85], hhon: [a.bestMock, 90], xhon: [a.bestMock, 95],
+          att: [Math.min(data.streak.count, 30), 30], quiz: [a.quiz.length, QUIZ_WINDOW, right],
+          imp: [a.improved ? 1 : 0, 1], book: [Math.min(a.lessons, 20), 20], early: [Math.min(a.early.length, 5), 5], dean: [0, 1],
+        },
+      };
+    },
+    onAward: null,
+
+    // A snapshot for the UI: today's Sparks against the goal, lifetime, freezes.
+    sparks() {
+      rollSparkDay();
+      const s = data.sparks;
+      return {
+        today: s.today, goal: s.goal, goalSet: !!s.goalSet,
+        pct: Math.max(0, Math.min(1, s.goal ? s.today / s.goal : 0)),
+        met: s.today >= s.goal, lifetime: s.lifetime, freezes: s.freezes || 0,
+      };
+    },
+    goals() { return GOALS.slice(); },
+    setGoal(v) {
+      const g = Math.round(+v || 0);
+      if (GOALS.indexOf(g) === -1) return false;
+      data.sparks.goal = g; data.sparks.goalSet = true;
+      // reaching a lowered goal with today's Sparks counts the day at once
+      if (!(/* already counted */ data.streak.lastDay === todayStr()) && data.sparks.today >= g) reachGoalToday();
+      save();
+      return true;
+    },
+
+    // A hook app.js sets to show the "+N Sparks" float and goal-met moment.
+    onSpark: null,
     masteredCount() {
       return Object.values(data.topics).filter((t) => t.correct > 0 && t.correct > t.wrong).length;
     },
@@ -204,19 +401,54 @@
         mastered: API.masteredCount(),
         focusHours: Math.round(((data.focusMinutes || 0) / 60) * 10) / 10,
         focusMinutes: data.focusMinutes || 0,
+        sparksToday: (rollSparkDay(), data.sparks.today),
+        sparksGoal: data.sparks.goal,
+        sparksLifetime: data.sparks.lifetime,
+        freezes: data.sparks.freezes || 0,
       };
     },
 
     clearAll() { data = blank(); save(); },
 
-    // the study streak and focus time go with an account (numbers and a date only, never what was studied)
-    streakData() { return { count: data.streak.count, lastDay: data.streak.lastDay, focusMinutes: data.focusMinutes || 0 }; },
+    // the study streak, focus time and Sparks go with an account (numbers and a
+    // date only, never what was studied)
+    streakData() {
+      rollSparkDay();
+      const s = data.sparks;
+      return {
+        count: data.streak.count, lastDay: data.streak.lastDay, focusMinutes: data.focusMinutes || 0,
+        sparkDay: s.day, sparkToday: s.today, sparkGoal: s.goal, sparkGoalSet: !!s.goalSet,
+        sparkLifetime: s.lifetime, onGoalDays: s.onGoalDays || 0, freezes: s.freezes || 0,
+        awards: Object.assign({}, data.awards.got), awardLessons: data.awards.lessons, awardMock: data.awards.bestMock,
+        awardEarly: data.awards.early.slice(), awardImproved: !!data.awards.improved,
+      };
+    },
     // back from the account on this device: the later streak wins (the same day: the longer one); focus time, the larger
     mergeStreak(s) {
       if (!s || typeof s !== 'object') return;
       const day = /^\d{4}-\d{2}-\d{2}$/.test(s.lastDay || '') ? s.lastDay : '', n = Math.max(0, Math.round(+s.count || 0));
       if (day && (day > data.streak.lastDay || (day === data.streak.lastDay && n > data.streak.count))) data.streak = { count: n, lastDay: day };
       data.focusMinutes = Math.max(data.focusMinutes || 0, Math.max(0, +s.focusMinutes || 0));
+      // Sparks: lifetime/onGoalDays/freezes take the larger; a set goal carries
+      // across devices; today's count merges only within the same calendar day.
+      const sp = data.sparks;
+      sp.lifetime = Math.max(sp.lifetime || 0, Math.max(0, +s.sparkLifetime || 0));
+      sp.onGoalDays = Math.max(sp.onGoalDays || 0, Math.max(0, +s.onGoalDays || 0));
+      sp.freezes = Math.max(sp.freezes || 0, Math.min(5, Math.max(0, +s.freezes || 0)));
+      if (s.sparkGoalSet && GOALS.indexOf(Math.round(+s.sparkGoal)) !== -1) { sp.goal = Math.round(+s.sparkGoal); sp.goalSet = true; }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s.sparkDay || '') && s.sparkDay === todayStr()) {
+        rollSparkDay();
+        sp.today = Math.max(sp.today || 0, Math.max(0, +s.sparkToday || 0));
+      }
+      // awards: an award earned on any device counts on every device (the earlier day wins)
+      const aw = data.awards, isDay = /^\d{4}-\d{2}-\d{2}$/;
+      if (s.awards && typeof s.awards === 'object') Object.keys(s.awards).forEach((id) => {
+        if (AWARD_RULES[id] && isDay.test(s.awards[id] || '') && (!aw.got[id] || s.awards[id] < aw.got[id])) aw.got[id] = s.awards[id];
+      });
+      aw.lessons = Math.max(aw.lessons || 0, Math.max(0, Math.round(+s.awardLessons || 0)));
+      aw.bestMock = Math.max(aw.bestMock || 0, Math.max(0, Math.min(100, Math.round(+s.awardMock || 0))));
+      if (Array.isArray(s.awardEarly)) aw.early = [...new Set(aw.early.concat(s.awardEarly.filter((d) => isDay.test(d))))].sort().slice(-10);
+      if (s.awardImproved === true) aw.improved = true;
       save();
     },
 

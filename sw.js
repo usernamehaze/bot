@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cassie-v266';
+const CACHE_NAME = 'cassie-v267';
 const ASSETS = [
   './',
   'index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   'landing/home.css',
   'app.html',
   'style.css',
+  'rewards.css',
   'config.js',
   'errors.js',
   'extlink.js',
@@ -23,6 +24,7 @@ const ASSETS = [
   'gradient.js',
   'start.js',
   'memory.js',
+  'rewards.js',
   'board.js',
   'export.js',
   'sketch.js',

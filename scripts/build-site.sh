@@ -8,8 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 rm -rf _site && mkdir _site
 # (a list, not *.js: a stray script in the folder never ships by accident)
-cp index.html app.html start.html privacy.html terms.html support.html bot.html rescue.html let.html rescue.css rescue.js style.css manifest.json _site/
-cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js \
+cp index.html app.html start.html privacy.html terms.html support.html bot.html rescue.html let.html rescue.css rescue.js style.css rewards.css manifest.json _site/
+cp app.js errors.js mic.js care.js board.js bot-page.js cards.js cassie-bot.js cassie-bot3d.js cassie-3d.js cite.js config.js export.js gradient.js listen.js memory.js rewards.js \
    native.js sketch.js start.js study-room.js sw.js tour.js voice.js extlink.js opening.js boardprep.js livedraw.js _site/
 cp _headers _site/   # Cloudflare Pages response headers (security)
 cp -r icons landing explore labs vendor _site/
