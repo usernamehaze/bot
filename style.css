@@ -1239,15 +1239,6 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 .auth-google { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); width: 100%; max-width: 360px; justify-self: center; min-height: 48px; padding: 0 var(--sp-4); border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; box-shadow: var(--lg-lift); }
 .auth-google svg { width: 18px; height: 18px; flex: none; }
 .auth-google:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
-/* "Signing you in…": the form steps aside while Google or Apple answers (never a blank page) */
-.auth-form.busy > :not(.auth-busy):not(.auth-title) { display: none !important; }
-.auth-busy { display: grid; justify-items: center; gap: var(--sp-2); padding: var(--sp-5) 0; text-align: center; }
-.auth-busy[hidden] { display: none; }
-.auth-busy b { font-size: var(--fs-lg); }
-.auth-busy-sub { color: var(--muted); font-size: var(--fs-sm); }
-.auth-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--text); animation: authSpin .9s linear infinite; }
-@keyframes authSpin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .auth-spin { animation-duration: 2.4s; } }
 /* a sign-in that didn't finish: what happened, and one button to try again */
 .auth-retry { width: 100%; min-height: 48px; border-radius: var(--r-pill); border: 1px solid var(--text); background: var(--text); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer; }
 .auth-retry[hidden] { display: none; }
@@ -1278,20 +1269,15 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 .auth-legal a { color: inherit; }
 .auth-right { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; padding: var(--sp-9, 56px) clamp(var(--sp-6, 32px), 5vw, 72px); color: var(--paper-1);
   background: radial-gradient(120% 80% at 80% 10%, var(--dark-3) 0%, var(--dark-1) 55%, var(--dark-0) 100%); }
-.auth-glow { position: absolute; width: 520px; height: 520px; right: -120px; bottom: -160px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--danger) 35%, transparent), transparent 70%); filter: blur(10px); }
 .auth-copy { position: relative; max-width: 440px; }
 .auth-kicker { margin: 0 0 var(--sp-3, 12px); font-size: .78rem; letter-spacing: .18em; text-transform: uppercase; color: rgba(var(--paper-rgb), .62); }
 .auth-copy h2 { margin: 0 0 var(--sp-4, 16px); font-size: clamp(1.9rem, 3.2vw, 2.7rem); line-height: 1.08; letter-spacing: -.035em; }
 .auth-copy p { margin: 0; color: rgba(var(--paper-rgb), .72); line-height: 1.55; font-size: 1rem; }
-.auth-hero { position: relative; width: min(300px, 64%); aspect-ratio: 1; margin: var(--sp-6, 32px) 0 0 auto; filter: drop-shadow(0 30px 40px rgba(var(--shade-rgb), .5)); }
-.auth-hero .cassie-bot { width: 100%; height: 100%; display: block; }
 @media (max-width: 760px) {
   .auth-page { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .auth-right { order: -1; padding: calc(var(--sp-10, 64px) + var(--safe-top, 0px)) var(--sp-5, 24px) var(--sp-4, 16px); flex-direction: row; align-items: center; gap: var(--sp-3, 12px); justify-content: space-between; }
   .auth-copy h2 { font-size: 1.45rem; margin-bottom: var(--sp-2, 8px); }
   .auth-copy p, .auth-kicker { display: none; }
-  .auth-hero { width: 104px; margin: 0; flex-shrink: 0; }
-  .auth-glow { width: 300px; height: 300px; right: -80px; bottom: -150px; }
   .auth-left { padding: var(--sp-5, 24px) var(--sp-5, 24px) var(--sp-6, 32px); flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--sp-4, 16px); min-height: 0; }
   .auth-brand { position: static; }
   .auth-title { font-size: 1.3rem; }
@@ -2407,17 +2393,105 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 }
 @media (prefers-reduced-motion: reduce) { .fr-welcome, .fr-intro, .fr-ob { animation: none; } .fr-load i { animation: none; opacity: .7; } .fr-bar i { transition: none; } }
 
-/* 3. Sign in, in the same look: one centred column (Google and Apple first), a glass card on a computer */
-.auth-page { grid-template-columns: 1fr; grid-template-rows: 1fr; place-items: center; padding: calc(var(--safe-top) + var(--sp-4, 16px)) var(--sp-4, 16px) calc(var(--safe-bottom) + var(--sp-4, 16px)); }
-.auth-right { display: none !important; }
-.auth-left { flex-direction: column; justify-content: center; gap: var(--sp-4, 16px); padding: 0; min-height: 0; width: min(440px, 100%); }
-.auth-brand { position: static; justify-content: center; font-size: 1.2rem; }
-.auth-form { width: 100%; }
+/* 3. (v270) Sign in, Cassie's way. Phone and tablet: a header (a desk at night, Cassie's cursor landing on the
+   notebook) with the form on a rounded sheet that slides up over it. Computer: the form in a glass card on the
+   left, the header and its words in a panel on the right. Signing in: the page blurs behind a small card. */
+.auth-page { display: flex; flex-direction: column; padding: 0; place-items: initial; }
+.auth-brand { position: absolute; z-index: 2; top: calc(var(--safe-top, 0px) + var(--sp-4, 16px)); left: var(--sp-4, 16px); display: flex; align-items: center; gap: var(--sp-2, 8px); font-size: 1.1rem; color: var(--paper-1); }
+.auth-brand svg { color: var(--paper-1); --logo-eyes: var(--dark-1); }
+.auth-right { display: block; position: relative; flex: none; order: 0; height: clamp(208px, 34vh, 320px); padding: 0; overflow: hidden; background: var(--dark-1); }
+.auth-art { position: absolute; inset: 0; }
+.auth-artsvg { display: block; width: 100%; height: 100%; }
+.auth-copy { display: none; }
+.auth-left { position: relative; z-index: 1; flex: 1 0 auto; width: 100%; margin: calc(-1 * var(--sp-6, 32px)) 0 0; padding: var(--sp-6, 32px) var(--sp-5, 24px) calc(var(--safe-bottom, 0px) + var(--sp-6, 32px)); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0; background: var(--surface); border-radius: 28px 28px 0 0; box-shadow: 0 -8px 24px rgba(var(--shade-rgb), .16);
+  animation: authSheet .5s cubic-bezier(.2, .8, .2, 1) both; }
+.auth-left::before { content: ""; position: absolute; top: var(--sp-2, 8px); left: calc(50% - 20px); width: 40px; height: 4px; border-radius: 99px; background: var(--border); }
+.auth-form { width: min(440px, 100%); padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .auth-go { border-radius: 16px; min-height: 52px; }
-@media (min-width: 600px) {
-  .auth-form { padding: var(--sp-6, 32px) var(--sp-5, 24px); border-radius: 28px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift);
-    -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+@keyframes authSheet { from { transform: translateY(64px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* the fields: an icon at the start of email and password */
+.auth-in { position: relative; display: block; }
+.auth-ico { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.auth-in input { padding-left: var(--sp-7, 40px); }
+/* Or continue with: Google and Apple side by side */
+.auth-or { text-transform: none; letter-spacing: 0; font-size: .82rem; }
+.auth-providers { display: flex; gap: var(--sp-3, 12px); }
+.auth-providers > button { flex: 1 1 0; width: auto; min-width: 0; max-width: none; }
+/* computers: two columns, the form in a glass card, the header in a rounded panel */
+@media (min-width: 900px) {
+  .auth-page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr; }
+  .auth-brand { top: var(--sp-5, 24px); left: var(--sp-5, 24px); color: var(--text); }
+  .auth-brand svg { color: var(--text); --logo-eyes: var(--bg); }
+  .auth-left { grid-column: 1; grid-row: 1; margin: 0; padding: var(--sp-10, 64px) var(--sp-6, 32px) var(--sp-6, 32px); justify-content: center; background: none; border-radius: 0; box-shadow: none; animation: none; }
+  .auth-left::before { display: none; }
+  .auth-form { padding: var(--sp-6, 32px) var(--sp-5, 24px); border-radius: 28px; background: var(--lg-fill-thick); border: 1px solid var(--lg-line); box-shadow: var(--lg-edge), var(--lg-lift); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+  .auth-right { grid-column: 2; grid-row: 1; height: auto; margin: var(--sp-4, 16px); border-radius: 28px; display: flex; flex-direction: column; background: var(--aa-desk); }
+  .auth-art { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
+  .auth-art { background: var(--aa-sky1); }
+  .auth-artsvg { position: absolute; left: 0; right: 0; bottom: 0; height: auto; aspect-ratio: 400 / 240; } /* (the whole desk shows: the panel is taller than the drawing) */
+  .auth-copy { display: block; flex: none; max-width: none; padding: var(--sp-5, 24px) var(--sp-7, 40px) var(--sp-7, 40px); color: var(--paper-1); }
 }
+/* the header's colours, from the theme (it follows the accent colour, light and dark) */
+.auth-page { --aa-sky1: color-mix(in srgb, var(--primary) 26%, var(--dark-1)); --aa-sky2: color-mix(in srgb, var(--secondary) 30%, var(--dark-0)); --aa-desk: color-mix(in srgb, var(--primary) 34%, var(--dark-0)); --aa-win: color-mix(in srgb, var(--secondary) 22%, var(--dark-0)); }
+.aa-sky1 { stop-color: var(--aa-sky1); } .aa-sky2 { stop-color: var(--aa-sky2); }
+.aa-star { fill: var(--paper-1); opacity: .8; animation: aaTwinkle 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.37s); }
+.aa-win, .aa-winsky { fill: var(--aa-win); } .aa-win { stroke: rgba(var(--paper-rgb), .28); stroke-width: 3; }
+.aa-moon, .aa-shade, .aa-bulb, .aa-b3, .aa-page, .aa-tip { fill: var(--paper-1); }
+.aa-frame { fill: none; stroke: rgba(var(--paper-rgb), .28); stroke-width: 3; }
+.aa-glow1 { stop-color: var(--paper-1); stop-opacity: .3; } .aa-glow2 { stop-color: var(--paper-1); stop-opacity: 0; }
+.aa-desk { fill: var(--aa-desk); } .aa-edge { fill: none; stroke: rgba(var(--paper-rgb), .22); stroke-width: 1; }
+.aa-lamp { fill: none; stroke: rgba(var(--paper-rgb), .78); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; } .aa-lampbase { fill: rgba(var(--paper-rgb), .78); }
+.aa-b1 { fill: color-mix(in srgb, var(--primary) 70%, var(--paper-1)); } .aa-b2 { fill: color-mix(in srgb, var(--secondary) 60%, var(--paper-1)); } .aa-eraser { fill: var(--secondary); }
+.aa-band { fill: none; stroke: rgba(var(--shade-rgb), .22); stroke-width: 2; }
+.aa-shadow { fill: rgba(var(--shade-rgb), .35); }
+.aa-page2 { fill: color-mix(in srgb, var(--paper-1) 88%, var(--dark-0)); }
+.aa-line, .aa-spine { fill: none; stroke: rgba(var(--ink-rgb), .24); stroke-width: 1.6; stroke-linecap: round; }
+.aa-write { fill: none; stroke: var(--primary); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: aaWrite .9s ease-out forwards; animation-delay: calc(var(--wait, 0s) + 3.1s); }
+.aa-pencil { fill: color-mix(in srgb, var(--primary) 55%, var(--paper-1)); }
+.aa-trail { fill: none; stroke: rgba(var(--paper-rgb), .5); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 9; }
+.aa-cur { color: var(--paper-1); --logo-eyes: var(--dark-1); }
+.aa-curin { animation: aaBob 2.4s ease-in-out infinite; animation-delay: calc(var(--wait, 0s) + 3s); }
+.auth-artsvg.is-still * { animation: none !important; }
+.auth-artsvg.is-still .aa-write { stroke-dashoffset: 0; }
+@keyframes aaTwinkle { 0%, 100% { opacity: .85; } 50% { opacity: .25; } }
+@keyframes aaWrite { to { stroke-dashoffset: 0; } }
+@keyframes aaBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
+/* the brand intro: "Cassie", the cursor underlines it, then "Your study buddy" (1.2 seconds, a tap ends it) */
+.auth-intro { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: var(--paper-1); background: radial-gradient(90% 70% at 50% 35%, var(--aa-sky1), var(--aa-sky2)); animation: aiOut .25s ease .95s forwards; }
+.ai-in { text-align: center; }
+.ai-word { position: relative; display: inline-block; padding-bottom: var(--sp-4, 16px); }
+.ai-word b { font-size: clamp(2.75rem, 12vw, 4rem); font-weight: 800; letter-spacing: -.04em; }
+.ai-line { position: absolute; left: 0; bottom: 0; width: 100%; height: 16px; overflow: visible; }
+.ai-line path { fill: none; stroke: color-mix(in srgb, var(--primary) 70%, var(--paper-1)); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: aiDraw .55s ease-out .1s forwards; }
+.ai-cur { position: absolute; bottom: 0; left: 0; width: 24px; height: 24px; color: var(--paper-1); --logo-eyes: var(--dark-1); animation: aiCur .55s ease-out .1s both; }
+.ai-in p { margin: var(--sp-4, 16px) 0 0; font-size: 1.05rem; color: rgba(var(--paper-rgb), .86); opacity: 0; animation: aiFade .3s ease .6s forwards; }
+@keyframes aiDraw { to { stroke-dashoffset: 0; } }
+@keyframes aiCur { from { left: -4px; } to { left: calc(100% - 12px); } }
+@keyframes aiFade { to { opacity: 1; } }
+@keyframes aiOut { to { opacity: 0; visibility: hidden; } }
+/* signing in: the page blurs behind a small card; Cassie's cursor goes round a ring of dots */
+.auth-busy { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: var(--sp-4, 16px); background: color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: aiFade .2s ease both; }
+.auth-busy[hidden] { display: none; }
+.ab-card { display: grid; justify-items: center; gap: var(--sp-2, 8px); min-width: 232px; padding: var(--sp-5, 24px) var(--sp-6, 32px); border-radius: 24px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 24px 48px rgba(var(--shade-rgb), .22); text-align: center; }
+.ab-card b { font-size: var(--fs-lg); }
+.auth-busy-sub { color: var(--muted); font-size: var(--fs-sm); }
+.ab-orbit { width: 80px; height: 80px; margin-bottom: var(--sp-2, 8px); overflow: visible; }
+.ab-dot { fill: var(--primary); opacity: .15; animation: abDot 1.2s linear infinite; animation-delay: calc(var(--i) * .1s - 1.2s); }
+.ab-cur { color: var(--text); --logo-eyes: var(--surface); transform-origin: 0 0; animation: abSpin 1.2s linear infinite; }
+@keyframes abDot { 0% { opacity: 1; } 75%, 100% { opacity: .15; } }
+@keyframes abSpin { to { transform: rotate(360deg); } }
+@keyframes abPulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+/* Reduce Motion and Lite mode: no intro (app.js), no slide; the cursor stays still and the dots pulse once a second */
+@media (prefers-reduced-motion: reduce) {
+  .auth-left { animation: none; }
+  .ab-cur { animation: none; }
+  .ab-dot { animation: abPulse 1s ease-in-out infinite; }
+}
+html.lite .auth-left { animation: none; }
+html.lite .ab-cur { animation: none; }
+html.lite .ab-dot { animation: abPulse 1s ease-in-out infinite; }
+html.lite .auth-busy { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--bg) 80%, transparent); }
 
 /* ---------- You, Settings and Plans: one panel, a page at a time ----------
    Grouped glass lists (like iOS Settings): a section title, then rows in one rounded card. */

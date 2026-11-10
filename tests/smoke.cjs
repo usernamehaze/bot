@@ -304,9 +304,9 @@ test('first run: Welcome, Intro, Sign in, then four questions a screen at a time
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-5-summary.png' });
   await page.click('.fr-summary .fr-set-go');
   await page.waitForSelector('.fr', { state: 'detached', timeout: 5000 });
-  // 4. Then sign in: Google and Apple come first (when the server has them), then email, then a guest
+  // 4. Then sign in (v270): email first, then Or continue with Google and Apple (when the server has them), then a guest
   await page.waitForSelector('.auth-page', { timeout: 5000 });
-  expect(await page.evaluate(() => { const p = document.querySelector('.auth-providers'), e = document.querySelector('.auth-page input[name=email]'); return !!(p.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'Google and Apple above email');
+  expect(await page.evaluate(() => { const p = document.querySelector('.auth-providers'), e = document.querySelector('.auth-page input[name=email]'), g = document.querySelector('.auth-skip'); return !!(e.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(p.compareDocumentPosition(g) & Node.DOCUMENT_POSITION_FOLLOWING); }), 'email, then Google and Apple, then a guest');
   expect(await page.locator('.auth-skip').innerText() === 'Continue as a guest', 'Continue as a guest');
   expect(await page.inputValue('.auth-form input[name=age]') === '15', 'the age from the questions is filled in for signing up');
   if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/fr-signin.png' });
@@ -574,7 +574,7 @@ test('accounts: sign up, profile syncs, sign in on another device gets it back',
   let { ctx, page } = await open(b, { state: null });
   await toSignIn(page, { name: 'Hazel', who: 'shs', age: 16 });
   expect(await page.inputValue('.auth-form input[name=age]') === '16', 'the age from the questions is filled in');
-  expect(await page.locator('.auth-title').textContent() === 'Create your Cassie account', 'should open on sign up');
+  expect(await page.locator('.auth-title').textContent() === 'Make your account', 'should open on sign up');
   await page.fill('.auth-form input[name=email]', email);
   const signupStatus = (body) => page.evaluate(async ([srv, b]) => (await fetch(srv + '/auth/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, [SERVER, body]);
   expect(await signupStatus({ email: 'x@mailinator.com', password: 'secret-pass-1', age: 20 }) === 400, 'throwaway email allowed');
@@ -993,6 +993,76 @@ test('sign in with Google: the return address sent to Google is one registered i
       expect(!/[?#]/.test(sent) && sent.startsWith(origin + '/'), `${name}: the return address is plain, on this site: ${sent}`);
       expect(errors.length === 0, `${name}: page errors: ` + errors.join(' | '));
     } finally { await ctx.close(); }
+  }
+});
+
+test('v270 sign in, Cassie’s way (390x844 and 1280x800, light and dark): a 1.2 second brand intro (a tap ends it; none under Reduce Motion or back from Google), a desk at night where Cassie’s cursor lands on the notebook, the form on a sheet with Google and Apple side by side under Or continue with, and signing in shows a small card over the blurred page with the cursor going round a ring of dots (still under Reduce Motion), readable and 48px taps on a phone', async (b) => {
+  const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
+  await serverMode({ noGoogle: false, noApple: false });
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    for (const scheme of ['light', 'dark']) {
+      const where = `${size} ${scheme}`;
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', state: { tab: 'home' } });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'no-preference' });
+      // 1. the intro: there at once, gone within 1.5 seconds; once a visit; a tap ends it sooner
+      // (timed in the page: from opening to the intro gone)
+      const intro = await page.evaluate(() => new Promise((done) => { sessionStorage.removeItem('cassie.authIntro'); const t0 = performance.now(); openAuth({ mode: 'signin' });
+        const el = document.querySelector('.auth-intro'), words = el ? el.innerText.replace(/\s+/g, ' ').trim() : '';
+        if (!el) return done({ words, ms: 0 });
+        const mo = new MutationObserver(() => { if (!el.isConnected) { mo.disconnect(); done({ words, ms: Math.round(performance.now() - t0) }); } }); mo.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => done({ words, ms: 9999 }), 3000); }));
+      expect(/Cassie/.test(intro.words) && /Your study buddy/.test(intro.words), `${where}: the intro shows Cassie and Your study buddy: ` + intro.words);
+      expect(intro.ms > 0 && intro.ms < 1500, `${where}: the intro ends within 1.5 seconds: ${intro.ms}ms`);
+      await page.evaluate(() => openAuth({ mode: 'signin' }));
+      expect(!(await page.$('.auth-intro')), `${where}: the intro plays once a visit`);
+      await page.evaluate(() => { sessionStorage.removeItem('cassie.authIntro'); openAuth({ mode: 'signin' }); });
+      const t1 = Date.now(); await page.locator('.auth-intro').dispatchEvent('pointerdown');
+      await page.waitForSelector('.auth-intro', { state: 'detached', timeout: 1000 });
+      expect(Date.now() - t1 < 400, `${where}: a tap ends the intro at once: ${Date.now() - t1}ms`);
+      // 2. the header: a desk at night with the cursor moving down the dotted trail to the notebook
+      const art = await page.evaluate(() => { const r = document.querySelector('.auth-right'), svg = r && r.querySelector('.auth-artsvg'), box = r ? r.getBoundingClientRect() : {};
+        return { shown: !!r && box.height > 150 && getComputedStyle(r).display !== 'none', parts: ['.aa-page', '.aa-b1', '.aa-lamp', '.aa-moon', '.aa-trail', '.aa-cur'].every((q) => svg && svg.querySelector(q)), moves: !!(svg && svg.querySelector('.aa-cur animateMotion')), top: box.top, w: box.width }; });
+      expect(art.shown && art.parts && art.moves, `${where}: the header art is there and the cursor moves: ` + JSON.stringify(art));
+      if (phone) expect(art.top <= 1 && art.w >= 389, `${where}: on a phone the header runs across the top: ` + JSON.stringify(art));
+      // 3. the sheet: Welcome back, the fields with icons, then Google and Apple side by side under Or continue with
+      await page.waitForSelector('.auth-google:not([hidden])', { timeout: 15000 }); await page.waitForSelector('.auth-apple:not([hidden])');
+      await page.waitForTimeout(600);
+      const sheet = await page.evaluate(() => { const L = document.querySelector('.auth-left'), q = (s) => document.querySelector(s), bb = (s) => q(s).getBoundingClientRect();
+        const g = bb('.auth-google'), a = bb('.auth-apple');
+        return { title: q('.auth-title').textContent, sub: q('.auth-sub').textContent, or: q('.auth-or').innerText.trim(), radius: parseFloat(getComputedStyle(L).borderTopLeftRadius), icons: document.querySelectorAll('.auth-form .auth-in .auth-ico').length,
+          side: Math.abs(g.top - a.top) < 2 && Math.abs(g.width - a.width) < 2 && g.right <= a.left, under: g.top > bb('.auth-or').bottom - 1 && bb('.auth-or').top > bb('.auth-go').bottom - 1,
+          labels: [q('.auth-google').getAttribute('aria-label'), q('.auth-apple').getAttribute('aria-label')] }; });
+      expect(sheet.title === 'Welcome back' && sheet.sub === 'Your notes and streak are waiting', `${where}: Welcome back and its line: ` + JSON.stringify(sheet));
+      expect(sheet.icons === 2 && /^or continue with$/i.test(sheet.or) && sheet.side && sheet.under, `${where}: the fields have icons; Google and Apple side by side, under Or continue with, under Sign in: ` + JSON.stringify(sheet));
+      expect(sheet.labels.join('|') === 'Continue with Google|Sign in with Apple', `${where}: the provider buttons are named in full: ` + sheet.labels);
+      if (phone) expect(sheet.radius >= 24, `${where}: the form sits on a rounded sheet: ` + sheet.radius);
+      const { bad } = await contrastIssues(page, '.auth-left'); expect(!bad.length, `${where}: readable: ` + bad.join(' | '));
+      if (phone) { const taps = await tapTargetIssues(page, '.auth-left'); expect(!taps.length, `${where}: 48px taps: ` + taps.join(' | ')); }
+      // 4. signing in: a small card over the blurred page, the cursor going round, the new words
+      await ctx.route(/\/auth\/login/, async (route) => { await new Promise((r) => setTimeout(r, 2500)); route.fulfill({ status: 401, json: { error: 'wrong_password', code: 'wrong_password' } }); });
+      await page.fill('.auth-form input[name=email]', 'card@example.com'); await page.fill('.auth-form input[name=password]', 'secret-pass-1');
+      await page.click('.auth-go');
+      await page.waitForSelector('.auth-busy:not([hidden])', { timeout: 3000 }); await page.waitForTimeout(300);
+      const card = await page.evaluate(() => { const bz = document.querySelector('.auth-busy'), c = bz.querySelector('.ab-card').getBoundingClientRect(), cs = getComputedStyle(bz);
+        return { role: bz.getAttribute('role'), text: bz.innerText.replace(/\s+/g, ' ').trim(), blur: /blur/.test(cs.backdropFilter || cs.webkitBackdropFilter || ''), formThere: getComputedStyle(document.querySelector('.auth-go')).display !== 'none',
+          centred: Math.abs((c.left + c.right) / 2 - innerWidth / 2) < 4 && c.width < 400, spin: getComputedStyle(bz.querySelector('.ab-cur')).animationName, dots: bz.querySelectorAll('.ab-dot').length }; });
+      expect(card.role === 'status' && /Signing you in/.test(card.text) && /Getting your notes ready/.test(card.text), `${where}: the card says Signing you in, Getting your notes ready: ` + JSON.stringify(card));
+      expect(card.blur && card.formThere && card.centred && card.spin === 'abSpin' && card.dots === 12, `${where}: a small centred card over the blurred form, the cursor going round 12 dots: ` + JSON.stringify(card));
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' }); await page.waitForTimeout(100);
+      const still = await page.evaluate(() => ({ cur: getComputedStyle(document.querySelector('.ab-cur')).animationName, dot: getComputedStyle(document.querySelector('.ab-dot')).animationName }));
+      expect(still.cur === 'none' && still.dot === 'abPulse', `${where}: Reduce Motion: the cursor stays still and the dots pulse: ` + JSON.stringify(still));
+      await page.waitForSelector('.auth-busy', { state: 'hidden', timeout: 6000 });
+      // 5. Reduce Motion: no intro, the cursor already on the notebook; and back from Google: no intro
+      await page.evaluate(() => { sessionStorage.removeItem('cassie.authIntro'); openAuth({ mode: 'signin' }); });
+      const rm = await page.evaluate(() => ({ intro: !!document.querySelector('.auth-intro'), still: document.querySelector('.auth-artsvg').classList.contains('is-still'), moves: !!document.querySelector('.aa-cur animateMotion') }));
+      expect(!rm.intro && rm.still && !rm.moves, `${where}: Reduce Motion: no intro and a still header: ` + JSON.stringify(rm));
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'no-preference' });
+      await page.evaluate(() => { sessionStorage.removeItem('cassie.authIntro'); openAuth({ mode: 'signin', returned: { provider: 'google', code: 'google_cancelled' } }); });
+      expect(!(await page.$('.auth-intro')), `${where}: no intro on the way back from Google`);
+      expect(!errors.length, `${where}: page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
   }
 });
 
