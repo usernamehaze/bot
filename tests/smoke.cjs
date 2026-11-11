@@ -1001,6 +1001,85 @@ test('sign in with Google: the return address sent to Google is one registered i
   }
 });
 
+test('v274 (390x844 and 1280x800): the follow-up pills show after an explanation only (never in a quiz, in Heart-to-heart or after a greeting); the sign-in lamp switches by its pull chain and the cursor never goes to it, the pencil writes and the books move until the notebook is closed; no Cards tab, Flashcards is in the menu under the timer; no Highlight help; Home has the menu button', async (b) => {
+  const LONG = 'Osmosis is the movement of water across a membrane, from where there is more water to where there is less. Think of a raisin in a glass of water: it swells because water moves into it. Cells do the same thing all day long.';
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    // 1. the pills
+    {
+      const { ctx, page, errors } = await open(b, { device, viewport, server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: LONG }) });
+      const pills = () => page.evaluate(() => [...document.querySelectorAll('#chat-log .followups .fu-chip')].map((x) => x.textContent));
+      await ask(page, 'What is osmosis?');
+      expect((await pills()).join('|') === 'Explain simpler|Step-by-step|Give an example|Double-check', `${size}: the four pills under an explanation: ` + await pills());
+      await ask(page, 'thanks!');
+      expect((await pills()).length === 0, `${size}: no pills after a thank you: ` + await pills());
+      await ask(page, 'How do plants make food?');
+      expect((await pills()).length === 4, `${size}: the pills are back after the next explanation`);
+      await page.fill('#prompt-input', 'biology'); await quickAction(page, 'quiz');
+      await page.waitForSelector('#quiz-btn.active', { state: 'attached', timeout: 5000 });
+      expect((await pills()).length === 0, `${size}: starting a quiz clears the pills at once`);
+      await page.waitForFunction(() => !document.querySelector('#send-btn.is-busy'), null, { timeout: 15000 }); await page.waitForTimeout(400);
+      await ask(page, 'B');
+      expect((await pills()).length === 0, `${size}: no pills during a quiz: ` + await pills());
+      await quickAction(page, 'quiz'); await page.waitForFunction(() => !document.querySelector('#quiz-btn.active'), null, { timeout: 5000 });
+      await quickAction(page, 'heart'); await page.waitForFunction(() => counselorMode === true, null, { timeout: 5000 }); await page.waitForTimeout(500);
+      await ask(page, 'I am stressed about my exams and do not know where to start.');
+      expect((await pills()).length === 0, `${size}: no pills in Heart-to-heart: ` + await pills());
+      expect(!errors.length, `${size}: chat page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+    // 2. the sign-in desk
+    {
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { tab: 'home' } });
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.evaluate(() => { sessionStorage.setItem('cassie.authIntro', '1'); sessionStorage.setItem('cassie.authSky', 'night'); openAuth({ mode: 'signin' }); });
+      const desk = () => page.evaluate(() => { const q = (x) => document.querySelector(x), an = (x) => getComputedStyle(q(x)).animationName;
+        return { day: q('.auth-page').classList.contains('is-day'), chain: !!q('.aa-lampbtn .aa-chain .aa-bead'), sway: an('.aa-chain'), pen: an('.aa-penmove'), ink: an('.aa-ink1'), book: an('.aa-book[style*="--n:2"]'), shut: q('.auth-artsvg').classList.contains('is-shut'), cur: q('.aa-curgo').style.transform }; });
+      const d0 = await desk();
+      expect(d0.chain && d0.sway === 'aaSway' && d0.pen === 'aaWriteMove' && d0.ink === 'aaInk1' && /aaLift/.test(d0.book) && !d0.shut, `${size}: the chain sways, the pencil writes and the top book lifts: ` + JSON.stringify(d0));
+      await page.locator('.aa-lampbtn').click(); const d1 = await desk();
+      await page.focus('.aa-lampbtn'); await page.keyboard.press('Enter'); const d2 = await desk();
+      expect(d1.day && !d2.day && !d1.cur && !d2.cur && await page.$eval('.aa-chainin', (c) => c.classList.contains('aa-pull')), `${size}: a pull on the chain (tap or Enter) switches night and day, and the cursor never goes to the lamp: ` + JSON.stringify([d1, d2]));
+      await page.locator('.aa-book2').click({ force: true }); await page.waitForTimeout(100); const d3 = await desk();
+      expect(d3.shut && d3.pen === 'aaRollBack' && d3.ink === 'none' && d3.book === 'none', `${size}: closing the notebook stops the pencil (it rolls back) and the books: ` + JSON.stringify(d3));
+      await page.locator('.aa-book2').click({ force: true }); await page.waitForTimeout(100); const d4 = await desk();
+      expect(!d4.shut && d4.pen === 'aaWriteMove' && d4.ink === 'aaInk1', `${size}: opening it again, the work goes on: ` + JSON.stringify(d4));
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.evaluate(() => openAuth({ mode: 'signin' }));
+      const c0 = await desk(); await page.locator('.aa-lampbtn').click(); await page.locator('.aa-book2').click({ force: true }); const c1 = await desk();
+      expect(c0.sway === 'none' && c0.pen === 'none' && c0.ink === 'none' && c0.day !== c1.day && !c1.shut, `${size}: Reduce Motion: all still, the chain still switches, the notebook stays open: ` + JSON.stringify([c0, c1]));
+      expect(!errors.length, `${size}: sign-in page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+    // 3. Flashcards in the menu, no Cards tab; no Highlight help; Home's menu button
+    {
+      const { ctx, page, errors } = await open(b, { device, viewport, server: false, state: { tab: 'home', groqKey: 'gsk_test', cards: [{ id: 'c1', f: 'What moves in osmosis?', b: 'Water', deck: 'Biology', box: 0, due: 0, at: 0 }] } });
+      await page.waitForTimeout(600);
+      if (phone) {
+        const tabs = await page.$$eval('#tabbar .tab', (a) => a.map((x) => x.dataset.tab).join(','));
+        expect(tabs === 'home,chat,labs,games,you', `${size}: the tab bar has no Cards tab: ` + tabs);
+        const mb = await page.$eval('.hub-menu', (x) => { const r = x.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), label: x.getAttribute('aria-label'), left: r.right <= document.querySelector('.hub-who').getBoundingClientRect().left + 1, name: document.querySelector('.hub-me').scrollWidth <= document.querySelector('.hub-me').clientWidth + 1 }; });
+        expect(mb.w >= 48 && mb.h >= 48 && mb.label === 'Open menu' && mb.left && mb.name, `${size}: Home has the menu button, before the greeting, 48px, and the greeting is not cut off: ` + JSON.stringify(mb));
+        await page.click('.hub-menu');
+        await page.waitForFunction(() => document.getElementById('sidebar').classList.contains('open'), null, { timeout: 3000 });
+      } else await page.evaluate(() => setSideOpen(true));
+      await page.waitForTimeout(400);
+      const row = await page.evaluate(() => { const c = document.getElementById('side-cards'), p = document.getElementById('pomo'), r = c.getBoundingClientRect(); return { shown: r.width > 0 && r.height >= 40, under: !!(p.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && r.top >= p.getBoundingClientRect().bottom - 1, text: c.querySelector('span').textContent, due: c.querySelector('em').textContent, dueShown: !c.querySelector('em').hidden, h: Math.round(r.height) }; });
+      expect(row.shown && row.under && row.text === 'Flashcards' && (!phone || row.h >= 48), `${size}: Flashcards is in the menu, under the timer: ` + JSON.stringify(row));
+      if (phone) expect(row.dueShown && row.due === '1 due', `${size}: it shows the cards due: ` + JSON.stringify(row));
+      await page.click('#side-cards');
+      await page.waitForSelector('.fc:not([hidden])', { timeout: 5000 });
+      expect(await page.locator('#highlight-help-toggle, #side-hl-toggle, .side-hl').count() === 0, `${size}: no Highlight help switch`);
+      expect(!errors.length, `${size}: menu page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+  // a tab saved as 'cards' (an old phone) still lands on flashcards
+  const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'cards' } });
+  await page.waitForSelector('.fc:not([hidden])', { timeout: 8000 });
+  await ctx.close();
+});
+
 test('v273 (390x844 and 1280x800): the setup no longer writes your name; the all-set ticks come one at a time; the sign-in lamp is a switch between night and day (by the clock at first, tap or key, readable both ways) and the books and pencil move when tapped; Home’s Cassie says hello by the clock, on the screen, in her outfit; no dots on Cassie', async (b) => {
   const { contrastIssues } = require('./ui-checks.cjs');
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
@@ -3114,6 +3193,7 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   // Learn: the student's own level first and about 1.5 times as wide
   await page.evaluate(() => { state.profile.grade = '2nd year college'; save(); });
   await page.click('.tab[data-tab="labs"]'); await page.waitForSelector('.lp-foryou .lf-mine');
+  await exploreLearn(page, 'levels'); // (v269: the other levels are under Explore other levels)
   const fw = await page.evaluate(() => { const f = [...document.querySelectorAll('.lp-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), level: f[0].dataset.level, mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
   expect(fw.first && fw.level === 'college' && fw.mine / fw.other > 1.35 && fw.mine / fw.other < 1.65, 'phone: the own level (College) first and about 1.5 times as wide: ' + JSON.stringify(fw));
   expect(!errors.length, 'page errors: ' + errors.join('; '));
@@ -3126,6 +3206,7 @@ test('Home by level: every onboarding grade opens its own Lessons and Learn leve
   await D.page.click('.desk-home .ht-dtimer .dk-tgo');
   await D.page.waitForFunction(() => /Pause/.test(document.querySelector('.desk-home .dk-tgo').getAttribute('aria-label')), null, { timeout: 4000 });
   await D.page.evaluate(() => openLabs(undefined, { section: 'learn' })); await D.page.waitForSelector('.labs-foryou .lf-mine'); await D.page.waitForTimeout(400);
+  await exploreLearn(D.page, 'levels'); // (v269: the other levels are under Explore other levels)
   const dw = await D.page.evaluate(() => { const f = [...document.querySelectorAll('.labs-foryou .lf')]; return { first: f[0].classList.contains('lf-mine'), mine: f[0].getBoundingClientRect().width, other: f[1].getBoundingClientRect().width }; });
   expect(dw.first && dw.mine / dw.other > 1.35 && dw.mine / dw.other < 1.65, 'computer: the own level first and about 1.5 times as wide: ' + JSON.stringify(dw));
   for (const scheme of ['light', 'dark']) { await D.page.evaluate(() => document.querySelector('.labs-x').click()); await D.page.emulateMedia({ colorScheme: scheme }); await D.page.waitForTimeout(1000); /* (the page fades to the new colours: measure once it has) */ const { bad } = await require('./ui-checks.cjs').contrastIssues(D.page, '.desk-home .home-top'); expect(!bad.length, `computer Home (${scheme}) reads: ` + bad.join(' | ')); }
@@ -6714,7 +6795,7 @@ test('keep your work: after a first real study moment a signed-out student sees 
   await ctx.close();
 });
 
-test('tab bar on a phone: each of the 6 tabs at least 48px wide and 44px tall, none overlapping, all on screen (320, 360, 390 wide)', async (b) => {
+test('tab bar on a phone: each of the 5 tabs at least 48px wide and 44px tall, none overlapping, all on screen (320, 360, 390 wide)', async (b) => {
   for (const width of [320, 360, 390]) {
     for (const tab of ['home', 'games']) { // (the open tab shows its name: the widest it gets)
       const { ctx, page } = await open(b, { device: 'iPhone 13', viewport: { width, height: 760 }, server: false, state: { groqKey: 'gsk_test', tab } });
@@ -6722,7 +6803,7 @@ test('tab bar on a phone: each of the 6 tabs at least 48px wide and 44px tall, n
       await page.waitForTimeout(400);
       const r = await page.$$eval('.tabbar .tab', (ts) => ts.map((t) => { const q = t.getBoundingClientRect(); return [q.left, q.right, q.width, q.height]; }));
       const overlap = r.some((a, i) => i && a[0] < r[i - 1][1] - 0.5), off = r.some((a) => a[0] < 0 || a[1] > innerWidthOf(width));
-      expect(r.length === 6 && r.every((a) => a[2] >= 48 && a[3] >= 44) && !overlap && !off, `${width} (${tab} open): ` + JSON.stringify(r.map((a) => [Math.round(a[0]), Math.round(a[2]), Math.round(a[3])])));
+      expect(r.length === 5 && r.every((a) => a[2] >= 48 && a[3] >= 44) && !overlap && !off, /* (v274: no Cards tab) */ `${width} (${tab} open): ` + JSON.stringify(r.map((a) => [Math.round(a[0]), Math.round(a[2]), Math.round(a[3])])));
       await ctx.close();
     }
   }
@@ -9813,7 +9894,7 @@ test('phone You sheets (iPhone, with the notch and home bar): You, Account, Stud
   // (the page notes the move as it starts: a short move can be over before a slow machine's next look)
   const watch = (t) => page.evaluate((tab) => { const s = document.querySelector(`.tab[data-tab="${tab}"] svg`); window.__mv = null;
     new MutationObserver((ms, ob) => { if (!s.classList.contains('ia-go')) return; ob.disconnect(); requestAnimationFrame(() => { window.__mv = { cls: true, n: s.getAnimations({ subtree: true }).filter((a) => a.playState === 'running' && /^ia-/.test(a.animationName || '')).length }; }); }).observe(s, { attributes: true, attributeFilter: ['class'] }); }, t);
-  for (const t of ['home', 'chat', 'labs', 'games', 'cards', 'you']) {
+  for (const t of ['home', 'chat', 'labs', 'games', 'you']) { // (v274: no Cards tab)
     await watch(t);
     await page.click(`.tab[data-tab="${t}"]`);
     await page.waitForFunction(() => window.__mv, null, { timeout: 2000 }).catch(() => {});
@@ -10961,14 +11042,14 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
       plays(await look(page, sel), ia, name, part, '390x844 tap ' + sel);
       await ends(page, sel, before, '390x844 ' + sel);
     };
-    for (const [sel, ia, name, part] of [['.hub-bell', 'bell', 'ia-ring', 'ia-p1'], ['.tab[data-tab="home"]', 'home', 'ia-echo', 'ia-x1'], ['.tab[data-tab="cards"]', 'cards', 'ia-move', 'ia-p2'],
+    for (const [sel, ia, name, part] of [['.hub-bell', 'bell', 'ia-ring', 'ia-p1'], ['.tab[data-tab="home"]', 'home', 'ia-echo', 'ia-x1'], /* (v274: no Cards tab) */
       ['.tab[data-tab="you"]', 'person', 'ia-move', 'ia-p1'], ['[data-ht="timer"], .hub-timer', 'clock', 'ia-spin', 'ia-p2'], ['.tab[data-tab="labs"]', 'flask', 'ia-slosh', 'ia-p3']]) await tap(sel, ia, name, part);
     await page.evaluate(() => { createNewChat(); CassieNative.go('chat'); }); await page.waitForSelector('#send-btn'); await page.waitForTimeout(600);
     for (const [sel, ia, name, part] of [['#menu-btn', 'menu', 'ia-x-top', 'ia-p1'], ['#send-btn', 'send', 'ia-fly', 'svg']]) await tap(sel, ia, name, part);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.touchscreen.tap(...await page.$eval('.tab[data-tab="cards"]', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }));
+    await page.touchscreen.tap(...await page.$eval('.tab[data-tab="you"]', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; }));
     await page.waitForTimeout(40);
-    const still = await look(page, '.tab[data-tab="cards"]');
+    const still = await look(page, '.tab[data-tab="you"]');
     expect(!still.go && still.anims.length === 0, '390x844: Reduce Motion plays no move: ' + JSON.stringify(still));
     expect(errors.length === 0, 'page errors: ' + errors.join('; '));
     await ctx.close();
@@ -12238,19 +12319,19 @@ test.slow('Labs 3D and atlas: fly to Jupiter and out to Andromeda, launch a 3D r
   await ctx.close();
 });
 
-test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, Cards, You)', async (b) => {
+test('phone app: Home and the floating tab bar (Home, Chat, Labs, Games, You)', async (b) => {
   const { ctx, page, errors } = await open(b, { server: false, device: 'iPhone 13', state: { tab: 'home', groqKey: 'gsk_test' } });
   await page.goto(APP);
   await page.waitForSelector('#home:not([hidden])');
   expect(/Hello, Test/.test(await page.locator('#home .hub-hi').innerText()), 'Home greets you by name');
-  expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 6, 'two big cards and six tabs');
+  expect(await page.locator('#home .hub-card').count() === 2 && await page.locator('#tabbar .tab').count() === 5, 'two big cards and five tabs (v274: Flashcards is in the side menu)');
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'home' && !(await page.locator('#prompt-input').isVisible()), 'Home is open and the chat is out of the way');
   await page.click('.tab[data-tab="labs"]');
   await page.waitForSelector(LABS_READY);
   expect(await page.locator('.tab.on').getAttribute('data-tab') === 'labs' && await page.locator('#tabbar').isVisible(), 'Labs open with the tab bar still there');
-  await page.click('.tab[data-tab="cards"]');
+  await page.evaluate(() => CassieNative.go('cards')); // (v274: Flashcards opens from the side menu, not a tab)
   await page.waitForSelector('.fc:not([hidden])');
-  expect(await page.locator('.labs').isHidden() && await page.locator('.tab.on').getAttribute('data-tab') === 'cards', 'Cards replace Labs');
+  expect(await page.locator('.labs').isHidden() && await page.locator('.tab.on').count() === 0, 'Flashcards replace Labs (no tab is lit: it has none)');
   await page.click('.tab[data-tab="you"]');
   await page.waitForSelector('#settings-panel:not([hidden])');
   await page.click('.tab[data-tab="home"]');
@@ -12731,32 +12812,16 @@ test('board: Cassie draws on it when asked', async (b) => {
   await ctx.close();
 });
 
-test('highlight text in an answer → Explain; switched off, highlighting is just highlighting', async (b) => {
-  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body, n) => ({ text: n === 1 ? 'Osmosis is the movement of water across a membrane.' : 'Simply put: water moves to where there is less water.' }) });
+test('v274: highlighting text in an answer is just highlighting (no pop-up, no Highlight help switch); right-click keeps the browser menu', async (b) => {
+  const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test', highlightHelp: true }, fakeGroq: () => ({ text: 'Osmosis is the movement of water across a membrane.' }) });
   const a = await ask(page, 'What is osmosis?');
-  // right-click keeps the browser menu (Copy)
   await a.locator('p').first().selectText();
   const box = await a.locator('p').first().boundingBox();
   const kept = await page.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y); const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y }); return el.dispatchEvent(ev); }, [box.x + 10, box.y + 5]);
   expect(kept, 'right-click on a highlight should keep the browser menu');
-  // ON (the default): highlighting opens Explain / Answer / Code
-  await page.mouse.up();
-  await page.waitForSelector('#highlight-popover:not([hidden]) [data-mode=explain]', { timeout: 5000 });
-  expect(await page.locator('#ask-chip').count() === 0, 'no separate Ask Cassie button any more');
-  await page.click('#highlight-popover [data-mode=explain]');
-  await page.waitForSelector('#highlight-popover >> text=Simply put', { timeout: 10000 });
-  await page.click('#highlight-popover-close');
-  // OFF, with the switch in the sidebar: highlighting is just highlighting
-  await page.evaluate(() => (sideWide.matches ? setSideOpen(true) : openSidebar())); // (a phone: the menu)
-  await page.waitForTimeout(400);
-  if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/app-hl-switch.png' });
-  await page.click('.side-hl');
-  expect(await page.evaluate(() => state.highlightHelp === false), 'the sidebar switch turns highlight help off');
-  await page.evaluate(() => closeSidebar());
-  await page.waitForTimeout(400);
-  await a.locator('p').first().selectText(); await page.mouse.up();
-  await page.waitForTimeout(800);
-  expect(await page.locator('#highlight-popover').isHidden(), 'with highlight help off, nothing shows');
+  await page.mouse.up(); await page.waitForTimeout(900);
+  expect(await page.locator('#highlight-popover').isHidden(), 'highlighting words in an answer opens nothing (an old saved "on" is ignored)');
+  expect(await page.locator('#highlight-help-toggle, #side-hl-toggle, .side-hl').count() === 0 && !/Highlight help/.test(await page.evaluate(() => document.body.textContent)), 'no Highlight help switch or words anywhere in the app');
   await ctx.close();
 });
 
@@ -13914,7 +13979,7 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     await page.emulateMedia({ colorScheme: 'light' });
     // Settings: every old setting is there, and a change is kept under its old key
     await page.evaluate(() => setPage('all'));
-    const IDS = ['groq-key-input', 'groq-model-select', 'gemini-key-input', 'edit-profile-btn', 'share-usage-toggle', 'level-select', 'citation-select', 'highlight-help-toggle', /* (the accent colour is on the Appearance page now, its old swatches kept hidden) */ 'lite-select', /* (text size too: on the Appearance page) */ 'easyread-toggle', 'voice-out-toggle', 'voice-gender-select', 'hearing-select', 'clear-chat-btn', 'settings-phone']; // (Report a problem shows only with Cassie's server: its own test)
+    const IDS = ['groq-key-input', 'groq-model-select', 'gemini-key-input', 'edit-profile-btn', 'share-usage-toggle', 'level-select', 'citation-select', /* (v274: no Highlight help switch) */ /* (the accent colour is on the Appearance page now, its old swatches kept hidden) */ 'lite-select', /* (text size too: on the Appearance page) */ 'easyread-toggle', 'voice-out-toggle', 'voice-gender-select', 'hearing-select', 'clear-chat-btn', 'settings-phone']; // (Report a problem shows only with Cassie's server: its own test)
     await page.evaluate(() => { document.getElementById('settings-keys').open = true; });
     for (const id of IDS) expect(await page.locator('#' + id).isVisible(), `${size}: ${id} is in Settings`);
     await page.fill('#groq-key-input', 'gsk_changed');
@@ -13926,14 +13991,13 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     await page.selectOption('#hearing-select', 'fast');
     await page.locator('#easyread-toggle').check();
     await page.locator('#voice-out-toggle').check();
-    await page.locator('#highlight-help-toggle').uncheck();
     await page.$eval('.accent-sw[data-accent="mono"]', (el) => el.click());
     // (Lite mode reloads the app to take effect: last, then wait for it)
     await Promise.all([page.waitForEvent('load', { timeout: 10000 }).catch(() => {}), page.selectOption('#lite-select', 'on')]);
     await page.waitForTimeout(600);
     const st = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')));
-    expect(st.groqKey === 'gsk_changed' && st.level === 'college' && st.citationStyle === 'MLA' && st.textSize === 'large' && st.voiceGender === 'man' && st.hearing === 'fast' && st.lite === 'on' && st.easyRead === true && st.voiceOut === true && st.highlightHelp === false && st.accent === 'mono',
-      `${size}: every change is kept under its old key: ` + JSON.stringify({ groqKey: st.groqKey, level: st.level, citationStyle: st.citationStyle, textSize: st.textSize, voiceGender: st.voiceGender, hearing: st.hearing, lite: st.lite, easyRead: st.easyRead, voiceOut: st.voiceOut, highlightHelp: st.highlightHelp, accent: st.accent }));
+    expect(st.groqKey === 'gsk_changed' && st.level === 'college' && st.citationStyle === 'MLA' && st.textSize === 'large' && st.voiceGender === 'man' && st.hearing === 'fast' && st.lite === 'on' && st.easyRead === true && st.voiceOut === true && st.accent === 'mono',
+      `${size}: every change is kept under its old key: ` + JSON.stringify({ groqKey: st.groqKey, level: st.level, citationStyle: st.citationStyle, textSize: st.textSize, voiceGender: st.voiceGender, hearing: st.hearing, lite: st.lite, easyRead: st.easyRead, voiceOut: st.voiceOut, accent: st.accent }));
     await page.evaluate(() => setAccent(''));
     await page.evaluate(() => openSettings('all'));
     await Promise.all([page.waitForEvent('load', { timeout: 10000 }).catch(() => {}), page.selectOption('#lite-select', 'off')]); // (back to the moving background)
@@ -13969,7 +14033,7 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
 test('Liquid Glass on a phone: every tap target is at least 44px, and every word passes WCAG AA on the marble, light and dark', async (b) => {
   const { tapTargetIssues, contrastIssues } = require('./ui-checks.cjs');
   const screens = {
-    'sign-up': async (page) => { await page.evaluate(() => localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'auth' }))); await page.reload(); await page.waitForSelector('.auth-page', { timeout: 10000 }); },
+    'sign-up': async (page) => { await page.evaluate(() => localStorage.setItem('cassie.firstRun', JSON.stringify({ step: 'auth' }))); await page.reload(); await page.waitForSelector('.auth-page', { timeout: 10000 }); await page.waitForSelector('.auth-intro', { state: 'detached', timeout: 4000 }); await page.waitForTimeout(600); }, // (v270: after the brand intro, the sheet slid up)
     home: async (page) => { await page.evaluate(() => { const t = document.querySelector('.tabbar [data-tab="home"]'); if (t) t.click(); }); await page.waitForTimeout(600); },
     // (the answer as it rests: the "Done" island sits over the top of it for a moment, then goes)
     chat: async (page) => { await ask(page, 'what is photosynthesis'); await page.waitForFunction(() => !document.getElementById('island').classList.contains('live'), null, { timeout: 8000, polling: 100 }); await page.waitForTimeout(600); },
@@ -14490,7 +14554,7 @@ test('the other screens in Liquid Glass: Plus sheet, offline note, board, flashc
   await ctx.setOffline(false);
   await page.waitForFunction(() => document.getElementById('offline-note').hidden, null, { timeout: 5000, polling: 100 });
   // flashcards with none yet: why, and one next step
-  await page.evaluate(() => { state.cards = []; save(); const t = document.querySelector('.tabbar [data-tab="cards"]'); if (t) t.click(); });
+  await page.evaluate(() => { state.cards = []; save(); if (window.CassieNative && document.documentElement.classList.contains('native')) CassieNative.go('cards'); else CassieCards.open(); });
   await seen(page, '.empty-state .es-title', 'No flashcards yet', 8000);
   await page.click('.empty-state .es-go');
   expect(await page.evaluate(() => document.activeElement && document.activeElement.name === 'f'), 'Write a card opens the form at the front of the card');
