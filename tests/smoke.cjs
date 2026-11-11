@@ -1001,6 +1001,19 @@ test('sign in with Google: the return address sent to Google is one registered i
   }
 });
 
+test('v275: the new Home (a phone, nothing studied yet) has Today too: the daily goal, the streak and the awards, all three in view, each opening its own thing', async (b) => {
+  const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: { width: 390, height: 844 }, server: false, state: { tab: 'home' } });
+  await page.waitForSelector('#home .hub-empty .hub-sec-new .hub-today', { state: 'attached', timeout: 10000 });
+  await page.evaluate(() => document.querySelector('.hub-sec-new').scrollIntoView({ block: 'center' })); await page.waitForTimeout(400);
+  const row = await page.evaluate(() => [...document.querySelectorAll('.hub-sec-new [data-hub]')].map((x) => { const r = x.getBoundingClientRect(); return { k: x.dataset.hub, inView: r.left >= 0 && r.right <= innerWidth + 0.5 && r.height >= 44, text: x.innerText.replace(/\s+/g, ' ').trim() }; }));
+  expect(row.map((r) => r.k).join(',') === 'goal,streak,awards' && row.every((r) => r.inView), 'the goal, the streak and the awards, all in view: ' + JSON.stringify(row));
+  expect(/Daily goal/.test(row[0].text) && /day streak/.test(row[1].text) && /Awards/.test(row[2].text), 'each says what it is: ' + JSON.stringify(row));
+  await page.click('.hub-sec-new [data-hub="awards"]'); await page.waitForTimeout(700);
+  expect(await page.evaluate(() => !!document.querySelector('.rw-shelf, .rw-bg')), 'Awards opens the shelf');
+  expect(!errors.length, 'page errors: ' + errors.join(' | '));
+  await ctx.close();
+});
+
 test('v274 (390x844 and 1280x800): the follow-up pills show after an explanation only (never in a quiz, in Heart-to-heart or after a greeting); the sign-in lamp switches by its pull chain and the cursor never goes to it, the pencil writes and the books move until the notebook is closed; no Cards tab, Flashcards is in the menu under the timer; no Highlight help; Home has the menu button', async (b) => {
   const LONG = 'Osmosis is the movement of water across a membrane, from where there is more water to where there is less. Think of a raisin in a glass of water: it swells because water moves into it. Cells do the same thing all day long.';
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
