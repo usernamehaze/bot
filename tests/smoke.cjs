@@ -1001,6 +1001,95 @@ test('sign in with Google: the return address sent to Google is one registered i
   }
 });
 
+test('v273 (390x844 and 1280x800): the setup no longer writes your name; the all-set ticks come one at a time; the sign-in lamp is a switch between night and day (by the clock at first, tap or key, readable both ways) and the books and pencil move when tapped; Home’s Cassie says hello by the clock, on the screen, in her outfit; no dots on Cassie', async (b) => {
+  const { contrastIssues } = require('./ui-checks.cjs');
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const phone = size === '390x844';
+    // 1. the setup: no handwritten name; the all-set rows one at a time
+    for (const calm of [false, true]) {
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: null });
+      await page.emulateMedia({ reducedMotion: calm ? 'reduce' : 'no-preference' });
+      await page.waitForSelector('.fr-start', { timeout: 10000 }); await page.click('.fr-start');
+      await page.waitForSelector('.fr-ob input[name=name]'); await page.type('.fr-ob input[name=name]', 'Haz', { delay: 30 }); await page.waitForTimeout(400);
+      expect(await page.locator('.fr-ink, .fr-ink-name').count() === 0, `${size}: no handwritten name while typing`);
+      // (the four questions by hand: the helper would tap straight through the all-set screen)
+      await page.fill('.fr-ob input[name=name]', 'Haze'); await page.click('.fr-go');
+      await page.waitForSelector('.fr-ob [data-who=shs]'); await page.click('.fr-ob [data-who=shs]'); await page.fill('.fr-ob input[name=age]', '16'); await page.click('.fr-go');
+      await page.waitForSelector('.fr-ob [data-goal=exam]'); await page.click('.fr-ob [data-goal=exam]'); await page.click('.fr-go');
+      await page.waitForSelector('.fr-ob [data-style=deep]'); await page.click('.fr-ob [data-style=deep]'); await page.click('.fr-ob .fr-go');
+      await page.waitForSelector('.fr-summary .fr-set-go', { timeout: 5000 });
+      const set = await page.evaluate(() => [...document.querySelectorAll('.fr-set li')].map((li) => { const cs = getComputedStyle(li), tk = getComputedStyle(li.querySelector('.fr-tick path'));
+        return { rise: li.classList.contains('fr-set-rise'), d: parseFloat(cs.animationDelay) || 0, tick: tk.animationName, td: parseFloat(tk.animationDelay) || 0, op: +cs.opacity }; }));
+      const go = await page.$eval('.fr-set-go', (x) => !x.disabled);
+      if (calm) expect(set.length === 4 && set.every((r) => !r.rise && r.op === 1) && go, `${size}: Reduce Motion: all four rows at once: ` + JSON.stringify(set));
+      else {
+        expect(set.length === 4 && set.every((r, i) => r.rise && r.tick === 'frTickDraw' && r.td > r.d && (i === 0 || r.d - set[i - 1].d >= 0.6)), `${size}: the rows come one at a time, each tick after its words, 0.6s or more apart: ` + JSON.stringify(set));
+        expect(set[3].op < 0.1 && go, `${size}: the last row is still to come, and Start studying already works: ` + JSON.stringify(set[3]));
+        await page.waitForTimeout(3200);
+        expect(await page.evaluate(() => [...document.querySelectorAll('.fr-set li')].every((li) => +getComputedStyle(li).opacity === 1 && getComputedStyle(li.querySelector('.fr-tick path')).strokeDashoffset === '0px')), `${size}: all four rows and ticks are in after about 3 seconds`);
+      }
+      expect(!errors.length, `${size}: setup page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+    // 2. the sign-in header: the lamp switches night and day, things move when tapped
+    {
+      const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { tab: 'home' }, setup: (c) => c.addInitScript(() => { Date.prototype.getHours = () => 10; }) });
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.evaluate(() => { sessionStorage.setItem('cassie.authIntro', '1'); sessionStorage.removeItem('cassie.authSky'); openAuth({ mode: 'signin' }); });
+      const sky = () => page.evaluate(() => { const p = document.querySelector('.auth-page'), l = p.querySelector('.aa-lampbtn'), hit = l.querySelector('.aa-hit').getBoundingClientRect();
+        return { day: p.classList.contains('is-day'), pressed: l.getAttribute('aria-pressed'), role: l.getAttribute('role'), label: l.getAttribute('aria-label'), tab: l.getAttribute('tabindex'), sky: getComputedStyle(p).getPropertyValue('--aa-sky1').trim(), bite: getComputedStyle(p.querySelector('.aa-bite')).opacity, hit: Math.round(Math.min(hit.width, hit.height)), saved: sessionStorage.getItem('cassie.authSky') }; });
+      await page.waitForTimeout(800); // (the sheet has slid up)
+      const d0 = await sky();
+      expect(d0.day && d0.pressed === 'false' && d0.role === 'button' && d0.tab === '0' && /night and day/.test(d0.label) && d0.hit >= 48, `${size}: at 10:00 it opens on day; the lamp is a real switch, 48px or more: ` + JSON.stringify(d0));
+      { const { bad } = await contrastIssues(page, '.auth-page'); expect(!bad.length, `${size}: readable by day: ` + bad.join(' | ')); }
+      await page.locator('.aa-lampbtn').click(); await page.waitForTimeout(900);
+      const n1 = await sky();
+      expect(!n1.day && n1.pressed === 'true' && n1.sky !== d0.sky && n1.bite === '1' && d0.bite === '0' && n1.saved === 'night', `${size}: a tap switches the lamp on: night, the moon for the sun, kept for the visit: ` + JSON.stringify(n1));
+      { const { bad } = await contrastIssues(page, '.auth-page'); expect(!bad.length, `${size}: readable by night: ` + bad.join(' | ')); }
+      await page.focus('.aa-lampbtn'); await page.keyboard.press('Enter'); const k1 = await sky(); await page.keyboard.press(' '); const k2 = await sky();
+      expect(k1.day && !k2.day, `${size}: Enter and Space work the lamp too: ` + JSON.stringify([k1.day, k2.day]));
+      await page.evaluate(() => openAuth({ mode: 'signin' }));
+      expect(!(await sky()).day, `${size}: the choice is remembered when the page opens again`);
+      const moved = async (sel, part) => { await page.locator(sel).first().click({ force: true }); return page.evaluate(([sel, part]) => { const t = document.querySelector(sel), p = part ? t.querySelector(part) : t; return { go: t.classList.contains('aa-go'), anim: getComputedStyle(p).animationName, cur: document.querySelector('.aa-curgo').style.transform }; }, [sel, part]); };
+      const bk = await moved('.aa-books', ''), pn = await moved('.aa-tap[data-t="pencil"]', '.aa-ptap');
+      expect(bk.go && bk.anim === 'aaHop' && /translate/.test(bk.cur) && pn.go && pn.anim === 'aaRollAway' && pn.cur !== bk.cur, `${size}: the books hop and the pencil rolls when tapped, and the cursor goes to each: ` + JSON.stringify([bk, pn]));
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.evaluate(() => openAuth({ mode: 'signin' }));
+      const before = await sky(); await page.locator('.aa-lampbtn').click(); const after = await sky();
+      const calmBooks = await moved('.aa-books', '');
+      expect(before.day !== after.day && !calmBooks.go && !calmBooks.cur, `${size}: Reduce Motion: the lamp still switches, nothing else moves: ` + JSON.stringify([before.day, after.day, calmBooks]));
+      expect(!errors.length, `${size}: sign-in page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+    // 3. Home's Cassie: the right hello for the hour, on the screen, in her outfit; and no dots on Cassie
+    {
+      const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport: phone ? viewport : { width: 360, height: 780 }, lite: 'off', server: false, state: { tab: 'home' } });
+      await page.waitForSelector('.hub-bot[data-state]', { state: 'attached', timeout: 10000 });
+      const WANT = { 8: ['Good morning, Test!', 'Morning, Test. Ready when you are.'], 14: ['Good afternoon, Test!', 'Back at it, Test?'], 20: ['Good evening, Test!', 'Evening study, Test?'], 1: ['Up late, Test?', 'Burning the midnight oil, Test?'] };
+      for (const h of [8, 14, 20, 1]) {
+        const got = await page.evaluate((h) => { const real = Date.prototype.getHours; Date.prototype.getHours = () => h; const out = Array.from({ length: 6 }, () => hubHelloLine()); Date.prototype.getHours = real; return out; }, h);
+        expect(got.every((l) => WANT[h].includes(l)) && new Set(got).size === 2, `${size}: at ${h}:00 she says one of her two lines for that hour, a different one each time: ` + JSON.stringify(got));
+      }
+      const noName = await page.evaluate(() => { const real = Date.prototype.getHours, p = state.profile.name; Date.prototype.getHours = () => 1; state.profile.name = ''; const l = [hubHelloLine(), hubHelloLine()]; state.profile.name = p; Date.prototype.getHours = real; return l; });
+      expect(noName.every((l) => ['Up late?', 'Burning the midnight oil?'].includes(l)), `${size}: with no name, the same lines without it: ` + JSON.stringify(noName));
+      await page.waitForSelector('.hub-say:not([hidden])', { timeout: 4000 });
+      const say = () => page.evaluate(() => { const e = document.querySelector('.hub-say'), r = e.getBoundingClientRect(); return { text: e.textContent, left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), w: innerWidth, hidden: e.hidden }; });
+      const s1 = await say();
+      expect(/Test/.test(s1.text) && s1.left >= 0 && s1.right <= s1.w && s1.top >= 0, `${size}: her hello is on the screen: ` + JSON.stringify(s1));
+      await page.evaluate(() => document.querySelector('.hub-bot').click()); const s2 = await say();
+      expect(s2.text && s2.text !== s1.text && !s2.hidden, `${size}: a tap on her says another line: ` + JSON.stringify(s2));
+      await page.waitForTimeout(5400);
+      expect((await say()).hidden, `${size}: the hello goes after about 5 seconds`);
+      const acc = await page.evaluate(() => { const real = window.cassieSeasonal; window.cassieSeasonal = () => 'gradcap'; dressCassie(); const a = hubBot && hubBot.accessory; window.cassieSeasonal = real; return a; });
+      expect(acc === 'gradcap', `${size}: Home’s Cassie wears the season’s outfit: ` + acc);
+      const dots = await page.evaluate(() => { for (const st of ['greeting', 'done', 'proud', 'poke']) { const host = document.createElement('div'); document.body.append(host); window.CassieBot.create(host, { state: st, flat: true }); } return document.querySelectorAll('.cb-dustring, .cb-dust').length + (document.querySelector('.hub-bot').dataset.fx === 'dust' ? 1 : 0); });
+      expect(dots === 0, `${size}: no dots on Cassie in any state: ` + dots);
+      expect(!errors.length, `${size}: Home page errors: ` + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+});
+
 test('v272: Cassie’s speech bubble beside the ask box stays on the screen (phone 390x844 and 360x780, her at the left or the right): it opens toward the side with room', async (b) => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 780 }]) {
     const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, lite: 'off', server: false, state: { tab: 'chat', groqKey: 'gsk_test' } });
@@ -1056,12 +1145,12 @@ test('v271 (390x844 and 1280x800): no pill row above the ask box; Hint, Quiz me,
     expect(on.on && on.pressed === 'true' && on.em === 'On', `${size}: a quiz that is on shows On in the sheet: ` + JSON.stringify(on));
     await page.click('.add-sheet .add-row[data-add="quiz"]');
     await page.waitForFunction(() => !document.querySelector('#quiz-btn.active'), null, { timeout: 5000 });
-    // (dust: false holds in every state; a plain Cassie in the same page still has the dots, so the check is real)
-    for (const st of ['greeting', 'done', 'proud']) { await page.evaluate((x) => { const host = document.createElement('div'); host.className = 'v271-probe'; document.body.append(host); window.__p = window.CassieBot.create(host, { state: x, dust: false, flat: true }); }, st); }
-    const probe = await page.evaluate(() => ({ off: document.querySelectorAll('.v271-probe .cb-dustring').length, on: (() => { const host = document.createElement('div'); document.body.append(host); window.CassieBot.create(host, { state: 'greeting', flat: true }); return host.querySelectorAll('.cb-dustring').length; })() }));
-    expect(probe.off === 0 && probe.on === 1, `${size}: dust: false turns the dots off in every state (and only then): ` + JSON.stringify(probe));
+    // (v273: the dots are gone from Cassie everywhere, in every state)
+    for (const st of ['greeting', 'done', 'proud']) { await page.evaluate((x) => { const host = document.createElement('div'); host.className = 'v271-probe'; document.body.append(host); window.CassieBot.create(host, { state: x, flat: true }); }, st); }
+    const probe = await page.evaluate(() => document.querySelectorAll('.cb-dustring, .cb-dust').length);
+    expect(probe === 0, `${size}: no ring of dots in any state: ` + probe);
     // 4. the sign-in header: no writing; the lamp, books and pencil move once; still under Reduce Motion
-    await page.evaluate(() => { sessionStorage.setItem('cassie.authIntro', '1'); openAuth({ mode: 'signin' }); });
+    await page.evaluate(() => { sessionStorage.setItem('cassie.authIntro', '1'); sessionStorage.setItem('cassie.authSky', 'night'); /* (v273: the lamp on, whatever the clock says) */ openAuth({ mode: 'signin' }); });
     const art = await page.evaluate(() => { const a = (q) => { const e = document.querySelector(q); return e ? getComputedStyle(e).animationName : 'missing'; };
       return { write: !!document.querySelector('.aa-write'), lamp: a('.aa-cone'), bulb: a('.aa-bulb'), books: document.querySelectorAll('.aa-book').length, book: a('.aa-book'), pencil: a('.aa-roll'), moon: a('.aa-moonglow') }; });
     expect(!art.write && art.lamp === 'aaLamp' && art.bulb === 'aaLamp' && art.books === 3 && art.book === 'aaDrop' && art.pencil === 'aaRoll' && art.moon === 'aaGlow', `${size}: the header moves, with no writing: ` + JSON.stringify(art));
@@ -7134,7 +7223,7 @@ test('UI rules v232: buttons say what they do (no bare OK, Yes, Send, Go, Done o
   }
 });
 
-test('Cassie v231: her hello ring fades from white to soft pink (none with Reduce Motion), she writes your name and draws a card in the setup (finished at once with Reduce Motion), thinks while an answer comes then smiles, looks puzzled with a stronger blush on an error, and wears the grad cap and exam tassel by the season and the calendar (1280x800 and 390x844)', async (b) => {
+test('Cassie v231: she greets with a wave and no ring of dots (v273), draws a card in the setup and no longer writes your name (v273) (finished at once with Reduce Motion), thinks while an answer comes then smiles, looks puzzled with a stronger blush on an error, and wears the grad cap and exam tassel by the season and the calendar (1280x800 and 390x844)', async (b) => {
   const hex = (h) => { h = h.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
   for (const phone of [false, true]) {
     const where = phone ? '390x844' : '1280x800';
@@ -7144,17 +7233,16 @@ test('Cassie v231: her hello ring fades from white to soft pink (none with Reduc
       const { ctx, page, errors } = await open(b, { ...view, server: false, lite: 'off', state: null });
       if (calm) await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.waitForSelector('.fr-start', { timeout: 10000 }); await page.click('.fr-start');
-      await page.waitForSelector('.fr-ob .fr-guide', { timeout: 10000 });
-      expect(await page.$eval('.fr-guide', (g) => g.dataset.anim) === (calm ? 'still' : 'run'), `${where}: the guide ${calm ? 'is still' : 'animates'}`);
+      await page.waitForSelector('.fr-ob input[name=name]', { timeout: 10000 });
       expect(!(await page.locator('.fr-guide-bot, .fr-guide .cassie-bot').count()), `${where}: no mascot beside the writing (v244)`);
       await page.type('.fr-ob input[name=name]', 'Mara', { delay: 40 });
       await page.waitForTimeout(450);
-      const ink = await page.evaluate(() => { const g = document.querySelector('.fr-guide'), t = g.querySelector('.fr-ink-name'); return { text: t.textContent, go: g.classList.contains('fr-ink-go'), anim: getComputedStyle(t).animationName, typed: document.querySelector('.fr-ob input[name=name]').value, focus: document.activeElement && document.activeElement.name }; });
-      expect(ink.text === 'Mara' && ink.typed === 'Mara' && ink.focus === 'name', `${where}: she writes the name, and typing isn't blocked: ` + JSON.stringify(ink));
-      expect(calm ? !ink.go && ink.anim === 'none' : ink.go && ink.anim === 'frInk', `${where}: the writing ${calm ? 'is shown finished' : 'animates'}: ` + JSON.stringify(ink));
-      if (process.env.SHOTS && !calm) { await page.waitForTimeout(250); await page.screenshot({ path: `${process.env.SHOTS}/v231-name-${phone ? 'phone' : 'desk'}.png` }); }
+      // (v273) the name is no longer written out above the question as it is typed
+      const ink = await page.evaluate(() => ({ ink: document.querySelectorAll('.fr-ink, .fr-ink-name, .fr-ob .fr-guide').length, typed: document.querySelector('.fr-ob input[name=name]').value, focus: document.activeElement && document.activeElement.name }));
+      expect(ink.ink === 0 && ink.typed === 'Mara' && ink.focus === 'name', `${where}: no handwritten name while typing, and typing isn't blocked: ` + JSON.stringify(ink));
       await page.click('.fr-go'); await page.waitForSelector('.fr-ob [data-who]'); await page.click('.fr-ob [data-who] >> nth=2'); await page.click('.fr-go');
       await page.waitForSelector('.fr-ob [data-goal]');
+      expect(await page.$eval('.fr-guide', (g) => g.dataset.anim) === (calm ? 'still' : 'run'), `${where}: the guide ${calm ? 'is still' : 'animates'}`);
       const card = await page.evaluate(() => { const g = document.querySelector('.fr-guide'); return g && { go: g.classList.contains('fr-draw-go'), anim: getComputedStyle(g.querySelector('.frc-edge')).animationName, lines: g.querySelectorAll('.frc-line').length }; });
       expect(card && card.lines === 3 && (calm ? !card.go : card.go && card.anim === 'frDraw'), `${where}: she draws a study card on the goals step${calm ? ' (already drawn)' : ''}: ` + JSON.stringify(card));
       const next = await page.$eval('.fr-go', (x) => { const r = x.getBoundingClientRect(); return !x.disabled && r.bottom <= innerHeight; });
@@ -7166,16 +7254,10 @@ test('Cassie v231: her hello ring fades from white to soft pink (none with Reduc
     // 2. the app: the hello ring, thinking, puzzled, and the season
     const { ctx, page, errors } = await open(b, { ...view, server: false, lite: 'off', state: { groqKey: 'gsk_test' }, fakeGroq: async (body) => { await new Promise((r) => setTimeout(r, 800)); return /FAILNOW/.test(JSON.stringify(body.messages.slice(-1))) ? { status: 400, message: 'bad request' } : { text: 'An answer.' }; } });
     await page.waitForSelector('#mascot.has2d .cassie-bot', { state: 'attached', timeout: 5000 });
-    const ring = () => page.evaluate(() => { bot2d.setState('idle'); bot2d.setState('greeting'); return [...document.querySelectorAll('#mascot .cb-dust')].map((c) => [+c.dataset.k, c.getAttribute('fill'), +c.getAttribute('r')]); });
-    const dots = await ring();
-    const near = dots.filter((d) => d[0] < 0.15), far = dots.filter((d) => d[0] > 0.85);
-    expect(dots.length === 90 && near.length && far.length, `${where}: the hello ring has its 90 dots`);
-    expect(near.every((d) => hex(d[1]).every((v) => v >= 0xf0)) && far.every((d) => { const [r, g] = hex(d[1]); return r >= 0xf8 && g <= 0xd8; }), `${where}: white beside her, soft pink further out: ` + near[0][1] + ' ' + far[0][1]);
-    expect(Math.min(...near.map((d) => d[2])) > Math.max(...far.map((d) => d[2])), `${where}: further dots are smaller`);
-    if (process.env.SHOTS) for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.waitForTimeout(600); await page.screenshot({ path: `${process.env.SHOTS}/v231-ring-${phone ? 'phone' : 'desk'}-${scheme}.png` }); }
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    expect((await ring()).length === 0, `${where}: no hello ring with Reduce Motion`);
-    await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.evaluate(() => bot2d.setState('idle'));
+    // (v273) the hello ring of dots is gone for good: she greets with her wave and blush alone
+    const hello = await page.evaluate(() => { bot2d.setState('idle'); bot2d.setState('greeting'); const d = bot2d.def; return { dots: document.querySelectorAll('.cb-dust, .cb-dustring').length, fx: d.effect || '', motion: d.motion, blush: d.blush }; });
+    expect(hello.dots === 0 && hello.fx === '' && hello.motion === 'wave' && hello.blush > 0, `${where}: she greets with a wave and a blush, and no ring of dots: ` + JSON.stringify(hello));
+    await page.evaluate(() => bot2d.setState('idle'));
     // thinking (eyes up and to the side) while the answer comes, then the smile, then idle
     await page.fill('#prompt-input', 'What is a cell?'); await page.press('#prompt-input', 'Enter'); await page.waitForTimeout(250);
     const th = await page.evaluate(() => ({ s: bot2d.state, look: bot2d.def.look }));

@@ -634,6 +634,15 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 }
 .mascot-bubble[hidden] { display: none; }
 .mascot-bubble.mb-left { right: auto; left: 0; border-radius: 14px 14px 14px 4px; } /* (v272: near the left edge it opens to her right) */
+/* (v273) Home's Cassie says hello: a bubble up and to her right (to her left when there is no room) */
+.hub-bot { position: relative; }
+.hub-say { position: absolute; z-index: 2; left: 64%; bottom: 76%; width: max-content; max-width: min(184px, 42vw); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 14px 14px 14px 4px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(var(--shade-rgb), .18); font-size: .86rem; font-weight: 600; line-height: 1.35; text-align: left; pointer-events: none; animation: hubSay .3s ease both; }
+.hub-say[hidden] { display: none; }
+.hub-say.hs-left { left: auto; right: 64%; border-radius: 14px 14px 4px 14px; }
+@keyframes hubSay { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .hub-say { animation: none; } }
+html.lite .hub-say { animation: none; }
 
 #mascot.sleeping #mascot-btn { cursor: pointer; }
 @media (max-width: 480px) { #mascot-btn { width: 48px; height: 48px; } }
@@ -2314,17 +2323,13 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-big::placeholder { color: var(--muted); font-weight: 600; }
 /* (v231) Cassie guides the setup: she writes your name, and draws your first study card (decoration only) */
 .fr-guide { --fr-ink: var(--primary-ink); flex: none; display: flex; align-items: center; justify-content: center; gap: var(--sp-3, 12px); height: 64px; pointer-events: none; }
-.fr-ink { width: min(240px, 60vw); height: 56px; overflow: visible; }
-.fr-ink-name { font: 600 40px/1 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive; fill: var(--fr-ink); stroke: var(--fr-ink); stroke-width: .8; }
-.fr-ink-go .fr-ink-name { stroke-dasharray: 600; stroke-dashoffset: 600; fill-opacity: 0; animation: frInk 1.4s ease-out forwards; }
-@keyframes frInk { 70% { stroke-dashoffset: 0; fill-opacity: 0; } 100% { stroke-dashoffset: 0; fill-opacity: 1; } }
 .fr-card-draw { width: 96px; height: 62px; overflow: visible; }
 .fr-card-draw .frc-edge, .fr-card-draw .frc-line { fill: none; stroke: var(--fr-ink); stroke-linecap: round; stroke-linejoin: round; }
 .fr-card-draw .frc-edge { stroke-width: 3; } .fr-card-draw .frc-line { stroke-width: 4; opacity: .7; }
 .fr-draw-go .frc-edge, .fr-draw-go .frc-line { stroke-dasharray: 100; stroke-dashoffset: 100; animation: frDraw .8s ease-out forwards; }
 .fr-draw-go .frc-l1 { animation-delay: .8s; } .fr-draw-go .frc-l2 { animation-delay: 1.05s; } .fr-draw-go .frc-l3 { animation-delay: 1.3s; }
 @keyframes frDraw { to { stroke-dashoffset: 0; } }
-@media (prefers-reduced-motion: reduce) { .fr-ink-go .fr-ink-name, .fr-draw-go .frc-edge, .fr-draw-go .frc-line { animation: none; stroke-dashoffset: 0; fill-opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fr-draw-go .frc-edge, .fr-draw-go .frc-line { animation: none; stroke-dashoffset: 0; } }
 @media (max-height: 700px) { .fr-guide { height: 48px; } }
 .fr-mid > .fr-skipall { flex: none; } /* (the guide never squeezes Skip setup below 44px) */
 .fr-select { font-size: 1.1rem; font-weight: 650; border: 1px solid var(--border); border-radius: 14px; padding: var(--sp-3, 12px) var(--sp-4, 16px); min-height: 52px; background: var(--surface); color: var(--text); text-align: left; }
@@ -2358,7 +2363,12 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .fr-set li { display: flex; align-items: flex-start; gap: var(--sp-3, 12px); }
 .fr-set-rise { opacity: 0; transform: translateY(8px); animation: frSetRise .4s ease both; animation-delay: var(--d, 0s); }
 @keyframes frSetRise { to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .fr-set-rise { animation: none; opacity: 1; transform: none; } }
+/* (v273) each row's tick pops in and draws after its words, before the next row starts */
+.fr-set-rise .fr-tick { animation: frTickPop .3s cubic-bezier(.3, 1.5, .5, 1) both; animation-delay: calc(var(--d, 0s) + .3s); }
+.fr-set-rise .fr-tick path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: frTickDraw .3s ease-out both; animation-delay: calc(var(--d, 0s) + .42s); }
+@keyframes frTickPop { from { opacity: 0; transform: scale(.5); } to { opacity: 1; transform: none; } }
+@keyframes frTickDraw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .fr-set-rise, .fr-set-rise .fr-tick, .fr-set-rise .fr-tick path { animation: none; opacity: 1; transform: none; stroke-dashoffset: 0; } }
 .fr-tick { flex: none; width: 26px; height: 26px; border-radius: 99px; background: var(--primary); display: grid; place-items: center; }
 .fr-tick svg { width: 15px; height: 15px; fill: none; stroke: var(--on-primary); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .fr-set-t { display: flex; flex-direction: column; gap: 2px; }
@@ -2402,8 +2412,10 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
    notebook) with the form on a rounded sheet that slides up over it. Computer: the form in a glass card on the
    left, the header and its words in a panel on the right. Signing in: the page blurs behind a small card. */
 .auth-page { display: flex; flex-direction: column; padding: 0; place-items: initial; }
-.auth-brand { position: absolute; z-index: 2; top: calc(var(--safe-top, 0px) + var(--sp-4, 16px)); left: var(--sp-4, 16px); display: flex; align-items: center; gap: var(--sp-2, 8px); font-size: 1.1rem; color: var(--paper-1); }
-.auth-brand svg { color: var(--paper-1); --logo-eyes: var(--dark-1); }
+.auth-brand { position: absolute; z-index: 2; top: calc(var(--safe-top, 0px) + var(--sp-4, 16px)); left: var(--sp-4, 16px); display: flex; align-items: center; gap: var(--sp-2, 8px); font-size: 1.1rem; }
+.auth-brand, .auth-brand svg { transition: color .6s ease; }
+.auth-brand { color: var(--aa-cur); }
+.auth-brand svg { color: var(--aa-cur); --logo-eyes: var(--aa-cur-eye); }
 .auth-right { display: block; position: relative; flex: none; order: 0; height: clamp(208px, 34vh, 320px); padding: 0; overflow: hidden; background: var(--dark-1); }
 .auth-art { position: absolute; inset: 0; }
 .auth-artsvg { display: block; width: 100%; height: 100%; }
@@ -2435,42 +2447,73 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
   .auth-art { position: relative; inset: auto; flex: 1 1 auto; min-height: 0; }
   .auth-art { background: var(--aa-sky1); }
   .auth-artsvg { position: absolute; left: 0; right: 0; bottom: 0; height: auto; aspect-ratio: 400 / 240; } /* (the whole desk shows: the panel is taller than the drawing) */
-  .auth-copy { display: block; flex: none; max-width: none; padding: var(--sp-5, 24px) var(--sp-7, 40px) var(--sp-7, 40px); color: var(--paper-1); }
+  .auth-copy { display: block; flex: none; max-width: none; padding: var(--sp-5, 24px) var(--sp-7, 40px) var(--sp-7, 40px); color: var(--aa-copy); transition: color .6s ease; }
+  .auth-copy p, .auth-kicker { color: var(--aa-copy-soft); }
+  .auth-right { transition: background-color .6s ease; }
 }
-/* the header's colours, from the theme (it follows the accent colour, light and dark) */
-.auth-page { --aa-sky1: color-mix(in srgb, var(--primary) 26%, var(--dark-1)); --aa-sky2: color-mix(in srgb, var(--secondary) 30%, var(--dark-0)); --aa-desk: color-mix(in srgb, var(--primary) 34%, var(--dark-0)); --aa-win: color-mix(in srgb, var(--secondary) 22%, var(--dark-0)); }
+/* the header's colours, from the theme (it follows the accent colour). (v273) Night as drawn; .is-day (the lamp
+   switched off) is a warm light sky with the sun in the window. Every part reads its colour from these. */
+.auth-page { --aa-sky1: color-mix(in srgb, var(--primary) 26%, var(--dark-1)); --aa-sky2: color-mix(in srgb, var(--secondary) 30%, var(--dark-0)); --aa-desk: color-mix(in srgb, var(--primary) 34%, var(--dark-0)); --aa-win: color-mix(in srgb, var(--secondary) 22%, var(--dark-0));
+  --aa-line: rgba(var(--paper-rgb), .78); --aa-soft: rgba(var(--paper-rgb), .28); --aa-thing: var(--paper-1); --aa-orb: var(--paper-1); --aa-cur: var(--paper-1); --aa-cur-eye: var(--dark-1); --aa-trail: rgba(var(--paper-rgb), .5);
+  --aa-b1: color-mix(in srgb, var(--primary) 70%, var(--paper-1)); --aa-b2: color-mix(in srgb, var(--secondary) 60%, var(--paper-1)); --aa-pencil: color-mix(in srgb, var(--primary) 55%, var(--paper-1)); --aa-b3: var(--paper-1); --aa-night: 1; --aa-copy: var(--paper-1); --aa-copy-soft: rgba(var(--paper-rgb), .72); }
+.auth-page.is-day { --aa-sky1: color-mix(in srgb, var(--secondary) 16%, var(--paper-1)); --aa-sky2: color-mix(in srgb, var(--primary) 14%, var(--paper-1)); --aa-desk: color-mix(in srgb, var(--primary) 30%, var(--dark-4)); --aa-win: color-mix(in srgb, var(--secondary) 26%, var(--white));
+  --aa-line: var(--dark-4); --aa-soft: rgba(var(--shade-rgb), .26); --aa-thing: var(--dark-3); --aa-orb: color-mix(in srgb, var(--warning) 55%, var(--paper-1)); --aa-cur: var(--dark-1); --aa-cur-eye: var(--paper-1); --aa-trail: rgba(var(--shade-rgb), .32);
+  --aa-b1: color-mix(in srgb, var(--primary) 55%, var(--dark-4)); --aa-b2: color-mix(in srgb, var(--secondary) 50%, var(--dark-3)); --aa-pencil: color-mix(in srgb, var(--primary) 50%, var(--dark-4)); --aa-b3: color-mix(in srgb, var(--dark-1) 34%, var(--paper-1)); --aa-night: 0; } /* (the desk stays dark by day too, so the words on it stay light) */
+.auth-artsvg * { transition: fill .6s ease, stroke .6s ease, stop-color .6s ease, opacity .6s ease; }
+.auth-artsvg.is-still * { transition: none; }
 .aa-sky1 { stop-color: var(--aa-sky1); } .aa-sky2 { stop-color: var(--aa-sky2); }
-.aa-star { fill: var(--paper-1); opacity: .8; animation: aaTwinkle 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.37s); }
-.aa-win, .aa-winsky { fill: var(--aa-win); } .aa-win { stroke: rgba(var(--paper-rgb), .28); stroke-width: 3; }
-.aa-moon, .aa-shade, .aa-bulb, .aa-b3, .aa-page, .aa-tip { fill: var(--paper-1); }
-.aa-frame { fill: none; stroke: rgba(var(--paper-rgb), .28); stroke-width: 3; }
+.aa-star { fill: var(--paper-1); opacity: calc(.8 * var(--aa-night)); animation: aaTwinkle 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.37s); }
+.is-day .aa-star { animation: none; }
+.aa-win, .aa-winsky { fill: var(--aa-win); } .aa-win { stroke: var(--aa-soft); stroke-width: 3; }
+.aa-bite { opacity: var(--aa-night); } /* (the moon's bite: gone by day, so the sun is whole) */
+.aa-moon { fill: var(--aa-orb); } .aa-bulb, .aa-page, .aa-tip { fill: var(--paper-1); } .aa-shade { fill: var(--aa-thing); } .aa-b3 { fill: var(--aa-b3); }
+.aa-frame { fill: none; stroke: var(--aa-soft); stroke-width: 3; pointer-events: none; }
 .aa-glow1 { stop-color: var(--paper-1); stop-opacity: .3; } .aa-glow2 { stop-color: var(--paper-1); stop-opacity: 0; }
-.aa-desk { fill: var(--aa-desk); } .aa-edge { fill: none; stroke: rgba(var(--paper-rgb), .22); stroke-width: 1; }
-.aa-lamp { fill: none; stroke: rgba(var(--paper-rgb), .78); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; } .aa-lampbase { fill: rgba(var(--paper-rgb), .78); }
-.aa-b1 { fill: color-mix(in srgb, var(--primary) 70%, var(--paper-1)); } .aa-b2 { fill: color-mix(in srgb, var(--secondary) 60%, var(--paper-1)); } .aa-eraser { fill: var(--secondary); }
+.aa-desk { fill: var(--aa-desk); } .aa-edge { fill: none; stroke: var(--aa-soft); stroke-width: 1; }
+.aa-lamp { fill: none; stroke: var(--aa-line); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; } .aa-lampbase { fill: var(--aa-line); }
+.aa-knob { fill: var(--aa-sky1); stroke: var(--aa-line); stroke-width: 2.5; }
+.aa-b1 { fill: var(--aa-b1); } .aa-b2 { fill: var(--aa-b2); } .aa-eraser { fill: var(--secondary); }
 .aa-band { fill: none; stroke: rgba(var(--shade-rgb), .22); stroke-width: 2; }
 .aa-shadow { fill: rgba(var(--shade-rgb), .35); }
 .aa-page2 { fill: color-mix(in srgb, var(--paper-1) 88%, var(--dark-0)); }
 .aa-line, .aa-spine { fill: none; stroke: rgba(var(--ink-rgb), .24); stroke-width: 1.6; stroke-linecap: round; }
-.aa-pencil { fill: color-mix(in srgb, var(--primary) 55%, var(--paper-1)); }
-.aa-trail { fill: none; stroke: rgba(var(--paper-rgb), .5); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 9; }
-.aa-cur { color: var(--paper-1); --logo-eyes: var(--dark-1); }
+.aa-pencil { fill: var(--aa-pencil); }
+.aa-page, .aa-tip { stroke: var(--aa-soft); stroke-width: 1.2; stroke-linejoin: round; }
+.aa-trail { fill: none; stroke: var(--aa-trail); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 9; pointer-events: none; }
+.aa-cur { color: var(--aa-cur); --logo-eyes: var(--aa-cur-eye); pointer-events: none; }
+.aa-curgo { transition: transform .7s cubic-bezier(.4, 0, .2, 1); }
 .aa-curin { animation: aaBob 2.4s ease-in-out infinite; animation-delay: calc(var(--wait, 0s) + 3s); }
 .auth-artsvg.is-still * { animation: none !important; }
 @keyframes aaTwinkle { 0%, 100% { opacity: .85; } 50% { opacity: .25; } }
+@keyframes aaBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
 /* (v271) once on open, after the intro: the lamp switches on with one flicker, the books drop into place one by one,
    the pencil rolls up to the notebook; the moon glows on a slow loop. Still (Reduce Motion, Lite mode): all in place. */
-.aa-on { animation: aaLamp .9s ease-out both; animation-delay: var(--wait, 0s); }
+.aa-on { opacity: var(--aa-night); animation: aaLamp .9s ease-out both; animation-delay: var(--wait, 0s); }
+.is-day .aa-on { animation: none; }
 .aa-book { animation: aaDrop .45s cubic-bezier(.3, 1.4, .5, 1) both; animation-delay: calc(var(--wait, 0s) + .2s + var(--n) * .14s); }
 .aa-roll { animation: aaRoll .8s ease-out both; animation-delay: calc(var(--wait, 0s) + .7s); }
-.aa-moonglow { fill: var(--paper-1); opacity: .12; animation: aaGlow 4s ease-in-out infinite; }
+.aa-moonglow { fill: var(--aa-orb); opacity: .12; animation: aaGlow 4s ease-in-out infinite; }
 @keyframes aaLamp { 0% { opacity: 0; } 30% { opacity: 1; } 42% { opacity: .35; } 56%, 100% { opacity: 1; } }
 @keyframes aaDrop { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes aaRoll { from { transform: translateX(4px); } to { transform: none; } }
 @keyframes aaGlow { 0%, 100% { opacity: .08; } 50% { opacity: .24; } }
-@keyframes aaBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
+/* (v273) the lamp is a switch you can tap or press; the books, the notebook, the pencil and the sun or moon each
+   make one short move when tapped */
+.aa-lampbtn, .aa-tap { cursor: pointer; }
+.aa-hit { fill: transparent; stroke: transparent; stroke-width: 2; }
+.aa-lampbtn { outline: none; }
+.aa-lampbtn:focus-visible .aa-hit { stroke: var(--aa-line); }
+.aa-books.aa-go { animation: aaHop .5s cubic-bezier(.3, 1.4, .5, 1); }
+.aa-book2.aa-go .aa-flip { transform-origin: 258px 176px; animation: aaFlip .6s ease-in-out; }
+.aa-tap.aa-go .aa-ptap { animation: aaRollAway .8s ease-in-out; }
+.aa-orb { transform-box: fill-box; }
+.aa-orb.aa-go { animation: aaOrb .6s ease-in-out; }
+@keyframes aaHop { 0%, 100% { transform: none; } 40% { transform: translateY(-10px); } }
+@keyframes aaFlip { 0%, 100% { transform: none; } 50% { transform: scaleX(.08); } }
+@keyframes aaRollAway { 0%, 100% { transform: none; } 50% { transform: translateX(14px); } }
+@keyframes aaOrb { 0%, 100% { transform: none; } 50% { transform: translateY(-6px); } }
 /* the brand intro: "Cassie", the cursor underlines it, then "Your study buddy" (1.2 seconds, a tap ends it) */
-.auth-intro { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: var(--paper-1); background: radial-gradient(90% 70% at 50% 35%, var(--aa-sky1), var(--aa-sky2)); animation: aiOut .25s ease .95s forwards; }
+.auth-intro { --aa-sky1: color-mix(in srgb, var(--primary) 26%, var(--dark-1)); --aa-sky2: color-mix(in srgb, var(--secondary) 30%, var(--dark-0)); position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: var(--paper-1); background: radial-gradient(90% 70% at 50% 35%, var(--aa-sky1), var(--aa-sky2)); animation: aiOut .25s ease .95s forwards; }
 .ai-in { text-align: center; }
 .ai-word { position: relative; display: inline-block; padding-bottom: var(--sp-4, 16px); }
 .ai-word b { font-size: clamp(2.75rem, 12vw, 4rem); font-weight: 800; letter-spacing: -.04em; }
