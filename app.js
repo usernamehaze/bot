@@ -879,6 +879,7 @@ function dressCassie() {
   const base = workMode() ? 'professor' : 'classic';
   const outfit = counselorMode ? 'heart' : quizMode ? 'coder' : (taskOutfit || base);
   if (bot2d) bot2d.setAccessory(outfit === 'classic' ? cassieSeasonal() : OUTFIT_TO_2D[outfit]);
+  if (hubBot) { try { hubBot.setAccessory(outfit === 'classic' ? cassieSeasonal() : OUTFIT_TO_2D[outfit]); } catch (e) { /* Home's Cassie is gone */ } } // (v273: Home's Cassie dresses the same)
 }
 
 function syncAudience() { state.audience = workMode() ? 'pro' : 'student'; } // (the old switch's choice, undone)
@@ -2620,7 +2621,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=272'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=273'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2642,7 +2643,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=272'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=273'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2916,7 +2917,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=272').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=273').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -3039,14 +3040,44 @@ function buildHub({ ideas = false, phone = false } = {}) {
   bell.addEventListener('click', () => { hubRemindOpen = remind.classList.toggle('open'); bell.setAttribute('aria-expanded', String(hubRemindOpen)); });
   el.addEventListener('click', (e) => { const b = e.target.closest('[data-hub]'); if (b) hubAct(b.dataset.hub); });
   const ib = el.querySelector('.home-ideas'); if (ib) ib.addEventListener('click', () => showTools());
-  // Cassie, large, at rest: breathing and blinking now and then, never the ring of dots (v271; still with Reduce Motion)
-  try { window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'idle', pokeable: true, dust: false }); } catch (e) { /* the words still work */ }
+  // Cassie, large, at rest: breathing and blinking now and then (still with Reduce Motion), in her seasonal outfit
+  // like the chat's Cassie (v273), and she says hello by the clock
+  try { hubBot = window.CassieBot.create(el.querySelector('.hub-bot'), { state: 'idle', pokeable: true, accessory: cassieSeasonal() }); hubHello(el.querySelector('.hub-bot')); } catch (e) { hubBot = null; /* the words still work */ }
   if (phone) el.append(calWidget()); // (v225: the Calendar, as a widget)
   homeWidgets(el, 'phone');
   setTimeout(renderHubTimer, 0);
   return el;
 }
 function renderHub(host) { if (!host) return; host.replaceChildren(buildHub({ phone: true })); } // (the phone's Home tab)
+// (v273) Home's Cassie says hello by the clock, with the student's first name: one line each time Home is built,
+// gone after about 5 seconds; a tap on her says another. The bubble opens to the side with room.
+var hubBot = null, hubHelloTimer = 0, hubHelloLast = ""; // (var: dressCassie can run before this line does)
+const HUB_HELLO = [
+  [5, 12, ['Good morning, {name}!', 'Morning, {name}. Ready when you are.']],
+  [12, 18, ['Good afternoon, {name}!', 'Back at it, {name}?']],
+  [18, 23, ['Good evening, {name}!', 'Evening study, {name}?']],
+  [23, 29, ['Up late, {name}?', 'Burning the midnight oil, {name}?']], // (23:00 to 4:59)
+];
+function hubHelloLine() {
+  const h = new Date().getHours(), hr = h < 5 ? h + 24 : h, name = firstName();
+  const set = (HUB_HELLO.find(([a, b]) => hr >= a && hr < b) || HUB_HELLO[0])[2];
+  const pick = set.filter((l) => l !== hubHelloLast), line = pick[Math.floor(Math.random() * pick.length)] || set[0];
+  hubHelloLast = line;
+  return name ? line.replace('{name}', name) : line.replace(', {name}', '');
+}
+function hubHello(host) {
+  if (!host) return;
+  const say = document.createElement('div'); say.className = 'hub-say'; say.hidden = true; host.append(say);
+  const show = () => {
+    if (!say.isConnected) return;
+    let line = hubHelloLine(); if (line === say.textContent) line = hubHelloLine(); // (never the line already showing)
+    say.textContent = line; say.hidden = false; say.classList.remove('hs-left');
+    if (say.getBoundingClientRect().right > innerWidth - 8) say.classList.add('hs-left');
+    clearTimeout(hubHelloTimer); hubHelloTimer = setTimeout(() => { say.hidden = true; }, 5000);
+  };
+  setTimeout(show, 500);
+  host.addEventListener('click', show);
+}
 
 /* ---------- Podcast mode: Jessica and Chris talk through your notes (about 3 minutes) ----------
    Cassie writes a short two person script from the notes only, then it plays line by line in the
@@ -6920,7 +6951,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=272')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=273')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8164,7 +8195,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=272');
+      exploreMod = await import('./explore/cell3d.js?v=273');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8214,7 +8245,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=272');
+      labsMod = await import('./labs/labs.js?v=273');
       islandRest();
     }
     labsMod.open({
@@ -10164,10 +10195,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=272').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=273').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=272', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=273', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -10309,7 +10340,6 @@ function frOnboard(at = 0) {
       <button type="button" class="fr-skip">Skip for now</button>
     </div>
     <div class="fr-mid">
-      ${at === 0 ? `<div class="fr-guide" aria-hidden="true"><svg class="fr-ink" viewBox="0 0 300 64" preserveAspectRatio="xMidYMid meet"><text class="fr-ink-name" x="150" y="46" text-anchor="middle"></text></svg></div>` : ''}
       ${at === 2 ? `<div class="fr-guide" aria-hidden="true"><svg class="fr-card-draw" viewBox="0 0 124 80"><rect class="frc-edge" x="4" y="4" width="116" height="72" rx="10" pathLength="100"/><path class="frc-line frc-l1" d="M20 28 H100" pathLength="100"/><path class="frc-line frc-l2" d="M20 42 H88" pathLength="100"/><path class="frc-line frc-l3" d="M20 56 H66" pathLength="100"/></svg></div>` : ''}
       <h1 class="fr-h">${Q.h}</h1>
       ${Q.sub ? `<p class="fr-sub">${Q.sub}</p>` : ''}
@@ -10330,25 +10360,14 @@ function frOnboard(at = 0) {
   };
   mark();
   const typed = () => { if (f.name) a.name = f.name.value.trim(); if (f.age) a.age = f.age.value; };
-  // (v231) the setup writes your name as you type it, and draws your first study card (v244: on their own, with no
+  // (v231) the setup draws your first study card (v273: it no longer writes your name as you type; v244: with no
   // mascot beside them). Only decoration: it never blocks typing or Next; Reduce Motion or Lite: the finished drawing.
   const guide = el.querySelector('.fr-guide'), still = reduceMotion() || !!window.CASSIE_LITE;
   if (guide) {
     guide.dataset.anim = still ? 'still' : 'run';
     if (at === 2 && !still) guide.classList.add('fr-draw-go');
   }
-  const ink = el.querySelector('.fr-ink-name');
-  let inkTimer = 0;
-  const writeName = (now) => {
-    if (!ink) return;
-    const n = (f.name && f.name.value.trim()) || '';
-    ink.textContent = n;
-    clearTimeout(inkTimer);
-    if (still || !n) { guide.classList.remove('fr-ink-go'); return; }
-    inkTimer = setTimeout(() => { guide.classList.remove('fr-ink-go'); void guide.getBoundingClientRect(); guide.classList.add('fr-ink-go'); }, now ? 0 : 280); // (she writes it once you pause)
-  };
-  writeName(true);
-  f.addEventListener('input', () => { typed(); say(''); keep(); writeName(); });
+  f.addEventListener('input', () => { typed(); say(''); keep(); });
   f.addEventListener('click', (e) => {
     const w = e.target.closest('[data-who]'), g = e.target.closest('[data-goal]'), s = e.target.closest('[data-style]');
     if (w) a.who = w.dataset.who;
@@ -10388,7 +10407,7 @@ function frSummary(a) {
     ['Made yours', style || 'Clear, friendly answers'],
     ['Ready', 'Cassie is tuned to you'],
   ];
-  const tick = '<span class="fr-tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span>';
+  const tick = '<span class="fr-tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" pathLength="1"/></svg></span>';
   el.innerHTML = `<section class="fr-summary" aria-live="polite">
     <h1 class="fr-h fr-set-title"></h1>
     <p class="fr-sub">Your study buddy is ready.</p>
@@ -10398,7 +10417,7 @@ function frSummary(a) {
   el.querySelector('.fr-set-title').textContent = `You’re all set${a.name ? `, ${a.name}` : ''}!`;
   const lis = el.querySelectorAll('.fr-set li');
   rows.forEach(([t, s], i) => { lis[i].querySelector('b').textContent = t; lis[i].querySelector('small').textContent = s; });
-  if (!reduceMotion() && !window.CASSIE_LITE) lis.forEach((li, i) => { li.style.setProperty('--d', `${i * 0.12 + 0.1}s`); li.classList.add('fr-set-rise'); });
+  if (!reduceMotion() && !window.CASSIE_LITE) lis.forEach((li, i) => { li.style.setProperty('--d', `${i * 0.7 + 0.2}s`); li.classList.add('fr-set-rise'); }); // (v273: one row at a time, unhurried: it fades up, its tick draws, then the next; Start studying works all the while)
   el.querySelector('.fr-set-go').addEventListener('click', () => frFinish(a));
   setTimeout(() => { const b = el.querySelector('.fr-set-go'); if (b) b.focus({ preventScroll: true }); }, 60);
 }
@@ -11023,26 +11042,50 @@ const authStill = () => document.documentElement.classList.contains('lite') || !
 function authArt(still, wait) {
   const TRAIL = 'M150 26 C 190 10, 236 40, 226 92 S 270 150, 282 170';
   const stars = [[40, 24], [92, 44], [150, 18], [204, 52], [228, 22], [126, 82], [62, 96]].map(([x, y], i) => `<circle class="aa-star" cx="${x}" cy="${y}" r="${i % 3 ? 1.4 : 2}" style="--i:${i}"/>`).join('');
-  const mark = `<g class="aa-curin"><g transform="scale(.06) translate(-108 -90)">${CASSIE_MARK}</g></g>`;
+  const mark = `<g class="aa-curgo"><g class="aa-curin"><g transform="scale(.06) translate(-108 -90)">${CASSIE_MARK}</g></g></g>`;
   const cur = still ? `<g class="aa-cur" transform="translate(282 170)">${mark}</g>`
     : `<g class="aa-cur" transform="translate(150 26)">${mark}<animateMotion dur="3s" begin="${wait}s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".42 0 .2 1" path="M0 0 C 40 -16, 86 14, 76 66 S 120 124, 132 144"/></g>`;
-  return `<svg class="auth-artsvg${still ? ' is-still' : ''}" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="--wait:${wait}s">
+  return `<svg class="auth-artsvg${still ? ' is-still' : ''}" viewBox="0 0 400 240" preserveAspectRatio="xMidYMax slice" role="group" aria-label="Cassie’s desk" style="--wait:${wait}s">
     <defs><linearGradient id="aa-sky" x1="0" y1="0" x2="0" y2="1"><stop class="aa-sky1" offset="0"/><stop class="aa-sky2" offset="1"/></linearGradient>
       <radialGradient id="aa-glow" cx=".5" cy="0" r="1"><stop class="aa-glow1" offset="0"/><stop class="aa-glow2" offset="1"/></radialGradient></defs>
     <rect width="400" height="240" fill="url(#aa-sky)"/>${stars}
-    <rect class="aa-win" x="250" y="28" width="104" height="112" rx="14"/><circle class="aa-moonglow" cx="322" cy="62" r="22"/><circle class="aa-moon" cx="322" cy="62" r="14"/><circle class="aa-winsky" cx="330" cy="56" r="12"/>
+    <rect class="aa-win" x="250" y="28" width="104" height="112" rx="14"/><g class="aa-tap aa-orb" data-t="orb"><circle class="aa-moonglow" cx="322" cy="62" r="22"/><circle class="aa-moon" cx="322" cy="62" r="14"/><circle class="aa-winsky aa-bite" cx="330" cy="56" r="12"/></g>
     <path class="aa-frame" d="M302 28 V140 M250 84 H354"/>
-    <path class="aa-cone aa-on" d="M84 104 L24 198 H176 Z" fill="url(#aa-glow)"/>
+    <path class="aa-cone aa-on" transform="translate(8 0)" d="M84 104 L24 198 H176 Z" fill="url(#aa-glow)"/>
     <rect class="aa-desk" x="0" y="196" width="400" height="44"/><path class="aa-edge" d="M0 196.5 H400"/>
-    <path class="aa-lamp" d="M58 196 L48 146 L84 104"/><ellipse class="aa-lampbase" cx="58" cy="196" rx="22" ry="5"/><path class="aa-shade" d="M70 92 L102 106 L94 122 L64 108 Z"/><circle class="aa-bulb aa-on" cx="86" cy="116" r="4"/>
-    <g class="aa-book" style="--n:0"><rect class="aa-b1" x="112" y="176" width="68" height="20" rx="3"/><path class="aa-band" d="M124 176 V196 M168 176 V196"/></g>
+    <g class="aa-lampbtn" role="button" tabindex="0" aria-pressed="true" aria-label="Lamp: switch between night and day" data-t="lamp" transform="translate(8 0)"><rect class="aa-hit" x="40" y="84" width="72" height="118" rx="12"/>
+      <path class="aa-lamp" d="M58 196 L48 146 L84 104"/><ellipse class="aa-lampbase" cx="58" cy="196" rx="22" ry="5"/><path class="aa-shade" d="M70 92 L102 106 L94 122 L64 108 Z"/><circle class="aa-bulb aa-on" cx="86" cy="116" r="4"/><circle class="aa-knob" cx="48" cy="146" r="4.5"/></g>
+    <g class="aa-tap aa-books" data-t="books"><g class="aa-book" style="--n:0"><rect class="aa-b1" x="112" y="176" width="68" height="20" rx="3"/><path class="aa-band" d="M124 176 V196 M168 176 V196"/></g>
     <g class="aa-book" style="--n:1"><rect class="aa-b2" x="118" y="158" width="58" height="18" rx="3"/><path class="aa-band" d="M130 158 V176"/></g>
-    <g class="aa-book" style="--n:2"><rect class="aa-b3" x="114" y="142" width="64" height="16" rx="3"/><path class="aa-band" d="M164 142 V158"/></g>
+    <g class="aa-book" style="--n:2"><rect class="aa-b3" x="114" y="142" width="64" height="16" rx="3"/><path class="aa-band" d="M164 142 V158"/></g></g>
     <ellipse class="aa-shadow" cx="258" cy="199" rx="70" ry="5"/>
-    <path class="aa-page" d="M196 198 L258 192 L258 160 L202 166 Z"/><path class="aa-page aa-page2" d="M258 192 L320 198 L314 166 L258 160 Z"/>
-    <path class="aa-line" d="M208 176 L250 172 M208 184 L244 180 M266 172 L302 175"/><path class="aa-spine" d="M258 160 V192"/>
-    <g transform="translate(336 186) rotate(-24)"><g class="aa-roll"><rect class="aa-pencil" x="-26" y="-4" width="46" height="8" rx="1.5"/><path class="aa-tip" d="M20 -4 L30 0 L20 4 Z"/><rect class="aa-eraser" x="-32" y="-4" width="7" height="8" rx="2"/></g></g>
+    <g class="aa-tap aa-book2" data-t="notebook"><path class="aa-page" d="M196 198 L258 192 L258 160 L202 166 Z"/><path class="aa-line" d="M208 176 L250 172 M208 184 L244 180"/>
+      <g class="aa-flip"><path class="aa-page aa-page2" d="M258 192 L320 198 L314 166 L258 160 Z"/><path class="aa-line" d="M266 172 L302 175"/></g><path class="aa-spine" d="M258 160 V192"/></g>
+    <g class="aa-tap" data-t="pencil" transform="translate(336 186) rotate(-24)"><g class="aa-ptap"><g class="aa-roll"><rect class="aa-pencil" x="-26" y="-4" width="46" height="8" rx="1.5"/><path class="aa-tip" d="M20 -4 L30 0 L20 4 Z"/><rect class="aa-eraser" x="-32" y="-4" width="7" height="8" rx="2"/></g></g></g>
     <path class="aa-trail" d="${TRAIL}"/>${cur}</svg>`;
+}
+// (v273) the header is alive. The lamp is a switch: on is night (as drawn), off is day (a warm sky, the sun in the
+// window, no stars, no lamp light); it opens by the device's clock (day from 6:00 to 17:59) and remembers the choice
+// for the visit. A tap on the books, the notebook, the pencil or the sun or moon gives each one short move, and
+// Cassie's cursor glides over to it. Reduce Motion or Lite mode: the lamp still switches, at once; nothing else moves.
+const AUTH_SPOT = { lamp: [-188, -58], books: [-136, -26], notebook: [-40, 6], pencil: [44, 12], orb: [36, -104] }; // (from where the cursor lands)
+function authArtWire(page, still) {
+  const svg = page.querySelector('.auth-artsvg'), lamp = svg && svg.querySelector('.aa-lampbtn'); if (!lamp) return;
+  let day = null;
+  try { const k = sessionStorage.getItem('cassie.authSky'); if (k === 'day' || k === 'night') day = k === 'day'; } catch (e) { /* by the clock, then */ }
+  if (day === null) { const h = new Date().getHours(); day = h >= 6 && h < 18; }
+  const paint = () => { page.classList.toggle('is-day', day); lamp.setAttribute('aria-pressed', String(!day)); };
+  paint();
+  const glide = (t) => { const g = svg.querySelector('.aa-curgo'), to = AUTH_SPOT[t]; if (g && to && !still) g.style.transform = `translate(${to[0]}px, ${to[1]}px)`; };
+  const flip = () => { day = !day; try { sessionStorage.setItem('cassie.authSky', day ? 'day' : 'night'); } catch (e) { /* this page only */ } svg.style.setProperty('--wait', '0s'); paint(); glide('lamp'); }; // (switched back on, the lamp flickers at once)
+  svg.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-t]'); if (!t) return;
+    if (t === lamp) { flip(); return; }
+    if (still) return;
+    t.classList.remove('aa-go'); void t.getBoundingClientRect(); t.classList.add('aa-go'); // (one short move, again on each tap)
+    glide(t.dataset.t);
+  });
+  lamp.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
 }
 // (v270) the sign-in wait: a small card over the blurred page, Cassie's cursor going round a ring of dots
 function authOrbit() {
@@ -11075,9 +11118,9 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
   const wait = still || returned ? 0 : authIntro(page);
   page.insertAdjacentHTML('beforeend', `
     <div class="auth-brand"><svg viewBox="40 40 420 420" aria-hidden="true">${CASSIE_MARK}</svg>Cassie</div>
-    <div class="auth-right" aria-hidden="true">
+    <div class="auth-right">
       <div class="auth-art">${authArt(still, wait + 0.3)}</div>
-      <div class="auth-copy">
+      <div class="auth-copy" aria-hidden="true">
         <p class="auth-kicker">Your study buddy</p>
         <h2>Learn anything.<br>On every device.</h2>
         <p>Sign in once: your grade, level and the quiz questions you missed follow you from your phone to your laptop.</p>
@@ -11106,6 +11149,7 @@ function openAuth({ first = false, mode = 'signin', returned = null } = {}) {
     </div>
     <div class="auth-busy" role="status" hidden><div class="ab-card">${authOrbit()}<b>Signing you in</b><span class="auth-busy-sub">Getting your notes ready</span></div></div>`);
   document.body.appendChild(page);
+  authArtWire(page, still);
   const f = page.querySelector('form');
   const err = f.querySelector('.auth-err');
   const go = f.querySelector('.auth-go');

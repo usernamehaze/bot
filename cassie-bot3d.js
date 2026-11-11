@@ -229,8 +229,6 @@ function effect(kind, color, accent) {
   g.userData.kind = kind;
   const col = new THREE.Color(color || '#ffffff'), ink = M(INK), add = (m) => { g.add(m); return m; };
   const heart = () => { const s = new THREE.Shape(); s.moveTo(0, -0.09); s.bezierCurveTo(-0.2, 0.03, -0.12, 0.17, 0, 0.07); s.bezierCurveTo(0.12, 0.17, 0.2, 0.03, 0, -0.09); return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 }); };
-  // (v231) the hello ring: white beside her, soft blush pink and smaller further out
-  if (kind === 'dust') { const near = new THREE.Color(D.DUST.near), far = new THREE.Color(D.DUST.far); for (let i = 0; i < 46; i++) { const k = (i * 37 % 46) / 46, a = i / 46 * Math.PI * 2, r = (190 + k * 46) / U, d = add(new THREE.Mesh(ball, M(near.clone().lerp(far, k), { emissive: near.clone().lerp(far, k), emissiveIntensity: 0.25 }))); d.position.set(Math.cos(a) * r, Math.sin(a) * r, -0.3 - k * 0.15); d.scale.setScalar(0.022 - k * 0.012); } }
   if (kind === 'lines') for (let i = 0; i < 3; i++) { const l = add(new THREE.Mesh(box, M(0x8a8f9c))); l.userData.i = i; l.position.set(X(352), Y(336 + i * 24), 0.1); }
   if (kind === 'scan') { const pg = new THREE.Group(); pg.position.set(X(373), Y(354), 0.05); pg.rotation.z = -0.14; g.add(pg); const edge = new THREE.Mesh(box, M(0x9a9488)); edge.scale.set(0.53, 0.67, 0.015); edge.position.z = -0.006; pg.add(edge); const paper = new THREE.Mesh(box, M(0xffffff)); paper.scale.set(0.5, 0.64, 0.02); pg.add(paper); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(box, M(0x9a9488)); l.scale.set(0.34, 0.025, 0.01); l.position.set(-0.03, 0.2 - i * 0.1, 0.015); pg.add(l); } const bar = new THREE.Mesh(box, M(color || 0x4fd1b5, { emissive: new THREE.Color(color || 0x4fd1b5), emissiveIntensity: 0.4 })); bar.scale.set(0.46, 0.03, 0.02); bar.position.z = 0.02; bar.userData.bar = true; pg.add(bar); }
   if (kind === 'search') { const lens = new THREE.Group(); lens.userData.lens = true; const ring = new THREE.Mesh(torus, ink); ring.scale.set(0.2, 0.2, 0.25); lens.add(ring); const glass = new THREE.Mesh(new THREE.CircleGeometry(0.19, 32), M(0xffffff, { transparent: true, opacity: 0.3 })); lens.add(glass); const h = new THREE.Mesh(cyl, ink); h.scale.set(0.035, 0.24, 0.035); h.position.set(0.2, -0.2, 0); h.rotation.z = Math.PI / 4; lens.add(h); lens.position.z = R.FRONT + 0.15; add(lens); }
@@ -318,7 +316,6 @@ export function upgrade(api, host, svg, { pokeable = false, glow = false, failed
     const t = p.t, ts = p.ts;
     fx.children.forEach((m) => {
       const u = m.userData;
-      if (fx.userData.kind === 'dust') fx.rotation.z = -(t * 9) * Math.PI / 180;
       if (fx.userData.kind === 'lines') { const q = ((t * 0.8) - u.i * 0.33) % 1, w = Math.max(0, Math.min(1, q * 1.6)) * (u.i === 2 ? 50 : 76) / U; m.scale.set(Math.max(0.001, w), 11 / U, 0.03); m.position.x = X(352) + w / 2; }
       if (u.bar) m.position.y = 0.26 - ((t * 0.7) % 4 | 0) * 0.13;
       if (u.lens) m.position.set(X(226 + Math.sin(t * 2.6) * 70), Y(236 + Math.cos(t * 5.2) * 10), R.FRONT + 0.15);

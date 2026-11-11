@@ -19,7 +19,6 @@
   const NS = 'http://www.w3.org/2000/svg';
   const INK = '#16131c', PAPER = '#fbfaf7';
   // (v231) the hello ring's dots: white beside her, a soft blush pink further out
-  const DUST_NEAR = '#ffffff', DUST_FAR = '#ffc9d8', DUST_EDGE = '#f2a5bb';
   const TASSEL = '#e8b84a', TASSEL_DARK = '#b8862a';
   const CARET_BLINK = 530; // ms — the classic text-cursor blink
 
@@ -142,7 +141,7 @@
   // color: her tint and glow for that mood (the UI stays monochrome; Cassie may be colourful)
   const STATES = {
     idle:        { eyes: 'caret',  mouth: 'none',   motion: 'breathe' },
-    greeting:    { eyes: 'happy',  mouth: 'smile',  motion: 'wave', blush: 0.7, color: '#ffb48a', effect: 'dust' },
+    greeting:    { eyes: 'happy',  mouth: 'smile',  motion: 'wave', blush: 0.7, color: '#ffb48a' }, // (v273: no ring of dots any more, anywhere)
     listening:   { eyes: 'ibeam',  mouth: 'none',   motion: 'lean', badge: 'ibeam', color: '#7aa7ff' },
     thinking:    { eyes: 'caret',  mouth: 'none',   motion: 'ponder', badge: 'dots', look: [0.55, -0.6], color: '#a58bff' },
     writing:     { eyes: 'caret',  mouth: 'none',   motion: 'type', effect: 'lines', color: '#7aa7ff' },
@@ -237,8 +236,6 @@
 
     let accent = opts.accent || '#d8343c';
     let stateName = '', st = STATES.idle, stateAt = 0, accessory = null;
-    // (v271) opts.dust === false: never the hello ring of dots, in any state (Home), flat or 3D
-    const noDust = (d) => (opts.dust === false && d && d.effect === 'dust' ? { ...d, effect: '' } : d);
     let lookX = 0, lookY = 0, wantX = 0, wantY = 0, pointerLook = null;
     // opts.win: the window she lives in (the pop-out Cassie window keeps animating while the main tab is hidden)
     const W = opts.win || window;
@@ -281,14 +278,6 @@
       if (kind === 'scribble') parts.fxBack.innerHTML = `<path class="cb-scrib" d="M330 410 C350 380 372 430 392 400 S430 380 446 404" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>`;
       if (kind === 'sparkle') parts.fxFront.innerHTML = [[96, 70, 1], [420, 150, 0.8], [436, 330, 0.7], [70, 300, 0.9], [300, 40, 0.6]].map(([x, y, s], i) => `<path class="cb-sp" data-i="${i}" transform="translate(${x} ${y}) scale(${s})" d="M0 -16 C2 -4 4 -2 16 0 C4 2 2 4 0 16 C-2 4 -4 2 -16 0 C-4 -2 -2 -4 0 -16Z" fill="${st.color || accent}"/>`).join('');
       if (kind === 'highlight') parts.hl.setAttribute('opacity', '.38');
-      if (kind === 'dust' && !(reduced() || window.CASSIE_LITE)) { // (the hello ring: not with Reduce Motion or in Lite mode)
-        let dots = '';
-        for (let i = 0; i < 90; i++) {
-          const a = (i / 90) * Math.PI * 2 + Math.random() * 0.2, k = Math.random(), r = 190 + k * 46; // k: 0 beside her, 1 at the outside
-          dots += `<circle class="cb-dust" cx="${(236 + Math.cos(a) * r).toFixed(1)}" cy="${(246 + Math.sin(a) * r * 0.86).toFixed(1)}" r="${(3.4 - k * 2).toFixed(1)}" fill="${mix(DUST_NEAR, DUST_FAR, k)}" stroke="${DUST_EDGE}" stroke-width="${(0.9 - k * 0.5).toFixed(2)}" stroke-opacity=".7" data-p="${Math.random().toFixed(2)}" data-k="${k.toFixed(2)}"/>`;
-        }
-        parts.fxBack.innerHTML = `<g class="cb-dustring">${dots}</g>`;
-      }
       if (kind === 'hearts') parts.fxFront.innerHTML = [0, 1, 2, 3].map((i) => `<path class="cb-float" data-i="${i}" d="M0 9 C-14 0 -9 -13 0 -6 C9 -13 14 0 0 9Z" fill="${st.color}" stroke="${INK}" stroke-width="3"/>`).join('');
       if (kind === 'notes') parts.fxFront.innerHTML = [0, 1, 2].map((i) => `<g class="cb-float" data-i="${i}"><path d="M4 -16 V8 M4 -16 L16 -20 V2" fill="none" stroke="${st.color || INK}" stroke-width="5" stroke-linecap="round"/><ellipse cx="-1" cy="9" rx="7" ry="5.5" fill="${st.color || INK}"/><ellipse cx="11" cy="3" rx="7" ry="5.5" fill="${st.color || INK}"/></g>`).join('');
       if (kind === 'drop') parts.fxFront.innerHTML = `<g class="cb-doc"><path d="M-22 -28 H10 L22 -16 V28 H-22 Z" fill="#fff" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M10 -28 V-16 H22" fill="none" stroke="${INK}" stroke-width="4"/><rect x="-14" y="-6" width="28" height="10" rx="3" fill="#d8343c"/><rect x="-14" y="9" width="20" height="5" rx="2.5" fill="${INK}" opacity=".5"/></g>`;
@@ -304,7 +293,7 @@
     function setState(name) {
       if (!STATES[name]) name = 'idle';
       if (name === stateName && name !== 'done' && name !== 'surprised' && name !== 'proud') return;
-      stateName = name; st = noDust(STATES[name]); stateAt = clock(); stale = true; svg.dataset.state = host.dataset.state = name; host.dataset.fx = st.effect || ''; // (v271: her state and effect, readable, flat or 3D)
+      stateName = name; st = STATES[name]; stateAt = clock(); stale = true; svg.dataset.state = host.dataset.state = name; host.dataset.fx = st.effect || ''; // (v271: her state and effect, readable, flat or 3D)
       const c = st.color;
       const base = ['#ffffff', PAPER, '#e9e5dd'];
       parts.stops.forEach((n, i) => n.setAttribute('stop-color', c ? mix(base[i], c, [0.22, 0.4, 0.58][i]) : base[i]));
@@ -388,7 +377,6 @@
       if (st.effect === 'search') { const l = svg.querySelector('.cb-lens'); if (l) l.setAttribute('transform', `translate(${226 + Math.sin(t * 2.6) * 70} ${236 + Math.cos(t * 5.2) * 10})`); }
       if (st.effect === 'scribble') { const s = svg.querySelector('.cb-scrib'); if (s) s.setAttribute('stroke-dashoffset', String(100 - ((t * 45) % 130))); }
       if (st.effect === 'sparkle') svg.querySelectorAll('.cb-sp').forEach((s) => { const i = +s.dataset.i; const k = Math.max(0, Math.sin(t * 4 + i * 1.3)); s.style.opacity = String(k); });
-      if (st.effect === 'dust') { const g = svg.querySelector('.cb-dustring'); if (g) g.setAttribute('transform', `rotate(${(t * 9) % 360} 236 246)`); svg.querySelectorAll('.cb-dust').forEach((c) => c.setAttribute('opacity', String((1 - 0.75 * c.dataset.k) * (0.3 + 0.7 * Math.abs(Math.sin(t * 2 + c.dataset.p * 9)))))); } // (further out: fainter, fading away)
       if (st.effect === 'hearts' || st.effect === 'notes') svg.querySelectorAll('.cb-float').forEach((n) => { const i = +n.dataset.i; const p = ((t * 0.45) + i / (st.effect === 'notes' ? 3 : 4)) % 1; n.setAttribute('transform', `translate(${(st.effect === 'notes' ? 380 : 330) + Math.sin(p * 6 + i) * 24 - i * 18} ${200 - p * 190}) scale(${(st.effect === 'notes' ? 1.4 : 1.2) * (1 - p * 0.3)})`); n.style.opacity = String(Math.min(1, (1 - p) * 2.2)); });
       if (st.effect === 'drop') { const d = svg.querySelector('.cb-doc'); if (d) { const ph = (ts % 2.2); const p = Math.min(1, ph / 0.95); const y = -30 + p * p * 190; const sc = ph < 0.95 ? 1.4 : Math.max(0, 1.4 - (ph - 0.95) * 4); d.setAttribute('transform', `translate(232 ${y}) rotate(${(1 - p) * -14}) scale(${sc})`); d.style.opacity = ph < 1.3 ? '1' : '0'; } }
       if (parts.glow) { const c = st.color; parts.glow.setAttribute('opacity', c ? String(0.75 + 0.25 * Math.sin(t * 2.4)) : '0.25'); }
@@ -420,7 +408,7 @@
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
       destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); if (deep) deep.destroy(); },
       get pose() { return pose; },
-      get def() { return noDust(STATES[stateName] || STATES.idle); },
+      get def() { return STATES[stateName] || STATES.idle; },
       get is3d() { return !!(deep && deep.live); },
       get flat() { return flatShown; },
       // show the flat Cassie for good (the 3D one won't come): remember=true when 3D failed on this device
@@ -535,6 +523,6 @@
     create, seasonal, holiday, failed3d, SEM_END, EXAM_SEASON,
     STATES: Object.keys(STATES), COLORS: Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color || null])), ACCESSORIES: Object.keys(ACC),
     construction: { POINTER, TAIL_PIVOT, TAIL_TIP, EYES, HAT, TOP_SLOPE, CARET_BLINK, roundedPath, bodyPath },
-    defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK, DUST: { near: DUST_NEAR, far: DUST_FAR } }, // (the 3D Cassie draws her face from these)
+    defs: { EYE, MOUTH, BADGE, ACC, BLUSH, STATES, INK }, // (the 3D Cassie draws her face from these)
   };
 })();
