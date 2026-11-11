@@ -80,6 +80,8 @@
   /* ---------- Home ---------- */
   function fill() { renderHub($('#home-hub')); } // (the hub: app.js)
   window.CassieNative = { go };
+  // (v274) no Cards tab any more (Flashcards is in the side menu): a tab saved as 'cards' still lands on flashcards
+  if (state.tab === 'cards') { state.tab = 'home'; setTimeout(() => go('cards'), 0); }
 
   // a new message (sent from anywhere: a tile, the extension, a share) opens the chat
   let seen = state.messages.length;

@@ -306,7 +306,6 @@ if (groqKeyInput && geminiKeyInput) CassieErrors.form(document.getElementById('s
 const voiceOutToggle = document.getElementById('voice-out-toggle');
 const voiceGenderSelect = document.getElementById('voice-gender-select');
 const hearingSelect = document.getElementById('hearing-select');
-const highlightHelpToggle = document.getElementById('highlight-help-toggle');
 const levelSelect = document.getElementById('level-select');
 const citationSelect = document.getElementById('citation-select');
 const textsizeSelect = document.getElementById('textsize-select');
@@ -2007,7 +2006,6 @@ const sideTools = document.getElementById('side-tools');
 const sideSearch = document.getElementById('side-search');
 const sideToggle = document.getElementById('side-toggle');
 const sideTip = document.getElementById('side-tip');
-const sideHl = document.getElementById('side-hl-toggle');
 const toolBtns = [];
 function runTool(ex) {
   hideSideTip();
@@ -2090,7 +2088,6 @@ setToolsOpen(toolsOpen, false);
 sideMenuBtn.addEventListener('click', () => setToolsOpen(!toolsOpen));
 sideReady = true;
 setSideOpen(sideOpenSaved, false);
-syncSideHl();
 sideToggle.addEventListener('click', () => setSideOpen(!document.body.classList.contains('side-open')));
 document.getElementById('side-search-btn').addEventListener('click', () => { setSideOpen(true); sideSearch.focus(); });
 // names in the rail: a tooltip beside the icon (hover or keyboard focus)
@@ -2119,13 +2116,6 @@ function applySideSearch() {
 }
 sideSearch.addEventListener('input', applySideSearch);
 sideSearch.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sideSearch.value) { e.stopPropagation(); sideSearch.value = ''; applySideSearch(); } });
-// the highlight switch: the same setting as the one in Settings
-function syncSideHl() { sideHl.checked = state.highlightHelp !== false; }
-sideHl.addEventListener('change', () => {
-  state.highlightHelp = sideHl.checked; save();
-  const t = document.getElementById('highlight-help-toggle'); if (t) t.checked = sideHl.checked;
-  track('feature', 'highlight-' + (sideHl.checked ? 'on' : 'off'));
-});
 // "Ideas to get started" on the home screen: shows where the tools live
 function showTools() {
   if (sideWide.matches) setSideOpen(true); else openSidebar();
@@ -2621,7 +2611,7 @@ const LET_WEIGHTS = 'Elementary: 40% General Education and 60% Professional Educ
 let letRescueLoad = null;
 function letRescue() {
   if (window.CassieRescue) return Promise.resolve(window.CassieRescue);
-  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=273'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
+  return letRescueLoad || (letRescueLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'rescue.js?v=274'; sc.onload = () => res(window.CassieRescue); sc.onerror = () => { letRescueLoad = null; rej(new Error('rescue.js')); }; document.head.appendChild(sc); }));
 }
 const letCourse = () => (state.letCourse && state.letCourse.level ? state.letCourse : null);
 /* v235: the course is for any board exam: the LET, or one of rescue.js's BOARD (CPALE, the Civil Service Exam, Criminology,
@@ -2643,7 +2633,7 @@ const BOARD_TASTE = 3;
    level and opened lessons carry over. */
 let prepLoad = null;
 function boardPrepReady() { // (also Learn's Board and Licensure exams folders)
-  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=273'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
+  return window.CassieBoardPrep ? Promise.resolve(window.CassieBoardPrep) : (prepLoad || (prepLoad = letRescue().then(() => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'boardprep.js?v=274'; sc.onload = () => res(window.CassieBoardPrep); sc.onerror = () => { prepLoad = null; rej(new Error('boardprep.js')); }; document.head.appendChild(sc); }))));
 }
 function openBoardPrep(start = {}) {
   return boardPrepReady().then(() => window.CassieBoardPrep.open(start)).catch(() => alert('The board exams couldn’t load. Check your connection, then try again.'));
@@ -2835,8 +2825,10 @@ function hubHero(name, returning, due, phone) {
   hero.setAttribute('aria-label', 'Welcome');
   if (phone) { // a phone: the hello and the bell
     const hr = new Date().getHours(), part = hr < 12 ? 'Morning' : hr < 18 ? 'Afternoon' : 'Evening';
-    hero.innerHTML = `<div class="hub-top"><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><h1 class="hub-me"></h1></span>
+    // (v274) the menu button here too: the side menu (the timer, Flashcards, chats) opens from Home as it does from Chat
+    hero.innerHTML = `<div class="hub-top"><button type="button" class="hub-menu" aria-label="Open menu"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="2" rx="1"/><rect x="3" y="11" width="18" height="2" rx="1"/><rect x="3" y="17" width="18" height="2" rx="1"/></svg></button><span class="hub-av" aria-hidden="true"></span><span class="hub-who"><h1 class="hub-me"></h1></span>
     ${themeSwitch('hub-theme')}<button type="button" class="hub-bell" aria-label="Reminders" aria-expanded="false">${HUB_BELL}</button></div>`;
+    hero.querySelector('.hub-menu').addEventListener('click', () => openSidebar());
     hero.querySelector('.hub-av').textContent = (name || 'C')[0].toUpperCase();
     hero.querySelector('.hub-me').textContent = `${part}${name ? ', ' + name : ''}`;
     return hero;
@@ -2917,7 +2909,7 @@ let hubPv = null;
 function hubPreviews(el) {
   const cvs = [...el.querySelectorAll('canvas[data-pv]')];
   if (!cvs.length) return;
-  if (!hubPv) hubPv = import('./labs/previews.js?v=273').catch(() => null);
+  if (!hubPv) hubPv = import('./labs/previews.js?v=274').catch(() => null);
   const three = isSubscriber(); // (Plus and Pro: real-looking 3D, like the labs; Free: the flat drawings)
   hubPv.then((m) => { if (m) cvs.forEach((cv) => { if (cv.isConnected) m.preview(cv, cv.dataset.pv, { three }); }); });
 }
@@ -4511,8 +4503,19 @@ const FOLLOWUPS = [
   { label: 'Give an example', text: 'Give me a concrete example.' },
   { label: 'Double-check', text: 'Double-check your last answer carefully and fix it if there is any mistake.' },
 ];
-function showFollowups() {
+// (v274) the pills (Explain simpler, Step-by-step, Give an example, Double-check) belong under an answer that
+// explains, reviews or teaches. Never in a quiz, in Heart-to-heart or a voice talk, and never after a greeting,
+// thanks or other small talk, or a reply too short to have explained anything. Decided here, for every caller.
+const FU_SMALL = /^\s*(hi+|hello+|hey+|yo+|sup|good\s+(morning|afternoon|evening|night)|thanks?(\s+you)?|thank\s+you|ty|ok(ay)?|k|bye+|goodbye|see\s+you|lol|haha+|hehe+|nice|cool|great|wow|got\s+it|i\s+see|kumusta|kamusta|salamat|what'?s\s+up|how\s+are\s+you)\b[^?]{0,40}\??\s*$/i;
+function followupsFit(asked, reply) {
+  if (quizMode || counselorMode || document.documentElement.classList.contains('vc-open')) return false;
+  const q = String(asked || ''), r = String(reply || '').trim();
+  if (q.length < 70 && FU_SMALL.test(q)) return false;
+  return r.length >= 160 || looksLikeContent(r) || /\$[^$]+\$|\\\(|\n\s*(\d+[.)]|[-*•])\s/.test(r);
+}
+function showFollowups(asked, reply) {
   clearFollowups();
+  if (!followupsFit(asked, reply)) return;
   const row = document.createElement('div');
   row.className = 'followups';
   FOLLOWUPS.forEach((f) => {
@@ -6249,7 +6252,7 @@ function reviewMistakes(all = false) {
   }
   if (!canChat()) { openSettings(); return; }
   track('feature', 'review');
-  quizMode = true; quizStarted();
+  quizMode = true; clearFollowups(); quizStarted();
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   dressCassie();
@@ -6555,7 +6558,7 @@ async function handleSend(text, opts = {}) {
       bubble.appendChild(rb);
     }
     if (!doc && !image) webChip(bubble, sendText, reply);
-    showFollowups();
+    showFollowups(sendText, reply);
     saveOffer(bubble);
     setCursorMode('idle');
     mascotCelebrate();
@@ -6951,7 +6954,7 @@ async function liveDrawVerify(question, first) {
   return s3;
 }
 let liveDrawLib = null;
-const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=273')));
+const liveDrawLoad = () => (liveDrawLib || (liveDrawLib = import('./livedraw.js?v=274')));
 // a real photo needs Gemini pictures (Cassie's server or the student's key); the free service draws toys and models
 const realPhotoOk = () => !!((SERVER && serverPictures) || (state.geminiKey && !geminiImageOff));
 // a drawing inside a chat bubble (a new one draws itself; one from history shows finished)
@@ -8137,7 +8140,7 @@ async function help3dFor(view) {
 function dropHelp3d() { if (help3d) { help3d.h.destroy(); help3d = null; } }
 function startQuizOn(topic, how = '') {
   if (!canChat()) { openSettings(); return; }
-  quizMode = true; quizStarted(topic);
+  quizMode = true; clearFollowups(); quizStarted(topic);
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   dressCassie();
@@ -8195,7 +8198,7 @@ async function openExplore(cell, ret) {
   try {
     if (!exploreMod) {
       islandShow('reading', 'Opening the 3D cell…');
-      exploreMod = await import('./explore/cell3d.js?v=273');
+      exploreMod = await import('./explore/cell3d.js?v=274');
       islandRest();
     }
     if (!exploreMod.supported()) {
@@ -8245,7 +8248,7 @@ async function openLabs(lab, more = {}) {
   try {
     if (!labsMod) {
       islandShow('reading', 'Opening Learn…');
-      labsMod = await import('./labs/labs.js?v=273');
+      labsMod = await import('./labs/labs.js?v=274');
       islandRest();
     }
     labsMod.open({
@@ -8303,7 +8306,7 @@ if (quizBtn) {
       renderMessage('assistant', 'Add a free Groq or Gemini key in Settings first, then we can start a quiz.');
       return;
     }
-    quizMode = !quizMode;
+    quizMode = !quizMode; clearFollowups(); // (v274: no pills in a quiz)
     if (quizMode) quizStarted(promptInput.value);
     quizBtn.classList.toggle('active', quizMode);
     dressCassie();
@@ -8335,7 +8338,7 @@ if (talkBtn) {
       renderMessage('assistant', 'Add a free Groq or Gemini key in Settings first, then we can talk.');
       return;
     }
-    counselorMode = !counselorMode;
+    counselorMode = !counselorMode; clearFollowups();
     talkBtn.classList.toggle('active', counselorMode);
     setTimeout(dressCassie, 0);
     if (talkLabel) talkLabel.textContent = counselorMode ? 'Studying' : 'Talk';
@@ -8532,7 +8535,6 @@ function openSettings(page = 'all') {
   groqModelSelect.value = state.groqModel;
   geminiKeyInput.value = state.geminiKey;
   voiceOutToggle.checked = state.voiceOut;
-  if (highlightHelpToggle) highlightHelpToggle.checked = state.highlightHelp !== false;
   if (voiceGenderSelect) voiceGenderSelect.value = state.voiceGender === 'man' ? 'man' : 'woman';
   if (hearingSelect) hearingSelect.value = state.hearing === 'fast' ? 'fast' : 'accurate';
   showHumanVoiceSetting();
@@ -8651,7 +8653,6 @@ function commitSettings() {
   state.groqModel = groqModelSelect.value;
   state.geminiKey = geminiKeyInput.value.trim();
   state.voiceOut = voiceOutToggle.checked;
-  if (highlightHelpToggle) { state.highlightHelp = highlightHelpToggle.checked; syncSideHl(); }
   if (voiceGenderSelect) state.voiceGender = voiceGenderSelect.value;
   if (hearingSelect) state.hearing = hearingSelect.value;
   if (state.voiceOut) track('feature', 'voice-out');
@@ -8860,7 +8861,7 @@ function closeMemory() { if (memoryPanel) memoryPanel.hidden = true; updateMemor
 function startReview(topic) {
   closeMemory();
   if (!topic) return;
-  quizMode = true;
+  quizMode = true; clearFollowups();
   if (quizBtn) quizBtn.classList.add('active');
   setQuizLabel('Stop quiz');
   handleSend(`Quiz me on ${topic}. Ask one question at a time, each choice on its own line (A., B., C., D.), and wait for my answer.`);
@@ -9065,8 +9066,23 @@ function resetQuizUi() {
   setTimeout(dressCassie, 0);
   if (quizBtn) { quizBtn.classList.remove('active'); setQuizLabel('Quiz me'); }
 }
+// (v274) Flashcards in the side menu, under the timer: the same place the Cards tab opened, with the cards due
+const sideCards = document.getElementById('side-cards');
+function sideCardsDue() {
+  const em = document.getElementById('side-cards-due'); if (!em) return;
+  const due = window.CassieCards ? window.CassieCards.dueCount() : 0;
+  em.hidden = !due; em.textContent = due ? `${due} due` : '';
+  if (sideCards) sideCards.setAttribute('aria-label', due ? `Flashcards: ${due} ${due === 1 ? 'card' : 'cards'} due` : 'Flashcards');
+}
+if (sideCards) sideCards.addEventListener('click', () => {
+  if (matchMedia('(max-width: 760px)').matches) closeSidebar();
+  if (document.documentElement.classList.contains('native') && window.CassieNative) window.CassieNative.go('cards');
+  else if (window.CassieCards) window.CassieCards.open();
+  guestNudge('Sign in so your flashcard decks and review are saved and follow you to every device.');
+});
 function openSidebar() {
-  renderChatList(); syncSideHl();
+  sideCardsDue();
+  renderChatList();
   sidebar.classList.add('open');
   sidebarOverlay.classList.add('open');
 }
@@ -9947,15 +9963,13 @@ document.addEventListener('keydown', (e) => {
 
 /* Right-click on selected text keeps the browser's own menu, so Copy works as usual. */
 
-/* Highlight-to-ask on ANY device, with an on/off switch (Settings, and the switch on the
-   home screen's side panel): ON — selecting text inside an answer (or a file in the
-   reader) opens the Explain / Answer / Code popover; OFF — highlighting is just
-   highlighting, to copy and paste. Debounced so it waits for the selection to settle
-   (mobile selection-handle dragging fires many selectionchange events). */
+/* Highlight-to-ask, in the reader only (v274): selecting words in a file opened with Read & highlight opens the
+   Explain / Answer / Code popover. In chat, highlighting is just highlighting, to copy and paste: Highlight help
+   and its two switches are gone from the app (the browser extension explains highlights on other pages).
+   Debounced so it waits for the selection to settle (mobile selection-handle dragging fires many events). */
 let selPopoverTimer = null;
 function trySelectionPopover() {
   if (!highlightPopover) return;
-  if (state.highlightHelp === false) return; // switched off: just highlighting
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
   const text = sel.toString().trim();
@@ -9965,7 +9979,7 @@ function trySelectionPopover() {
   const el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
   if (!el) return;
   if (el.closest('input, textarea')) return;         // ignore typed text
-  if (!el.closest('#chat-log, #reader-body')) return; // answers, messages, and files open in the reader
+  if (!el.closest('#reader-body')) return; // (v274) only a file open in the reader
   // if this exact selection is already open (e.g. showing an answer), leave it
   if (!highlightPopover.hidden && text === lastPopoverText) return;
   const rect = range.getBoundingClientRect();
@@ -10195,10 +10209,10 @@ const reduceMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-
 // Cassie stays, still, for Reduce Motion, Lite mode or no WebGL, and until the 3D one is ready.
 let fr3d = null;
 const fr3dWanted = () => !reduceMotion() && !window.CASSIE_LITE;
-const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=273').catch(() => null); return fr3d; };
+const fr3dLoad = () => { if (!fr3d && fr3dWanted()) fr3d = import('./cassie-3d.js?v=274').catch(() => null); return fr3d; };
 // (during the welcome: only downloaded, at low priority, so the welcome's timing stays the same;
 // running three.js waits for the Get started screen)
-const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=273', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
+const fr3dFetch = () => { if (!fr3dWanted()) return; ['cassie-3d.js?v=274', 'explore/three.module.min.js', 'explore/RoomEnvironment.js'].forEach((u) => { try { fetch(u, { priority: 'low' }).catch(() => {}); } catch (e) { /* ignore */ } }); };
 // Which Cassie is decided before she's painted: the 3D one (her place stays empty until her first
 // frame), or the flat one from the start (Reduce Motion, Lite mode, no WebGL, 3D failed here before).
 // If the 3D one fails, the flat one shows in her place instead: never one then the other.
@@ -11038,7 +11052,9 @@ const CASSIE_MARK = '<path d="M108 90 L395 259 L275 281 L342 399 L287 422 L225 3
 const authStill = () => document.documentElement.classList.contains('lite') || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 // (v270) the sign-in header: a desk at night (a lamp, books, an open notebook, a pencil, a window with the moon).
 // Cassie's cursor drifts down a dotted path and lands on the notebook; the lamp switches on, the books settle,
-// the pencil rolls up and the moon glows (v271). Still: everything is already in place.
+// the pencil rolls up and the moon glows (v271). (v274) The lamp has a pull chain that sways, and the desk is at
+// work: the pencil writes three lines in the notebook and goes back, over and over, and the top book lifts now and
+// then, until the notebook is closed. Still: everything is already in place.
 function authArt(still, wait) {
   const TRAIL = 'M150 26 C 190 10, 236 40, 226 92 S 270 150, 282 170';
   const stars = [[40, 24], [92, 44], [150, 18], [204, 52], [228, 22], [126, 82], [62, 96]].map(([x, y], i) => `<circle class="aa-star" cx="${x}" cy="${y}" r="${i % 3 ? 1.4 : 2}" style="--i:${i}"/>`).join('');
@@ -11054,21 +11070,23 @@ function authArt(still, wait) {
     <path class="aa-cone aa-on" transform="translate(8 0)" d="M84 104 L24 198 H176 Z" fill="url(#aa-glow)"/>
     <rect class="aa-desk" x="0" y="196" width="400" height="44"/><path class="aa-edge" d="M0 196.5 H400"/>
     <g class="aa-lampbtn" role="button" tabindex="0" aria-pressed="true" aria-label="Lamp: switch between night and day" data-t="lamp" transform="translate(8 0)"><rect class="aa-hit" x="40" y="84" width="72" height="118" rx="12"/>
-      <path class="aa-lamp" d="M58 196 L48 146 L84 104"/><ellipse class="aa-lampbase" cx="58" cy="196" rx="22" ry="5"/><path class="aa-shade" d="M70 92 L102 106 L94 122 L64 108 Z"/><circle class="aa-bulb aa-on" cx="86" cy="116" r="4"/><circle class="aa-knob" cx="48" cy="146" r="4.5"/></g>
+      <path class="aa-lamp" d="M58 196 L48 146 L84 104"/><ellipse class="aa-lampbase" cx="58" cy="196" rx="22" ry="5"/><path class="aa-shade" d="M70 92 L102 106 L94 122 L64 108 Z"/><circle class="aa-bulb aa-on" cx="86" cy="116" r="4"/><circle class="aa-knob" cx="48" cy="146" r="4.5"/>
+      <g class="aa-chain"><g class="aa-chainin"><path class="aa-chainline" d="M98 114 V144"/><circle class="aa-bead" cx="98" cy="148" r="3.6"/></g></g></g>
     <g class="aa-tap aa-books" data-t="books"><g class="aa-book" style="--n:0"><rect class="aa-b1" x="112" y="176" width="68" height="20" rx="3"/><path class="aa-band" d="M124 176 V196 M168 176 V196"/></g>
     <g class="aa-book" style="--n:1"><rect class="aa-b2" x="118" y="158" width="58" height="18" rx="3"/><path class="aa-band" d="M130 158 V176"/></g>
     <g class="aa-book" style="--n:2"><rect class="aa-b3" x="114" y="142" width="64" height="16" rx="3"/><path class="aa-band" d="M164 142 V158"/></g></g>
     <ellipse class="aa-shadow" cx="258" cy="199" rx="70" ry="5"/>
     <g class="aa-tap aa-book2" data-t="notebook"><path class="aa-page" d="M196 198 L258 192 L258 160 L202 166 Z"/><path class="aa-line" d="M208 176 L250 172 M208 184 L244 180"/>
-      <g class="aa-flip"><path class="aa-page aa-page2" d="M258 192 L320 198 L314 166 L258 160 Z"/><path class="aa-line" d="M266 172 L302 175"/></g><path class="aa-spine" d="M258 160 V192"/></g>
-    <g class="aa-tap" data-t="pencil" transform="translate(336 186) rotate(-24)"><g class="aa-ptap"><g class="aa-roll"><rect class="aa-pencil" x="-26" y="-4" width="46" height="8" rx="1.5"/><path class="aa-tip" d="M20 -4 L30 0 L20 4 Z"/><rect class="aa-eraser" x="-32" y="-4" width="7" height="8" rx="2"/></g></g></g>
+      <g class="aa-flip"><path class="aa-page aa-page2" d="M258 192 L320 198 L314 166 L258 160 Z"/><path class="aa-line" d="M266 172 L302 175"/>
+        <path class="aa-ink aa-ink1" d="M266 178 L296 180.5" pathLength="1"/><path class="aa-ink aa-ink2" d="M266 184 L292 186" pathLength="1"/><path class="aa-ink aa-ink3" d="M266 190 L286 191.5" pathLength="1"/></g><path class="aa-spine" d="M258 160 V192"/></g>
+    <g class="aa-penmove"><g class="aa-tap" data-t="pencil" transform="translate(336 186) rotate(-24)"><g class="aa-ptap"><g class="aa-roll"><rect class="aa-pencil" x="-26" y="-4" width="46" height="8" rx="1.5"/><path class="aa-tip" d="M20 -4 L30 0 L20 4 Z"/><rect class="aa-eraser" x="-32" y="-4" width="7" height="8" rx="2"/></g></g></g></g>
     <path class="aa-trail" d="${TRAIL}"/>${cur}</svg>`;
 }
-// (v273) the header is alive. The lamp is a switch: on is night (as drawn), off is day (a warm sky, the sun in the
+// (v273) the header is alive. The lamp is a switch (v274: by its pull chain): on is night (as drawn), off is day (a warm sky, the sun in the
 // window, no stars, no lamp light); it opens by the device's clock (day from 6:00 to 17:59) and remembers the choice
 // for the visit. A tap on the books, the notebook, the pencil or the sun or moon gives each one short move, and
 // Cassie's cursor glides over to it. Reduce Motion or Lite mode: the lamp still switches, at once; nothing else moves.
-const AUTH_SPOT = { lamp: [-188, -58], books: [-136, -26], notebook: [-40, 6], pencil: [44, 12], orb: [36, -104] }; // (from where the cursor lands)
+const AUTH_SPOT = { books: [-136, -26], notebook: [-40, 6], pencil: [44, 12], orb: [36, -104] }; // (from where the cursor lands; v274: never the lamp)
 function authArtWire(page, still) {
   const svg = page.querySelector('.auth-artsvg'), lamp = svg && svg.querySelector('.aa-lampbtn'); if (!lamp) return;
   let day = null;
@@ -11077,11 +11095,12 @@ function authArtWire(page, still) {
   const paint = () => { page.classList.toggle('is-day', day); lamp.setAttribute('aria-pressed', String(!day)); };
   paint();
   const glide = (t) => { const g = svg.querySelector('.aa-curgo'), to = AUTH_SPOT[t]; if (g && to && !still) g.style.transform = `translate(${to[0]}px, ${to[1]}px)`; };
-  const flip = () => { day = !day; try { sessionStorage.setItem('cassie.authSky', day ? 'day' : 'night'); } catch (e) { /* this page only */ } svg.style.setProperty('--wait', '0s'); paint(); glide('lamp'); }; // (switched back on, the lamp flickers at once)
+  const flip = () => { day = !day; try { sessionStorage.setItem('cassie.authSky', day ? 'day' : 'night'); } catch (e) { /* this page only */ } svg.style.setProperty('--wait', '0s'); paint(); if (!still) { const c = svg.querySelector('.aa-chainin'); c.classList.remove('aa-pull'); void c.getBoundingClientRect(); c.classList.add('aa-pull'); } }; // (a pull on the chain; switched back on, the lamp flickers at once)
   svg.addEventListener('click', (e) => {
     const t = e.target.closest('[data-t]'); if (!t) return;
     if (t === lamp) { flip(); return; }
     if (still) return;
+    if (t.dataset.t === 'notebook') { svg.classList.toggle('is-shut'); glide('notebook'); return; } // (closed: the pencil stops and rolls back, the books rest; open: back to work)
     t.classList.remove('aa-go'); void t.getBoundingClientRect(); t.classList.add('aa-go'); // (one short move, again on each tap)
     glide(t.dataset.t);
   });

@@ -634,6 +634,24 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 }
 .mascot-bubble[hidden] { display: none; }
 .mascot-bubble.mb-left { right: auto; left: 0; border-radius: 14px 14px 14px 4px; } /* (v272: near the left edge it opens to her right) */
+/* (v274) Home's menu button (phone): the same three lines as Chat's */
+.hub-menu { flex: none; display: grid; place-items: center; width: var(--tap, 48px); height: var(--tap, 48px); margin-left: calc(-1 * var(--sp-2, 8px)); border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
+.hub-menu svg { width: 24px; height: 24px; fill: currentColor; }
+.hub-hero-phone .hub-av { display: none; } /* (the menu button takes the avatar's place on a phone, so the greeting has room for the name) */
+.hub-menu:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* (v274) Flashcards in the side menu, under the timer */
+.side-cards { display: flex; align-items: center; gap: var(--sp-3, 12px); width: 100%; min-height: var(--tap, 48px); margin: var(--sp-2, 8px) 0 var(--sp-2, 8px); padding: var(--sp-2, 8px) var(--sp-4, 16px); border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650; font-size: .92rem; text-align: left; cursor: pointer; }
+.side-cards svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.side-cards span { flex: 1; }
+.side-cards em { font-style: normal; font-size: .76rem; font-weight: 700; padding: 2px var(--sp-2, 8px); border-radius: 99px; background: var(--primary); color: var(--on-primary); }
+.side-cards em[hidden] { display: none; }
+.side-cards:hover { border-color: var(--text); }
+.side-cards:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* under the timer (a phone's menu), the row is the timer card's own footer: one card, a hairline between, no gap,
+   so the first chat in Recents still shows above the tab bar */
+.pomo:has(+ .side-cards) { margin-bottom: 0; padding-bottom: var(--sp-2, 8px); border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.pomo + .side-cards { margin: 0 0 var(--sp-1, 4px); border-top-color: color-mix(in srgb, var(--border) 70%, transparent); border-top-left-radius: 0; border-top-right-radius: 0; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; background: var(--bg); }
+.pomo.break + .side-cards { border-color: var(--muted); }
 /* (v273) Home's Cassie says hello: a bubble up and to her right (to her left when there is no room) */
 .hub-bot { position: relative; }
 .hub-say { position: absolute; z-index: 2; left: 64%; bottom: 76%; width: max-content; max-width: min(184px, 42vw); padding: var(--sp-2, 8px) var(--sp-3, 12px); border-radius: 14px 14px 14px 4px;
@@ -1595,13 +1613,6 @@ html.vc-open, html.vc-open body { overflow: hidden; }
 .side-tool.on { font-weight: 650; }
 .side-tool:focus-visible { outline: none; }
 .side-tool[hidden], .chat-item[hidden] { display: none; }
-.side-hl { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3, 12px); margin: var(--sp-3, 12px) 0 0; padding: var(--sp-3, 12px) var(--sp-4, 16px); border-radius: 16px; background: var(--bg); border: 1px solid var(--border); cursor: pointer; }
-.side-hl b { display: block; font-size: .88rem; }
-.side-hl small { display: block; margin-top: 2px; color: var(--muted); font-size: .76rem; line-height: 1.35; }
-.side-hl input { appearance: none; -webkit-appearance: none; flex-shrink: 0; width: var(--tap, 48px); height: 26px; border-radius: 99px; background: var(--border); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
-.side-hl input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--white); box-shadow: 0 1px 3px rgba(var(--shade-rgb), .25); transition: transform .15s; }
-.side-hl input:checked { background: var(--primary); }
-.side-hl input:checked::after { transform: translateX(18px); }
 .side-toggle { display: none; }
 /* (the whole sidebar scrolls, so nothing in it is squeezed or hidden under the phone's tab bar) */
 .sidebar { overflow-y: auto; overscroll-behavior: contain; }
@@ -2497,6 +2508,30 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 @keyframes aaDrop { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes aaRoll { from { transform: translateX(4px); } to { transform: none; } }
 @keyframes aaGlow { 0%, 100% { opacity: .08; } 50% { opacity: .24; } }
+/* (v274) the lamp's pull chain sways, and dips when pulled. The desk is at work: the pencil goes to the notebook,
+   writes three lines and comes back, on a loop, and the top book lifts now and then. Closing the notebook
+   (.is-shut) folds the page over, stops the pencil (it rolls back to rest) and rests the books. */
+.aa-chainline { fill: none; stroke: var(--aa-line); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 1.5 2.5; }
+.aa-bead { fill: var(--aa-line); }
+.aa-chain { transform-origin: 98px 114px; animation: aaSway 3.2s ease-in-out infinite; }
+.aa-chainin.aa-pull { animation: aaPull .45s ease-out; }
+.aa-penmove { animation: aaWriteMove 7s ease-in-out infinite; animation-delay: calc(var(--wait, 0s) + 3.4s); }
+.aa-ink { fill: none; stroke: var(--primary); stroke-width: 1.8; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: 7s linear infinite; animation-delay: calc(var(--wait, 0s) + 3.4s); pointer-events: none; }
+.aa-ink1 { animation-name: aaInk1; } .aa-ink2 { animation-name: aaInk2; } .aa-ink3 { animation-name: aaInk3; }
+.aa-book[style*="--n:2"] { animation: aaDrop .45s cubic-bezier(.3, 1.4, .5, 1) both, aaLift 8s ease-in-out infinite; animation-delay: calc(var(--wait, 0s) + .48s), calc(var(--wait, 0s) + 5s); }
+.aa-flip { transform-origin: 258px 176px; transition: transform .5s ease-in-out; }
+.is-shut .aa-flip { transform: scaleX(-1); }
+.is-shut .aa-ink { animation: none; opacity: 0; }
+.is-shut .aa-penmove { animation: aaRollBack .6s ease-out; }
+.is-shut .aa-book[style*="--n:2"] { animation: none; }
+@keyframes aaSway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes aaPull { 0%, 100% { transform: none; } 40% { transform: translateY(8px); } }
+@keyframes aaWriteMove { 0%, 88%, 100% { transform: none; } 10% { transform: translate(-97px, -4px); } 28% { transform: translate(-67px, -1.5px); } 33% { transform: translate(-97px, 2px); } 51% { transform: translate(-71px, 4px); } 56% { transform: translate(-97px, 8px); } 72%, 76% { transform: translate(-77px, 9.5px); } }
+@keyframes aaInk1 { 0%, 10% { stroke-dashoffset: 1; opacity: 1; } 28%, 90% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes aaInk2 { 0%, 33% { stroke-dashoffset: 1; opacity: 1; } 51%, 90% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes aaInk3 { 0%, 56% { stroke-dashoffset: 1; opacity: 1; } 72%, 90% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes aaLift { 0%, 12%, 100% { transform: none; } 5% { transform: translateY(-5px) rotate(-1.5deg); } }
+@keyframes aaRollBack { from { transform: translate(-40px, 8px); } to { transform: none; } }
 /* (v273) the lamp is a switch you can tap or press; the books, the notebook, the pencil and the sun or moon each
    make one short move when tapped */
 .aa-lampbtn, .aa-tap { cursor: pointer; }
@@ -2504,12 +2539,10 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .aa-lampbtn { outline: none; }
 .aa-lampbtn:focus-visible .aa-hit { stroke: var(--aa-line); }
 .aa-books.aa-go { animation: aaHop .5s cubic-bezier(.3, 1.4, .5, 1); }
-.aa-book2.aa-go .aa-flip { transform-origin: 258px 176px; animation: aaFlip .6s ease-in-out; }
 .aa-tap.aa-go .aa-ptap { animation: aaRollAway .8s ease-in-out; }
 .aa-orb { transform-box: fill-box; }
 .aa-orb.aa-go { animation: aaOrb .6s ease-in-out; }
 @keyframes aaHop { 0%, 100% { transform: none; } 40% { transform: translateY(-10px); } }
-@keyframes aaFlip { 0%, 100% { transform: none; } 50% { transform: scaleX(.08); } }
 @keyframes aaRollAway { 0%, 100% { transform: none; } 50% { transform: translateX(14px); } }
 @keyframes aaOrb { 0%, 100% { transform: none; } 50% { transform: translateY(-6px); } }
 /* the brand intro: "Cassie", the cursor underlines it, then "Your study buddy" (1.2 seconds, a tap ends it) */
@@ -3196,7 +3229,7 @@ body:not(.side-open) .side-badge { position: absolute; top: 4px; right: 4px; min
 .topbar .app-label { display: none; }
 @media (min-width: 761px) {
   /* the sidebar: Menu, Study tools, General and the Chrome card (chats live on the Chats page) */
-  .sidebar .side-search, #side-search-btn, #new-chat-btn, .sidebar .sidebar-section.rail-hide, #chat-list, .side-hl, .sidebar-foot { display: none !important; }
+  .sidebar .side-search, #side-search-btn, #new-chat-btn, .sidebar .sidebar-section.rail-hide, #chat-list, .sidebar-foot { display: none !important; }
   #side-apps .side-tool, #side-general .side-tool { width: 100%; height: auto; min-height: 40px; justify-content: flex-start; border-radius: 10px; }
   #side-apps .side-tool svg, #side-general .side-tool svg { width: 18px; height: 18px; }
   #side-general #settings-btn svg { fill: currentColor; stroke: none; }
