@@ -119,6 +119,11 @@ async function openCard(page, sel) {
   await page.click(sel);
   await page.waitForSelector('.lab-view:not([hidden]) .lab-controls > *, .x3d:not([hidden])', { timeout: 20000 });
 }
+// (v271) Hint, Quiz me, Research and Web are rows in the + sheet (no pill row above the ask box)
+async function quickAction(page, key) {
+  await page.click('#plus-btn');
+  await page.click(`.add-sheet .add-row[data-add="${key}"]`);
+}
 // (v269) Learn's home shows Today's Lab and Your level; two dropdowns under it: Explore other levels opens the other
 // level folders, Explore labs the simulations and study tools. which: 'levels', 'labs' or (by default) both
 async function exploreLearn(page, which = 'both') {
@@ -993,6 +998,63 @@ test('sign in with Google: the return address sent to Google is one registered i
       expect(!/[?#]/.test(sent) && sent.startsWith(origin + '/'), `${name}: the return address is plain, on this site: ${sent}`);
       expect(errors.length === 0, `${name}: page errors: ` + errors.join(' | '));
     } finally { await ctx.close(); }
+  }
+});
+
+test('v271 (390x844 and 1280x800): no pill row above the ask box; Hint, Quiz me, Research and Web are rows in the + sheet that press the same buttons (a quiz starts and stops); Home’s Cassie rests (idle) with no ring of dots, also after a poke; the sign-in header has no writing, and its lamp, books and pencil move once (still under Reduce Motion)', async (b) => {
+  for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
+    const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { tab: 'chat', groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Question 1: What is 2 + 2?' }) });
+    // 3. Home (the phone's Home tab, for a new student, where she is): Cassie at rest, never the ring of dots
+    if (size === '390x844') {
+      const o = await open(b, { device, viewport, lite: 'off', server: false, state: { tab: 'home' } }); const page = o.page;
+      await page.waitForSelector('.hub-bot[data-state]', { state: 'attached', timeout: 10000 }).catch(async (e) => { throw new Error('no Home Cassie: ' + await page.evaluate(() => JSON.stringify({ bots: [...document.querySelectorAll('.hub-bot')].map((h) => h.outerHTML.slice(0, 160)), cls: document.documentElement.className }))); });
+      const home = () => page.evaluate(() => { const h = document.querySelector('.hub-bot'); return { state: h.dataset.state, dust: h.dataset.fx === 'dust' || !!h.querySelector('.cb-dustring') }; });
+      const h1 = await home();
+      expect(h1.state === 'idle' && !h1.dust, `${size}: Home’s Cassie rests with no dots: ` + JSON.stringify(h1));
+      await page.evaluate(() => { const s = document.querySelector('.hub-bot canvas, .hub-bot svg'); s.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+      await page.waitForTimeout(300); const h2 = await home();
+      await page.waitForTimeout(900); const h3 = await home();
+      expect(!o.errors.length, `${size}: Home page errors: ` + o.errors.join(' | '));
+      await o.ctx.close();
+      expect(h2.state === 'poke' && !h2.dust && h3.state === 'idle' && !h3.dust, `${size}: a poke, then back to rest, never the dots: ` + JSON.stringify([h2, h3]));
+    }
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    // 1. no pill row anywhere
+    await page.waitForSelector('#prompt-input');
+    const pills = await page.evaluate(() => [...document.querySelectorAll('#quick-actions, #quick-actions .chip')].filter((e) => e.getClientRects().length).length);
+    expect(pills === 0, `${size}: no pill row above the ask box: ${pills}`);
+    // 2. the + sheet: the four rows, each pressing its own button
+    await page.click('#plus-btn'); await page.waitForSelector('.add-sheet');
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.add-sheet .add-row')].map((r) => r.dataset.add + ':' + r.querySelector('span').textContent));
+    expect(['hint:Hint', 'quiz:Quiz me', 'research:Research', 'web:Web'].every((x) => rows.includes(x)), `${size}: the + sheet has Hint, Quiz me, Research and Web: ` + rows.join(', '));
+    await page.click('.add-sheet .add-x');
+    await page.evaluate(() => { window.__hits = []; window.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('#hint-btn, #research-btn, #web-btn'); if (b) { window.__hits.push(b.id); e.stopPropagation(); } }, true); });
+    for (const k of ['hint', 'research', 'web']) await quickAction(page, k);
+    const hits = await page.evaluate(() => window.__hits.join(','));
+    expect(hits === 'hint-btn,research-btn,web-btn', `${size}: each row presses its own button: ` + hits);
+    await page.fill('#prompt-input', 'maths');
+    await quickAction(page, 'quiz');
+    await page.waitForSelector('#quiz-btn.active', { state: 'attached', timeout: 5000 });
+    await page.click('#plus-btn');
+    const on = await page.evaluate(() => { const r = document.querySelector('.add-sheet .add-row[data-add="quiz"]'); return { on: r.classList.contains('is-on'), pressed: r.getAttribute('aria-pressed'), em: (r.querySelector('em') || {}).textContent || '' }; });
+    expect(on.on && on.pressed === 'true' && on.em === 'On', `${size}: a quiz that is on shows On in the sheet: ` + JSON.stringify(on));
+    await page.click('.add-sheet .add-row[data-add="quiz"]');
+    await page.waitForFunction(() => !document.querySelector('#quiz-btn.active'), null, { timeout: 5000 });
+    // (dust: false holds in every state; a plain Cassie in the same page still has the dots, so the check is real)
+    for (const st of ['greeting', 'done', 'proud']) { await page.evaluate((x) => { const host = document.createElement('div'); host.className = 'v271-probe'; document.body.append(host); window.__p = window.CassieBot.create(host, { state: x, dust: false, flat: true }); }, st); }
+    const probe = await page.evaluate(() => ({ off: document.querySelectorAll('.v271-probe .cb-dustring').length, on: (() => { const host = document.createElement('div'); document.body.append(host); window.CassieBot.create(host, { state: 'greeting', flat: true }); return host.querySelectorAll('.cb-dustring').length; })() }));
+    expect(probe.off === 0 && probe.on === 1, `${size}: dust: false turns the dots off in every state (and only then): ` + JSON.stringify(probe));
+    // 4. the sign-in header: no writing; the lamp, books and pencil move once; still under Reduce Motion
+    await page.evaluate(() => { sessionStorage.setItem('cassie.authIntro', '1'); openAuth({ mode: 'signin' }); });
+    const art = await page.evaluate(() => { const a = (q) => { const e = document.querySelector(q); return e ? getComputedStyle(e).animationName : 'missing'; };
+      return { write: !!document.querySelector('.aa-write'), lamp: a('.aa-cone'), bulb: a('.aa-bulb'), books: document.querySelectorAll('.aa-book').length, book: a('.aa-book'), pencil: a('.aa-roll'), moon: a('.aa-moonglow') }; });
+    expect(!art.write && art.lamp === 'aaLamp' && art.bulb === 'aaLamp' && art.books === 3 && art.book === 'aaDrop' && art.pencil === 'aaRoll' && art.moon === 'aaGlow', `${size}: the header moves, with no writing: ` + JSON.stringify(art));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.evaluate(() => openAuth({ mode: 'signin' }));
+    const still = await page.evaluate(() => [...document.querySelectorAll('.aa-cone, .aa-book, .aa-roll, .aa-moonglow')].map((e) => getComputedStyle(e).animationName).filter((n) => n !== 'none'));
+    expect(!still.length, `${size}: Reduce Motion: the header is still: ` + still.join(','));
+    expect(!errors.length, `${size}: page errors: ` + errors.join(' | '));
+    await ctx.close();
   }
 });
 
@@ -3588,7 +3650,7 @@ test('v244: the ask box gives the answers room (one row at rest in a started cha
   expect(rest.rest && rest.comp <= 80 && !rest.chips && rest.area >= 0.6 * rest.h && rest.send >= 44 && !rest.onSend, 'at rest: one row, no chips, the answers get 60% of the screen, Cassie not on Send: ' + JSON.stringify(rest));
   await page.focus('#prompt-input'); await page.waitForTimeout(400);
   const typing = await M();
-  expect(!typing.rest && typing.comp <= 120 && typing.chips > 0 && typing.chips <= 56 && await page.locator('#plus-btn').isVisible(), 'typing: the full box (120px or less) and the chips (56px or less) are back: ' + JSON.stringify(typing));
+  expect(!typing.rest && typing.comp <= 120 && !typing.chips && await page.locator('#plus-btn').isVisible(), 'typing: the full box (120px or less) is back, and no chips (v271: they are in the + sheet): ' + JSON.stringify(typing));
   // a tap on a tool lands, though the box loses focus first
   await page.locator('#plus-btn').dispatchEvent('pointerdown'); await page.evaluate(() => document.activeElement.blur()); await page.waitForTimeout(300);
   expect(await page.locator('#plus-btn').isVisible(), 'a tool tapped while the box closes is still there to take the tap');
@@ -5747,10 +5809,10 @@ test('your week: real counts after a quiz, a mistake review and a flashcard sess
   // a quiz (one right, one missed), a mistake review (the saved one, right) and a flashcard session (Good)
   await page.evaluate(() => deskGo('chat')); // (a computer: Progress has no ask box; a new chat does)
   await page.fill('#prompt-input', 'maths');
-  await page.click('#quiz-btn');
+  await quickAction(page, 'quiz');
   await page.waitForSelector('text=Question 1');
   await ask(page, '4');
-  await page.click('#quiz-btn'); // stop
+  await quickAction(page, 'quiz'); // stop
   await page.evaluate(() => reviewMistakes(true));
   await page.waitForFunction(() => !(state.mistakes || []).some((m) => /powerhouse/.test(m.q) && !m.right), null, { timeout: 8000 });
   await page.evaluate(() => window.CassieCards.open());
@@ -5809,14 +5871,14 @@ test('quiz saves missed questions for Review my mistakes', async (b) => {
   ];
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: (body, n) => ({ text: replies[Math.min(n - 1, 1)] }) });
   await page.fill('#prompt-input', 'cells');
-  await page.click('#quiz-btn');
+  await quickAction(page, 'quiz');
   await page.waitForSelector('text=Question 1');
   const a = await ask(page, 'the nucleus');
   const t = await a.textContent();
   expect(!/\[\[/.test(t), 'marker visible: ' + t);
   const m = await page.evaluate(() => JSON.parse(localStorage.getItem('cassie.v2')).mistakes || []);
   expect(m.length === 1 && /powerhouse/.test(m[0].q) && m[0].a === 'mitochondria', 'mistake not saved: ' + JSON.stringify(m));
-  await page.click('#quiz-btn'); // stop
+  await quickAction(page, 'quiz'); // stop
   await page.waitForSelector('text=Review my mistakes');
   await page.evaluate(() => { document.getElementById('new-chat-btn').click(); });
   await page.waitForSelector('.review-mistakes', { timeout: 5000 });
@@ -6034,11 +6096,11 @@ test('a Gemini key alone: chat, graph, quiz, research, file, photo and Save as P
   a = await ask(page, 'graph y = x^2 - 4');
   expect(await a.locator('.cassie-board canvas').count() >= 1, 'no graph');
   // quiz
-  await page.fill('#prompt-input', 'math'); await page.click('#quiz-btn');
+  await page.fill('#prompt-input', 'math'); await quickAction(page, 'quiz');
   await page.waitForSelector('text=Question 1', { timeout: 10000 });
-  await page.click('#quiz-btn');
+  await quickAction(page, 'quiz');
   // research
-  await page.fill('#prompt-input', 'sleep and memory'); await page.click('#research-btn');
+  await page.fill('#prompt-input', 'sleep and memory'); await quickAction(page, 'research');
   await page.waitForSelector('text=RRL: sleep helps memory', { timeout: 10000 });
   // file (PDF read whole by Gemini)
   const pdf = await page.evaluate(async () => {
@@ -6570,9 +6632,9 @@ test('Cassie’s moods: thinking while an answer comes, reading a photo, proud w
   const sawWhile = async (want, act) => { const seen = new Set(); const t = setInterval(async () => { try { seen.add(await mood()); } catch (e) { /* page busy */ } }, 60); await act(); clearInterval(t); return seen.has(want) ? want : [...seen].join(','); };
   expect(await sawWhile('thinking', () => ask(page, 'what is photosynthesis')) === 'thinking', 'thinking while the answer comes');
   expect(await sawWhile('reading', () => sendPhoto(page, 'what is this')) === 'reading', 'reading a photo');
-  await page.click('#quiz-btn');
+  await quickAction(page, 'quiz');
   await page.waitForFunction(() => !document.getElementById('send-btn').disabled, null, { timeout: 10000 });
-  await page.click('#quiz-btn');
+  await quickAction(page, 'quiz');
   expect(await mood() === 'proud', 'a quiz finished: proud');
   await page.evaluate(() => { bot2d.setState('idle'); window.CassieCards.add([{ f: 'What is H2O?', b: 'Water' }], 'Chem'); window.CassieCards.open(); });
   await page.click('[data-study="Chem"]'); await page.click('.fc-card'); await page.click('[data-grade="good"]');
@@ -10758,7 +10820,7 @@ test('icons move exactly like the recording (computer 1280x800 and phone 390x844
     await page.evaluate(() => { document.getElementById('mic-btn').hidden = false; });
     const C = await all(page);
     expect(!C.bad.length, '1280x800 chat: every icon moves its own parts like the recording: ' + C.bad.join(' | '));
-    for (const [sel, ia, name, part] of [['#send-btn', 'send', 'ia-fly', 'svg'], ['#mic-btn', 'mic', 'ia-fill', 'ia-p1'], ['#quiz-btn', 'pencil', 'ia-underline', 'ia-x1']]) await hover(sel, ia, name, part);
+    for (const [sel, ia, name, part] of [['#send-btn', 'send', 'ia-fly', 'svg'], ['#mic-btn', 'mic', 'ia-fill', 'ia-p1']] /* (v271: the Quiz me pill is gone, now a row in the + sheet) */) await hover(sel, ia, name, part);
     // a press: the icon moves and the button still presses to 0.94
     const r = await page.$eval('#settings-btn', (h) => { const q = h.getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; });
     await page.mouse.move(r[0], r[1]); await page.waitForTimeout(900);
@@ -11054,7 +11116,7 @@ test('Home widgets: add, remove, resize, drag, kept after reload (computer 1280x
   }
 });
 
-test('glass edges are smooth (iPhone, 3x screen): the rounded corners of a chip, the ask box, the tab bar and a Home card have no stair steps, and the still light is baked at the screen’s sharpness with a soft edge', async (b) => {
+test('glass edges are smooth (iPhone, 3x screen): the rounded corners of the ask box, the tab bar and a Home card have no stair steps, and the still light is baked at the screen’s sharpness with a soft edge', async (b) => {
   // the boundary of a corner, row by row, from the screen’s own pixels: on a smooth curve it only ever moves one
   // way; the old 1px steps on a 3x screen made it zigzag (teeth)
   const teeth = async (page, sel, where) => {
@@ -11082,8 +11144,8 @@ test('glass edges are smooth (iPhone, 3x screen): the rounded corners of a chip,
   const card = await teeth(page, '#home .ht-tile', 'a Home card'), bar = await teeth(page, '.tabbar', 'the tab bar');
   await page.evaluate(() => { createNewChat(); CassieNative.go('chat'); }); await page.waitForSelector('.composer'); await page.waitForTimeout(1500);
   const box = await teeth(page, '.composer', 'the ask box');
-  const chip = await teeth(page, '#quick-actions .chip', 'a chip');
-  for (const t of [card, bar, box, chip]) expect(t.rows > 6 && t.teeth === 0, `${t.where}: a smooth rounded corner, no stair steps: ` + JSON.stringify(t));
+  // (v271: no chips above the ask box any more)
+  for (const t of [card, bar, box]) expect(t.rows > 6 && t.teeth === 0, `${t.where}: a smooth rounded corner, no stair steps: ` + JSON.stringify(t));
   // the still light: baked at 2x on a 3x screen, with a soft (partly covered) outer edge, not a hard 0 to full step
   const S = await page.evaluate(async () => {
     const url = window.CassieGlass.still(120, 80, 20, false), img = new Image(); img.src = url; await img.decode();
@@ -12298,7 +12360,7 @@ test('Research finds real papers and writes an RRL; references copy as APA/MLA a
     { title: 'Naps in students', publication_year: 2019, authorships: [{ author: { display_name: 'A. Cruz' } }], cited_by_count: 3 },
   ] } }));
   await page.fill('#prompt-input', 'sleep and memory');
-  await page.click('#research-btn');
+  await quickAction(page, 'research');
   await page.waitForSelector('text=Found 2 real papers', { timeout: 10000 });
   await page.waitForSelector('text=Studies agree', { timeout: 10000 });
   // the citations come from the papers' own data, not from the AI
@@ -12324,7 +12386,7 @@ test('Web answers with sources (Gemini key)', async (b) => {
   const { ctx, page } = await open(b, { server: false, state: { groqKey: 'gsk_test', geminiKey: 'AIza_test' } });
   await ctx.route(/generativelanguage\.googleapis\.com/, (route) => route.fulfill({ json: { candidates: [{ content: { parts: [{ text: 'The tallest mountain is Mount Everest.' }] }, groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.org/everest', title: 'example.org' } }] } }] } }));
   await page.fill('#prompt-input', 'What is the tallest mountain?');
-  await page.click('#web-btn');
+  await quickAction(page, 'web');
   await page.waitForSelector('text=Mount Everest', { timeout: 10000 });
   await ctx.close();
 });
@@ -12709,9 +12771,9 @@ test.slow('study tools in the sidebar: Flashcards one tap away mid-chat (a rail 
 test('Talk mode and Hint answer', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' } });
   await page.fill('#prompt-input', 'How do I solve 2x + 3 = 7?');
-  await page.click('#hint-btn');
+  await quickAction(page, 'hint');
   await page.waitForSelector('text=Own-key answer', { timeout: 10000 });
-  await page.click('#talk-btn');
+  await quickAction(page, 'heart');
   await page.waitForSelector('text=real talk mode');
   await ask(page, 'I feel stressed about exams');
   expect(groqCalls.length === 2, 'expected 2 AI calls, got ' + groqCalls.length);
@@ -12953,7 +13015,7 @@ test('iPhone: copy words, then Paste & ask', async (b) => {
   const { ctx, page, groqCalls } = await open(b, { server: false, state: { groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Inertia means objects keep doing what they are doing.' }) });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(APP).origin });
   await page.evaluate(() => navigator.clipboard.writeText('Newton’s first law is the law of inertia.'));
-  await page.click('#paste-btn');
+  await quickAction(page, 'paste');
   await page.waitForSelector('.share-card', { timeout: 5000 });
   expect(/law of inertia/.test(await page.locator('.share-quote').textContent()), 'the copied words show in the card');
   await page.click('.share-card .chip:has-text("Explain")');
@@ -13715,7 +13777,8 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
       await toHome();
       await page.waitForSelector(hub + ':not(.hub-empty) .hub-today');
       const r = await page.locator(hub).innerText();
-      expect(await page.locator(hub + ' .hub-w').count() === 3 && /card due/.test(r) && /Today’s lab/.test(r) && /Focus/.test(r) && /day streak/.test(r), `${size}: the Today chips (and Today’s lab in the boxes): ` + r);
+      expect(await page.locator(hub + ' .hub-goal').count() === 1 && await page.locator(hub + ' .hub-w-streak').count() === 1 && /card due/.test(r) && /Today’s lab/i.test(r) && /Focus/.test(r) && /day streak/.test(r), // (v267: Today is the Sparks goal ring, the streak flame and the awards)
+        `${size}: the Today chips (and Today’s lab in the boxes): ` + JSON.stringify({ w: await page.locator(hub + ' .hub-w').count(), r: r.replace(/\s+/g, ' ') }));
       expect(/Continue/.test(r) && await page.locator(hub + ' .hub-chat', { hasText: 'What is osmosis?' }).count() === 1, `${size}: the chat under Continue`);
       expect(/Quick actions/.test(r) && await page.locator(hub + ' .hub-q').count() >= 4, `${size}: Quick actions`);
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/hub-${size}.png` });
@@ -13732,7 +13795,7 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     await page.goto(APP); await page.waitForTimeout(600);
     await page.evaluate(() => openSettings('profile'));
     const you = await page.locator('#settings-panel').innerText();
-    expect(/Test/.test(you) && /questions this week/.test(you) && /cards learned/.test(you) && /day streak/.test(you), `${size}: You shows the name and numbers`);
+    expect(/Test/.test(you) && /questions? this week/.test(you) && /cards learned/.test(you) && /day streak/.test(you), `${size}: You shows the name and numbers: ` + you.replace(/\s+/g, ' ').slice(0, 400));
     for (const [row, title, inside] of [['account', 'Account', '#edit-profile-btn'], ['study', 'Study', '#level-select'], ['voice', 'Voice and sound', '#voice-gender-select'], ['privacy', 'Privacy and data', '#share-usage-toggle']]) {
       await page.click(`.set-link[data-open="${row}"]`);
       expect(await page.locator('#set-title').innerText() === title && await page.locator(inside).isVisible() && await page.locator('.set-back').isVisible(), `${size}: ${row} opens on its own, with Back`);
