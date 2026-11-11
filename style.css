@@ -506,7 +506,8 @@ button.sidebar-section { min-height: 40px; } /* (v233: the Study tools toggle is
 .plus-sheet.add-sheet { align-items: flex-end; padding: 0; }
 html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the sheet is open) */
 @media (max-width: 760px) { .plus-sheet .add-card { max-width: none; border-width: 1px 0 0 !important; box-shadow: none !important; } } /* (edge to edge on a phone, no side or bottom rim) */
-.add-card { max-width: 560px; border-radius: var(--r-xl, 28px) var(--r-xl, 28px) 0 0 !important; padding: var(--sp-4, 16px) var(--sp-4, 16px) calc(var(--sp-6, 32px) + var(--safe-bottom, 0px)) !important; display: grid; gap: var(--sp-3, 12px); }
+.add-card { max-width: 560px; border-radius: var(--r-xl, 28px) var(--r-xl, 28px) 0 0 !important; padding: var(--sp-4, 16px) var(--sp-4, 16px) calc(var(--sp-6, 32px) + var(--safe-bottom, 0px)) !important; display: grid; gap: var(--sp-3, 12px);
+  max-height: calc(100dvh - var(--safe-top, 0px) - var(--sp-6, 32px)); overflow-y: auto; overscroll-behavior: contain; } /* (v271: with Hint, Quiz me, Research and Web it is taller: it scrolls inside, never past the screen) */
 .add-head { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; }
 .add-head h3 { margin: 0; text-align: center; font-size: 1.1rem; }
 .add-x { display: grid; place-items: center; width: var(--tap, 48px); height: var(--tap, 48px); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
@@ -555,6 +556,9 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
   .model-pill #model-pill-level { display: none; }
 }
 
+/* (v271) no pill row above the ask box anywhere: its buttons live on, hidden, behind the + sheet's rows */
+#quick-actions, #quick-actions[hidden] { display: none !important; }
+.add-row.is-on em { color: var(--primary); font-weight: 700; }
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2447,15 +2451,22 @@ html.fr-open, html.fr-open body { overflow: hidden; overscroll-behavior: none; }
 .aa-shadow { fill: rgba(var(--shade-rgb), .35); }
 .aa-page2 { fill: color-mix(in srgb, var(--paper-1) 88%, var(--dark-0)); }
 .aa-line, .aa-spine { fill: none; stroke: rgba(var(--ink-rgb), .24); stroke-width: 1.6; stroke-linecap: round; }
-.aa-write { fill: none; stroke: var(--primary); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: aaWrite .9s ease-out forwards; animation-delay: calc(var(--wait, 0s) + 3.1s); }
 .aa-pencil { fill: color-mix(in srgb, var(--primary) 55%, var(--paper-1)); }
 .aa-trail { fill: none; stroke: rgba(var(--paper-rgb), .5); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0 9; }
 .aa-cur { color: var(--paper-1); --logo-eyes: var(--dark-1); }
 .aa-curin { animation: aaBob 2.4s ease-in-out infinite; animation-delay: calc(var(--wait, 0s) + 3s); }
 .auth-artsvg.is-still * { animation: none !important; }
-.auth-artsvg.is-still .aa-write { stroke-dashoffset: 0; }
 @keyframes aaTwinkle { 0%, 100% { opacity: .85; } 50% { opacity: .25; } }
-@keyframes aaWrite { to { stroke-dashoffset: 0; } }
+/* (v271) once on open, after the intro: the lamp switches on with one flicker, the books drop into place one by one,
+   the pencil rolls up to the notebook; the moon glows on a slow loop. Still (Reduce Motion, Lite mode): all in place. */
+.aa-on { animation: aaLamp .9s ease-out both; animation-delay: var(--wait, 0s); }
+.aa-book { animation: aaDrop .45s cubic-bezier(.3, 1.4, .5, 1) both; animation-delay: calc(var(--wait, 0s) + .2s + var(--n) * .14s); }
+.aa-roll { animation: aaRoll .8s ease-out both; animation-delay: calc(var(--wait, 0s) + .7s); }
+.aa-moonglow { fill: var(--paper-1); opacity: .12; animation: aaGlow 4s ease-in-out infinite; }
+@keyframes aaLamp { 0% { opacity: 0; } 30% { opacity: 1; } 42% { opacity: .35; } 56%, 100% { opacity: 1; } }
+@keyframes aaDrop { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes aaRoll { from { transform: translateX(4px); } to { transform: none; } }
+@keyframes aaGlow { 0%, 100% { opacity: .08; } 50% { opacity: .24; } }
 @keyframes aaBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
 /* the brand intro: "Cassie", the cursor underlines it, then "Your study buddy" (1.2 seconds, a tap ends it) */
 .auth-intro { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; color: var(--paper-1); background: radial-gradient(90% 70% at 50% 35%, var(--aa-sky1), var(--aa-sky2)); animation: aiOut .25s ease .95s forwards; }

@@ -237,6 +237,8 @@
 
     let accent = opts.accent || '#d8343c';
     let stateName = '', st = STATES.idle, stateAt = 0, accessory = null;
+    // (v271) opts.dust === false: never the hello ring of dots, in any state (Home), flat or 3D
+    const noDust = (d) => (opts.dust === false && d && d.effect === 'dust' ? { ...d, effect: '' } : d);
     let lookX = 0, lookY = 0, wantX = 0, wantY = 0, pointerLook = null;
     // opts.win: the window she lives in (the pop-out Cassie window keeps animating while the main tab is hidden)
     const W = opts.win || window;
@@ -302,7 +304,7 @@
     function setState(name) {
       if (!STATES[name]) name = 'idle';
       if (name === stateName && name !== 'done' && name !== 'surprised' && name !== 'proud') return;
-      stateName = name; st = STATES[name]; stateAt = clock(); stale = true;
+      stateName = name; st = noDust(STATES[name]); stateAt = clock(); stale = true; svg.dataset.state = host.dataset.state = name; host.dataset.fx = st.effect || ''; // (v271: her state and effect, readable, flat or 3D)
       const c = st.color;
       const base = ['#ffffff', PAPER, '#e9e5dd'];
       parts.stops.forEach((n, i) => n.setAttribute('stop-color', c ? mix(base[i], c, [0.22, 0.4, 0.58][i]) : base[i]));
@@ -418,7 +420,7 @@
       look(x, y) { pointerLook = x == null ? null : [Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))]; },
       destroy() { alive = false; W.cancelAnimationFrame(raf); svg.remove(); if (deep) deep.destroy(); },
       get pose() { return pose; },
-      get def() { return STATES[stateName] || STATES.idle; },
+      get def() { return noDust(STATES[stateName] || STATES.idle); },
       get is3d() { return !!(deep && deep.live); },
       get flat() { return flatShown; },
       // show the flat Cassie for good (the 3D one won't come): remember=true when 3D failed on this device
