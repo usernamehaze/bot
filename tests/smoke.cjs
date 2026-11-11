@@ -1001,6 +1001,22 @@ test('sign in with Google: the return address sent to Google is one registered i
   }
 });
 
+test('v272: Cassie’s speech bubble beside the ask box stays on the screen (phone 390x844 and 360x780, her at the left or the right): it opens toward the side with room', async (b) => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 780 }]) {
+    const { ctx, page, errors } = await open(b, { device: 'iPhone 13', viewport, lite: 'off', server: false, state: { tab: 'chat', groqKey: 'gsk_test' } });
+    await page.waitForSelector('#mascot.has2d', { state: 'attached', timeout: 10000 });
+    for (const side of ['left', 'right']) {
+      // (she moves the app's own way, gliding; the bubble shows on the way and re-fits where she lands)
+      await page.evaluate((side) => { const m = document.getElementById('mascot'), r = m.getBoundingClientRect(); placeMascot(side === 'left' ? 0 : innerWidth, r.top); mascotSay('Welcome back! What are we studying today?', 0); }, side);
+      await page.waitForTimeout(700);
+      const r = await page.evaluate(() => { const b = document.getElementById('mascot-bubble').getBoundingClientRect(), m = document.getElementById('mascot').getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(b.right), w: innerWidth, her: Math.round(m.left) }; });
+      expect(r.left >= 0 && r.right <= r.w, `${viewport.width}px, Cassie at the ${side}: the bubble is on the screen: ` + JSON.stringify(r));
+    }
+    expect(!errors.length, 'page errors: ' + errors.join(' | '));
+    await ctx.close();
+  }
+});
+
 test('v271 (390x844 and 1280x800): no pill row above the ask box; Hint, Quiz me, Research and Web are rows in the + sheet that press the same buttons (a quiz starts and stops); Home’s Cassie rests (idle) with no ring of dots, also after a poke; the sign-in header has no writing, and its lamp, books and pencil move once (still under Reduce Motion)', async (b) => {
   for (const [size, device, viewport] of [['390x844', 'iPhone 13', { width: 390, height: 844 }], ['1280x800', 'Desktop Chrome', { width: 1280, height: 800 }]]) {
     const { ctx, page, errors } = await open(b, { device, viewport, lite: 'off', server: false, state: { tab: 'chat', groqKey: 'gsk_test' }, fakeGroq: () => ({ text: 'Question 1: What is 2 + 2?' }) });
@@ -13816,19 +13832,20 @@ test.slow('Home, You, Settings and Plans: the new and the returning home, every 
     await page.emulateMedia({ colorScheme: 'light' });
     // Settings: every old setting is there, and a change is kept under its old key
     await page.evaluate(() => setPage('all'));
-    const IDS = ['groq-key-input', 'groq-model-select', 'gemini-key-input', 'edit-profile-btn', 'share-usage-toggle', 'level-select', 'citation-select', 'highlight-help-toggle', 'accent-swatches', 'lite-select', 'textsize-select', 'easyread-toggle', 'voice-out-toggle', 'voice-gender-select', 'hearing-select', 'clear-chat-btn', 'settings-phone']; // (Report a problem shows only with Cassie's server: its own test)
+    const IDS = ['groq-key-input', 'groq-model-select', 'gemini-key-input', 'edit-profile-btn', 'share-usage-toggle', 'level-select', 'citation-select', 'highlight-help-toggle', /* (the accent colour is on the Appearance page now, its old swatches kept hidden) */ 'lite-select', /* (text size too: on the Appearance page) */ 'easyread-toggle', 'voice-out-toggle', 'voice-gender-select', 'hearing-select', 'clear-chat-btn', 'settings-phone']; // (Report a problem shows only with Cassie's server: its own test)
     await page.evaluate(() => { document.getElementById('settings-keys').open = true; });
     for (const id of IDS) expect(await page.locator('#' + id).isVisible(), `${size}: ${id} is in Settings`);
     await page.fill('#groq-key-input', 'gsk_changed');
     await page.selectOption('#level-select', 'college');
     await page.selectOption('#citation-select', 'MLA');
-    await page.selectOption('#textsize-select', 'large');
+    // (text size and colour live on the Appearance page now; their old controls, kept hidden, still save the same keys)
+    await page.$eval('#textsize-select', (el) => { el.value = 'large'; el.dispatchEvent(new Event('change', { bubbles: true })); });
     await page.selectOption('#voice-gender-select', 'man');
     await page.selectOption('#hearing-select', 'fast');
     await page.locator('#easyread-toggle').check();
     await page.locator('#voice-out-toggle').check();
     await page.locator('#highlight-help-toggle').uncheck();
-    await page.click('.accent-sw[data-accent="mono"]');
+    await page.$eval('.accent-sw[data-accent="mono"]', (el) => el.click());
     // (Lite mode reloads the app to take effect: last, then wait for it)
     await Promise.all([page.waitForEvent('load', { timeout: 10000 }).catch(() => {}), page.selectOption('#lite-select', 'on')]);
     await page.waitForTimeout(600);

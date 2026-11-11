@@ -633,6 +633,7 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
   pointer-events: none; /* a passing tip: a tap goes to the button under it */
 }
 .mascot-bubble[hidden] { display: none; }
+.mascot-bubble.mb-left { right: auto; left: 0; border-radius: 14px 14px 14px 4px; } /* (v272: near the left edge it opens to her right) */
 
 #mascot.sleeping #mascot-btn { cursor: pointer; }
 @media (max-width: 480px) { #mascot-btn { width: 48px; height: 48px; } }
