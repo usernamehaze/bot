@@ -634,6 +634,11 @@ html.add-open #mascot { visibility: hidden; } /* (Cassie steps aside while the s
 }
 .mascot-bubble[hidden] { display: none; }
 .mascot-bubble.mb-left { right: auto; left: 0; border-radius: 14px 14px 14px 4px; } /* (v272: near the left edge it opens to her right) */
+/* (v275) the new Home has Today too (the goal, the streak, the awards), under Start studying */
+.hub-sec-new { margin-top: var(--sp-5, 24px); text-align: left; }
+.hub-sec-new .hub-today { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; padding-bottom: 0; } /* (all three in view: the goal across, then the streak and the awards) */
+.hub-sec-new .hub-today > * { min-width: 0; }
+.hub-sec-new .hub-goal { grid-column: 1 / -1; }
 /* (v274) Home's menu button (phone): the same three lines as Chat's */
 .hub-menu { flex: none; display: grid; place-items: center; width: var(--tap, 48px); height: var(--tap, 48px); margin-left: calc(-1 * var(--sp-2, 8px)); border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
 .hub-menu svg { width: 24px; height: 24px; fill: currentColor; }
