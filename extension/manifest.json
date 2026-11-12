@@ -69,6 +69,18 @@
   "side_panel": {
     "default_path": "panel.html"
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "livedraw.js",
+        "vendor/three.module.min.js",
+        "vendor/OrbitControls.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "minimum_chrome_version": "116",
   "commands": {
     "open-panel": {

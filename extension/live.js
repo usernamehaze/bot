@@ -10,8 +10,13 @@
  *  - on a web page (a content script, after teach.js): CassieLive.ask({ q }) does all of it.
  *  - in the side panel: the same card, in the panel, for tabs she can't draw on.
  *
+ * When the student asks for 3D, or to be shown how parts go together, the scene is a 3D model instead:
+ * built part by part over the page by the Cassie app's own model builder (livedraw.js, with three.js
+ * from this folder, both loaded only then). Where 3D can't show, the same answer is a flat drawing.
+ *
  *   CassieLive.parse(reply, count) → { kind, answer, scene, steps }
- *       kind 'card': scene { title, caption, view, about, beats: [{ say, parts }] } (bad parts are left out)
+ *       kind 'card': scene { title, caption, view, about, beats: [{ say, parts }] } (bad parts are left out),
+ *                    or scene { dim: '3d', spec, beats: [{ say, part }] } for a 3D model
  *       kind 'page': steps for CassieTeach.show (she points at the page instead)
  *       kind 'words': only an answer          kind '': nothing that can be used
  *   CassieLive.prompt({ q, page, draw, scene, said }) → what Cassie is asked
@@ -19,6 +24,8 @@
  *   CassieLive.from({ send, ask, count, draw }) → one reply, read (asked once more, more strictly, when it can't be used)
  *   CassieLive.ask({ q, from, hideUi, again }) → on a page: one picture of the tab, her reply, and the drawing
  *   CassieLive.wants(q) → the question asks for a drawing ("draw", "sketch", "a diagram of", "show me how")
+ *   CassieLive.wants3d(q) → it asks for a 3D model ("in 3D", or to be shown how parts go together), and 3D can show here
+ *   CassieLive.has3d → the 3D model builder has been asked for (it loads only then)
  *   CassieLive.problem(err) → what went wrong, in plain words (CassieErrors)
  */
 (function () {
@@ -62,17 +69,23 @@
     if (i < 0) return null;
     const j = closeOf(t, i);
     if (j > 0) { try { return JSON.parse(t.slice(i, j + 1)); } catch (e) { /* the whole beats are picked out below */ } }
-    const s = t.search(/"beats"\s*:\s*\[/);
-    if (s < 0) return null;
-    const beats = [];
-    for (let k = t.indexOf('[', s) + 1; k < t.length;) {
-      while (k < t.length && /[\s,]/.test(t[k])) k++;
-      if (t[k] !== '{') break;
-      const e = closeOf(t, k);
-      if (e < 0) break; // (the beat that was cut off)
-      try { beats.push(JSON.parse(t.slice(k, e + 1))); } catch (err) { break; }
-      k = e + 1;
-    }
+    // every whole {…} in the list called key (the one that was cut off is left out)
+    const whole = (key) => {
+      const s = t.search(new RegExp('"' + key + '"\\s*:\\s*\\[')), out = [];
+      if (s < 0) return out;
+      for (let k = t.indexOf('[', s) + 1; k < t.length;) {
+        while (k < t.length && /[\s,]/.test(t[k])) k++;
+        if (t[k] !== '{') break;
+        const e = closeOf(t, k);
+        if (e < 0) break;
+        try { out.push(JSON.parse(t.slice(k, e + 1))); } catch (err) { break; }
+        k = e + 1;
+      }
+      return out;
+    };
+    const beats = whole('beats'), parts = beats.length ? [] : whole('parts');
+    if (parts.length && /"mode"\s*:\s*"3d"/.test(t)) return { answer: wordOf(t, 'answer'), title: wordOf(t, 'title'), intro: wordOf(t, 'intro'), mode: '3d', axis: wordOf(t, 'axis'), parts };
+    if (!beats.length) return null;
     let about = null;
     const a = t.match(/"about"\s*:\s*(\[[^\]]*\]|\d+)/);
     if (a) { try { about = JSON.parse(a[1]); } catch (e) { about = null; } }
@@ -209,6 +222,17 @@
     const T = window.CassieTeach;
     const d = jsonOf(reply);
     const answer = words(d && d.answer, 1500) || (T ? T.answer(reply) : '');
+    // a 3D model: one beat for each part she builds (the parts are made safe by the model builder itself)
+    if (d && d.mode === '3d' && Array.isArray(d.parts)) {
+      const parts = d.parts.slice(0, 10).filter((x) => x && typeof x === 'object' && Array.isArray(x.shapes) && x.shapes.some((sh) => sh && typeof sh === 'object'));
+      if (parts.length) {
+        const intro = words(d.intro, 300), sum = words(d.summary, 300), beats = [];
+        if (intro) beats.push({ say: intro, parts: [] });
+        parts.forEach((x, i) => beats.push({ say: words(x.say, 360) || words(x.label, 40), parts: [], part: i }));
+        if (sum) beats.push({ say: sum, parts: [] });
+        return { kind: 'card', answer: answer || intro || beats.map((b) => b.say).join(' '), scene: { dim: '3d', spec: { ...d, parts }, title: words(d.title, 60) || 'How it works', caption: sum, view: '3D model', about: cleanAbout(d.about, count), keep: false, beats }, steps: [] };
+      }
+    }
     const scene = d && Array.isArray(d.beats) ? cleanScene(d, count) : null;
     const said = scene ? scene.beats.map((b) => b.say).filter(Boolean).join(' ') : '';
     if (scene && scene.beats.some((b) => b.parts.length)) return { kind: 'card', answer: answer || said, scene, steps: [] };
@@ -219,8 +243,33 @@
 
   /* ---------- what Cassie is asked ---------- */
   // (the same words the Cassie app takes as "draw it"; but "this diagram" on the screen is a thing to explain, not an order to draw)
-  const WANTS = /\b(draw|redraw|sketch|illustrate|visuali[sz]e|iguhit|ipakita)\b|\bi-?drawing\b|\b(make|create|give|show|do|build)\b[^.?!]{0,24}\b(drawing|sketch|diagram|illustration|model)\b|\bdiagram of\b|\bshow\b[^.?!]{0,20}\bhow\b|\b(explain|teach)\b[^.?!]*\b(with|using|in)\s+(a\s+)?(drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b/i;
+  const WANTS = /\b(draw|redraw|sketch|illustrate|visuali[sz]e|iguhit|ipakita)\b|\bi-?drawing\b|\b(make|create|give|show|do|build)\b[^.?!]{0,24}\b(drawing|sketch|diagram|illustration|model)\b|\bdiagram of\b|\bshow\b[^.?!]{0,20}\bhow\b|\b(explain|teach)\b[^.?!]*\b(with|using|in)\s+(a\s+)?(drawing|diagram|graphics?|visuals?|3d)\b|\bin\s+3d\b|\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
   const wants = (q) => WANTS.test(String(q || ''));
+  // 3D is for when the student asks for it, or asks to be shown how parts go together. Where 3D can't show
+  // (no WebGL, or Reduce Motion), the same answer is a flat drawing.
+  const WANTS_3D = /\b3d\b|\bthree[\s-]?d\b|\bturn\s+it\s+around\b|\brotate\s+it\b|\bfrom\s+all\s+sides\b/i;
+  const FITS = /\b(attach|assembl|connect|install|plug|insert|mount|screw)\w*|\bput\b[^.?!]{0,20}\btogether\b|\bfits?\b[^.?!]{0,12}\b(in|into|onto|together)\b/i;
+  const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
+  const stillNow = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const can3d = () => glOk() && !stillNow();
+  const wants3d = (q) => { const t = String(q || ''); return (WANTS_3D.test(t) || (WANTS.test(t) && FITS.test(t))) && can3d(); };
+  // the Cassie app's model builder, with three.js from this folder (both loaded only when a 3D model is asked for)
+  let lib3d = null;
+  const load3d = () => (lib3d || (lib3d = import(chrome.runtime.getURL('livedraw.js')).then((m) => {
+    m.useThree(() => Promise.all([import(chrome.runtime.getURL('vendor/three.module.min.js')), import(chrome.runtime.getURL('vendor/OrbitControls.js'))]).then(([T, oc]) => ({ T, OrbitControls: oc.OrbitControls })));
+    return m;
+  }).catch((e) => { lib3d = null; throw e; })));
+  // what she is told about building in 3D: the plan-first guide is the Cassie app's own (liveDrawPrompt in app.js)
+  const GUIDE_3D = `Students learn from this: every fact, label, direction and count MUST be correct. If you are not sure of something, leave that part out.
+  First think how the real object is built: its real parts, which part holds or contains which, how big each one is against the whole, and how they line up and connect. Then build the model to match that plan:
+  - every part touches or sits inside the part it connects to; nothing floats in the air
+  - parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it
+  - real proportions: a part that is small in the real object is small here; a part inside another is smaller than it
+  - parts that turn get "spin": true; hot or glowing parts get "glow": true
+  {"answer":the direct answer in one or two short sentences,"about":[x,y,w,h] the box around the thing on their screen the question is about, as shares of the picture from 0 to 1, or null,"title","mode":"3d","axis":the model's main length "x"|"y"|"z","intro":one sentence that says what you see on their screen,"summary":one sentence,"note":one short warning or tip for a sticky note (leave it out when there is none),"parts":[{"id","label":1 to 3 words,"say":1 or 2 short sentences,"color":"#hex","inside":the id of the part it sits in, or null,"attached":[ids of the parts it touches],"size":how big it really is (its longest side) against the whole object, 0 to 1,"shell","spin","glow","shapes":[...]}]}
+  3 to 8 parts in building order, 1 to 8 shapes each. Each part is built while its "say" is said. The whole model about 6 units long, centred on 0,0,0. Every shape has "pos":[x,y,z] and, when it has a length, "axis":"x"|"y"|"z".
+  Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}, capsule {r,len,axis,pos}, pipe {pts:[[x,y,z],...],r} (a tube, hose or cable through 2 to 8 points), arrow {pts:[[x,y,z],...],r} (a flow or a push; its head is at the last point), lathe {profile:[[radius,along],...],axis,pos} (a profile turned round the axis), plate {outline:[[a,b],...],thick,axis,pos} (a flat board; its outline lies across the axis).
+  To show how something is put together, give the part that moves "from":[dx,dy,dz], where it starts away from its place: it slides in. "view":"front"|"back"|"left"|"right"|"top" on a part turns the model to that side when it is built.`;
   const CARD_SHAPE = '{"answer":"the direct answer in one or two short sentences","about":[0.3,0.2,0.4,0.5],"title":"2 to 6 words","caption":"what the drawing shows, in under 10 words","view":"Side view","beats":[{"say":"one or two short, natural spoken sentences","draw":[{"shape":"outline","points":[[30,22],[62,22],[68,58],[24,58]]}]}]}';
   const CARD_HELP = `Give 3 to 6 beats. "about" is the box [x, y, w, h] around the thing on their screen that the question is about, as shares of the picture from 0 to 1 (null when it is about nothing on the screen). "view" says how the thing is seen: Side view, Front view, Top view, Cut-away or Diagram.
   The drawing is made on a card ${GW} units wide and ${GH} tall, and (0, 0) is its top left corner. It grows while you talk: each beat adds 1 to 5 new parts ("draw") while its sentence is said. Draw the main outline first, then its parts in colour, then arrows, then labels. The parts you can draw:
@@ -248,8 +297,10 @@
   //   draw: the student asked for a drawing, so she draws (no pointing at the page instead)
   //   scene: the drawing on the card now, for a follow-up (she adds to it, or starts a new one)
   //   said: what she has said so far (a lesson's steps, or the card's beats)
-  function prompt({ q = '', page = null, draw = false, scene = null, said = [] } = {}) {
+  //   dim: '3d' builds a model, '2d' draws flat; left out, the question decides (wants3d)
+  function prompt({ q = '', page = null, draw = false, scene = null, said = [], dim = null } = {}) {
     const T = window.CassieTeach, truth = T && T.truth ? T.truth.asked : '';
+    const d3 = dim === '3d' || (dim == null && !scene && wants3d(q));
     const title = page && page.title ? `, on a page called "${String(page.title).slice(0, 120)}"` : '';
     const text = page && page.text ? `The words on the page (maybe cut short):\n"""\n${page.text}\n"""\n` : '';
     const sofar = said.length ? `You (Cassie) said so far:\n${said.map((x, i) => `${i + 1}. ${x}`).join('\n')}\n` : '';
@@ -266,6 +317,12 @@
   ${truth}`;
     }
     const seen = `A student is looking at their screen right now (the picture)${title}.\n  ${text}${sofar}The student asks: "${q}"`;
+    if (d3) {
+      return `${seen}
+  Answer like a kind tutor sitting beside them, by building a 3D model for them while you explain. Reply with ONLY one minified JSON object, "mode":"3d".
+  ${GUIDE_3D}
+  ${truth}`;
+    }
     if (draw) {
       return `${seen}
   Answer like a kind tutor sitting beside them, and draw it for them while you explain. The student asked for a drawing, so always draw one.
@@ -295,16 +352,24 @@
   const DRAW_IT = '\n  IMPORTANT: the student asked for a drawing and your last reply had none. Reply in the drawing form, and give every beat at least one part to draw.';
   // One reply from Cassie, read: send(prompt, maxTokens) → her reply. A reply that can't be used (or has no
   // drawing when one was asked for) is asked for once more, more strictly. → { kind, answer, scene, steps, noDraw }
-  async function from({ send, ask, count = 0, draw = false, maxTokens = 3000 } = {}) {
-    let last = null;
+  async function from({ send, ask, count = 0, draw = false, maxTokens = 3600 } = {}) {
+    let last = null, nudge = '';
     for (let tries = 0; tries < 2; tries++) {
-      const reply = await send(tries ? ask + (last && last.kind ? DRAW_IT : STRICT) : ask, maxTokens);
+      const reply = await send(ask + nudge, maxTokens);
       const got = parse(reply, count);
+      if (got.kind === 'card' && got.scene.dim === '3d' && !tries) {
+        // (as in the Cassie app: the model against her own plan; what is wrong goes back to her once)
+        const m = await load3d().catch(() => null), spec = m && m.clean(got.scene.spec), wrong = !m ? [] : spec ? m.check3d(spec) : ['the reply was not one valid JSON object in the schema'];
+        if (wrong.length) { last = got; nudge = `\n  IMPORTANT: your model has these problems:\n  - ${wrong.join('\n  - ')}\n  Send the whole corrected JSON object again.`; continue; }
+      }
       if (got.kind === 'card' || (got.kind && !draw)) return got;
-      if (got.kind) last = got;
-      else if (tries && !last) { const plain = String(reply || '').trim(); if (plain && plain.indexOf('{') < 0) last = { kind: 'words', answer: plain.slice(0, 1500), scene: null, steps: [] }; } // (plain words twice: they are still an answer)
+      if (got.kind) { last = got; nudge = DRAW_IT; }
+      else {
+        if (tries && !last) { const plain = String(reply || '').trim(); if (plain && plain.indexOf('{') < 0) last = { kind: 'words', answer: plain.slice(0, 1500), scene: null, steps: [] }; } // (plain words twice: they are still an answer)
+        if (!last) nudge = STRICT;
+      }
     }
-    if (last) return { ...last, noDraw: !!draw };
+    if (last) return { ...last, noDraw: !!draw && last.kind !== 'card' };
     throw keyed('live_failed');
   }
   // what went wrong, in plain words (CassieErrors): a missing key, no internet, too slow, or "try again"
@@ -425,14 +490,34 @@
     .lv-ask input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--edge); background: var(--card); color: var(--ink); padding: 0 12px; font: 15px/1.2 ${FONT}; }
     .lv-ask input::placeholder { color: var(--mute); opacity: 1; }
     .lv-ask input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
-    .lv-card button { all: unset; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    .lv button { all: unset; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       font: 600 14px/1 ${FONT}; color: var(--ink); background: var(--card); border: 1px solid var(--line); cursor: pointer; }
-    .lv-card button:hover { border-color: var(--edge); }
-    .lv-card button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-    .lv-card button:disabled { opacity: .45; cursor: default; }
-    .lv-card button[aria-pressed="false"] { color: var(--mute); }
-    .lv-card .lv-pri { background: var(--pri); color: var(--pri-ink); border-color: var(--pri); }
-    .lv-card .lv-icon { padding: 0; }
+    .lv button:hover { border-color: var(--edge); }
+    .lv button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .lv button:disabled { opacity: .45; cursor: default; }
+    .lv .lv-voice[aria-pressed="false"] { color: var(--mute); }
+    .lv .lv-pri { background: var(--pri); color: var(--pri-ink); border-color: var(--pri); }
+    .lv .lv-icon { padding: 0; }
+    /* a 3D model: in her card (the side panel, a narrow window), or over the page with no background */
+    .lv-hint { margin: 0 0 8px; font-size: 13px; line-height: 1.35; color: var(--p-grey); }
+    .lv-stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; }
+    .lv-float { position: fixed; pointer-events: auto; }
+    .lv-float .lv-stage { height: 100%; aspect-ratio: auto; overflow: visible; }
+    .lv-sticky { margin: 0 0 8px; padding: 8px 12px; max-width: 208px; box-sizing: border-box; background: ${NOTE.paper}; color: ${NOTE.ink}; border: 1px solid ${NOTE.edge}; border-radius: 4px;
+      font: 600 14px/1.3 ${FONT}; transform: rotate(-2deg); box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+    .lv-paper .lv-sticky { display: inline-block; }
+    .lv-float .lv-sticky { position: absolute; left: 0; top: 0; z-index: 2; margin: 0; }
+    .lv .lv-clear3 { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 2; border-color: var(--edge); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    .ld-canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; touch-action: none; outline: none; }
+    .ld-canvas:active { cursor: grabbing; }
+    .ld-tags { position: absolute; inset: 0; pointer-events: none; }
+    .lv .ld-tag { all: unset; position: absolute; transform: translate(-50%, -50%); box-sizing: border-box; pointer-events: none; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--edge);
+      background: var(--card); color: var(--ink); font: 600 13px/1.3 ${FONT}; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.22); }
+    .lv .ld-tag:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .ld-tag-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; filter: drop-shadow(0 0 1px var(--card)) drop-shadow(0 0 1px var(--card)); }
+    .ld-tag-lines line { stroke: var(--ink); stroke-width: 1.5; }
+    .ld-tag-lines circle { fill: var(--ink); stroke: var(--card); stroke-width: 1.5; }
+    .lv-line.is-picked { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
     .lv-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     /* a short window (a small laptop): the drawing and her words sit side by side, so both show at once */
     @media (max-height: 680px) and (min-width: 880px) {
@@ -440,6 +525,9 @@
       .lv-on-page:not(.lv-cleared) .lv-body { display: grid; grid-template-columns: minmax(0, 1fr) 344px; align-items: start; }
       .lv-on-page .lv-svg { max-height: max(168px, calc(100vh - 184px)); }
       .lv-on-page .lv-words { max-height: 132px; }
+      /* (a 3D model over the page: her card stays narrow, the model has the room) */
+      .lv-on-page.lv-floats:not(.lv-cleared) .lv-card { width: min(432px, calc(100vw - 32px)); }
+      .lv-on-page.lv-floats:not(.lv-cleared) .lv-body { display: flex; }
     }
   `;
 
@@ -482,7 +570,9 @@
           <div class="lv-paper">
             <p class="lv-title"></p>
             <p class="lv-sub"></p>
+            <p class="lv-hint" hidden>Drag to turn it. Tap a part to read about it.</p>
             <svg class="lv-svg" viewBox="0 0 ${GW * K} ${GH * K}" role="img"></svg>
+            <div class="lv-stage lv-stage-card" role="img" hidden></div>
           </div>
           <div class="lv-rest">
             <div class="lv-words" aria-live="polite"></div>
@@ -496,12 +586,15 @@
             <div class="lv-nav">
               <button type="button" class="lv-replay">Replay</button>
               <button type="button" class="lv-clear">Clear</button>
+              <button type="button" class="lv-open" aria-pressed="true" hidden>Close the case</button>
+              <button type="button" class="lv-apart" aria-pressed="false" hidden>Pull apart</button>
               ${onBoard ? '<button type="button" class="lv-board">Open on the board</button>' : ''}
             </div>
             ${opts.send ? '<form class="lv-ask" autocomplete="off"><input type="text" placeholder="Ask a follow-up" aria-label="Ask a follow-up" maxlength="300" enterkeyhint="send"><button type="submit" class="lv-send">Ask</button></form>' : ''}
           </div>
         </div>
-      </div>`;
+      </div>
+      <div class="lv-float" hidden><div class="lv-stage lv-stage-float" role="img"></div><button type="button" class="lv-clear3">Clear</button></div>`;
     root.appendChild(wrapEl);
     (inPanel ? opts.mount : document.documentElement).appendChild(host);
     const $ = (s) => root.querySelector(s);
@@ -509,8 +602,17 @@
     const el = (name, attrs = {}) => { const n = document.createElementNS(NS, name); Object.keys(attrs).forEach((k) => n.setAttribute(k, attrs[k])); return n; };
     wordsEl.addEventListener('scroll', () => wordsEl.classList.toggle('is-more', wordsEl.scrollTop > 0), { passive: true });
 
-    let beats = scene.beats.map((b, i) => ({ say: b.say, parts: b.parts.slice(), asked: i === 0 ? String(opts.q || '') : '' }));
-    let info = { title: scene.title, caption: scene.caption, view: scene.view };
+    let cur = null, beats = [], info = {}, askedNow = '';
+    // the scene on her card: the first one, or a new one a follow-up brought (q: the question it answers)
+    const adopt = (sc, q) => {
+      cur = sc; askedNow = String(q || '');
+      info = { title: sc.title, caption: sc.caption, view: sc.view };
+      beats = sc.beats.map((b, i) => ({ say: b.say, parts: (b.parts || []).slice(), part: b.part, asked: i === 0 ? askedNow : '' }));
+    };
+    adopt(scene, opts.q);
+    const is3d = () => cur.dim === '3d';
+    const cardStage = $('.lv-stage-card'), floatEl = $('.lv-float'), floatStage = $('.lv-stage-float');
+    let model = null, floating = false, picked = -1, built = 0, lastPic = '';
     let views = [], cursor = null;
     let at = -1, playing = false, alive = true, cleared = false, done = false;
     let run = 0, raf = 0, gap = 0, mid = null, nextUp = 0, voiceOn = true, asking = 0;
@@ -625,23 +727,95 @@
         },
       };
     }
-    // every part of every beat, built once and hidden: a beat's parts appear when it is played
-    function build() {
-      svg.replaceChildren();
-      views = beats.map((b) => b.parts.map((p) => {
-        const v = p.shape === 'label' ? labelView(p) : p.shape === 'note' ? noteView(p) : lineView(p), show = v.set;
-        v.k = 0; v.set = (k) => { v.k = k; show(k); };
-        svg.appendChild(v.g); v.set(0);
-        return v;
-      }));
-      cursor = el('g', { class: 'lv-cur' });
-      cursor.appendChild(el('path', { d: ARROW }));
-      cursor.style.opacity = '0';
-      svg.appendChild(cursor);
-      host.dataset.parts = String(views.reduce((n, v) => n + v.length, 0));
+    // a part of a 3D model: it is built when its beat starts (at once, when a beat is shown whole)
+    function part3d(i) {
+      let on = false;
+      return { part: { shape: 'part' }, set(k) { if (k > 0 && !on) { on = true; if (model) model.view.show(i, k >= 1); } else if (k <= 0 && on) { on = false; if (model) model.view.hide(i); } }, tip: () => null, paint() {} };
+    }
+    const kept = (v) => { const show = v.set; v.k = 0; v.set = (k) => { v.k = k; show(k); }; return v; };
+    function end3d() {
+      if (model) { try { model.view.stop(); } catch (e) { /* already gone */ } model = null; }
+      cardStage.replaceChildren(); floatStage.replaceChildren();
+      wrapEl.querySelectorAll('.lv-sticky').forEach((n) => n.remove());
+      cardStage.hidden = true; floatEl.hidden = true; floating = false; picked = -1;
+      wrapEl.classList.remove('lv-floats');
+    }
+    // where the model floats: in the room beside her card, in the middle of it
+    function placeFloat() {
+      if (!floating) return;
+      const cw = card.offsetWidth, m = 16, free = innerWidth - cw - m * 3, w = Math.max(280, Math.min(760, free)), h = Math.max(240, Math.min(Math.round(w * 0.62), innerHeight - 96));
+      const left = card.dataset.side === 'left' ? cw + m * 2 + (free - w) / 2 : m + (free - w) / 2;
+      Object.assign(floatEl.style, { left: Math.round(left) + 'px', top: Math.round((innerHeight - h) / 2) + 'px', width: Math.round(w) + 'px', height: Math.round(h) + 'px' });
+    }
+    function paint3d() {
+      const v = model && model.view, ob = $('.lv-open'), pb = $('.lv-apart');
+      ob.hidden = !(v && v.open) || cleared; pb.hidden = !(v && v.explode) || cleared;
+      if (v && v.open) { ob.textContent = v.opened ? 'Close the case' : 'Open it up'; ob.setAttribute('aria-pressed', String(!!v.opened)); }
+      $('.lv-hint').hidden = !v;
+    }
+    // every part of every beat, built once and hidden: a beat's parts appear when it is played.
+    // → false when a 3D model can't be built here (then the same answer is shown flat: flatInstead)
+    async function build() {
+      const my = ++built, d3 = is3d();
+      end3d();
+      svg.replaceChildren(); cursor = null; views = beats.map(() => []);
+      svg.style.display = d3 ? 'none' : '';
+      host.dataset.dim = d3 ? '3d' : '2d';
       $('.lv-title').textContent = info.title || 'Cassie’s drawing';
       $('.lv-sub').textContent = [info.view, 'Simplified sketch'].filter(Boolean).join(' · ');
-      svg.setAttribute('aria-label', [info.title, info.caption].filter(Boolean).join(': ') || 'Cassie’s drawing');
+      const name = [info.title, info.caption].filter(Boolean).join(': ') || 'Cassie’s drawing';
+      svg.setAttribute('aria-label', name);
+      if (!d3) {
+        views = beats.map((b) => b.parts.map((p) => { const v = kept(p.shape === 'label' ? labelView(p) : p.shape === 'note' ? noteView(p) : lineView(p)); svg.appendChild(v.g); v.set(0); return v; }));
+        cursor = el('g', { class: 'lv-cur' });
+        cursor.appendChild(el('path', { d: ARROW }));
+        cursor.style.opacity = '0';
+        svg.appendChild(cursor);
+        host.dataset.parts = String(views.reduce((n, v) => n + v.length, 0));
+        paint3d();
+        return true;
+      }
+      host.dataset.parts = '0';
+      if (!can3d()) return false;
+      try {
+        const m = await load3d();
+        if (my !== built || !alive) return true;
+        // over the page when there is room beside her card; otherwise in the card
+        floating = !inPanel && innerWidth - 432 - 48 >= 380;
+        wrapEl.classList.toggle('lv-floats', floating);
+        const stage = floating ? floatStage : cardStage;
+        (floating ? floatEl : cardStage).hidden = false;
+        stage.setAttribute('aria-label', name);
+        placeFloat();
+        const made = await m.model3d(stage, cur.spec, { turn: true, zoom: !floating, matte: true });
+        if (my !== built || !alive) { if (made) made.view.stop(); return true; }
+        if (!made) { end3d(); return false; }
+        model = made;
+        if (made.view.open) made.view.setOpen(true); // (the case starts open, so the parts inside show as they are built)
+        views = beats.map((b) => (b.part >= 0 && made.view.has(b.part) ? [kept(part3d(b.part))] : []));
+        beats.forEach((b) => { if (b.part >= 0) made.view.hide(b.part); }); // (nothing shows until its beat)
+        const tip = words(cur.spec.note, 80);
+        if (tip) { const n = document.createElement('p'); n.className = 'lv-sticky'; n.textContent = tip; (floating ? floatEl : paper).insertBefore(n, floating ? floatStage : cardStage); }
+        made.view.onPick = (part) => { picked = part ? beats.findIndex((b) => b.part === made.spec.parts.indexOf(part)) : -1; paintWords(); };
+        host.dataset.parts = String(views.reduce((n, v) => n + v.length, 0));
+        paint3d();
+        return true;
+      } catch (e) { end3d(); return false; }
+    }
+    // 3D can't show here: the same answer as a flat drawing (asked for once), or at least her words
+    async function flatInstead() {
+      if (opts.send && askedNow) {
+        setStatus('looking');
+        try {
+          const got = await from({ send: opts.send, ask: prompt({ q: askedNow, page: opts.page || null, draw: true, dim: '2d' }), draw: true });
+          if (!alive) return;
+          if (got.kind === 'card' && got.scene.dim !== '3d') { adopt(got.scene, askedNow); await build(); return; }
+        } catch (e) { /* her words, below */ }
+      }
+      if (!alive) return;
+      cur = { ...cur, dim: '2d' };
+      beats.forEach((b) => { b.parts = []; b.part = undefined; });
+      await build();
     }
     const S = 2.2; // (her arrow's size on the card)
     function placeCursor(spot) {
@@ -661,9 +835,11 @@
         if (b.asked) { const a = document.createElement('p'); a.className = 'lv-asked'; a.textContent = 'You asked: ' + b.asked; wordsEl.appendChild(a); }
         if (!b.say) return;
         const p = document.createElement('p');
-        p.className = 'lv-line' + (i === at ? ' is-now' : ''); p.textContent = b.say;
+        p.className = 'lv-line' + (i === at ? ' is-now' : '') + (i === picked ? ' is-picked' : ''); p.textContent = b.say;
         wordsEl.appendChild(p);
       });
+      const tapped = wordsEl.querySelector('.is-picked');
+      if (tapped) { wordsEl.scrollTop = Math.max(0, tapped.offsetTop - wordsEl.offsetTop - 8); wordsEl.classList.toggle('is-more', wordsEl.scrollTop > 0); return; }
       wordsEl.scrollTop = wordsEl.scrollHeight;
       wordsEl.classList.toggle('is-more', wordsEl.scrollTop > 0);
     }
@@ -677,6 +853,7 @@
       wrapEl.classList.toggle('lv-cleared', cleared);
       $('.lv-steps').hidden = cleared; paper.hidden = cleared; wordsEl.hidden = cleared; $('.lv-clear').hidden = cleared;
       const board = $('.lv-board'); if (board) board.hidden = cleared;
+      paint3d();
     }
 
     /* voice: Bella's studio voice (from Cassie's server, through the background) and no other, by the same
@@ -799,21 +976,43 @@
       if (mid) { playing = true; mid.clock.resume(); setStatus(src ? 'speaking' : 'drawing'); paintNav(); raf = requestAnimationFrame(mid.tick); return; }
       if (nextUp < beats.length) startBeat(nextUp); else replay();
     }
-    function replay() { if (cleared) { cleared = false; paintNav(); build(); } startBeat(0); }
+    async function replay() {
+      if (cleared) { cleared = false; paintNav(); if (!(await build())) await flatInstead(); if (!alive || cleared) return; }
+      startBeat(0);
+    }
     // Clear: everything she drew goes, and her voice stops. A small card stays, to ask again or replay.
     function clear() {
       run++; cancelAnimationFrame(raf); clearTimeout(gap); hush();
-      mid = null; playing = false; done = false; cleared = true;
-      svg.replaceChildren(); views = []; cursor = null;
+      mid = null; playing = false; done = false;
+      try { lastPic = toCanvas(480).toDataURL('image/jpeg', 0.8); } catch (e) { lastPic = ''; } // (kept for Your lessons)
+      cleared = true; built++;
+      svg.replaceChildren(); views = []; cursor = null; end3d();
       host.dataset.drawn = '0'; host.dataset.moving = '0';
       setStatus('cleared'); paintNav();
     }
 
     /* the picture of the drawing, for the board and for Your lessons (always on white paper) */
     function toCanvas(W) {
-      const c = document.createElement('canvas');
+      const c = document.createElement('canvas'), pal = PAPER.light;
+      if (is3d() && model) {
+        const stage = floating ? floatStage : cardStage, gl = stage.querySelector('canvas'), r = stage.getBoundingClientRect(), k = W / Math.max(1, r.width);
+        c.width = W; c.height = Math.max(1, Math.round(r.height * k));
+        const x = c.getContext('2d');
+        x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
+        if (gl) x.drawImage(gl, 0, 0, c.width, c.height);
+        x.font = `600 ${Math.round(13 * k)}px system-ui, sans-serif`; x.textBaseline = 'middle'; x.textAlign = 'center';
+        stage.querySelectorAll('.ld-tag').forEach((t) => {
+          if (t.hidden) return;
+          const tx = parseFloat(t.style.left) * k, ty = parseFloat(t.style.top) * k, ax = +t.dataset.ax * k, ay = +t.dataset.ay * k, w = x.measureText(t.textContent).width + 24 * k, h = 28 * k;
+          x.strokeStyle = pal.ink; x.lineWidth = 1.5 * k; x.beginPath(); x.moveTo(ax, ay); x.lineTo(tx, ty); x.stroke();
+          x.fillStyle = pal.ink; x.beginPath(); x.arc(ax, ay, 3 * k, 0, Math.PI * 2); x.fill();
+          x.fillStyle = pal.paper; x.strokeStyle = pal.grey; x.beginPath(); x.roundRect(tx - w / 2, ty - h / 2, w, h, h / 2); x.fill(); x.stroke();
+          x.fillStyle = pal.ink; x.fillText(t.textContent, tx, ty);
+        });
+        return c;
+      }
       c.width = W; c.height = Math.round((W * GH) / GW);
-      const x = c.getContext('2d'), pal = PAPER.light;
+      const x = c.getContext('2d');
       x.fillStyle = pal.paper; x.fillRect(0, 0, c.width, c.height);
       x.scale(W / (GW * K), W / (GW * K)); x.lineCap = 'round'; x.lineJoin = 'round';
       views.forEach((list) => list.forEach((v) => v.paint(x, pal)));
@@ -822,21 +1021,22 @@
     // kept on this device with her other lessons: the title, her words, and her drawing (never the picture of the screen)
     function saveLesson() {
       let pic = '';
-      try { if (cleared) build(); pic = toCanvas(480).toDataURL('image/jpeg', 0.8); } catch (e) { pic = ''; }
+      try { pic = cleared ? lastPic : toCanvas(480).toDataURL('image/jpeg', 0.8); } catch (e) { pic = ''; }
       // (her first answer is the lesson's steps; each follow-up is kept with its answer)
       const steps = [], qa = [];
       beats.forEach((b, i) => { if (i > 0 && b.asked) qa.push({ q: b.asked, a: b.say }); else if (qa.length) qa[qa.length - 1].a += ' ' + b.say; else if (b.say) steps.push(b.say); });
-      const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), title: String(info.title || document.title || 'A drawing').slice(0, 120), q: String(opts.q || '').slice(0, 300), steps, qa: qa.slice(0, 20), pic };
+      const item = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), title: String(info.title || document.title || 'A drawing').slice(0, 120), q: String(beats[0] && beats[0].asked || opts.q || '').slice(0, 300), steps, qa: qa.slice(0, 20), pic };
       store.get(['teachLessons']).then((o) => { const list = Array.isArray(o.teachLessons) ? o.teachLessons : []; store.set({ teachLessons: [item, ...list].slice(0, 20) }); });
     }
 
     function close() {
       if (!alive) return;
       if (opts.save !== false) saveLesson();
-      alive = false; run++;
+      alive = false; run++; built++;
       cancelAnimationFrame(raf); clearTimeout(gap); hush();
+      end3d();
       if (actx) { try { actx.close(); } catch (e) { /* ignore */ } }
-      removeEventListener('keydown', onKey, true);
+      removeEventListener('keydown', onKey, true); removeEventListener('resize', placeFloat);
       if (mic && mic.stop) mic.stop();
       host.remove();
       if (current && current.host === host) current = null;
@@ -846,10 +1046,11 @@
     // Escape: first everything she drew goes (the same as Clear); pressed again, the card closes
     const onKey = (e) => { if (e.key !== 'Escape' || !alive) return; e.stopPropagation(); if (cleared) close(); else clear(); };
     addEventListener('keydown', onKey, true);
+    addEventListener('resize', placeFloat);
 
     /* the side of the window that covers least of what the question is about */
     function aboutRect() {
-      const a = opts.about || scene.about;
+      const a = opts.about || cur.about;
       if (a && a.x != null) return { left: a.x * innerWidth, right: (a.x + a.w) * innerWidth };
       if (opts.pointer) return { left: opts.pointer.x - 40, right: opts.pointer.x + 40 };
       return null;
@@ -860,7 +1061,7 @@
       const over = (x0, x1) => Math.max(0, Math.min(r.right, x1) - Math.max(r.left, x0));
       return over(m, m + w) < over(innerWidth - m - w, innerWidth - m) ? 'left' : 'right';
     }
-    const setSide = (side) => { card.dataset.side = side; host.dataset.side = side; };
+    const setSide = (side) => { card.dataset.side = side; host.dataset.side = side; placeFloat(); };
 
     /* the buttons */
     $('.lv-x').addEventListener('click', close);
@@ -869,6 +1070,9 @@
     $('.lv-play').addEventListener('click', () => { if (playing) pause(); else resume(); });
     $('.lv-replay').addEventListener('click', replay);
     $('.lv-clear').addEventListener('click', clear);
+    $('.lv-clear3').addEventListener('click', clear);
+    $('.lv-open').addEventListener('click', () => { if (model && model.view.open) { model.view.open(); paint3d(); } });
+    $('.lv-apart').addEventListener('click', () => { if (!model || !model.view.explode) return; const on = model.view.explode(), b = $('.lv-apart'); b.textContent = on ? 'Put it back' : 'Pull apart'; b.setAttribute('aria-pressed', String(on)); });
     if ($('.lv-side')) $('.lv-side').addEventListener('click', () => setSide(card.dataset.side === 'left' ? 'right' : 'left'));
     if ($('.lv-board')) $('.lv-board').addEventListener('click', () => {
       let canvas = null;
@@ -897,33 +1101,37 @@
         if (!q) { askIn.focus(); return; }
         askIn.value = '';
         const my = ++asking;
-        const addBeats = (list, startNew) => {
-          if (cleared) { cleared = false; build(); }
-          const first = startNew ? 0 : beats.length;
-          if (startNew) beats = [];
-          list.forEach((b, i) => beats.push({ say: b.say, parts: b.parts.slice(), asked: i === 0 ? q : '' }));
-          build();
+        // more beats on the drawing that is there (on a 3D model they are words only), or a new scene in its place
+        const addBeats = async (list) => {
+          if (cleared) { cleared = false; if (!(await build())) await flatInstead(); }
+          const first = beats.length;
+          list.forEach((b, i) => beats.push({ say: b.say, parts: is3d() ? [] : (b.parts || []).slice(), asked: i === 0 ? q : '' }));
+          if (is3d()) list.forEach(() => views.push([])); else await build();
           return first;
         };
+        // (the drawing it replaces is kept in Your lessons first, with its own question and follow-ups)
+        const newScene = async (sc) => { if (opts.save !== false) saveLesson(); cleared = false; adopt(sc, q); if (!(await build())) await flatInstead(); return 0; };
         // a student at risk: care first, and no AI is asked (care.js; counted with no words, no id)
         const hit = window.CassieCare && window.CassieCare.check(q);
         if (hit) {
-          const first = addBeats([{ say: window.CassieCare.reply(hit.lang), parts: [] }], false);
-          showStill(first);
+          const first = await addBeats([{ say: window.CassieCare.reply(hit.lang), parts: [] }]);
+          if (my === asking && alive) showStill(first);
           tell({ type: 'CASSIE_CARE' });
           return;
         }
         if (playing) pause();
         setStatus('looking');
+        // on a flat drawing she may add to it; a 3D model (there now, or asked for now) is asked about afresh
+        const afresh = is3d() || wants3d(q);
+        const words_ = afresh ? prompt({ q, page: opts.page || null, draw: wants(q), said: beats.map((b) => b.say).filter(Boolean) }) : prompt({ q, page: opts.page || null, scene: { title: info.title, beats }, said: [] });
         let got = null;
-        try { got = await from({ send: opts.send, ask: prompt({ q, page: opts.page || null, scene: { title: info.title, beats }, said: [] }), draw: wants(q) }); }
-        catch (err) { if (my === asking && alive) { const first = addBeats([{ say: problem(err), parts: [] }], false); showStill(first); } return; }
+        try { got = await from({ send: opts.send, ask: words_, draw: wants(q) }); }
+        catch (err) { if (my === asking && alive) { const first = await addBeats([{ say: problem(err), parts: [] }]); if (my === asking && alive) showStill(first); } return; }
         if (my !== asking || !alive) return;
         host.dataset.answered = String(+(host.dataset.answered || 0) + 1);
-        const fresh = got.kind === 'card' && !got.scene.keep;
-        const list = got.kind === 'card' ? got.scene.beats : [{ say: got.answer + (got.noDraw ? ' ' + say('live_no_drawing') : ''), parts: [] }];
-        if (fresh) info = { title: got.scene.title, caption: got.scene.caption, view: got.scene.view };
-        const first = addBeats(list, fresh);
+        const fresh = got.kind === 'card' && (afresh || !got.scene.keep);
+        const first = fresh ? await newScene(got.scene) : await addBeats(got.kind === 'card' ? got.scene.beats : [{ say: got.answer + (got.noDraw ? ' ' + say('live_no_drawing') : ''), parts: [] }]);
+        if (my !== asking || !alive) return;
         if (voiceOn && studio) await decideVoice(first);
         if (my !== asking || !alive) return;
         startBeat(first);
@@ -932,15 +1140,17 @@
 
     current = { host, close };
     if (window.CassieTeach && window.CassieTeach.follow) window.CassieTeach.follow.hide(true); // (her cursor beside the mouse waits while she draws)
-    build();
     if (!inPanel) setSide(bestSide());
     setStatus('drawing'); paintNav();
     try { card.focus({ preventScroll: true }); } catch (e) { /* not focusable here */ }
+    const ready = build().then((ok) => (ok ? null : flatInstead()));
     store.get(['teachVoice']).then(async (o) => {
       if (!alive) return;
       setVoice(o.teachVoice !== 'off');
+      await ready;
+      if (!alive) return;
       if (voiceOn) await decideVoice(0);
-      if (!alive || at >= 0) return;
+      if (!alive || at >= 0 || cleared) return;
       startBeat(0);
     });
     return current;
@@ -979,7 +1189,7 @@
     return got;
   }
 
-  window.CassieLive = { parse, prompt, play, stop, from, ask, wants, problem, get active() { return !!current; } };
+  window.CassieLive = { parse, prompt, play, stop, from, ask, wants, wants3d, problem, get active() { return !!current; }, get has3d() { return !!lib3d; } };
 
   // on a web page: the side panel asks her to draw here (CASSIE_LIVE_SHOW: the scene she replied with, and the
   // picture it was made from, for follow-ups), or to stop (top frame only, and never on Cassie's own site)
