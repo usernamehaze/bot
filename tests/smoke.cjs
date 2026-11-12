@@ -8766,11 +8766,11 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   expect(sw, 'the Cassie extension did not start');
   // each call to the AI takes the next reply in line ('THROW' fails it); every prompt is kept; every picture of the tab is counted
   await sw.evaluate(() => {
-    self.__prompts = []; self.__replies = []; self.__shots = 0; self.__wait = 0; self.__clips = [];
+    self.__prompts = []; self.__replies = []; self.__shots = 0; self.__wait = 0; self.__clips = []; self.__images = [];
     const cap = chrome.tabs.captureVisibleTab.bind(chrome.tabs);
     chrome.tabs.captureVisibleTab = (...a) => { self.__shots++; return cap(...a); };
     self.readPicture = async (keys, msg) => {
-      self.__prompts.push(String(msg.prompt || ''));
+      self.__prompts.push(String(msg.prompt || '')); self.__images.push(String(msg.image || '').slice(0, 22) + ':' + String(msg.image || '').length);
       if (self.__wait) await new Promise((r) => setTimeout(r, self.__wait));
       const next = self.__replies.length ? self.__replies.shift() : '{"answer":"(none)","steps":[]}';
       if (next === 'THROW') throw new Error('boom');
@@ -8780,8 +8780,9 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     self.teachFail = async () => {};
     return chrome.storage.local.set({ teachVoice: 'on', teachAuto: 'off' });
   });
-  const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; }, list);
+  const replies = (list) => sw.evaluate((l) => { self.__replies = l.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))); self.__prompts = []; self.__images = []; }, list);
   const prompts = () => sw.evaluate(() => self.__prompts.slice());
+  const images = () => sw.evaluate(() => self.__images.slice());
   const shots = () => sw.evaluate(() => self.__shots);
   const page = ctx.pages()[0] || await ctx.newPage();
   const errors = [];
@@ -8797,7 +8798,8 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
     return async (js) => { const r = await cdp.send('Runtime.evaluate', { contextId: w.id, expression: js, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 400)); return r.result.value; };
   };
   const open = async (url) => { await page.goto(url); await page.bringToFront(); await page.waitForFunction((h) => document.querySelector(h), EXT, { timeout: 10000 }); await page.waitForTimeout(400); return world(); };
-  // her card, as the student sees it
+  // her card, as the student sees it, on a page (the tab) or in the side panel: on(pg) → { card, tap, until }
+  const on = (page) => {
   const card = () => page.evaluate((h) => {
     const n = document.querySelector(h);
     if (!n) return null;
@@ -8813,6 +8815,9 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   const tap = (sel) => page.evaluate(([h, s]) => document.querySelector(h).shadowRoot.querySelector(s).click(), [LIVE, sel]);
   // wait for her card to say so: { beat: '1', status: 'done', … } (drawnMin: at least that many parts drawn)
   const until = (want, ms = 15000) => page.waitForFunction(([h, w]) => { const n = document.querySelector(h); return !!n && Object.keys(w).every((k) => (k === 'drawnMin' ? +n.dataset.drawn >= w[k] : n.dataset[k] === w[k])); }, [LIVE, want], { timeout: ms });
+  return { card, tap, until };
+  };
+  const { card, tap, until } = on(page);
   // Ctrl twice, then the question typed and Enter
   const summon = async () => { await page.mouse.move(300, 300); await page.keyboard.press('Control'); await page.keyboard.press('Control'); await page.waitForSelector('.page-input', { timeout: 5000 }); };
   const ask = async (q) => { await summon(); await page.fill('.page-input', q); await page.press('.page-input', 'Enter'); };
@@ -8820,7 +8825,7 @@ async function liveExt({ viewport = { width: 1280, height: 800 } } = {}) {
   const gone = async () => { await page.keyboard.press('Escape'); await page.waitForTimeout(150); await page.keyboard.press('Escape'); await page.waitForTimeout(250); };
   const fixture = (name) => fs.readFileSync(path.join(ROOT, 'tests/fixtures/live', name + '.json'), 'utf8');
   const close = async () => { await ctx.close(); fs.rmSync(profile, { recursive: true, force: true }); };
-  return { ctx, sw, page, errors, replies, prompts, shots, open, world, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
+  return { ctx, sw, page, errors, replies, prompts, images, shots, open, world, on, card, tap, until, summon, ask, toEnd, gone, fixture, close, LIVE, LESSON, EXT };
 }
 
 test('Cassie’s live drawing in the extension (3.67): Ctrl twice opens “Ask Cassie about your screen” with a mic; she looks once, when asked, and draws beat by beat on her card beside the page, from her own knowledge when the page lacks it (never “I can’t draw that from this page”); Pause, Play, Back, Next, Replay; Clear and Escape remove everything she drew; the card docks off what the question is about; Reduce Motion draws whole; a highlight still gets its choices and an empty question the page lesson; the parser keeps only what makes sense; no new permission', async () => {
@@ -9247,6 +9252,130 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
     expect(L.ans.includes(await say('live_no_drawing')) && L.shown && (await prompts()).length === 2, 'no drawing on a step: her words and the plain line: ' + L.ans);
     await inWorld('CassieTeach.stop(), 1');
     expect(!X.errors.length, 'page errors: ' + X.errors.join('; '));
+  } finally { await X.close(); }
+});
+
+test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page when it can; on a tab she can’t draw on, she draws on her board in the panel and says why; Look at another window takes one picture, when asked, and stops sharing at once; then she draws or points on that picture; a share that is turned down says so', async () => {
+  const X = await liveExt();
+  const { ctx, sw, page, replies, prompts, images, shots, fixture, LIVE, LESSON } = X;
+  try {
+    const id = new URL(sw.url()).host;
+    await X.open(`http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`);
+    // the panel in its own small window, so the test page stays the tab being looked at
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 860 }));
+    const panel = await panelOpened;
+    const panelErrors = []; panel.on('pageerror', (e) => panelErrors.push(e.message));
+    await panel.setViewportSize({ width: 400, height: 860 }); // (a side panel is narrow)
+    await panel.waitForSelector('#t-ask');
+    const P_ = X.on(panel), T_ = X.on(page);
+    const say = (k) => panel.evaluate((k) => CassieErrors.say(k), k);
+    const askPanel = async (q) => { await panel.fill('.ask-page form input', q); await panel.press('.ask-page form input', 'Enter'); };
+    expect(/draws it for you/.test(await panel.locator('.help').innerText()), 'the panel’s help says Ask Cassie draws');
+
+    // 1. a page she can draw on: asked in the panel, drawn on the page, on her card
+    await panel.click('#t-ask');
+    const help = await panel.locator('.ask-page').innerText();
+    expect(/draws it or points at what she means/.test(help) && help.includes(await say('live_once')) && !/[–—]/.test(help), 'Ask Cassie says she draws, and that she looks once, only when asked: ' + help);
+    for (const b of ['.ask-page form input', '.ask-page form button[type=submit]', '#look-window']) expect((await panel.locator(b).boundingBox()).height >= 44, b + ' is 44px');
+    await replies([fixture('jet')]);
+    const shots0 = await shots();
+    await askPanel('how does a jet work?');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await panel.waitForSelector('.live-on', { timeout: 5000 });
+    let P = await prompts();
+    expect(P.length === 1 && P[0].includes('The student asks: "how does a jet work?"') && /answer from what you know/.test(P[0]) && (await shots()) === shots0 + 1, 'one question, one picture of the tab: ' + P.length);
+    expect(/A jet engine pulls air in/.test(await panel.locator('.ask-page .answer').innerText()) && /drawing on the page/.test(await panel.locator('.live-on').innerText()), 'her answer is in the panel, and it says she is drawing on the page');
+    await T_.until({ beat: '0' });
+    let c = await T_.card();
+    expect(c.parts.length === 16 && c.title === 'How a jet engine pushes' && c.side === 'right' && await panel.evaluate((h) => !document.querySelector(h), LIVE), 'the drawing is on the page (docked off the jets), not in the panel: ' + JSON.stringify([c.parts.length, c.side]));
+    // a follow-up on the page's card uses the same picture
+    await replies([fixture('fuel')]);
+    await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'where does the fuel go in?']);
+    await T_.until({ beat: '6' });
+    expect((await prompts()).length === 1 && /^data:image\/png/.test((await images())[0]) && (await shots()) === shots0 + 1, 'the follow-up goes with the same picture: ' + JSON.stringify(await images()));
+    await panel.click('.live-on [data-stop]');
+    await page.waitForTimeout(400);
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE) && /stopped drawing/.test(await panel.locator('.teach-box').innerText()), 'Stop in the panel removes her card from the page');
+
+    // 2. a tab she can't draw on: the same question and drawing, here on her board in the panel, with the reason
+    await page.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/blocked.html`);
+    await page.waitForTimeout(800);
+    await replies([fixture('leaf')]);
+    await askPanel('draw how a leaf makes food');
+    await panel.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await P_.until({ beat: '0' });
+    const why = await panel.locator('.teach-why').innerText();
+    expect(why === await say('live_in_panel') && !/[–—]/.test(why), 'one plain sentence says why she draws here: ' + why);
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE), 'nothing is put on the page');
+    P = await prompts();
+    expect(P.length === 1 && /always draw one/.test(P[0]) && /^data:image\/png/.test((await images())[0]), 'she was asked with a picture of the tab: ' + JSON.stringify(await images()));
+    await P_.until({ status: 'done' }, 20000);
+    c = await P_.card();
+    expect(c.parts.length === 5 && c.parts.every((p) => p.on) && c.title === 'A leaf makes food' && c.sub === 'Diagram · Simplified sketch' && c.words.length === 3, 'the whole drawing plays in the panel: ' + JSON.stringify([c.parts.length, c.title, c.words]));
+    const inPanel = await panel.evaluate((h) => { const r = document.querySelector(h).shadowRoot, b = r.querySelector('.lv-card').getBoundingClientRect(); return { side: !!r.querySelector('.lv-side'), fits: b.left >= 0 && b.right <= innerWidth + 1 && b.width <= 560, sideways: document.documentElement.scrollWidth > innerWidth + 1, small: [...r.querySelectorAll('.lv-card button, .lv-card input')].filter((x) => x.offsetParent).map((x) => { const q = x.getBoundingClientRect(); return [Math.round(q.width), Math.round(q.height)]; }).filter(([w, h]) => w < 44 || h < 44) }; }, LIVE);
+    expect(!inPanel.side && inPanel.fits && !inPanel.sideways && !inPanel.small.length, 'in the panel her card fits, with 44px controls and no side button: ' + JSON.stringify(inPanel));
+    if (process.env.SHOTS) await panel.screenshot({ path: process.env.SHOTS + '/live-panel.png' });
+    // Clear and Escape work here too; Open on the board opens the panel's board with her drawing
+    await P_.tap('.lv-clear');
+    expect((await P_.card()).status === 'cleared' && (await P_.card()).parts.length === 0, 'Clear removes what she drew, in the panel too');
+    await P_.tap('.lv-replay');
+    await P_.until({ beat: '0', playing: '1' });
+    await P_.tap('.lv-board');
+    await panel.waitForSelector('.csk-wrap canvas', { timeout: 10000 });
+    await panel.waitForTimeout(800);
+    const board = await panel.evaluate((h) => { const bg = document.querySelector('.csk-wrap canvas.csk-bg'), d = bg.getContext('2d').getImageData(0, 0, bg.width, bg.height).data; let green = 0; for (let i = 0; i < d.length; i += 16) if (d[i + 3] > 200 && d[i + 1] > d[i] + 40 && d[i + 1] > d[i + 2] + 30) green++; return { green, live: !!document.querySelector(h), note: (document.querySelector('.csk-note') || {}).innerText || '' }; }, LIVE);
+    expect(board.green > 30 && !board.live && /This is a leaf\./.test(board.note), 'Open on the board: the panel’s board shows her drawing and her words: ' + JSON.stringify(board));
+    await panel.evaluate(() => document.querySelector('.csk-wrap [data-act="close"]').click());
+    await panel.waitForTimeout(300);
+
+    // 3. Look at another window: one share, one frame, and the sharing stops at once; nothing is taken of the tab
+    await panel.evaluate(() => {
+      window.__share = { asked: 0, tracks: [], fail: false };
+      navigator.mediaDevices.getDisplayMedia = async () => {
+        window.__share.asked++;
+        if (window.__share.fail) throw new DOMException('Permission denied', 'NotAllowedError');
+        const c = document.createElement('canvas'); c.width = 640; c.height = 400;
+        const x = c.getContext('2d');
+        const paint = () => { x.fillStyle = '#2255aa'; x.fillRect(0, 0, 640, 400); x.fillStyle = '#ffffff'; x.font = '40px sans-serif'; x.fillText('Another window', 40, 200); };
+        paint(); const t = setInterval(paint, 40);
+        const s = c.captureStream(25);
+        s.getTracks().forEach((tr) => { window.__share.tracks.push(tr); tr.addEventListener('ended', () => clearInterval(t)); });
+        return s;
+      };
+    });
+    await panel.click('#t-ask');
+    const shots1 = await shots();
+    await panel.click('#look-window');
+    await panel.waitForFunction(() => { const f = document.querySelector('.look-seen'); return f && !f.hidden && /^data:image\/jpeg/.test(f.querySelector('img').src); }, null, { timeout: 10000 });
+    let share = await panel.evaluate(() => ({ asked: window.__share.asked, ended: window.__share.tracks.every((t) => t.readyState === 'ended'), n: window.__share.tracks.length, note: document.querySelector('.look-note').textContent }));
+    expect(share.asked === 1 && share.n >= 1 && share.ended && share.note === await say('live_window_ready'), 'one share, one picture, and the sharing has stopped: ' + JSON.stringify(share));
+    await replies([fixture('leaf')]);
+    await askPanel('what is in that window? draw it');
+    await panel.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await P_.until({ beat: '0' });
+    const imgs = await images();
+    expect(imgs.length === 1 && /^data:image\/jpeg/.test(imgs[0]) && (await shots()) === shots1 && (await panel.evaluate(() => window.__share.asked)) === 1, 'she is asked with that one picture: no picture of the tab, no second share: ' + JSON.stringify([imgs, await shots(), shots1]));
+    const seenIn = await panel.evaluate(() => { const i = document.querySelector('.look-seen img'), w = document.querySelector('.teach-why'); return { shot: !!i && !i.closest('[hidden]') && /^data:image\/jpeg/.test(i.src), alt: i ? i.alt : '', why: w ? !w.hidden : false }; });
+    expect(seenIn.shot && seenIn.alt === 'The picture Cassie took of the other window' && !seenIn.why, 'the picture she looked at stays in view above her drawing: ' + JSON.stringify(seenIn));
+    if (process.env.SHOTS) await panel.screenshot({ path: process.env.SHOTS + '/live-window.png' });
+    // when the answer is on that picture, she points on it
+    await replies([{ answer: 'It says Another window.', steps: [{ say: 'The words are here.', point: { x: 0.3, y: 0.5 }, draw: [{ shape: 'underline', x: 0.06, y: 0.56, w: 0.5 }] }] }]);
+    await askPanel('what does it say?');
+    await panel.waitForSelector(LESSON, { state: 'attached', timeout: 20000 });
+    const pointed = await panel.evaluate((h) => { const r = document.querySelector(h).shadowRoot, i = r.querySelector('.ct-shot img'), w = document.querySelector('.teach-why'); return { on: !!i && /^data:image\/jpeg/.test(i.src), why: w ? !w.hidden : false }; }, LESSON);
+    expect(pointed.on && !pointed.why && /It says Another window/.test(await panel.locator('.ask-page .answer').innerText()) && (await panel.evaluate(() => window.__share.asked)) === 1, 'she points on the picture of the other window: ' + JSON.stringify(pointed));
+    await panel.evaluate(() => CassieTeach.stop());
+    // back to this tab: the picture is dropped
+    await panel.click('#look-tab');
+    share = await panel.evaluate(() => ({ hidden: document.querySelector('.look-seen').hidden, src: document.querySelector('.look-seen img').getAttribute('src'), note: document.querySelector('.look-note').textContent }));
+    expect(share.hidden && !share.src && share.note === await say('live_once'), 'Ask about this tab instead drops the picture: ' + JSON.stringify(share));
+    // a share that is turned down: one plain line, nothing kept
+    await panel.evaluate(() => { window.__share.fail = true; });
+    await panel.click('#look-window');
+    await panel.waitForFunction((t) => document.querySelector('.look-note').textContent === t, await say('live_no_window'), { timeout: 5000 });
+    expect(await panel.evaluate(() => document.querySelector('.look-seen').hidden), 'a share that is turned down keeps nothing');
+    expect(!panelErrors.length && !X.errors.length, 'page errors: ' + [...panelErrors, ...X.errors].join('; '));
   } finally { await X.close(); }
 });
 

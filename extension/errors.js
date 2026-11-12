@@ -157,6 +157,10 @@
     live_cleared: 'Cleared. Ask again, or tap Replay.',
     live_failed: 'Cassie couldn’t answer that just now. Tap Try again.',
     live_no_drawing: 'Cassie couldn’t draw that just now. Ask again to try once more.',
+    live_in_panel: 'Cassie can’t draw on this tab’s page, so she draws here on her board instead.',
+    live_once: 'Cassie looks once, only when you ask. She takes one picture of the window you pick, then stops looking.',
+    live_window_ready: 'Cassie has one picture of that window. Now ask her about it.',
+    live_no_window: 'Cassie didn’t get a picture, so nothing was shared. Tap Look at another window to try again.',
   };
 
   const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : '')).replace(/\s+$/, '');

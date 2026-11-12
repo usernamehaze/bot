@@ -58,7 +58,7 @@ function home(extra = '') {
     <p><b>Snip</b>: take a picture of this tab, drag over the part you need, then Cassie teaches it right there or on her board.</p>
     <p><b>Whole file</b>: on a PDF, Google Slides or Google Doc tab, Cassie reads every page and makes a reviewer.</p>
     <p><b>Board</b>: draw, or paste any screenshot with <b>Ctrl+V</b> (Win+Shift+S makes one).</p>
-    <p><b>Teach me</b>: Cassie teaches what’s on this tab step by step, pointing and drawing on it. <b>Ask Cassie</b>: ask about this tab and she shows you where the answer is.</p>
+    <p><b>Teach me</b>: Cassie teaches what’s on this tab step by step, pointing and drawing on it. <b>Ask Cassie</b>: ask about this tab, typed or said, and she draws it for you or shows you where the answer is. She can also look once at another window, only when you ask.</p>
     <button type="button" class="cur-switch tall" aria-pressed="false"><span>Cassie’s cursor beside your mouse</span><i aria-hidden="true"></i></button>
     <section class="lessons" aria-label="Your lessons"></section>
   </div>`;
@@ -358,38 +358,68 @@ function teachError(box, words, retry) {
 let teachRun = 0, lookAgain = null;
 // Look again (her card on the page, when the page moved under her drawings): the same lesson, with a fresh look
 chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.type === 'CASSIE_TEACH_AGAIN' && lookAgain) lookAgain(); return false; });
-// teach({ tab, q, snip: { image, region }, box, onAnswer }) runs one lesson (box: where her words go in the panel)
-async function teach({ tab = null, q = '', snip: snipped = null, box = null, onAnswer = null } = {}) {
+// teach({ tab, q, snip: { image, region }, box, onAnswer, picture }) runs one lesson (box: where her words go in the panel)
+//   q: a question. She may answer by drawing on her card (live.js) or by pointing at the page.
+//   picture: one picture of another window, taken when the student asked her to look (it stands in for the tab)
+async function teach({ tab = null, q = '', snip: snipped = null, box = null, onAnswer = null, picture = null } = {}) {
   tab = tab || (await activeTab());
-  const run = ++teachRun, again = () => teach({ tab, q, snip: snipped, box, onAnswer });
+  const run = ++teachRun, again = () => teach({ tab, q, snip: snipped, box, onAnswer, picture });
+  const L = q && window.CassieLive ? window.CassieLive : null, say = window.CassieErrors.say;
   if (!box) { view.innerHTML = '<div class="teach-box"></div>'; box = view.querySelector('.teach-box'); }
   if (window.CassieTeach) window.CassieTeach.stop();
+  if (window.CassieLive) window.CassieLive.stop();
   chrome.storage.local.get(['teachCursor'], (o) => { if (o.teachCursor == null) chrome.storage.local.set({ teachCursor: 'on' }); }); // (her cursor comes on with the first lesson)
-  if (!tab) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
-  box.innerHTML = `<p class="muted">${q ? 'Cassie is reading your tab to answer…' : 'Cassie is looking at your tab…'}</p>`;
-  // 1. can she draw on this page? (it answers with what's on it, numbered)
-  const page = snipped ? ((await teachReach(tab, { type: 'CASSIE_TEACH_PING' })) ? { pictureOnly: true, items: [] } : null) : await teachReach(tab, { type: 'CASSIE_TEACH_SCAN' });
+  if (!tab && !picture) { teachError(box, say('teach_no_picture'), again); return; }
+  box.innerHTML = `<p class="muted">${L ? esc(say('live_looking')) : q ? 'Cassie is reading your tab to answer…' : 'Cassie is looking at your tab…'}</p>`;
+  // 1. can she draw on this page? (it answers with what's on it, numbered). A picture of another window has no page.
+  const page = picture ? null : snipped ? ((await teachReach(tab, { type: 'CASSIE_TEACH_PING' })) ? { pictureOnly: true, items: [] } : null) : await teachReach(tab, { type: 'CASSIE_TEACH_SCAN' });
   const onPage = !!(page && Array.isArray(page.items));
-  // 2. what she sees: the snip, or a picture of the tab
-  const image = snipped ? snipped.image : await tabPicture(tab);
+  // 2. what she sees: the snip, the picture of another window, or a picture of the tab
+  const image = snipped ? snipped.image : picture || await tabPicture(tab);
   if (run !== teachRun) return;
-  if (!image) { teachError(box, window.CassieErrors.say('teach_no_picture'), again); return; }
+  if (!image) { teachError(box, say('teach_no_picture'), again); return; }
   // 3. her lesson as steps (CassieTeach.parse leaves out any bad step or shape; a reply that can't be
-  // used is asked for once more before she says she couldn't)
+  // used is asked for once more before she says she couldn't), or, for a question, maybe a drawing
   const numbered = onPage && !snipped && !page.pictureOnly;
-  let steps, answer;
+  const title = picture ? '' : (onPage && page.title) || (tab && tab.title) || '';
+  let steps, answer, scene = null, noDraw = false;
   try {
-    ({ steps, answer } = await window.CassieTeach.lessonFrom({ send: (ask, n) => vision(image, ask, n), prompt: window.CassieTeach.prompt({ q, page: onPage ? { ...page, title: page.title || tab.title || '' } : { title: tab.title || '' }, snipped: !!snipped }), count: numbered ? page.items.length : 0, q }));
+    if (L) {
+      const draw = L.wants(q);
+      const got = await L.from({ send: (ask, n) => vision(image, ask, n), ask: L.prompt({ q, page: onPage ? { ...page, title } : { title }, draw }), count: numbered ? page.items.length : 0, draw });
+      steps = got.steps; answer = got.answer; scene = got.kind === 'card' ? got.scene : null; noDraw = !!got.noDraw;
+    } else {
+      ({ steps, answer } = await window.CassieTeach.lessonFrom({ send: (ask, n) => vision(image, ask, n), prompt: window.CassieTeach.prompt({ q, page: onPage ? { ...page, title } : { title }, snipped: !!snipped }), count: numbered ? page.items.length : 0, q }));
+    }
   } catch (e) {
-    if (run === teachRun) teachError(box, window.CassieTeach.problem(e), again);
+    if (run === teachRun) teachError(box, L ? L.problem(e) : window.CassieTeach.problem(e), again);
     return;
   }
   if (run !== teachRun) return;
-  if (onAnswer && answer) onAnswer(answer);
+  if (onAnswer && answer) onAnswer(answer + (noDraw ? '\n\n' + say('live_no_drawing') : ''));
+  if (scene) {
+    // her drawing: on her card on the page, or here on her board when the page won't take it
+    const about = scene.about && scene.about.el ? (() => { const it = onPage && page.items[scene.about.el - 1]; return it ? { x: it.box[0], y: it.box[1], w: it.box[2], h: it.box[3] } : null; })() : scene.about;
+    if (onPage) {
+      const shown = await teachReach(tab, { type: 'CASSIE_LIVE_SHOW', scene, q, shot: image, about });
+      if (run !== teachRun) return;
+      if (shown && shown.ok) {
+        box.innerHTML = `<div class="card teach-on live-on"><p>Cassie is drawing on the page, on her card. Tap Clear on it, or press Escape, to remove what she drew.</p>
+          <div class="row"><button class="btn ghost tall" type="button" data-stop>Stop</button></div></div>`;
+        box.querySelector('[data-stop]').addEventListener('click', () => { teachReach(tab, { type: 'CASSIE_LIVE_STOP' }); box.innerHTML = '<p class="muted">Cassie stopped drawing.</p>'; });
+        return;
+      }
+    }
+    box.innerHTML = '<p class="teach-why" hidden></p><div class="live-mount"></div>';
+    if (!picture) { const why = box.querySelector('.teach-why'); why.textContent = say('live_in_panel'); why.hidden = false; }
+    L.play(scene, { mount: box.querySelector('.live-mount'), q, page: { title }, send: (ask, n) => vision(image, ask, n),
+      onBoard: (canvas, told) => { home(); openBoard(canvas, { title: told.title, note: { headline: told.title, steps: told.steps } }); } });
+    return;
+  }
   if (!steps.length) { box.innerHTML = ''; return; }
   lookAgain = again;
   // 4. the lesson: on the page, or here on the picture when the page won't let her draw
-  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: tab.title || '', q }, region: snipped ? snipped.region : null, shot: image, numbered };
+  const lesson = { type: 'CASSIE_TEACH_SHOW', lesson: { steps, title: (tab && tab.title) || '', q }, region: snipped ? snipped.region : null, shot: image, numbered };
   if (onPage) {
     const shown = await teachReach(tab, lesson);
     if (run !== teachRun) return;
@@ -401,18 +431,58 @@ async function teach({ tab = null, q = '', snip: snipped = null, box = null, onA
       return;
     }
   }
-  box.innerHTML = '<p class="teach-why"></p><div class="teach-mount"></div>';
-  box.querySelector('.teach-why').textContent = window.CassieErrors.say(whyNotHere(tab));
-  window.CassieTeach.show({ steps, title: tab.title || '', q }, { mount: box.querySelector('.teach-mount'), image });
+  box.innerHTML = '<p class="teach-why" hidden></p><div class="teach-mount"></div>';
+  if (!picture) { const why = box.querySelector('.teach-why'); why.textContent = say(whyNotHere(tab)); why.hidden = false; } // (a picture of another window: she points on that picture)
+  window.CassieTeach.show({ steps, title, q }, { mount: box.querySelector('.teach-mount'), image });
 }
-// Ask Cassie: the answer shows here, and she points at what she means
+// One picture of another window (or the whole screen), only when the student asks: the browser shows its own
+// box to choose what to share, she takes a single frame, and the sharing stops at once. Nothing is kept
+// after the panel moves on.
+async function lookOnce() {
+  const md = navigator.mediaDevices;
+  if (!md || !md.getDisplayMedia) throw new Error('no-share');
+  const stream = await md.getDisplayMedia({ video: true, audio: false });
+  try {
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.srcObject = stream;
+    await v.play();
+    await new Promise((r) => setTimeout(r, 300)); // (a real frame arrives)
+    const w = v.videoWidth, h = v.videoHeight;
+    if (!w || !h) throw new Error('no-frame');
+    const k = Math.min(1, 1600 / Math.max(w, h));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    v.srcObject = null;
+    return c.toDataURL('image/jpeg', 0.9);
+  } finally { stream.getTracks().forEach((t) => t.stop()); }
+}
+// Ask Cassie: the answer shows here, and she draws it or points at what she means. About this tab, or about
+// another window she looks at once.
 function askPage() {
+  const say = window.CassieErrors.say;
+  let seen = null; // (the one picture of another window, until the student goes back to this tab)
   view.innerHTML = `<div class="card ask-page">
-      <p class="hint">Ask Cassie about this tab. She answers here and points at what she means.</p>
+      <p class="hint">Ask Cassie about this tab. She answers here, and draws it or points at what she means.</p>
       <form class="row"><input class="tall" type="text" placeholder="Ask about this page…" aria-label="Your question about this page"><button class="btn tall" type="submit">Ask</button></form>
+      <div class="look">
+        <button class="btn ghost tall" type="button" id="look-window">Look at another window</button>
+        <p class="hint look-note" role="status"></p>
+        <figure class="look-seen" hidden><img alt="The picture Cassie took of the other window"><button class="btn ghost tall" type="button" id="look-tab">Ask about this tab instead</button></figure>
+      </div>
       <div class="answer" aria-live="polite"></div>
     </div><div class="teach-box"></div>`;
   const form = view.querySelector('form'), input = form.querySelector('input'), out = view.querySelector('.answer'), box = view.querySelector('.teach-box');
+  const lookBtn = view.querySelector('#look-window'), note = view.querySelector('.look-note'), fig = view.querySelector('.look-seen');
+  note.textContent = say('live_once');
+  const show = () => { fig.hidden = !seen; if (seen) fig.querySelector('img').src = seen; else fig.querySelector('img').removeAttribute('src'); };
+  lookBtn.addEventListener('click', async () => {
+    lookBtn.disabled = true;
+    try { seen = await lookOnce(); note.textContent = say('live_window_ready'); } catch (e) { seen = null; note.textContent = say('live_no_window'); }
+    lookBtn.disabled = false;
+    show();
+    if (seen) input.focus();
+  });
+  view.querySelector('#look-tab').addEventListener('click', () => { seen = null; show(); note.textContent = say('live_once'); input.focus(); });
   if (window.CassieMic) window.CassieMic.attach(input, { send: () => form.requestSubmit() });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -426,7 +496,7 @@ function askPage() {
       try { chrome.runtime.sendMessage({ type: 'CASSIE_CARE' }); } catch (err) { /* best effort */ }
       return;
     }
-    teach({ q, box, onAnswer: (a) => renderMd(out, a) });
+    teach({ q, box, onAnswer: (a) => renderMd(out, a), picture: seen });
   });
   input.focus();
 }

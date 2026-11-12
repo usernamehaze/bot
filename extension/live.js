@@ -395,7 +395,7 @@
       background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 16px 48px rgba(0,0,0,.28); overflow: hidden; }
     .lv-card[data-side="left"] { right: auto; left: 16px; }
     .lv-card:focus { outline: none; }
-    .lv-in-panel .lv-card { position: static; width: auto; max-height: none; box-shadow: none; }
+    .lv-in-panel .lv-card { position: static; width: auto; max-width: 560px; max-height: none; box-shadow: none; }
     .lv-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); }
     .lv-status { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; line-height: 1.3; }
     .lv-status svg { flex: none; width: 16px; height: 16px; fill: var(--ink); }
@@ -451,7 +451,7 @@
   const tell = (msg) => { try { return chrome.runtime.sendMessage(msg).catch(() => null); } catch (e) { return Promise.resolve(null); } };
   const readPace = (text) => Math.min(9000, 1400 + String(text || '').length * 45); // (typed: time to read it, as in her lessons)
 
-  // play(scene, { q, send, mount, image, about, pointer, onBoard, onClose, save, pace })
+  // play(scene, { q, send, mount, about, pointer, page, onBoard, onClose, save, pace })
   //   send(prompt, maxTokens) → her reply: for follow-ups (without it the card has no ask box)
   //   mount: a box in the side panel (the card sits in it); otherwise the card floats over the page
   //   onBoard(canvas, { title, steps }): opens the finished drawing on the board
@@ -980,4 +980,25 @@
   }
 
   window.CassieLive = { parse, prompt, play, stop, from, ask, wants, problem, get active() { return !!current; } };
+
+  // on a web page: the side panel asks her to draw here (CASSIE_LIVE_SHOW: the scene she replied with, and the
+  // picture it was made from, for follow-ups), or to stop (top frame only, and never on Cassie's own site)
+  const onCassieSite = document.querySelector('meta[name="cassie-app"]') || /(^|\.)askcassie\.pages\.dev$|(^|\.)usernamehaze\.github\.io$/.test(location.hostname);
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage && !/^chrome-extension:$|^moz-extension:$/.test(location.protocol) && window.top === window && !onCassieSite) {
+    chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+      if (!msg) return false;
+      if (msg.type === 'CASSIE_LIVE_SHOW') {
+        const send = async (ask_, maxTokens) => {
+          const r = await chrome.runtime.sendMessage({ type: 'CASSIE_VISION', image: msg.shot, prompt: ask_, maxTokens });
+          if (!r || r.error) throw new Error((r && r.error) || 'ask failed');
+          return String(r.reply || '');
+        };
+        if (window.CassieTeach) window.CassieTeach.stop();
+        reply({ ok: !!play(msg.scene, { q: msg.q || '', send: msg.shot ? send : null, page: { title: document.title }, about: msg.about || null }) });
+        return false;
+      }
+      if (msg.type === 'CASSIE_LIVE_STOP' || msg.type === 'CASSIE_TEACH_STOP') { stop(); if (msg.type === 'CASSIE_LIVE_STOP') reply({ ok: true }); return false; }
+      return false;
+    });
+  }
 })();
