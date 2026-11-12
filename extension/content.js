@@ -214,6 +214,8 @@
     .page-ask-row .page-input { flex: 1; min-width: 0; min-height: 48px; margin-bottom: 0; font-size: 14px; }
     .page-ask-row + .page-ask-btn { min-height: 44px; font-size: 14px; }
     .body p.page-note { margin: 12px 0 0; font-size: 12px; line-height: 1.4; opacity: .82; white-space: normal; }
+    .popover.dark .page-ask-row .page-input { background: #2a2b33; color: #e9e9ef; }
+    .popover.dark .page-ask-row .page-input::placeholder { color: #a9aab3; opacity: 1; }
     .answer-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.25); }
     .copy-btn { background: none; border: 1px solid rgba(127,127,127,.4); color: inherit; border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
     .copy-btn:hover { background: rgba(127,127,127,.12); }
