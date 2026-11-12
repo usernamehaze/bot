@@ -41,6 +41,9 @@ export function clean(raw) {
     inside: mode === '3d' ? words(p && p.inside, 40) || null : null,
     size: mode === '3d' && Number.isFinite(+(p && p.size)) && +p.size > 0 ? Math.min(1, +p.size) : null,
     attached: mode === '3d' && Array.isArray(p && p.attached) ? p.attached.slice(0, 6).map((x) => words(x, 40)).filter(Boolean) : [],
+    // (3d, for something that is put together) where the part starts before it slides into its place, as an offset; and the side to look from
+    from: mode === '3d' && Array.isArray(p && p.from) && p.from.length === 3 && p.from.every((v) => Number.isFinite(+v)) ? p.from.map((v) => num(v, -12, 12)) : null,
+    view: mode === '3d' && ['front', 'back', 'left', 'right', 'side', 'top'].includes(p && p.view) ? p.view : null,
     shapes: (Array.isArray(p && p.shapes) ? p.shapes : []).slice(0, mode === '3d' ? 8 : 24).filter((x) => x && typeof x === 'object'),
   })).filter((p) => p.shapes.length);
   if (!parts.length) return null;
@@ -108,10 +111,27 @@ function box3(s) {
   else if (t === 'blades') { along = Math.abs(n3(s.width, .18)) / 2; across = Math.abs(n3(s.hub, .12)) + Math.abs(n3(s.len, r)); }
   else if (t === 'sphere') half = [r, r, r];
   else if (t === 'box') { const sz = Array.isArray(s.size) ? s.size : [1, 1, 1]; half = [0, 1, 2].map((k) => Math.abs(n3(sz[k], 1)) / 2); }
+  else if (t === 'capsule') { along = len / 2 + r; across = r; }
+  else if (t === 'pipe' || t === 'arrow') { // (a tube through points: the box around them)
+    const pts = pts3(s.pts), w = Math.abs(n3(s.r, .06));
+    if (pts.length < 2) return null;
+    return [0, 1, 2].map((k) => pos[k] + Math.min(...pts.map((q) => q[k])) - w).concat([0, 1, 2].map((k) => pos[k] + Math.max(...pts.map((q) => q[k])) + w));
+  } else if (t === 'lathe' || t === 'plate') { // (a turned profile [radius, along]; a flat plate with an outline across its axis)
+    const pr = pts2(t === 'lathe' ? s.profile : s.outline);
+    if (pr.length < (t === 'lathe' ? 2 : 3)) return null;
+    const lo = [Math.min(...pr.map((q) => q[0])), Math.min(...pr.map((q) => q[1]))], hi = [Math.max(...pr.map((q) => q[0])), Math.max(...pr.map((q) => q[1]))];
+    const k = { x: 0, y: 1, z: 2 }[axis], b = [0, 0, 0, 0, 0, 0];
+    if (t === 'lathe') { [0, 1, 2].forEach((j) => { b[j] = j === k ? lo[1] : -hi[0]; b[j + 3] = j === k ? hi[1] : hi[0]; }); }
+    else { const th = Math.abs(n3(s.thick, .1)) / 2, u = axis === 'x' ? 2 : 0, v = axis === 'y' ? 2 : 1; b[k] = -th; b[k + 3] = th; b[u] = lo[0]; b[u + 3] = hi[0]; b[v] = lo[1]; b[v + 3] = hi[1]; }
+    return b.map((x, j) => x + pos[j % 3]);
+  }
   else return null;
   if (!half) half = ['x', 'y', 'z'].map((a) => (a === axis ? along : across));
   return [pos[0] - half[0], pos[1] - half[1], pos[2] - half[2], pos[0] + half[0], pos[1] + half[1], pos[2] + half[2]];
 }
+// points the AI wrote, kept only when they are numbers: [[x,y,z],...] (up to 10) and [[a,b],...] (up to 24)
+const pts3 = (list) => (Array.isArray(list) ? list : []).slice(0, 10).filter((q) => Array.isArray(q) && q.length === 3 && q.every((v) => Number.isFinite(+v))).map((q) => q.map((v) => num(v, -20, 20)));
+const pts2 = (list) => (Array.isArray(list) ? list : []).slice(0, 24).filter((q) => Array.isArray(q) && q.length === 2 && q.every((v) => Number.isFinite(+v))).map((q) => q.map((v) => num(v, -20, 20)));
 const join3 = (bs) => bs.reduce((a, b) => (a ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2]), Math.max(a[3], b[3]), Math.max(a[4], b[4]), Math.max(a[5], b[5])] : b.slice()), null);
 const gap3 = (a, b) => Math.hypot(...[0, 1, 2].map((k) => Math.max(0, a[k] - b[k + 3], b[k] - a[k + 3])));
 const long3 = (b) => Math.max(b[3] - b[0], b[4] - b[1], b[5] - b[2]);
@@ -419,9 +439,20 @@ export async function snapshot(rawSpec) {
 
 // ---------- 3D models: built piece by piece ----------
 let three = null;
-const loadThree = () => (three || (three = Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js')]).then(([T, oc]) => ({ T, OrbitControls: oc.OrbitControls }))));
+let threeFrom = () => Promise.all([import('./explore/three.module.min.js'), import('./explore/OrbitControls.js')]).then(([T, oc]) => ({ T, OrbitControls: oc.OrbitControls }));
+const loadThree = () => (three || (three = threeFrom()));
+// (the Chrome extension keeps its own copy of three.js: it says where) useThree(() => Promise<{ T, OrbitControls }>)
+export function useThree(from) { threeFrom = from; three = null; }
+// A 3D model on a stage of the caller's own, with no frame and no buttons, for a player that sets its own pace
+// (the extension's card shows one part at a time with view.show). → { spec, view }, or null (no 3D here, or nothing to build)
+export async function model3d(stage, rawSpec, opts = {}) {
+  const spec = clean(rawSpec);
+  if (!spec || spec.mode !== '3d') return null;
+  const view = await draw3d(stage, spec, { animate: false, setSay: async () => {}, hint: opts.hint || el('div'), turn: !!opts.turn, zoom: opts.zoom !== false, matte: !!opts.matte });
+  return view ? { spec, view } : null;
+}
 const glOk = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
-async function draw3d(stage, spec, { animate, setSay, hint }) {
+async function draw3d(stage, spec, { animate, setSay, hint, turn = false, zoom = true, matte = false }) {
   if (!glOk()) return null;
   let lib; try { lib = await loadThree(); } catch (e) { return null; }
   const { T, OrbitControls } = lib;
@@ -436,7 +467,11 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
   scene.add(new T.HemisphereLight(0xe4ecff, 0x1a1a22, 1.15));
   const sun = new T.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 6, 5); scene.add(sun);
   const rim = new T.DirectionalLight(0x8fb4ff, .6); rim.position.set(-5, -2, -4); scene.add(rim);
+  if (matte) scene.add(new T.AmbientLight(0xffffff, .7)); // (matte: plain, bright colours for a model that floats over any page, with no shine to go dark)
   const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 2; controls.maxDistance = 40;
+  if (!zoom) controls.enableZoom = false; // (a model that floats over a page: the wheel still scrolls the page)
+  // (turn: the model turns slowly by itself until the student takes hold of it)
+  if (turn && !still()) { controls.autoRotate = true; controls.autoRotateSpeed = 1.1; controls.addEventListener('start', () => { controls.autoRotate = false; }); }
   const model = new T.Group(); scene.add(model);
   const AX = { x: new T.Vector3(1, 0, 0), y: new T.Vector3(0, 1, 0), z: new T.Vector3(0, 0, 1) };
   const v3 = (a, d = [0, 0, 0]) => (Array.isArray(a) ? new T.Vector3(num(a[0], -20, 20, d[0]), num(a[1], -20, 20, d[1]), num(a[2], -20, 20, d[2])) : new T.Vector3(...d));
@@ -444,7 +479,7 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
   const along = (obj, axis) => { if (axis === 'x') obj.rotation.z = -Math.PI / 2; else if (axis === 'z') obj.rotation.x = Math.PI / 2; return obj; };
   const groups = spec.parts.map((p, i) => {
     const g = new T.Group(); g.userData = { i, part: p };
-    const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: .5, roughness: .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
+    const mat = new T.MeshStandardMaterial({ color: new T.Color(p.color), metalness: matte ? .05 : .5, roughness: matte ? .65 : .4, side: T.DoubleSide, transparent: true, opacity: 1, emissive: p.glow ? new T.Color(p.color) : new T.Color(0x000000), emissiveIntensity: p.glow ? .55 : 0 });
     for (const s of p.shapes) { const m = shape3d(T, s, mat, along, v3, AX); if (m) g.add(m); }
     model.add(g);
     return g;
@@ -501,6 +536,7 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     if (!still()) groups.forEach((g) => { if (g.userData.part.spin && g.visible) g.rotation[spec.axis] += dt * 3; });
     groups.forEach((g) => { const to = g.userData.to; if (to) { g.position.lerp(to, Math.min(1, dt * 6)); if (g.position.distanceTo(to) < .002) { g.position.copy(to); g.userData.to = null; } } });
+    groups.forEach((g) => { const sl = g.userData.slide; if (sl) { const k = Math.min(1, Math.max(0, (now - sl.t0 - 400) / 1100)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; g.position.lerpVectors(sl.from, g.userData.home, e); if (k >= 1) g.userData.slide = null; } }); // (it waits a moment, then slides home)
     if (camTo) { cam.position.lerp(camTo, Math.min(1, dt * 5)); if (cam.position.distanceTo(camTo) < .01) camTo = null; }
     controls.update();
     renderer.render(scene, cam);
@@ -531,8 +567,27 @@ async function draw3d(stage, spec, { animate, setSay, hint }) {
   const ro = 'ResizeObserver' in window ? new ResizeObserver(() => { renderer.setSize(W(), H()); cam.aspect = W() / H(); cam.updateProjectionMatrix(); if (!exploded) { home.copy(VIEW).multiplyScalar(fitDist()); camTo = cam.position.clone().normalize().multiplyScalar(home.length()); } }) : null; if (ro) ro.observe(stage);
   const gone = new MutationObserver(() => { if (!stage.isConnected) { cancelAnimationFrame(raf); renderer.dispose(); io && io.disconnect(); ro && ro.disconnect(); gone.disconnect(); } });
   gone.observe(document.body, { childList: true, subtree: true });
+  const byPart = (i) => groups.find((g) => g.userData.i === i) || null;
+  const SIDES = { front: [0, .14, 1], back: [0, .14, -1], left: [-1, .14, .001], right: [1, .14, .001], side: [1, .14, .001], top: [.001, 1, .04] };
   const view = {
     hintText,
+    // one part at a time, for a player with its own pace: show(i) brings part i in (it pops in, slides into its
+    // place from "from", and the camera goes to its "view"); show(i, true) puts it there at once; hide(i) takes it away
+    has: (i) => !!byPart(i),
+    show(i, atOnce) {
+      const g = byPart(i); if (!g) return;
+      const p = g.userData.part, dim = p.shell && (opened || exploded) ? .14 : 1;
+      g.visible = true; g.userData.slide = null;
+      if (p.view && SIDES[p.view] && !atOnce) camTo = new T.Vector3(...SIDES[p.view]).normalize().multiplyScalar(cam.position.length());
+      if (atOnce || still()) { g.scale.setScalar(1); fade(g, dim); if (!exploded) g.position.copy(g.userData.home); return; }
+      if (p.from && !exploded) { g.position.copy(g.userData.home).add(new T.Vector3(p.from[0], p.from[1], p.from[2])); g.userData.slide = { from: g.position.clone(), t0: performance.now() }; }
+      const t0 = performance.now();
+      const step = () => { if (!g.visible) return; const k = Math.min(1, (performance.now() - t0) / 550), e = 1 - Math.pow(1 - k, 3); g.scale.setScalar(.6 + .4 * e); fade(g, Math.min(e, dim)); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    },
+    hide(i) { const g = byPart(i); if (g) { g.visible = false; g.userData.slide = null; } },
+    // (a stage that is not under <body>, like the extension's: it says when it is done)
+    stop() { cancelAnimationFrame(raf); renderer.dispose(); io && io.disconnect(); ro && ro.disconnect(); gone.disconnect(); },
     async play(again) {
       if (!animate && !again) return;
       groups.forEach((g) => { g.visible = false; g.scale.setScalar(.6); });
@@ -584,6 +639,30 @@ function shape3d(T, s, mat, along, v3, AX) {
     m = new T.Group(); const n = Math.round(num(s.n, 2, 40, 12)), bl = num(s.len, .05, 8, r), wd = num(s.width, .02, 2, .18);
     for (let i = 0; i < n; i++) { const b = new T.Mesh(new T.BoxGeometry(.04, bl, wd), own); b.position.y = bl / 2 + num(s.hub, 0, 4, .12); b.rotation.y = .5; const p = new T.Group(); p.add(b); p.rotation.x = i / n * Math.PI * 2; m.add(p); }
     if (axis === 'y') m.rotation.z = Math.PI / 2; else if (axis === 'z') m.rotation.y = Math.PI / 2;
+  }
+  else if (t === 'capsule') m = along(new T.Mesh(new T.CapsuleGeometry(r, len, 8, 24), own), axis);
+  else if (t === 'pipe' || t === 'arrow') { // a tube through the points; an arrow ends in a head, the way it points
+    const pts = pts3(s.pts).map((q) => new T.Vector3(q[0], q[1], q[2])), w = num(s.r, .01, 2, .06);
+    if (pts.length < 2) return null;
+    const tube = new T.Mesh(new T.TubeGeometry(pts.length > 2 ? new T.CatmullRomCurve3(pts) : new T.LineCurve3(pts[0], pts[1]), Math.max(8, pts.length * 12), w, 10, false), own);
+    if (t === 'pipe') m = tube;
+    else {
+      const tip = pts[pts.length - 1], dir = tip.clone().sub(pts[pts.length - 2]).normalize(), hl = w * 7;
+      const head = new T.Mesh(new T.ConeGeometry(w * 2.8, hl, 18), own);
+      head.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir); head.position.copy(tip).addScaledVector(dir, hl / 2);
+      m = new T.Group(); m.add(tube, head);
+    }
+  } else if (t === 'lathe') { // a profile [radius, along] turned round the axis
+    const pr = pts2(s.profile).map((q) => new T.Vector2(Math.abs(q[0]), q[1]));
+    if (pr.length < 2) return null;
+    m = along(new T.Mesh(new T.LatheGeometry(pr, 48), own), axis);
+  } else if (t === 'plate') { // a flat plate: its outline across the axis ([x,z] for y, [x,y] for z, [z,y] for x), "thick" along it
+    const pr = pts2(s.outline), th = num(s.thick, .01, 4, .1);
+    if (pr.length < 3) return null;
+    const g = new T.ExtrudeGeometry(new T.Shape(pr.map((q) => new T.Vector2(q[0], q[1]))), { depth: th, bevelEnabled: false });
+    g.translate(0, 0, -th / 2);
+    m = new T.Mesh(g, own);
+    if (axis === 'y') m.rotation.x = Math.PI / 2; else if (axis === 'x') m.rotation.y = -Math.PI / 2;
   }
   if (!m) return null;
   m.position.copy(v3(s.pos));

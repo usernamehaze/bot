@@ -25,7 +25,8 @@ find _site -name '*.html' -o -name '*.js' -not -path '_site/vendor/*' -not -path
 sed -i -E "s/cassie-v[0-9]+/cassie-$ver/" _site/sw.js
 # the Chrome extension, ready to download from the site (a folder inside, for "Load unpacked")
 tmp="$(mktemp -d)" && cp -r extension "$tmp/cassie-extension" && rm -f "$tmp"/cassie-extension/*.zip
-cp board.js sketch.js care.js mic.js "$tmp/cassie-extension/"   # the board and the mic are the app's own (one copy of each to keep up)
+cp board.js sketch.js care.js mic.js livedraw.js "$tmp/cassie-extension/"   # the board, the mic and the model builder are the app's own (one copy of each to keep up)
+cp explore/three.module.min.js explore/OrbitControls.js explore/THREE-LICENSE.txt "$tmp/cassie-extension/vendor/"   # (and its three.js, for 3D drawings)
 python3 - "$tmp" "$PWD/_site/cassie-extension.zip" <<'PY'
 import os, sys, zipfile
 src, out = sys.argv[1], sys.argv[2]

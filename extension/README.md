@@ -128,6 +128,13 @@ jet engine works".
   **Escape**) to remove everything she drew, **Open on the board** to draw on
   it yourself, and a box to ask a follow-up, typed or said.
 - Leave the box empty for a step-by-step lesson on the page itself.
+- **In 3D:** ask "in 3D", or ask to be shown how parts go together ("show me
+  how to attach the camera"), and she builds a 3D model over the page, part by
+  part, each part named as it is built. Drag it to turn it, tap a part to read
+  about it, **Close the case / Open it up**, **Pull apart**, and **Clear**
+  takes it off the page. It is the same model builder as in the Cassie app,
+  with the same checks. Where 3D can't show (no WebGL, or Reduce Motion is
+  on), she answers with a flat drawing instead.
 - **Where she can't draw on the page** (the browser's own pages, its PDF
   viewer, the extension stores): open the side panel and use **Ask Cassie**.
   She draws there instead, on her board in the panel, and says why.
@@ -193,6 +200,8 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 - `panel.html` / `panel.js` — the side panel.
 - `teach.js` — Teach me: Cassie points at the page and draws on it, step by step.
 - `live.js` — Cassie's live drawing: reads the scene she replies with and draws it beat by beat.
+- `livedraw.js` — the Cassie app's 3D model builder (identical copy of the web app's `livedraw.js`), loaded only for a 3D drawing.
+- `vendor/three.module.min.js`, `vendor/OrbitControls.js` — three.js (MIT, see `vendor/THREE-LICENSE.txt`), the same copies as the web app's, loaded only for a 3D drawing.
 - `vendor/html2canvas.min.js` — MIT-licensed page renderer, loaded only when a snip needs it.
 - `bridge.js` — runs only on the Cassie web app; hands it a file from a PDF/Docs tab.
 - `background.js` — service worker that calls the Groq API (keeps the

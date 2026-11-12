@@ -9139,8 +9139,9 @@ test('Cassie’s live drawing, the rest: a follow-up adds to the drawing or star
     await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.csk-wrap [data-act="close"]').click(), EXT);
     await page.waitForTimeout(400);
     // kept on this device with her other lessons: the title, her words and her drawing (not the picture of the screen)
-    const kept = (await stored('teachLessons'))[0];
-    expect(kept && kept.title === 'A leaf makes food' && kept.q === 'how does a jet work?' && /^data:image\/jpeg/.test(kept.pic) && kept.steps.length >= 3 && kept.qa.some((x) => x.q === SAID && /chlorophyll/.test(x.a)), 'the drawing is kept in Your lessons: ' + JSON.stringify(kept && [kept.title, kept.q, kept.steps, kept.qa.map((x) => x.q)]));
+    const [kept, first] = await stored('teachLessons');
+    expect(kept && kept.title === 'A leaf makes food' && kept.q === 'draw a leaf instead' && /^data:image\/jpeg/.test(kept.pic) && kept.steps.length === 3 && kept.qa.some((x) => x.q === SAID && /chlorophyll/.test(x.a)), 'the drawing is kept in Your lessons, with the question that led to it: ' + JSON.stringify(kept && [kept.title, kept.q, kept.steps, kept.qa.map((x) => x.q)]));
+    expect(first && first.title === 'How a jet engine pushes' && first.q === 'how does a jet work?' && first.steps.length === 6 && first.qa.length === 1 && first.qa[0].q === 'where does the fuel go in?' && /^data:image\/jpeg/.test(first.pic), 'and the drawing it replaced was kept too, with its follow-up: ' + JSON.stringify(first && [first.title, first.q, first.steps.length, first.qa]));
     const picSize = await page.evaluate((src) => new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.src = src; }), kept.pic);
     expect(picSize.join() === '480,360', 'its picture is her drawing, 480 by 360 (the card’s shape, not the screen’s): ' + picSize.join());
 
@@ -9376,6 +9377,191 @@ test('Cassie’s live drawing in the side panel: Ask Cassie draws on the page wh
     await panel.waitForFunction((t) => document.querySelector('.look-note').textContent === t, await say('live_no_window'), { timeout: 5000 });
     expect(await panel.evaluate(() => document.querySelector('.look-seen').hidden), 'a share that is turned down keeps nothing');
     expect(!panelErrors.length && !X.errors.length, 'page errors: ' + [...panelErrors, ...X.errors].join('; '));
+  } finally { await X.close(); }
+});
+
+test('Cassie’s live drawing in 3D: asked for 3D, or to be shown how parts go together, she builds a model part by part over the page with no background, each part named as it is built; Close the case, Pull apart, a tapped part, a sticky note; Clear and Escape remove it; the model builder and three.js are the app’s own copies and load only then; where 3D can’t show (no WebGL, Reduce Motion) the same answer is a flat drawing; in the side panel the model sits in her card; no new permission', async () => {
+  const same = (a, c) => fs.readFileSync(path.join(ROOT, a)).equals(fs.readFileSync(path.join(ROOT, c)));
+  expect(same('livedraw.js', 'extension/livedraw.js'), 'extension/livedraw.js is the app’s livedraw.js: copy it over');
+  expect(same('explore/three.module.min.js', 'extension/vendor/three.module.min.js') && same('explore/OrbitControls.js', 'extension/vendor/OrbitControls.js') && same('explore/THREE-LICENSE.txt', 'extension/vendor/THREE-LICENSE.txt'), 'the extension’s three.js, its controls and its licence are the repo’s own');
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension/manifest.json'), 'utf8'));
+  expect(manifest.permissions.slice().sort().join() === 'activeTab,contextMenus,scripting,sidePanel,storage' && manifest.host_permissions.join() === 'https://api.groq.com/*,<all_urls>', 'no new permission: ' + JSON.stringify([manifest.permissions, manifest.host_permissions]));
+  expect(JSON.stringify(manifest.web_accessible_resources) === JSON.stringify([{ resources: ['livedraw.js', 'vendor/three.module.min.js', 'vendor/OrbitControls.js'], matches: ['<all_urls>'] }]), 'only the model builder and three.js can be loaded by her page script: ' + JSON.stringify(manifest.web_accessible_resources));
+  // the plan-first 3D guide is the app's own: its lines are the same in both
+  const appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8'), liveSrc = fs.readFileSync(path.join(ROOT, 'extension/live.js'), 'utf8');
+  for (const line of ['every part touches or sits inside the part it connects to; nothing floats in the air', 'parts that are inside a case are placed inside it, and the case is "shell": true so the student can open it', 'real proportions: a part that is small in the real object is small here; a part inside another is smaller than it', 'Shapes: cylinder {r,r2,len,axis,pos,open,cut}, disc {r,thick,axis,pos}, cone {r,len,axis,pos,dir}, sphere {r,pos,cut}, box {size:[w,h,d],pos}, torus {r,tube,axis,pos}, blades {n,len,width,hub,axis,pos}']) expect(appSrc.includes(line) && liveSrc.includes(line), 'the 3D guide in the extension keeps the app’s line: ' + line);
+  const X = await liveExt();
+  const { ctx, page, sw, replies, prompts, shots, card, tap, until, ask, toEnd, gone, fixture, LIVE, EXT } = X;
+  try {
+    const PICS = `http://localhost:${APP_PORT}/tests/fixtures/live/pictures.html`;
+    let inWorld = await X.open(PICS);
+    const say = (k) => inWorld(`CassieErrors.say(${JSON.stringify(k)})`);
+    // what shows of the model: where it is, its names, its buttons, and how much of the picture is drawn
+    const model = (pg = page) => pg.evaluate((h) => {
+      const n = document.querySelector(h); if (!n) return null;
+      const r = n.shadowRoot, fl = r.querySelector('.lv-float'), inCard = r.querySelector('.lv-stage-card'), gl = r.querySelector('.ld-canvas'), box = (e) => { const q = e.getBoundingClientRect(); return [Math.round(q.left), Math.round(q.top), Math.round(q.width), Math.round(q.height)]; };
+      let ink = 0, corner = -1;
+      if (gl && gl.width) { const c = document.createElement('canvas'); c.width = gl.width; c.height = gl.height; const x = c.getContext('2d'); x.drawImage(gl, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 40) ink++; corner = d[3]; }
+      const b = (s) => { const e = r.querySelector(s); return e && !e.hidden ? { text: e.textContent.trim(), pressed: e.getAttribute('aria-pressed') } : null; };
+      return { floats: !fl.hidden, float: fl.hidden ? null : box(fl), floatBg: getComputedStyle(fl).backgroundColor, inCard: !inCard.hidden, canvas: !!gl, ink, corner, tags: [...r.querySelectorAll('.ld-tag')].filter((t) => !t.hidden).map((t) => t.textContent),
+        hint: (r.querySelector('.lv-hint') || {}).hidden === false ? r.querySelector('.lv-hint').textContent : '', note: (r.querySelector('.lv-sticky') || {}).textContent || '', open: b('.lv-open'), apart: b('.lv-apart'), clear3: !!b('.lv-clear3'), picked: (r.querySelector('.lv-line.is-picked') || {}).textContent || '', svgShown: getComputedStyle(r.querySelector('.lv-svg')).display !== 'none' };
+    }, LIVE);
+
+    // 1. a flat drawing first: the model builder and three.js are not asked for
+    await replies([fixture('leaf')]);
+    await ask('draw a leaf');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ beat: '0' });
+    expect(await inWorld('CassieLive.has3d') === false && (await card()).dim === '2d', 'a flat drawing loads nothing for 3D');
+    await gone();
+
+    // 2. asked in 3D: a model, built part by part over the page
+    expect(await inWorld('["draw the full jet engine in 3D", "turn it around", "show me how to attach the camera", "draw how a jet works", "how do I attach a file to an email?"].map((q) => +CassieLive.wants3d(q)).join("")') === '11100', 'what asks for a 3D model');
+    await replies([fixture('jet3d')]);
+    await ask('Draw the full jet engine for me in 3D and explain how it works');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await until({ dim: '3d', beat: '0' }, 30000);
+    let P = await prompts();
+    expect(P.length === 1 && P[0].includes('The student asks: "Draw the full jet engine for me in 3D and explain how it works"') && /"mode":"3d"/.test(P[0]) && /nothing floats in the air/.test(P[0]) && /answer from what you know/.test(P[0]) && !/"beats"/.test(P[0]), 'she is asked for a 3D model, with the app’s guide and the rule for questions: ' + P[0].slice(0, 200));
+    expect(await inWorld('CassieLive.has3d') === true, 'the model builder is asked for now');
+    let c = await card(), m = await model();
+    expect(c.sub === '3D model · Simplified sketch' && c.title === 'How a jet engine works' && c.parts.length === 0 && c['parts'] !== undefined, 'the card names the model and says it is a simplified sketch: ' + JSON.stringify([c.title, c.sub]));
+    expect(m.floats && m.canvas && !m.inCard && !m.svgShown && /rgba\(0, 0, 0, 0\)|transparent/.test(m.floatBg) && m.float[2] >= 380 && m.float[0] >= 0 && m.float[0] + m.float[2] <= c.box.left + 1, 'the model floats over the page beside her card, with no background: ' + JSON.stringify(m.float) + ' ' + m.floatBg);
+    expect(m.tags.length === 0 && /Drag to turn it/.test(m.hint), 'nothing is named before it is built: ' + JSON.stringify(m.tags));
+    // beat by beat: the casing, then the fan with its name, and so on
+    await tap('.lv-next'); await until({ beat: '1' }); await page.waitForTimeout(900);
+    const ink1 = (await model()).ink;
+    await tap('.lv-next'); await until({ beat: '2' }); await page.waitForTimeout(900);
+    m = await model();
+    expect(ink1 > 20 && m.ink > ink1 && m.tags.join() === '2 Fan' && m.corner === 0, 'each beat builds its part, named as it is built, on a see-through stage: ' + JSON.stringify([ink1, m.ink, m.tags, m.corner]));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-half.png' });
+    await toEnd(); await page.waitForTimeout(900);
+    c = await card(); m = await model();
+    expect(c.status === 'done' && c.drawn === '7' && m.tags.join() === '2 Fan,3 Compressor,4 Combustor,5 Turbine,6 Nozzle,7 Hot gas out' && c.words.length === 9, 'the whole model, every part named, and all her words: ' + JSON.stringify([c.status, c.drawn, m.tags, c.words.length]));
+    expect(!/can(no|’|')t draw/i.test(c.text) && /so here is one/.test(c.text) && !/[–—]/.test(c.text + m.tags.join(' ')), 'she says the page lacks it and builds it: ' + c.text.slice(0, 160));
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-done.png' });
+    const controls = await page.evaluate((h) => { const r = document.querySelector(h).shadowRoot; return [...r.querySelectorAll('.lv-card button, .lv-card input, .lv-clear3')].filter((b) => b.offsetParent && !b.classList.contains('ld-tag')).map((b) => { const q = b.getBoundingClientRect(); return [(b.getAttribute('aria-label') || b.textContent).trim(), Math.round(q.width), Math.round(q.height)]; }); }, LIVE);
+    expect(controls.every(([, w, h]) => w >= 44 && h >= 44) && ['Close the case', 'Pull apart', 'Clear', 'Open on the board'].every((n) => controls.some(([name]) => name === n)), 'her 3D buttons are there and 44px: ' + JSON.stringify(controls));
+    // the case closes and opens; the model pulls apart; a part tapped (or chosen with the keyboard) shows its sentence
+    expect(m.open.text === 'Close the case' && m.open.pressed === 'true' && m.apart.text === 'Pull apart', 'the case starts open: ' + JSON.stringify([m.open, m.apart]));
+    await tap('.lv-open'); await page.waitForTimeout(300);
+    m = await model();
+    expect(m.open.text === 'Open it up' && m.open.pressed === 'false' && m.tags.includes('1 Casing'), 'Close the case closes it, and the casing is named: ' + JSON.stringify([m.open, m.tags]));
+    await tap('.lv-open');
+    await tap('.lv-apart'); await page.waitForTimeout(700);
+    m = await model();
+    expect(m.apart.text === 'Put it back' && m.apart.pressed === 'true', 'Pull apart: ' + JSON.stringify(m.apart));
+    await tap('.lv-apart');
+    await page.evaluate((h) => [...document.querySelector(h).shadowRoot.querySelectorAll('.ld-tag')].find((t) => t.textContent === '2 Fan').click(), LIVE);
+    expect((await model()).picked === 'The big fan at the front pulls air in.', 'a chosen part shows its sentence: ' + (await model()).picked);
+    // dragging turns it and the page stays put; the wheel still scrolls the page
+    await page.evaluate(() => { document.body.style.minHeight = '2400px'; }); // (a page long enough to scroll)
+    const before = await page.evaluate(() => scrollY);
+    await page.mouse.move(m.float[0] + m.float[2] / 2, m.float[1] + m.float[3] / 2); await page.mouse.down(); await page.mouse.move(m.float[0] + m.float[2] / 2 + 120, m.float[1] + m.float[3] / 2 + 30, { steps: 6 }); await page.mouse.up();
+    await page.mouse.wheel(0, 200); await page.waitForTimeout(400);
+    expect(await page.evaluate(() => scrollY) > before, 'the wheel over the model still scrolls the page');
+    await page.evaluate(() => { scrollTo(0, 0); document.body.style.minHeight = ''; });
+    // Open on the board: the model as it stands, with its names
+    await tap('.lv-board');
+    await page.waitForFunction((h) => document.querySelector(h).shadowRoot.querySelector('.csk-wrap canvas'), EXT, { timeout: 10000 });
+    await page.waitForTimeout(800);
+    const board = await page.evaluate(([h, live]) => { const bg = document.querySelector(h).shadowRoot.querySelector('.csk-wrap canvas.csk-bg'), d = bg.getContext('2d').getImageData(0, 0, bg.width, bg.height).data; let ink = 0; for (let i = 0; i < d.length; i += 16) if (d[i + 3] > 200 && (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200)) ink++; return { ink, live: !!document.querySelector(live) }; }, [EXT, LIVE]);
+    expect(board.ink > 300 && !board.live, 'the board shows the model: ' + JSON.stringify(board));
+    await page.evaluate((h) => document.querySelector(h).shadowRoot.querySelector('.csk-wrap [data-act="close"]').click(), EXT);
+    await page.waitForTimeout(300);
+
+    // 3. Clear (on the model) and Escape remove it; Replay builds it again
+    await replies([fixture('jet3d')]);
+    await ask('show me the jet engine in 3D');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await until({ dim: '3d', beat: '0' }, 30000);
+    await toEnd();
+    expect((await model()).clear3, 'the model has its own Clear');
+    await tap('.lv-clear3');
+    c = await card(); m = await model();
+    expect(c.status === 'cleared' && !m.floats && !m.canvas && !m.tags.length && !m.open && !m.apart, 'Clear removes the model and its names: ' + JSON.stringify([c.status, m.floats, m.canvas]));
+    await tap('.lv-replay');
+    await until({ dim: '3d', beat: '0', playing: '1' }, 30000);
+    await page.waitForTimeout(500);
+    expect((await model()).canvas && (await model()).floats, 'Replay builds it again');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+    expect((await card()).status === 'cleared' && !(await model()).canvas, 'Escape clears the model');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+    expect(await page.evaluate((h) => !document.querySelector(h), LIVE), 'Escape again leaves nothing on the page');
+
+    // 4. how parts go together: 3D, with a sticky note, and a part that slides into its place
+    await replies([fixture('camera3d')]);
+    await ask('How do I attach a camera to this board? Can you show me exactly how?');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    await until({ dim: '3d', beat: '0' }, 30000);
+    P = await prompts();
+    expect(P.length === 1 && /"mode":"3d"/.test(P[0]) && /"from":\[dx,dy,dz\]/.test(P[0]) && /sticky note/.test(P[0]), 'being shown how to put it together asks for 3D: ' + P[0].slice(0, 160));
+    await toEnd(); await page.waitForTimeout(600);
+    m = await model();
+    expect(m.note === 'Power off and unplug first' && m.tags.join() === '1 Board,2 Camera port,3 Ribbon cable,4 Camera,5 Press the latch' && !m.open && m.apart, 'the note and every part: ' + JSON.stringify([m.note, m.tags]));
+    expect(await inWorld(`import(chrome.runtime.getURL('livedraw.js')).then((L) => { const s = L.clean(${JSON.stringify(fixture('camera3d'))}); return JSON.stringify([s.parts[2].from, s.parts[2].view, L.check3d(s)]); })`) === '[[0,1.7,0],"front",[]]', 'the cable starts away from its port and slides in, and the model passes the app’s own checks');
+    if (process.env.SHOTS) await page.screenshot({ path: process.env.SHOTS + '/live-3d-fit.png' });
+    // a follow-up on a model: her words are added, the model stays
+    await replies([{ answer: 'The blue tab is the latch.', steps: [] }]);
+    await page.evaluate(([h, q]) => { const r = document.querySelector(h).shadowRoot; r.querySelector('.lv-ask input').value = q; r.querySelector('.lv-ask').requestSubmit(); }, [LIVE, 'which part is the latch?']);
+    await page.waitForFunction((h) => /The blue tab is the latch/.test(document.querySelector(h).shadowRoot.querySelector('.lv-words').textContent), LIVE, { timeout: 10000 });
+    P = await prompts(); m = await model();
+    expect(P.length === 1 && /You \(Cassie\) said so far/.test(P[0]) && m.canvas && m.tags.length === 5 && /You asked: which part is the latch\?/.test((await card()).text), 'a follow-up adds her words and keeps the model: ' + JSON.stringify([P.length, m.tags.length]));
+    await gone();
+
+    // 5. where 3D can't show, the same answer is a flat drawing
+    await inWorld('HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, { apply(t, me, a) { return /webgl/.test(String(a[0])) ? null : Reflect.apply(t, me, a); } }); 1');
+    expect(await inWorld('CassieLive.wants3d("show me a leaf in 3D")') === false, 'no WebGL: no 3D is asked for');
+    await replies([fixture('leaf')]);
+    await ask('show me a leaf in 3D');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ dim: '2d', beat: '0' });
+    P = await prompts();
+    expect(P.length === 1 && /always draw one/.test(P[0]) && !/"mode":"3d"/.test(P[0]) && (await card()).parts.length === 5 && !(await model()).canvas, 'no WebGL: asked for a flat drawing instead, and it is drawn: ' + P[0].slice(0, 120));
+    await gone();
+    // (a model comes back anyway: she is asked once more, for the flat drawing)
+    await replies([fixture('jet3d'), fixture('leaf')]);
+    await ask('draw how a jet works');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ dim: '2d', beat: '0' }, 20000);
+    P = await prompts();
+    expect(P.length === 2 && /always draw one/.test(P[1]) && (await card()).parts.length === 5 && (await card()).title === 'A leaf makes food', 'a model she can’t show here becomes a flat drawing, asked for once: ' + P.length);
+    await gone();
+    inWorld = await X.open(PICS); // (WebGL is back)
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await inWorld('CassieLive.wants3d("draw the jet engine in 3D")') === false, 'Reduce Motion: no 3D is asked for');
+    await replies([fixture('leaf')]);
+    await ask('draw the jet engine in 3D');
+    await page.waitForSelector(LIVE, { state: 'attached', timeout: 15000 });
+    await until({ dim: '2d', beat: '0' });
+    expect(!/"mode":"3d"/.test((await prompts())[0]) && !(await model()).canvas, 'Reduce Motion: a flat drawing, nothing turning');
+    await gone();
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+    // 6. the side panel, on a tab she can't draw on: the model sits in her card
+    const id = new URL(sw.url()).host;
+    await page.goto(`http://localhost:${APP_PORT}/tests/fixtures/teach/blocked.html`);
+    await page.waitForTimeout(600);
+    const panelOpened = ctx.waitForEvent('page', { timeout: 15000 });
+    await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('panel.html?float=1'), type: 'popup', width: 420, height: 860 }));
+    const panel = await panelOpened;
+    await panel.setViewportSize({ width: 400, height: 860 });
+    await panel.waitForSelector('#t-ask');
+    await panel.click('#t-ask');
+    await replies([fixture('jet3d')]);
+    await panel.fill('.ask-page form input', 'show me a jet engine in 3D');
+    await panel.press('.ask-page form input', 'Enter');
+    await panel.waitForSelector(LIVE, { state: 'attached', timeout: 20000 });
+    const P_ = X.on(panel);
+    await P_.until({ dim: '3d', beat: '0' }, 30000);
+    for (let i = 0; i < 12 && (await P_.card()).status !== 'done'; i++) { await P_.tap('.lv-next'); await panel.waitForTimeout(120); }
+    await panel.waitForTimeout(900);
+    m = await model(panel);
+    expect(m.inCard && !m.floats && m.canvas && m.ink > 20 && m.tags.length === 6 && m.open && m.apart, 'in the panel the model sits in her card: ' + JSON.stringify([m.inCard, m.floats, m.ink, m.tags.length]));
+    const fitsPanel = await panel.evaluate((h) => { const r = document.querySelector(h).shadowRoot, s = r.querySelector('.lv-stage-card').getBoundingClientRect(); return s.left >= 0 && s.right <= innerWidth + 1 && s.width > 240 && document.documentElement.scrollWidth <= innerWidth + 1; }, LIVE);
+    expect(fitsPanel, 'and fits the panel');
+    if (process.env.SHOTS) await panel.screenshot({ path: process.env.SHOTS + '/live-3d-panel.png' });
+    expect(!X.errors.length, 'page errors: ' + X.errors.join('; '));
   } finally { await X.close(); }
 });
 
