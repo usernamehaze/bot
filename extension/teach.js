@@ -796,7 +796,7 @@
         let room = null;
         if (inPanel) { room = document.createElement('div'); host.after(room); }
         park(true);
-        L.play(got.scene, { q, send, mount: room, image: picture, save: false, onClose: () => { if (room) room.remove(); if (alive) park(false); } });
+        L.play(got.scene, { q, send, mount: room, save: false, onClose: () => { if (room) room.remove(); if (alive) park(false); } });
         return;
       }
       const count = numbered ? parts.length : 0;

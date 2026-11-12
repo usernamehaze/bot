@@ -128,6 +128,14 @@ jet engine works".
   **Escape**) to remove everything she drew, **Open on the board** to draw on
   it yourself, and a box to ask a follow-up, typed or said.
 - Leave the box empty for a step-by-step lesson on the page itself.
+- **Where she can't draw on the page** (the browser's own pages, its PDF
+  viewer, the extension stores): open the side panel and use **Ask Cassie**.
+  She draws there instead, on her board in the panel, and says why.
+- **Another window or app:** in the side panel's **Ask Cassie**, tap **Look at
+  another window**. Your browser asks which window or screen to share; Cassie
+  takes one picture of it and the sharing stops at once. Then ask about it and
+  she draws or points on that picture, in the panel. (An extension can't draw
+  over other apps, only inside the browser.)
 
 ## Experimental HUD add-on (premium — subject to change)
 
