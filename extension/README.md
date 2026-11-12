@@ -10,9 +10,9 @@ no account, calling Groq's free API directly using a key you provide (Groq's
 free tier allows ~30 requests/minute, which comfortably handles highlighting
 across your tabs). It doesn't hide anything, doesn't disguise itself, and
 doesn't watch your screen — it only reacts when you deliberately highlight
-text (or click the floating button), and it always shows up as an obvious
-"Cassie" popup with a close button and your browser's normal extension icon
-in the toolbar.
+text, click one of its buttons or ask it something, and it always shows up as
+an obvious "Cassie" popup with a close button and your browser's normal
+extension icon in the toolbar.
 
 **This is meant for reading and homework help, not for use during a test or
 quiz** — using it to get instant answers during graded work is exactly the
@@ -107,6 +107,28 @@ can still double-tap **Ctrl**, or right-click → **Explain with Cassie**.
 This highlight → Explain/Answer/Code flow is the **core** of the extension
 and always works.
 
+## Ask about your screen, and Cassie draws
+
+Double-tap **Ctrl** with nothing highlighted (or click the floating button)
+and a small box opens: **Ask Cassie about your screen**. Type your question,
+or tap the mic and say it — for example "how does this work?" or "draw how a
+jet engine works".
+
+- Cassie looks at your tab **once, only when you ask**. She takes one picture
+  of what is showing at that moment and nothing more. She never looks on a
+  timer, and the picture is gone when you close her card.
+- She answers in a few short sentences, and while each one is said (or shown)
+  she draws the next pieces of a labelled drawing on a card beside the page:
+  the outline first, then the parts in colour, then arrows and labels. Every
+  card says **Simplified sketch**, because that is what it is.
+- If the page doesn't explain what you asked, she says so once and explains
+  from what she knows. If the answer is already on the page, she points at it
+  instead, as in a lesson.
+- On the card: **Pause / Play**, **Back**, **Next**, **Replay**, **Clear** (or
+  **Escape**) to remove everything she drew, **Open on the board** to draw on
+  it yourself, and a box to ask a follow-up, typed or said.
+- Leave the box empty for a step-by-step lesson on the page itself.
+
 ## Experimental HUD add-on (premium — subject to change)
 
 The extension also ships an optional, more advanced "HUD" layer, kept
@@ -128,7 +150,7 @@ as a future **premium** feature, so its behaviour and shortcuts may change:
   canvas-based editors) don't let extensions see highlighted text. On those
   tabs the side tab shows a **page** button that sends the whole file to the
   Cassie app, which reads every page (pictures included) and writes the
-  reviewer. "Ask about this page" reads what's on screen instead.
+  reviewer. "Ask Cassie about your screen" reads what's on screen instead.
 - **Board beside the page**: the side tab has a **board** button, and every snip
   opens straight into the side board — your snip on the canvas, Cassie's
   step-by-step explanation above it, an "Ask Cassie about this snip…" box, and
@@ -161,6 +183,8 @@ own. Treat the HUD as opt-in polish while it's still being refined.
 - `sketch.js` — the drawing board (identical copy of the web app's `sketch.js`).
 - `board.js` — draws real graphs/shapes in the popup (identical copy of the web app's `board.js`).
 - `panel.html` / `panel.js` — the side panel.
+- `teach.js` — Teach me: Cassie points at the page and draws on it, step by step.
+- `live.js` — Cassie's live drawing: reads the scene she replies with and draws it beat by beat.
 - `vendor/html2canvas.min.js` — MIT-licensed page renderer, loaded only when a snip needs it.
 - `bridge.js` — runs only on the Cassie web app; hands it a file from a PDF/Docs tab.
 - `background.js` — service worker that calls the Groq API (keeps the

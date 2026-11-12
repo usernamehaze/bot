@@ -147,6 +147,16 @@
     teach_where_pdf: 'This PDF is open in the browser’s own PDF viewer, where extensions can’t draw. So Cassie teaches it here, on a picture of the tab.',
     teach_where_store: 'Extension stores don’t let extensions draw on their pages. So Cassie teaches it here, on a picture of the tab.',
     teach_where_page: 'This page doesn’t let Cassie draw on it. So she teaches it here, on a picture of the tab.',
+    // Cassie's live drawing (the browser extension): what she is doing right now, and what went wrong
+    live_listening: 'Cassie is listening.',
+    live_looking: 'Cassie is looking at your screen.',
+    live_drawing: 'Cassie is drawing.',
+    live_speaking: 'Cassie is speaking.',
+    live_paused: 'Cassie is paused. Tap Play to go on.',
+    live_done: 'Cassie finished drawing.',
+    live_cleared: 'Cleared. Ask again, or tap Replay.',
+    live_failed: 'Cassie couldn’t answer that just now. Tap Try again.',
+    live_no_drawing: 'Cassie couldn’t draw that just now. Ask again to try once more.',
   };
 
   const say = (key, vars = {}) => String(STRINGS[key] || STRINGS.unknown).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? String(vars[k]) : '')).replace(/\s+$/, '');

@@ -1,0 +1,3 @@
+{"keep":true,"answer":"Fuel is sprayed in just before the burning part.","beats":[
+{"say":"Fuel is sprayed in here, just before it burns.","draw":[{"shape":"arrow","points":[[44,58],[47,45]],"color":"orange"},{"shape":"label","x":50,"y":70,"text":"Fuel in","to":[44,58]}]}
+]}
